@@ -1,0 +1,61 @@
+services:
+  now-postgres:
+    image: postgres:16-alpine
+    container_name: now-postgres
+    environment:
+      POSTGRES_DB: now
+      POSTGRES_USER: now
+      POSTGRES_PASSWORD: now-local-password
+    volumes:
+      - now_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U now -d now"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  now-api:
+    build: .
+    container_name: now-api
+    depends_on:
+      now-postgres:
+        condition: service_healthy
+    environment:
+      NOW_DATABASE_URL: postgresql+psycopg://now:now-local-password@now-postgres:5432/now
+      NOW_STORAGE_DIR: /data/recordings
+      NOW_SERVER_NAME: NowNote Local Server
+      # Set this before public operation. If empty, local server APIs are open.
+      NOW_API_TOKEN: ${NOW_API_TOKEN:-}
+      NOW_LLM_PROVIDER: ${NOW_LLM_PROVIDER:-local}
+      NOW_OPENAI_API_KEY: ${NOW_OPENAI_API_KEY:-}
+      NOW_OPENAI_BASE_URL: ${NOW_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      NOW_OPENAI_MODEL: ${NOW_OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - now_recording_data:/data/recordings
+    ports:
+      - "8080:8080"
+
+  now-worker:
+    build: .
+    container_name: now-worker
+    depends_on:
+      now-postgres:
+        condition: service_healthy
+    environment:
+      NOW_DATABASE_URL: postgresql+psycopg://now:now-local-password@now-postgres:5432/now
+      NOW_STORAGE_DIR: /data/recordings
+      NOW_SERVER_NAME: NowNote Local Server
+      NOW_API_TOKEN: ${NOW_API_TOKEN:-}
+      NOW_WORKER_POLL_SECONDS: 5
+      NOW_WORKER_BATCH_SIZE: 5
+      NOW_LLM_PROVIDER: ${NOW_LLM_PROVIDER:-local}
+      NOW_OPENAI_API_KEY: ${NOW_OPENAI_API_KEY:-}
+      NOW_OPENAI_BASE_URL: ${NOW_OPENAI_BASE_URL:-https://api.openai.com/v1}
+      NOW_OPENAI_MODEL: ${NOW_OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - now_recording_data:/data/recordings
+    command: ["python", "-m", "app.worker"]
+
+volumes:
+  now_postgres_data:
+  now_recording_data:

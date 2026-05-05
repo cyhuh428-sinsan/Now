@@ -1,0 +1,190 @@
+# NowNote Server
+
+NowNote 1차 서버는 개인 Docker 서버 또는 공용 운영 서버에서 메모와 녹음 파일을 동기화하기 위한 기본 API입니다.
+
+## 구성
+
+- `now-api`: FastAPI 서버
+- `now-worker`: LLM/분석 작업 큐 처리 워커
+- `now-postgres`: PostgreSQL 16
+- `now_recording_data`: 원본 음성 파일 저장 볼륨
+- `now_postgres_data`: DB 저장 볼륨
+
+## 실행
+
+```powershell
+cd D:\Project\Now\server
+docker compose up --build
+```
+
+공용 서버처럼 외부에 노출할 때는 API 토큰을 반드시 설정합니다.
+
+```powershell
+$env:NOW_API_TOKEN="긴-랜덤-토큰"
+docker compose up --build
+```
+
+LLM 워커를 외부 LLM에 연결하려면 `.env` 또는 환경변수에 아래 값을 설정합니다.
+
+```powershell
+$env:NOW_LLM_PROVIDER="openai"
+$env:NOW_OPENAI_API_KEY="sk-..."
+$env:NOW_OPENAI_MODEL="gpt-4o-mini"
+docker compose up --build
+```
+
+`NOW_LLM_PROVIDER=local`이면 외부 API 없이 기본 로컬 요약/키워드 처리만 수행합니다.
+
+서버 확인:
+
+```powershell
+Invoke-WebRequest http://localhost:8080/health
+Invoke-WebRequest http://localhost:8080/health/ready
+```
+
+스모크 테스트:
+
+```powershell
+python .\scripts\smoke_test.py --base-url http://localhost:8080 --token 긴-랜덤-토큰
+```
+
+## 1차 API
+
+### Health
+
+`GET /health`
+
+서버 상태 확인.
+
+`GET /health/ready`
+
+DB 연결까지 포함한 준비 상태 확인.
+
+`GET /api/v1/server`
+
+서버 이름, API 버전, 인증 필요 여부를 확인합니다.
+
+### Notes
+
+`GET /api/v1/notes?owner_id=local_user`
+
+서버에 저장된 메모 목록을 조회합니다.
+
+`GET /api/v1/notes/search?owner_id=local_user&q=검색어`
+
+제목과 본문에서 메모를 검색합니다.
+
+`DELETE /api/v1/notes/{local_id}?owner_id=local_user&device_id=phone`
+
+메모를 서버에서 소프트 삭제합니다. 삭제된 메모는 `include_deleted=true`로 조회할 수 있습니다.
+
+`GET /api/v1/notes?owner_id=local_user&updated_after=2026-05-05T00:00:00`
+
+특정 시점 이후 변경된 메모만 조회합니다.
+
+`POST /api/v1/notes`
+
+단일 메모를 생성하거나 갱신합니다. `owner_id + device_id + local_id` 조합으로 중복을 판단합니다.
+
+`POST /api/v1/notes/sync`
+
+앱에서 여러 메모를 한 번에 올리는 동기화 API입니다.
+
+`POST /api/v1/sync`
+
+앱에서 변경된 메모를 올리고, 서버에서 변경된 메모를 한 번에 내려받는 통합 동기화 API입니다.
+
+요청 예시:
+
+```json
+{
+  "owner_id": "local_user",
+  "device_id": "android_001",
+  "updated_after": "2026-05-06T00:00:00",
+  "include_deleted": true,
+  "notes": []
+}
+```
+
+응답:
+
+- `pushed_notes`: 앱에서 올려 서버에 반영된 메모
+- `pulled_notes`: 서버에서 앱으로 내려받을 변경 메모
+- `server_time`: 다음 동기화 기준 시각
+
+지원 메모 타입 예시:
+
+- `daily`: 일자 중심 간단 메모
+- `tree`: 계층형 지식 메모
+- `record`: 회의/대화/음성 메모
+
+계층형 메모는 `level` 값을 `1..3`으로 제한합니다.
+
+동기화 충돌 규칙:
+
+- 같은 `owner_id + device_id + local_id`는 같은 메모로 처리합니다.
+- `client_updated_at`이 서버에 저장된 값보다 오래된 요청이면 서버 값을 유지합니다.
+- 삭제도 `deleted_at`이 포함된 메모 업데이트로 동기화할 수 있습니다.
+
+### Recordings
+
+`POST /api/v1/recordings`
+
+원본 음성 파일과 선택적 텍스트 변환 결과를 업로드합니다.
+
+폼 필드:
+
+- `owner_id`
+- `device_id`
+- `local_id`
+- `note_local_id`
+- `transcript`
+- `file`
+
+### Analysis Jobs
+
+`POST /api/v1/analysis/jobs`
+
+서버 측 LLM 분석 작업을 큐에 등록합니다.
+
+지원 작업 타입:
+
+- `memo_summary`
+- `daily_briefing`
+- `tree_note_index`
+- `recording_summary`
+
+`GET /api/v1/analysis/jobs?owner_id=local_user`
+
+분석 작업 목록을 조회합니다.
+
+`GET /api/v1/analysis/jobs/{job_id}`
+
+분석 작업 상태를 조회합니다.
+
+`PATCH /api/v1/analysis/jobs/{job_id}`
+
+작업 상태와 결과를 갱신합니다. 실제 LLM 워커를 붙이기 전까지는 운영자/워커 프로세스가 이 API로 상태를 갱신하는 구조입니다.
+
+현재 `now-worker`는 외부 LLM 연결 전에도 동작하는 기본 로컬 처리기를 사용합니다.
+
+- `queued` 작업 조회
+- `running`으로 상태 변경
+- LLM 설정이 있으면 외부 LLM 호출
+- LLM 설정이 없으면 작업 타입별 기본 요약/키워드 JSON 생성
+- 성공 시 `done`, 실패 시 `failed` 저장
+
+워커 단독 실행:
+
+```powershell
+python -m app.worker
+```
+
+## 다음 단계
+
+- 앱에 서버 주소 설정 화면 추가
+- 앱 로컬 DB 변경분을 `/api/v1/sync`로 전송
+- 녹음 후 변환 모드의 원본 파일을 `/api/v1/recordings`로 업로드
+- 서버 인증 토큰을 앱 설정과 연결
+- 서버 측 분석 결과를 앱 화면과 연결
+- 앱에서 분석 작업 생성/상태 조회 연결
