@@ -1,0 +1,79 @@
+import argparse
+import json
+import urllib.error
+import urllib.request
+from datetime import datetime, timezone
+
+
+def request(method: str, url: str, token: str | None = None, data: dict | None = None):
+    body = None
+    headers = {}
+    if data is not None:
+        body = json.dumps(data).encode("utf-8")
+        headers["Content-Type"] = "application/json"
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=10) as res:
+        text = res.read().decode("utf-8")
+        return res.status, json.loads(text) if text else None
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--base-url", default="http://localhost:8080")
+    parser.add_argument("--token", default=None)
+    args = parser.parse_args()
+
+    base_url = args.base_url.rstrip("/")
+    checks = [
+        ("GET", "/health", None),
+        ("GET", "/health/ready", None),
+        ("GET", "/api/v1/server", None),
+    ]
+
+    for method, path, payload in checks:
+        status, data = request(method, f"{base_url}{path}", args.token, payload)
+        print(f"{method} {path}: {status} {data}")
+
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    sync_payload = {
+        "owner_id": "local_user",
+        "device_id": "smoke_test",
+        "updated_after": None,
+        "include_deleted": True,
+        "notes": [
+            {
+                "owner_id": "local_user",
+                "device_id": "smoke_test",
+                "local_id": "smoke_note_001",
+                "note_type": "daily",
+                "title": "Smoke test memo",
+                "content": "NowNote server smoke test",
+                "parent_local_id": None,
+                "level": 1,
+                "tags": "test=smoke",
+                "source": "smoke_test",
+                "client_updated_at": now,
+                "deleted_at": None,
+            }
+        ],
+    }
+    status, data = request("POST", f"{base_url}/api/v1/sync", args.token, sync_payload)
+    print(
+        "POST /api/v1/sync:",
+        status,
+        {
+            "pushed": len(data.get("pushed_notes", [])),
+            "pulled": len(data.get("pulled_notes", [])),
+            "server_time": data.get("server_time"),
+        },
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except urllib.error.HTTPError as e:
+        print(f"HTTP {e.code}: {e.read().decode('utf-8')}")
+        raise
