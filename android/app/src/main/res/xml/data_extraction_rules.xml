@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 12+ Data Extraction 규칙
+  cloud-backup: 구글 드라이브 자동 백업
+  device-transfer: 기기 이전(새 폰으로 복원) 시 포함
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <include domain="database" path="now_app_db" />
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="." />
+    </cloud-backup>
+    <device-transfer>
+        <include domain="database" path="now_app_db" />
+        <include domain="sharedpref" path="." />
+        <include domain="file" path="." />
+    </device-transfer>
+</data-extraction-rules>

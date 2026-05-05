@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Android 11 이하 Auto Backup 규칙
+  DB 파일 + SharedPreferences를 Google Drive에 자동 백업
+-->
+<full-backup-content>
+    <!-- SQLite DB (Drift) -->
+    <include domain="database" path="now_app_db" />
+    <!-- SharedPreferences (브리핑 알림 설정 등) -->
+    <include domain="sharedpref" path="." />
+    <!-- 앱 내부 파일 -->
+    <include domain="file" path="." />
+</full-backup-content>
