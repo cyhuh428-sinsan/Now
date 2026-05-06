@@ -40,7 +40,10 @@ docker compose up --build
 ```powershell
 Invoke-WebRequest http://localhost:8750/health
 Invoke-WebRequest http://localhost:8750/health/ready
+docker compose ps
 ```
+
+`now-api`는 `/health/ready` 기준 Docker healthcheck를 사용하며, 주요 컨테이너는 `restart: unless-stopped`로 재시작됩니다.
 
 운영 화면:
 

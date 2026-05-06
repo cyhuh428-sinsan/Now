@@ -2,6 +2,7 @@ services:
   now-postgres:
     image: postgres:16-alpine
     container_name: now-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_DB: now
       POSTGRES_USER: now
@@ -17,6 +18,7 @@ services:
   now-api:
     build: .
     container_name: now-api
+    restart: unless-stopped
     depends_on:
       now-postgres:
         condition: service_healthy
@@ -34,10 +36,23 @@ services:
       - now_recording_data:/data/recordings
     ports:
       - "8750:8080"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/health/ready', timeout=5).read()",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
 
   now-worker:
     build: .
     container_name: now-worker
+    restart: unless-stopped
     depends_on:
       now-postgres:
         condition: service_healthy
