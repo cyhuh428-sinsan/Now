@@ -54,6 +54,7 @@ def main() -> None:
         "/admin/notes",
         "/admin/recordings",
         "/admin/devices",
+        "/admin/sync",
         "/admin/ops",
         "/admin/analysis",
     ]

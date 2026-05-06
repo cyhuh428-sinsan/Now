@@ -69,3 +69,16 @@ class AnalysisJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+
+class SyncLog(Base):
+    __tablename__ = "sync_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    device_id: Mapped[str] = mapped_column(String(120), index=True)
+    pushed_count: Mapped[int] = mapped_column(Integer, default=0)
+    pulled_count: Mapped[int] = mapped_column(Integer, default=0)
+    include_deleted: Mapped[int] = mapped_column(Integer, default=0)
+    updated_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

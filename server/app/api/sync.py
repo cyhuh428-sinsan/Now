@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_api_token
 from app.db import get_db
+from app.models.note import SyncLog
 from app.schemas.note import SyncRequest, SyncResponse
 from app.services.note_sync import list_changed_notes, upsert_note
 
@@ -28,6 +29,17 @@ def sync(payload: SyncRequest, db: Session = Depends(get_db)) -> SyncResponse:
         updated_after=payload.updated_after,
         include_deleted=payload.include_deleted,
     )
+    db.add(
+        SyncLog(
+            owner_id=payload.owner_id,
+            device_id=payload.device_id,
+            pushed_count=len(pushed),
+            pulled_count=len(pulled),
+            include_deleted=1 if payload.include_deleted else 0,
+            updated_after=payload.updated_after,
+        )
+    )
+    db.commit()
     return SyncResponse(
         pushed_notes=pushed,
         pulled_notes=pulled,
