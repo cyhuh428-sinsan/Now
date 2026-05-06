@@ -41,6 +41,11 @@ def admin(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_html())
 
 
+@router.get("/admin/analysis", include_in_schema=False)
+def admin_analysis(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_analysis_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -501,6 +506,7 @@ def _admin_html() -> str:
       </div>
       <nav class="nav">
         <a href="/monitor">Monitor</a>
+        <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
       </nav>
@@ -594,3 +600,291 @@ def _recent_job_rows(jobs: list[AnalysisJob]) -> str:
         "</tr>"
         for job in jobs
     )
+
+
+def _admin_analysis_html() -> str:
+    error_message = ""
+    status_counts: dict[str, int] = {}
+    job_type_counts: dict[str, int] = {}
+    recent_jobs: list[AnalysisJob] = []
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            status_rows = db.execute(
+                select(AnalysisJob.status, func.count())
+                .group_by(AnalysisJob.status)
+                .order_by(AnalysisJob.status)
+            ).all()
+            type_rows = db.execute(
+                select(AnalysisJob.job_type, func.count())
+                .group_by(AnalysisJob.job_type)
+                .order_by(AnalysisJob.job_type)
+            ).all()
+            status_counts = {status_name: count for status_name, count in status_rows}
+            job_type_counts = {job_type: count for job_type, count in type_rows}
+            recent_jobs = list(
+                db.scalars(
+                    select(AnalysisJob).order_by(AnalysisJob.created_at.desc()).limit(50)
+                ).all()
+            )
+    except Exception as exc:
+        error_message = str(exc)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Analysis Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    .status {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .status-done {{ background: #dcfce7; color: #166534; }}
+    .status-failed {{ background: #fee2e2; color: #991b1b; }}
+    .status-running {{ background: #fef3c7; color: #92400e; }}
+    .error {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fff1f2;
+      color: #991b1b;
+      font-size: 14px;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Analysis Admin</h1>
+        <div class="sub">분석 작업 큐와 최근 처리 결과 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/monitor">Monitor</a>
+        <a href="/docs">API Docs</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <section>
+        <div class="section-head">
+          <span>상태별 작업 수</span>
+          <span class="sub">queue status</span>
+        </div>
+        <table>
+          <tr><th>상태</th><th>개수</th></tr>
+          {_analysis_count_rows(status_counts)}
+        </table>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <span>유형별 작업 수</span>
+          <span class="sub">job type</span>
+        </div>
+        <table>
+          <tr><th>유형</th><th>개수</th></tr>
+          {_analysis_count_rows(job_type_counts)}
+        </table>
+      </section>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>최근 분석 작업 상세</span>
+        <span class="sub">최근 50건 · 원문은 앞부분만 표시</span>
+      </div>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>상태</th>
+          <th>유형</th>
+          <th>메모</th>
+          <th>입력</th>
+          <th>결과/오류</th>
+          <th>수정 시각</th>
+        </tr>
+        {_analysis_job_detail_rows(recent_jobs)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _analysis_count_rows(counts: dict[str, int]) -> str:
+    if not counts:
+        return '<tr><td colspan="2">분석 작업이 없습니다.</td></tr>'
+    return "\n".join(
+        f"<tr><td>{escape(name)}</td><td>{count}</td></tr>"
+        for name, count in counts.items()
+    )
+
+
+def _analysis_job_detail_rows(jobs: list[AnalysisJob]) -> str:
+    if not jobs:
+        return '<tr><td colspan="7">분석 작업이 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{job.id}</td>"
+        f"<td>{_status_badge(job.status)}</td>"
+        f"<td>{escape(job.job_type)}</td>"
+        f"<td>{escape(job.note_local_id or '-')}</td>"
+        f"<td class=\"mono\">{_short_text(job.input_text)}</td>"
+        f"<td class=\"mono\">{_job_output(job)}</td>"
+        f"<td>{_format_datetime(job.updated_at)}</td>"
+        "</tr>"
+        for job in jobs
+    )
+
+
+def _status_badge(value: str) -> str:
+    class_name = {
+        "done": "status status-done",
+        "failed": "status status-failed",
+        "running": "status status-running",
+    }.get(value, "status")
+    return f'<span class="{class_name}">{escape(value)}</span>'
+
+
+def _job_output(job: AnalysisJob) -> str:
+    if job.error_message:
+        return _short_text(job.error_message)
+    return _short_text(job.result_json)
+
+
+def _short_text(value: str | None, limit: int = 180) -> str:
+    if not value:
+        return "-"
+    normalized = " ".join(value.split())
+    if len(normalized) <= limit:
+        return escape(normalized)
+    return escape(f"{normalized[:limit]}...")
