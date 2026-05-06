@@ -1,8 +1,10 @@
 from datetime import datetime
 from html import escape
+from secrets import compare_digest
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import func, select, text
 
 from app.core.config import get_settings
@@ -10,6 +12,7 @@ from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording
 
 router = APIRouter(tags=["monitor"])
+basic_security = HTTPBasic(auto_error=False)
 
 
 @router.get("/", include_in_schema=False)
@@ -17,13 +20,29 @@ def root() -> RedirectResponse:
     return RedirectResponse(url="/monitor")
 
 
+def _require_monitor_access(
+    credentials: HTTPBasicCredentials | None = Depends(basic_security),
+) -> None:
+    settings = get_settings()
+    expected = settings.api_token
+    if not expected:
+        return
+    if credentials and compare_digest(credentials.password, expected):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="admin token required",
+        headers={"WWW-Authenticate": 'Basic realm="NowNote Admin"'},
+    )
+
+
 @router.get("/admin", include_in_schema=False)
-def admin() -> HTMLResponse:
+def admin(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_html())
 
 
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
-def monitor() -> str:
+def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
     status = "ready"
     db_status = "ready"
