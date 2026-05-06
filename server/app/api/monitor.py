@@ -46,6 +46,11 @@ def admin_analysis(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_analysis_html())
 
 
+@router.get("/admin/notes", include_in_schema=False)
+def admin_notes(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_notes_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -506,6 +511,7 @@ def _admin_html() -> str:
       </div>
       <nav class="nav">
         <a href="/monitor">Monitor</a>
+        <a href="/admin/notes">Notes</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
@@ -786,6 +792,7 @@ def _admin_analysis_html() -> str:
       </div>
       <nav class="nav">
         <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -888,3 +895,297 @@ def _short_text(value: str | None, limit: int = 180) -> str:
     if len(normalized) <= limit:
         return escape(normalized)
     return escape(f"{normalized[:limit]}...")
+
+
+def _admin_notes_html() -> str:
+    error_message = ""
+    type_counts: dict[str, int] = {}
+    source_counts: dict[str, int] = {}
+    owner_counts: dict[str, int] = {}
+    recent_notes: list[Note] = []
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            type_rows = db.execute(
+                select(Note.note_type, func.count())
+                .where(Note.deleted_at.is_(None))
+                .group_by(Note.note_type)
+                .order_by(Note.note_type)
+            ).all()
+            source_rows = db.execute(
+                select(Note.source, func.count())
+                .where(Note.deleted_at.is_(None))
+                .group_by(Note.source)
+                .order_by(Note.source)
+            ).all()
+            owner_rows = db.execute(
+                select(Note.owner_id, func.count())
+                .where(Note.deleted_at.is_(None))
+                .group_by(Note.owner_id)
+                .order_by(func.count().desc())
+                .limit(20)
+            ).all()
+            type_counts = {_label_or_empty(name): count for name, count in type_rows}
+            source_counts = {_label_or_empty(name): count for name, count in source_rows}
+            owner_counts = {owner_id: count for owner_id, count in owner_rows}
+            recent_notes = list(
+                db.scalars(select(Note).order_by(Note.updated_at.desc()).limit(100)).all()
+            )
+    except Exception as exc:
+        error_message = str(exc)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Notes Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --red: #dc2626;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      background: #eef2ff;
+      color: #3730a3;
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .pill-deleted {{ background: #fee2e2; color: #991b1b; }}
+    .error {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fff1f2;
+      color: #991b1b;
+      font-size: 14px;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Notes Admin</h1>
+        <div class="sub">서버에 동기화된 메모 흐름 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/analysis">Analysis</a>
+        <a href="/monitor">Monitor</a>
+        <a href="/docs">API Docs</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <section>
+        <div class="section-head">
+          <span>타입별 메모</span>
+          <span class="sub">active only</span>
+        </div>
+        <table>
+          <tr><th>타입</th><th>개수</th></tr>
+          {_note_group_rows(type_counts)}
+        </table>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <span>소스별 메모</span>
+          <span class="sub">active only</span>
+        </div>
+        <table>
+          <tr><th>소스</th><th>개수</th></tr>
+          {_note_group_rows(source_counts)}
+        </table>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <span>사용자별 메모</span>
+          <span class="sub">상위 20개</span>
+        </div>
+        <table>
+          <tr><th>Owner</th><th>개수</th></tr>
+          {_note_group_rows(owner_counts)}
+        </table>
+      </section>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>최근 변경 메모</span>
+        <span class="sub">최근 100건 · 내용은 앞부분만 표시</span>
+      </div>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>상태</th>
+          <th>타입</th>
+          <th>레벨</th>
+          <th>제목</th>
+          <th>내용</th>
+          <th>Owner / Device</th>
+          <th>수정 시각</th>
+        </tr>
+        {_admin_note_rows(recent_notes)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _label_or_empty(value: str | None) -> str:
+    return value or "-"
+
+
+def _note_group_rows(counts: dict[str, int]) -> str:
+    if not counts:
+        return '<tr><td colspan="2">저장된 메모가 없습니다.</td></tr>'
+    return "\n".join(
+        f"<tr><td>{escape(name)}</td><td>{count}</td></tr>"
+        for name, count in counts.items()
+    )
+
+
+def _admin_note_rows(notes: list[Note]) -> str:
+    if not notes:
+        return '<tr><td colspan="8">저장된 메모가 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{note.id}</td>"
+        f"<td>{_note_state_badge(note)}</td>"
+        f"<td>{escape(note.note_type)}</td>"
+        f"<td>{note.level}</td>"
+        f"<td>{escape(note.title)}</td>"
+        f"<td class=\"mono\">{_short_text(note.content, 140)}</td>"
+        f"<td class=\"mono\">{escape(note.owner_id)} / {escape(note.device_id)}</td>"
+        f"<td>{_format_datetime(note.updated_at)}</td>"
+        "</tr>"
+        for note in notes
+    )
+
+
+def _note_state_badge(note: Note) -> str:
+    if note.deleted_at is None:
+        return '<span class="pill">active</span>'
+    return '<span class="pill pill-deleted">deleted</span>'
