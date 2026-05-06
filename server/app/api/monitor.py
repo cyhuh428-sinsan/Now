@@ -71,6 +71,11 @@ def admin_sync(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_sync_html())
 
 
+@router.get("/admin/export", include_in_schema=False)
+def admin_export(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_export_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -536,6 +541,7 @@ def _admin_html() -> str:
         <a href="/admin/devices">Devices</a>
         <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
@@ -821,6 +827,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin/devices">Devices</a>
         <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1120,6 +1127,7 @@ def _admin_notes_html() -> str:
         <a href="/admin/devices">Devices</a>
         <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1427,6 +1435,7 @@ def _admin_recordings_html() -> str:
         <a href="/admin/devices">Devices</a>
         <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1713,6 +1722,7 @@ def _admin_devices_html() -> str:
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -2259,6 +2269,7 @@ def _admin_sync_html() -> str:
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
         <a href="/admin/ops">Ops</a>
+        <a href="/admin/export">Export</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/monitor">Monitor</a>
       </nav>
@@ -2331,4 +2342,174 @@ def _sync_log_rows(logs: list[SyncLog]) -> str:
         f"<td>{_format_datetime(log.created_at)}</td>"
         "</tr>"
         for log in logs
+    )
+
+
+def _admin_export_html() -> str:
+    export_links = [
+        ("Notes", "/api/v1/admin/export/notes", "메모 전체 export"),
+        ("Active Notes", "/api/v1/admin/export/notes?include_deleted=false", "삭제 표시 제외 메모 export"),
+        ("Recordings", "/api/v1/admin/export/recordings", "녹음 파일 메타데이터 export"),
+        ("Analysis Jobs", "/api/v1/admin/export/analysis-jobs", "분석 작업 이력 export"),
+        ("Sync Logs", "/api/v1/admin/export/sync-logs", "동기화 호출 이력 export"),
+    ]
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Export Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 980px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .notice {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fde68a;
+      border-radius: 8px;
+      background: #fffbeb;
+      color: #92400e;
+      font-size: 14px;
+    }}
+    @media (max-width: 760px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Export Admin</h1>
+        <div class="sub">운영 확인과 백업을 위한 읽기 전용 JSON export</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
+        <a href="/admin/sync">Sync</a>
+        <a href="/admin/ops">Ops</a>
+        <a href="/monitor">Monitor</a>
+      </nav>
+    </header>
+
+    <div class="notice">
+      원본 음성 파일 자체는 내려받지 않고, 녹음 파일의 메타데이터만 export합니다.
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>Export Links</span>
+        <span class="sub">JSON</span>
+      </div>
+      <table>
+        <tr><th>항목</th><th>설명</th><th>링크</th></tr>
+        {_export_link_rows(export_links)}
+      </table>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _export_link_rows(links: list[tuple[str, str, str]]) -> str:
+    return "\n".join(
+        "<tr>"
+        f"<td>{escape(name)}</td>"
+        f"<td>{escape(description)}</td>"
+        f'<td><a href="{escape(url)}">{escape(url)}</a></td>'
+        "</tr>"
+        for name, url, description in links
     )

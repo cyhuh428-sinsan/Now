@@ -56,11 +56,23 @@ def main() -> None:
         "/admin/devices",
         "/admin/sync",
         "/admin/ops",
+        "/admin/export",
         "/admin/analysis",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
         print(f"GET {path}: {status} html={len(text)} bytes")
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/notes?include_deleted=false",
+        args.token,
+    )
+    print(
+        "GET /api/v1/admin/export/notes:",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     sync_payload = {
