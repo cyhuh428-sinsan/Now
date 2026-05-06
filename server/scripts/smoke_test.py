@@ -21,7 +21,7 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--base-url", default="http://localhost:8080")
+    parser.add_argument("--base-url", default="http://localhost:8750")
     parser.add_argument("--token", default=None)
     args = parser.parse_args()
 

@@ -38,14 +38,14 @@ docker compose up --build
 서버 확인:
 
 ```powershell
-Invoke-WebRequest http://localhost:8080/health
-Invoke-WebRequest http://localhost:8080/health/ready
+Invoke-WebRequest http://localhost:8750/health
+Invoke-WebRequest http://localhost:8750/health/ready
 ```
 
 스모크 테스트:
 
 ```powershell
-python .\scripts\smoke_test.py --base-url http://localhost:8080 --token 긴-랜덤-토큰
+python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
 ## 1차 API
