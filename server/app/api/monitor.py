@@ -61,6 +61,11 @@ def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_devices_html())
 
 
+@router.get("/admin/ops", include_in_schema=False)
+def admin_ops(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_ops_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -524,6 +529,7 @@ def _admin_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/ops">Ops</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
@@ -807,6 +813,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1104,6 +1111,7 @@ def _admin_notes_html() -> str:
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1409,6 +1417,7 @@ def _admin_recordings_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1693,6 +1702,7 @@ def _admin_devices_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/analysis">Analysis</a>
+        <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1737,4 +1747,315 @@ def _admin_device_rows(devices: list[dict[str, object]]) -> str:
         f"<td>{_format_datetime(device['latest_recording_at'])}</td>"
         "</tr>"
         for device in devices
+    )
+
+
+def _admin_ops_html() -> str:
+    settings = get_settings()
+    checks: list[dict[str, str]] = []
+
+    db_status = "ok"
+    db_message = "DB 연결 정상"
+    failed_jobs = 0
+    queued_jobs = 0
+    running_jobs = 0
+    deleted_notes = 0
+    recordings_without_transcript = 0
+    note_total = 0
+    recording_total = 0
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            note_total = db.scalar(select(func.count()).select_from(Note)) or 0
+            recording_total = db.scalar(select(func.count()).select_from(Recording)) or 0
+            failed_jobs = _count_jobs_by_status(db, "failed")
+            queued_jobs = _count_jobs_by_status(db, "queued")
+            running_jobs = _count_jobs_by_status(db, "running")
+            deleted_notes = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(Note)
+                    .where(Note.deleted_at.is_not(None))
+                )
+                or 0
+            )
+            recordings_without_transcript = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(Recording)
+                    .where(Recording.transcript.is_(None))
+                )
+                or 0
+            )
+    except Exception as exc:
+        db_status = "bad"
+        db_message = f"DB 연결 오류: {exc}"
+
+    checks.append({"name": "Database", "status": db_status, "message": db_message})
+    checks.append(
+        {
+            "name": "API Token",
+            "status": "ok" if settings.api_token else "warn",
+            "message": "설정됨" if settings.api_token else "로컬 개발은 가능하지만 공용 오픈 전 설정 필요",
+        }
+    )
+    checks.append(
+        {
+            "name": "LLM Provider",
+            "status": "ok" if settings.llm_provider != "local" else "info",
+            "message": _llm_state(settings.llm_provider, settings.openai_api_key),
+        }
+    )
+    checks.append(
+        {
+            "name": "Failed Analysis Jobs",
+            "status": "bad" if failed_jobs else "ok",
+            "message": f"{failed_jobs}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "Queued Analysis Jobs",
+            "status": "warn" if queued_jobs > 20 else "ok",
+            "message": f"queued {queued_jobs}건, running {running_jobs}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "Deleted Notes",
+            "status": "info" if deleted_notes else "ok",
+            "message": f"삭제 표시 메모 {deleted_notes}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "Recordings Without Transcript",
+            "status": "info" if recordings_without_transcript else "ok",
+            "message": f"transcript 없는 녹음 {recordings_without_transcript}건",
+        }
+    )
+
+    summary_status = _ops_summary_status(checks)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Ops Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #d97706;
+      --indigo: #4f46e5;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .card, section {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .card {{
+      padding: 18px;
+      min-height: 116px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    section {{ margin-top: 14px; }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .ok {{ background: #dcfce7; color: #166534; }}
+    .bad {{ background: #fee2e2; color: #991b1b; }}
+    .warn {{ background: #fef3c7; color: #92400e; }}
+    .info {{ background: #e0e7ff; color: #3730a3; }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Ops Admin</h1>
+        <div class="sub">운영 전 점검 항목과 서버 이상 징후 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
+        <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/devices">Devices</a>
+        <a href="/admin/analysis">Analysis</a>
+        <a href="/monitor">Monitor</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">전체 상태</div>
+        <div class="value">{summary_status}</div>
+      </div>
+      <div class="card">
+        <div class="label">메모</div>
+        <div class="value">{note_total}</div>
+      </div>
+      <div class="card">
+        <div class="label">녹음 파일</div>
+        <div class="value">{recording_total}</div>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>운영 점검</span>
+        <span class="sub">읽기 전용 상태 진단</span>
+      </div>
+      <table>
+        <tr><th>항목</th><th>상태</th><th>내용</th></tr>
+        {_ops_check_rows(checks)}
+      </table>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _count_jobs_by_status(db, job_status: str) -> int:
+    return (
+        db.scalar(
+            select(func.count())
+            .select_from(AnalysisJob)
+            .where(AnalysisJob.status == job_status)
+        )
+        or 0
+    )
+
+
+def _ops_summary_status(checks: list[dict[str, str]]) -> str:
+    statuses = {check["status"] for check in checks}
+    if "bad" in statuses:
+        return "주의 필요"
+    if "warn" in statuses:
+        return "점검 권장"
+    return "정상"
+
+
+def _ops_check_rows(checks: list[dict[str, str]]) -> str:
+    return "\n".join(
+        "<tr>"
+        f"<td>{escape(check['name'])}</td>"
+        f"<td><span class=\"badge {escape(check['status'])}\">{escape(check['status'])}</span></td>"
+        f"<td>{escape(check['message'])}</td>"
+        "</tr>"
+        for check in checks
     )

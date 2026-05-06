@@ -50,6 +50,7 @@ http://localhost:8750/admin
 http://localhost:8750/admin/notes
 http://localhost:8750/admin/recordings
 http://localhost:8750/admin/devices
+http://localhost:8750/admin/ops
 http://localhost:8750/admin/analysis
 ```
 
@@ -58,6 +59,7 @@ http://localhost:8750/admin/analysis
 `/admin/notes`는 메모 타입/소스/사용자별 집계와 최근 변경 메모를 확인하는 읽기 전용 화면입니다.
 `/admin/recordings`는 원본 음성 파일 저장 현황과 최근 녹음 파일을 확인하는 읽기 전용 화면입니다.
 `/admin/devices`는 owner/device별 메모, 녹음, 마지막 동기화 흔적을 확인하는 읽기 전용 화면입니다.
+`/admin/ops`는 토큰, DB, 분석 작업, 삭제 표시 메모 등 운영 점검 항목을 확인하는 읽기 전용 화면입니다.
 `/admin/analysis`는 분석 작업 큐의 상태별/유형별 집계와 최근 작업 상세를 확인하는 읽기 전용 화면입니다.
 `NOW_API_TOKEN`이 설정된 경우 운영 화면은 브라우저 로그인 창에서 비밀번호로 API 토큰을 입력해야 열립니다.
 
