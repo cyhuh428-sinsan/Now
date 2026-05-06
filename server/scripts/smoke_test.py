@@ -1,4 +1,5 @@
 import argparse
+import base64
 import json
 import urllib.error
 import urllib.request
@@ -19,6 +20,17 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
         return res.status, json.loads(text) if text else None
 
 
+def request_text(method: str, url: str, token: str | None = None):
+    headers = {}
+    if token:
+        encoded = base64.b64encode(f"admin:{token}".encode("utf-8")).decode("ascii")
+        headers["Authorization"] = f"Basic {encoded}"
+    req = urllib.request.Request(url, headers=headers, method=method)
+    with urllib.request.urlopen(req, timeout=10) as res:
+        text = res.read().decode("utf-8")
+        return res.status, text
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
@@ -35,6 +47,19 @@ def main() -> None:
     for method, path, payload in checks:
         status, data = request(method, f"{base_url}{path}", args.token, payload)
         print(f"{method} {path}: {status} {data}")
+
+    admin_pages = [
+        "/monitor",
+        "/admin",
+        "/admin/notes",
+        "/admin/recordings",
+        "/admin/devices",
+        "/admin/ops",
+        "/admin/analysis",
+    ]
+    for path in admin_pages:
+        status, text = request_text("GET", f"{base_url}{path}", args.token)
+        print(f"GET {path}: {status} html={len(text)} bytes")
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     sync_payload = {
