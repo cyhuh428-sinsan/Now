@@ -56,6 +56,11 @@ def admin_recordings(_: None = Depends(_require_monitor_access)) -> HTMLResponse
     return HTMLResponse(_admin_recordings_html())
 
 
+@router.get("/admin/devices", include_in_schema=False)
+def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_devices_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -518,6 +523,7 @@ def _admin_html() -> str:
         <a href="/monitor">Monitor</a>
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/devices">Devices</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
@@ -800,6 +806,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin">Admin</a>
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/devices">Devices</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1096,6 +1103,7 @@ def _admin_notes_html() -> str:
         <a href="/admin">Admin</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/devices">Devices</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1400,6 +1408,7 @@ def _admin_recordings_html() -> str:
         <a href="/admin">Admin</a>
         <a href="/admin/notes">Notes</a>
         <a href="/admin/analysis">Analysis</a>
+        <a href="/admin/devices">Devices</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1483,4 +1492,249 @@ def _admin_recording_rows(recordings: list[Recording]) -> str:
         f"<td>{_format_datetime(recording.updated_at)}</td>"
         "</tr>"
         for recording in recordings
+    )
+
+
+def _admin_devices_html() -> str:
+    error_message = ""
+    devices: dict[tuple[str, str], dict[str, object]] = {}
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            note_rows = db.execute(
+                select(
+                    Note.owner_id,
+                    Note.device_id,
+                    func.count(),
+                    func.max(Note.updated_at),
+                    func.max(Note.client_updated_at),
+                )
+                .where(Note.deleted_at.is_(None))
+                .group_by(Note.owner_id, Note.device_id)
+                .order_by(func.max(Note.updated_at).desc())
+            ).all()
+            recording_rows = db.execute(
+                select(
+                    Recording.owner_id,
+                    Recording.device_id,
+                    func.count(),
+                    func.max(Recording.updated_at),
+                )
+                .group_by(Recording.owner_id, Recording.device_id)
+            ).all()
+            for owner_id, device_id, count, latest_at, client_latest_at in note_rows:
+                devices[(owner_id, device_id)] = {
+                    "owner_id": owner_id,
+                    "device_id": device_id,
+                    "note_count": count,
+                    "recording_count": 0,
+                    "latest_note_at": latest_at,
+                    "latest_client_at": client_latest_at,
+                    "latest_recording_at": None,
+                }
+            for owner_id, device_id, count, latest_at in recording_rows:
+                key = (owner_id, device_id)
+                if key not in devices:
+                    devices[key] = {
+                        "owner_id": owner_id,
+                        "device_id": device_id,
+                        "note_count": 0,
+                        "recording_count": 0,
+                        "latest_note_at": None,
+                        "latest_client_at": None,
+                        "latest_recording_at": None,
+                    }
+                devices[key]["recording_count"] = count
+                devices[key]["latest_recording_at"] = latest_at
+    except Exception as exc:
+        error_message = str(exc)
+
+    device_rows = sorted(
+        devices.values(),
+        key=lambda item: (
+            item["latest_note_at"] or item["latest_recording_at"] or datetime.min
+        ),
+        reverse=True,
+    )
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Devices Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    .error {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fff1f2;
+      color: #991b1b;
+      font-size: 14px;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Devices Admin</h1>
+        <div class="sub">서버에 연결된 owner/device별 동기화 흔적 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
+        <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/analysis">Analysis</a>
+        <a href="/monitor">Monitor</a>
+        <a href="/docs">API Docs</a>
+      </nav>
+    </header>
+
+    <section>
+      <div class="section-head">
+        <span>기기별 동기화 현황</span>
+        <span class="sub">{len(device_rows)}개 device</span>
+      </div>
+      <table>
+        <tr>
+          <th>Owner</th>
+          <th>Device</th>
+          <th>메모</th>
+          <th>녹음</th>
+          <th>마지막 메모 변경</th>
+          <th>마지막 클라이언트 변경</th>
+          <th>마지막 녹음 변경</th>
+        </tr>
+        {_admin_device_rows(device_rows)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _admin_device_rows(devices: list[dict[str, object]]) -> str:
+    if not devices:
+        return '<tr><td colspan="7">연결된 기기 흔적이 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td class=\"mono\">{escape(str(device['owner_id']))}</td>"
+        f"<td class=\"mono\">{escape(str(device['device_id']))}</td>"
+        f"<td>{device['note_count']}</td>"
+        f"<td>{device['recording_count']}</td>"
+        f"<td>{_format_datetime(device['latest_note_at'])}</td>"
+        f"<td>{_format_datetime(device['latest_client_at'])}</td>"
+        f"<td>{_format_datetime(device['latest_recording_at'])}</td>"
+        "</tr>"
+        for device in devices
     )
