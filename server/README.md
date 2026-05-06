@@ -49,6 +49,9 @@ http://localhost:8750/monitor
 http://localhost:8750/admin
 ```
 
+`/monitor`는 서버/DB 상태와 집계 중심의 모니터링 화면입니다.
+`/admin`은 운영 설정, 메모 타입별 저장 현황, 최근 분석 작업을 확인하는 읽기 전용 관리 화면입니다.
+
 스모크 테스트:
 
 ```powershell
