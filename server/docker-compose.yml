@@ -33,7 +33,7 @@ services:
     volumes:
       - now_recording_data:/data/recordings
     ports:
-      - "8080:8080"
+      - "8750:8080"
 
   now-worker:
     build: .
