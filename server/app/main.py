@@ -1,5 +1,6 @@
 from fastapi import FastAPI
 
+from app.api.admin import router as admin_router
 from app.api.analysis import router as analysis_router
 from app.api.health import router as health_router
 from app.api.monitor import router as monitor_router
@@ -26,6 +27,7 @@ def create_app() -> FastAPI:
     app.include_router(recordings_router)
     app.include_router(sync_router)
     app.include_router(analysis_router)
+    app.include_router(admin_router)
     return app
 
 
