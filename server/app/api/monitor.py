@@ -51,6 +51,11 @@ def admin_notes(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_notes_html())
 
 
+@router.get("/admin/recordings", include_in_schema=False)
+def admin_recordings(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_recordings_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -512,6 +517,7 @@ def _admin_html() -> str:
       <nav class="nav">
         <a href="/monitor">Monitor</a>
         <a href="/admin/notes">Notes</a>
+        <a href="/admin/recordings">Recordings</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
         <a href="/health/ready">Ready</a>
@@ -793,6 +799,7 @@ def _admin_analysis_html() -> str:
       <nav class="nav">
         <a href="/admin">Admin</a>
         <a href="/admin/notes">Notes</a>
+        <a href="/admin/recordings">Recordings</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1088,6 +1095,7 @@ def _admin_notes_html() -> str:
       <nav class="nav">
         <a href="/admin">Admin</a>
         <a href="/admin/analysis">Analysis</a>
+        <a href="/admin/recordings">Recordings</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
       </nav>
@@ -1189,3 +1197,290 @@ def _note_state_badge(note: Note) -> str:
     if note.deleted_at is None:
         return '<span class="pill">active</span>'
     return '<span class="pill pill-deleted">deleted</span>'
+
+
+def _admin_recordings_html() -> str:
+    error_message = ""
+    content_type_counts: dict[str, int] = {}
+    owner_counts: dict[str, int] = {}
+    recent_recordings: list[Recording] = []
+    latest_recording_at = None
+    recording_total = 0
+    transcript_count = 0
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            content_type_rows = db.execute(
+                select(Recording.content_type, func.count())
+                .group_by(Recording.content_type)
+                .order_by(Recording.content_type)
+            ).all()
+            owner_rows = db.execute(
+                select(Recording.owner_id, func.count())
+                .group_by(Recording.owner_id)
+                .order_by(func.count().desc())
+                .limit(20)
+            ).all()
+            content_type_counts = {
+                _label_or_empty(content_type): count
+                for content_type, count in content_type_rows
+            }
+            owner_counts = {owner_id: count for owner_id, count in owner_rows}
+            recording_total = db.scalar(select(func.count()).select_from(Recording)) or 0
+            transcript_count = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(Recording)
+                    .where(Recording.transcript.is_not(None))
+                )
+                or 0
+            )
+            latest_recording_at = db.scalar(select(func.max(Recording.updated_at)))
+            recent_recordings = list(
+                db.scalars(
+                    select(Recording).order_by(Recording.updated_at.desc()).limit(100)
+                ).all()
+            )
+    except Exception as exc:
+        error_message = str(exc)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Recordings Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .card, section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .card {{
+      margin-top: 0;
+      padding: 18px;
+      min-height: 116px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    .error {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fff1f2;
+      color: #991b1b;
+      font-size: 14px;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Recordings Admin</h1>
+        <div class="sub">서버에 저장된 원본 음성 파일 흐름 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
+        <a href="/admin/analysis">Analysis</a>
+        <a href="/monitor">Monitor</a>
+        <a href="/docs">API Docs</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">전체 녹음 파일</div>
+        <div class="value">{recording_total}</div>
+      </div>
+      <div class="card">
+        <div class="label">텍스트 변환 포함</div>
+        <div class="value">{transcript_count}</div>
+      </div>
+      <div class="card">
+        <div class="label">최근 변경</div>
+        <div class="value">{_format_datetime(latest_recording_at)}</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <section>
+        <div class="section-head">
+          <span>파일 타입별</span>
+          <span class="sub">content type</span>
+        </div>
+        <table>
+          <tr><th>타입</th><th>개수</th></tr>
+          {_note_group_rows(content_type_counts)}
+        </table>
+      </section>
+
+      <section>
+        <div class="section-head">
+          <span>사용자별</span>
+          <span class="sub">상위 20개</span>
+        </div>
+        <table>
+          <tr><th>Owner</th><th>개수</th></tr>
+          {_note_group_rows(owner_counts)}
+        </table>
+      </section>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>최근 녹음 파일</span>
+        <span class="sub">최근 100건 · transcript는 앞부분만 표시</span>
+      </div>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>파일명</th>
+          <th>타입</th>
+          <th>연결 메모</th>
+          <th>Transcript</th>
+          <th>Owner / Device</th>
+          <th>수정 시각</th>
+        </tr>
+        {_admin_recording_rows(recent_recordings)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _admin_recording_rows(recordings: list[Recording]) -> str:
+    if not recordings:
+        return '<tr><td colspan="7">저장된 녹음 파일이 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{recording.id}</td>"
+        f"<td class=\"mono\">{escape(recording.file_name)}</td>"
+        f"<td>{escape(recording.content_type)}</td>"
+        f"<td>{escape(recording.note_local_id or '-')}</td>"
+        f"<td class=\"mono\">{_short_text(recording.transcript, 140)}</td>"
+        f"<td class=\"mono\">{escape(recording.owner_id)} / {escape(recording.device_id)}</td>"
+        f"<td>{_format_datetime(recording.updated_at)}</td>"
+        "</tr>"
+        for recording in recordings
+    )
