@@ -47,11 +47,13 @@ Invoke-WebRequest http://localhost:8750/health/ready
 ```powershell
 http://localhost:8750/monitor
 http://localhost:8750/admin
+http://localhost:8750/admin/analysis
 ```
 
 `/monitor`는 서버/DB 상태와 집계 중심의 모니터링 화면입니다.
 `/admin`은 운영 설정, 메모 타입별 저장 현황, 최근 분석 작업을 확인하는 읽기 전용 관리 화면입니다.
-`NOW_API_TOKEN`이 설정된 경우 `/monitor`와 `/admin`은 브라우저 로그인 창에서 비밀번호로 API 토큰을 입력해야 열립니다.
+`/admin/analysis`는 분석 작업 큐의 상태별/유형별 집계와 최근 작업 상세를 확인하는 읽기 전용 화면입니다.
+`NOW_API_TOKEN`이 설정된 경우 운영 화면은 브라우저 로그인 창에서 비밀번호로 API 토큰을 입력해야 열립니다.
 
 스모크 테스트:
 
