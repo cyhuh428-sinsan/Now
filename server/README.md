@@ -69,6 +69,8 @@ http://localhost:8750/admin/analysis
 python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+스모크 테스트는 health/API/sync와 운영 화면 응답을 함께 확인합니다.
+
 ## 1차 API
 
 ### Health
