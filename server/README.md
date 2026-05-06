@@ -42,6 +42,13 @@ Invoke-WebRequest http://localhost:8750/health
 Invoke-WebRequest http://localhost:8750/health/ready
 ```
 
+운영 화면:
+
+```powershell
+http://localhost:8750/monitor
+http://localhost:8750/admin
+```
+
 스모크 테스트:
 
 ```powershell
