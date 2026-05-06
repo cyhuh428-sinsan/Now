@@ -24,6 +24,6 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
-    from app.models.note import AnalysisJob, Note, Recording  # noqa: F401
+    from app.models.note import AnalysisJob, Note, Recording, SyncLog  # noqa: F401
 
     Base.metadata.create_all(bind=engine)

@@ -9,7 +9,7 @@ from sqlalchemy import func, select, text
 
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording
+from app.models.note import AnalysisJob, Note, Recording, SyncLog
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
@@ -64,6 +64,11 @@ def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.get("/admin/ops", include_in_schema=False)
 def admin_ops(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_ops_html())
+
+
+@router.get("/admin/sync", include_in_schema=False)
+def admin_sync(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_sync_html())
 
 
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
@@ -529,6 +534,7 @@ def _admin_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/docs">API Docs</a>
@@ -813,6 +819,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
@@ -1111,6 +1118,7 @@ def _admin_notes_html() -> str:
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
@@ -1417,6 +1425,7 @@ def _admin_recordings_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
@@ -1702,6 +1711,7 @@ def _admin_devices_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/analysis">Analysis</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/ops">Ops</a>
         <a href="/monitor">Monitor</a>
         <a href="/docs">API Docs</a>
@@ -1995,6 +2005,7 @@ def _admin_ops_html() -> str:
         <a href="/admin/notes">Notes</a>
         <a href="/admin/recordings">Recordings</a>
         <a href="/admin/devices">Devices</a>
+        <a href="/admin/sync">Sync</a>
         <a href="/admin/analysis">Analysis</a>
         <a href="/monitor">Monitor</a>
       </nav>
@@ -2058,4 +2069,266 @@ def _ops_check_rows(checks: list[dict[str, str]]) -> str:
         f"<td>{escape(check['message'])}</td>"
         "</tr>"
         for check in checks
+    )
+
+
+def _admin_sync_html() -> str:
+    error_message = ""
+    sync_total = 0
+    latest_sync_at = None
+    recent_logs: list[SyncLog] = []
+    device_counts: dict[str, int] = {}
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            sync_total = db.scalar(select(func.count()).select_from(SyncLog)) or 0
+            latest_sync_at = db.scalar(select(func.max(SyncLog.created_at)))
+            recent_logs = list(
+                db.scalars(
+                    select(SyncLog).order_by(SyncLog.created_at.desc()).limit(100)
+                ).all()
+            )
+            rows = db.execute(
+                select(SyncLog.owner_id, SyncLog.device_id, func.count())
+                .group_by(SyncLog.owner_id, SyncLog.device_id)
+                .order_by(func.count().desc())
+                .limit(30)
+            ).all()
+            device_counts = {
+                f"{owner_id} / {device_id}": count
+                for owner_id, device_id, count in rows
+            }
+    except Exception as exc:
+        error_message = str(exc)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Sync Admin</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .card, section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .card {{
+      margin-top: 0;
+      padding: 18px;
+      min-height: 116px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }}
+    .error {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #fecaca;
+      border-radius: 8px;
+      background: #fff1f2;
+      color: #991b1b;
+      font-size: 14px;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>Sync Admin</h1>
+        <div class="sub">앱과 서버 사이의 동기화 호출 이력 확인</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">Admin</a>
+        <a href="/admin/notes">Notes</a>
+        <a href="/admin/recordings">Recordings</a>
+        <a href="/admin/devices">Devices</a>
+        <a href="/admin/ops">Ops</a>
+        <a href="/admin/analysis">Analysis</a>
+        <a href="/monitor">Monitor</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <div class="card">
+        <div class="label">전체 동기화 호출</div>
+        <div class="value">{sync_total}</div>
+      </div>
+      <div class="card">
+        <div class="label">최근 동기화</div>
+        <div class="value">{_format_datetime(latest_sync_at)}</div>
+      </div>
+      <div class="card">
+        <div class="label">최근 목록</div>
+        <div class="value">{len(recent_logs)}</div>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>기기별 동기화 호출</span>
+        <span class="sub">상위 30개</span>
+      </div>
+      <table>
+        <tr><th>Owner / Device</th><th>호출 수</th></tr>
+        {_note_group_rows(device_counts)}
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>최근 동기화 이력</span>
+        <span class="sub">최근 100건</span>
+      </div>
+      <table>
+        <tr>
+          <th>ID</th>
+          <th>Owner</th>
+          <th>Device</th>
+          <th>Push</th>
+          <th>Pull</th>
+          <th>삭제 포함</th>
+          <th>updated_after</th>
+          <th>시각</th>
+        </tr>
+        {_sync_log_rows(recent_logs)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _sync_log_rows(logs: list[SyncLog]) -> str:
+    if not logs:
+        return '<tr><td colspan="8">동기화 이력이 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{log.id}</td>"
+        f"<td class=\"mono\">{escape(log.owner_id)}</td>"
+        f"<td class=\"mono\">{escape(log.device_id)}</td>"
+        f"<td>{log.pushed_count}</td>"
+        f"<td>{log.pulled_count}</td>"
+        f"<td>{'yes' if log.include_deleted else 'no'}</td>"
+        f"<td>{_format_datetime(log.updated_after)}</td>"
+        f"<td>{_format_datetime(log.created_at)}</td>"
+        "</tr>"
+        for log in logs
     )
