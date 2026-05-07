@@ -18,6 +18,7 @@ const state = {
   data: {
     daily: {},
     archivedDaily: [],
+    deletedTree: [],
     tree: [],
   },
   settings: {
@@ -31,6 +32,7 @@ const state = {
     showBacklinks: true,
     enableShortcuts: true,
     showTags: true,
+    showSidebarAssist: false,
   },
 };
 
@@ -85,6 +87,10 @@ const elements = {
   markdownPreview: $("#markdownPreview"),
   addChildBtn: $("#addChildBtn"),
   deleteTreeBtn: $("#deleteTreeBtn"),
+  deletedTreeBtn: $("#deletedTreeBtn"),
+  deletedTreeView: $("#deletedTreeView"),
+  deletedTreeList: $("#deletedTreeList"),
+  deletedTreeCloseBtn: $("#deletedTreeCloseBtn"),
   resultsList: $("#resultsList"),
   exportBtn: $("#exportBtn"),
   exportMarkdownBtn: $("#exportMarkdownBtn"),
@@ -106,6 +112,7 @@ const elements = {
   backlinksToggle: $("#backlinksToggle"),
   tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
+  sidebarAssistToggle: $("#sidebarAssistToggle"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
@@ -278,6 +285,12 @@ function bindEvents() {
     persistSettings();
   });
 
+  elements.sidebarAssistToggle.addEventListener("change", () => {
+    state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
+    persistSettings();
+    applySettings();
+  });
+
   elements.addRootBtn.addEventListener("click", () => {
     addRootNote();
   });
@@ -372,13 +385,15 @@ function bindEvents() {
       alert("아래에 연결된 항목이 있으면 삭제할 수 없습니다.");
       return;
     }
-    if (!confirm(`'${selected.title || "제목 없음"}' 메모를 삭제할까요?`)) return;
-    deleteTreeNode(selected.id);
+    if (!confirm(`'${selected.title || "제목 없음"}' 메모를 삭제 보관함으로 이동할까요?`)) return;
+    archiveDeletedTreeNode(selected.id);
     state.selectedTreeId = null;
     persist();
     renderTree();
   });
 
+  elements.deletedTreeBtn.addEventListener("click", openDeletedTreeBox);
+  elements.deletedTreeCloseBtn.addEventListener("click", closeDeletedTreeBox);
   elements.exportBtn.addEventListener("click", exportData);
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
@@ -410,6 +425,7 @@ function renderSettings() {
   elements.backlinksToggle.checked = state.settings.showBacklinks;
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
+  elements.sidebarAssistToggle.checked = state.settings.showSidebarAssist;
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
       const button = document.createElement("button");
@@ -442,6 +458,7 @@ function applySettings() {
   document.documentElement.dataset.lineHeight = state.settings.lineHeight;
   document.documentElement.dataset.backlinks = state.settings.showBacklinks ? "show" : "hide";
   document.documentElement.dataset.tags = state.settings.showTags ? "show" : "hide";
+  document.documentElement.dataset.sidebarAssist = state.settings.showSidebarAssist ? "show" : "hide";
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
   elements.railSidebarBtn.title = state.settings.sidebarCollapsed ? "목록 펼치기" : "목록 접기";
@@ -491,11 +508,21 @@ function closeGraph() {
   elements.graphView.classList.add("hidden");
 }
 
+function openDeletedTreeBox() {
+  renderDeletedTreeList();
+  elements.deletedTreeView.classList.remove("hidden");
+}
+
+function closeDeletedTreeBox() {
+  elements.deletedTreeView.classList.add("hidden");
+}
+
 function handleShortcuts(event) {
   if (!state.settings.enableShortcuts) return;
   if (event.key === "Escape") {
     closeQuickSwitch();
     closeGraph();
+    closeDeletedTreeBox();
     closeDailyPopup();
     elements.settingsView.classList.add("hidden");
     return;
@@ -529,6 +556,34 @@ function renderGraph() {
         closeGraph();
       });
       return row;
+    }),
+  );
+}
+
+function renderDeletedTreeList() {
+  const deleted = state.data.deletedTree || [];
+  if (deleted.length === 0) {
+    elements.deletedTreeList.innerHTML = '<div class="empty-compact">삭제 보관함이 비어 있습니다.</div>';
+    return;
+  }
+  elements.deletedTreeList.replaceChildren(
+    ...deleted.map((node) => {
+      const item = document.createElement("article");
+      item.className = "archive-item";
+      item.innerHTML = `
+        <div>
+          <strong>${escapeHtml(node.title || "제목 없음")}</strong>
+          <span>${escapeHtml(formatArchivedAt(node.deletedAt))} 삭제</span>
+          <p>${escapeHtml(snippet(node.content || ""))}</p>
+        </div>
+        <div class="archive-actions">
+          <button class="secondary-btn" type="button" data-action="restore">복원</button>
+        </div>
+      `;
+      item.querySelector('[data-action="restore"]').addEventListener("click", () => {
+        restoreDeletedTreeNode(node.id);
+      });
+      return item;
     }),
   );
 }
@@ -1342,13 +1397,58 @@ function expandAncestors(id, nodes = state.data.tree, parents = []) {
   return false;
 }
 
-function deleteTreeNode(id, nodes = state.data.tree) {
+function archiveDeletedTreeNode(id) {
+  const node = detachTreeNode(id);
+  if (!node) return false;
+  state.data.deletedTree.unshift({
+    ...node,
+    children: [],
+    status: "deleted",
+    syncState: "pending",
+    deletedAt: new Date().toISOString(),
+  });
+  return true;
+}
+
+function restoreDeletedTreeNode(id) {
+  const index = state.data.deletedTree.findIndex((node) => node.id === id);
+  if (index < 0) return;
+  const [node] = state.data.deletedTree.splice(index, 1);
+  const parent = node.parentId ? findTreeNode(state.data.tree, node.parentId) : null;
+  const restored = {
+    ...node,
+    status: "active",
+    syncState: "pending",
+    deletedAt: undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  if (parent && parent.level < 3) {
+    restored.level = parent.level + 1;
+    restored.parentId = parent.id;
+    parent.children.push(restored);
+    state.expandedTreeIds.add(parent.id);
+  } else {
+    restored.level = 1;
+    restored.parentId = null;
+    state.data.tree.push(restored);
+  }
+  state.selectedTreeId = restored.id;
+  persist();
+  render();
+  renderDeletedTreeList();
+}
+
+function detachTreeNode(id, nodes = state.data.tree) {
   const index = nodes.findIndex((node) => node.id === id);
   if (index >= 0) {
-    nodes.splice(index, 1);
-    return true;
+    const [node] = nodes.splice(index, 1);
+    return node;
   }
-  return nodes.some((node) => deleteTreeNode(id, node.children));
+  for (const node of nodes) {
+    const child = detachTreeNode(id, node.children);
+    if (child) return child;
+  }
+  return null;
 }
 
 function flattenTree(nodes) {
@@ -1362,6 +1462,7 @@ function load() {
     const parsed = JSON.parse(raw);
     state.data.daily = parsed.daily || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
+    state.data.deletedTree = parsed.deletedTree || [];
     state.data.tree = parsed.tree || [];
     normalizeData();
   } catch {
@@ -1399,6 +1500,18 @@ function normalizeData() {
     note.syncState = note.syncState || "synced";
     note.archivedAt = note.archivedAt || note.updatedAt || new Date().toISOString();
     note.updatedAt = note.updatedAt || note.archivedAt;
+  });
+  state.data.deletedTree = state.data.deletedTree || [];
+  state.data.deletedTree.forEach((node) => {
+    node.id = node.id || crypto.randomUUID();
+    node.title = node.title || "";
+    node.content = node.content || "";
+    node.children = [];
+    node.status = "deleted";
+    node.syncState = node.syncState || "synced";
+    node.deletedAt = node.deletedAt || node.updatedAt || new Date().toISOString();
+    node.updatedAt = node.updatedAt || node.deletedAt;
+    node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
   });
   normalizeTreeNodes(state.data.tree, null, 1);
 }
@@ -1517,6 +1630,7 @@ function importData(event) {
         return;
       }
       parsed.archivedDaily = parsed.archivedDaily || [];
+      parsed.deletedTree = parsed.deletedTree || [];
       state.data = parsed;
       normalizeData();
       state.selectedTreeId = null;

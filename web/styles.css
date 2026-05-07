@@ -233,6 +233,10 @@ button {
   margin-top: 18px;
 }
 
+:root[data-sidebar-assist="hide"] .side-knowledge-section {
+  display: none;
+}
+
 .side-section-head {
   display: flex;
   align-items: center;
