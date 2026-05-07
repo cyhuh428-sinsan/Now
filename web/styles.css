@@ -767,6 +767,12 @@ body.resizing {
   color: var(--muted);
 }
 
+.note-stats {
+  margin: -4px 0 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .save-state {
   color: var(--muted);
   font-size: 13px;

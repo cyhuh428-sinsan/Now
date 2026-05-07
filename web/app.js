@@ -76,7 +76,9 @@ const elements = {
   treeLevelLabel: $("#treeLevelLabel"),
   treeSavedLabel: $("#treeSavedLabel"),
   favoriteBtn: $("#favoriteBtn"),
+  copyLinkBtn: $("#copyLinkBtn"),
   tagList: $("#tagList"),
+  noteStats: $("#noteStats"),
   previewToggleBtn: $("#previewToggleBtn"),
   markdownPreview: $("#markdownPreview"),
   addChildBtn: $("#addChildBtn"),
@@ -290,6 +292,7 @@ function bindEvents() {
     persist();
     renderTreeListOnly();
     renderTreePath(selected);
+    renderNoteStats(selected);
     showSaved(elements.treeSavedLabel);
   });
 
@@ -302,6 +305,7 @@ function bindEvents() {
     persist();
     renderMarkdownPreview(selected.content);
     renderTags();
+    renderNoteStats(selected);
     renderLinkPanel();
     showSaved(elements.treeSavedLabel);
   });
@@ -313,6 +317,12 @@ function bindEvents() {
     markTreeNodeChanged(selected);
     persist();
     renderTree();
+  });
+
+  elements.copyLinkBtn.addEventListener("click", () => {
+    const selected = getSelectedTreeNode();
+    if (!selected) return;
+    copyNoteLink(selected);
   });
 
   elements.previewToggleBtn.addEventListener("click", () => {
@@ -895,6 +905,7 @@ function renderTreeEditor() {
   elements.treeContent.value = selected.content;
   renderFavorite(selected);
   renderTags();
+  renderNoteStats(selected);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
   elements.previewToggleBtn.textContent = "Markdown 보기";
@@ -938,6 +949,43 @@ function renderTags() {
       return button;
     }),
   );
+}
+
+function renderNoteStats(node) {
+  const text = node.content || "";
+  const chars = text.replace(/\s/g, "").length;
+  const lines = text ? text.split("\n").length : 0;
+  const links = extractWikiLinks(text).length;
+  const tags = extractTags(text).length;
+  elements.noteStats.textContent = `글자 ${chars} · 줄 ${lines} · 링크 ${links} · 태그 ${tags} · 수정 ${relativeTime(node.updatedAt)}`;
+}
+
+async function copyNoteLink(node) {
+  const link = `[[${node.title || "제목 없음"}]]`;
+  const copied = await copyText(link);
+  elements.treeSavedLabel.textContent = copied ? "링크 복사됨" : "복사 실패";
+  showSaved(elements.treeSavedLabel);
+}
+
+async function copyText(text) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // file:// 환경에서는 권한 문제로 실패할 수 있어 아래 방식으로 재시도합니다.
+  }
+  const input = document.createElement("textarea");
+  input.value = text;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.opacity = "0";
+  document.body.appendChild(input);
+  input.select();
+  const ok = document.execCommand("copy");
+  input.remove();
+  return ok;
 }
 
 function treePath(id, nodes = state.data.tree, parents = []) {
