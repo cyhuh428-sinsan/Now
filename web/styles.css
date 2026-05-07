@@ -438,15 +438,13 @@ button {
 
 .tree-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 32px 1fr auto;
   gap: 8px;
   align-items: center;
   width: 100%;
   min-height: 48px;
-  border: 0;
   background: transparent;
   padding: 10px 12px;
-  text-align: left;
 }
 
 .tree-row.active {
@@ -477,6 +475,35 @@ button {
   background: #fff;
   color: var(--blue);
   font-weight: 800;
+}
+
+.tree-toggle,
+.tree-label-btn {
+  border: 0;
+  background: transparent;
+}
+
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 22px;
+}
+
+.tree-toggle:not(:disabled):hover {
+  background: #f1f5f9;
+  color: var(--blue);
+}
+
+.tree-label-btn {
+  min-height: 40px;
+  padding: 0;
+  color: inherit;
+  text-align: left;
 }
 
 .title-input {
