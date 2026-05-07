@@ -25,6 +25,7 @@ const state = {
     accent: "blue",
     wideEditor: true,
     treeListWidth: 280,
+    sidebarCollapsed: false,
   },
 };
 
@@ -54,6 +55,7 @@ const elements = {
   prevMonthBtn: $("#prevMonthBtn"),
   nextMonthBtn: $("#nextMonthBtn"),
   addRootBtn: $("#addRootBtn"),
+  emptyAddRootBtn: $("#emptyAddRootBtn"),
   treeList: $("#treeList"),
   emptyTreeEditor: $("#emptyTreeEditor"),
   treeEditor: $("#treeEditor"),
@@ -70,7 +72,9 @@ const elements = {
   exportBtn: $("#exportBtn"),
   importInput: $("#importInput"),
   settingsBtn: $("#settingsBtn"),
+  railSidebarBtn: $("#railSidebarBtn"),
   railDailyBtn: $("#railDailyBtn"),
+  railSearchBtn: $("#railSearchBtn"),
   railSettingsBtn: $("#railSettingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsView: $("#settingsView"),
@@ -158,6 +162,21 @@ function bindEvents() {
     saveDailyFromEditor();
   });
 
+  elements.railSidebarBtn.addEventListener("click", () => {
+    state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
+    persistSettings();
+    applySettings();
+  });
+
+  elements.railSearchBtn.addEventListener("click", () => {
+    if (state.settings.sidebarCollapsed) {
+      state.settings.sidebarCollapsed = false;
+      persistSettings();
+      applySettings();
+    }
+    elements.searchInput.focus();
+  });
+
   elements.settingsBtn.addEventListener("click", () => {
     openSettings();
   });
@@ -188,12 +207,11 @@ function bindEvents() {
   });
 
   elements.addRootBtn.addEventListener("click", () => {
-    const node = createNode("새 주제", "", null, 1);
-    state.data.tree.push(node);
-    state.selectedTreeId = node.id;
-    state.expandedTreeIds.add(node.id);
-    persist();
-    renderTree();
+    addRootNote();
+  });
+
+  elements.emptyAddRootBtn.addEventListener("click", () => {
+    addRootNote();
   });
 
   elements.treeTitleInput.addEventListener("input", () => {
@@ -303,8 +321,10 @@ function applySettings() {
   const accent = ACCENTS.find((item) => item.id === state.settings.accent) || ACCENTS[0];
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
+  document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
+  elements.railSidebarBtn.title = state.settings.sidebarCollapsed ? "목록 펼치기" : "목록 접기";
 }
 
 function bindTreeResize() {
@@ -506,6 +526,15 @@ function restoreArchivedDailyNote(id) {
 function renderTree() {
   renderTreeListOnly();
   renderTreeEditor();
+}
+
+function addRootNote() {
+  const node = createNode("새 주제", "", null, 1);
+  state.data.tree.push(node);
+  state.selectedTreeId = node.id;
+  state.expandedTreeIds.add(node.id);
+  persist();
+  renderTree();
 }
 
 function renderTreeListOnly() {
