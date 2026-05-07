@@ -1,4 +1,12 @@
 const STORAGE_KEY = "nownote.web.v1";
+const SETTINGS_KEY = "nownote.web.settings.v1";
+
+const ACCENTS = [
+  { id: "blue", label: "파랑", value: "#2563eb" },
+  { id: "purple", label: "보라", value: "#8b5cf6" },
+  { id: "green", label: "초록", value: "#14b8a6" },
+  { id: "orange", label: "주황", value: "#f97316" },
+];
 
 const state = {
   view: "tree",
@@ -11,6 +19,12 @@ const state = {
     daily: {},
     archivedDaily: [],
     tree: [],
+  },
+  settings: {
+    theme: "system",
+    accent: "blue",
+    wideEditor: true,
+    treeListWidth: 280,
   },
 };
 
@@ -55,10 +69,22 @@ const elements = {
   resultsList: $("#resultsList"),
   exportBtn: $("#exportBtn"),
   importInput: $("#importInput"),
+  settingsBtn: $("#settingsBtn"),
+  railDailyBtn: $("#railDailyBtn"),
+  railSettingsBtn: $("#railSettingsBtn"),
+  settingsCloseBtn: $("#settingsCloseBtn"),
+  settingsView: $("#settingsView"),
+  themeSelect: $("#themeSelect"),
+  accentChoices: $("#accentChoices"),
+  wideEditorToggle: $("#wideEditorToggle"),
+  treeResizeHandle: $("#treeResizeHandle"),
 };
 
 load();
+loadSettings();
 bindEvents();
+renderSettings();
+applySettings();
 render();
 
 function bindEvents() {
@@ -130,6 +156,35 @@ function bindEvents() {
 
   elements.dailyContent.addEventListener("input", () => {
     saveDailyFromEditor();
+  });
+
+  elements.settingsBtn.addEventListener("click", () => {
+    openSettings();
+  });
+
+  elements.railSettingsBtn.addEventListener("click", () => {
+    openSettings();
+  });
+
+  elements.railDailyBtn.addEventListener("click", () => {
+    openDailyPopup();
+  });
+
+  elements.settingsCloseBtn.addEventListener("click", () => {
+    elements.settingsView.classList.add("hidden");
+  });
+
+  elements.themeSelect.addEventListener("change", () => {
+    state.settings.theme = elements.themeSelect.value;
+    persistSettings();
+    applySettings();
+  });
+
+  elements.wideEditorToggle.addEventListener("change", () => {
+    state.settings.wideEditor = elements.wideEditorToggle.checked;
+    state.settings.treeListWidth = state.settings.wideEditor ? 280 : 360;
+    persistSettings();
+    applySettings();
   });
 
   elements.addRootBtn.addEventListener("click", () => {
@@ -207,6 +262,75 @@ function bindEvents() {
 
   elements.exportBtn.addEventListener("click", exportData);
   elements.importInput.addEventListener("change", importData);
+  bindTreeResize();
+
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
+    if (state.settings.theme === "system") applySettings();
+  });
+}
+
+function openSettings() {
+  elements.settingsView.classList.remove("hidden");
+}
+
+function renderSettings() {
+  elements.themeSelect.value = state.settings.theme;
+  elements.wideEditorToggle.checked = state.settings.wideEditor;
+  elements.accentChoices.replaceChildren(
+    ...ACCENTS.map((accent) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "accent-btn";
+      button.title = accent.label;
+      button.style.setProperty("--accent-preview", accent.value);
+      button.classList.toggle("active", accent.id === state.settings.accent);
+      button.addEventListener("click", () => {
+        state.settings.accent = accent.id;
+        persistSettings();
+        renderSettings();
+        applySettings();
+      });
+      return button;
+    }),
+  );
+}
+
+function applySettings() {
+  const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  const resolvedTheme = state.settings.theme === "system"
+    ? (systemDark ? "dark" : "light")
+    : state.settings.theme;
+  const accent = ACCENTS.find((item) => item.id === state.settings.accent) || ACCENTS[0];
+  document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
+  document.documentElement.style.setProperty("--blue", accent.value);
+  document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
+}
+
+function bindTreeResize() {
+  let startX = 0;
+  let startWidth = 0;
+
+  const onMove = (event) => {
+    const nextWidth = Math.min(460, Math.max(180, startWidth + event.clientX - startX));
+    state.settings.treeListWidth = nextWidth;
+    applySettings();
+  };
+
+  const onUp = () => {
+    persistSettings();
+    window.removeEventListener("pointermove", onMove);
+    window.removeEventListener("pointerup", onUp);
+    document.body.classList.remove("resizing");
+  };
+
+  elements.treeResizeHandle.addEventListener("pointerdown", (event) => {
+    startX = event.clientX;
+    startWidth = state.settings.treeListWidth;
+    document.body.classList.add("resizing");
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+  });
 }
 
 function setView(view) {
@@ -684,6 +808,24 @@ function load() {
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+function loadSettings() {
+  const raw = localStorage.getItem(SETTINGS_KEY);
+  if (!raw) return;
+  try {
+    const parsed = JSON.parse(raw);
+    state.settings = {
+      ...state.settings,
+      ...parsed,
+    };
+  } catch {
+    localStorage.removeItem(SETTINGS_KEY);
+  }
+}
+
+function persistSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
 }
 
 function normalizeData() {
