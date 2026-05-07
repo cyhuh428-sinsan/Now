@@ -1822,6 +1822,17 @@ def _admin_ops_html() -> str:
     )
     checks.append(
         {
+            "name": "Postgres Password",
+            "status": "warn" if _uses_default_database_password(settings.database_url) else "ok",
+            "message": (
+                "기본 DB 비밀번호 사용 중"
+                if _uses_default_database_password(settings.database_url)
+                else "기본 DB 비밀번호 아님"
+            ),
+        }
+    )
+    checks.append(
+        {
             "name": "LLM Provider",
             "status": "ok" if settings.llm_provider != "local" else "info",
             "message": _llm_state(settings.llm_provider, settings.openai_api_key),
@@ -2080,6 +2091,10 @@ def _ops_check_rows(checks: list[dict[str, str]]) -> str:
         "</tr>"
         for check in checks
     )
+
+
+def _uses_default_database_password(database_url: str) -> bool:
+    return "now-local-password" in database_url
 
 
 def _admin_sync_html() -> str:
