@@ -9,10 +9,11 @@
 <body>
   <div class="app-shell">
     <nav class="app-rail" aria-label="빠른 메뉴">
-      <button class="rail-btn active" type="button" title="지식 메모">N</button>
-      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모">D</button>
-      <button class="rail-btn" type="button" title="검색">S</button>
-      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">G</button>
+      <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기">≡</button>
+      <button class="rail-btn active" type="button" title="지식 메모">지</button>
+      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모">일</button>
+      <button id="railSearchBtn" class="rail-btn" type="button" title="검색">검</button>
+      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">설</button>
     </nav>
 
     <aside class="sidebar" aria-label="NowNote 메뉴">
@@ -72,6 +73,7 @@
             <div id="emptyTreeEditor" class="empty-state">
               <strong>메모를 선택하세요</strong>
               <span>왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.</span>
+              <button id="emptyAddRootBtn" class="primary-btn" type="button">주제 만들기</button>
             </div>
             <div id="treeEditor" class="tree-editor hidden">
               <div class="editor-head">

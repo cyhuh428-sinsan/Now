@@ -51,6 +51,10 @@ button {
   min-height: 100vh;
 }
 
+:root[data-sidebar="collapsed"] .app-shell {
+  grid-template-columns: 48px 0 minmax(0, 1fr);
+}
+
 .app-rail {
   position: sticky;
   top: 0;
@@ -84,6 +88,12 @@ button {
   color: #fff;
 }
 
+:root[data-sidebar="collapsed"] #railSidebarBtn {
+  border-color: #4b5563;
+  background: #111827;
+  color: #fff;
+}
+
 .sidebar {
   position: sticky;
   top: 0;
@@ -91,6 +101,13 @@ button {
   padding: 16px 14px;
   border-right: 1px solid var(--line);
   background: var(--panel);
+  overflow: hidden;
+  transition: padding 160ms ease, border-color 160ms ease;
+}
+
+:root[data-sidebar="collapsed"] .sidebar {
+  padding: 0;
+  border-right-color: transparent;
 }
 
 .brand {
@@ -773,6 +790,10 @@ body.resizing {
   gap: 8px;
   color: var(--muted);
   text-align: center;
+}
+
+.empty-state .primary-btn {
+  margin-top: 10px;
 }
 
 .tree-panel .empty-state {
