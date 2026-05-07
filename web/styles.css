@@ -1116,13 +1116,49 @@ kbd {
 .quick-input {
   width: 100%;
   min-height: 44px;
-  margin-bottom: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   color: var(--text);
   padding: 0 12px;
   outline: none;
+}
+
+.search-popover-toolbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 140px 160px;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.compact-select {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
+}
+
+.search-option-help {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.search-option-help span {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  padding: 5px 8px;
+}
+
+.search-option-help strong {
+  color: var(--text);
 }
 
 .quick-results,
@@ -1237,6 +1273,10 @@ kbd {
 
   .feature-list {
     justify-content: flex-start;
+  }
+
+  .search-popover-toolbar {
+    grid-template-columns: 1fr;
   }
 }
 
