@@ -47,6 +47,14 @@ Invoke-WebRequest http://localhost:8750/health/ready
 docker compose ps
 ```
 
+WSL 환경에서 `docker compose`가 일부 옵션을 인식하지 못하면 `docker-compose` 명령을 사용합니다.
+
+```bash
+docker-compose ps
+docker-compose logs now-api --tail=80
+docker-compose logs now-worker --tail=80
+```
+
 `now-api`는 `/health/ready` 기준 Docker healthcheck를 사용하며, 주요 컨테이너는 `restart: unless-stopped`로 재시작됩니다.
 
 운영 화면:
