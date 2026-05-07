@@ -44,6 +44,8 @@ const elements = {
   todayMemoState: $("#todayMemoState"),
   favoriteList: $("#favoriteList"),
   favoriteCount: $("#favoriteCount"),
+  recentList: $("#recentList"),
+  recentCount: $("#recentCount"),
   sideTagList: $("#sideTagList"),
   tagCount: $("#tagCount"),
   dailyView: $("#dailyView"),
@@ -579,6 +581,7 @@ function renderDaily() {
 
 function renderSidebarKnowledge() {
   renderFavoriteList();
+  renderRecentList();
   renderSideTags();
 }
 
@@ -595,6 +598,30 @@ function renderFavoriteList() {
       button.type = "button";
       button.className = "side-link";
       button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(levelName(node.level))}</span>`;
+      button.addEventListener("click", () => {
+        selectTreeNode(node.id);
+      });
+      return button;
+    }),
+  );
+}
+
+function renderRecentList() {
+  const recent = flattenTree(state.data.tree)
+    .filter((node) => node.updatedAt)
+    .sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt))
+    .slice(0, 8);
+  elements.recentCount.textContent = String(recent.length);
+  if (recent.length === 0) {
+    elements.recentList.innerHTML = '<div class="side-empty">없음</div>';
+    return;
+  }
+  elements.recentList.replaceChildren(
+    ...recent.map((node) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "side-link";
+      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(relativeTime(node.updatedAt))}</span>`;
       button.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -1411,6 +1438,22 @@ function formatArchivedAt(value) {
   if (!value) return "날짜 없음";
   return new Intl.DateTimeFormat("ko-KR", {
     year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
+}
+
+function relativeTime(value) {
+  if (!value) return "날짜 없음";
+  const diffMs = Date.now() - new Date(value).getTime();
+  const minute = 60 * 1000;
+  const hour = 60 * minute;
+  const day = 24 * hour;
+  if (diffMs < minute) return "방금 전";
+  if (diffMs < hour) return `${Math.floor(diffMs / minute)}분 전`;
+  if (diffMs < day) return `${Math.floor(diffMs / hour)}시간 전`;
+  if (diffMs < day * 7) return `${Math.floor(diffMs / day)}일 전`;
+  return new Intl.DateTimeFormat("ko-KR", {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
