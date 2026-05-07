@@ -321,6 +321,29 @@ button {
   font-weight: 700;
 }
 
+.count-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.count-btn strong {
+  min-width: 22px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--soft-blue);
+  color: var(--blue);
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.count-btn:not(.has-items) strong {
+  color: var(--muted);
+  background: transparent;
+}
+
 .file-btn {
   display: grid;
   place-items: center;
