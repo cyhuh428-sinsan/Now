@@ -13,6 +13,8 @@
       <button class="rail-btn active" type="button" title="지식 메모">지</button>
       <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모">일</button>
       <button id="railSearchBtn" class="rail-btn" type="button" title="검색">검</button>
+      <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환">전</button>
+      <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기">연</button>
       <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">설</button>
     </nav>
 
@@ -89,6 +91,7 @@
               </div>
               <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
+              <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>
               <div class="editor-actions">
                 <button id="addChildBtn" class="secondary-btn" type="button">아래에 추가</button>
                 <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
@@ -207,6 +210,41 @@
             </label>
           </section>
 
+          <section class="settings-row">
+            <div>
+              <h3>글자 크기</h3>
+              <p>메모 작성 화면의 글자 크기를 조정합니다.</p>
+            </div>
+            <select id="fontSizeSelect" class="settings-select" aria-label="글자 크기">
+              <option value="small">작게</option>
+              <option value="medium">보통</option>
+              <option value="large">크게</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3>줄 간격</h3>
+              <p>긴 메모를 읽기 편한 간격으로 조정합니다.</p>
+            </div>
+            <select id="lineHeightSelect" class="settings-select" aria-label="줄 간격">
+              <option value="compact">좁게</option>
+              <option value="normal">보통</option>
+              <option value="relaxed">넓게</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3>백링크 표시</h3>
+              <p>현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="backlinksToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
           <section class="settings-row feature-row">
             <div>
               <h3>지식 기능</h3>
@@ -215,11 +253,39 @@
             <div class="feature-list">
               <span>통합 검색</span>
               <span>일일 메모</span>
-              <span>백링크 준비</span>
-              <span>그래프 보기 준비</span>
+              <span>빠른 전환</span>
+              <span>백링크</span>
+              <span>연결 보기</span>
             </div>
           </section>
         </div>
+      </div>
+    </section>
+
+    <section id="quickSwitchView" class="quick-popover hidden" aria-labelledby="quickSwitchTitle">
+      <div class="quick-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">제목으로 바로 이동</p>
+            <h2 id="quickSwitchTitle">빠른 전환</h2>
+          </div>
+          <button id="quickCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <input id="quickInput" class="quick-input" type="search" placeholder="메모 제목 검색">
+        <div id="quickResults" class="quick-results"></div>
+      </div>
+    </section>
+
+    <section id="graphView" class="quick-popover hidden" aria-labelledby="graphTitle">
+      <div class="quick-card graph-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">[[제목]] 연결 기준</p>
+            <h2 id="graphTitle">연결 보기</h2>
+          </div>
+          <button id="graphCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div id="graphList" class="graph-list"></div>
       </div>
     </section>
   </div>
