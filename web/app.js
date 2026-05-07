@@ -119,6 +119,10 @@ const elements = {
   quickInput: $("#quickInput"),
   quickResults: $("#quickResults"),
   quickCloseBtn: $("#quickCloseBtn"),
+  searchPopoverView: $("#searchPopoverView"),
+  searchPopoverInput: $("#searchPopoverInput"),
+  searchPopoverResults: $("#searchPopoverResults"),
+  searchPopoverCloseBtn: $("#searchPopoverCloseBtn"),
   graphView: $("#graphView"),
   graphList: $("#graphList"),
   graphCloseBtn: $("#graphCloseBtn"),
@@ -149,7 +153,7 @@ function bindEvents() {
   });
 
   elements.dailyToggleBtn.addEventListener("click", () => {
-    openDailyPopup();
+    toggleDailyPopup();
   });
 
   elements.dailyCloseBtn.addEventListener("click", () => {
@@ -209,32 +213,27 @@ function bindEvents() {
   });
 
   elements.railSearchBtn.addEventListener("click", () => {
-    if (state.settings.sidebarCollapsed) {
-      state.settings.sidebarCollapsed = false;
-      persistSettings();
-      applySettings();
-    }
-    elements.searchInput.focus();
+    toggleSearchPopover();
   });
 
   elements.railQuickBtn.addEventListener("click", () => {
-    openQuickSwitch();
+    toggleQuickSwitch();
   });
 
   elements.railGraphBtn.addEventListener("click", () => {
-    openGraph();
+    toggleGraph();
   });
 
   elements.settingsBtn.addEventListener("click", () => {
-    openSettings();
+    toggleSettings();
   });
 
   elements.railSettingsBtn.addEventListener("click", () => {
-    openSettings();
+    toggleSettings();
   });
 
   elements.railDailyBtn.addEventListener("click", () => {
-    openDailyPopup();
+    toggleDailyPopup();
   });
 
   elements.settingsCloseBtn.addEventListener("click", () => {
@@ -392,11 +391,13 @@ function bindEvents() {
     renderTree();
   });
 
-  elements.deletedTreeBtn.addEventListener("click", openDeletedTreeBox);
+  elements.deletedTreeBtn.addEventListener("click", toggleDeletedTreeBox);
   elements.deletedTreeCloseBtn.addEventListener("click", closeDeletedTreeBox);
   elements.exportBtn.addEventListener("click", exportData);
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
+  elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
+  elements.searchPopoverCloseBtn.addEventListener("click", closeSearchPopover);
   elements.quickInput.addEventListener("input", renderQuickResults);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
@@ -413,8 +414,12 @@ function bindEvents() {
   });
 }
 
-function openSettings() {
-  elements.settingsView.classList.remove("hidden");
+function toggleSettings() {
+  if (elements.settingsView.classList.contains("hidden")) {
+    elements.settingsView.classList.remove("hidden");
+  } else {
+    elements.settingsView.classList.add("hidden");
+  }
 }
 
 function renderSettings() {
@@ -471,8 +476,46 @@ function openQuickSwitch() {
   elements.quickInput.focus();
 }
 
+function toggleQuickSwitch() {
+  if (elements.quickSwitchView.classList.contains("hidden")) {
+    openQuickSwitch();
+  } else {
+    closeQuickSwitch();
+  }
+}
+
 function closeQuickSwitch() {
   elements.quickSwitchView.classList.add("hidden");
+}
+
+function toggleSearchPopover() {
+  if (elements.searchPopoverView.classList.contains("hidden")) {
+    openSearchPopover();
+  } else {
+    closeSearchPopover();
+  }
+}
+
+function openSearchPopover() {
+  elements.searchPopoverView.classList.remove("hidden");
+  elements.searchPopoverInput.value = state.search;
+  renderSearchPopoverResults();
+  elements.searchPopoverInput.focus();
+}
+
+function closeSearchPopover() {
+  elements.searchPopoverView.classList.add("hidden");
+}
+
+function renderSearchPopoverResults() {
+  const query = elements.searchPopoverInput.value.trim().toLowerCase();
+  if (!query) {
+    elements.searchPopoverResults.innerHTML = '<div class="empty-compact">검색어를 입력하세요.</div>';
+    return;
+  }
+  renderSearchResultsInto(elements.searchPopoverResults, searchResults(query), () => {
+    closeSearchPopover();
+  });
 }
 
 function renderQuickResults() {
@@ -504,6 +547,14 @@ function openGraph() {
   elements.graphView.classList.remove("hidden");
 }
 
+function toggleGraph() {
+  if (elements.graphView.classList.contains("hidden")) {
+    openGraph();
+  } else {
+    closeGraph();
+  }
+}
+
 function closeGraph() {
   elements.graphView.classList.add("hidden");
 }
@@ -511,6 +562,14 @@ function closeGraph() {
 function openDeletedTreeBox() {
   renderDeletedTreeList();
   elements.deletedTreeView.classList.remove("hidden");
+}
+
+function toggleDeletedTreeBox() {
+  if (elements.deletedTreeView.classList.contains("hidden")) {
+    openDeletedTreeBox();
+  } else {
+    closeDeletedTreeBox();
+  }
 }
 
 function closeDeletedTreeBox() {
@@ -521,6 +580,7 @@ function handleShortcuts(event) {
   if (!state.settings.enableShortcuts) return;
   if (event.key === "Escape") {
     closeQuickSwitch();
+    closeSearchPopover();
     closeGraph();
     closeDeletedTreeBox();
     closeDailyPopup();
@@ -532,6 +592,26 @@ function handleShortcuts(event) {
   if (key === "k") {
     event.preventDefault();
     openQuickSwitch();
+  }
+  if (key === "o") {
+    event.preventDefault();
+    openQuickSwitch();
+  }
+  if (key === "f") {
+    event.preventDefault();
+    toggleSearchPopover();
+  }
+  if (key === "d") {
+    event.preventDefault();
+    toggleDailyPopup();
+  }
+  if (key === "g") {
+    event.preventDefault();
+    toggleGraph();
+  }
+  if (key === ",") {
+    event.preventDefault();
+    toggleSettings();
   }
   if (key === "n") {
     event.preventDefault();
@@ -628,6 +708,14 @@ function selectTreeNode(id) {
   state.selectedTreeId = id;
   expandAncestors(id);
   setView("tree");
+}
+
+function toggleDailyPopup() {
+  if (elements.dailyView.classList.contains("hidden")) {
+    openDailyPopup();
+  } else {
+    closeDailyPopup();
+  }
 }
 
 function openDailyPopup() {
@@ -1292,6 +1380,10 @@ function renderResults() {
     return;
   }
 
+  renderSearchResultsInto(elements.resultsList, searchResults(query));
+}
+
+function searchResults(query) {
   const dailyResults = Object.values(state.data.daily)
     .filter((note) => note.content.toLowerCase().includes(query))
     .map((note) => ({
@@ -1312,13 +1404,16 @@ function renderResults() {
       preview: node.content,
     }));
 
-  const results = [...dailyResults, ...treeResults];
+  return [...dailyResults, ...treeResults];
+}
+
+function renderSearchResultsInto(container, results, afterSelect) {
   if (results.length === 0) {
-    elements.resultsList.innerHTML = '<div class="empty-state"><strong>검색 결과가 없습니다</strong><span>다른 검색어를 입력해보세요.</span></div>';
+    container.innerHTML = '<div class="empty-state"><strong>검색 결과가 없습니다</strong><span>다른 검색어를 입력해보세요.</span></div>';
     return;
   }
 
-  elements.resultsList.replaceChildren(
+  container.replaceChildren(
     ...results.map((result) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -1336,6 +1431,7 @@ function renderResults() {
           expandAncestors(result.id);
           setView("tree");
         }
+        if (afterSelect) afterSelect(result);
       });
       return button;
     }),
