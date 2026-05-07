@@ -78,15 +78,43 @@ class ServerSettings {
 class ServerConnectionResult {
   final bool ok;
   final String message;
+  final String serverName;
+  final Map<String, dynamic> capabilities;
 
-  const ServerConnectionResult({required this.ok, required this.message});
+  const ServerConnectionResult({
+    required this.ok,
+    required this.message,
+    this.serverName = '',
+    this.capabilities = const {},
+  });
 }
 
 class ServerSyncResult {
   final int uploaded;
+  final int downloaded;
   final String message;
 
-  const ServerSyncResult({required this.uploaded, required this.message});
+  const ServerSyncResult({
+    required this.uploaded,
+    this.downloaded = 0,
+    required this.message,
+  });
+}
+
+class ServerOpsResult {
+  final String status;
+  final List<Map<String, dynamic>> checks;
+
+  const ServerOpsResult({
+    required this.status,
+    required this.checks,
+  });
+
+  String get message {
+    if (status == 'ok') return '운영 점검 정상';
+    if (status == 'bad') return '운영 점검 주의 필요';
+    return '운영 점검 확인 필요';
+  }
 }
 
 class ServerSyncService {
@@ -103,9 +131,14 @@ class ServerSyncService {
       final res = await dio.get<Map<String, dynamic>>('/api/v1/server');
       final name = res.data?['server']?.toString() ?? 'NowNote Server';
       final authRequired = res.data?['auth_required'] == true;
+      final capabilities = Map<String, dynamic>.from(
+        (res.data?['capabilities'] as Map?) ?? const {},
+      );
       return ServerConnectionResult(
         ok: true,
-        message: authRequired ? '$name 연결됨 · 토큰 필요' : '$name 연결됨',
+        message: _serverConnectionMessage(name, authRequired, capabilities),
+        serverName: name,
+        capabilities: capabilities,
       );
     } on DioException catch (e) {
       final status = e.response?.statusCode;
@@ -122,6 +155,10 @@ class ServerSyncService {
   }
 
   Future<ServerSyncResult> uploadNotes(ServerSettings settings) async {
+    return syncNotes(settings);
+  }
+
+  Future<ServerSyncResult> syncNotes(ServerSettings settings) async {
     if (!settings.enabled) {
       return const ServerSyncResult(uploaded: 0, message: '서버 동기화가 꺼져 있습니다');
     }
@@ -138,10 +175,38 @@ class ServerSyncService {
     }
 
     final dio = _dio(settings);
-    await dio.post('/api/v1/notes/sync', data: {'notes': notes});
+    final res = await dio.post<Map<String, dynamic>>(
+      '/api/v1/sync',
+      data: {
+        'owner_id': 'local_user',
+        'device_id': settings.deviceId,
+        'updated_after': null,
+        'include_deleted': true,
+        'notes': notes,
+      },
+    );
+    final pushed = (res.data?['pushed_notes'] as List?)?.length ?? notes.length;
+    final pulled = (res.data?['pulled_notes'] as List?)?.length ?? 0;
     return ServerSyncResult(
-      uploaded: notes.length,
-      message: '메모 ${notes.length}건 업로드 완료',
+      uploaded: pushed,
+      downloaded: pulled,
+      message: '메모 업로드 $pushed건 · 서버 변경 $pulled건 확인',
+    );
+  }
+
+  Future<ServerOpsResult> loadOpsStatus(ServerSettings settings) async {
+    if (!settings.isConfigured) {
+      return const ServerOpsResult(status: 'warn', checks: []);
+    }
+    final dio = _dio(settings);
+    final res = await dio.get<Map<String, dynamic>>('/api/v1/admin/ops');
+    final checks = ((res.data?['checks'] as List?) ?? const [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    return ServerOpsResult(
+      status: res.data?['status']?.toString() ?? 'warn',
+      checks: checks,
     );
   }
 
@@ -234,4 +299,16 @@ String _normalizeBaseUrl(String value) {
     return trimmed.substring(0, trimmed.length - 1);
   }
   return trimmed;
+}
+
+String _serverConnectionMessage(
+  String name,
+  bool authRequired,
+  Map<String, dynamic> capabilities,
+) {
+  final sync = capabilities['sync'] == true ? '동기화 지원' : '동기화 미확인';
+  final maxLevel = capabilities['max_tree_note_level'];
+  final levelText = maxLevel is int ? '계층 $maxLevel단계' : '계층 확인';
+  final authText = authRequired ? '토큰 필요' : '토큰 없음';
+  return '$name 연결됨 · $authText · $sync · $levelText';
 }
