@@ -81,6 +81,13 @@ const elements = {
   treeSavedLabel: $("#treeSavedLabel"),
   favoriteBtn: $("#favoriteBtn"),
   copyLinkBtn: $("#copyLinkBtn"),
+  noteFindToggleBtn: $("#noteFindToggleBtn"),
+  noteFindBar: $("#noteFindBar"),
+  noteFindInput: $("#noteFindInput"),
+  noteFindCount: $("#noteFindCount"),
+  noteFindPrevBtn: $("#noteFindPrevBtn"),
+  noteFindNextBtn: $("#noteFindNextBtn"),
+  noteFindCloseBtn: $("#noteFindCloseBtn"),
   tagList: $("#tagList"),
   noteStats: $("#noteStats"),
   previewToggleBtn: $("#previewToggleBtn"),
@@ -350,6 +357,12 @@ function bindEvents() {
     copyNoteLink(selected);
   });
 
+  elements.noteFindToggleBtn.addEventListener("click", toggleNoteFind);
+  elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0));
+  elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
+  elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
+  elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
+
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
@@ -585,6 +598,10 @@ function closeDeletedTreeBox() {
 function handleShortcuts(event) {
   if (!state.settings.enableShortcuts) return;
   if (event.key === "Escape") {
+    if (!elements.noteFindBar.classList.contains("hidden")) {
+      closeNoteFind();
+      return;
+    }
     closeQuickSwitch();
     closeSearchPopover();
     closeGraph();
@@ -605,7 +622,11 @@ function handleShortcuts(event) {
   }
   if (key === "f") {
     event.preventDefault();
-    toggleSearchPopover();
+    if (event.shiftKey) {
+      openNoteFind();
+    } else {
+      toggleSearchPopover();
+    }
   }
   if (key === "d") {
     event.preventDefault();
@@ -1132,6 +1153,65 @@ function renderNoteStats(node) {
   const links = extractWikiLinks(text).length;
   const tags = extractTags(text).length;
   elements.noteStats.textContent = `글자 ${chars} · 줄 ${lines} · 링크 ${links} · 태그 ${tags} · 수정 ${relativeTime(node.updatedAt)}`;
+}
+
+function toggleNoteFind() {
+  if (elements.noteFindBar.classList.contains("hidden")) {
+    openNoteFind();
+  } else {
+    closeNoteFind();
+  }
+}
+
+function openNoteFind() {
+  elements.noteFindBar.classList.remove("hidden");
+  elements.noteFindInput.focus();
+  elements.noteFindInput.select();
+  selectNoteFindMatch(0);
+}
+
+function closeNoteFind() {
+  elements.noteFindBar.classList.add("hidden");
+  elements.noteFindInput.value = "";
+  elements.noteFindCount.textContent = "0개";
+  elements.treeContent.focus();
+}
+
+function noteFindMatches() {
+  const query = elements.noteFindInput.value.trim().toLowerCase();
+  if (!query) return [];
+  const text = elements.treeContent.value.toLowerCase();
+  const matches = [];
+  let index = text.indexOf(query);
+  while (index >= 0) {
+    matches.push(index);
+    index = text.indexOf(query, index + query.length);
+  }
+  return matches;
+}
+
+function selectNoteFindMatch(index) {
+  const query = elements.noteFindInput.value.trim();
+  const matches = noteFindMatches();
+  if (!query || matches.length === 0) {
+    elements.noteFindInput.dataset.index = "0";
+    elements.noteFindCount.textContent = query ? "0개" : "0개";
+    return;
+  }
+  const safeIndex = ((index % matches.length) + matches.length) % matches.length;
+  const start = matches[safeIndex];
+  elements.noteFindInput.dataset.index = String(safeIndex);
+  elements.noteFindCount.textContent = `${safeIndex + 1}/${matches.length}`;
+  elements.markdownPreview.classList.add("hidden");
+  elements.treeContent.classList.remove("hidden");
+  elements.previewToggleBtn.textContent = "Markdown 보기";
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(start, start + query.length);
+}
+
+function moveNoteFindMatch(direction) {
+  const current = Number(elements.noteFindInput.dataset.index || 0);
+  selectNoteFindMatch(current + direction);
 }
 
 async function copyNoteLink(node) {
