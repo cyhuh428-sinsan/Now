@@ -103,6 +103,8 @@ const elements = {
   noteStats: $("#noteStats"),
   previewToggleBtn: $("#previewToggleBtn"),
   markdownPreview: $("#markdownPreview"),
+  moveUpBtn: $("#moveUpBtn"),
+  moveDownBtn: $("#moveDownBtn"),
   addChildBtn: $("#addChildBtn"),
   deleteTreeBtn: $("#deleteTreeBtn"),
   deletedTreeBtn: $("#deletedTreeBtn"),
@@ -379,6 +381,8 @@ function bindEvents() {
   elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
   elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
   elements.closeAllTabsBtn.addEventListener("click", closeAllTreeTabs);
+  elements.moveUpBtn.addEventListener("click", () => moveSelectedTreeNode(-1));
+  elements.moveDownBtn.addEventListener("click", () => moveSelectedTreeNode(1));
 
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -1147,6 +1151,13 @@ function renderTreeEditor() {
   renderOutlinePanel(selected);
   renderLinkPanel();
   elements.addChildBtn.disabled = selected.level >= 3;
+  renderTreeMoveButtons(selected);
+}
+
+function renderTreeMoveButtons(node) {
+  const { siblings, index } = treeSiblingPosition(node);
+  elements.moveUpBtn.disabled = index <= 0;
+  elements.moveDownBtn.disabled = index < 0 || index >= siblings.length - 1;
 }
 
 function renderTreePath(node) {
@@ -1870,6 +1881,28 @@ function markTreeNodeChanged(node) {
 function getSelectedTreeNode() {
   if (!state.selectedTreeId) return null;
   return findTreeNode(state.data.tree, state.selectedTreeId);
+}
+
+function treeSiblingPosition(node) {
+  const siblings = node.parentId
+    ? findTreeNode(state.data.tree, node.parentId)?.children || []
+    : state.data.tree;
+  return {
+    siblings,
+    index: siblings.findIndex((item) => item.id === node.id),
+  };
+}
+
+function moveSelectedTreeNode(direction) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const { siblings, index } = treeSiblingPosition(selected);
+  const nextIndex = index + direction;
+  if (index < 0 || nextIndex < 0 || nextIndex >= siblings.length) return;
+  [siblings[index], siblings[nextIndex]] = [siblings[nextIndex], siblings[index]];
+  markTreeNodeChanged(selected);
+  persist();
+  renderTree();
 }
 
 function findTreeNode(nodes, id) {
