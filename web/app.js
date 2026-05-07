@@ -920,7 +920,12 @@ function treeNodeElement(node) {
     renderTree();
   });
 
-  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${node.title || "제목 없음"}` : node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(levelName(node.level))} · 아래 ${node.children.length}개${node.tags.length ? ` · #${node.tags.slice(0, 2).join(" #")}` : ""}</div>`;
+  const metaParts = [
+    levelName(node.level),
+    node.children.length > 0 ? `아래 ${node.children.length}개` : "",
+    node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
+  ].filter(Boolean);
+  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${node.title || "제목 없음"}` : node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
