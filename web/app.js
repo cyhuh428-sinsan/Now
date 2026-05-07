@@ -42,6 +42,10 @@ const elements = {
   dailyToggleBtn: $("#dailyToggleBtn"),
   dailyCloseBtn: $("#dailyCloseBtn"),
   todayMemoState: $("#todayMemoState"),
+  favoriteList: $("#favoriteList"),
+  favoriteCount: $("#favoriteCount"),
+  sideTagList: $("#sideTagList"),
+  tagCount: $("#tagCount"),
   dailyView: $("#dailyView"),
   treeView: $("#treeView"),
   resultsView: $("#resultsView"),
@@ -559,6 +563,7 @@ function render() {
   renderDaily();
   renderTree();
   renderResults();
+  renderSidebarKnowledge();
 }
 
 function renderDaily() {
@@ -570,6 +575,55 @@ function renderDaily() {
     : "비어 있음";
   renderCalendar();
   renderArchiveList();
+}
+
+function renderSidebarKnowledge() {
+  renderFavoriteList();
+  renderSideTags();
+}
+
+function renderFavoriteList() {
+  const favorites = flattenTree(state.data.tree).filter((node) => node.favorite);
+  elements.favoriteCount.textContent = String(favorites.length);
+  if (favorites.length === 0) {
+    elements.favoriteList.innerHTML = '<div class="side-empty">없음</div>';
+    return;
+  }
+  elements.favoriteList.replaceChildren(
+    ...favorites.slice(0, 8).map((node) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "side-link";
+      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(levelName(node.level))}</span>`;
+      button.addEventListener("click", () => {
+        selectTreeNode(node.id);
+      });
+      return button;
+    }),
+  );
+}
+
+function renderSideTags() {
+  const tags = tagSummary();
+  elements.tagCount.textContent = String(tags.length);
+  if (tags.length === 0) {
+    elements.sideTagList.innerHTML = '<div class="side-empty">없음</div>';
+    return;
+  }
+  elements.sideTagList.replaceChildren(
+    ...tags.slice(0, 16).map((tag) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "side-tag";
+      button.textContent = `#${tag.name} ${tag.count}`;
+      button.addEventListener("click", () => {
+        elements.searchInput.value = `#${tag.name}`;
+        state.search = `#${tag.name}`;
+        setView("results");
+      });
+      return button;
+    }),
+  );
 }
 
 function renderCalendar() {
@@ -1372,6 +1426,17 @@ function extractTags(text) {
   return Array.from(String(text || "").matchAll(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g), (match) => match[2])
     .filter(Boolean)
     .filter((tag, index, tags) => tags.indexOf(tag) === index);
+}
+
+function tagSummary() {
+  const counts = new Map();
+  flattenTree(state.data.tree).forEach((node) => {
+    node.tags.forEach((tag) => {
+      counts.set(tag, (counts.get(tag) || 0) + 1);
+    });
+  });
+  return Array.from(counts, ([name, count]) => ({ name, count }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, "ko"));
 }
 
 function searchableTreeText(node) {
