@@ -33,6 +33,7 @@ const state = {
     enableShortcuts: true,
     showTags: true,
     showSidebarAssist: false,
+    openTreeTabs: [],
   },
 };
 
@@ -72,6 +73,7 @@ const elements = {
   addRootBtn: $("#addRootBtn"),
   emptyAddRootBtn: $("#emptyAddRootBtn"),
   treeList: $("#treeList"),
+  openTabs: $("#openTabs"),
   emptyTreeEditor: $("#emptyTreeEditor"),
   treeEditor: $("#treeEditor"),
   treeTitleInput: $("#treeTitleInput"),
@@ -640,6 +642,10 @@ function handleShortcuts(event) {
     event.preventDefault();
     toggleGraph();
   }
+  if (key === "w") {
+    event.preventDefault();
+    closeOpenTreeTab(state.selectedTreeId);
+  }
   if (key === ",") {
     event.preventDefault();
     toggleSettings();
@@ -987,6 +993,7 @@ function restoreArchivedDailyNote(id) {
 function renderTree() {
   renderTreeListOnly();
   renderTreeEditor();
+  renderOpenTreeTabs();
 }
 
 function addRootNote() {
@@ -1097,7 +1104,11 @@ function renderTreeEditor() {
   const selected = getSelectedTreeNode();
   elements.emptyTreeEditor.classList.toggle("hidden", Boolean(selected));
   elements.treeEditor.classList.toggle("hidden", !selected);
-  if (!selected) return;
+  if (!selected) {
+    renderOpenTreeTabs();
+    return;
+  }
+  addOpenTreeTab(selected.id);
 
   elements.treeLevelLabel.textContent = levelName(selected.level);
   elements.treeTitleInput.value = selected.title;
@@ -1117,6 +1128,55 @@ function renderTreeEditor() {
 
 function renderTreePath(node) {
   elements.treePathLabel.textContent = treePath(node.id).join(" / ");
+}
+
+function addOpenTreeTab(id) {
+  if (!id) return;
+  state.settings.openTreeTabs = [id, ...state.settings.openTreeTabs.filter((tabId) => tabId !== id)].slice(0, 10);
+  persistSettings();
+}
+
+function renderOpenTreeTabs() {
+  const tabs = state.settings.openTreeTabs
+    .map((id) => findTreeNode(state.data.tree, id))
+    .filter(Boolean);
+  state.settings.openTreeTabs = tabs.map((node) => node.id);
+  elements.openTabs.classList.toggle("hidden", tabs.length === 0);
+  if (tabs.length === 0) {
+    elements.openTabs.replaceChildren();
+    persistSettings();
+    return;
+  }
+  elements.openTabs.replaceChildren(
+    ...tabs.map((node) => {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "open-tab";
+      tab.classList.toggle("active", node.id === state.selectedTreeId);
+      tab.innerHTML = `<span>${escapeHtml(node.title || "제목 없음")}</span><strong aria-label="닫기">×</strong>`;
+      tab.addEventListener("click", () => {
+        selectTreeNode(node.id);
+      });
+      tab.querySelector("strong").addEventListener("click", (event) => {
+        event.stopPropagation();
+        closeOpenTreeTab(node.id);
+      });
+      return tab;
+    }),
+  );
+  persistSettings();
+}
+
+function closeOpenTreeTab(id) {
+  if (!id) return;
+  const tabs = state.settings.openTreeTabs.filter((tabId) => tabId !== id);
+  const wasSelected = state.selectedTreeId === id;
+  state.settings.openTreeTabs = tabs;
+  if (wasSelected) {
+    state.selectedTreeId = tabs.find((tabId) => findTreeNode(state.data.tree, tabId)) || null;
+  }
+  persistSettings();
+  renderTree();
 }
 
 function renderFavorite(node) {
@@ -1791,6 +1851,9 @@ function loadSettings() {
       ...state.settings,
       ...parsed,
     };
+    if (!Array.isArray(state.settings.openTreeTabs)) {
+      state.settings.openTreeTabs = [];
+    }
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
   }
