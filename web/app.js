@@ -34,6 +34,7 @@ const state = {
     showTags: true,
     showSidebarAssist: false,
     openTreeTabs: [],
+    closedTreeTabs: [],
   },
 };
 
@@ -75,6 +76,7 @@ const elements = {
   treeList: $("#treeList"),
   openTabsBar: $("#openTabsBar"),
   openTabs: $("#openTabs"),
+  reopenClosedTabBtn: $("#reopenClosedTabBtn"),
   closeOtherTabsBtn: $("#closeOtherTabsBtn"),
   closeAllTabsBtn: $("#closeAllTabsBtn"),
   emptyTreeEditor: $("#emptyTreeEditor"),
@@ -371,6 +373,7 @@ function bindEvents() {
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
+  elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
   elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
   elements.closeAllTabsBtn.addEventListener("click", closeAllTreeTabs);
 
@@ -654,6 +657,10 @@ function handleShortcuts(event) {
     } else {
       closeOpenTreeTab(state.selectedTreeId);
     }
+  }
+  if (key === "t" && event.shiftKey) {
+    event.preventDefault();
+    reopenClosedTreeTab();
   }
   if (key === ",") {
     event.preventDefault();
@@ -1175,11 +1182,30 @@ function renderOpenTreeTabs() {
       return tab;
     }),
   );
+  elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
+}
+
+function rememberClosedTreeTabs(ids) {
+  const validIds = ids.filter((id) => id && findTreeNode(state.data.tree, id));
+  if (validIds.length === 0) return;
+  state.settings.closedTreeTabs = [
+    ...validIds.reverse(),
+    ...state.settings.closedTreeTabs.filter((id) => !validIds.includes(id)),
+  ].slice(0, 10);
+}
+
+function reopenClosedTreeTab() {
+  const id = state.settings.closedTreeTabs.find((tabId) => findTreeNode(state.data.tree, tabId));
+  if (!id) return;
+  state.settings.closedTreeTabs = state.settings.closedTreeTabs.filter((tabId) => tabId !== id);
+  addOpenTreeTab(id);
+  selectTreeNode(id);
 }
 
 function closeOtherTreeTabs() {
   if (!state.selectedTreeId) return;
+  rememberClosedTreeTabs(state.settings.openTreeTabs.filter((tabId) => tabId !== state.selectedTreeId));
   state.settings.openTreeTabs = state.settings.openTreeTabs.includes(state.selectedTreeId)
     ? [state.selectedTreeId]
     : [];
@@ -1188,6 +1214,7 @@ function closeOtherTreeTabs() {
 }
 
 function closeAllTreeTabs() {
+  rememberClosedTreeTabs(state.settings.openTreeTabs);
   state.settings.openTreeTabs = [];
   state.selectedTreeId = null;
   persistSettings();
@@ -1198,6 +1225,7 @@ function closeOpenTreeTab(id) {
   if (!id) return;
   const tabs = state.settings.openTreeTabs.filter((tabId) => tabId !== id);
   const wasSelected = state.selectedTreeId === id;
+  rememberClosedTreeTabs([id]);
   state.settings.openTreeTabs = tabs;
   if (wasSelected) {
     state.selectedTreeId = tabs.find((tabId) => findTreeNode(state.data.tree, tabId)) || null;
@@ -1880,6 +1908,9 @@ function loadSettings() {
     };
     if (!Array.isArray(state.settings.openTreeTabs)) {
       state.settings.openTreeTabs = [];
+    }
+    if (!Array.isArray(state.settings.closedTreeTabs)) {
+      state.settings.closedTreeTabs = [];
     }
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
