@@ -633,6 +633,14 @@ function handleShortcuts(event) {
   }
   if (!(event.ctrlKey || event.metaKey)) return;
   const key = event.key.toLowerCase();
+  if (event.altKey && key === "arrowup") {
+    event.preventDefault();
+    moveSelectedTreeNode(-1);
+  }
+  if (event.altKey && key === "arrowdown") {
+    event.preventDefault();
+    moveSelectedTreeNode(1);
+  }
   if (key === "k") {
     event.preventDefault();
     openQuickSwitch();
