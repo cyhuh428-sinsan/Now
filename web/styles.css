@@ -116,6 +116,30 @@ button {
   gap: 8px;
 }
 
+.today-chip {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  min-height: 58px;
+  margin-bottom: 16px;
+  padding: 10px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  background: var(--blue-soft);
+  color: var(--blue);
+  text-align: left;
+}
+
+.today-chip span {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.today-chip strong {
+  color: var(--text);
+  font-size: 15px;
+}
+
 .nav-tab,
 .ghost-btn,
 .primary-btn,
@@ -210,6 +234,39 @@ button {
   grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
+}
+
+.daily-popover {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  justify-items: end;
+  background: rgba(15, 23, 42, 0.18);
+  padding: 18px;
+}
+
+.daily-popover.hidden {
+  display: none;
+}
+
+.daily-card {
+  width: min(760px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 24px 70px rgba(15, 23, 42, 0.22);
+  padding: 18px;
+}
+
+.daily-layout.compact {
+  grid-template-columns: 260px minmax(0, 1fr);
+}
+
+.daily-layout.compact .memo-editor {
+  min-height: 360px;
 }
 
 .panel {
@@ -438,6 +495,10 @@ button {
 
   .daily-layout,
   .tree-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .daily-layout.compact {
     grid-template-columns: 1fr;
   }
 }

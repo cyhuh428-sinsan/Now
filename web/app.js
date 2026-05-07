@@ -1,7 +1,7 @@
 const STORAGE_KEY = "nownote.web.v1";
 
 const state = {
-  view: "daily",
+  view: "tree",
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
@@ -17,6 +17,9 @@ const $ = (selector) => document.querySelector(selector);
 const elements = {
   searchInput: $("#searchInput"),
   navTabs: document.querySelectorAll(".nav-tab"),
+  dailyToggleBtn: $("#dailyToggleBtn"),
+  dailyCloseBtn: $("#dailyCloseBtn"),
+  todayMemoState: $("#todayMemoState"),
   dailyView: $("#dailyView"),
   treeView: $("#treeView"),
   resultsView: $("#resultsView"),
@@ -60,9 +63,17 @@ function bindEvents() {
     if (state.search) {
       setView("results");
     } else if (state.view === "results") {
-      setView("daily");
+      setView("tree");
     }
     render();
+  });
+
+  elements.dailyToggleBtn.addEventListener("click", () => {
+    openDailyPopup();
+  });
+
+  elements.dailyCloseBtn.addEventListener("click", () => {
+    closeDailyPopup();
   });
 
   elements.todayBtn.addEventListener("click", () => {
@@ -166,10 +177,18 @@ function setView(view) {
   elements.navTabs.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
   });
-  elements.dailyView.classList.toggle("active", view === "daily");
   elements.treeView.classList.toggle("active", view === "tree");
   elements.resultsView.classList.toggle("active", view === "results");
   render();
+}
+
+function openDailyPopup() {
+  elements.dailyView.classList.remove("hidden");
+  elements.dailyContent.focus();
+}
+
+function closeDailyPopup() {
+  elements.dailyView.classList.add("hidden");
 }
 
 function render() {
@@ -182,6 +201,9 @@ function renderDaily() {
   elements.monthLabel.textContent = monthLabel(state.visibleMonth);
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
   elements.dailyContent.value = state.data.daily[state.selectedDate]?.content || "";
+  elements.todayMemoState.textContent = state.data.daily[toDateKey(new Date())]?.content?.trim()
+    ? "기록 있음"
+    : "비어 있음";
   renderCalendar();
 }
 
@@ -350,7 +372,8 @@ function renderResults() {
           state.selectedDate = result.id;
           const [year, month] = result.id.split("-").map(Number);
           state.visibleMonth = new Date(year, month - 1, 1);
-          setView("daily");
+          setView("tree");
+          openDailyPopup();
         } else {
           state.selectedTreeId = result.id;
           setView("tree");
