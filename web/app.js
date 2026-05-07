@@ -45,8 +45,11 @@ const elements = {
   treeEditor: $("#treeEditor"),
   treeTitleInput: $("#treeTitleInput"),
   treeContent: $("#treeContent"),
+  treePathLabel: $("#treePathLabel"),
   treeLevelLabel: $("#treeLevelLabel"),
   treeSavedLabel: $("#treeSavedLabel"),
+  previewToggleBtn: $("#previewToggleBtn"),
+  markdownPreview: $("#markdownPreview"),
   addChildBtn: $("#addChildBtn"),
   deleteTreeBtn: $("#deleteTreeBtn"),
   resultsList: $("#resultsList"),
@@ -142,9 +145,10 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     selected.title = elements.treeTitleInput.value;
-    selected.updatedAt = new Date().toISOString();
+    markTreeNodeChanged(selected);
     persist();
     renderTreeListOnly();
+    renderTreePath(selected);
     showSaved(elements.treeSavedLabel);
   });
 
@@ -152,9 +156,24 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     selected.content = elements.treeContent.value;
-    selected.updatedAt = new Date().toISOString();
+    markTreeNodeChanged(selected);
     persist();
+    renderMarkdownPreview(selected.content);
     showSaved(elements.treeSavedLabel);
+  });
+
+  elements.previewToggleBtn.addEventListener("click", () => {
+    const selected = getSelectedTreeNode();
+    if (!selected) return;
+    const isOpening = elements.markdownPreview.classList.contains("hidden");
+    elements.markdownPreview.classList.toggle("hidden", !isOpening);
+    elements.treeContent.classList.toggle("hidden", isOpening);
+    elements.previewToggleBtn.textContent = isOpening ? "편집하기" : "Markdown 보기";
+    if (isOpening) {
+      renderMarkdownPreview(selected.content);
+    } else {
+      elements.treeContent.focus();
+    }
   });
 
   elements.addChildBtn.addEventListener("click", () => {
@@ -263,6 +282,7 @@ function saveDailyFromEditor() {
       date: state.selectedDate,
       content,
       status: "active",
+      syncState: "pending",
       updatedAt: new Date().toISOString(),
     };
   }
@@ -347,6 +367,7 @@ function restoreArchivedDailyNote(id) {
       date: note.date,
       content: note.content,
       status: "active",
+      syncState: "pending",
       restoredFromArchiveId: note.id,
       updatedAt: new Date().toISOString(),
     };
@@ -453,7 +474,72 @@ function renderTreeEditor() {
   elements.treeLevelLabel.textContent = `${selected.level}단계 계층 메모`;
   elements.treeTitleInput.value = selected.title;
   elements.treeContent.value = selected.content;
+  elements.markdownPreview.classList.add("hidden");
+  elements.treeContent.classList.remove("hidden");
+  elements.previewToggleBtn.textContent = "Markdown 보기";
+  renderTreePath(selected);
+  renderMarkdownPreview(selected.content);
   elements.addChildBtn.disabled = selected.level >= 3;
+}
+
+function renderTreePath(node) {
+  elements.treePathLabel.textContent = treePath(node.id).join(" / ");
+}
+
+function treePath(id, nodes = state.data.tree, parents = []) {
+  for (const node of nodes) {
+    const current = [...parents, node.title || "제목 없음"];
+    if (node.id === id) return current;
+    const childPath = treePath(id, node.children, current);
+    if (childPath.length > 0) return childPath;
+  }
+  return [];
+}
+
+function renderMarkdownPreview(content) {
+  const html = markdownToHtml(content || "");
+  elements.markdownPreview.innerHTML = html || '<p class="empty-compact">미리 볼 내용이 없습니다.</p>';
+}
+
+function markdownToHtml(markdown) {
+  const lines = escapeHtml(markdown).split("\n");
+  const blocks = [];
+  let listItems = [];
+
+  const flushList = () => {
+    if (listItems.length === 0) return;
+    blocks.push(`<ul>${listItems.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+    listItems = [];
+  };
+
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!trimmed) {
+      flushList();
+      return;
+    }
+    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    if (heading) {
+      flushList();
+      blocks.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      return;
+    }
+    const list = trimmed.match(/^[-*]\s+(.+)$/);
+    if (list) {
+      listItems.push(list[1]);
+      return;
+    }
+    flushList();
+    blocks.push(`<p>${inlineMarkdown(trimmed)}</p>`);
+  });
+  flushList();
+  return blocks.join("");
+}
+
+function inlineMarkdown(text) {
+  return text
+    .replace(/`([^`]+)`/g, "<code>$1</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
 
 function renderResults() {
@@ -521,9 +607,17 @@ function createNode(title, content, parentId, level) {
     parentId,
     level,
     children: [],
+    status: "active",
+    syncState: "pending",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function markTreeNodeChanged(node) {
+  node.updatedAt = new Date().toISOString();
+  node.status = node.status || "active";
+  node.syncState = "pending";
 }
 
 function getSelectedTreeNode() {
@@ -574,9 +668,42 @@ function load() {
     state.data.daily = parsed.daily || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.tree = parsed.tree || [];
+    normalizeData();
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
+}
+
+function normalizeData() {
+  Object.values(state.data.daily).forEach((note) => {
+    note.status = note.status || "active";
+    note.syncState = note.syncState || "synced";
+    note.updatedAt = note.updatedAt || new Date().toISOString();
+  });
+  state.data.archivedDaily.forEach((note) => {
+    note.id = note.id || crypto.randomUUID();
+    note.status = note.status || "archived";
+    note.syncState = note.syncState || "synced";
+    note.archivedAt = note.archivedAt || note.updatedAt || new Date().toISOString();
+    note.updatedAt = note.updatedAt || note.archivedAt;
+  });
+  normalizeTreeNodes(state.data.tree, null, 1);
+}
+
+function normalizeTreeNodes(nodes, parentId, level) {
+  nodes.forEach((node) => {
+    node.id = node.id || crypto.randomUUID();
+    node.title = node.title || "";
+    node.content = node.content || "";
+    node.parentId = node.parentId ?? parentId;
+    node.level = node.level || level;
+    node.children = node.children || [];
+    node.status = node.status || "active";
+    node.syncState = node.syncState || "synced";
+    node.createdAt = node.createdAt || new Date().toISOString();
+    node.updatedAt = node.updatedAt || node.createdAt;
+    normalizeTreeNodes(node.children, node.id, node.level + 1);
+  });
 }
 
 function persist() {
@@ -606,6 +733,7 @@ function importData(event) {
       }
       parsed.archivedDaily = parsed.archivedDaily || [];
       state.data = parsed;
+      normalizeData();
       state.selectedTreeId = null;
       persist();
       render();
