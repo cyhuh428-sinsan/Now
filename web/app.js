@@ -73,7 +73,10 @@ const elements = {
   addRootBtn: $("#addRootBtn"),
   emptyAddRootBtn: $("#emptyAddRootBtn"),
   treeList: $("#treeList"),
+  openTabsBar: $("#openTabsBar"),
   openTabs: $("#openTabs"),
+  closeOtherTabsBtn: $("#closeOtherTabsBtn"),
+  closeAllTabsBtn: $("#closeAllTabsBtn"),
   emptyTreeEditor: $("#emptyTreeEditor"),
   treeEditor: $("#treeEditor"),
   treeTitleInput: $("#treeTitleInput"),
@@ -368,6 +371,8 @@ function bindEvents() {
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
+  elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
+  elements.closeAllTabsBtn.addEventListener("click", closeAllTreeTabs);
 
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -644,7 +649,11 @@ function handleShortcuts(event) {
   }
   if (key === "w") {
     event.preventDefault();
-    closeOpenTreeTab(state.selectedTreeId);
+    if (event.shiftKey) {
+      closeOtherTreeTabs();
+    } else {
+      closeOpenTreeTab(state.selectedTreeId);
+    }
   }
   if (key === ",") {
     event.preventDefault();
@@ -1143,7 +1152,7 @@ function renderOpenTreeTabs() {
     .map((id) => findTreeNode(state.data.tree, id))
     .filter(Boolean);
   state.settings.openTreeTabs = tabs.map((node) => node.id);
-  elements.openTabs.classList.toggle("hidden", tabs.length === 0);
+  elements.openTabsBar.classList.toggle("hidden", tabs.length === 0);
   if (tabs.length === 0) {
     elements.openTabs.replaceChildren();
     persistSettings();
@@ -1167,6 +1176,22 @@ function renderOpenTreeTabs() {
     }),
   );
   persistSettings();
+}
+
+function closeOtherTreeTabs() {
+  if (!state.selectedTreeId) return;
+  state.settings.openTreeTabs = state.settings.openTreeTabs.includes(state.selectedTreeId)
+    ? [state.selectedTreeId]
+    : [];
+  persistSettings();
+  renderTree();
+}
+
+function closeAllTreeTabs() {
+  state.settings.openTreeTabs = [];
+  state.selectedTreeId = null;
+  persistSettings();
+  renderTree();
 }
 
 function closeOpenTreeTab(id) {

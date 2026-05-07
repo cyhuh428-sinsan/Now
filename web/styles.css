@@ -749,13 +749,34 @@ kbd {
   background: var(--green);
 }
 
-.open-tabs {
-  display: flex;
-  gap: 0;
-  overflow-x: auto;
+.open-tabs-bar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: end;
   margin: -4px 0 14px;
   border-bottom: 1px solid var(--line);
   padding-left: 4px;
+}
+
+.open-tabs {
+  display: flex;
+  gap: 0;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.open-tab-actions {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 4px;
+  white-space: nowrap;
+}
+
+.open-tab-actions .secondary-btn {
+  min-height: 30px;
+  padding: 0 9px;
+  font-size: 12px;
 }
 
 .open-tab {
@@ -1405,6 +1426,14 @@ kbd {
 
   .note-find-bar {
     grid-template-columns: 1fr;
+  }
+
+  .open-tabs-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .open-tab-actions {
+    justify-content: flex-end;
   }
 }
 
