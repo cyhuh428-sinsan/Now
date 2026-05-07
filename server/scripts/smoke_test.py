@@ -74,6 +74,16 @@ def main() -> None:
         {"count": data.get("count"), "name": data.get("name")},
     )
 
+    status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
+    print(
+        "GET /api/v1/admin/ops:",
+        status,
+        {
+            "status": data.get("status"),
+            "checks": len(data.get("checks", [])),
+        },
+    )
+
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     sync_payload = {
         "owner_id": "local_user",
