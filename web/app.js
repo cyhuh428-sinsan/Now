@@ -1132,7 +1132,9 @@ function renderTreePath(node) {
 
 function addOpenTreeTab(id) {
   if (!id) return;
-  state.settings.openTreeTabs = [id, ...state.settings.openTreeTabs.filter((tabId) => tabId !== id)].slice(0, 10);
+  if (!state.settings.openTreeTabs.includes(id)) {
+    state.settings.openTreeTabs = [...state.settings.openTreeTabs, id].slice(-10);
+  }
   persistSettings();
 }
 
