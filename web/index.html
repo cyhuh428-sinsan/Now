@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Web</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="NowNote 메뉴">
+      <div class="brand">
+        <div class="brand-mark">N</div>
+        <div>
+          <h1>NowNote</h1>
+          <p>로컬 메모</p>
+        </div>
+      </div>
+
+      <label class="search-box">
+        <span>검색</span>
+        <input id="searchInput" type="search" placeholder="제목, 내용 검색">
+      </label>
+
+      <nav class="nav-tabs" aria-label="메모 보기">
+        <button class="nav-tab active" data-view="daily" type="button">일자별 메모</button>
+        <button class="nav-tab" data-view="tree" type="button">계층 메모</button>
+        <button class="nav-tab" data-view="results" type="button">검색 결과</button>
+      </nav>
+
+      <div class="side-actions">
+        <button id="exportBtn" class="ghost-btn" type="button">JSON 내보내기</button>
+        <label class="ghost-btn file-btn">
+          JSON 가져오기
+          <input id="importInput" type="file" accept="application/json">
+        </label>
+      </div>
+    </aside>
+
+    <main class="workspace">
+      <section id="dailyView" class="view active" aria-labelledby="dailyTitle">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">오늘과 날짜 중심 기록</p>
+            <h2 id="dailyTitle">일자별 메모</h2>
+          </div>
+          <div class="header-actions">
+            <button id="todayBtn" class="secondary-btn" type="button">오늘</button>
+            <button id="appendTimeBtn" class="primary-btn" type="button">시간 추가</button>
+          </div>
+        </header>
+
+        <div class="daily-layout">
+          <section class="panel calendar-panel" aria-label="달력">
+            <div class="month-bar">
+              <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
+              <strong id="monthLabel"></strong>
+              <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
+            </div>
+            <div class="calendar-weekdays">
+              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+            </div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </section>
+
+          <section class="panel editor-panel" aria-label="선택한 날짜 메모">
+            <div class="editor-head">
+              <div>
+                <p id="selectedDateLabel" class="eyebrow"></p>
+                <h3>하루 메모</h3>
+              </div>
+              <span id="dailySavedLabel" class="save-state">저장됨</span>
+            </div>
+            <textarea id="dailyContent" class="memo-editor" placeholder="오늘 기억할 것, 생각, 아이디어를 적어두세요."></textarea>
+          </section>
+        </div>
+      </section>
+
+      <section id="treeView" class="view" aria-labelledby="treeTitle">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">3단계 지식 구조</p>
+            <h2 id="treeTitle">계층 메모</h2>
+          </div>
+          <div class="header-actions">
+            <button id="addRootBtn" class="primary-btn" type="button">부모 메모 추가</button>
+          </div>
+        </header>
+
+        <div class="tree-layout">
+          <section class="panel tree-panel" aria-label="계층 목록">
+            <div id="treeList" class="tree-list"></div>
+          </section>
+
+          <section class="panel editor-panel" aria-label="계층 메모 편집">
+            <div id="emptyTreeEditor" class="empty-state">
+              <strong>메모를 선택하세요</strong>
+              <span>왼쪽에서 계층 메모를 선택하면 내용을 편집할 수 있습니다.</span>
+            </div>
+            <div id="treeEditor" class="tree-editor hidden">
+              <div class="editor-head">
+                <div>
+                  <p id="treeLevelLabel" class="eyebrow"></p>
+                  <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
+                </div>
+                <span id="treeSavedLabel" class="save-state">저장됨</span>
+              </div>
+              <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
+              <div class="editor-actions">
+                <button id="addChildBtn" class="secondary-btn" type="button">하위 메모 추가</button>
+                <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="resultsView" class="view" aria-labelledby="resultsTitle">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">통합 검색</p>
+            <h2 id="resultsTitle">검색 결과</h2>
+          </div>
+        </header>
+        <section class="panel">
+          <div id="resultsList" class="results-list"></div>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
