@@ -779,6 +779,11 @@ kbd {
   font-size: 12px;
 }
 
+.open-tab-actions .secondary-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 .open-tab {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
