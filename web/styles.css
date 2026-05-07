@@ -749,6 +749,47 @@ kbd {
   background: var(--green);
 }
 
+.open-tabs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  margin: -4px 0 12px;
+  padding-bottom: 4px;
+}
+
+.open-tab {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  max-width: 180px;
+  min-height: 32px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  padding: 0 8px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.open-tab.active {
+  border-color: var(--blue);
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+
+.open-tab span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.open-tab strong {
+  color: inherit;
+  font-size: 14px;
+}
+
 .editor-head {
   display: flex;
   align-items: flex-start;
