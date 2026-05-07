@@ -121,6 +121,8 @@ const elements = {
   quickCloseBtn: $("#quickCloseBtn"),
   searchPopoverView: $("#searchPopoverView"),
   searchPopoverInput: $("#searchPopoverInput"),
+  searchScopeSelect: $("#searchScopeSelect"),
+  searchSortSelect: $("#searchSortSelect"),
   searchPopoverResults: $("#searchPopoverResults"),
   searchPopoverCloseBtn: $("#searchPopoverCloseBtn"),
   graphView: $("#graphView"),
@@ -397,6 +399,8 @@ function bindEvents() {
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
   elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
+  elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
+  elements.searchSortSelect.addEventListener("change", renderSearchPopoverResults);
   elements.searchPopoverCloseBtn.addEventListener("click", closeSearchPopover);
   elements.quickInput.addEventListener("input", renderQuickResults);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
@@ -508,14 +512,16 @@ function closeSearchPopover() {
 }
 
 function renderSearchPopoverResults() {
-  const query = elements.searchPopoverInput.value.trim().toLowerCase();
+  const query = elements.searchPopoverInput.value.trim();
   if (!query) {
     elements.searchPopoverResults.innerHTML = '<div class="empty-compact">검색어를 입력하세요.</div>';
     return;
   }
-  renderSearchResultsInto(elements.searchPopoverResults, searchResults(query), () => {
-    closeSearchPopover();
+  const results = searchResults(query, {
+    scope: elements.searchScopeSelect.value,
+    sort: elements.searchSortSelect.value,
   });
+  renderSearchResultsInto(elements.searchPopoverResults, results, () => closeSearchPopover());
 }
 
 function renderQuickResults() {
@@ -1383,28 +1389,96 @@ function renderResults() {
   renderSearchResultsInto(elements.resultsList, searchResults(query));
 }
 
-function searchResults(query) {
+function searchResults(query, options = {}) {
+  const normalizedQuery = String(query || "").trim().toLowerCase();
+  const parsed = parseSearchQuery(normalizedQuery, options.scope || "all");
+  const sort = options.sort || "updated-desc";
   const dailyResults = Object.values(state.data.daily)
-    .filter((note) => note.content.toLowerCase().includes(query))
     .map((note) => ({
       type: "daily",
       id: note.date,
       title: longDateLabel(note.date),
       meta: "일자별 메모",
       preview: note.content,
+      content: note.content,
+      path: `일자별 메모 / ${longDateLabel(note.date)}`,
+      tags: [],
+      updatedAt: note.updatedAt || note.date,
+      createdAt: note.date,
+    }))
+    .filter((result) => matchesSearchResult(result, parsed))
+    .map((note) => ({
+      type: "daily",
+      id: note.id,
+      title: note.title,
+      meta: `${note.meta} · ${formatDateTime(note.updatedAt)}`,
+      preview: note.content,
+      updatedAt: note.updatedAt,
+      createdAt: note.createdAt,
     }));
 
   const treeResults = flattenTree(state.data.tree)
-    .filter((node) => searchableTreeText(node).includes(query))
     .map((node) => ({
       type: "tree",
       id: node.id,
       title: node.title || "제목 없음",
-      meta: levelName(node.level),
+      meta: `${levelName(node.level)} · ${treePath(node.id).join(" / ")}`,
       preview: node.content,
-    }));
+      content: node.content,
+      path: treePath(node.id).join(" / "),
+      tags: node.tags || [],
+      updatedAt: node.updatedAt,
+      createdAt: node.createdAt,
+    }))
+    .filter((result) => matchesSearchResult(result, parsed));
 
-  return [...dailyResults, ...treeResults];
+  return sortSearchResults([...dailyResults, ...treeResults], sort);
+}
+
+function parseSearchQuery(query, fallbackScope) {
+  const prefixes = {
+    "path:": "path",
+    "file:": "title",
+    "tag:": "tag",
+    "line:": "content",
+    "section:": "content",
+    "[property]": "all",
+  };
+  const prefix = Object.keys(prefixes).find((item) => query.startsWith(item));
+  if (!prefix) {
+    return { scope: fallbackScope, text: query };
+  }
+  return {
+    scope: prefixes[prefix],
+    text: query.slice(prefix.length).trim(),
+  };
+}
+
+function matchesSearchResult(result, parsed) {
+  const text = parsed.text;
+  if (!text) return true;
+  const title = result.title.toLowerCase();
+  const content = result.content.toLowerCase();
+  const path = result.path.toLowerCase();
+  const tags = result.tags.map((tag) => tag.toLowerCase());
+  if (parsed.scope === "title") return title.includes(text);
+  if (parsed.scope === "content") return content.includes(text);
+  if (parsed.scope === "path") return path.includes(text);
+  if (parsed.scope === "tag") return tags.some((tag) => tag.includes(text.replace(/^#/, "")));
+  return [title, content, path, tags.join(" ")].some((value) => value.includes(text));
+}
+
+function sortSearchResults(results, sort) {
+  const collator = new Intl.Collator("ko-KR", { numeric: true, sensitivity: "base" });
+  const timeValue = (value) => new Date(value || 0).getTime() || 0;
+  return [...results].sort((a, b) => {
+    if (sort === "title-asc") return collator.compare(a.title, b.title);
+    if (sort === "title-desc") return collator.compare(b.title, a.title);
+    if (sort === "created-asc") return timeValue(a.createdAt) - timeValue(b.createdAt);
+    if (sort === "created-desc") return timeValue(b.createdAt) - timeValue(a.createdAt);
+    if (sort === "updated-asc") return timeValue(a.updatedAt) - timeValue(b.updatedAt);
+    return timeValue(b.updatedAt) - timeValue(a.updatedAt);
+  });
 }
 
 function renderSearchResultsInto(container, results, afterSelect) {
