@@ -28,7 +28,7 @@
       </button>
 
       <nav class="nav-tabs" aria-label="메모 보기">
-        <button class="nav-tab active" data-view="tree" type="button">계층 메모</button>
+        <button class="nav-tab active" data-view="tree" type="button">지식 메모</button>
         <button class="nav-tab" data-view="results" type="button">검색 결과</button>
       </nav>
 
@@ -45,23 +45,23 @@
       <section id="treeView" class="view active" aria-labelledby="treeTitle">
         <header class="view-header">
           <div>
-            <p class="eyebrow">3단계 지식 구조</p>
-            <h2 id="treeTitle">계층 메모</h2>
+            <p class="eyebrow">주제 / 분류 / 메모</p>
+            <h2 id="treeTitle">지식 메모</h2>
           </div>
           <div class="header-actions">
-            <button id="addRootBtn" class="primary-btn" type="button">부모 메모 추가</button>
+            <button id="addRootBtn" class="primary-btn" type="button">주제 추가</button>
           </div>
         </header>
 
         <div class="tree-layout">
-          <section class="panel tree-panel" aria-label="계층 목록">
+          <section class="panel tree-panel" aria-label="지식 목록">
             <div id="treeList" class="tree-list"></div>
           </section>
 
-          <section class="panel editor-panel" aria-label="계층 메모 편집">
+          <section class="panel editor-panel" aria-label="지식 메모 편집">
             <div id="emptyTreeEditor" class="empty-state">
               <strong>메모를 선택하세요</strong>
-              <span>왼쪽에서 계층 메모를 선택하면 내용을 편집할 수 있습니다.</span>
+              <span>왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.</span>
             </div>
             <div id="treeEditor" class="tree-editor hidden">
               <div class="editor-head">
@@ -71,14 +71,14 @@
                 </div>
                 <span id="treeSavedLabel" class="save-state">저장됨</span>
               </div>
-              <div class="editor-tools" aria-label="계층 메모 도구">
+              <div class="editor-tools" aria-label="지식 메모 도구">
                 <span id="treePathLabel" class="path-label"></span>
                 <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
               </div>
               <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <div class="editor-actions">
-                <button id="addChildBtn" class="secondary-btn" type="button">하위 메모 추가</button>
+                <button id="addChildBtn" class="secondary-btn" type="button">아래에 추가</button>
                 <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
               </div>
             </div>

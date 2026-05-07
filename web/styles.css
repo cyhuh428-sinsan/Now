@@ -231,7 +231,7 @@ button {
 .daily-layout,
 .tree-layout {
   display: grid;
-  grid-template-columns: minmax(300px, 420px) minmax(0, 1fr);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
@@ -529,11 +529,11 @@ button {
 }
 
 .tree-editor .memo-editor {
-  min-height: 440px;
+  min-height: 560px;
 }
 
 .markdown-preview {
-  min-height: 440px;
+  min-height: 560px;
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 18px;
@@ -563,10 +563,15 @@ button {
 .empty-state {
   display: grid;
   place-items: center;
-  min-height: 520px;
+  min-height: 360px;
   gap: 8px;
   color: var(--muted);
   text-align: center;
+}
+
+.tree-panel .empty-state {
+  min-height: 180px;
+  padding: 24px 14px;
 }
 
 .empty-state strong {

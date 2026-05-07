@@ -133,7 +133,7 @@ function bindEvents() {
   });
 
   elements.addRootBtn.addEventListener("click", () => {
-    const node = createNode("새 부모 메모", "", null, 1);
+    const node = createNode("새 주제", "", null, 1);
     state.data.tree.push(node);
     state.selectedTreeId = node.id;
     state.expandedTreeIds.add(node.id);
@@ -180,10 +180,10 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     if (selected.level >= 3) {
-      alert("계층 메모는 3단계까지만 만들 수 있습니다.");
+      alert("지식 메모는 주제, 분류, 메모 3단계까지만 만들 수 있습니다.");
       return;
     }
-    const node = createNode("새 하위 메모", "", selected.id, selected.level + 1);
+    const node = createNode(defaultTitleForLevel(selected.level + 1), "", selected.id, selected.level + 1);
     selected.children.push(node);
     state.selectedTreeId = node.id;
     state.expandedTreeIds.add(selected.id);
@@ -195,7 +195,7 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     if (selected.children.length > 0) {
-      alert("하위 메모가 있는 메모는 삭제할 수 없습니다.");
+      alert("아래에 연결된 항목이 있으면 삭제할 수 없습니다.");
       return;
     }
     if (!confirm(`'${selected.title || "제목 없음"}' 메모를 삭제할까요?`)) return;
@@ -388,7 +388,7 @@ function renderTreeListOnly() {
   if (state.data.tree.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = "<strong>계층 메모가 없습니다</strong><span>부모 메모를 먼저 추가하세요.</span>";
+    empty.innerHTML = "<strong>주제가 없습니다</strong><span>먼저 주제를 추가하세요.</span>";
     elements.treeList.replaceChildren(empty);
     return;
   }
@@ -424,18 +424,18 @@ function treeNodeElement(node) {
     renderTree();
   });
 
-  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.title || "제목 없음")}</div><div class="tree-meta">${node.level}단계 · 하위 ${node.children.length}개</div>`;
+  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(levelName(node.level))} · 아래 ${node.children.length}개</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.className = "small-btn";
   addButton.textContent = "+";
-  addButton.title = "하위 메모 추가";
+  addButton.title = "아래에 추가";
   addButton.disabled = node.level >= 3;
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
     if (node.level >= 3) return;
-    const child = createNode("새 하위 메모", "", node.id, node.level + 1);
+    const child = createNode(defaultTitleForLevel(node.level + 1), "", node.id, node.level + 1);
     node.children.push(child);
     state.selectedTreeId = child.id;
     state.expandedTreeIds.add(node.id);
@@ -471,7 +471,7 @@ function renderTreeEditor() {
   elements.treeEditor.classList.toggle("hidden", !selected);
   if (!selected) return;
 
-  elements.treeLevelLabel.textContent = `${selected.level}단계 계층 메모`;
+  elements.treeLevelLabel.textContent = levelName(selected.level);
   elements.treeTitleInput.value = selected.title;
   elements.treeContent.value = selected.content;
   elements.markdownPreview.classList.add("hidden");
@@ -545,7 +545,7 @@ function inlineMarkdown(text) {
 function renderResults() {
   const query = state.search.toLowerCase();
   if (!query) {
-    elements.resultsList.innerHTML = '<div class="empty-state"><strong>검색어를 입력하세요</strong><span>일자별 메모와 계층 메모를 함께 검색합니다.</span></div>';
+    elements.resultsList.innerHTML = '<div class="empty-state"><strong>검색어를 입력하세요</strong><span>일자별 메모와 지식 메모를 함께 검색합니다.</span></div>';
     return;
   }
 
@@ -565,7 +565,7 @@ function renderResults() {
       type: "tree",
       id: node.id,
       title: node.title || "제목 없음",
-      meta: `${node.level}단계 계층 메모`,
+      meta: levelName(node.level),
       preview: node.content,
     }));
 
@@ -612,6 +612,18 @@ function createNode(title, content, parentId, level) {
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
+}
+
+function defaultTitleForLevel(level) {
+  if (level === 1) return "새 주제";
+  if (level === 2) return "새 분류";
+  return "새 메모";
+}
+
+function levelName(level) {
+  if (level === 1) return "주제";
+  if (level === 2) return "분류";
+  return "메모";
 }
 
 function markTreeNodeChanged(node) {
