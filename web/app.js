@@ -30,6 +30,7 @@ const state = {
     lineHeight: "normal",
     showBacklinks: true,
     enableShortcuts: true,
+    showTags: true,
   },
 };
 
@@ -68,6 +69,8 @@ const elements = {
   treePathLabel: $("#treePathLabel"),
   treeLevelLabel: $("#treeLevelLabel"),
   treeSavedLabel: $("#treeSavedLabel"),
+  favoriteBtn: $("#favoriteBtn"),
+  tagList: $("#tagList"),
   previewToggleBtn: $("#previewToggleBtn"),
   markdownPreview: $("#markdownPreview"),
   addChildBtn: $("#addChildBtn"),
@@ -90,6 +93,7 @@ const elements = {
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
   backlinksToggle: $("#backlinksToggle"),
+  tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
@@ -251,6 +255,13 @@ function bindEvents() {
     renderLinkPanel();
   });
 
+  elements.tagsToggle.addEventListener("change", () => {
+    state.settings.showTags = elements.tagsToggle.checked;
+    persistSettings();
+    applySettings();
+    renderTags();
+  });
+
   elements.shortcutsToggle.addEventListener("change", () => {
     state.settings.enableShortcuts = elements.shortcutsToggle.checked;
     persistSettings();
@@ -279,11 +290,22 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     selected.content = elements.treeContent.value;
+    selected.tags = extractTags(selected.content);
     markTreeNodeChanged(selected);
     persist();
     renderMarkdownPreview(selected.content);
+    renderTags();
     renderLinkPanel();
     showSaved(elements.treeSavedLabel);
+  });
+
+  elements.favoriteBtn.addEventListener("click", () => {
+    const selected = getSelectedTreeNode();
+    if (!selected) return;
+    selected.favorite = !selected.favorite;
+    markTreeNodeChanged(selected);
+    persist();
+    renderTree();
   });
 
   elements.previewToggleBtn.addEventListener("click", () => {
@@ -357,6 +379,7 @@ function renderSettings() {
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
+  elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
@@ -389,6 +412,7 @@ function applySettings() {
   document.documentElement.dataset.fontSize = state.settings.fontSize;
   document.documentElement.dataset.lineHeight = state.settings.lineHeight;
   document.documentElement.dataset.backlinks = state.settings.showBacklinks ? "show" : "hide";
+  document.documentElement.dataset.tags = state.settings.showTags ? "show" : "hide";
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
   elements.railSidebarBtn.title = state.settings.sidebarCollapsed ? "목록 펼치기" : "목록 접기";
@@ -408,7 +432,7 @@ function closeQuickSwitch() {
 function renderQuickResults() {
   const query = elements.quickInput.value.trim().toLowerCase();
   const nodes = flattenTree(state.data.tree)
-    .filter((node) => !query || `${node.title} ${treePath(node.id).join(" ")}`.toLowerCase().includes(query))
+    .filter((node) => !query || searchableTreeText(node).includes(query))
     .slice(0, 30);
   if (nodes.length === 0) {
     elements.quickResults.innerHTML = '<div class="empty-compact">이동할 메모가 없습니다.</div>';
@@ -736,7 +760,7 @@ function treeNodeElement(node) {
     renderTree();
   });
 
-  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(levelName(node.level))} · 아래 ${node.children.length}개</div>`;
+  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${node.title || "제목 없음"}` : node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(levelName(node.level))} · 아래 ${node.children.length}개${node.tags.length ? ` · #${node.tags.slice(0, 2).join(" #")}` : ""}</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
@@ -786,6 +810,8 @@ function renderTreeEditor() {
   elements.treeLevelLabel.textContent = levelName(selected.level);
   elements.treeTitleInput.value = selected.title;
   elements.treeContent.value = selected.content;
+  renderFavorite(selected);
+  renderTags();
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
   elements.previewToggleBtn.textContent = "Markdown 보기";
@@ -797,6 +823,38 @@ function renderTreeEditor() {
 
 function renderTreePath(node) {
   elements.treePathLabel.textContent = treePath(node.id).join(" / ");
+}
+
+function renderFavorite(node) {
+  elements.favoriteBtn.classList.toggle("active", Boolean(node.favorite));
+  elements.favoriteBtn.textContent = node.favorite ? "즐겨찾기 해제" : "즐겨찾기";
+}
+
+function renderTags() {
+  const selected = getSelectedTreeNode();
+  if (!selected || !state.settings.showTags) {
+    elements.tagList.replaceChildren();
+    return;
+  }
+  selected.tags = extractTags(selected.content);
+  if (selected.tags.length === 0) {
+    elements.tagList.innerHTML = '<span class="tag-empty">태그 없음</span>';
+    return;
+  }
+  elements.tagList.replaceChildren(
+    ...selected.tags.map((tag) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "tag-chip";
+      button.textContent = `#${tag}`;
+      button.addEventListener("click", () => {
+        elements.searchInput.value = `#${tag}`;
+        state.search = `#${tag}`;
+        setView("results");
+      });
+      return button;
+    }),
+  );
 }
 
 function treePath(id, nodes = state.data.tree, parents = []) {
@@ -902,6 +960,7 @@ function markdownToHtml(markdown) {
 function inlineMarkdown(text) {
   return text
     .replace(/\[\[([^\]]+)\]\]/g, (_, title) => `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(title.trim())}">${title}</button>`)
+    .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
 }
@@ -1033,7 +1092,7 @@ function renderResults() {
     }));
 
   const treeResults = flattenTree(state.data.tree)
-    .filter((node) => `${node.title} ${node.content}`.toLowerCase().includes(query))
+    .filter((node) => searchableTreeText(node).includes(query))
     .map((node) => ({
       type: "tree",
       id: node.id,
@@ -1082,6 +1141,8 @@ function createNode(title, content, parentId, level) {
     children: [],
     status: "active",
     syncState: "pending",
+    favorite: false,
+    tags: extractTags(content),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -1203,6 +1264,8 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.children = node.children || [];
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
+    node.favorite = Boolean(node.favorite);
+    node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
     node.createdAt = node.createdAt || new Date().toISOString();
     node.updatedAt = node.updatedAt || node.createdAt;
     normalizeTreeNodes(node.children, node.id, node.level + 1);
@@ -1303,6 +1366,16 @@ function snippet(text) {
   const normalized = (text || "").replace(/\s+/g, " ").trim();
   if (!normalized) return "내용 없음";
   return normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
+}
+
+function extractTags(text) {
+  return Array.from(String(text || "").matchAll(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g), (match) => match[2])
+    .filter(Boolean)
+    .filter((tag, index, tags) => tags.indexOf(tag) === index);
+}
+
+function searchableTreeText(node) {
+  return `${node.title} ${node.content} ${treePath(node.id).join(" ")} ${node.tags.join(" ")}`.toLowerCase();
 }
 
 function escapeHtml(value) {
