@@ -819,6 +819,7 @@ body.resizing {
 }
 
 .wiki-link {
+  border: 0;
   border-radius: 6px;
   background: var(--blue-soft);
   color: var(--blue);
@@ -866,6 +867,14 @@ body.resizing {
 .quick-result span {
   color: var(--muted);
   font-size: 13px;
+}
+
+.backlink-item.missing-link {
+  border-style: dashed;
+}
+
+.backlink-item.missing-link strong {
+  color: var(--blue);
 }
 
 .quick-popover {
