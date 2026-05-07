@@ -7,7 +7,7 @@ from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import SyncLog
 from app.schemas.note import SyncRequest, SyncResponse
-from app.services.note_sync import list_changed_notes, upsert_note
+from app.services.note_sync import as_naive_utc, list_changed_notes, upsert_note
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -36,7 +36,7 @@ def sync(payload: SyncRequest, db: Session = Depends(get_db)) -> SyncResponse:
             pushed_count=len(pushed),
             pulled_count=len(pulled),
             include_deleted=1 if payload.include_deleted else 0,
-            updated_after=payload.updated_after,
+            updated_after=as_naive_utc(payload.updated_after),
         )
     )
     db.commit()
