@@ -33,7 +33,7 @@ def _require_monitor_access(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="admin token required",
-        headers={"WWW-Authenticate": 'Basic realm="NowNote Admin"'},
+        headers={"WWW-Authenticate": 'Basic realm="NowNote 관리"'},
     )
 
 
@@ -116,8 +116,10 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
         db_status = "error"
         error_message = str(exc)
 
-    auth_required = "ON" if settings.api_token else "OFF"
+    auth_required = _api_token_badge(settings.api_token)
     server_name = escape(settings.server_name)
+    status_label = _status_label(status)
+    db_status_label = _status_label(db_status)
     latest_note_label = _format_datetime(latest_note_at)
     job_rows = _job_rows(job_status_counts)
 
@@ -127,7 +129,7 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="refresh" content="30">
-  <title>NowNote Monitor</title>
+  <title>NowNote 모니터</title>
   <style>
     :root {{
       color-scheme: light;
@@ -267,17 +269,17 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
         <h1>{server_name}</h1>
         <div class="sub">NowNote 서버 모니터링 · 30초마다 자동 새로고침</div>
       </div>
-      <div class="badge">API Token: {auth_required}</div>
+      <div class="badge">API 토큰: {auth_required}</div>
     </header>
 
     <div class="grid">
       <div class="card">
         <div class="label">API 상태</div>
-        <div class="value {'ok' if status == 'ready' else 'bad'}">{status}</div>
+        <div class="value {'ok' if status == 'ready' else 'bad'}">{status_label}</div>
       </div>
       <div class="card">
         <div class="label">DB 상태</div>
-        <div class="value {'ok' if db_status == 'ready' else 'bad'}">{db_status}</div>
+        <div class="value {'ok' if db_status == 'ready' else 'bad'}">{db_status_label}</div>
       </div>
       <div class="card">
         <div class="label">활성 메모</div>
@@ -325,6 +327,22 @@ def _format_datetime(value: datetime | None) -> str:
     if value is None:
         return "-"
     return value.strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _status_label(status: str) -> str:
+    labels = {
+        "ready": "정상",
+        "error": "오류",
+    }
+    return labels.get(status, status)
+
+
+def _api_token_badge(api_token: str | None) -> str:
+    if not api_token:
+        return "미사용"
+    if api_token.startswith("change-this"):
+        return "예시값"
+    return "사용"
 
 
 def _job_rows(counts: dict[str, int]) -> str:
@@ -379,7 +397,7 @@ def _admin_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Admin</title>
+  <title>NowNote 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -532,30 +550,30 @@ def _admin_html() -> str:
   <main>
     <header>
       <div>
-        <h1>NowNote Admin</h1>
+        <h1>NowNote 관리</h1>
         <div class="sub">읽기 전용 관리 화면 · 운영 설정과 처리 현황 확인</div>
       </div>
       <nav class="nav">
-        <a href="/monitor">Monitor</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/docs">API Docs</a>
-        <a href="/health/ready">Ready</a>
+        <a href="/monitor">모니터</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/docs">API 문서</a>
+        <a href="/health/ready">준비 상태</a>
       </nav>
     </header>
 
     <div class="grid">
       <div class="card">
-        <div class="label">API Token</div>
+        <div class="label">API 토큰</div>
         <div class="value {api_token_class}">{api_token_state}</div>
       </div>
       <div class="card">
-        <div class="label">LLM Provider</div>
+        <div class="label">LLM 제공자</div>
         <div class="value">{escape(settings.llm_provider)}</div>
         <div class="sub">{llm_state}</div>
       </div>
@@ -605,12 +623,12 @@ def _llm_state(provider: str, api_key: str | None) -> str:
 
 
 def _admin_notice(api_token: str | None) -> str:
-    if api_token:
+    if api_token and not api_token.startswith("change-this"):
         return ""
     return (
         '<div class="notice">'
-        "현재 API Token이 꺼져 있습니다. 공용 서버로 열기 전에는 "
-        "NOW_API_TOKEN을 반드시 설정해야 합니다."
+        "현재 API 토큰이 없거나 예시값입니다. 공용 서버로 열기 전에는 "
+        "NOW_API_TOKEN을 긴 랜덤 토큰으로 반드시 변경해야 합니다."
         "</div>"
     )
 
@@ -673,7 +691,7 @@ def _admin_analysis_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Analysis Admin</title>
+  <title>NowNote 분석 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -818,19 +836,19 @@ def _admin_analysis_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Analysis Admin</h1>
+        <h1>분석 관리</h1>
         <div class="sub">분석 작업 큐와 최근 처리 결과 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/monitor">Monitor</a>
-        <a href="/docs">API Docs</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+        <a href="/docs">API 문서</a>
       </nav>
     </header>
 
@@ -976,7 +994,7 @@ def _admin_notes_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Notes Admin</title>
+  <title>NowNote 메모 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -1118,19 +1136,19 @@ def _admin_notes_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Notes Admin</h1>
+        <h1>메모 관리</h1>
         <div class="sub">서버에 동기화된 메모 흐름 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/monitor">Monitor</a>
-        <a href="/docs">API Docs</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+        <a href="/docs">API 문서</a>
       </nav>
     </header>
 
@@ -1283,7 +1301,7 @@ def _admin_recordings_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Recordings Admin</title>
+  <title>NowNote 녹음 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -1426,19 +1444,19 @@ def _admin_recordings_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Recordings Admin</h1>
+        <h1>녹음 관리</h1>
         <div class="sub">서버에 저장된 원본 음성 파일 흐름 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/monitor">Monitor</a>
-        <a href="/docs">API Docs</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+        <a href="/docs">API 문서</a>
       </nav>
     </header>
 
@@ -1591,7 +1609,7 @@ def _admin_devices_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Devices Admin</title>
+  <title>NowNote 기기 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -1713,19 +1731,19 @@ def _admin_devices_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Devices Admin</h1>
+        <h1>기기 관리</h1>
         <div class="sub">서버에 연결된 owner/device별 동기화 흔적 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/monitor">Monitor</a>
-        <a href="/docs">API Docs</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+        <a href="/docs">API 문서</a>
       </nav>
     </header>
 
@@ -1813,64 +1831,56 @@ def _admin_ops_html() -> str:
         db_status = "bad"
         db_message = f"DB 연결 오류: {exc}"
 
-    checks.append({"name": "Database", "status": db_status, "message": db_message})
+    checks.append({"name": "데이터베이스", "status": db_status, "message": db_message})
     storage_status, storage_message = _recording_storage_state(settings.storage_dir)
     checks.append(
         {
-            "name": "Recording Storage",
+            "name": "녹음 저장소",
             "status": storage_status,
             "message": storage_message,
         }
     )
+    token_status, token_message = _api_token_state(settings.api_token)
+    checks.append({"name": "API 토큰", "status": token_status, "message": token_message})
+    password_status, password_message = _database_password_state(settings.database_url)
     checks.append(
         {
-            "name": "API Token",
-            "status": "ok" if settings.api_token else "warn",
-            "message": "설정됨" if settings.api_token else "로컬 개발은 가능하지만 공용 오픈 전 설정 필요",
+            "name": "PostgreSQL 비밀번호",
+            "status": password_status,
+            "message": password_message,
         }
     )
     checks.append(
         {
-            "name": "Postgres Password",
-            "status": "warn" if _uses_default_database_password(settings.database_url) else "ok",
-            "message": (
-                "기본 DB 비밀번호 사용 중"
-                if _uses_default_database_password(settings.database_url)
-                else "기본 DB 비밀번호 아님"
-            ),
-        }
-    )
-    checks.append(
-        {
-            "name": "LLM Provider",
+            "name": "LLM 제공자",
             "status": "ok" if settings.llm_provider != "local" else "info",
             "message": _llm_state(settings.llm_provider, settings.openai_api_key),
         }
     )
     checks.append(
         {
-            "name": "Failed Analysis Jobs",
+            "name": "실패한 분석 작업",
             "status": "bad" if failed_jobs else "ok",
             "message": f"{failed_jobs}건",
         }
     )
     checks.append(
         {
-            "name": "Queued Analysis Jobs",
+            "name": "대기 중인 분석 작업",
             "status": "warn" if queued_jobs > 20 else "ok",
             "message": f"queued {queued_jobs}건, running {running_jobs}건",
         }
     )
     checks.append(
         {
-            "name": "Deleted Notes",
+            "name": "삭제 표시 메모",
             "status": "info" if deleted_notes else "ok",
             "message": f"삭제 표시 메모 {deleted_notes}건",
         }
     )
     checks.append(
         {
-            "name": "Recordings Without Transcript",
+            "name": "텍스트 없는 녹음",
             "status": "info" if recordings_without_transcript else "ok",
             "message": f"transcript 없는 녹음 {recordings_without_transcript}건",
         }
@@ -1883,7 +1893,7 @@ def _admin_ops_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Ops Admin</title>
+  <title>NowNote 운영 점검</title>
   <style>
     :root {{
       color-scheme: light;
@@ -2027,17 +2037,17 @@ def _admin_ops_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Ops Admin</h1>
+        <h1>운영 점검</h1>
         <div class="sub">운영 전 점검 항목과 서버 이상 징후 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/monitor">Monitor</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/monitor">모니터</a>
       </nav>
     </header>
 
@@ -2111,8 +2121,20 @@ def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
     return "ok", f"녹음 저장소 경로 확인됨: {storage_dir}"
 
 
-def _uses_default_database_password(database_url: str) -> bool:
-    return "now-local-password" in database_url
+def _api_token_state(api_token: str | None) -> tuple[str, str]:
+    if not api_token:
+        return "warn", "로컬 개발은 가능하지만 공용 오픈 전 설정 필요"
+    if api_token.startswith("change-this"):
+        return "warn", ".env.example 예시 토큰 사용 중"
+    return "ok", "설정됨"
+
+
+def _database_password_state(database_url: str) -> tuple[str, str]:
+    if "now-local-password" in database_url:
+        return "warn", "기본 DB 비밀번호 사용 중"
+    if "change-this-postgres-password" in database_url:
+        return "warn", ".env.example 예시 DB 비밀번호 사용 중"
+    return "ok", "기본 DB 비밀번호 아님"
 
 
 def _admin_sync_html() -> str:
@@ -2150,7 +2172,7 @@ def _admin_sync_html() -> str:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Sync Admin</title>
+  <title>NowNote 동기화 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -2293,18 +2315,18 @@ def _admin_sync_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Sync Admin</h1>
+        <h1>동기화 관리</h1>
         <div class="sub">앱과 서버 사이의 동기화 호출 이력 확인</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/recordings">Recordings</a>
-        <a href="/admin/devices">Devices</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/admin/export">Export</a>
-        <a href="/admin/analysis">Analysis</a>
-        <a href="/monitor">Monitor</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/admin/analysis">분석</a>
+        <a href="/monitor">모니터</a>
       </nav>
     </header>
 
@@ -2381,17 +2403,17 @@ def _sync_log_rows(logs: list[SyncLog]) -> str:
 def _admin_export_html() -> str:
     export_links = [
         ("Notes", "/api/v1/admin/export/notes", "메모 전체 export"),
-        ("Active Notes", "/api/v1/admin/export/notes?include_deleted=false", "삭제 표시 제외 메모 export"),
+        ("삭제 제외 메모", "/api/v1/admin/export/notes?include_deleted=false", "삭제 표시 제외 메모 export"),
         ("Recordings", "/api/v1/admin/export/recordings", "녹음 파일 메타데이터 export"),
-        ("Analysis Jobs", "/api/v1/admin/export/analysis-jobs", "분석 작업 이력 export"),
-        ("Sync Logs", "/api/v1/admin/export/sync-logs", "동기화 호출 이력 export"),
+        ("분석 작업", "/api/v1/admin/export/analysis-jobs", "분석 작업 이력 export"),
+        ("동기화 이력", "/api/v1/admin/export/sync-logs", "동기화 호출 이력 export"),
     ]
     return f"""<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Export Admin</title>
+  <title>NowNote 내보내기 관리</title>
   <style>
     :root {{
       color-scheme: light;
@@ -2506,15 +2528,15 @@ def _admin_export_html() -> str:
   <main>
     <header>
       <div>
-        <h1>Export Admin</h1>
-        <div class="sub">운영 확인과 백업을 위한 읽기 전용 JSON export</div>
+        <h1>내보내기 관리</h1>
+        <div class="sub">운영 확인과 백업을 위한 읽기 전용 JSON 내보내기</div>
       </div>
       <nav class="nav">
-        <a href="/admin">Admin</a>
-        <a href="/admin/notes">Notes</a>
-        <a href="/admin/sync">Sync</a>
-        <a href="/admin/ops">Ops</a>
-        <a href="/monitor">Monitor</a>
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/monitor">모니터</a>
       </nav>
     </header>
 
@@ -2524,7 +2546,7 @@ def _admin_export_html() -> str:
 
     <section>
       <div class="section-head">
-        <span>Export Links</span>
+        <span>내보내기 링크</span>
         <span class="sub">JSON</span>
       </div>
       <table>
