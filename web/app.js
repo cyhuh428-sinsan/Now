@@ -29,6 +29,7 @@ const state = {
     fontSize: "medium",
     lineHeight: "normal",
     showBacklinks: true,
+    enableShortcuts: true,
   },
 };
 
@@ -89,6 +90,7 @@ const elements = {
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
   backlinksToggle: $("#backlinksToggle"),
+  shortcutsToggle: $("#shortcutsToggle"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
@@ -246,7 +248,12 @@ function bindEvents() {
     state.settings.showBacklinks = elements.backlinksToggle.checked;
     persistSettings();
     applySettings();
-    renderBacklinks();
+    renderLinkPanel();
+  });
+
+  elements.shortcutsToggle.addEventListener("change", () => {
+    state.settings.enableShortcuts = elements.shortcutsToggle.checked;
+    persistSettings();
   });
 
   elements.addRootBtn.addEventListener("click", () => {
@@ -275,7 +282,7 @@ function bindEvents() {
     markTreeNodeChanged(selected);
     persist();
     renderMarkdownPreview(selected.content);
-    renderBacklinks();
+    renderLinkPanel();
     showSaved(elements.treeSavedLabel);
   });
 
@@ -327,6 +334,12 @@ function bindEvents() {
   elements.quickInput.addEventListener("input", renderQuickResults);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
+  elements.markdownPreview.addEventListener("click", (event) => {
+    const link = event.target.closest("[data-wiki-link]");
+    if (!link) return;
+    openWikiLink(link.dataset.wikiLink);
+  });
+  window.addEventListener("keydown", handleShortcuts);
   bindTreeResize();
 
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
@@ -344,6 +357,7 @@ function renderSettings() {
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
+  elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
       const button = document.createElement("button");
@@ -422,6 +436,27 @@ function openGraph() {
 
 function closeGraph() {
   elements.graphView.classList.add("hidden");
+}
+
+function handleShortcuts(event) {
+  if (!state.settings.enableShortcuts) return;
+  if (event.key === "Escape") {
+    closeQuickSwitch();
+    closeGraph();
+    closeDailyPopup();
+    elements.settingsView.classList.add("hidden");
+    return;
+  }
+  if (!(event.ctrlKey || event.metaKey)) return;
+  const key = event.key.toLowerCase();
+  if (key === "k") {
+    event.preventDefault();
+    openQuickSwitch();
+  }
+  if (key === "n") {
+    event.preventDefault();
+    addRootNote();
+  }
 }
 
 function renderGraph() {
@@ -756,7 +791,7 @@ function renderTreeEditor() {
   elements.previewToggleBtn.textContent = "Markdown 보기";
   renderTreePath(selected);
   renderMarkdownPreview(selected.content);
-  renderBacklinks();
+  renderLinkPanel();
   elements.addChildBtn.disabled = selected.level >= 3;
 }
 
@@ -779,15 +814,36 @@ function renderMarkdownPreview(content) {
   elements.markdownPreview.innerHTML = html || '<p class="empty-compact">미리 볼 내용이 없습니다.</p>';
 }
 
-function renderBacklinks() {
+function renderLinkPanel() {
   const selected = getSelectedTreeNode();
   if (!selected || !state.settings.showBacklinks) {
     elements.backlinksPanel.replaceChildren();
     return;
   }
+  const outgoing = outgoingLinksFor(selected);
   const backlinks = backlinksFor(selected);
+  const blocks = [];
+
+  blocks.push(sectionTitle("연결"));
+  if (outgoing.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-compact";
+    empty.textContent = "본문에 [[메모 제목]]을 적으면 다른 메모와 연결됩니다.";
+    blocks.push(empty);
+  } else {
+    const list = document.createElement("div");
+    list.className = "backlink-list";
+    list.append(...outgoing.map((link) => linkButton(link.title, link.node, link.exists)));
+    blocks.push(list);
+  }
+
+  blocks.push(sectionTitle("백링크"));
   if (backlinks.length === 0) {
-    elements.backlinksPanel.innerHTML = '<h3>백링크</h3><p class="empty-compact">이 메모를 언급한 다른 메모가 없습니다.</p>';
+    const empty = document.createElement("p");
+    empty.className = "empty-compact";
+    empty.textContent = "이 메모를 언급한 다른 메모가 없습니다.";
+    blocks.push(empty);
+    elements.backlinksPanel.replaceChildren(...blocks);
     return;
   }
   const list = document.createElement("div");
@@ -804,7 +860,8 @@ function renderBacklinks() {
       return button;
     }),
   );
-  elements.backlinksPanel.replaceChildren(sectionTitle("백링크"), list);
+  blocks.push(list);
+  elements.backlinksPanel.replaceChildren(...blocks);
 }
 
 function markdownToHtml(markdown) {
@@ -844,9 +901,84 @@ function markdownToHtml(markdown) {
 
 function inlineMarkdown(text) {
   return text
-    .replace(/\[\[([^\]]+)\]\]/g, '<span class="wiki-link">$1</span>')
+    .replace(/\[\[([^\]]+)\]\]/g, (_, title) => `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(title.trim())}">${title}</button>`)
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+}
+
+function openWikiLink(title) {
+  const normalized = title.trim();
+  if (!normalized) return;
+  const existing = findTreeNodeByTitle(normalized);
+  if (existing) {
+    selectTreeNode(existing.id);
+    return;
+  }
+  if (!confirm(`'${normalized}' 메모가 없습니다. 새로 만들까요?`)) return;
+  const node = createLinkedNote(normalized);
+  selectTreeNode(node.id);
+}
+
+function createLinkedNote(title) {
+  const selected = getSelectedTreeNode();
+  if (!selected) {
+    const root = createNode(title, "", null, 1);
+    state.data.tree.push(root);
+    persist();
+    renderTree();
+    return root;
+  }
+  if (selected.level < 3) {
+    const child = createNode(title, "", selected.id, selected.level + 1);
+    selected.children.push(child);
+    state.expandedTreeIds.add(selected.id);
+    persist();
+    renderTree();
+    return child;
+  }
+  const parent = findTreeNode(state.data.tree, selected.parentId);
+  if (parent) {
+    const sibling = createNode(title, "", parent.id, selected.level);
+    parent.children.push(sibling);
+    state.expandedTreeIds.add(parent.id);
+    persist();
+    renderTree();
+    return sibling;
+  }
+  const root = createNode(title, "", null, 1);
+  state.data.tree.push(root);
+  persist();
+  renderTree();
+  return root;
+}
+
+function outgoingLinksFor(node) {
+  const allNodes = flattenTree(state.data.tree);
+  const byTitle = new Map(allNodes.map((item) => [item.title.trim().toLowerCase(), item]));
+  return extractWikiLinks(node.content).map((title) => {
+    const linked = byTitle.get(title.toLowerCase());
+    return {
+      title,
+      node: linked || null,
+      exists: Boolean(linked),
+    };
+  });
+}
+
+function linkButton(title, node, exists) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "backlink-item";
+  button.classList.toggle("missing-link", !exists);
+  button.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${exists ? "메모로 이동" : "아직 없는 메모"}</span>`;
+  button.addEventListener("click", () => {
+    if (node) {
+      selectTreeNode(node.id);
+    } else {
+      openWikiLink(title);
+    }
+  });
+  return button;
 }
 
 function backlinksFor(target) {
@@ -865,6 +997,11 @@ function graphLinks() {
       .map((title) => ({ from, to: byTitle.get(title.toLowerCase()) }))
       .filter((link) => link.to && link.to.id !== from.id)
   ));
+}
+
+function findTreeNodeByTitle(title) {
+  const normalized = title.trim().toLowerCase();
+  return flattenTree(state.data.tree).find((node) => node.title.trim().toLowerCase() === normalized) || null;
 }
 
 function extractWikiLinks(content) {
