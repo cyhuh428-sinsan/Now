@@ -867,7 +867,7 @@ body.resizing {
 
 .tree-row {
   display: grid;
-  grid-template-columns: 22px 1fr auto;
+  grid-template-columns: 22px minmax(0, 1fr) 24px;
   gap: 6px;
   align-items: center;
   width: 100%;
@@ -908,6 +908,7 @@ body.resizing {
 }
 
 .small-btn {
+  width: 24px;
   min-width: 24px;
   height: 24px;
   border: 1px solid var(--line);
