@@ -917,6 +917,10 @@ body.resizing {
   font-weight: 800;
 }
 
+.small-btn:disabled {
+  display: none;
+}
+
 .tree-toggle,
 .tree-label-btn {
   border: 0;
