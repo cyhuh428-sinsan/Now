@@ -5,6 +5,7 @@ const state = {
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
+  expandedTreeIds: new Set(),
   search: "",
   data: {
     daily: {},
@@ -132,6 +133,7 @@ function bindEvents() {
     const node = createNode("새 부모 메모", "", null, 1);
     state.data.tree.push(node);
     state.selectedTreeId = node.id;
+    state.expandedTreeIds.add(node.id);
     persist();
     renderTree();
   });
@@ -165,6 +167,7 @@ function bindEvents() {
     const node = createNode("새 하위 메모", "", selected.id, selected.level + 1);
     selected.children.push(node);
     state.selectedTreeId = node.id;
+    state.expandedTreeIds.add(selected.id);
     persist();
     renderTree();
   });
@@ -374,18 +377,33 @@ function renderTreeListOnly() {
 function treeNodeElement(node) {
   const wrapper = document.createElement("div");
   wrapper.className = "tree-node";
+  const expanded = state.expandedTreeIds.has(node.id);
+  const hasChildren = node.children.length > 0;
 
-  const row = document.createElement("button");
-  row.type = "button";
+  const row = document.createElement("div");
   row.className = "tree-row";
   row.classList.toggle("active", node.id === state.selectedTreeId);
-  row.addEventListener("click", () => {
+
+  const toggleButton = document.createElement("button");
+  toggleButton.type = "button";
+  toggleButton.className = "tree-toggle";
+  toggleButton.textContent = hasChildren ? (expanded ? "⌄" : "›") : "";
+  toggleButton.disabled = !hasChildren;
+  toggleButton.title = expanded ? "접기" : "펼치기";
+  toggleButton.addEventListener("click", () => {
+    toggleTreeNode(node.id);
+  });
+
+  const labelButton = document.createElement("button");
+  labelButton.type = "button";
+  labelButton.className = "tree-label-btn";
+  labelButton.addEventListener("click", () => {
     state.selectedTreeId = node.id;
+    expandAncestors(node.id);
     renderTree();
   });
 
-  const label = document.createElement("div");
-  label.innerHTML = `<div class="tree-title">${escapeHtml(node.title || "제목 없음")}</div><div class="tree-meta">${node.level}단계 · 하위 ${node.children.length}개</div>`;
+  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.title || "제목 없음")}</div><div class="tree-meta">${node.level}단계 · 하위 ${node.children.length}개</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
@@ -399,18 +417,15 @@ function treeNodeElement(node) {
     const child = createNode("새 하위 메모", "", node.id, node.level + 1);
     node.children.push(child);
     state.selectedTreeId = child.id;
+    state.expandedTreeIds.add(node.id);
     persist();
     renderTree();
   });
 
-  const openMark = document.createElement("span");
-  openMark.className = "tree-meta";
-  openMark.textContent = node.children.length ? "열림" : "";
-
-  row.append(label, addButton, openMark);
+  row.append(toggleButton, labelButton, addButton);
   wrapper.append(row);
 
-  if (node.children.length > 0) {
+  if (hasChildren && expanded) {
     const children = document.createElement("div");
     children.className = "tree-children";
     children.append(...node.children.map((child) => treeNodeElement(child)));
@@ -418,6 +433,15 @@ function treeNodeElement(node) {
   }
 
   return wrapper;
+}
+
+function toggleTreeNode(id) {
+  if (state.expandedTreeIds.has(id)) {
+    state.expandedTreeIds.delete(id);
+  } else {
+    state.expandedTreeIds.add(id);
+  }
+  renderTreeListOnly();
 }
 
 function renderTreeEditor() {
@@ -480,6 +504,7 @@ function renderResults() {
           openDailyPopup();
         } else {
           state.selectedTreeId = result.id;
+          expandAncestors(result.id);
           setView("tree");
         }
       });
@@ -513,6 +538,19 @@ function findTreeNode(nodes, id) {
     if (child) return child;
   }
   return null;
+}
+
+function expandAncestors(id, nodes = state.data.tree, parents = []) {
+  for (const node of nodes) {
+    if (node.id === id) {
+      parents.forEach((parentId) => state.expandedTreeIds.add(parentId));
+      return true;
+    }
+    if (expandAncestors(id, node.children, [...parents, node.id])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function deleteTreeNode(id, nodes = state.data.tree) {
