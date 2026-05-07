@@ -83,6 +83,7 @@ const elements = {
   deleteTreeBtn: $("#deleteTreeBtn"),
   resultsList: $("#resultsList"),
   exportBtn: $("#exportBtn"),
+  exportMarkdownBtn: $("#exportMarkdownBtn"),
   importInput: $("#importInput"),
   settingsBtn: $("#settingsBtn"),
   railSidebarBtn: $("#railSidebarBtn"),
@@ -358,6 +359,7 @@ function bindEvents() {
   });
 
   elements.exportBtn.addEventListener("click", exportData);
+  elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
   elements.quickInput.addEventListener("input", renderQuickResults);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
@@ -1367,6 +1369,76 @@ function exportData() {
   URL.revokeObjectURL(url);
 }
 
+function exportMarkdown() {
+  const markdown = [
+    "# NowNote 내보내기",
+    "",
+    `- 내보낸 날짜: ${new Date().toLocaleString("ko-KR")}`,
+    `- 지식 메모: ${flattenTree(state.data.tree).length}개`,
+    `- 일자별 메모: ${Object.keys(state.data.daily).length}개`,
+    "",
+    "## 지식 메모",
+    "",
+    treeToMarkdown(state.data.tree),
+    "",
+    "## 일자별 메모",
+    "",
+    dailyToMarkdown(),
+  ].join("\n");
+  downloadText(`nownote-${toDateKey(new Date())}.md`, markdown, "text/markdown");
+}
+
+function treeToMarkdown(nodes) {
+  if (nodes.length === 0) return "_지식 메모가 없습니다._\n";
+  return nodes.map((node) => nodeToMarkdown(node)).join("\n");
+}
+
+function nodeToMarkdown(node) {
+  const headingLevel = Math.min(node.level + 1, 6);
+  const tags = node.tags.length ? `\n\n태그: ${node.tags.map((tag) => `#${tag}`).join(" ")}` : "";
+  const favorite = node.favorite ? "\n\n즐겨찾기: 예" : "";
+  const meta = [
+    `경로: ${treePath(node.id).join(" / ")}`,
+    `수정: ${formatDateTime(node.updatedAt)}`,
+  ].join("\n");
+  const content = node.content?.trim() || "_내용 없음_";
+  const children = node.children.map((child) => nodeToMarkdown(child)).join("\n");
+  return [
+    `${"#".repeat(headingLevel)} ${node.title || "제목 없음"}`,
+    "",
+    meta,
+    tags,
+    favorite,
+    "",
+    content,
+    "",
+    children,
+  ].filter((part) => part !== "").join("\n");
+}
+
+function dailyToMarkdown() {
+  const entries = Object.values(state.data.daily)
+    .filter((note) => note.content?.trim())
+    .sort((a, b) => a.date.localeCompare(b.date));
+  if (entries.length === 0) return "_일자별 메모가 없습니다._\n";
+  return entries.map((note) => [
+    `### ${longDateLabel(note.date)}`,
+    "",
+    note.content.trim(),
+    "",
+  ].join("\n")).join("\n");
+}
+
+function downloadText(filename, content, type) {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function importData(event) {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -1440,6 +1512,17 @@ function formatArchivedAt(value) {
     year: "numeric",
     month: "short",
     day: "numeric",
+  }).format(new Date(value));
+}
+
+function formatDateTime(value) {
+  if (!value) return "날짜 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   }).format(new Date(value));
 }
 
