@@ -849,12 +849,15 @@ body.resizing {
 }
 
 .tree-title {
+  font-size: 14px;
+  line-height: 1.3;
   font-weight: 800;
 }
 
 .tree-meta {
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .tree-children {
@@ -887,7 +890,7 @@ body.resizing {
   padding: 0;
   border-radius: 8px;
   color: var(--muted);
-  font-size: 22px;
+  font-size: 14px;
 }
 
 .tree-toggle:not(:disabled):hover {
@@ -899,6 +902,7 @@ body.resizing {
   min-height: 40px;
   padding: 0;
   color: inherit;
+  font-size: 14px;
   text-align: left;
 }
 
