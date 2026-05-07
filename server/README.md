@@ -74,6 +74,15 @@ http://localhost:8750/admin/analysis
 `/admin/analysis`는 분석 작업 큐의 상태별/유형별 집계와 최근 작업 상세를 확인하는 읽기 전용 화면입니다.
 `NOW_API_TOKEN`이 설정된 경우 운영 화면은 브라우저 로그인 창에서 비밀번호로 API 토큰을 입력해야 열립니다.
 
+운영 점검 API:
+
+```powershell
+Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
+```
+
+`NOW_API_TOKEN`이 설정된 경우 `Authorization: Bearer 긴-랜덤-토큰` 헤더가 필요합니다.
+이 API는 `/admin/ops` 화면과 같은 기준으로 DB, 녹음 저장소, 토큰, DB 기본 비밀번호, 분석 작업 상태를 JSON으로 반환합니다.
+
 스모크 테스트:
 
 ```powershell
