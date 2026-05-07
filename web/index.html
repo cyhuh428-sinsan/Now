@@ -8,6 +8,13 @@
 </head>
 <body>
   <div class="app-shell">
+    <nav class="app-rail" aria-label="빠른 메뉴">
+      <button class="rail-btn active" type="button" title="지식 메모">N</button>
+      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모">D</button>
+      <button class="rail-btn" type="button" title="검색">S</button>
+      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">G</button>
+    </nav>
+
     <aside class="sidebar" aria-label="NowNote 메뉴">
       <div class="brand">
         <div class="brand-mark">N</div>
@@ -33,6 +40,7 @@
       </nav>
 
       <div class="side-actions">
+        <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
         <button id="exportBtn" class="ghost-btn" type="button">JSON 내보내기</button>
         <label class="ghost-btn file-btn">
           JSON 가져오기
@@ -57,6 +65,8 @@
           <section class="panel tree-panel" aria-label="지식 목록">
             <div id="treeList" class="tree-list"></div>
           </section>
+
+          <div id="treeResizeHandle" class="resize-handle" role="separator" aria-label="목록 폭 조정"></div>
 
           <section class="panel editor-panel" aria-label="지식 메모 편집">
             <div id="emptyTreeEditor" class="empty-state">
@@ -150,6 +160,64 @@
           </div>
           <div id="archiveList" class="archive-list"></div>
         </section>
+      </div>
+    </section>
+
+    <section id="settingsView" class="settings-popover hidden" aria-labelledby="settingsTitle">
+      <div class="settings-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">사용자 취향에 맞게 조정</p>
+            <h2 id="settingsTitle">화면 설정</h2>
+          </div>
+          <button id="settingsCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+
+        <div class="settings-list">
+          <section class="settings-row">
+            <div>
+              <h3>기본 테마</h3>
+              <p>앱의 밝기 테마를 선택합니다.</p>
+            </div>
+            <select id="themeSelect" class="settings-select" aria-label="기본 테마">
+              <option value="system">시스템 테마 적용</option>
+              <option value="light">밝은 테마</option>
+              <option value="dark">어두운 테마</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3>강조 색상</h3>
+              <p>버튼과 선택 상태에 사용할 색상을 선택합니다.</p>
+            </div>
+            <div id="accentChoices" class="accent-choices" aria-label="강조 색상"></div>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3>넓은 작성 공간</h3>
+              <p>목록 폭을 줄여 메모 작성 공간을 넓게 사용합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="wideEditorToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row feature-row">
+            <div>
+              <h3>지식 기능</h3>
+              <p>Obsidian에서 꼭 필요한 기능만 NowNote 방식으로 가져옵니다.</p>
+            </div>
+            <div class="feature-list">
+              <span>통합 검색</span>
+              <span>일일 메모</span>
+              <span>백링크 준비</span>
+              <span>그래프 보기 준비</span>
+            </div>
+          </section>
+        </div>
       </div>
     </section>
   </div>
