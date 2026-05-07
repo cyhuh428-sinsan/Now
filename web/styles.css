@@ -825,6 +825,48 @@ kbd {
   outline: none;
 }
 
+.outline-panel {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.outline-item {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 8px;
+  padding-left: calc(8px + var(--outline-depth, 0) * 12px);
+  text-align: left;
+}
+
+.outline-item:hover {
+  background: var(--blue-soft);
+}
+
+.outline-item span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.outline-item strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+
 .tag-list {
   display: flex;
   flex-wrap: wrap;

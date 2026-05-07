@@ -120,6 +120,7 @@
                 <span id="treePathLabel" class="path-label"></span>
                 <div class="editor-tool-actions">
                   <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
+                  <button id="outlineToggleBtn" class="secondary-btn" type="button">개요</button>
                   <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
                 </div>
               </div>
@@ -130,6 +131,7 @@
                 <button id="noteFindNextBtn" class="secondary-btn" type="button">다음</button>
                 <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
               </div>
+              <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
               <div id="tagList" class="tag-list" aria-label="태그"></div>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
               <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>

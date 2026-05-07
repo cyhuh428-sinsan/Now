@@ -82,6 +82,8 @@ const elements = {
   favoriteBtn: $("#favoriteBtn"),
   copyLinkBtn: $("#copyLinkBtn"),
   noteFindToggleBtn: $("#noteFindToggleBtn"),
+  outlineToggleBtn: $("#outlineToggleBtn"),
+  outlinePanel: $("#outlinePanel"),
   noteFindBar: $("#noteFindBar"),
   noteFindInput: $("#noteFindInput"),
   noteFindCount: $("#noteFindCount"),
@@ -338,6 +340,7 @@ function bindEvents() {
     renderMarkdownPreview(selected.content);
     renderTags();
     renderNoteStats(selected);
+    renderOutlinePanel(selected);
     renderLinkPanel();
     showSaved(elements.treeSavedLabel);
   });
@@ -362,6 +365,7 @@ function bindEvents() {
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
+  elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
 
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -1106,6 +1110,7 @@ function renderTreeEditor() {
   elements.previewToggleBtn.textContent = "Markdown 보기";
   renderTreePath(selected);
   renderMarkdownPreview(selected.content);
+  renderOutlinePanel(selected);
   renderLinkPanel();
   elements.addChildBtn.disabled = selected.level >= 3;
 }
@@ -1153,6 +1158,56 @@ function renderNoteStats(node) {
   const links = extractWikiLinks(text).length;
   const tags = extractTags(text).length;
   elements.noteStats.textContent = `글자 ${chars} · 줄 ${lines} · 링크 ${links} · 태그 ${tags} · 수정 ${relativeTime(node.updatedAt)}`;
+}
+
+function toggleOutlinePanel() {
+  elements.outlinePanel.classList.toggle("hidden");
+  const selected = getSelectedTreeNode();
+  if (selected) renderOutlinePanel(selected);
+}
+
+function renderOutlinePanel(node) {
+  if (elements.outlinePanel.classList.contains("hidden")) return;
+  const headings = extractHeadings(node.content);
+  if (headings.length === 0) {
+    elements.outlinePanel.innerHTML = '<div class="empty-compact">개요로 표시할 제목이 없습니다.</div>';
+    return;
+  }
+  elements.outlinePanel.replaceChildren(
+    ...headings.map((heading) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "outline-item";
+      button.style.setProperty("--outline-depth", String(Math.min(heading.level - 1, 4)));
+      button.innerHTML = `<span>H${heading.level}</span><strong>${escapeHtml(heading.title)}</strong>`;
+      button.addEventListener("click", () => {
+        elements.markdownPreview.classList.add("hidden");
+        elements.treeContent.classList.remove("hidden");
+        elements.previewToggleBtn.textContent = "Markdown 보기";
+        elements.treeContent.focus();
+        elements.treeContent.setSelectionRange(heading.index, heading.index + heading.raw.length);
+      });
+      return button;
+    }),
+  );
+}
+
+function extractHeadings(content) {
+  const headings = [];
+  let offset = 0;
+  String(content || "").split("\n").forEach((line) => {
+    const match = /^(#{1,6})\s+(.+)$/.exec(line);
+    if (match) {
+      headings.push({
+        level: match[1].length,
+        title: match[2].trim(),
+        raw: line,
+        index: offset,
+      });
+    }
+    offset += line.length + 1;
+  });
+  return headings;
 }
 
 function toggleNoteFind() {
