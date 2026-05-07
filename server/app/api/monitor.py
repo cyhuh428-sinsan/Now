@@ -1,5 +1,6 @@
 from datetime import datetime
 from html import escape
+from pathlib import Path
 from secrets import compare_digest
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -1813,6 +1814,14 @@ def _admin_ops_html() -> str:
         db_message = f"DB 연결 오류: {exc}"
 
     checks.append({"name": "Database", "status": db_status, "message": db_message})
+    storage_status, storage_message = _recording_storage_state(settings.storage_dir)
+    checks.append(
+        {
+            "name": "Recording Storage",
+            "status": storage_status,
+            "message": storage_message,
+        }
+    )
     checks.append(
         {
             "name": "API Token",
@@ -2091,6 +2100,15 @@ def _ops_check_rows(checks: list[dict[str, str]]) -> str:
         "</tr>"
         for check in checks
     )
+
+
+def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
+    storage_path = Path(storage_dir)
+    if not storage_path.exists():
+        return "warn", f"녹음 저장소 경로 없음: {storage_dir}"
+    if not storage_path.is_dir():
+        return "bad", f"녹음 저장소가 디렉터리가 아님: {storage_dir}"
+    return "ok", f"녹음 저장소 경로 확인됨: {storage_dir}"
 
 
 def _uses_default_database_password(database_url: str) -> bool:
