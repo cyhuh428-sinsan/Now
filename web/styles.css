@@ -30,6 +30,7 @@
 body {
   margin: 0;
   min-height: 100vh;
+  overflow: hidden;
   background: var(--bg);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
@@ -48,7 +49,9 @@ button {
 .app-shell {
   display: grid;
   grid-template-columns: 48px 220px minmax(0, 1fr);
-  min-height: 100vh;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
 }
 
 :root[data-sidebar="collapsed"] .app-shell {
@@ -319,7 +322,10 @@ button {
 }
 
 .workspace {
-  padding: 24px;
+  height: 100vh;
+  min-height: 0;
+  overflow: hidden;
+  padding: 18px 20px;
 }
 
 .view {
@@ -327,7 +333,10 @@ button {
 }
 
 .view.active {
-  display: block;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
 }
 
 .view-header {
@@ -370,7 +379,8 @@ button {
   display: grid;
   grid-template-columns: minmax(180px, var(--tree-list-width, 280px)) 8px minmax(0, 1fr);
   gap: 8px;
-  align-items: start;
+  align-items: stretch;
+  min-height: 0;
 }
 
 .daily-layout {
@@ -380,7 +390,6 @@ button {
 
 .resize-handle {
   align-self: stretch;
-  min-height: 560px;
   border-radius: 8px;
   cursor: col-resize;
 }
@@ -634,6 +643,17 @@ body.resizing {
   padding: 18px;
 }
 
+.tree-panel,
+.editor-panel {
+  min-height: 0;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.tree-panel {
+  padding: 8px;
+}
+
 .month-bar {
   display: grid;
   grid-template-columns: 42px 1fr 42px;
@@ -826,25 +846,25 @@ body.resizing {
 
 .tree-list {
   display: grid;
-  gap: 8px;
+  gap: 4px;
 }
 
 .tree-node {
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   overflow: hidden;
 }
 
 .tree-row {
   display: grid;
-  grid-template-columns: 32px 1fr auto;
-  gap: 8px;
+  grid-template-columns: 22px 1fr auto;
+  gap: 6px;
   align-items: center;
   width: 100%;
-  min-height: 48px;
+  min-height: 34px;
   background: transparent;
-  padding: 10px 12px;
+  padding: 5px 7px;
 }
 
 .tree-row.active {
@@ -853,28 +873,35 @@ body.resizing {
 }
 
 .tree-title {
-  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
   line-height: 1.3;
   font-weight: 800;
 }
 
 .tree-meta {
   color: var(--muted);
-  font-size: 11px;
+  font-size: 10px;
   line-height: 1.35;
+}
+
+.tree-node.expanded > .tree-row .tree-meta {
+  display: none;
 }
 
 .tree-children {
   display: grid;
-  gap: 8px;
-  padding: 0 10px 10px 26px;
+  gap: 4px;
+  padding: 0 4px 5px 16px;
 }
 
 .small-btn {
-  min-width: 30px;
-  height: 30px;
+  min-width: 24px;
+  height: 24px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--panel);
   color: var(--blue);
   font-weight: 800;
@@ -889,10 +916,10 @@ body.resizing {
 .tree-toggle {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 22px;
+  height: 22px;
   padding: 0;
-  border-radius: 8px;
+  border-radius: 6px;
   color: var(--muted);
   font-size: 14px;
 }
@@ -903,7 +930,7 @@ body.resizing {
 }
 
 .tree-label-btn {
-  min-height: 40px;
+  min-height: 28px;
   padding: 0;
   color: inherit;
   font-size: 14px;

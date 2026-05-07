@@ -895,6 +895,7 @@ function treeNodeElement(node) {
   wrapper.className = "tree-node";
   const expanded = state.expandedTreeIds.has(node.id);
   const hasChildren = node.children.length > 0;
+  wrapper.classList.toggle("expanded", expanded && hasChildren);
 
   const row = document.createElement("div");
   row.className = "tree-row";
