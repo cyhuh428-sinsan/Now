@@ -35,6 +35,7 @@ const state = {
     showSidebarAssist: false,
     openTreeTabs: [],
     closedTreeTabs: [],
+    pinnedTreeTabs: [],
   },
 };
 
@@ -76,6 +77,7 @@ const elements = {
   treeList: $("#treeList"),
   openTabsBar: $("#openTabsBar"),
   openTabs: $("#openTabs"),
+  pinTabBtn: $("#pinTabBtn"),
   reopenClosedTabBtn: $("#reopenClosedTabBtn"),
   closeOtherTabsBtn: $("#closeOtherTabsBtn"),
   closeAllTabsBtn: $("#closeAllTabsBtn"),
@@ -373,6 +375,7 @@ function bindEvents() {
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
+  elements.pinTabBtn.addEventListener("click", toggleSelectedTreeTabPin);
   elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
   elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
   elements.closeAllTabsBtn.addEventListener("click", closeAllTreeTabs);
@@ -657,6 +660,10 @@ function handleShortcuts(event) {
     } else {
       closeOpenTreeTab(state.selectedTreeId);
     }
+  }
+  if (key === "p" && event.shiftKey) {
+    event.preventDefault();
+    toggleSelectedTreeTabPin();
   }
   if (key === "t" && event.shiftKey) {
     event.preventDefault();
@@ -1159,19 +1166,29 @@ function renderOpenTreeTabs() {
     .map((id) => findTreeNode(state.data.tree, id))
     .filter(Boolean);
   state.settings.openTreeTabs = tabs.map((node) => node.id);
-  elements.openTabsBar.classList.toggle("hidden", tabs.length === 0);
+  state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((id) => (
+    state.settings.openTreeTabs.includes(id) && findTreeNode(state.data.tree, id)
+  ));
+  const pinnedIds = new Set(state.settings.pinnedTreeTabs);
+  const sortedTabs = [
+    ...tabs.filter((node) => pinnedIds.has(node.id)),
+    ...tabs.filter((node) => !pinnedIds.has(node.id)),
+  ];
+  elements.openTabsBar.classList.toggle("hidden", sortedTabs.length === 0);
   if (tabs.length === 0) {
     elements.openTabs.replaceChildren();
     persistSettings();
     return;
   }
   elements.openTabs.replaceChildren(
-    ...tabs.map((node) => {
+    ...sortedTabs.map((node) => {
+      const pinned = pinnedIds.has(node.id);
       const tab = document.createElement("button");
       tab.type = "button";
       tab.className = "open-tab";
       tab.classList.toggle("active", node.id === state.selectedTreeId);
-      tab.innerHTML = `<span>${escapeHtml(node.title || "제목 없음")}</span><strong aria-label="닫기">×</strong>`;
+      tab.classList.toggle("pinned", pinned);
+      tab.innerHTML = `<span>${pinned ? "고정 · " : ""}${escapeHtml(node.title || "제목 없음")}</span><strong aria-label="닫기">×</strong>`;
       tab.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -1182,6 +1199,9 @@ function renderOpenTreeTabs() {
       return tab;
     }),
   );
+  const selectedPinned = state.settings.pinnedTreeTabs.includes(state.selectedTreeId);
+  elements.pinTabBtn.disabled = !state.selectedTreeId || !state.settings.openTreeTabs.includes(state.selectedTreeId);
+  elements.pinTabBtn.textContent = selectedPinned ? "고정 해제" : "탭 고정";
   elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
 }
@@ -1203,20 +1223,36 @@ function reopenClosedTreeTab() {
   selectTreeNode(id);
 }
 
+function toggleSelectedTreeTabPin() {
+  const id = state.selectedTreeId;
+  if (!id || !state.settings.openTreeTabs.includes(id)) return;
+  if (state.settings.pinnedTreeTabs.includes(id)) {
+    state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((tabId) => tabId !== id);
+  } else {
+    state.settings.pinnedTreeTabs = [...state.settings.pinnedTreeTabs, id];
+  }
+  persistSettings();
+  renderOpenTreeTabs();
+}
+
 function closeOtherTreeTabs() {
   if (!state.selectedTreeId) return;
-  rememberClosedTreeTabs(state.settings.openTreeTabs.filter((tabId) => tabId !== state.selectedTreeId));
-  state.settings.openTreeTabs = state.settings.openTreeTabs.includes(state.selectedTreeId)
-    ? [state.selectedTreeId]
-    : [];
+  const keepIds = new Set([state.selectedTreeId, ...state.settings.pinnedTreeTabs]);
+  const closingIds = state.settings.openTreeTabs.filter((tabId) => !keepIds.has(tabId));
+  rememberClosedTreeTabs(closingIds);
+  state.settings.openTreeTabs = state.settings.openTreeTabs.filter((tabId) => keepIds.has(tabId));
   persistSettings();
   renderTree();
 }
 
 function closeAllTreeTabs() {
-  rememberClosedTreeTabs(state.settings.openTreeTabs);
-  state.settings.openTreeTabs = [];
-  state.selectedTreeId = null;
+  const pinnedIds = new Set(state.settings.pinnedTreeTabs);
+  const closingIds = state.settings.openTreeTabs.filter((tabId) => !pinnedIds.has(tabId));
+  rememberClosedTreeTabs(closingIds);
+  state.settings.openTreeTabs = state.settings.openTreeTabs.filter((tabId) => pinnedIds.has(tabId));
+  if (!state.settings.openTreeTabs.includes(state.selectedTreeId)) {
+    state.selectedTreeId = state.settings.openTreeTabs[0] || null;
+  }
   persistSettings();
   renderTree();
 }
@@ -1227,6 +1263,7 @@ function closeOpenTreeTab(id) {
   const wasSelected = state.selectedTreeId === id;
   rememberClosedTreeTabs([id]);
   state.settings.openTreeTabs = tabs;
+  state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((tabId) => tabId !== id);
   if (wasSelected) {
     state.selectedTreeId = tabs.find((tabId) => findTreeNode(state.data.tree, tabId)) || null;
   }
@@ -1911,6 +1948,9 @@ function loadSettings() {
     }
     if (!Array.isArray(state.settings.closedTreeTabs)) {
       state.settings.closedTreeTabs = [];
+    }
+    if (!Array.isArray(state.settings.pinnedTreeTabs)) {
+      state.settings.pinnedTreeTabs = [];
     }
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
