@@ -21,8 +21,12 @@ docker compose up --build
 
 ```powershell
 $env:NOW_API_TOKEN="긴-랜덤-토큰"
+$env:NOW_POSTGRES_PASSWORD="긴-랜덤-DB-비밀번호"
 docker compose up --build
 ```
+
+기존 DB 볼륨이 이미 만들어진 뒤 `NOW_POSTGRES_PASSWORD`를 바꾸면 PostgreSQL 저장 비밀번호와 설정이 달라질 수 있으므로, 운영 시작 전에 먼저 확정합니다.
+DB 비밀번호는 연결 URL에도 들어가므로 처음에는 영문/숫자 중심의 긴 값으로 설정합니다.
 
 LLM 워커를 외부 LLM에 연결하려면 `.env` 또는 환경변수에 아래 값을 설정합니다.
 
