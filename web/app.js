@@ -1150,7 +1150,30 @@ function renderTreeEditor() {
 }
 
 function renderTreePath(node) {
-  elements.treePathLabel.textContent = treePath(node.id).join(" / ");
+  const nodes = treePathNodes(node.id);
+  if (nodes.length === 0) {
+    elements.treePathLabel.textContent = "";
+    return;
+  }
+  elements.treePathLabel.replaceChildren(
+    ...nodes.flatMap((pathNode, index) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "path-link";
+      button.textContent = pathNode.title || "제목 없음";
+      button.addEventListener("click", () => {
+        selectTreeNode(pathNode.id);
+      });
+      if (index === nodes.length - 1) {
+        button.setAttribute("aria-current", "page");
+      }
+      if (index === nodes.length - 1) return [button];
+      const separator = document.createElement("span");
+      separator.className = "path-separator";
+      separator.textContent = "/";
+      return [button, separator];
+    }),
+  );
 }
 
 function addOpenTreeTab(id) {
@@ -1454,6 +1477,16 @@ function treePath(id, nodes = state.data.tree, parents = []) {
     const current = [...parents, node.title || "제목 없음"];
     if (node.id === id) return current;
     const childPath = treePath(id, node.children, current);
+    if (childPath.length > 0) return childPath;
+  }
+  return [];
+}
+
+function treePathNodes(id, nodes = state.data.tree, parents = []) {
+  for (const node of nodes) {
+    const current = [...parents, node];
+    if (node.id === id) return current;
+    const childPath = treePathNodes(id, node.children, current);
     if (childPath.length > 0) return childPath;
   }
   return [];
