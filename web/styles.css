@@ -751,10 +751,11 @@ kbd {
 
 .open-tabs {
   display: flex;
-  gap: 6px;
+  gap: 0;
   overflow-x: auto;
-  margin: -4px 0 12px;
-  padding-bottom: 4px;
+  margin: -4px 0 14px;
+  border-bottom: 1px solid var(--line);
+  padding-left: 4px;
 }
 
 .open-tab {
@@ -762,34 +763,35 @@ kbd {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 6px;
   align-items: center;
-  max-width: 180px;
-  min-height: 32px;
+  width: 156px;
+  min-width: 156px;
+  height: 36px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
   background: var(--panel);
   color: var(--muted);
-  padding: 0 8px;
+  padding: 0 9px;
   font-size: 13px;
   font-weight: 800;
   position: relative;
+  transform: translateY(1px);
 }
 
 .open-tab.active {
   border-color: var(--blue);
-  border-width: 2px;
-  background: color-mix(in srgb, var(--blue) 20%, var(--panel));
-  color: var(--blue);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent);
+  background: var(--bg);
+  color: var(--text);
+  z-index: 1;
 }
 
 .open-tab.active::after {
   content: "";
   position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: -5px;
+  left: -1px;
+  right: -1px;
+  bottom: -1px;
   height: 3px;
-  border-radius: 999px;
   background: var(--blue);
 }
 
