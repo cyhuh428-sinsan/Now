@@ -83,12 +83,16 @@
                   <p id="treeLevelLabel" class="eyebrow"></p>
                   <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
                 </div>
-                <span id="treeSavedLabel" class="save-state">저장됨</span>
+                <div class="editor-status">
+                  <button id="favoriteBtn" class="icon-text-btn" type="button">즐겨찾기</button>
+                  <span id="treeSavedLabel" class="save-state">저장됨</span>
+                </div>
               </div>
               <div class="editor-tools" aria-label="지식 메모 도구">
                 <span id="treePathLabel" class="path-label"></span>
                 <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
               </div>
+              <div id="tagList" class="tag-list" aria-label="태그"></div>
               <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>
@@ -247,6 +251,17 @@
 
           <section class="settings-row">
             <div>
+              <h3>태그 표시</h3>
+              <p>본문의 #태그를 인식해 편집 화면과 검색에서 사용합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="tagsToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
               <h3>단축키 사용</h3>
               <p>빠른 전환, 새 주제 만들기 같은 기본 단축키를 사용합니다.</p>
             </div>
@@ -267,6 +282,8 @@
               <span>빠른 전환</span>
               <span>백링크</span>
               <span>연결 보기</span>
+              <span>태그</span>
+              <span>즐겨찾기</span>
               <span>단축키</span>
             </div>
           </section>
