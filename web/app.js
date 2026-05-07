@@ -730,10 +730,14 @@ function renderDeletedTreeList() {
         </div>
         <div class="archive-actions">
           <button class="secondary-btn" type="button" data-action="restore">복원</button>
+          <button class="danger-btn" type="button" data-action="remove">영구 삭제</button>
         </div>
       `;
       item.querySelector('[data-action="restore"]').addEventListener("click", () => {
         restoreDeletedTreeNode(node.id);
+      });
+      item.querySelector('[data-action="remove"]').addEventListener("click", () => {
+        permanentlyDeleteTreeNode(node.id);
       });
       return item;
     }),
@@ -1973,6 +1977,18 @@ function restoreDeletedTreeNode(id) {
   state.selectedTreeId = restored.id;
   persist();
   render();
+  renderDeletedTreeList();
+}
+
+function permanentlyDeleteTreeNode(id) {
+  const index = state.data.deletedTree.findIndex((node) => node.id === id);
+  if (index < 0) return;
+  const node = state.data.deletedTree[index];
+  if (!confirm(`'${node.title || "제목 없음"}' 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+  state.data.deletedTree.splice(index, 1);
+  persist();
   renderDeletedTreeList();
 }
 
