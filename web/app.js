@@ -108,6 +108,7 @@ const elements = {
   addChildBtn: $("#addChildBtn"),
   deleteTreeBtn: $("#deleteTreeBtn"),
   deletedTreeBtn: $("#deletedTreeBtn"),
+  deletedTreeCount: $("#deletedTreeCount"),
   deletedTreeView: $("#deletedTreeView"),
   deletedTreeList: $("#deletedTreeList"),
   deletedTreeCloseBtn: $("#deletedTreeCloseBtn"),
@@ -425,6 +426,7 @@ function bindEvents() {
     state.selectedTreeId = null;
     persist();
     renderTree();
+    renderDeletedTreeButton();
   });
 
   elements.deletedTreeBtn.addEventListener("click", toggleDeletedTreeBox);
@@ -714,6 +716,7 @@ function renderGraph() {
 
 function renderDeletedTreeList() {
   const deleted = state.data.deletedTree || [];
+  renderDeletedTreeButton();
   if (deleted.length === 0) {
     elements.deletedTreeList.innerHTML = '<div class="empty-compact">삭제 보관함이 비어 있습니다.</div>';
     return;
@@ -808,6 +811,13 @@ function render() {
   renderTree();
   renderResults();
   renderSidebarKnowledge();
+  renderDeletedTreeButton();
+}
+
+function renderDeletedTreeButton() {
+  const count = state.data.deletedTree?.length || 0;
+  elements.deletedTreeCount.textContent = String(count);
+  elements.deletedTreeBtn.classList.toggle("has-items", count > 0);
 }
 
 function renderDaily() {
@@ -1990,6 +2000,7 @@ function permanentlyDeleteTreeNode(id) {
   state.data.deletedTree.splice(index, 1);
   persist();
   renderDeletedTreeList();
+  renderDeletedTreeButton();
 }
 
 function detachTreeNode(id, nodes = state.data.tree) {
