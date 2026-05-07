@@ -6,7 +6,7 @@ services:
     environment:
       POSTGRES_DB: now
       POSTGRES_USER: now
-      POSTGRES_PASSWORD: now-local-password
+      POSTGRES_PASSWORD: ${NOW_POSTGRES_PASSWORD:-now-local-password}
     volumes:
       - now_postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -23,7 +23,7 @@ services:
       now-postgres:
         condition: service_healthy
     environment:
-      NOW_DATABASE_URL: postgresql+psycopg://now:now-local-password@now-postgres:5432/now
+      NOW_DATABASE_URL: postgresql+psycopg://now:${NOW_POSTGRES_PASSWORD:-now-local-password}@now-postgres:5432/now
       NOW_STORAGE_DIR: /data/recordings
       NOW_SERVER_NAME: NowNote Local Server
       # Set this before public operation. If empty, local server APIs are open.
@@ -57,7 +57,7 @@ services:
       now-postgres:
         condition: service_healthy
     environment:
-      NOW_DATABASE_URL: postgresql+psycopg://now:now-local-password@now-postgres:5432/now
+      NOW_DATABASE_URL: postgresql+psycopg://now:${NOW_POSTGRES_PASSWORD:-now-local-password}@now-postgres:5432/now
       NOW_STORAGE_DIR: /data/recordings
       NOW_SERVER_NAME: NowNote Local Server
       NOW_API_TOKEN: ${NOW_API_TOKEN:-}
