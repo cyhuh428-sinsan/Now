@@ -8,6 +8,7 @@ const state = {
   search: "",
   data: {
     daily: {},
+    archivedDaily: [],
     tree: [],
   },
 };
@@ -30,6 +31,11 @@ const elements = {
   dailySavedLabel: $("#dailySavedLabel"),
   todayBtn: $("#todayBtn"),
   appendTimeBtn: $("#appendTimeBtn"),
+  archiveSelectedBtn: $("#archiveSelectedBtn"),
+  archiveToggleBtn: $("#archiveToggleBtn"),
+  archivePanel: $("#archivePanel"),
+  archiveList: $("#archiveList"),
+  archiveCountLabel: $("#archiveCountLabel"),
   prevMonthBtn: $("#prevMonthBtn"),
   nextMonthBtn: $("#nextMonthBtn"),
   addRootBtn: $("#addRootBtn"),
@@ -107,6 +113,15 @@ function bindEvents() {
     elements.dailyContent.value = `${prefix}[${timeLabel(new Date())}] `;
     elements.dailyContent.focus();
     saveDailyFromEditor();
+  });
+
+  elements.archiveSelectedBtn.addEventListener("click", () => {
+    archiveSelectedDailyNote();
+  });
+
+  elements.archiveToggleBtn.addEventListener("click", () => {
+    elements.archivePanel.classList.toggle("hidden");
+    renderArchiveList();
   });
 
   elements.dailyContent.addEventListener("input", () => {
@@ -205,6 +220,7 @@ function renderDaily() {
     ? "기록 있음"
     : "비어 있음";
   renderCalendar();
+  renderArchiveList();
 }
 
 function renderCalendar() {
@@ -243,12 +259,100 @@ function saveDailyFromEditor() {
     state.data.daily[state.selectedDate] = {
       date: state.selectedDate,
       content,
+      status: "active",
       updatedAt: new Date().toISOString(),
     };
   }
   persist();
   renderCalendar();
   showSaved(elements.dailySavedLabel);
+}
+
+function archiveSelectedDailyNote() {
+  const note = state.data.daily[state.selectedDate];
+  if (!note?.content?.trim()) {
+    alert("보관할 메모가 없습니다.");
+    return;
+  }
+  if (!confirm(`${longDateLabel(state.selectedDate)} 메모를 보관함으로 이동할까요?`)) return;
+
+  state.data.archivedDaily.unshift({
+    id: crypto.randomUUID(),
+    date: state.selectedDate,
+    content: note.content,
+    status: "archived",
+    syncState: "pending",
+    archivedAt: new Date().toISOString(),
+    updatedAt: note.updatedAt || new Date().toISOString(),
+  });
+  delete state.data.daily[state.selectedDate];
+  persist();
+  renderDaily();
+  elements.dailyContent.focus();
+}
+
+function renderArchiveList() {
+  const archives = state.data.archivedDaily || [];
+  elements.archiveCountLabel.textContent = `${archives.length}개`;
+  if (archives.length === 0) {
+    elements.archiveList.innerHTML = '<div class="empty-compact">보관된 일자별 메모가 없습니다.</div>';
+    return;
+  }
+
+  elements.archiveList.replaceChildren(
+    ...archives.map((note) => {
+      const item = document.createElement("article");
+      item.className = "archive-item";
+      item.innerHTML = `
+        <div>
+          <strong>${escapeHtml(longDateLabel(note.date))}</strong>
+          <span>${escapeHtml(formatArchivedAt(note.archivedAt))} 보관</span>
+          <p>${escapeHtml(snippet(note.content))}</p>
+        </div>
+        <div class="archive-actions">
+          <button class="secondary-btn" type="button" data-action="view">열람</button>
+          <button class="secondary-btn" type="button" data-action="restore">복원</button>
+        </div>
+      `;
+      item.querySelector('[data-action="view"]').addEventListener("click", () => {
+        state.selectedDate = note.date;
+        const [year, month] = note.date.split("-").map(Number);
+        state.visibleMonth = new Date(year, month - 1, 1);
+        elements.dailyContent.value = note.content;
+        elements.selectedDateLabel.textContent = `${longDateLabel(note.date)} · 보관본 열람`;
+        elements.dailyContent.focus();
+      });
+      item.querySelector('[data-action="restore"]').addEventListener("click", () => {
+        restoreArchivedDailyNote(note.id);
+      });
+      return item;
+    }),
+  );
+}
+
+function restoreArchivedDailyNote(id) {
+  const note = state.data.archivedDaily.find((item) => item.id === id);
+  if (!note) return;
+  const active = state.data.daily[note.date];
+  if (active?.content?.trim()) {
+    const ok = confirm("같은 날짜의 활성 메모가 있습니다. 보관본 내용을 아래에 추가할까요?");
+    if (!ok) return;
+    state.data.daily[note.date].content = `${active.content.trimEnd()}\n\n--- 보관본 복원 ---\n${note.content}`;
+    state.data.daily[note.date].updatedAt = new Date().toISOString();
+  } else {
+    state.data.daily[note.date] = {
+      date: note.date,
+      content: note.content,
+      status: "active",
+      restoredFromArchiveId: note.id,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  state.selectedDate = note.date;
+  const [year, month] = note.date.split("-").map(Number);
+  state.visibleMonth = new Date(year, month - 1, 1);
+  persist();
+  renderDaily();
 }
 
 function renderTree() {
@@ -430,6 +534,7 @@ function load() {
   try {
     const parsed = JSON.parse(raw);
     state.data.daily = parsed.daily || {};
+    state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.tree = parsed.tree || [];
   } catch {
     localStorage.removeItem(STORAGE_KEY);
@@ -461,6 +566,7 @@ function importData(event) {
         alert("NowNote 백업 JSON 형식이 아닙니다.");
         return;
       }
+      parsed.archivedDaily = parsed.archivedDaily || [];
       state.data = parsed;
       state.selectedTreeId = null;
       persist();
@@ -513,6 +619,15 @@ function timeLabel(date) {
     minute: "2-digit",
     hour12: false,
   }).format(date);
+}
+
+function formatArchivedAt(value) {
+  if (!value) return "날짜 없음";
+  return new Intl.DateTimeFormat("ko-KR", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  }).format(new Date(value));
 }
 
 function snippet(text) {
