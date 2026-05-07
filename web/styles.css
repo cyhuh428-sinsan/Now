@@ -771,12 +771,26 @@ kbd {
   padding: 0 8px;
   font-size: 13px;
   font-weight: 800;
+  position: relative;
 }
 
 .open-tab.active {
   border-color: var(--blue);
-  background: var(--blue-soft);
+  border-width: 2px;
+  background: color-mix(in srgb, var(--blue) 20%, var(--panel));
   color: var(--blue);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--blue) 20%, transparent);
+}
+
+.open-tab.active::after {
+  content: "";
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: -5px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--blue);
 }
 
 .open-tab span {
