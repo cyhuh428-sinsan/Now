@@ -563,6 +563,33 @@ body.resizing {
   font-weight: 800;
 }
 
+.shortcut-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(140px, 1fr));
+  gap: 8px;
+  min-width: min(420px, 100%);
+}
+
+.shortcut-list span {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 24px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .daily-popover.hidden {
   display: none;
 }

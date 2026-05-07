@@ -300,6 +300,23 @@
             </label>
           </section>
 
+          <section class="settings-row shortcuts-row">
+            <div>
+              <h3>단축키 안내</h3>
+              <p>자주 쓰는 창과 작업을 키보드로 바로 엽니다.</p>
+            </div>
+            <div class="shortcut-list">
+              <span><kbd>Ctrl</kbd> + <kbd>N</kbd> 새 주제</span>
+              <span><kbd>Ctrl</kbd> + <kbd>F</kbd> 검색</span>
+              <span><kbd>Ctrl</kbd> + <kbd>K</kbd> 빠른 전환</span>
+              <span><kbd>Ctrl</kbd> + <kbd>O</kbd> 빠른 전환</span>
+              <span><kbd>Ctrl</kbd> + <kbd>D</kbd> 일자별 메모</span>
+              <span><kbd>Ctrl</kbd> + <kbd>G</kbd> 연결 보기</span>
+              <span><kbd>Ctrl</kbd> + <kbd>,</kbd> 화면 설정</span>
+              <span><kbd>Esc</kbd> 닫기</span>
+            </div>
+          </section>
+
           <section class="settings-row">
             <div>
               <h3>보조 목록 표시</h3>
@@ -342,6 +359,20 @@
         </header>
         <input id="quickInput" class="quick-input" type="search" placeholder="메모 제목 검색">
         <div id="quickResults" class="quick-results"></div>
+      </div>
+    </section>
+
+    <section id="searchPopoverView" class="quick-popover hidden" aria-labelledby="searchPopoverTitle">
+      <div class="quick-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">일자별 메모와 지식 메모 전체</p>
+            <h2 id="searchPopoverTitle">검색</h2>
+          </div>
+          <button id="searchPopoverCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <input id="searchPopoverInput" class="quick-input" type="search" placeholder="제목, 내용, 태그 검색">
+        <div id="searchPopoverResults" class="quick-results"></div>
       </div>
     </section>
 
