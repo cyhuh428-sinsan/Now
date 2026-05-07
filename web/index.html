@@ -71,7 +71,12 @@
                 </div>
                 <span id="treeSavedLabel" class="save-state">저장됨</span>
               </div>
+              <div class="editor-tools" aria-label="계층 메모 도구">
+                <span id="treePathLabel" class="path-label"></span>
+                <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+              </div>
               <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
+              <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <div class="editor-actions">
                 <button id="addChildBtn" class="secondary-btn" type="button">하위 메모 추가</button>
                 <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
