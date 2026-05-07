@@ -182,11 +182,11 @@ button {
 
 .today-chip {
   display: grid;
-  gap: 4px;
+  gap: 2px;
   width: 100%;
-  min-height: 50px;
+  min-height: 42px;
   margin-bottom: 12px;
-  padding: 10px 12px;
+  padding: 8px 10px;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
   background: var(--blue-soft);
@@ -195,13 +195,13 @@ button {
 }
 
 .today-chip span {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 800;
 }
 
 .today-chip strong {
   color: var(--text);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .nav-tab,
@@ -310,6 +310,15 @@ button {
   display: grid;
   gap: 6px;
   margin-top: 18px;
+}
+
+.sidebar .nav-tab,
+.sidebar .ghost-btn,
+.sidebar .file-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .file-btn {
@@ -882,12 +891,6 @@ body.resizing {
 }
 
 .tree-meta {
-  color: var(--muted);
-  font-size: 10px;
-  line-height: 1.35;
-}
-
-.tree-node.expanded > .tree-row .tree-meta {
   display: none;
 }
 
