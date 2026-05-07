@@ -103,64 +103,56 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
         db_status = "bad"
         db_message = f"DB 연결 오류: {exc}"
 
-    checks.append({"name": "Database", "status": db_status, "message": db_message})
+    checks.append({"name": "데이터베이스", "status": db_status, "message": db_message})
     storage_status, storage_message = _recording_storage_state(settings.storage_dir)
     checks.append(
         {
-            "name": "Recording Storage",
+            "name": "녹음 저장소",
             "status": storage_status,
             "message": storage_message,
         }
     )
+    token_status, token_message = _api_token_state(settings.api_token)
+    checks.append({"name": "API 토큰", "status": token_status, "message": token_message})
+    password_status, password_message = _database_password_state(settings.database_url)
     checks.append(
         {
-            "name": "API Token",
-            "status": "ok" if settings.api_token else "warn",
-            "message": "설정됨" if settings.api_token else "공용 오픈 전 설정 필요",
+            "name": "PostgreSQL 비밀번호",
+            "status": password_status,
+            "message": password_message,
         }
     )
     checks.append(
         {
-            "name": "Postgres Password",
-            "status": "warn" if _uses_default_database_password(settings.database_url) else "ok",
-            "message": (
-                "기본 DB 비밀번호 사용 중"
-                if _uses_default_database_password(settings.database_url)
-                else "기본 DB 비밀번호 아님"
-            ),
-        }
-    )
-    checks.append(
-        {
-            "name": "LLM Provider",
+            "name": "LLM 제공자",
             "status": "ok" if settings.llm_provider != "local" else "info",
             "message": _llm_state(settings.llm_provider, settings.openai_api_key),
         }
     )
     checks.append(
         {
-            "name": "Failed Analysis Jobs",
+            "name": "실패한 분석 작업",
             "status": "bad" if failed_jobs else "ok",
             "message": f"{failed_jobs}건",
         }
     )
     checks.append(
         {
-            "name": "Queued Analysis Jobs",
+            "name": "대기 중인 분석 작업",
             "status": "warn" if queued_jobs > 20 else "ok",
             "message": f"queued {queued_jobs}건, running {running_jobs}건",
         }
     )
     checks.append(
         {
-            "name": "Deleted Notes",
+            "name": "삭제 표시 메모",
             "status": "info" if deleted_notes else "ok",
             "message": f"삭제 표시 메모 {deleted_notes}건",
         }
     )
     checks.append(
         {
-            "name": "Recordings Without Transcript",
+            "name": "텍스트 없는 녹음",
             "status": "info" if recordings_without_transcript else "ok",
             "message": f"transcript 없는 녹음 {recordings_without_transcript}건",
         }
@@ -213,8 +205,20 @@ def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
     return "ok", f"녹음 저장소 경로 확인됨: {storage_dir}"
 
 
-def _uses_default_database_password(database_url: str) -> bool:
-    return "now-local-password" in database_url
+def _api_token_state(api_token: str | None) -> tuple[str, str]:
+    if not api_token:
+        return "warn", "로컬 개발은 가능하지만 공용 오픈 전 설정 필요"
+    if api_token.startswith("change-this"):
+        return "warn", ".env.example 예시 토큰 사용 중"
+    return "ok", "설정됨"
+
+
+def _database_password_state(database_url: str) -> tuple[str, str]:
+    if "now-local-password" in database_url:
+        return "warn", "기본 DB 비밀번호 사용 중"
+    if "change-this-postgres-password" in database_url:
+        return "warn", ".env.example 예시 DB 비밀번호 사용 중"
+    return "ok", "기본 DB 비밀번호 아님"
 
 
 def _llm_state(provider: str, api_key: str | None) -> str:
