@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -21,6 +21,7 @@ def validate_note(payload: NoteIn) -> None:
 
 def upsert_note(payload: NoteIn, db: Session) -> Note:
     validate_note(payload)
+    payload_data = _normalized_note_data(payload)
     note = db.scalar(
         select(Note).where(
             Note.owner_id == payload.owner_id,
@@ -30,18 +31,18 @@ def upsert_note(payload: NoteIn, db: Session) -> Note:
     )
 
     if note is None:
-        note = Note(**payload.model_dump())
+        note = Note(**payload_data)
         db.add(note)
         return note
 
     if (
         note.client_updated_at
-        and payload.client_updated_at
-        and payload.client_updated_at < note.client_updated_at
+        and payload_data["client_updated_at"]
+        and payload_data["client_updated_at"] < note.client_updated_at
     ):
         return note
 
-    for key, value in payload.model_dump().items():
+    for key, value in payload_data.items():
         setattr(note, key, value)
     return note
 
@@ -53,6 +54,7 @@ def list_changed_notes(
     updated_after: datetime | None,
     include_deleted: bool,
 ) -> list[Note]:
+    updated_after = as_naive_utc(updated_after)
     stmt = select(Note).where(Note.owner_id == owner_id)
     if updated_after is not None:
         stmt = stmt.where(Note.updated_at > updated_after)
@@ -60,3 +62,18 @@ def list_changed_notes(
         stmt = stmt.where(Note.deleted_at.is_(None))
     stmt = stmt.order_by(Note.updated_at.asc(), Note.id.asc())
     return list(db.scalars(stmt).all())
+
+
+def _normalized_note_data(payload: NoteIn) -> dict:
+    data = payload.model_dump()
+    data["client_updated_at"] = as_naive_utc(data["client_updated_at"])
+    data["deleted_at"] = as_naive_utc(data["deleted_at"])
+    return data
+
+
+def as_naive_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value
+    return value.astimezone(timezone.utc).replace(tzinfo=None)
