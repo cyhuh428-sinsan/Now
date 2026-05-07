@@ -118,7 +118,17 @@
               </div>
               <div class="editor-tools" aria-label="지식 메모 도구">
                 <span id="treePathLabel" class="path-label"></span>
-                <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+                <div class="editor-tool-actions">
+                  <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
+                  <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+                </div>
+              </div>
+              <div id="noteFindBar" class="note-find-bar hidden" aria-label="현재 메모에서 찾기">
+                <input id="noteFindInput" type="search" placeholder="현재 메모에서 찾기">
+                <span id="noteFindCount" class="save-state">0개</span>
+                <button id="noteFindPrevBtn" class="secondary-btn" type="button">이전</button>
+                <button id="noteFindNextBtn" class="secondary-btn" type="button">다음</button>
+                <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
               </div>
               <div id="tagList" class="tag-list" aria-label="태그"></div>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
@@ -308,6 +318,7 @@
             <div class="shortcut-list">
               <span><kbd>Ctrl</kbd> + <kbd>N</kbd> 새 주제</span>
               <span><kbd>Ctrl</kbd> + <kbd>F</kbd> 검색</span>
+              <span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> 본문 찾기</span>
               <span><kbd>Ctrl</kbd> + <kbd>K</kbd> 빠른 전환</span>
               <span><kbd>Ctrl</kbd> + <kbd>O</kbd> 빠른 전환</span>
               <span><kbd>Ctrl</kbd> + <kbd>D</kbd> 일자별 메모</span>

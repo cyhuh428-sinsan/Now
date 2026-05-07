@@ -793,11 +793,36 @@ kbd {
   margin-bottom: 12px;
 }
 
+.editor-tool-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .path-label {
   min-width: 0;
   color: var(--muted);
   font-size: 13px;
   line-height: 1.5;
+}
+
+.note-find-bar {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.note-find-bar input {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 10px;
+  outline: none;
 }
 
 .tag-list {
@@ -1276,6 +1301,10 @@ kbd {
   }
 
   .search-popover-toolbar {
+    grid-template-columns: 1fr;
+  }
+
+  .note-find-bar {
     grid-template-columns: 1fr;
   }
 }
