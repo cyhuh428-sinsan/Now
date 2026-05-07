@@ -891,6 +891,13 @@ body.resizing {
 }
 
 .tree-meta {
+  color: var(--muted);
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.tree-node.expanded > .tree-row .tree-meta,
+.tree-node:not(.has-children) > .tree-row .tree-meta {
   display: none;
 }
 
