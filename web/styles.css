@@ -811,6 +811,14 @@ kbd {
   z-index: 1;
 }
 
+.open-tab.pinned {
+  border-color: color-mix(in srgb, var(--blue) 55%, var(--line));
+}
+
+.open-tab.pinned span {
+  color: var(--blue);
+}
+
 .open-tab.active::after {
   content: "";
   position: absolute;
