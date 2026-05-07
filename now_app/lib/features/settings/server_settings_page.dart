@@ -17,6 +17,8 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
+  ServerConnectionResult? _connectionResult;
+  ServerOpsResult? _opsResult;
 
   @override
   void dispose() {
@@ -62,7 +64,16 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       await settings.save();
       final result =
           await ref.read(serverSyncServiceProvider).testConnection(settings);
+      ServerOpsResult? opsResult;
+      if (result.ok) {
+        opsResult =
+            await ref.read(serverSyncServiceProvider).loadOpsStatus(settings);
+      }
       if (mounted) {
+        setState(() {
+          _connectionResult = result;
+          _opsResult = opsResult;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message),
@@ -82,7 +93,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       final settings = _currentSettings();
       await settings.save();
       final result =
-          await ref.read(serverSyncServiceProvider).uploadNotes(settings);
+          await ref.read(serverSyncServiceProvider).syncNotes(settings);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(result.message)),
@@ -152,7 +163,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     keyboardType: TextInputType.url,
                     decoration: const InputDecoration(
                       labelText: '서버 주소',
-                      hintText: 'http://192.168.0.10:8080',
+                      hintText: 'http://10.0.2.2:8750',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -176,6 +187,13 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                 ],
               ),
+              if (_connectionResult != null || _opsResult != null) ...[
+                const SizedBox(height: 14),
+                _ServerStatusCard(
+                  connectionResult: _connectionResult,
+                  opsResult: _opsResult,
+                ),
+              ],
               const SizedBox(height: 14),
               Row(
                 children: [
@@ -210,7 +228,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    '현재는 일자별 메모와 계층 메모를 서버로 업로드합니다. 내려받기와 충돌 병합은 다음 단계에서 연결합니다.',
+                    '일자별 메모와 계층 메모를 서버와 통합 동기화합니다. 이번 단계에서는 서버 변경분을 확인하고, 로컬 병합은 다음 단계에서 연결합니다.',
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
@@ -233,7 +251,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                               ),
                             )
                           : const Icon(Icons.cloud_upload_outlined, size: 18),
-                      label: const Text('메모 서버 업로드'),
+                      label: const Text('메모 동기화'),
                     ),
                   ),
                 ],
@@ -268,5 +286,98 @@ class _ServerCard extends StatelessWidget {
         children: children,
       ),
     );
+  }
+}
+
+class _ServerStatusCard extends StatelessWidget {
+  final ServerConnectionResult? connectionResult;
+  final ServerOpsResult? opsResult;
+
+  const _ServerStatusCard({
+    required this.connectionResult,
+    required this.opsResult,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final connection = connectionResult;
+    final ops = opsResult;
+    final color = _statusColor(connection?.ok == true ? ops?.status : 'bad');
+    return _ServerCard(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Icon(
+              connection?.ok == true
+                  ? Icons.cloud_done_outlined
+                  : Icons.cloud_off_outlined,
+              size: 20,
+              color: color,
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                connection?.message ?? '연결 테스트 전',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: Color(0xFF111827),
+                ),
+              ),
+            ),
+          ],
+        ),
+        if (ops != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            ops.message,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...ops.checks.take(4).map((check) {
+            final status = check['status']?.toString() ?? 'info';
+            return Padding(
+              padding: const EdgeInsets.only(top: 5),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 7,
+                    height: 7,
+                    margin: const EdgeInsets.only(top: 6, right: 8),
+                    decoration: BoxDecoration(
+                      color: _statusColor(status),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      '${check['name'] ?? '-'} · ${check['message'] ?? ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Color _statusColor(String? status) {
+    if (status == 'ok') return const Color(0xFF059669);
+    if (status == 'bad') return const Color(0xFFEF4444);
+    if (status == 'warn') return const Color(0xFFD97706);
+    return const Color(0xFF6366F1);
   }
 }
