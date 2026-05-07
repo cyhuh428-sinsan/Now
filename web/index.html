@@ -104,6 +104,8 @@
           <div class="header-actions">
             <button id="todayBtn" class="secondary-btn" type="button">오늘</button>
             <button id="appendTimeBtn" class="primary-btn" type="button">시간 추가</button>
+            <button id="archiveSelectedBtn" class="secondary-btn" type="button">보관</button>
+            <button id="archiveToggleBtn" class="secondary-btn" type="button">보관함</button>
             <button id="dailyCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
           </div>
         </header>
@@ -132,6 +134,17 @@
             <textarea id="dailyContent" class="memo-editor daily-editor" placeholder="이 날짜의 메모장 하나에 계속 추가해서 적어두세요."></textarea>
           </section>
         </div>
+
+        <section id="archivePanel" class="panel archive-panel hidden" aria-label="일자별 메모 보관함">
+          <div class="archive-head">
+            <div>
+              <p class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
+              <h3>보관함</h3>
+            </div>
+            <span id="archiveCountLabel" class="save-state">0개</span>
+          </div>
+          <div id="archiveList" class="archive-list"></div>
+        </section>
       </div>
     </section>
   </div>
