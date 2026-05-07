@@ -65,6 +65,8 @@ const elements = {
   archiveCountLabel: $("#archiveCountLabel"),
   prevMonthBtn: $("#prevMonthBtn"),
   nextMonthBtn: $("#nextMonthBtn"),
+  expandAllBtn: $("#expandAllBtn"),
+  collapseAllBtn: $("#collapseAllBtn"),
   addRootBtn: $("#addRootBtn"),
   emptyAddRootBtn: $("#emptyAddRootBtn"),
   treeList: $("#treeList"),
@@ -278,6 +280,15 @@ function bindEvents() {
 
   elements.addRootBtn.addEventListener("click", () => {
     addRootNote();
+  });
+
+  elements.expandAllBtn.addEventListener("click", () => {
+    expandAllTreeNodes();
+  });
+
+  elements.collapseAllBtn.addEventListener("click", () => {
+    state.expandedTreeIds.clear();
+    renderTreeListOnly();
   });
 
   elements.emptyAddRootBtn.addEventListener("click", () => {
@@ -891,6 +902,13 @@ function toggleTreeNode(id) {
   } else {
     state.expandedTreeIds.add(id);
   }
+  renderTreeListOnly();
+}
+
+function expandAllTreeNodes() {
+  flattenTree(state.data.tree)
+    .filter((node) => node.children.length > 0)
+    .forEach((node) => state.expandedTreeIds.add(node.id));
   renderTreeListOnly();
 }
 
