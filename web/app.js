@@ -2215,6 +2215,9 @@ function importData(event) {
         alert("NowNote 백업 JSON 형식이 아닙니다.");
         return;
       }
+      if (!confirm("JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다. 계속할까요?")) {
+        return;
+      }
       imported.data.archivedDaily = imported.data.archivedDaily || [];
       imported.data.deletedTree = imported.data.deletedTree || [];
       state.data = imported.data;
