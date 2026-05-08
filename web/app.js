@@ -415,20 +415,7 @@ function bindEvents() {
     }
   });
 
-  elements.addChildBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    if (selected.level >= 3) {
-      alert("지식 메모는 주제, 분류, 메모 3단계까지만 만들 수 있습니다.");
-      return;
-    }
-    const node = createNode(defaultTitleForLevel(selected.level + 1), "", selected.id, selected.level + 1);
-    selected.children.push(node);
-    state.selectedTreeId = node.id;
-    state.expandedTreeIds.add(selected.id);
-    persist();
-    renderTree();
-  });
+  elements.addChildBtn.addEventListener("click", addChildToSelectedTreeNode);
 
   elements.deleteTreeBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -784,7 +771,11 @@ function handleShortcuts(event) {
   }
   if (key === "n") {
     event.preventDefault();
-    addRootNote();
+    if (event.shiftKey) {
+      addChildToSelectedTreeNode();
+    } else {
+      addRootNote();
+    }
   }
 }
 
@@ -1183,6 +1174,24 @@ function addRootNote() {
   state.data.tree.push(node);
   state.selectedTreeId = node.id;
   state.expandedTreeIds.add(node.id);
+  persist();
+  renderTree();
+}
+
+function addChildToSelectedTreeNode() {
+  const selected = getSelectedTreeNode();
+  if (!selected) {
+    addRootNote();
+    return;
+  }
+  if (selected.level >= 3) {
+    alert("지식 메모는 주제, 분류, 메모 3단계까지만 만들 수 있습니다.");
+    return;
+  }
+  const node = createNode(defaultTitleForLevel(selected.level + 1), "", selected.id, selected.level + 1);
+  selected.children.push(node);
+  state.selectedTreeId = node.id;
+  state.expandedTreeIds.add(selected.id);
   persist();
   renderTree();
 }
