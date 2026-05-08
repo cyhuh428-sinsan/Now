@@ -1054,7 +1054,7 @@ function applyHeadingToTreeContent(level) {
   const block = value.slice(lineStart, end);
   const nextBlock = block
     .split("\n")
-    .map((line) => `${marker}${line.replace(/^#{1,3}\s+/, "")}`)
+    .map((line) => `${marker}${line.replace(/^#{1,6}\s+/, "")}`)
     .join("\n");
   elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
   const cursorStart = lineStart;
