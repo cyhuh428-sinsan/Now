@@ -14,6 +14,7 @@ const state = {
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
   expandedTreeIds: new Set(),
+  selectedDeletedTreeIds: new Set(),
   search: "",
   data: {
     daily: {},
@@ -119,12 +120,17 @@ const elements = {
   deletedTreeView: $("#deletedTreeView"),
   deletedTreeList: $("#deletedTreeList"),
   deletedTreeCloseBtn: $("#deletedTreeCloseBtn"),
+  deletedSelectionLabel: $("#deletedSelectionLabel"),
+  deletedSelectAllBtn: $("#deletedSelectAllBtn"),
+  deletedBulkDeleteBtn: $("#deletedBulkDeleteBtn"),
+  deletedDeleteAllBtn: $("#deletedDeleteAllBtn"),
   resultsList: $("#resultsList"),
   resultsCount: $("#resultsCount"),
   clearResultsBtn: $("#clearResultsBtn"),
   exportBtn: $("#exportBtn"),
   exportMarkdownBtn: $("#exportMarkdownBtn"),
   importInput: $("#importInput"),
+  importMarkdownInput: $("#importMarkdownInput"),
   settingsBtn: $("#settingsBtn"),
   railSidebarBtn: $("#railSidebarBtn"),
   railDailyBtn: $("#railDailyBtn"),
@@ -434,9 +440,13 @@ function bindEvents() {
 
   elements.deletedTreeBtn.addEventListener("click", toggleDeletedTreeBox);
   elements.deletedTreeCloseBtn.addEventListener("click", closeDeletedTreeBox);
+  elements.deletedSelectAllBtn.addEventListener("click", toggleDeletedTreeSelection);
+  elements.deletedBulkDeleteBtn.addEventListener("click", deleteSelectedTreeNodes);
+  elements.deletedDeleteAllBtn.addEventListener("click", deleteAllArchivedTreeNodes);
   elements.exportBtn.addEventListener("click", exportData);
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
+  elements.importMarkdownInput.addEventListener("change", importMarkdownData);
   elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
   elements.searchPopoverInput.addEventListener("keydown", handleSearchPopoverInputKey);
   elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
@@ -672,6 +682,7 @@ function closeGraph() {
 }
 
 function openDeletedTreeBox() {
+  state.selectedDeletedTreeIds.clear();
   renderDeletedTreeList();
   elements.deletedTreeView.classList.remove("hidden");
 }
@@ -686,6 +697,8 @@ function toggleDeletedTreeBox() {
 
 function closeDeletedTreeBox() {
   elements.deletedTreeView.classList.add("hidden");
+  state.selectedDeletedTreeIds.clear();
+  renderDeletedTreeControls();
 }
 
 function handleShortcuts(event) {
@@ -1140,16 +1153,23 @@ function renderGraph() {
 function renderDeletedTreeList() {
   const deleted = state.data.deletedTree || [];
   renderDeletedTreeButton();
+  pruneDeletedTreeSelection();
+  renderDeletedTreeControls();
   if (deleted.length === 0) {
     elements.deletedTreeList.innerHTML = '<div class="empty-compact">삭제 보관함이 비어 있습니다.</div>';
     return;
   }
   elements.deletedTreeList.replaceChildren(
     ...deleted.map((node) => {
+      const selected = state.selectedDeletedTreeIds.has(node.id);
       const item = document.createElement("article");
       item.className = "archive-item";
+      item.classList.toggle("selected", selected);
       item.innerHTML = `
-        <div>
+        <label class="archive-check" aria-label="${escapeHtml(node.title || "제목 없음")} 선택">
+          <input type="checkbox" data-action="select" ${selected ? "checked" : ""}>
+        </label>
+        <div class="archive-info">
           <strong>${escapeHtml(node.title || "제목 없음")}</strong>
           <span>${escapeHtml(formatArchivedAt(node.deletedAt))} 삭제</span>
           <p>${escapeHtml(snippet(node.content || ""))}</p>
@@ -1159,6 +1179,14 @@ function renderDeletedTreeList() {
           <button class="danger-btn" type="button" data-action="remove">영구 삭제</button>
         </div>
       `;
+      item.querySelector('[data-action="select"]').addEventListener("change", (event) => {
+        if (event.target.checked) {
+          state.selectedDeletedTreeIds.add(node.id);
+        } else {
+          state.selectedDeletedTreeIds.delete(node.id);
+        }
+        renderDeletedTreeList();
+      });
       item.querySelector('[data-action="restore"]').addEventListener("click", () => {
         restoreDeletedTreeNode(node.id);
       });
@@ -1168,6 +1196,67 @@ function renderDeletedTreeList() {
       return item;
     }),
   );
+}
+
+function renderDeletedTreeControls() {
+  if (!elements.deletedSelectionLabel) return;
+  const deleted = state.data.deletedTree || [];
+  const selectedCount = state.selectedDeletedTreeIds.size;
+  const totalCount = deleted.length;
+  elements.deletedSelectionLabel.textContent = `선택 ${selectedCount}개 / 전체 ${totalCount}개`;
+  elements.deletedSelectAllBtn.disabled = totalCount === 0;
+  elements.deletedSelectAllBtn.textContent = selectedCount === totalCount && totalCount > 0 ? "전체 해제" : "전체 선택";
+  elements.deletedBulkDeleteBtn.disabled = selectedCount === 0;
+  elements.deletedDeleteAllBtn.disabled = totalCount === 0;
+}
+
+function pruneDeletedTreeSelection() {
+  const deletedIds = new Set((state.data.deletedTree || []).map((node) => node.id));
+  state.selectedDeletedTreeIds.forEach((id) => {
+    if (!deletedIds.has(id)) {
+      state.selectedDeletedTreeIds.delete(id);
+    }
+  });
+}
+
+function toggleDeletedTreeSelection() {
+  const deleted = state.data.deletedTree || [];
+  if (deleted.length === 0) return;
+  pruneDeletedTreeSelection();
+  if (state.selectedDeletedTreeIds.size === deleted.length) {
+    state.selectedDeletedTreeIds.clear();
+  } else {
+    state.selectedDeletedTreeIds = new Set(deleted.map((node) => node.id));
+  }
+  renderDeletedTreeList();
+}
+
+function deleteSelectedTreeNodes() {
+  pruneDeletedTreeSelection();
+  const selectedIds = [...state.selectedDeletedTreeIds];
+  if (selectedIds.length === 0) return;
+  if (!confirm(`선택한 ${selectedIds.length}개 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+  const selectedSet = new Set(selectedIds);
+  state.data.deletedTree = state.data.deletedTree.filter((node) => !selectedSet.has(node.id));
+  state.selectedDeletedTreeIds.clear();
+  persist();
+  renderDeletedTreeList();
+  renderDeletedTreeButton();
+}
+
+function deleteAllArchivedTreeNodes() {
+  const deleted = state.data.deletedTree || [];
+  if (deleted.length === 0) return;
+  if (!confirm(`삭제 보관함의 ${deleted.length}개 메모를 모두 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+    return;
+  }
+  state.data.deletedTree = [];
+  state.selectedDeletedTreeIds.clear();
+  persist();
+  renderDeletedTreeList();
+  renderDeletedTreeButton();
 }
 
 function bindTreeResize() {
@@ -2665,6 +2754,7 @@ function restoreDeletedTreeNode(id) {
   const index = state.data.deletedTree.findIndex((node) => node.id === id);
   if (index < 0) return;
   const [node] = state.data.deletedTree.splice(index, 1);
+  state.selectedDeletedTreeIds.delete(id);
   const parent = node.parentId ? findTreeNode(state.data.tree, node.parentId) : null;
   const restored = {
     ...node,
@@ -2697,6 +2787,7 @@ function permanentlyDeleteTreeNode(id) {
     return;
   }
   state.data.deletedTree.splice(index, 1);
+  state.selectedDeletedTreeIds.delete(id);
   persist();
   renderDeletedTreeList();
   renderDeletedTreeButton();
@@ -3067,6 +3158,52 @@ function importData(event) {
     alert("JSON 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
     event.target.value = "";
   }
+}
+
+function importMarkdownData(event) {
+  const file = event.target.files?.[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const content = String(reader.result || "").replace(/\r\n/g, "\n");
+      if (!content.trim()) {
+        alert("가져올 Markdown 내용이 없습니다.");
+        return;
+      }
+      const title = titleFromMarkdownFile(file.name, content);
+      if (!confirm(`'${title}' Markdown 파일을 새 주제로 가져올까요?`)) {
+        return;
+      }
+      const node = createNode(title, content, null, 1);
+      state.data.tree.push(node);
+      state.selectedTreeId = node.id;
+      state.expandedTreeIds.add(node.id);
+      persist();
+      setView("tree");
+      alert("Markdown 가져오기가 완료되었습니다.");
+    } catch {
+      alert("Markdown 파일을 읽을 수 없습니다.");
+    } finally {
+      event.target.value = "";
+    }
+  };
+  reader.onerror = () => {
+    alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    event.target.value = "";
+  };
+  try {
+    reader.readAsText(file);
+  } catch {
+    alert("Markdown 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    event.target.value = "";
+  }
+}
+
+function titleFromMarkdownFile(fileName, content) {
+  const heading = content.split("\n").find((line) => /^#\s+/.test(line.trim()));
+  const title = heading ? heading.replace(/^#\s+/, "").trim() : fileName.replace(/\.(md|markdown|txt)$/i, "").trim();
+  return normalizeText(title).slice(0, 80) || "가져온 Markdown";
 }
 
 function backupDataShape(data) {

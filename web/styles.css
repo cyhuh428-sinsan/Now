@@ -315,10 +315,14 @@ button {
 .sidebar .nav-tab,
 .sidebar .ghost-btn,
 .sidebar .file-btn {
+  display: flex;
+  align-items: center;
   min-height: 34px;
   padding: 0 10px;
   font-size: 13px;
   font-weight: 700;
+  justify-content: flex-start;
+  text-align: left;
 }
 
 .count-btn {
@@ -345,8 +349,8 @@ button {
 }
 
 .file-btn {
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
 }
 
 .file-btn input {
@@ -697,11 +701,71 @@ kbd {
   gap: 10px;
 }
 
+.deleted-toolbar {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin: 14px 0 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.deleted-toolbar strong {
+  font-size: 13px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.deleted-toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.deleted-toolbar .secondary-btn,
+.deleted-toolbar .danger-btn {
+  min-height: 34px;
+  padding: 0 10px;
+  font-size: 12px;
+}
+
 .archive-item {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   padding: 12px;
+}
+
+#deletedTreeList .archive-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: flex-start;
+}
+
+#deletedTreeList .archive-item.selected {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.24);
+}
+
+.archive-check {
+  display: inline-flex;
+  align-items: center;
+  padding-top: 3px;
+}
+
+.archive-check input {
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: var(--blue);
+}
+
+.archive-info {
+  min-width: 0;
 }
 
 .archive-item strong {
@@ -721,6 +785,7 @@ kbd {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  justify-content: flex-end;
 }
 
 .panel {
