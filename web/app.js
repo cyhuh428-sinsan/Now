@@ -118,6 +118,7 @@ const elements = {
   deletedTreeCloseBtn: $("#deletedTreeCloseBtn"),
   resultsList: $("#resultsList"),
   resultsCount: $("#resultsCount"),
+  clearResultsBtn: $("#clearResultsBtn"),
   exportBtn: $("#exportBtn"),
   exportMarkdownBtn: $("#exportMarkdownBtn"),
   importInput: $("#importInput"),
@@ -181,6 +182,8 @@ function bindEvents() {
     }
     render();
   });
+
+  elements.clearResultsBtn.addEventListener("click", clearSearchResults);
 
   elements.dailyToggleBtn.addEventListener("click", () => {
     toggleDailyPopup();
@@ -1766,6 +1769,13 @@ function renderResults() {
   const results = searchResults(query);
   elements.resultsCount.textContent = `검색 결과 ${results.length}개`;
   renderSearchResultsInto(elements.resultsList, results);
+}
+
+function clearSearchResults() {
+  state.search = "";
+  elements.searchInput.value = "";
+  setView("tree");
+  render();
 }
 
 function searchResults(query, options = {}) {
