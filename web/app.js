@@ -3168,15 +3168,21 @@ async function importMarkdownData(event) {
       const content = (await readTextFile(file)).replace(/\r\n/g, "\n");
       if (!content.trim()) return null;
       const treeNodes = parseNowNoteMarkdownTree(content);
-      if (treeNodes.length > 0) {
+      const dailyNotes = parseNowNoteMarkdownDaily(content);
+      const archivedDailyNotes = parseNowNoteMarkdownArchivedDaily(content);
+      if (treeNodes.length > 0 || dailyNotes.length > 0 || archivedDailyNotes.length > 0) {
         return {
           title: `${file.name} 구조`,
           nodes: treeNodes,
+          dailyNotes,
+          archivedDailyNotes,
         };
       }
       return {
         title: titleFromMarkdownFile(file.name, content),
         nodes: [createNode(titleFromMarkdownFile(file.name, content), content, null, 1)],
+        dailyNotes: [],
+        archivedDailyNotes: [],
       };
     }))).filter(Boolean);
     if (imports.length === 0) {
@@ -3193,12 +3199,18 @@ async function importMarkdownData(event) {
       return;
     }
     const nodes = imports.flatMap((item) => item.nodes);
-    state.data.tree.push(...nodes);
-    state.selectedTreeId = nodes[0].id;
-    nodes.forEach((node) => state.expandedTreeIds.add(node.id));
+    const dailyNotes = imports.flatMap((item) => item.dailyNotes || []);
+    const archivedDailyNotes = imports.flatMap((item) => item.archivedDailyNotes || []);
+    if (nodes.length > 0) {
+      state.data.tree.push(...nodes);
+      state.selectedTreeId = nodes[0].id;
+      nodes.forEach((node) => state.expandedTreeIds.add(node.id));
+    }
+    dailyNotes.forEach((note) => mergeImportedDailyNote(note));
+    state.data.archivedDaily.unshift(...archivedDailyNotes);
     persist();
     setView("tree");
-    alert(`${nodes.length}개 Markdown 파일을 가져왔습니다.`);
+    alert(`Markdown 가져오기 완료: 지식 메모 ${nodes.length}개, 일자별 메모 ${dailyNotes.length}개, 보관 일자 ${archivedDailyNotes.length}개`);
   } catch {
     alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
   } finally {
@@ -3221,9 +3233,9 @@ function readTextFile(file) {
 
 function parseNowNoteMarkdownTree(content) {
   if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
-  const treeSection = content.match(/(?:^|\n)##\s+지식 메모\s*\n([\s\S]*?)(?=\n##\s+일자별 메모|\n##\s+보관된 일자별 메모|$)/);
+  const treeSection = markdownSectionContent(content, "지식 메모");
   if (!treeSection) return [];
-  const blocks = splitNowNoteTreeBlocks(treeSection[1]);
+  const blocks = splitNowNoteTreeBlocks(treeSection);
   if (blocks.length === 0) return [];
   const roots = [];
   const stack = [];
@@ -3245,6 +3257,53 @@ function parseNowNoteMarkdownTree(content) {
     stack.length = level;
   });
   return roots;
+}
+
+function parseNowNoteMarkdownDaily(content) {
+  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
+  const section = markdownSectionContent(content, "일자별 메모");
+  if (!section) return [];
+  return splitNowNoteDateBlocks(section).map((block) => {
+    const date = dateKeyFromKoreanLabel(block.title);
+    if (!date) return null;
+    const noteContent = cleanNowNoteDateContent(block.body, false);
+    if (!noteContent.trim()) return null;
+    return {
+      date,
+      content: noteContent,
+      status: "active",
+      syncState: "pending",
+      updatedAt: new Date().toISOString(),
+    };
+  }).filter(Boolean);
+}
+
+function parseNowNoteMarkdownArchivedDaily(content) {
+  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
+  const section = markdownSectionContent(content, "보관된 일자별 메모");
+  if (!section) return [];
+  return splitNowNoteDateBlocks(section).map((block) => {
+    const date = dateKeyFromKoreanLabel(block.title);
+    if (!date) return null;
+    const noteContent = cleanNowNoteDateContent(block.body, true);
+    if (!noteContent.trim()) return null;
+    return {
+      id: crypto.randomUUID(),
+      date,
+      content: noteContent,
+      status: "archived",
+      syncState: "pending",
+      archivedAt: new Date().toISOString(),
+      restoredAt: null,
+      updatedAt: new Date().toISOString(),
+    };
+  }).filter(Boolean);
+}
+
+function markdownSectionContent(content, title) {
+  const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = content.match(new RegExp(`(?:^|\\n)##\\s+${escaped}\\s*\\n([\\s\\S]*?)(?=\\n##\\s+|$)`));
+  return match ? match[1] : "";
 }
 
 function splitNowNoteTreeBlocks(content) {
@@ -3272,6 +3331,63 @@ function splitNowNoteTreeBlocks(content) {
   });
   if (current) blocks.push(current);
   return blocks;
+}
+
+function splitNowNoteDateBlocks(content) {
+  const lines = content.split("\n");
+  const blocks = [];
+  let current = null;
+  let inCodeBlock = false;
+  lines.forEach((line) => {
+    if (/^\s*```/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+    }
+    const heading = !inCodeBlock ? line.match(/^###\s+(.+)\s*$/) : null;
+    if (heading) {
+      if (current) blocks.push(current);
+      current = {
+        title: normalizeText(heading[1]),
+        body: [],
+      };
+      return;
+    }
+    if (current) {
+      current.body.push(line);
+    }
+  });
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+function cleanNowNoteDateContent(lines, hasArchiveMeta) {
+  let readingContent = false;
+  const content = [];
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!readingContent && trimmed === "") return;
+    if (hasArchiveMeta && !readingContent && /^-\s+(보관|복원)\s*시각:\s*/.test(trimmed)) return;
+    readingContent = true;
+    content.push(line);
+  });
+  return content.join("\n").trim();
+}
+
+function dateKeyFromKoreanLabel(label) {
+  const match = String(label || "").match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+  if (!match) return "";
+  const dateKey = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+  return isDateKey(dateKey) ? dateKey : "";
+}
+
+function mergeImportedDailyNote(note) {
+  const current = state.data.daily[note.date];
+  if (current?.content?.trim()) {
+    state.data.daily[note.date] = mergeDailyNote(current, note);
+    state.data.daily[note.date].syncState = "pending";
+    state.data.daily[note.date].updatedAt = new Date().toISOString();
+  } else {
+    state.data.daily[note.date] = note;
+  }
 }
 
 function readNowNoteMarkdownMeta(lines) {
