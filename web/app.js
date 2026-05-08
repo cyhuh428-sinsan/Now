@@ -183,6 +183,7 @@ function bindEvents() {
     }
     render();
   });
+  elements.searchInput.addEventListener("keydown", handleMainSearchInputKey);
 
   elements.clearResultsBtn.addEventListener("click", clearSearchResults);
 
@@ -1956,8 +1957,20 @@ function renderSearchResultsInto(container, results, afterSelect) {
 
 function handleSearchPopoverInputKey(event) {
   if (event.key !== "Enter" && event.key !== "ArrowDown") return;
-  const first = elements.searchPopoverResults.querySelector(".result-item");
+  const first = firstSearchResult(elements.searchPopoverResults);
   if (!first) return;
+  event.preventDefault();
+  if (event.key === "Enter") {
+    first.click();
+  } else {
+    first.focus();
+  }
+}
+
+function handleMainSearchInputKey(event) {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  const first = firstSearchResult(elements.resultsList);
+  if (!first || state.view !== "results") return;
   event.preventDefault();
   if (event.key === "Enter") {
     first.click();
@@ -1980,7 +1993,13 @@ function handleResultItemKey(event, button) {
     (results[index - 1] || results.at(-1) || button).focus();
   } else if (!elements.searchPopoverView.classList.contains("hidden")) {
     elements.searchPopoverInput.focus();
+  } else {
+    elements.searchInput.focus();
   }
+}
+
+function firstSearchResult(container) {
+  return container.querySelector(".result-item");
 }
 
 function createNode(title, content, parentId, level) {
