@@ -1653,9 +1653,21 @@ function renderTreePath(node) {
 function addOpenTreeTab(id) {
   if (!id) return;
   if (!state.settings.openTreeTabs.includes(id)) {
-    state.settings.openTreeTabs = [...state.settings.openTreeTabs, id].slice(-10);
+    state.settings.openTreeTabs = limitOpenTreeTabs([...state.settings.openTreeTabs, id]);
   }
   persistSettings();
+}
+
+function limitOpenTreeTabs(ids, limit = 10, pinnedTabIds = state.settings.pinnedTreeTabs) {
+  const uniqueIds = Array.from(new Set(ids.filter((id) => typeof id === "string" && id.trim())));
+  if (uniqueIds.length <= limit) return uniqueIds;
+  const pinnedIds = new Set(pinnedTabIds);
+  const pinnedToKeep = uniqueIds.filter((id) => pinnedIds.has(id)).slice(0, limit);
+  const remainingSlots = Math.max(0, limit - pinnedToKeep.length);
+  const normalIds = uniqueIds.filter((id) => !pinnedIds.has(id));
+  const normalToKeep = remainingSlots > 0 ? normalIds.slice(-remainingSlots) : [];
+  const keepIds = new Set([...pinnedToKeep, ...normalToKeep]);
+  return uniqueIds.filter((id) => keepIds.has(id));
 }
 
 function visibleOpenTreeTabs() {
@@ -1710,10 +1722,11 @@ function renderOpenTreeTabs() {
 
 function pruneTreeTabSettings() {
   const exists = (id) => Boolean(findTreeNode(state.data.tree, id));
-  state.settings.openTreeTabs = normalizeIdList(state.settings.openTreeTabs, 10).filter(exists);
+  const pinnedTabs = normalizeIdList(state.settings.pinnedTreeTabs, 10).filter(exists);
+  const openTabs = normalizeIdList(state.settings.openTreeTabs, 100).filter(exists);
+  state.settings.openTreeTabs = limitOpenTreeTabs(openTabs, 10, pinnedTabs);
   state.settings.closedTreeTabs = normalizeIdList(state.settings.closedTreeTabs, 10).filter(exists);
-  state.settings.pinnedTreeTabs = normalizeIdList(state.settings.pinnedTreeTabs, 10)
-    .filter((id) => state.settings.openTreeTabs.includes(id) && exists(id));
+  state.settings.pinnedTreeTabs = pinnedTabs.filter((id) => state.settings.openTreeTabs.includes(id));
   if (state.selectedTreeId && !exists(state.selectedTreeId)) {
     state.selectedTreeId = null;
   }
@@ -2726,9 +2739,10 @@ function normalizeSettings(settings = {}) {
   normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
   normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
   normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
-  normalized.openTreeTabs = normalizeIdList(normalized.openTreeTabs, 10);
+  normalized.openTreeTabs = normalizeIdList(normalized.openTreeTabs, 100);
   normalized.closedTreeTabs = normalizeIdList(normalized.closedTreeTabs, 10);
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
+  normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
   return normalized;
 }
