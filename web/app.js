@@ -1664,13 +1664,10 @@ function visibleOpenTreeTabs() {
 }
 
 function renderOpenTreeTabs() {
+  pruneTreeTabSettings();
   const tabs = state.settings.openTreeTabs
     .map((id) => findTreeNode(state.data.tree, id))
     .filter(Boolean);
-  state.settings.openTreeTabs = tabs.map((node) => node.id);
-  state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((id) => (
-    state.settings.openTreeTabs.includes(id) && findTreeNode(state.data.tree, id)
-  ));
   const pinnedIds = new Set(state.settings.pinnedTreeTabs);
   const sortedTabs = visibleOpenTreeTabs();
   elements.openTabsBar.classList.toggle("hidden", sortedTabs.length === 0);
@@ -1703,6 +1700,17 @@ function renderOpenTreeTabs() {
   elements.pinTabBtn.textContent = selectedPinned ? "고정 해제" : "탭 고정";
   elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
+}
+
+function pruneTreeTabSettings() {
+  const exists = (id) => Boolean(findTreeNode(state.data.tree, id));
+  state.settings.openTreeTabs = normalizeIdList(state.settings.openTreeTabs, 10).filter(exists);
+  state.settings.closedTreeTabs = normalizeIdList(state.settings.closedTreeTabs, 10).filter(exists);
+  state.settings.pinnedTreeTabs = normalizeIdList(state.settings.pinnedTreeTabs, 10)
+    .filter((id) => state.settings.openTreeTabs.includes(id) && exists(id));
+  if (state.selectedTreeId && !exists(state.selectedTreeId)) {
+    state.selectedTreeId = null;
+  }
 }
 
 function cycleOpenTreeTab(direction) {
