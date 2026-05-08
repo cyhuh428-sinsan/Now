@@ -2995,7 +2995,16 @@ function importData(event) {
       event.target.value = "";
     }
   };
-  reader.readAsText(file);
+  reader.onerror = () => {
+    alert("JSON 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    event.target.value = "";
+  };
+  try {
+    reader.readAsText(file);
+  } catch {
+    alert("JSON 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    event.target.value = "";
+  }
 }
 
 function backupDataShape(data) {
