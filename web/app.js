@@ -2763,6 +2763,10 @@ function exportMarkdown() {
     "## 일자별 메모",
     "",
     dailyToMarkdown(),
+    "",
+    "## 보관된 일자별 메모",
+    "",
+    archivedDailyToMarkdown(),
   ].join("\n");
   downloadText(`nownote-${toDateKey(new Date())}.md`, markdown, "text/markdown");
 }
@@ -2802,6 +2806,21 @@ function dailyToMarkdown() {
   if (entries.length === 0) return "_일자별 메모가 없습니다._\n";
   return entries.map((note) => [
     `### ${longDateLabel(note.date)}`,
+    "",
+    note.content.trim(),
+    "",
+  ].join("\n")).join("\n");
+}
+
+function archivedDailyToMarkdown() {
+  const entries = state.data.archivedDaily
+    .filter((note) => note.content?.trim())
+    .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.archivedAt || "").localeCompare(b.archivedAt || ""));
+  if (entries.length === 0) return "_보관된 일자별 메모가 없습니다._\n";
+  return entries.map((note) => [
+    `### ${longDateLabel(note.date)}`,
+    "",
+    `- 보관 시각: ${formatDateTime(note.archivedAt || note.updatedAt)}`,
     "",
     note.content.trim(),
     "",
