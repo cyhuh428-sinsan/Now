@@ -2004,18 +2004,26 @@ function markdownToHtml(markdown) {
   const lines = escapeHtml(markdown).split("\n");
   const blocks = [];
   let listItems = [];
+  let listType = "ul";
   let taskIndex = 0;
   let codeLines = null;
 
   const flushList = () => {
     if (listItems.length === 0) return;
-    blocks.push(`<ul>${listItems.map((item) => {
+    blocks.push(`<${listType}>${listItems.map((item) => {
       const isTask = /^\[[ xX]\]\s*/.test(item);
       const html = renderMarkdownListItem(item, isTask ? taskIndex : null);
       if (isTask) taskIndex += 1;
       return html;
-    }).join("")}</ul>`);
+    }).join("")}</${listType}>`);
     listItems = [];
+    listType = "ul";
+  };
+
+  const addListItem = (type, item) => {
+    if (listItems.length > 0 && listType !== type) flushList();
+    listType = type;
+    listItems.push(item);
   };
 
   const flushCode = () => {
@@ -2062,7 +2070,12 @@ function markdownToHtml(markdown) {
     }
     const list = trimmed.match(/^[-*]\s+(.+)$/);
     if (list) {
-      listItems.push(list[1]);
+      addListItem("ul", list[1]);
+      return;
+    }
+    const orderedList = trimmed.match(/^\d+\.\s+(.+)$/);
+    if (orderedList) {
+      addListItem("ol", orderedList[1]);
       return;
     }
     flushList();

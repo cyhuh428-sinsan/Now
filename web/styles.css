@@ -1269,7 +1269,8 @@ kbd {
 }
 
 .markdown-preview p,
-.markdown-preview ul {
+.markdown-preview ul,
+.markdown-preview ol {
   margin: 0 0 12px;
 }
 
