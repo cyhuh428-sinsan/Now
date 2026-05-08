@@ -2783,7 +2783,7 @@ function nodeToMarkdown(node) {
   const content = node.content?.trim() || "_내용 없음_";
   const children = node.children.map((child) => nodeToMarkdown(child)).join("\n");
   return [
-    `${"#".repeat(headingLevel)} ${node.title || "제목 없음"}`,
+    `${"#".repeat(headingLevel)} [${levelName(node.level)}] ${node.title || "제목 없음"}`,
     "",
     meta,
     tags,
