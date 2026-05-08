@@ -2916,6 +2916,7 @@ function exportData() {
 }
 
 function exportMarkdown() {
+  const restoredArchivedDailyCount = state.data.archivedDaily.filter((note) => note.restoredAt).length;
   const markdown = [
     "# NowNote 내보내기",
     "",
@@ -2923,6 +2924,7 @@ function exportMarkdown() {
     `- 지식 메모: ${flattenTree(state.data.tree).length}개`,
     `- 일자별 메모: ${Object.keys(state.data.daily).length}개`,
     `- 보관 일자별 메모: ${state.data.archivedDaily.length}개`,
+    restoredArchivedDailyCount ? `- 복원된 보관본: ${restoredArchivedDailyCount}개` : "",
     "",
     "## 지식 메모",
     "",
