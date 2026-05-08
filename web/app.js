@@ -2272,10 +2272,10 @@ function linkButton(title, node, exists) {
 }
 
 function backlinksFor(target) {
-  const token = `[[${target.title}]]`.toLowerCase();
-  if (!target.title?.trim()) return [];
+  const targetTitle = target.title?.trim().toLowerCase();
+  if (!targetTitle) return [];
   return flattenTree(state.data.tree).filter((node) => (
-    node.id !== target.id && node.content.toLowerCase().includes(token)
+    node.id !== target.id && uniqueWikiLinks(node.content).some((title) => title.toLowerCase() === targetTitle)
   ));
 }
 
@@ -2295,7 +2295,7 @@ function findTreeNodeByTitle(title) {
 }
 
 function extractWikiLinks(content) {
-  return Array.from(content.matchAll(/\[\[([^\]]+)\]\]/g), (match) => match[1].trim())
+  return Array.from(stripMarkdownCode(content).matchAll(/\[\[([^\]]+)\]\]/g), (match) => match[1].trim())
     .filter(Boolean);
 }
 
@@ -2307,6 +2307,12 @@ function uniqueWikiLinks(content) {
     seen.add(key);
     return true;
   });
+}
+
+function stripMarkdownCode(content) {
+  return String(content || "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/`[^`]*`/g, "");
 }
 
 function sectionTitle(title) {
@@ -3179,7 +3185,7 @@ function snippet(text, query = "") {
 }
 
 function extractTags(text) {
-  return Array.from(String(text || "").matchAll(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g), (match) => match[2])
+  return Array.from(stripMarkdownCode(text).matchAll(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g), (match) => match[2])
     .filter(Boolean)
     .filter((tag, index, tags) => tags.indexOf(tag) === index);
 }
