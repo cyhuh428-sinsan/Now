@@ -21,7 +21,11 @@ const state = {
     deletedTree: [],
     tree: [],
   },
-  settings: {
+  settings: defaultSettings(),
+};
+
+function defaultSettings() {
+  return {
     theme: "system",
     accent: "blue",
     wideEditor: true,
@@ -36,8 +40,8 @@ const state = {
     openTreeTabs: [],
     closedTreeTabs: [],
     pinnedTreeTabs: [],
-  },
-};
+  };
+}
 
 const $ = (selector) => document.querySelector(selector);
 
@@ -2040,22 +2044,22 @@ function loadSettings() {
   if (!raw) return;
   try {
     const parsed = JSON.parse(raw);
-    state.settings = {
-      ...state.settings,
-      ...parsed,
-    };
-    if (!Array.isArray(state.settings.openTreeTabs)) {
-      state.settings.openTreeTabs = [];
-    }
-    if (!Array.isArray(state.settings.closedTreeTabs)) {
-      state.settings.closedTreeTabs = [];
-    }
-    if (!Array.isArray(state.settings.pinnedTreeTabs)) {
-      state.settings.pinnedTreeTabs = [];
-    }
+    state.settings = normalizeSettings(parsed);
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
   }
+}
+
+function normalizeSettings(settings = {}) {
+  const normalized = {
+    ...defaultSettings(),
+    ...settings,
+  };
+  normalized.openTreeTabs = Array.isArray(normalized.openTreeTabs) ? normalized.openTreeTabs : [];
+  normalized.closedTreeTabs = Array.isArray(normalized.closedTreeTabs) ? normalized.closedTreeTabs : [];
+  normalized.pinnedTreeTabs = Array.isArray(normalized.pinnedTreeTabs) ? normalized.pinnedTreeTabs : [];
+  normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
+  return normalized;
 }
 
 function persistSettings() {
@@ -2113,7 +2117,14 @@ function persist() {
 }
 
 function exportData() {
-  const blob = new Blob([JSON.stringify(state.data, null, 2)], { type: "application/json" });
+  const backup = {
+    app: "NowNote Web",
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    data: state.data,
+    settings: state.settings,
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -2199,13 +2210,20 @@ function importData(event) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result));
-      if (!parsed.daily || !Array.isArray(parsed.tree)) {
+      const imported = parseBackupData(parsed);
+      if (!imported.data) {
         alert("NowNote 백업 JSON 형식이 아닙니다.");
         return;
       }
-      parsed.archivedDaily = parsed.archivedDaily || [];
-      parsed.deletedTree = parsed.deletedTree || [];
-      state.data = parsed;
+      imported.data.archivedDaily = imported.data.archivedDaily || [];
+      imported.data.deletedTree = imported.data.deletedTree || [];
+      state.data = imported.data;
+      if (imported.settings) {
+        state.settings = normalizeSettings(imported.settings);
+        persistSettings();
+        renderSettings();
+        applySettings();
+      }
       normalizeData();
       state.selectedTreeId = null;
       persist();
@@ -2218,6 +2236,21 @@ function importData(event) {
     }
   };
   reader.readAsText(file);
+}
+
+function parseBackupData(parsed) {
+  const data = parsed?.data && isBackupData(parsed.data) ? parsed.data : parsed;
+  if (!isBackupData(data)) {
+    return { data: null, settings: null };
+  }
+  return {
+    data,
+    settings: parsed?.settings || null,
+  };
+}
+
+function isBackupData(data) {
+  return Boolean(data?.daily && Array.isArray(data.tree));
 }
 
 function showSaved(label) {
