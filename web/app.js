@@ -825,43 +825,48 @@ function insertCurrentTimeIntoTreeNote() {
 
 function handleTreeContentShortcut(event) {
   if (event.key === "Enter" && !event.shiftKey && continueMarkdownLineOnEnter()) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     return;
   }
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
   const key = event.key.toLowerCase();
   if (key === "b") {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     wrapTreeContentSelection("**", "**");
   }
   if (key === "i") {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     wrapTreeContentSelection("*", "*");
   }
   if (key === "c" && event.shiftKey) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     insertChecklistIntoTreeContent();
   }
   if (key === "q" && event.shiftKey) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     applyLinePrefixToTreeContent("> ", /^>\s*/);
   }
   if (key === "k" && event.shiftKey) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     wrapTreeContentAsCodeBlock();
   }
   if (key === "h" && event.shiftKey) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     insertHorizontalRuleIntoTreeContent();
   }
   if (key === "l" && event.shiftKey) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     wrapTreeContentAsMarkdownLink();
   }
   if (["1", "2", "3"].includes(key)) {
-    event.preventDefault();
+    consumeTreeContentShortcut(event);
     applyHeadingToTreeContent(Number(key));
   }
+}
+
+function consumeTreeContentShortcut(event) {
+  event.preventDefault();
+  event.stopPropagation();
 }
 
 function continueMarkdownLineOnEnter() {
