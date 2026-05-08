@@ -1313,8 +1313,8 @@ function renderSideTags() {
       button.className = "side-tag";
       button.textContent = `#${tag.name} ${tag.count}`;
       button.addEventListener("click", () => {
-        elements.searchInput.value = `#${tag.name}`;
-        state.search = `#${tag.name}`;
+        elements.searchInput.value = `tag:${tag.name}`;
+        state.search = `tag:${tag.name}`;
         setView("results");
       });
       return button;
@@ -1809,8 +1809,8 @@ function renderTags() {
       button.className = "tag-chip";
       button.textContent = `#${tag}`;
       button.addEventListener("click", () => {
-        elements.searchInput.value = `#${tag}`;
-        state.search = `#${tag}`;
+        elements.searchInput.value = `tag:${tag}`;
+        state.search = `tag:${tag}`;
         setView("results");
       });
       return button;
