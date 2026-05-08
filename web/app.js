@@ -2679,15 +2679,33 @@ function loadSettings() {
 }
 
 function normalizeSettings(settings = {}) {
+  const defaults = defaultSettings();
   const normalized = {
-    ...defaultSettings(),
+    ...defaults,
     ...settings,
   };
+  normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
+  normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
+  normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
+  normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
+  normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
+  normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);
+  normalized.showBacklinks = normalizeToggle(normalized.showBacklinks, defaults.showBacklinks);
+  normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
+  normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
+  normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
   normalized.openTreeTabs = Array.isArray(normalized.openTreeTabs) ? normalized.openTreeTabs : [];
   normalized.closedTreeTabs = Array.isArray(normalized.closedTreeTabs) ? normalized.closedTreeTabs : [];
   normalized.pinnedTreeTabs = Array.isArray(normalized.pinnedTreeTabs) ? normalized.pinnedTreeTabs : [];
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
   return normalized;
+}
+
+function normalizeToggle(value, fallback) {
+  if (typeof value === "boolean") return value;
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return fallback;
 }
 
 function persistSettings() {
