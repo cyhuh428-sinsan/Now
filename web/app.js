@@ -881,6 +881,23 @@ function continueMarkdownLineOnEnter() {
     syncTreeContentFromEditor();
     return true;
   }
+  const orderedListMatch = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+  if (orderedListMatch) {
+    const [, indent, number, body] = orderedListMatch;
+    if (!body.trim()) {
+      const before = value.slice(0, lineStart);
+      const after = value.slice(cursor);
+      elements.treeContent.value = `${before}${after}`;
+      elements.treeContent.setSelectionRange(lineStart, lineStart);
+    } else {
+      const nextMarker = `${indent}${Number(number) + 1}. `;
+      elements.treeContent.value = `${value.slice(0, cursor)}\n${nextMarker}${value.slice(cursor)}`;
+      const nextCursor = cursor + 1 + nextMarker.length;
+      elements.treeContent.setSelectionRange(nextCursor, nextCursor);
+    }
+    syncTreeContentFromEditor();
+    return true;
+  }
   const listMatch = line.match(/^(\s*)([-*])\s+(.*)$/);
   if (!listMatch) return false;
   const [, indent, bullet, body] = listMatch;
