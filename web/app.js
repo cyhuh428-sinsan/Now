@@ -1681,6 +1681,10 @@ function visibleOpenTreeTabs() {
   ];
 }
 
+function firstVisibleOpenTreeTabId() {
+  return visibleOpenTreeTabs()[0]?.id || null;
+}
+
 function renderOpenTreeTabs() {
   pruneTreeTabSettings();
   const tabs = state.settings.openTreeTabs
@@ -1785,7 +1789,7 @@ function closeAllTreeTabs() {
   rememberClosedTreeTabs(closingIds);
   state.settings.openTreeTabs = state.settings.openTreeTabs.filter((tabId) => pinnedIds.has(tabId));
   if (!state.settings.openTreeTabs.includes(state.selectedTreeId)) {
-    state.selectedTreeId = state.settings.openTreeTabs[0] || null;
+    state.selectedTreeId = firstVisibleOpenTreeTabId();
   }
   persistSettings();
   renderTree();
@@ -1799,7 +1803,7 @@ function closeOpenTreeTab(id) {
   state.settings.openTreeTabs = tabs;
   state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((tabId) => tabId !== id);
   if (wasSelected) {
-    state.selectedTreeId = tabs.find((tabId) => findTreeNode(state.data.tree, tabId)) || null;
+    state.selectedTreeId = firstVisibleOpenTreeTabId();
   }
   persistSettings();
   renderTree();
