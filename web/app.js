@@ -1894,7 +1894,8 @@ function inlineMarkdown(text) {
     .replace(/\[\[([^\]]+)\]\]/g, (_, title) => `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(title.trim())}">${title}</button>`)
     .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
     .replace(/`([^`]+)`/g, "<code>$1</code>")
-    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+    .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
 }
 
 function openWikiLink(title) {
