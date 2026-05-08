@@ -2117,20 +2117,7 @@ function persist() {
 }
 
 function exportData() {
-  const backup = {
-    app: "NowNote Web",
-    version: 2,
-    exportedAt: new Date().toISOString(),
-    data: state.data,
-    settings: state.settings,
-  };
-  const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `nownote-${toDateKey(new Date())}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
+  downloadCurrentBackup();
 }
 
 function exportMarkdown() {
@@ -2218,6 +2205,7 @@ function importData(event) {
       if (!confirm("JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다. 계속할까요?")) {
         return;
       }
+      downloadCurrentBackup("nownote-before-import");
       imported.data.archivedDaily = imported.data.archivedDaily || [];
       imported.data.deletedTree = imported.data.deletedTree || [];
       state.data = imported.data;
@@ -2254,6 +2242,17 @@ function parseBackupData(parsed) {
 
 function isBackupData(data) {
   return Boolean(data?.daily && Array.isArray(data.tree));
+}
+
+function downloadCurrentBackup(prefix = "nownote") {
+  const backup = {
+    app: "NowNote Web",
+    version: 2,
+    exportedAt: new Date().toISOString(),
+    data: state.data,
+    settings: state.settings,
+  };
+  downloadText(`${prefix}-${toDateKey(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json");
 }
 
 function showSaved(label) {
