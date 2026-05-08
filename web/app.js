@@ -448,6 +448,7 @@ function bindEvents() {
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
   elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
+  elements.searchPopoverInput.addEventListener("keydown", handleSearchPopoverInputKey);
   elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
   elements.searchSortSelect.addEventListener("change", renderSearchPopoverResults);
   elements.searchPopoverCloseBtn.addEventListener("click", closeSearchPopover);
@@ -1945,9 +1946,41 @@ function renderSearchResultsInto(container, results, afterSelect) {
         }
         if (afterSelect) afterSelect(result);
       });
+      button.addEventListener("keydown", (event) => {
+        handleResultItemKey(event, button);
+      });
       return button;
     }),
   );
+}
+
+function handleSearchPopoverInputKey(event) {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  const first = elements.searchPopoverResults.querySelector(".result-item");
+  if (!first) return;
+  event.preventDefault();
+  if (event.key === "Enter") {
+    first.click();
+  } else {
+    first.focus();
+  }
+}
+
+function handleResultItemKey(event, button) {
+  if (!["Enter", "ArrowDown", "ArrowUp", "Escape"].includes(event.key)) return;
+  event.preventDefault();
+  const container = button.closest(".quick-results, .results-list");
+  const results = Array.from(container?.querySelectorAll(".result-item") || []);
+  const index = results.indexOf(button);
+  if (event.key === "Enter") {
+    button.click();
+  } else if (event.key === "ArrowDown") {
+    (results[index + 1] || results[0] || button).focus();
+  } else if (event.key === "ArrowUp") {
+    (results[index - 1] || results.at(-1) || button).focus();
+  } else if (!elements.searchPopoverView.classList.contains("hidden")) {
+    elements.searchPopoverInput.focus();
+  }
 }
 
 function createNode(title, content, parentId, level) {
