@@ -2184,11 +2184,11 @@ function inlineMarkdown(text) {
 }
 
 function renderExternalLink(label, url) {
-  const trimmedUrl = url.trim();
+  const trimmedUrl = decodeHtml(url.trim());
   if (!/^(https?:\/\/|mailto:)/i.test(trimmedUrl)) {
     return `[${label}](${url})`;
   }
-  return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+  return `<a href="${escapeHtml(trimmedUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 }
 
 function openWikiLink(title) {
