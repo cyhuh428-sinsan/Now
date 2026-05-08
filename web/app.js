@@ -418,7 +418,7 @@ function bindEvents() {
       return;
     }
     if (!confirm(`'${selected.title || "제목 없음"}' 메모를 삭제 보관함으로 이동할까요?`)) return;
-    archiveDeletedTreeNode(selected.id);
+    if (!archiveDeletedTreeNode(selected.id)) return;
     state.selectedTreeId = null;
     persist();
     renderTree();
