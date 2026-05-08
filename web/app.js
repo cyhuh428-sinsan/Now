@@ -744,6 +744,10 @@ function handleShortcuts(event) {
     event.preventDefault();
     toggleGraph();
   }
+  if (key === "s") {
+    event.preventDefault();
+    showCurrentSaveState();
+  }
   if (key === "w") {
     event.preventDefault();
     if (event.shiftKey) {
@@ -775,6 +779,16 @@ function handleShortcuts(event) {
   if (key === "n") {
     event.preventDefault();
     addRootNote();
+  }
+}
+
+function showCurrentSaveState() {
+  if (state.view === "tree" && state.selectedTreeId) {
+    showSaved(elements.treeSavedLabel);
+    return;
+  }
+  if (!elements.dailyPopup.classList.contains("hidden")) {
+    showSaved(elements.dailySavedLabel);
   }
 }
 
