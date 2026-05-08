@@ -1362,6 +1362,11 @@ kbd {
   font-weight: 700;
 }
 
+.header-count {
+  margin: 8px 0 0;
+  white-space: nowrap;
+}
+
 .compact-select {
   min-height: 44px;
   border: 1px solid var(--line);

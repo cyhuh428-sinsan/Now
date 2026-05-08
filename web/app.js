@@ -117,6 +117,7 @@ const elements = {
   deletedTreeList: $("#deletedTreeList"),
   deletedTreeCloseBtn: $("#deletedTreeCloseBtn"),
   resultsList: $("#resultsList"),
+  resultsCount: $("#resultsCount"),
   exportBtn: $("#exportBtn"),
   exportMarkdownBtn: $("#exportMarkdownBtn"),
   importInput: $("#importInput"),
@@ -1757,11 +1758,14 @@ function sectionTitle(title) {
 function renderResults() {
   const query = state.search.toLowerCase();
   if (!query) {
+    elements.resultsCount.textContent = "검색어를 입력하세요.";
     elements.resultsList.innerHTML = '<div class="empty-state"><strong>검색어를 입력하세요</strong><span>일자별 메모와 지식 메모를 함께 검색합니다.</span></div>';
     return;
   }
 
-  renderSearchResultsInto(elements.resultsList, searchResults(query));
+  const results = searchResults(query);
+  elements.resultsCount.textContent = `검색 결과 ${results.length}개`;
+  renderSearchResultsInto(elements.resultsList, results);
 }
 
 function searchResults(query, options = {}) {
