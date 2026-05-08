@@ -1086,21 +1086,52 @@ kbd {
 }
 
 .note-find-bar {
-  display: grid;
-  grid-template-columns: minmax(180px, 1fr) auto auto auto auto;
-  gap: 8px;
+  display: flex;
   align-items: center;
+  gap: 6px;
   margin-bottom: 12px;
-}
-
-.note-find-bar input {
-  min-height: 36px;
+  padding: 6px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
+}
+
+.note-find-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 180px;
+  flex: 1;
+  color: var(--muted);
+}
+
+.note-find-bar input {
+  width: 100%;
+  min-height: 28px;
+  border: 0;
+  background: transparent;
   color: var(--text);
-  padding: 0 10px;
+  padding: 0;
   outline: none;
+}
+
+.note-find-count {
+  min-width: 46px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.note-find-bar .icon-btn {
+  width: 30px;
+  min-height: 30px;
+  height: 30px;
+}
+
+.note-find-bar.not-found {
+  border-color: var(--red);
 }
 
 .outline-panel {
@@ -1173,9 +1204,30 @@ kbd {
 }
 
 .note-stats {
-  margin: -4px 0 12px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 0;
+  margin: -4px 0 8px;
   color: var(--muted);
   font-size: 12px;
+  line-height: 1.4;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.note-stats span {
+  padding: 0 8px;
+  border-right: 1px solid var(--line);
+}
+
+.note-stats span:first-child {
+  border-left: 1px solid var(--line);
+}
+
+.note-stats .warning {
+  color: var(--red);
+  font-weight: 800;
 }
 
 .save-state {

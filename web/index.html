@@ -149,10 +149,13 @@
                 </div>
               </div>
               <div id="noteFindBar" class="note-find-bar hidden" aria-label="현재 메모에서 찾기">
-                <input id="noteFindInput" type="search" placeholder="현재 메모에서 찾기" title="Enter 다음, Shift+Enter 이전">
-                <span id="noteFindCount" class="save-state">0개</span>
-                <button id="noteFindPrevBtn" class="secondary-btn" type="button">이전</button>
-                <button id="noteFindNextBtn" class="secondary-btn" type="button">다음</button>
+                <label class="note-find-input-wrap">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="noteFindInput" type="search" placeholder="본문에서 검색" title="Enter 다음, Shift+Enter 이전">
+                </label>
+                <span id="noteFindCount" class="note-find-count">0 / 0</span>
+                <button id="noteFindPrevBtn" class="icon-btn" type="button" title="이전 결과" aria-label="이전 결과">↑</button>
+                <button id="noteFindNextBtn" class="icon-btn" type="button" title="다음 결과" aria-label="다음 결과">↓</button>
                 <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
               </div>
               <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
