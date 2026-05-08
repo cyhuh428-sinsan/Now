@@ -915,9 +915,16 @@ kbd {
 
 .editor-tool-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.editor-tool-actions .secondary-btn {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .path-label {
