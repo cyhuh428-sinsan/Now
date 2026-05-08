@@ -829,6 +829,10 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     wrapTreeContentSelection("*", "*");
   }
+  if (key === "c" && event.shiftKey) {
+    event.preventDefault();
+    insertChecklistIntoTreeContent();
+  }
 }
 
 function wrapTreeContentSelection(prefix, suffix) {
@@ -841,6 +845,36 @@ function wrapTreeContentSelection(prefix, suffix) {
   elements.treeContent.value = `${value.slice(0, start)}${prefix}${selectedText}${suffix}${value.slice(end)}`;
   const cursorStart = start + prefix.length;
   const cursorEnd = cursorStart + selectedText.length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function insertChecklistIntoTreeContent() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const selectedText = value.slice(start, end);
+  const checklist = selectedText
+    ? selectedText
+      .split("\n")
+      .map((line) => `- [ ] ${line.replace(/^[-*]\s+\[[ xX]\]\s*/, "").trimStart()}`)
+      .join("\n")
+    : "- [ ] ";
+  elements.treeContent.value = `${value.slice(0, start)}${checklist}${value.slice(end)}`;
+  const cursorStart = start + (selectedText ? 0 : checklist.length);
+  const cursorEnd = start + checklist.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
   selected.content = elements.treeContent.value;
