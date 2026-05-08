@@ -452,6 +452,7 @@ function bindEvents() {
   elements.searchSortSelect.addEventListener("change", renderSearchPopoverResults);
   elements.searchPopoverCloseBtn.addEventListener("click", closeSearchPopover);
   elements.quickInput.addEventListener("input", renderQuickResults);
+  elements.quickInput.addEventListener("keydown", handleQuickInputKey);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
   elements.markdownPreview.addEventListener("click", (event) => {
@@ -607,12 +608,47 @@ function renderQuickResults() {
       button.className = "quick-result";
       button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(treePath(node.id).join(" / "))}</span>`;
       button.addEventListener("click", () => {
-        selectTreeNode(node.id);
-        closeQuickSwitch();
+        openQuickNode(node.id);
+      });
+      button.addEventListener("keydown", (event) => {
+        handleQuickResultKey(event, button);
       });
       return button;
     }),
   );
+}
+
+function handleQuickInputKey(event) {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  const first = elements.quickResults.querySelector(".quick-result");
+  if (!first) return;
+  event.preventDefault();
+  if (event.key === "Enter") {
+    first.click();
+  } else {
+    first.focus();
+  }
+}
+
+function handleQuickResultKey(event, button) {
+  if (!["Enter", "ArrowDown", "ArrowUp", "Escape"].includes(event.key)) return;
+  event.preventDefault();
+  const results = Array.from(elements.quickResults.querySelectorAll(".quick-result"));
+  const index = results.indexOf(button);
+  if (event.key === "Enter") {
+    button.click();
+  } else if (event.key === "ArrowDown") {
+    (results[index + 1] || results[0] || button).focus();
+  } else if (event.key === "ArrowUp") {
+    (results[index - 1] || results.at(-1) || button).focus();
+  } else {
+    elements.quickInput.focus();
+  }
+}
+
+function openQuickNode(id) {
+  selectTreeNode(id);
+  closeQuickSwitch();
 }
 
 function quickSwitchTime(node) {
