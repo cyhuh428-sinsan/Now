@@ -138,6 +138,7 @@ const elements = {
   tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
+  resetSettingsBtn: $("#resetSettingsBtn"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
@@ -317,6 +318,8 @@ function bindEvents() {
     applySettings();
   });
 
+  elements.resetSettingsBtn.addEventListener("click", resetViewSettings);
+
   elements.addRootBtn.addEventListener("click", () => {
     addRootNote();
   });
@@ -492,6 +495,18 @@ function renderSettings() {
       return button;
     }),
   );
+}
+
+function resetViewSettings() {
+  if (!confirm("화면 설정을 기본값으로 되돌릴까요? 메모 내용은 유지됩니다.")) {
+    return;
+  }
+  state.settings = defaultSettings();
+  persistSettings();
+  renderSettings();
+  applySettings();
+  renderTree();
+  renderSidebarKnowledge();
 }
 
 function applySettings() {
