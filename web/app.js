@@ -96,6 +96,7 @@ const elements = {
   copyLinkBtn: $("#copyLinkBtn"),
   noteFindToggleBtn: $("#noteFindToggleBtn"),
   outlineToggleBtn: $("#outlineToggleBtn"),
+  insertTimeBtn: $("#insertTimeBtn"),
   outlinePanel: $("#outlinePanel"),
   noteFindBar: $("#noteFindBar"),
   noteFindInput: $("#noteFindInput"),
@@ -392,6 +393,7 @@ function bindEvents() {
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
+  elements.insertTimeBtn.addEventListener("click", insertCurrentTimeIntoTreeNote);
   elements.pinTabBtn.addEventListener("click", toggleSelectedTreeTabPin);
   elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
   elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
@@ -748,6 +750,10 @@ function handleShortcuts(event) {
     event.preventDefault();
     showCurrentSaveState();
   }
+  if (key === ";") {
+    event.preventDefault();
+    insertCurrentTimeIntoTreeNote();
+  }
   if (key === "w") {
     event.preventDefault();
     if (event.shiftKey) {
@@ -790,6 +796,34 @@ function showCurrentSaveState() {
   if (!elements.dailyPopup.classList.contains("hidden")) {
     showSaved(elements.dailySavedLabel);
   }
+}
+
+function insertCurrentTimeIntoTreeNote() {
+  const selected = getSelectedTreeNode();
+  if (!selected || state.view !== "tree") return;
+  if (!elements.markdownPreview.classList.contains("hidden")) {
+    elements.markdownPreview.classList.add("hidden");
+    elements.treeContent.classList.remove("hidden");
+    elements.previewToggleBtn.textContent = "Markdown 보기";
+  }
+  const marker = `[${timeLabel(new Date())}] `;
+  const start = elements.treeContent.selectionStart ?? elements.treeContent.value.length;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const before = elements.treeContent.value.slice(0, start);
+  const after = elements.treeContent.value.slice(end);
+  elements.treeContent.value = `${before}${marker}${after}`;
+  const nextCursor = start + marker.length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(nextCursor, nextCursor);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
 }
 
 function renderGraph() {
