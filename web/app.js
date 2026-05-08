@@ -354,8 +354,12 @@ function bindEvents() {
     markTreeNodeChanged(selected);
     persist();
     renderTreeListOnly();
+    renderOpenTreeTabs();
+    renderSidebarKnowledge();
     renderTreePath(selected);
     renderNoteStats(selected);
+    renderLinkPanel();
+    if (!elements.graphView.classList.contains("hidden")) renderGraph();
     showSaved(elements.treeSavedLabel);
   });
 
