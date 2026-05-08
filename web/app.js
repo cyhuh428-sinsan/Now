@@ -1991,11 +1991,25 @@ function renderTags() {
 
 function renderNoteStats(node) {
   const text = node.content || "";
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   const chars = text.replace(/\s/g, "").length;
   const lines = text ? text.split("\n").length : 0;
-  const links = extractWikiLinks(text).length;
+  const outgoing = outgoingLinksFor(node);
+  const links = outgoing.length;
+  const missingLinks = outgoing.filter((link) => !link.exists).length;
+  const backlinks = backlinksFor(node).length;
   const tags = extractTags(text).length;
-  elements.noteStats.textContent = `글자 ${chars} · 줄 ${lines} · 링크 ${links} · 태그 ${tags} · 수정 ${relativeTime(node.updatedAt)}`;
+  elements.noteStats.innerHTML = [
+    `<span>${backlinks}개 백링크</span>`,
+    `<span>편집</span>`,
+    `<span>${words}개 단어</span>`,
+    `<span>${chars}개 문자</span>`,
+    `<span>${lines}줄</span>`,
+    `<span>${links}개 링크</span>`,
+    `<span>${tags}개 태그</span>`,
+    ...(missingLinks ? [`<span class="warning">${missingLinks}개 미생성 링크</span>`] : []),
+    `<span>수정 ${escapeHtml(relativeTime(node.updatedAt))}</span>`,
+  ].join("");
 }
 
 function toggleOutlinePanel() {
@@ -2058,6 +2072,7 @@ function toggleNoteFind() {
 
 function openNoteFind() {
   elements.noteFindBar.classList.remove("hidden");
+  seedNoteFindFromSelection();
   elements.noteFindInput.focus();
   elements.noteFindInput.select();
   selectNoteFindMatch(0);
@@ -2066,8 +2081,18 @@ function openNoteFind() {
 function closeNoteFind() {
   elements.noteFindBar.classList.add("hidden");
   elements.noteFindInput.value = "";
-  elements.noteFindCount.textContent = "0개";
+  elements.noteFindInput.dataset.index = "0";
+  updateNoteFindState([], "");
   elements.treeContent.focus();
+}
+
+function seedNoteFindFromSelection() {
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  if (end <= start) return;
+  const selectedText = elements.treeContent.value.slice(start, end).trim();
+  if (!selectedText || selectedText.includes("\n")) return;
+  elements.noteFindInput.value = selectedText;
 }
 
 function handleNoteFindInputKey(event) {
@@ -2099,13 +2124,13 @@ function selectNoteFindMatch(index) {
   const matches = noteFindMatches();
   if (!query || matches.length === 0) {
     elements.noteFindInput.dataset.index = "0";
-    elements.noteFindCount.textContent = query ? "0개" : "0개";
+    updateNoteFindState(matches, query);
     return;
   }
   const safeIndex = ((index % matches.length) + matches.length) % matches.length;
   const start = matches[safeIndex];
   elements.noteFindInput.dataset.index = String(safeIndex);
-  elements.noteFindCount.textContent = `${safeIndex + 1}/${matches.length}`;
+  updateNoteFindState(matches, query, safeIndex);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
   elements.previewToggleBtn.textContent = "Markdown 보기";
@@ -2116,6 +2141,15 @@ function selectNoteFindMatch(index) {
 function moveNoteFindMatch(direction) {
   const current = Number(elements.noteFindInput.dataset.index || 0);
   selectNoteFindMatch(current + direction);
+}
+
+function updateNoteFindState(matches, query, index = -1) {
+  const hasQuery = Boolean(query);
+  const hasMatches = matches.length > 0;
+  elements.noteFindCount.textContent = hasMatches ? `${index + 1} / ${matches.length}` : "0 / 0";
+  elements.noteFindBar.classList.toggle("not-found", hasQuery && !hasMatches);
+  elements.noteFindPrevBtn.disabled = !hasMatches;
+  elements.noteFindNextBtn.disabled = !hasMatches;
 }
 
 async function copyNoteLink(node) {
