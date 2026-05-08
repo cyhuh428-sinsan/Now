@@ -224,6 +224,7 @@ function bindEvents() {
   });
 
   elements.appendTimeBtn.addEventListener("click", () => {
+    if (elements.dailyContent.readOnly) return;
     const current = elements.dailyContent.value.trimEnd();
     const prefix = current ? `${current}\n\n` : "";
     elements.dailyContent.value = `${prefix}[${timeLabel(new Date())}] `;
@@ -1251,6 +1252,7 @@ function renderDeletedTreeButton() {
 }
 
 function renderDaily() {
+  setDailyArchivePreviewMode(false);
   elements.monthLabel.textContent = monthLabel(state.visibleMonth);
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
   elements.dailyContent.value = state.data.daily[state.selectedDate]?.content || "";
@@ -1364,6 +1366,7 @@ function calendarButtons() {
 }
 
 function saveDailyFromEditor() {
+  if (elements.dailyContent.readOnly) return;
   const content = elements.dailyContent.value;
   if (!content.trim()) {
     delete state.data.daily[state.selectedDate];
@@ -1433,6 +1436,7 @@ function renderArchiveList() {
         state.visibleMonth = new Date(year, month - 1, 1);
         elements.dailyContent.value = note.content;
         elements.selectedDateLabel.textContent = `${longDateLabel(note.date)} · 보관본 열람`;
+        setDailyArchivePreviewMode(true);
         elements.dailyContent.focus();
       });
       item.querySelector('[data-action="restore"]').addEventListener("click", () => {
@@ -1441,6 +1445,13 @@ function renderArchiveList() {
       return item;
     }),
   );
+}
+
+function setDailyArchivePreviewMode(isPreview) {
+  elements.dailyContent.readOnly = isPreview;
+  elements.dailyContent.classList.toggle("readonly", isPreview);
+  elements.appendTimeBtn.disabled = isPreview;
+  elements.archiveSelectedBtn.disabled = isPreview;
 }
 
 function restoreArchivedDailyNote(id) {
