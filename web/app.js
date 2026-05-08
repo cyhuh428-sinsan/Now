@@ -2936,14 +2936,23 @@ function parseBackupData(parsed) {
 }
 
 function isBackupData(data) {
-  return Boolean(data?.daily && Array.isArray(data.tree));
+  return Boolean(isPlainObject(data) && (
+    isPlainObject(data.daily)
+    || Array.isArray(data.tree)
+    || Array.isArray(data.archivedDaily)
+    || Array.isArray(data.deletedTree)
+  ));
+}
+
+function isPlainObject(value) {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 function backupSummary(data) {
   return {
-    daily: Object.keys(data.daily || {}).length,
+    daily: isPlainObject(data.daily) ? Object.keys(data.daily).length : 0,
     archivedDaily: Array.isArray(data.archivedDaily) ? data.archivedDaily.length : 0,
-    tree: flattenTree(data.tree || []).length,
+    tree: Array.isArray(data.tree) ? flattenTree(data.tree).length : 0,
     deletedTree: Array.isArray(data.deletedTree) ? data.deletedTree.length : 0,
   };
 }
