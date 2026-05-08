@@ -838,6 +838,10 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     insertChecklistIntoTreeContent();
   }
+  if (["1", "2", "3"].includes(key)) {
+    event.preventDefault();
+    applyHeadingToTreeContent(Number(key));
+  }
 }
 
 function wrapTreeContentSelection(prefix, suffix) {
@@ -850,6 +854,38 @@ function wrapTreeContentSelection(prefix, suffix) {
   elements.treeContent.value = `${value.slice(0, start)}${prefix}${selectedText}${suffix}${value.slice(end)}`;
   const cursorStart = start + prefix.length;
   const cursorEnd = cursorStart + selectedText.length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function applyHeadingToTreeContent(level) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const marker = `${"#".repeat(level)} `;
+  const value = elements.treeContent.value;
+  const selectionStart = elements.treeContent.selectionStart ?? 0;
+  const selectionEnd = elements.treeContent.selectionEnd ?? selectionStart;
+  const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+  const lineEnd = value.indexOf("\n", selectionEnd);
+  const end = lineEnd === -1 ? value.length : lineEnd;
+  const block = value.slice(lineStart, end);
+  const nextBlock = block
+    .split("\n")
+    .map((line) => `${marker}${line.replace(/^#{1,3}\s+/, "")}`)
+    .join("\n");
+  elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
+  const cursorStart = lineStart;
+  const cursorEnd = lineStart + nextBlock.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
   selected.content = elements.treeContent.value;
