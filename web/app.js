@@ -2171,16 +2171,21 @@ function toggleMarkdownTask(taskIndex) {
 }
 
 function inlineMarkdown(text) {
-  return text
+  const codeSpans = [];
+  const protectedText = text.replace(/`([^`]+)`/g, (_, code) => {
+    const index = codeSpans.push(code) - 1;
+    return `\u0000CODE${index}\u0000`;
+  });
+  return protectedText
     .replace(/\[\[([^\]]+)\]\]/g, (_, title) => {
       const target = decodeHtml(title.trim());
       return `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(target)}">${title}</button>`;
     })
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => renderExternalLink(label, url))
     .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
-    .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/\u0000CODE(\d+)\u0000/g, (_, index) => `<code>${codeSpans[Number(index)] || ""}</code>`);
 }
 
 function renderExternalLink(label, url) {
