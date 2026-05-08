@@ -1817,7 +1817,7 @@ function markdownToHtml(markdown) {
 
   const flushList = () => {
     if (listItems.length === 0) return;
-    blocks.push(`<ul>${listItems.map((item) => `<li>${inlineMarkdown(item)}</li>`).join("")}</ul>`);
+    blocks.push(`<ul>${listItems.map(renderMarkdownListItem).join("")}</ul>`);
     listItems = [];
   };
 
@@ -1843,6 +1843,13 @@ function markdownToHtml(markdown) {
   });
   flushList();
   return blocks.join("");
+}
+
+function renderMarkdownListItem(item) {
+  const task = item.match(/^\[([ xX])\]\s*(.*)$/);
+  if (!task) return `<li>${inlineMarkdown(item)}</li>`;
+  const checked = task[1].toLowerCase() === "x";
+  return `<li class="task-list-item"><input type="checkbox" disabled${checked ? " checked" : ""}> <span>${inlineMarkdown(task[2])}</span></li>`;
 }
 
 function inlineMarkdown(text) {

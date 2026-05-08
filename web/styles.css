@@ -1245,6 +1245,18 @@ kbd {
   margin: 0 0 12px;
 }
 
+.task-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  list-style: none;
+}
+
+.task-list-item input {
+  margin-top: 5px;
+  accent-color: var(--blue);
+}
+
 .markdown-preview code {
   border-radius: 6px;
   background: #f1f5f9;
