@@ -2695,6 +2695,13 @@ function persistSettings() {
 }
 
 function normalizeData() {
+  state.data.daily = state.data.daily && typeof state.data.daily === "object" && !Array.isArray(state.data.daily)
+    ? state.data.daily
+    : {};
+  state.data.archivedDaily = Array.isArray(state.data.archivedDaily) ? state.data.archivedDaily : [];
+  state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
+  state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
+
   Object.values(state.data.daily).forEach((note) => {
     note.status = note.status || "active";
     note.syncState = note.syncState || "synced";
@@ -2707,7 +2714,6 @@ function normalizeData() {
     note.archivedAt = note.archivedAt || note.updatedAt || new Date().toISOString();
     note.updatedAt = note.updatedAt || note.archivedAt;
   });
-  state.data.deletedTree = state.data.deletedTree || [];
   state.data.deletedTree.forEach((node) => {
     node.id = node.id || crypto.randomUUID();
     node.title = node.title || "";
