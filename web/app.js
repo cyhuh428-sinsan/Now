@@ -2156,17 +2156,8 @@ function toggleMarkdownTask(taskIndex) {
     const nextMark = task[2].toLowerCase() === "x" ? " " : "x";
     return line.replace(/^(\s*[-*]\s+\[)([ xX])(\]\s*)/, `$1${nextMark}$3`);
   });
-  selected.content = nextLines.join("\n");
-  elements.treeContent.value = selected.content;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  elements.treeContent.value = nextLines.join("\n");
+  syncTreeContentFromEditor();
 }
 
 function inlineMarkdown(text) {
