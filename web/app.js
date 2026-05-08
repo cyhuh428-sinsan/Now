@@ -590,7 +590,7 @@ function renderSearchPopoverResults() {
 function renderQuickResults() {
   const query = elements.quickInput.value.trim().toLowerCase();
   const matches = flattenTree(state.data.tree)
-    .filter((node) => !query || searchableTreeText(node).includes(query))
+    .filter((node) => !query || quickSwitchText(node).includes(query))
     .sort((a, b) => quickSwitchTime(b) - quickSwitchTime(a));
   const nodes = matches.slice(0, 30);
   elements.quickCount.textContent = query
@@ -617,6 +617,10 @@ function renderQuickResults() {
 
 function quickSwitchTime(node) {
   return new Date(node.updatedAt || node.createdAt || 0).getTime() || 0;
+}
+
+function quickSwitchText(node) {
+  return `${node.title} ${treePath(node.id).join(" ")}`.toLowerCase();
 }
 
 function openGraph() {
