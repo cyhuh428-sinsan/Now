@@ -2048,7 +2048,7 @@ function markdownToHtml(markdown) {
       blocks.push("<hr>");
       return;
     }
-    const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
+    const heading = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       flushList();
       blocks.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
