@@ -824,6 +824,10 @@ function insertCurrentTimeIntoTreeNote() {
 }
 
 function handleTreeContentShortcut(event) {
+  if (event.key === "Enter" && !event.shiftKey && continueMarkdownListOnEnter()) {
+    event.preventDefault();
+    return;
+  }
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
   const key = event.key.toLowerCase();
   if (key === "b") {
@@ -858,6 +862,47 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     applyHeadingToTreeContent(Number(key));
   }
+}
+
+function continueMarkdownListOnEnter() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return false;
+  const cursor = elements.treeContent.selectionStart ?? 0;
+  const value = elements.treeContent.value;
+  const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+  const line = value.slice(lineStart, cursor);
+  const listMatch = line.match(/^(\s*)([-*])\s+(.*)$/);
+  if (!listMatch) return false;
+  const [, indent, bullet, body] = listMatch;
+  const taskMatch = body.match(/^\[([ xX])\]\s*(.*)$/);
+  if (!body.trim() || (taskMatch && !taskMatch[2].trim())) {
+    const before = value.slice(0, lineStart);
+    const after = value.slice(cursor);
+    elements.treeContent.value = `${before}${after}`;
+    elements.treeContent.setSelectionRange(lineStart, lineStart);
+  } else {
+    const nextMarker = taskMatch ? `${indent}${bullet} [ ] ` : `${indent}${bullet} `;
+    elements.treeContent.value = `${value.slice(0, cursor)}\n${nextMarker}${value.slice(cursor)}`;
+    const nextCursor = cursor + 1 + nextMarker.length;
+    elements.treeContent.setSelectionRange(nextCursor, nextCursor);
+  }
+  syncTreeContentFromEditor();
+  return true;
+}
+
+function syncTreeContentFromEditor() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
 }
 
 function wrapTreeContentSelection(prefix, suffix) {
