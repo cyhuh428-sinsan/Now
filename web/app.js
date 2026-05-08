@@ -2672,6 +2672,7 @@ function load() {
     state.data.deletedTree = parsed.deletedTree || [];
     state.data.tree = parsed.tree || [];
     normalizeData();
+    persist();
   } catch {
     localStorage.removeItem(STORAGE_KEY);
   }
@@ -2683,6 +2684,7 @@ function loadSettings() {
   try {
     const parsed = JSON.parse(raw);
     state.settings = normalizeSettings(parsed);
+    persistSettings();
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
   }
