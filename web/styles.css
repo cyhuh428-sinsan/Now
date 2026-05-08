@@ -1312,7 +1312,8 @@ kbd {
   font-size: 13px;
 }
 
-.quick-result:focus-visible {
+.quick-result:focus-visible,
+.result-item:focus-visible {
   border-color: var(--blue);
   background: var(--blue-soft);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
