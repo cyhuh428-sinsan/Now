@@ -824,7 +824,7 @@ function insertCurrentTimeIntoTreeNote() {
 }
 
 function handleTreeContentShortcut(event) {
-  if (event.key === "Enter" && !event.shiftKey && continueMarkdownListOnEnter()) {
+  if (event.key === "Enter" && !event.shiftKey && continueMarkdownLineOnEnter()) {
     event.preventDefault();
     return;
   }
@@ -864,13 +864,29 @@ function handleTreeContentShortcut(event) {
   }
 }
 
-function continueMarkdownListOnEnter() {
+function continueMarkdownLineOnEnter() {
   const selected = getSelectedTreeNode();
   if (!selected) return false;
   const cursor = elements.treeContent.selectionStart ?? 0;
   const value = elements.treeContent.value;
   const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
   const line = value.slice(lineStart, cursor);
+  const quoteMatch = line.match(/^(\s*>\s?)(.*)$/);
+  if (quoteMatch) {
+    const [, marker, body] = quoteMatch;
+    if (!body.trim()) {
+      const before = value.slice(0, lineStart);
+      const after = value.slice(cursor);
+      elements.treeContent.value = `${before}${after}`;
+      elements.treeContent.setSelectionRange(lineStart, lineStart);
+    } else {
+      elements.treeContent.value = `${value.slice(0, cursor)}\n${marker}${value.slice(cursor)}`;
+      const nextCursor = cursor + 1 + marker.length;
+      elements.treeContent.setSelectionRange(nextCursor, nextCursor);
+    }
+    syncTreeContentFromEditor();
+    return true;
+  }
   const listMatch = line.match(/^(\s*)([-*])\s+(.*)$/);
   if (!listMatch) return false;
   const [, indent, bullet, body] = listMatch;
