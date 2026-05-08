@@ -1417,17 +1417,18 @@ function renderArchiveList() {
 
   elements.archiveList.replaceChildren(
     ...archives.map((note) => {
+      const restored = Boolean(note.restoredAt);
       const item = document.createElement("article");
       item.className = "archive-item";
       item.innerHTML = `
         <div>
           <strong>${escapeHtml(longDateLabel(note.date))}</strong>
-          <span>${escapeHtml(formatArchivedAt(note.archivedAt))} 보관</span>
+          <span>${escapeHtml(formatArchivedAt(note.archivedAt))} 보관${restored ? ` · ${escapeHtml(formatArchivedAt(note.restoredAt))} 복원됨` : ""}</span>
           <p>${escapeHtml(snippet(note.content))}</p>
         </div>
         <div class="archive-actions">
           <button class="secondary-btn" type="button" data-action="view">열람</button>
-          <button class="secondary-btn" type="button" data-action="restore">복원</button>
+          <button class="secondary-btn" type="button" data-action="restore"${restored ? " disabled" : ""}>${restored ? "복원됨" : "복원"}</button>
         </div>
       `;
       item.querySelector('[data-action="view"]').addEventListener("click", () => {
@@ -1456,13 +1457,15 @@ function setDailyArchivePreviewMode(isPreview) {
 
 function restoreArchivedDailyNote(id) {
   const note = state.data.archivedDaily.find((item) => item.id === id);
-  if (!note) return;
+  if (!note || note.restoredAt) return;
   const active = state.data.daily[note.date];
+  const restoredAt = new Date().toISOString();
   if (active?.content?.trim()) {
     const ok = confirm("같은 날짜의 활성 메모가 있습니다. 보관본 내용을 아래에 추가할까요?");
     if (!ok) return;
     state.data.daily[note.date].content = `${active.content.trimEnd()}\n\n--- 보관본 복원 ---\n${note.content}`;
-    state.data.daily[note.date].updatedAt = new Date().toISOString();
+    state.data.daily[note.date].syncState = "pending";
+    state.data.daily[note.date].updatedAt = restoredAt;
   } else {
     state.data.daily[note.date] = {
       date: note.date,
@@ -1470,9 +1473,12 @@ function restoreArchivedDailyNote(id) {
       status: "active",
       syncState: "pending",
       restoredFromArchiveId: note.id,
-      updatedAt: new Date().toISOString(),
+      updatedAt: restoredAt,
     };
   }
+  note.restoredAt = restoredAt;
+  note.syncState = "pending";
+  note.updatedAt = restoredAt;
   state.selectedDate = note.date;
   const [year, month] = note.date.split("-").map(Number);
   state.visibleMonth = new Date(year, month - 1, 1);
@@ -2808,6 +2814,7 @@ function normalizeData() {
     note.status = note.status || "archived";
     note.syncState = note.syncState || "synced";
     note.archivedAt = note.archivedAt || note.updatedAt || new Date().toISOString();
+    note.restoredAt = note.restoredAt || null;
     note.updatedAt = note.updatedAt || note.archivedAt;
   });
   state.data.deletedTree.forEach((node) => {
@@ -2982,6 +2989,7 @@ function archivedDailyToMarkdown() {
     `### ${longDateLabel(note.date)}`,
     "",
     `- 보관 시각: ${formatDateTime(note.archivedAt || note.updatedAt)}`,
+    note.restoredAt ? `- 복원 시각: ${formatDateTime(note.restoredAt)}` : "",
     "",
     note.content.trim(),
     "",
