@@ -24,6 +24,8 @@ const state = {
   settings: defaultSettings(),
 };
 
+let storageWarningShown = false;
+
 function defaultSettings() {
   return {
     theme: "system",
@@ -2726,7 +2728,7 @@ function normalizeToggle(value, fallback) {
 }
 
 function persistSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(state.settings));
+  writeStorage(SETTINGS_KEY, state.settings);
 }
 
 function normalizeData() {
@@ -2834,7 +2836,20 @@ function mergeOverflowTreeChildren(content, children) {
 }
 
 function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state.data));
+  writeStorage(STORAGE_KEY, state.data);
+}
+
+function writeStorage(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+    return true;
+  } catch {
+    if (!storageWarningShown) {
+      storageWarningShown = true;
+      alert("브라우저 저장소에 저장할 수 없습니다. 중요한 내용은 JSON 내보내기로 백업해 주세요.");
+    }
+    return false;
+  }
 }
 
 function exportData() {
