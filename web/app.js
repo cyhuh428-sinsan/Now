@@ -850,6 +850,10 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     insertHorizontalRuleIntoTreeContent();
   }
+  if (key === "l" && event.shiftKey) {
+    event.preventDefault();
+    wrapTreeContentAsMarkdownLink();
+  }
   if (["1", "2", "3"].includes(key)) {
     event.preventDefault();
     applyHeadingToTreeContent(Number(key));
@@ -893,6 +897,31 @@ function insertHorizontalRuleIntoTreeContent() {
   const cursor = (before ? before.length + 2 : 0) + 3;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursor, cursor);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function wrapTreeContentAsMarkdownLink() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const selectedText = value.slice(start, end) || "링크 제목";
+  const linkText = `[${selectedText}](https://)`;
+  elements.treeContent.value = `${value.slice(0, start)}${linkText}${value.slice(end)}`;
+  const urlStart = start + selectedText.length + 3;
+  const urlEnd = urlStart + "https://".length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(urlStart, urlEnd);
   selected.content = elements.treeContent.value;
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
@@ -2051,10 +2080,19 @@ function toggleMarkdownTask(taskIndex) {
 function inlineMarkdown(text) {
   return text
     .replace(/\[\[([^\]]+)\]\]/g, (_, title) => `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(title.trim())}">${title}</button>`)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => renderExternalLink(label, url))
     .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
     .replace(/`([^`]+)`/g, "<code>$1</code>")
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+}
+
+function renderExternalLink(label, url) {
+  const trimmedUrl = url.trim();
+  if (!/^(https?:\/\/|mailto:)/i.test(trimmedUrl)) {
+    return `[${label}](${url})`;
+  }
+  return `<a href="${trimmedUrl}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 }
 
 function openWikiLink(title) {
