@@ -760,6 +760,14 @@ function handleShortcuts(event) {
     event.preventDefault();
     reopenClosedTreeTab();
   }
+  if (key === "pageup") {
+    event.preventDefault();
+    cycleOpenTreeTab(-1);
+  }
+  if (key === "pagedown") {
+    event.preventDefault();
+    cycleOpenTreeTab(1);
+  }
   if (key === ",") {
     event.preventDefault();
     toggleSettings();
@@ -1294,6 +1302,17 @@ function addOpenTreeTab(id) {
   persistSettings();
 }
 
+function visibleOpenTreeTabs() {
+  const tabs = state.settings.openTreeTabs
+    .map((id) => findTreeNode(state.data.tree, id))
+    .filter(Boolean);
+  const pinnedIds = new Set(state.settings.pinnedTreeTabs);
+  return [
+    ...tabs.filter((node) => pinnedIds.has(node.id)),
+    ...tabs.filter((node) => !pinnedIds.has(node.id)),
+  ];
+}
+
 function renderOpenTreeTabs() {
   const tabs = state.settings.openTreeTabs
     .map((id) => findTreeNode(state.data.tree, id))
@@ -1303,10 +1322,7 @@ function renderOpenTreeTabs() {
     state.settings.openTreeTabs.includes(id) && findTreeNode(state.data.tree, id)
   ));
   const pinnedIds = new Set(state.settings.pinnedTreeTabs);
-  const sortedTabs = [
-    ...tabs.filter((node) => pinnedIds.has(node.id)),
-    ...tabs.filter((node) => !pinnedIds.has(node.id)),
-  ];
+  const sortedTabs = visibleOpenTreeTabs();
   elements.openTabsBar.classList.toggle("hidden", sortedTabs.length === 0);
   if (tabs.length === 0) {
     elements.openTabs.replaceChildren();
@@ -1337,6 +1353,14 @@ function renderOpenTreeTabs() {
   elements.pinTabBtn.textContent = selectedPinned ? "고정 해제" : "탭 고정";
   elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
+}
+
+function cycleOpenTreeTab(direction) {
+  const tabs = visibleOpenTreeTabs();
+  if (tabs.length < 2) return;
+  const currentIndex = Math.max(0, tabs.findIndex((node) => node.id === state.selectedTreeId));
+  const nextIndex = (currentIndex + direction + tabs.length) % tabs.length;
+  selectTreeNode(tabs[nextIndex].id);
 }
 
 function rememberClosedTreeTabs(ids) {
