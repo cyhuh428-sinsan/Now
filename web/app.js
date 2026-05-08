@@ -3178,9 +3178,10 @@ async function importMarkdownData(event) {
           archivedDailyNotes,
         };
       }
+      const title = titleFromMarkdownFile(file.name, content);
       return {
-        title: titleFromMarkdownFile(file.name, content),
-        nodes: [createNode(titleFromMarkdownFile(file.name, content), content, null, 1)],
+        title,
+        nodes: [createNode(title, content, null, 1)],
         dailyNotes: [],
         archivedDailyNotes: [],
       };
@@ -3189,10 +3190,12 @@ async function importMarkdownData(event) {
       alert("가져올 Markdown 내용이 없습니다.");
       return;
     }
+    const summary = markdownImportSummary(imports);
     const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
     const moreText = imports.length > 5 ? `\n- 외 ${imports.length - 5}개` : "";
     if (!confirm([
-      `${imports.length}개 Markdown 파일을 새 주제로 가져올까요?`,
+      `${imports.length}개 Markdown 파일을 가져올까요?`,
+      `지식 메모 ${summary.nodes}개, 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개`,
       "",
       previewNames + moreText,
     ].join("\n"))) {
@@ -3209,13 +3212,38 @@ async function importMarkdownData(event) {
     dailyNotes.forEach((note) => mergeImportedDailyNote(note));
     state.data.archivedDaily.unshift(...archivedDailyNotes);
     persist();
-    setView("tree");
+    showMarkdownImportResult(nodes, dailyNotes);
     alert(`Markdown 가져오기 완료: 지식 메모 ${nodes.length}개, 일자별 메모 ${dailyNotes.length}개, 보관 일자 ${archivedDailyNotes.length}개`);
   } catch {
     alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
   } finally {
     event.target.value = "";
   }
+}
+
+function markdownImportSummary(imports) {
+  return imports.reduce((summary, item) => {
+    summary.nodes += item.nodes?.length || 0;
+    summary.daily += item.dailyNotes?.length || 0;
+    summary.archivedDaily += item.archivedDailyNotes?.length || 0;
+    return summary;
+  }, { nodes: 0, daily: 0, archivedDaily: 0 });
+}
+
+function showMarkdownImportResult(nodes, dailyNotes) {
+  if (nodes.length > 0) {
+    setView("tree");
+    return;
+  }
+  if (dailyNotes.length > 0) {
+    state.selectedDate = dailyNotes[0].date;
+    const [year, month] = state.selectedDate.split("-").map(Number);
+    state.visibleMonth = new Date(year, month - 1, 1);
+    render();
+    openDailyPopup();
+    return;
+  }
+  render();
 }
 
 function readTextFile(file) {
