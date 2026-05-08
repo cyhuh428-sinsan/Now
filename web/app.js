@@ -2173,7 +2173,7 @@ function createLinkedNote(title) {
 function outgoingLinksFor(node) {
   const allNodes = flattenTree(state.data.tree);
   const byTitle = new Map(allNodes.map((item) => [item.title.trim().toLowerCase(), item]));
-  return extractWikiLinks(node.content).map((title) => {
+  return uniqueWikiLinks(node.content).map((title) => {
     const linked = byTitle.get(title.toLowerCase());
     return {
       title,
@@ -2211,7 +2211,7 @@ function graphLinks() {
   const nodes = flattenTree(state.data.tree);
   const byTitle = new Map(nodes.map((node) => [node.title.trim().toLowerCase(), node]));
   return nodes.flatMap((from) => (
-    extractWikiLinks(from.content)
+    uniqueWikiLinks(from.content)
       .map((title) => ({ from, to: byTitle.get(title.toLowerCase()) }))
       .filter((link) => link.to && link.to.id !== from.id)
   ));
@@ -2225,6 +2225,16 @@ function findTreeNodeByTitle(title) {
 function extractWikiLinks(content) {
   return Array.from(content.matchAll(/\[\[([^\]]+)\]\]/g), (match) => match[1].trim())
     .filter(Boolean);
+}
+
+function uniqueWikiLinks(content) {
+  const seen = new Set();
+  return extractWikiLinks(content).filter((title) => {
+    const key = title.toLowerCase();
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function sectionTitle(title) {
