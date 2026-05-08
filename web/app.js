@@ -643,7 +643,6 @@ function handleQuickResultKey(event, button) {
 
 function openQuickNode(id) {
   selectTreeNode(id);
-  closeQuickSwitch();
 }
 
 function quickSwitchTime(node) {
@@ -1209,8 +1208,15 @@ function setView(view) {
 function selectTreeNode(id) {
   state.selectedTreeId = id;
   expandAncestors(id);
-  closeDailyPopup();
+  closeSelectionOverlays();
   setView("tree");
+}
+
+function closeSelectionOverlays() {
+  closeDailyPopup();
+  closeQuickSwitch();
+  closeSearchPopover();
+  closeGraph();
 }
 
 function toggleDailyPopup() {
