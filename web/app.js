@@ -2733,6 +2733,14 @@ function normalizeData() {
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
+  state.data.daily = Object.fromEntries(Object.entries(state.data.daily).map(([date, note]) => {
+    if (isPlainObject(note)) return [date, { date, ...note }];
+    return [date, { date, content: String(note || "") }];
+  }));
+  state.data.archivedDaily = state.data.archivedDaily.filter(isPlainObject);
+  state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
+  state.data.tree = state.data.tree.filter(isPlainObject);
+
   Object.values(state.data.daily).forEach((note) => {
     note.status = note.status || "active";
     note.syncState = note.syncState || "synced";
@@ -2766,7 +2774,7 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.content = node.content || "";
     node.parentId = parentId;
     node.level = level;
-    node.children = node.children || [];
+    node.children = Array.isArray(node.children) ? node.children.filter(isPlainObject) : [];
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
     node.favorite = Boolean(node.favorite);
