@@ -828,6 +828,11 @@ function handleTreeContentShortcut(event) {
     consumeTreeContentShortcut(event);
     return;
   }
+  if (event.key === "Tab") {
+    consumeTreeContentShortcut(event);
+    indentTreeContentSelection(event.shiftKey ? -1 : 1);
+    return;
+  }
   if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
   const key = event.key.toLowerCase();
   if (key === "b") {
@@ -924,6 +929,32 @@ function syncTreeContentFromEditor() {
   renderOutlinePanel(selected);
   renderLinkPanel();
   showSaved(elements.treeSavedLabel);
+}
+
+function indentTreeContentSelection(direction) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const value = elements.treeContent.value;
+  const selectionStart = elements.treeContent.selectionStart ?? 0;
+  const selectionEnd = elements.treeContent.selectionEnd ?? selectionStart;
+  const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+  const lineEnd = value.indexOf("\n", selectionEnd);
+  const end = lineEnd === -1 ? value.length : lineEnd;
+  const block = value.slice(lineStart, end);
+  const nextBlock = block
+    .split("\n")
+    .map((line) => {
+      if (direction > 0) return `  ${line}`;
+      return line.replace(/^ {1,2}/, "");
+    })
+    .join("\n");
+  elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
+  const delta = nextBlock.length - block.length;
+  const nextStart = Math.max(lineStart, selectionStart + (direction > 0 ? 2 : Math.min(0, delta)));
+  const nextEnd = Math.max(nextStart, selectionEnd + delta);
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(nextStart, nextEnd);
+  syncTreeContentFromEditor();
 }
 
 function wrapTreeContentSelection(prefix, suffix) {
