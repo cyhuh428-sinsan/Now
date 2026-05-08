@@ -600,11 +600,30 @@ body.resizing {
   font-weight: 800;
 }
 
+.shortcuts-row {
+  align-items: flex-start;
+}
+
+.shortcut-groups {
+  display: grid;
+  gap: 14px;
+  width: min(620px, 100%);
+}
+
+.shortcut-group {
+  display: grid;
+  gap: 8px;
+}
+
+.shortcut-group strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
 .shortcut-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(140px, 1fr));
   gap: 8px;
-  min-width: min(420px, 100%);
 }
 
 .shortcut-list span {
@@ -1601,6 +1620,10 @@ kbd {
   .open-tab-actions {
     justify-content: flex-end;
   }
+
+  .shortcut-groups {
+    width: 100%;
+  }
 }
 
 @media (max-width: 640px) {
@@ -1611,6 +1634,10 @@ kbd {
 
   .view-header {
     display: grid;
+  }
+
+  .shortcut-list {
+    grid-template-columns: 1fr;
   }
 
   .memo-editor,
