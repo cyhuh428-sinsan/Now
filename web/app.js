@@ -141,6 +141,7 @@ const elements = {
   railQuickBtn: $("#railQuickBtn"),
   railGraphBtn: $("#railGraphBtn"),
   railMarkdownExportBtn: $("#railMarkdownExportBtn"),
+  railMarkdownImportBtn: $("#railMarkdownImportBtn"),
   railDeletedTreeBtn: $("#railDeletedTreeBtn"),
   railSettingsBtn: $("#railSettingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
@@ -275,6 +276,10 @@ function bindEvents() {
   });
 
   elements.railMarkdownExportBtn.addEventListener("click", exportMarkdown);
+
+  elements.railMarkdownImportBtn.addEventListener("click", () => {
+    elements.importMarkdownInput.click();
+  });
 
   elements.railDeletedTreeBtn.addEventListener("click", toggleDeletedTreeBox);
 
