@@ -32,7 +32,7 @@ NowNote Web은 PC 설치형 메모 프로그램으로 확장하기 전 단계의
 - 사이드바 탐색: 즐겨찾기와 태그 모음에서 바로 이동
 - 최근 수정: 최근에 편집한 지식 메모를 사이드바에서 바로 열기
 - 삭제 보관함: 지식 메모를 즉시 영구 삭제하지 않고 복원 가능한 상태로 보관, 삭제 성공 시 열린 탭 정리, 개수 표시, 개별/선택/전체 영구 삭제 지원
-- 가져오기/내보내기: JSON 백업 가져오기/내보내기, Markdown 내보내기, `.md`/`.txt` 파일을 새 주제로 가져오기 지원
+- 가져오기/내보내기: JSON 백업 가져오기/내보내기, Markdown 내보내기, `.md`/`.txt` 파일을 새 주제로 가져오기, 여러 Markdown 파일 동시 가져오기 지원
 - 목록 제어: 지식 목록 전체 펼치기/접기
 - 팝업 토글: 일일 메모, 검색, 빠른 전환, 연결 보기, 화면 설정, 삭제 보관함은 같은 버튼으로 열고 닫기
 - 단축키: `Ctrl+N` 새 주제, `Ctrl+Shift+N` 선택 항목 아래에 추가, `Ctrl+S` 저장 상태 확인, `Ctrl+;` 시간 넣기, 본문에서 `Tab`/`Shift+Tab` 들여쓰기, 본문에서 `Ctrl+1/2/3` 제목, 본문에서 `Ctrl+B` 굵게, 본문에서 `Ctrl+I` 기울임, 본문에서 `Ctrl+Shift+L` 링크, 본문에서 `Ctrl+Shift+Q` 인용, 본문에서 `Ctrl+Shift+H` 구분선, 본문에서 `Ctrl+Shift+C` 체크리스트, 본문에서 `Ctrl+Shift+7` 번호 목록, 본문에서 `Ctrl+Shift+K` 코드블록, `Ctrl+F` 검색, `Ctrl+Shift+F` 본문 찾기, `Ctrl+K`/`Ctrl+O` 빠른 전환, `Ctrl+D` 일자별 메모, `Ctrl+G` 연결 보기, `Ctrl+W` 현재 탭 닫기, `Ctrl+Shift+T` 닫은 탭 다시 열기, `Ctrl+Shift+W` 다른 탭 닫기, `Ctrl+Shift+P` 현재 탭 고정, `Ctrl+PageUp`/`Ctrl+PageDown` 열린 탭 전환, `Ctrl+Alt+↑`/`Ctrl+Alt+↓` 같은 단계 순서 이동, `Ctrl+,` 화면 설정, `Esc` 팝업 닫기
