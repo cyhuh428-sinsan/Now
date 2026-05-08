@@ -3167,9 +3167,16 @@ async function importMarkdownData(event) {
     const imports = (await Promise.all(files.map(async (file) => {
       const content = (await readTextFile(file)).replace(/\r\n/g, "\n");
       if (!content.trim()) return null;
+      const treeNodes = parseNowNoteMarkdownTree(content);
+      if (treeNodes.length > 0) {
+        return {
+          title: `${file.name} 구조`,
+          nodes: treeNodes,
+        };
+      }
       return {
         title: titleFromMarkdownFile(file.name, content),
-        content,
+        nodes: [createNode(titleFromMarkdownFile(file.name, content), content, null, 1)],
       };
     }))).filter(Boolean);
     if (imports.length === 0) {
@@ -3185,7 +3192,7 @@ async function importMarkdownData(event) {
     ].join("\n"))) {
       return;
     }
-    const nodes = imports.map((item) => createNode(item.title, item.content, null, 1));
+    const nodes = imports.flatMap((item) => item.nodes);
     state.data.tree.push(...nodes);
     state.selectedTreeId = nodes[0].id;
     nodes.forEach((node) => state.expandedTreeIds.add(node.id));
@@ -3210,6 +3217,90 @@ function readTextFile(file) {
       reject(error);
     }
   });
+}
+
+function parseNowNoteMarkdownTree(content) {
+  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
+  const treeSection = content.match(/(?:^|\n)##\s+지식 메모\s*\n([\s\S]*?)(?=\n##\s+일자별 메모|\n##\s+보관된 일자별 메모|$)/);
+  if (!treeSection) return [];
+  const blocks = splitNowNoteTreeBlocks(treeSection[1]);
+  if (blocks.length === 0) return [];
+  const roots = [];
+  const stack = [];
+  blocks.forEach((block) => {
+    const level = Math.min(3, Math.max(1, block.headingLevel - 1));
+    const meta = readNowNoteMarkdownMeta(block.body);
+    const node = createNode(block.title, meta.content, null, level);
+    node.tags = meta.tags.length ? meta.tags : extractTags(meta.content);
+    node.favorite = meta.favorite;
+    const parent = stack[level - 2];
+    if (level > 1 && parent) {
+      node.parentId = parent.id;
+      parent.children.push(node);
+    } else {
+      node.level = 1;
+      roots.push(node);
+    }
+    stack[level - 1] = node;
+    stack.length = level;
+  });
+  return roots;
+}
+
+function splitNowNoteTreeBlocks(content) {
+  const lines = content.split("\n");
+  const blocks = [];
+  let current = null;
+  let inCodeBlock = false;
+  lines.forEach((line) => {
+    if (/^\s*```/.test(line)) {
+      inCodeBlock = !inCodeBlock;
+    }
+    const heading = !inCodeBlock ? line.match(/^(#{2,4})\s+\[(주제|분류|메모)\]\s+(.+)\s*$/) : null;
+    if (heading) {
+      if (current) blocks.push(current);
+      current = {
+        headingLevel: heading[1].length,
+        title: normalizeText(heading[3]).slice(0, 80) || defaultTitleForLevel(Math.min(3, heading[1].length - 1)),
+        body: [],
+      };
+      return;
+    }
+    if (current) {
+      current.body.push(line);
+    }
+  });
+  if (current) blocks.push(current);
+  return blocks;
+}
+
+function readNowNoteMarkdownMeta(lines) {
+  const tags = [];
+  let favorite = false;
+  const content = [];
+  let readingContent = false;
+  lines.forEach((line) => {
+    const trimmed = line.trim();
+    if (!readingContent && trimmed === "") return;
+    if (!readingContent && /^경로:\s*/.test(trimmed)) return;
+    if (!readingContent && /^수정:\s*/.test(trimmed)) return;
+    if (!readingContent && /^태그:\s*/.test(trimmed)) {
+      trimmed.match(/#[0-9A-Za-z가-힣_-]+/g)?.forEach((tag) => tags.push(tag.slice(1)));
+      return;
+    }
+    if (!readingContent && /^즐겨찾기:\s*예/.test(trimmed)) {
+      favorite = true;
+      return;
+    }
+    readingContent = true;
+    content.push(line);
+  });
+  const text = content.join("\n").trim();
+  return {
+    content: text === "_내용 없음_" ? "" : text,
+    tags: [...new Set(tags)],
+    favorite,
+  };
 }
 
 function titleFromMarkdownFile(fileName, content) {
