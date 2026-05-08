@@ -77,6 +77,10 @@
           JSON 가져오기
           <input id="importInput" type="file" accept="application/json">
         </label>
+        <label class="ghost-btn file-btn">
+          Markdown 가져오기
+          <input id="importMarkdownInput" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain">
+        </label>
       </div>
     </aside>
 
@@ -495,6 +499,14 @@
           </div>
           <button id="deletedTreeCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
         </header>
+        <div class="deleted-toolbar">
+          <strong id="deletedSelectionLabel">선택 0개 / 전체 0개</strong>
+          <div class="deleted-toolbar-actions">
+            <button id="deletedSelectAllBtn" class="secondary-btn" type="button">전체 선택</button>
+            <button id="deletedBulkDeleteBtn" class="danger-btn" type="button" disabled>선택 영구 삭제</button>
+            <button id="deletedDeleteAllBtn" class="danger-btn" type="button" disabled>전체 영구 삭제</button>
+          </div>
+        </div>
         <div id="deletedTreeList" class="archive-list"></div>
       </div>
     </section>
