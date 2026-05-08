@@ -2741,12 +2741,14 @@ function normalizeData() {
   state.data.tree = state.data.tree.filter(isPlainObject);
 
   Object.values(state.data.daily).forEach((note) => {
+    note.content = normalizeText(note.content);
     note.status = note.status || "active";
     note.syncState = note.syncState || "synced";
     note.updatedAt = note.updatedAt || new Date().toISOString();
   });
   state.data.archivedDaily.forEach((note) => {
     note.id = note.id || crypto.randomUUID();
+    note.content = normalizeText(note.content);
     note.status = note.status || "archived";
     note.syncState = note.syncState || "synced";
     note.archivedAt = note.archivedAt || note.updatedAt || new Date().toISOString();
@@ -2754,8 +2756,8 @@ function normalizeData() {
   });
   state.data.deletedTree.forEach((node) => {
     node.id = node.id || crypto.randomUUID();
-    node.title = node.title || "";
-    node.content = node.content || "";
+    node.title = normalizeText(node.title);
+    node.content = normalizeText(node.content);
     node.children = [];
     node.status = "deleted";
     node.syncState = node.syncState || "synced";
@@ -2801,8 +2803,8 @@ function mergeDailyNote(current, next) {
 function normalizeTreeNodes(nodes, parentId, level) {
   nodes.forEach((node) => {
     node.id = node.id || crypto.randomUUID();
-    node.title = node.title || "";
-    node.content = node.content || "";
+    node.title = normalizeText(node.title);
+    node.content = normalizeText(node.content);
     node.parentId = parentId;
     node.level = level;
     node.children = Array.isArray(node.children) ? node.children.filter(isPlainObject) : [];
@@ -3005,6 +3007,10 @@ function isBackupData(data) {
 
 function isPlainObject(value) {
   return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function normalizeText(value) {
+  return value == null ? "" : String(value);
 }
 
 function backupSummary(data) {
