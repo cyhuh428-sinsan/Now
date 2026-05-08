@@ -1889,6 +1889,7 @@ function markdownToHtml(markdown) {
   const blocks = [];
   let listItems = [];
   let taskIndex = 0;
+  let codeLines = null;
 
   const flushList = () => {
     if (listItems.length === 0) return;
@@ -1901,8 +1902,27 @@ function markdownToHtml(markdown) {
     listItems = [];
   };
 
+  const flushCode = () => {
+    if (!codeLines) return;
+    blocks.push(`<pre><code>${codeLines.join("\n")}</code></pre>`);
+    codeLines = null;
+  };
+
   lines.forEach((line) => {
     const trimmed = line.trim();
+    if (trimmed.startsWith("```")) {
+      flushList();
+      if (codeLines) {
+        flushCode();
+      } else {
+        codeLines = [];
+      }
+      return;
+    }
+    if (codeLines) {
+      codeLines.push(line);
+      return;
+    }
     if (!trimmed) {
       flushList();
       return;
@@ -1928,6 +1948,7 @@ function markdownToHtml(markdown) {
     blocks.push(`<p>${inlineMarkdown(trimmed)}</p>`);
   });
   flushList();
+  flushCode();
   return blocks.join("");
 }
 
