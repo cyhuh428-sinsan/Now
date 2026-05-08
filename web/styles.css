@@ -392,6 +392,14 @@ button {
   flex-wrap: wrap;
 }
 
+.results-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .primary-btn {
   border-color: var(--blue);
   background: var(--blue);
@@ -1365,6 +1373,12 @@ kbd {
 .header-count {
   margin: 8px 0 0;
   white-space: nowrap;
+}
+
+.compact-action {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 12px;
 }
 
 .compact-select {
