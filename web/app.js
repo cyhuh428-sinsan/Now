@@ -2311,7 +2311,7 @@ function uniqueWikiLinks(content) {
 
 function stripMarkdownCode(content) {
   return String(content || "")
-    .replace(/```[\s\S]*?```/g, "")
+    .replace(/```[\s\S]*?(?:```|$)/g, "")
     .replace(/`[^`]*`/g, "");
 }
 
