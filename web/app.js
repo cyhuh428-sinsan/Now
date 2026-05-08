@@ -2937,13 +2937,19 @@ function archivedDailyToMarkdown() {
 }
 
 function downloadText(filename, content, type) {
-  const blob = new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
+  let url = null;
+  try {
+    const blob = new Blob([content], { type });
+    url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+  } catch {
+    alert("파일을 내보낼 수 없습니다. 브라우저 다운로드 권한이나 저장 공간을 확인해 주세요.");
+  } finally {
+    if (url) URL.revokeObjectURL(url);
+  }
 }
 
 function importData(event) {
