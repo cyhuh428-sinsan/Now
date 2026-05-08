@@ -2938,7 +2938,7 @@ function exportMarkdown() {
     "",
     archivedDailyToMarkdown(),
   ].join("\n");
-  downloadText(`nownote-${toDateKey(new Date())}.md`, markdown, "text/markdown");
+  downloadText(`nownote-${fileTimestamp(new Date())}.md`, markdown, "text/markdown");
 }
 
 function treeToMarkdown(nodes) {
@@ -3132,7 +3132,7 @@ function downloadCurrentBackup(prefix = "nownote") {
     data: state.data,
     settings: state.settings,
   };
-  downloadText(`${prefix}-${toDateKey(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json");
+  downloadText(`${prefix}-${fileTimestamp(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json");
 }
 
 function showSaved(label) {
@@ -3151,6 +3151,13 @@ function toDateKey(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function fileTimestamp(date) {
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  const seconds = String(date.getSeconds()).padStart(2, "0");
+  return `${toDateKey(date)}-${hours}${minutes}${seconds}`;
 }
 
 function isDateKey(value) {
