@@ -2095,8 +2095,8 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.id = node.id || crypto.randomUUID();
     node.title = node.title || "";
     node.content = node.content || "";
-    node.parentId = node.parentId ?? parentId;
-    node.level = node.level || level;
+    node.parentId = parentId;
+    node.level = level;
     node.children = node.children || [];
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
