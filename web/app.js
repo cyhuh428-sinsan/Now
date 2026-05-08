@@ -1209,6 +1209,7 @@ function setView(view) {
 function selectTreeNode(id) {
   state.selectedTreeId = id;
   expandAncestors(id);
+  closeDailyPopup();
   setView("tree");
 }
 
@@ -2480,9 +2481,7 @@ function renderSearchResultsInto(container, results, afterSelect) {
           setView("tree");
           openDailyPopup();
         } else {
-          state.selectedTreeId = result.id;
-          expandAncestors(result.id);
-          setView("tree");
+          selectTreeNode(result.id);
         }
         if (afterSelect) afterSelect(result);
       });
