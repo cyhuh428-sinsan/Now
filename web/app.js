@@ -2943,7 +2943,7 @@ function exportMarkdown() {
 
 function treeToMarkdown(nodes) {
   if (nodes.length === 0) return "_지식 메모가 없습니다._\n";
-  return nodes.map((node) => nodeToMarkdown(node)).join("\n");
+  return nodes.map((node) => nodeToMarkdown(node)).join("\n\n");
 }
 
 function nodeToMarkdown(node) {
@@ -2955,7 +2955,7 @@ function nodeToMarkdown(node) {
     `수정: ${formatDateTime(node.updatedAt)}`,
   ].join("\n");
   const content = node.content?.trim() || "_내용 없음_";
-  const children = node.children.map((child) => nodeToMarkdown(child)).join("\n");
+  const children = node.children.map((child) => nodeToMarkdown(child)).join("\n\n");
   return [
     `${"#".repeat(headingLevel)} [${levelName(node.level)}] ${node.title || "제목 없음"}`,
     "",
