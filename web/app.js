@@ -360,16 +360,7 @@ function bindEvents() {
   elements.treeContent.addEventListener("input", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
-    selected.content = elements.treeContent.value;
-    selected.tags = extractTags(selected.content);
-    markTreeNodeChanged(selected);
-    persist();
-    renderMarkdownPreview(selected.content);
-    renderTags();
-    renderNoteStats(selected);
-    renderOutlinePanel(selected);
-    renderLinkPanel();
-    showSaved(elements.treeSavedLabel);
+    syncTreeContentFromEditor();
   });
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
 
@@ -812,15 +803,7 @@ function insertCurrentTimeIntoTreeNote() {
   const nextCursor = start + marker.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(nextCursor, nextCursor);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function handleTreeContentShortcut(event) {
@@ -969,16 +952,7 @@ function wrapTreeContentSelection(prefix, suffix) {
   const cursorEnd = cursorStart + selectedText.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function insertHorizontalRuleIntoTreeContent() {
@@ -994,16 +968,7 @@ function insertHorizontalRuleIntoTreeContent() {
   const cursor = (before ? before.length + 2 : 0) + 3;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursor, cursor);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function wrapTreeContentAsMarkdownLink() {
@@ -1019,16 +984,7 @@ function wrapTreeContentAsMarkdownLink() {
   const urlEnd = urlStart + "https://".length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(urlStart, urlEnd);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function wrapTreeContentAsCodeBlock() {
@@ -1044,16 +1000,7 @@ function wrapTreeContentAsCodeBlock() {
   const cursorEnd = cursorStart + selectedText.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function applyLinePrefixToTreeContent(prefix, cleanupPattern) {
@@ -1073,16 +1020,7 @@ function applyLinePrefixToTreeContent(prefix, cleanupPattern) {
   elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(lineStart, lineStart + nextBlock.length);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function applyHeadingToTreeContent(level) {
@@ -1105,16 +1043,7 @@ function applyHeadingToTreeContent(level) {
   const cursorEnd = lineStart + nextBlock.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function insertChecklistIntoTreeContent() {
@@ -1135,16 +1064,7 @@ function insertChecklistIntoTreeContent() {
   const cursorEnd = start + checklist.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
-  selected.content = elements.treeContent.value;
-  selected.tags = extractTags(selected.content);
-  markTreeNodeChanged(selected);
-  persist();
-  renderMarkdownPreview(selected.content);
-  renderTags();
-  renderNoteStats(selected);
-  renderOutlinePanel(selected);
-  renderLinkPanel();
-  showSaved(elements.treeSavedLabel);
+  syncTreeContentFromEditor();
 }
 
 function renderGraph() {
