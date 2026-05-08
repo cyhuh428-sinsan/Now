@@ -3160,44 +3160,56 @@ function importData(event) {
   }
 }
 
-function importMarkdownData(event) {
-  const file = event.target.files?.[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    try {
-      const content = String(reader.result || "").replace(/\r\n/g, "\n");
-      if (!content.trim()) {
-        alert("가져올 Markdown 내용이 없습니다.");
-        return;
-      }
-      const title = titleFromMarkdownFile(file.name, content);
-      if (!confirm(`'${title}' Markdown 파일을 새 주제로 가져올까요?`)) {
-        return;
-      }
-      const node = createNode(title, content, null, 1);
-      state.data.tree.push(node);
-      state.selectedTreeId = node.id;
-      state.expandedTreeIds.add(node.id);
-      persist();
-      setView("tree");
-      alert("Markdown 가져오기가 완료되었습니다.");
-    } catch {
-      alert("Markdown 파일을 읽을 수 없습니다.");
-    } finally {
-      event.target.value = "";
-    }
-  };
-  reader.onerror = () => {
-    alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
-    event.target.value = "";
-  };
+async function importMarkdownData(event) {
+  const files = Array.from(event.target.files || []);
+  if (files.length === 0) return;
   try {
-    reader.readAsText(file);
+    const imports = (await Promise.all(files.map(async (file) => {
+      const content = (await readTextFile(file)).replace(/\r\n/g, "\n");
+      if (!content.trim()) return null;
+      return {
+        title: titleFromMarkdownFile(file.name, content),
+        content,
+      };
+    }))).filter(Boolean);
+    if (imports.length === 0) {
+      alert("가져올 Markdown 내용이 없습니다.");
+      return;
+    }
+    const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
+    const moreText = imports.length > 5 ? `\n- 외 ${imports.length - 5}개` : "";
+    if (!confirm([
+      `${imports.length}개 Markdown 파일을 새 주제로 가져올까요?`,
+      "",
+      previewNames + moreText,
+    ].join("\n"))) {
+      return;
+    }
+    const nodes = imports.map((item) => createNode(item.title, item.content, null, 1));
+    state.data.tree.push(...nodes);
+    state.selectedTreeId = nodes[0].id;
+    nodes.forEach((node) => state.expandedTreeIds.add(node.id));
+    persist();
+    setView("tree");
+    alert(`${nodes.length}개 Markdown 파일을 가져왔습니다.`);
   } catch {
-    alert("Markdown 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+  } finally {
     event.target.value = "";
   }
+}
+
+function readTextFile(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    try {
+      reader.readAsText(file);
+    } catch (error) {
+      reject(error);
+    }
+  });
 }
 
 function titleFromMarkdownFile(fileName, content) {
