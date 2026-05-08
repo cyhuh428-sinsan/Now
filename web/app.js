@@ -2172,7 +2172,10 @@ function toggleMarkdownTask(taskIndex) {
 
 function inlineMarkdown(text) {
   return text
-    .replace(/\[\[([^\]]+)\]\]/g, (_, title) => `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(title.trim())}">${title}</button>`)
+    .replace(/\[\[([^\]]+)\]\]/g, (_, title) => {
+      const target = decodeHtml(title.trim());
+      return `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(target)}">${title}</button>`;
+    })
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => renderExternalLink(label, url))
     .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
     .replace(/`([^`]+)`/g, "<code>$1</code>")
@@ -3198,6 +3201,15 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function decodeHtml(value) {
+  return String(value)
+    .replaceAll("&lt;", "<")
+    .replaceAll("&gt;", ">")
+    .replaceAll("&quot;", '"')
+    .replaceAll("&#039;", "'")
+    .replaceAll("&amp;", "&");
 }
 
 function highlightSearchText(value, query) {
