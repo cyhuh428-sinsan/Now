@@ -831,6 +831,10 @@ function handleTreeContentShortcut(event) {
     consumeTreeContentShortcut(event);
     insertChecklistIntoTreeContent();
   }
+  if (event.code === "Digit7" && event.shiftKey) {
+    consumeTreeContentShortcut(event);
+    insertOrderedListIntoTreeContent();
+  }
   if (key === "q" && event.shiftKey) {
     consumeTreeContentShortcut(event);
     applyLinePrefixToTreeContent("> ", /^>\s*/);
@@ -1080,6 +1084,27 @@ function insertChecklistIntoTreeContent() {
   elements.treeContent.value = `${value.slice(0, start)}${checklist}${value.slice(end)}`;
   const cursorStart = start + (selectedText ? 0 : checklist.length);
   const cursorEnd = start + checklist.length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  syncTreeContentFromEditor();
+}
+
+function insertOrderedListIntoTreeContent() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const selectedText = value.slice(start, end);
+  const orderedList = selectedText
+    ? selectedText
+      .split("\n")
+      .map((line, index) => `${index + 1}. ${line.replace(/^(\d+\.\s+|[-*]\s+)/, "").trimStart()}`)
+      .join("\n")
+    : "1. ";
+  elements.treeContent.value = `${value.slice(0, start)}${orderedList}${value.slice(end)}`;
+  const cursorStart = start + (selectedText ? 0 : orderedList.length);
+  const cursorEnd = start + orderedList.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
   syncTreeContentFromEditor();
