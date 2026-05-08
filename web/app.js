@@ -1778,6 +1778,14 @@ function closeOpenTreeTab(id) {
   renderTree();
 }
 
+function removeTreeTabReferences(id) {
+  if (!id) return;
+  state.settings.openTreeTabs = state.settings.openTreeTabs.filter((tabId) => tabId !== id);
+  state.settings.closedTreeTabs = state.settings.closedTreeTabs.filter((tabId) => tabId !== id);
+  state.settings.pinnedTreeTabs = state.settings.pinnedTreeTabs.filter((tabId) => tabId !== id);
+  persistSettings();
+}
+
 function renderFavorite(node) {
   elements.favoriteBtn.classList.toggle("active", Boolean(node.favorite));
   elements.favoriteBtn.textContent = node.favorite ? "즐겨찾기 해제" : "즐겨찾기";
@@ -2584,6 +2592,7 @@ function expandAncestors(id, nodes = state.data.tree, parents = []) {
 function archiveDeletedTreeNode(id) {
   const node = detachTreeNode(id);
   if (!node) return false;
+  removeTreeTabReferences(id);
   state.data.deletedTree.unshift({
     ...node,
     children: [],
