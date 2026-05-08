@@ -371,6 +371,7 @@ function bindEvents() {
     renderLinkPanel();
     showSaved(elements.treeSavedLabel);
   });
+  elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
 
   elements.favoriteBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -810,6 +811,43 @@ function insertCurrentTimeIntoTreeNote() {
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
   persist();
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function handleTreeContentShortcut(event) {
+  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
+  const key = event.key.toLowerCase();
+  if (key === "b") {
+    event.preventDefault();
+    wrapTreeContentSelection("**", "**");
+  }
+  if (key === "i") {
+    event.preventDefault();
+    wrapTreeContentSelection("*", "*");
+  }
+}
+
+function wrapTreeContentSelection(prefix, suffix) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const selectedText = value.slice(start, end);
+  elements.treeContent.value = `${value.slice(0, start)}${prefix}${selectedText}${suffix}${value.slice(end)}`;
+  const cursorStart = start + prefix.length;
+  const cursorEnd = cursorStart + selectedText.length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
   renderTags();
   renderNoteStats(selected);
   renderOutlinePanel(selected);
