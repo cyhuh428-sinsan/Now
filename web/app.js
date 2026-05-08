@@ -149,6 +149,7 @@ const elements = {
   searchPopoverInput: $("#searchPopoverInput"),
   searchScopeSelect: $("#searchScopeSelect"),
   searchSortSelect: $("#searchSortSelect"),
+  searchPopoverCount: $("#searchPopoverCount"),
   searchPopoverResults: $("#searchPopoverResults"),
   searchPopoverCloseBtn: $("#searchPopoverCloseBtn"),
   graphView: $("#graphView"),
@@ -569,6 +570,7 @@ function closeSearchPopover() {
 function renderSearchPopoverResults() {
   const query = elements.searchPopoverInput.value.trim();
   if (!query) {
+    elements.searchPopoverCount.textContent = "검색어를 입력하세요.";
     elements.searchPopoverResults.innerHTML = '<div class="empty-compact">검색어를 입력하세요.</div>';
     return;
   }
@@ -576,6 +578,7 @@ function renderSearchPopoverResults() {
     scope: elements.searchScopeSelect.value,
     sort: elements.searchSortSelect.value,
   });
+  elements.searchPopoverCount.textContent = `검색 결과 ${results.length}개`;
   renderSearchResultsInto(elements.searchPopoverResults, results, () => closeSearchPopover());
 }
 

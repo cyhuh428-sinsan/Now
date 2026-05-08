@@ -1355,6 +1355,13 @@ kbd {
   margin-bottom: 10px;
 }
 
+.search-count {
+  margin: -2px 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .compact-select {
   min-height: 44px;
   border: 1px solid var(--line);
