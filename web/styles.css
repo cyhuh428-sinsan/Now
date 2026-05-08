@@ -1255,6 +1255,7 @@ kbd {
 .task-list-item input {
   margin-top: 5px;
   accent-color: var(--blue);
+  cursor: pointer;
 }
 
 .markdown-preview code {

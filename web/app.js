@@ -448,6 +448,11 @@ function bindEvents() {
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
   elements.markdownPreview.addEventListener("click", (event) => {
+    const taskInput = event.target.closest(".task-list-item input");
+    if (taskInput) {
+      toggleMarkdownTask(Number(taskInput.closest(".task-list-item").dataset.taskIndex));
+      return;
+    }
     const link = event.target.closest("[data-wiki-link]");
     if (!link) return;
     openWikiLink(link.dataset.wikiLink);
@@ -1814,10 +1819,16 @@ function markdownToHtml(markdown) {
   const lines = escapeHtml(markdown).split("\n");
   const blocks = [];
   let listItems = [];
+  let taskIndex = 0;
 
   const flushList = () => {
     if (listItems.length === 0) return;
-    blocks.push(`<ul>${listItems.map(renderMarkdownListItem).join("")}</ul>`);
+    blocks.push(`<ul>${listItems.map((item) => {
+      const isTask = /^\[[ xX]\]\s*/.test(item);
+      const html = renderMarkdownListItem(item, isTask ? taskIndex : null);
+      if (isTask) taskIndex += 1;
+      return html;
+    }).join("")}</ul>`);
     listItems = [];
   };
 
@@ -1845,11 +1856,37 @@ function markdownToHtml(markdown) {
   return blocks.join("");
 }
 
-function renderMarkdownListItem(item) {
+function renderMarkdownListItem(item, taskIndex) {
   const task = item.match(/^\[([ xX])\]\s*(.*)$/);
   if (!task) return `<li>${inlineMarkdown(item)}</li>`;
   const checked = task[1].toLowerCase() === "x";
-  return `<li class="task-list-item"><input type="checkbox" disabled${checked ? " checked" : ""}> <span>${inlineMarkdown(task[2])}</span></li>`;
+  return `<li class="task-list-item" data-task-index="${taskIndex}"><input type="checkbox"${checked ? " checked" : ""}> <span>${inlineMarkdown(task[2])}</span></li>`;
+}
+
+function toggleMarkdownTask(taskIndex) {
+  const selected = getSelectedTreeNode();
+  if (!selected || Number.isNaN(taskIndex)) return;
+  let currentTask = -1;
+  const lines = (selected.content || "").split("\n");
+  const nextLines = lines.map((line) => {
+    const task = line.match(/^(\s*[-*]\s+\[)([ xX])(\]\s*)/);
+    if (!task) return line;
+    currentTask += 1;
+    if (currentTask !== taskIndex) return line;
+    const nextMark = task[2].toLowerCase() === "x" ? " " : "x";
+    return line.replace(/^(\s*[-*]\s+\[)([ xX])(\]\s*)/, `$1${nextMark}$3`);
+  });
+  selected.content = nextLines.join("\n");
+  elements.treeContent.value = selected.content;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
 }
 
 function inlineMarkdown(text) {
