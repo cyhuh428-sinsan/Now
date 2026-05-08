@@ -2206,6 +2206,8 @@ function importData(event) {
       if (!confirm([
         "JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다.",
         "",
+        `백업 파일: ${file.name}`,
+        `백업 시각: ${imported.exportedAt ? formatBackupTime(imported.exportedAt) : "확인 안 됨"}`,
         `백업 내용: 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개, 지식 메모 ${summary.tree}개, 삭제 보관 ${summary.deletedTree}개`,
         "",
         "계속할까요?",
@@ -2244,6 +2246,7 @@ function parseBackupData(parsed) {
   return {
     data,
     settings: parsed?.settings || null,
+    exportedAt: parsed?.exportedAt || null,
   };
 }
 
@@ -2258,6 +2261,12 @@ function backupSummary(data) {
     tree: flattenTree(data.tree || []).length,
     deletedTree: Array.isArray(data.deletedTree) ? data.deletedTree.length : 0,
   };
+}
+
+function formatBackupTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "확인 안 됨";
+  return `${date.toLocaleDateString("ko-KR")} ${date.toLocaleTimeString("ko-KR")}`;
 }
 
 function downloadCurrentBackup(prefix = "nownote") {
