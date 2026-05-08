@@ -3030,7 +3030,7 @@ function importData(event) {
         "",
         `백업 파일: ${file.name}`,
         `백업 시각: ${imported.exportedAt ? formatBackupTime(imported.exportedAt) : "확인 안 됨"}`,
-        `백업 내용: 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개, 지식 메모 ${summary.tree}개, 삭제 보관 ${summary.deletedTree}개`,
+        `백업 내용: 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개${summary.restoredArchivedDaily ? `, 복원된 보관본 ${summary.restoredArchivedDaily}개` : ""}, 지식 메모 ${summary.tree}개, 삭제 보관 ${summary.deletedTree}개`,
         "",
         "계속할까요?",
       ].join("\n"))) {
@@ -3106,9 +3106,11 @@ function normalizeText(value) {
 }
 
 function backupSummary(data) {
+  const archivedDaily = Array.isArray(data.archivedDaily) ? data.archivedDaily : [];
   return {
     daily: isPlainObject(data.daily) ? Object.keys(data.daily).length : 0,
-    archivedDaily: Array.isArray(data.archivedDaily) ? data.archivedDaily.length : 0,
+    archivedDaily: archivedDaily.length,
+    restoredArchivedDaily: archivedDaily.filter((note) => note?.restoredAt).length,
     tree: Array.isArray(data.tree) ? flattenTree(data.tree).length : 0,
     deletedTree: Array.isArray(data.deletedTree) ? data.deletedTree.length : 0,
   };
