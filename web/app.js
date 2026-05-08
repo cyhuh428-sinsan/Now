@@ -2900,9 +2900,7 @@ function importData(event) {
         return;
       }
       downloadCurrentBackup("nownote-before-import");
-      imported.data.archivedDaily = imported.data.archivedDaily || [];
-      imported.data.deletedTree = imported.data.deletedTree || [];
-      state.data = imported.data;
+      state.data = backupDataShape(imported.data);
       if (imported.settings) {
         state.settings = normalizeSettings(imported.settings);
         persistSettings();
@@ -2921,6 +2919,15 @@ function importData(event) {
     }
   };
   reader.readAsText(file);
+}
+
+function backupDataShape(data) {
+  return {
+    daily: data.daily,
+    archivedDaily: data.archivedDaily,
+    deletedTree: data.deletedTree,
+    tree: data.tree,
+  };
 }
 
 function parseBackupData(parsed) {
