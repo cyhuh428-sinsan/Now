@@ -2773,14 +2773,27 @@ function normalizeDailyNotes(daily) {
     const entry = isPlainObject(note)
       ? { ...note, date }
       : { date, content: String(note || "") };
-    if (normalized[date]?.content?.trim() && entry.content?.trim()) {
-      normalized[date].content = `${normalized[date].content.trimEnd()}\n\n${entry.content}`;
-      normalized[date].updatedAt = entry.updatedAt || normalized[date].updatedAt;
+    if (normalized[date]) {
+      normalized[date] = mergeDailyNote(normalized[date], entry);
     } else {
-      normalized[date] = { ...normalized[date], ...entry };
+      normalized[date] = entry;
     }
     return normalized;
   }, {});
+}
+
+function mergeDailyNote(current, next) {
+  const currentContent = current.content || "";
+  const nextContent = next.content || "";
+  const content = currentContent.trim() && nextContent.trim()
+    ? `${currentContent.trimEnd()}\n\n${nextContent}`
+    : currentContent || nextContent;
+  return {
+    ...current,
+    ...next,
+    content,
+    updatedAt: next.updatedAt || current.updatedAt,
+  };
 }
 
 function normalizeTreeNodes(nodes, parentId, level) {
