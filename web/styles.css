@@ -410,6 +410,7 @@ button {
   color: var(--blue);
 }
 
+.primary-btn:disabled,
 .secondary-btn:disabled,
 .danger-btn:disabled {
   opacity: 0.45;
@@ -1099,6 +1100,12 @@ kbd {
   padding: 16px;
   line-height: 1.65;
   outline: none;
+}
+
+.memo-editor.readonly {
+  background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+  color: var(--muted);
+  cursor: default;
 }
 
 :root[data-font-size="small"] .memo-editor,
