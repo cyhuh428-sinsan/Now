@@ -838,6 +838,10 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     insertChecklistIntoTreeContent();
   }
+  if (key === "q" && event.shiftKey) {
+    event.preventDefault();
+    applyLinePrefixToTreeContent("> ", /^>\s*/);
+  }
   if (["1", "2", "3"].includes(key)) {
     event.preventDefault();
     applyHeadingToTreeContent(Number(key));
@@ -856,6 +860,35 @@ function wrapTreeContentSelection(prefix, suffix) {
   const cursorEnd = cursorStart + selectedText.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function applyLinePrefixToTreeContent(prefix, cleanupPattern) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const value = elements.treeContent.value;
+  const selectionStart = elements.treeContent.selectionStart ?? 0;
+  const selectionEnd = elements.treeContent.selectionEnd ?? selectionStart;
+  const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
+  const lineEnd = value.indexOf("\n", selectionEnd);
+  const end = lineEnd === -1 ? value.length : lineEnd;
+  const block = value.slice(lineStart, end);
+  const nextBlock = block
+    .split("\n")
+    .map((line) => `${prefix}${line.replace(cleanupPattern, "")}`)
+    .join("\n");
+  elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(lineStart, lineStart + nextBlock.length);
   selected.content = elements.treeContent.value;
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
@@ -1878,6 +1911,12 @@ function markdownToHtml(markdown) {
     if (heading) {
       flushList();
       blocks.push(`<h${heading[1].length}>${inlineMarkdown(heading[2])}</h${heading[1].length}>`);
+      return;
+    }
+    const quote = trimmed.match(/^>\s*(.+)$/);
+    if (quote) {
+      flushList();
+      blocks.push(`<blockquote>${inlineMarkdown(quote[1])}</blockquote>`);
       return;
     }
     const list = trimmed.match(/^[-*]\s+(.+)$/);
