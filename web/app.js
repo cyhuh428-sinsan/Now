@@ -145,6 +145,7 @@ const elements = {
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
   quickInput: $("#quickInput"),
+  quickCount: $("#quickCount"),
   quickResults: $("#quickResults"),
   quickCloseBtn: $("#quickCloseBtn"),
   searchPopoverView: $("#searchPopoverView"),
@@ -591,6 +592,9 @@ function renderQuickResults() {
   const nodes = flattenTree(state.data.tree)
     .filter((node) => !query || searchableTreeText(node).includes(query))
     .slice(0, 30);
+  elements.quickCount.textContent = query
+    ? `전환 후보 ${nodes.length}개`
+    : `최근 기준 최대 ${nodes.length}개 표시`;
   if (nodes.length === 0) {
     elements.quickResults.innerHTML = '<div class="empty-compact">이동할 메모가 없습니다.</div>';
     return;
