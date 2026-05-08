@@ -2657,7 +2657,9 @@ function detachTreeNode(id, nodes = state.data.tree) {
 }
 
 function flattenTree(nodes) {
-  return nodes.flatMap((node) => [node, ...flattenTree(node.children)]);
+  return (Array.isArray(nodes) ? nodes : [])
+    .filter(isPlainObject)
+    .flatMap((node) => [node, ...flattenTree(node.children)]);
 }
 
 function load() {
@@ -2810,8 +2812,21 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
     node.createdAt = node.createdAt || new Date().toISOString();
     node.updatedAt = node.updatedAt || node.createdAt;
+    if (node.level >= 3 && node.children.length > 0) {
+      node.content = mergeOverflowTreeChildren(node.content, node.children);
+      node.children = [];
+      node.tags = extractTags(node.content);
+    }
     normalizeTreeNodes(node.children, node.id, node.level + 1);
   });
+}
+
+function mergeOverflowTreeChildren(content, children) {
+  const overflow = flattenTree(children)
+    .map((child) => [`### ${child.title || "제목 없음"}`, child.content || ""].join("\n").trim())
+    .filter(Boolean)
+    .join("\n\n");
+  return [content || "", overflow].filter((part) => part.trim()).join("\n\n--- 하위 메모 병합 ---\n\n");
 }
 
 function persist() {
