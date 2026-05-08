@@ -381,6 +381,7 @@ function bindEvents() {
 
   elements.noteFindToggleBtn.addEventListener("click", toggleNoteFind);
   elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0));
+  elements.noteFindInput.addEventListener("keydown", handleNoteFindInputKey);
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
@@ -1846,6 +1847,17 @@ function closeNoteFind() {
   elements.noteFindInput.value = "";
   elements.noteFindCount.textContent = "0개";
   elements.treeContent.focus();
+}
+
+function handleNoteFindInputKey(event) {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    moveNoteFindMatch(event.shiftKey ? -1 : 1);
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeNoteFind();
+  }
 }
 
 function noteFindMatches() {
