@@ -1491,6 +1491,14 @@ kbd {
   color: var(--text);
 }
 
+.search-hit {
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--blue) 24%, transparent);
+  color: var(--text);
+  padding: 0 2px;
+  font-weight: 900;
+}
+
 .quick-results,
 .graph-list {
   display: grid;

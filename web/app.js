@@ -2265,6 +2265,7 @@ function searchResults(query, options = {}) {
       title: note.title,
       meta: `${note.meta} · ${formatDateTime(note.updatedAt)}`,
       preview: note.content,
+      searchText: parsed.text,
       updatedAt: note.updatedAt,
       createdAt: note.createdAt,
     }));
@@ -2282,7 +2283,8 @@ function searchResults(query, options = {}) {
       updatedAt: node.updatedAt,
       createdAt: node.createdAt,
     }))
-    .filter((result) => matchesSearchResult(result, parsed));
+    .filter((result) => matchesSearchResult(result, parsed))
+    .map((node) => ({ ...node, searchText: parsed.text }));
 
   return sortSearchResults([...dailyResults, ...treeResults], sort);
 }
@@ -2344,7 +2346,11 @@ function renderSearchResultsInto(container, results, afterSelect) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "result-item";
-      button.innerHTML = `<strong>${escapeHtml(result.title)}</strong><span>${escapeHtml(result.meta)}</span><p>${escapeHtml(snippet(result.preview))}</p>`;
+      button.innerHTML = [
+        `<strong>${highlightSearchText(result.title, result.searchText)}</strong>`,
+        `<span>${highlightSearchText(result.meta, result.searchText)}</span>`,
+        `<p>${highlightSearchText(snippet(result.preview, result.searchText), result.searchText)}</p>`,
+      ].join("");
       button.addEventListener("click", () => {
         if (result.type === "daily") {
           state.selectedDate = result.id;
@@ -2901,9 +2907,20 @@ function relativeTime(value) {
   }).format(new Date(value));
 }
 
-function snippet(text) {
+function snippet(text, query = "") {
   const normalized = (text || "").replace(/\s+/g, " ").trim();
   if (!normalized) return "내용 없음";
+  const term = String(query || "").trim().toLowerCase();
+  if (term) {
+    const index = normalized.toLowerCase().indexOf(term);
+    if (index >= 0) {
+      const start = Math.max(0, index - 45);
+      const end = Math.min(normalized.length, index + term.length + 75);
+      const prefix = start > 0 ? "..." : "";
+      const suffix = end < normalized.length ? "..." : "";
+      return `${prefix}${normalized.slice(start, end)}${suffix}`;
+    }
+  }
   return normalized.length > 120 ? `${normalized.slice(0, 120)}...` : normalized;
 }
 
@@ -2935,4 +2952,25 @@ function escapeHtml(value) {
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
+}
+
+function highlightSearchText(value, query) {
+  const text = String(value || "");
+  const term = String(query || "").trim();
+  if (!term) return escapeHtml(text);
+  const pattern = new RegExp(escapeRegExp(term), "gi");
+  let lastIndex = 0;
+  let highlighted = "";
+  text.replace(pattern, (match, offset) => {
+    highlighted += escapeHtml(text.slice(lastIndex, offset));
+    highlighted += `<mark class="search-hit">${escapeHtml(match)}</mark>`;
+    lastIndex = offset + match.length;
+    return match;
+  });
+  if (!highlighted) return escapeHtml(text);
+  return highlighted + escapeHtml(text.slice(lastIndex));
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
