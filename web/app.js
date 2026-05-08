@@ -2202,7 +2202,14 @@ function importData(event) {
         alert("NowNote 백업 JSON 형식이 아닙니다.");
         return;
       }
-      if (!confirm("JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다. 계속할까요?")) {
+      const summary = backupSummary(imported.data);
+      if (!confirm([
+        "JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다.",
+        "",
+        `백업 내용: 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개, 지식 메모 ${summary.tree}개, 삭제 보관 ${summary.deletedTree}개`,
+        "",
+        "계속할까요?",
+      ].join("\n"))) {
         return;
       }
       downloadCurrentBackup("nownote-before-import");
@@ -2242,6 +2249,15 @@ function parseBackupData(parsed) {
 
 function isBackupData(data) {
   return Boolean(data?.daily && Array.isArray(data.tree));
+}
+
+function backupSummary(data) {
+  return {
+    daily: Object.keys(data.daily || {}).length,
+    archivedDaily: Array.isArray(data.archivedDaily) ? data.archivedDaily.length : 0,
+    tree: flattenTree(data.tree || []).length,
+    deletedTree: Array.isArray(data.deletedTree) ? data.deletedTree.length : 0,
+  };
 }
 
 function downloadCurrentBackup(prefix = "nownote") {
