@@ -2694,11 +2694,16 @@ function normalizeSettings(settings = {}) {
   normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
   normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
   normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
-  normalized.openTreeTabs = Array.isArray(normalized.openTreeTabs) ? normalized.openTreeTabs : [];
-  normalized.closedTreeTabs = Array.isArray(normalized.closedTreeTabs) ? normalized.closedTreeTabs : [];
-  normalized.pinnedTreeTabs = Array.isArray(normalized.pinnedTreeTabs) ? normalized.pinnedTreeTabs : [];
+  normalized.openTreeTabs = normalizeIdList(normalized.openTreeTabs, 10);
+  normalized.closedTreeTabs = normalizeIdList(normalized.closedTreeTabs, 10);
+  normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
   return normalized;
+}
+
+function normalizeIdList(value, limit) {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.filter((id) => typeof id === "string" && id.trim()))).slice(0, limit);
 }
 
 function normalizeToggle(value, fallback) {
