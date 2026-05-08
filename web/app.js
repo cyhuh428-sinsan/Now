@@ -130,13 +130,18 @@ const elements = {
   exportBtn: $("#exportBtn"),
   exportMarkdownBtn: $("#exportMarkdownBtn"),
   importInput: $("#importInput"),
+  importMarkdownBtn: $("#importMarkdownBtn"),
   importMarkdownInput: $("#importMarkdownInput"),
+  quickSwitchBtn: $("#quickSwitchBtn"),
+  graphBtn: $("#graphBtn"),
   settingsBtn: $("#settingsBtn"),
   railSidebarBtn: $("#railSidebarBtn"),
   railDailyBtn: $("#railDailyBtn"),
   railSearchBtn: $("#railSearchBtn"),
   railQuickBtn: $("#railQuickBtn"),
   railGraphBtn: $("#railGraphBtn"),
+  railMarkdownExportBtn: $("#railMarkdownExportBtn"),
+  railDeletedTreeBtn: $("#railDeletedTreeBtn"),
   railSettingsBtn: $("#railSettingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsView: $("#settingsView"),
@@ -267,6 +272,24 @@ function bindEvents() {
 
   elements.railGraphBtn.addEventListener("click", () => {
     toggleGraph();
+  });
+
+  elements.railMarkdownExportBtn.addEventListener("click", exportMarkdown);
+
+  elements.railDeletedTreeBtn.addEventListener("click", toggleDeletedTreeBox);
+
+  elements.quickSwitchBtn.addEventListener("click", () => {
+    toggleQuickSwitch();
+  });
+
+  elements.graphBtn.addEventListener("click", () => {
+    toggleGraph();
+  });
+
+  elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
+
+  elements.importMarkdownBtn.addEventListener("click", () => {
+    elements.importMarkdownInput.click();
   });
 
   elements.settingsBtn.addEventListener("click", () => {
@@ -444,7 +467,6 @@ function bindEvents() {
   elements.deletedBulkDeleteBtn.addEventListener("click", deleteSelectedTreeNodes);
   elements.deletedDeleteAllBtn.addEventListener("click", deleteAllArchivedTreeNodes);
   elements.exportBtn.addEventListener("click", exportData);
-  elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
   elements.importInput.addEventListener("change", importData);
   elements.importMarkdownInput.addEventListener("change", importMarkdownData);
   elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);

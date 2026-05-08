@@ -15,6 +15,12 @@
       <button id="railSearchBtn" class="rail-btn" type="button" title="검색">검</button>
       <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환">전</button>
       <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기">연</button>
+      <button id="railMarkdownExportBtn" class="rail-btn" type="button" title="Markdown 내보내기">내</button>
+      <label class="rail-btn rail-file-btn" title="Markdown 가져오기">
+        가
+        <input id="importMarkdownInput" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple>
+      </label>
+      <button id="railDeletedTreeBtn" class="rail-btn" type="button" title="삭제 보관함">삭</button>
       <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">설</button>
     </nav>
 
@@ -66,21 +72,24 @@
       </section>
 
       <div class="side-actions">
-        <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
-        <button id="deletedTreeBtn" class="ghost-btn count-btn" type="button">
-          <span>삭제 보관함</span>
-          <strong id="deletedTreeCount">0</strong>
-        </button>
-        <button id="exportBtn" class="ghost-btn" type="button">JSON 내보내기</button>
-        <button id="exportMarkdownBtn" class="ghost-btn" type="button">Markdown 내보내기</button>
-        <label class="ghost-btn file-btn">
-          JSON 가져오기
-          <input id="importInput" type="file" accept="application/json">
-        </label>
-        <label class="ghost-btn file-btn">
-          Markdown 가져오기
-          <input id="importMarkdownInput" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple>
-        </label>
+        <section class="side-action-group" aria-label="탐색">
+          <h2>탐색</h2>
+          <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
+          <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
+        </section>
+        <section class="side-action-group" aria-label="파일">
+          <h2>파일</h2>
+          <button id="exportMarkdownBtn" class="ghost-btn" type="button">Markdown 내보내기</button>
+          <button id="importMarkdownBtn" class="ghost-btn" type="button">Markdown 가져오기</button>
+        </section>
+        <section class="side-action-group" aria-label="관리">
+          <h2>관리</h2>
+          <button id="deletedTreeBtn" class="ghost-btn count-btn" type="button">
+            <span>삭제 보관함</span>
+            <strong id="deletedTreeCount">0</strong>
+          </button>
+          <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
+        </section>
       </div>
     </aside>
 
@@ -410,6 +419,20 @@
               <span>태그</span>
               <span>즐겨찾기</span>
               <span>단축키</span>
+            </div>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3>백업 / 복원</h3>
+              <p>JSON은 NowNote 전체 데이터를 백업하거나 현재 데이터를 백업 파일로 교체할 때 사용합니다.</p>
+            </div>
+            <div class="settings-actions">
+              <button id="exportBtn" class="secondary-btn" type="button">JSON 내보내기</button>
+              <label class="secondary-btn file-btn">
+                JSON 가져오기
+                <input id="importInput" type="file" accept="application/json">
+              </label>
             </div>
           </section>
 

@@ -91,6 +91,10 @@ button {
   color: #fff;
 }
 
+.rail-file-btn input {
+  display: none;
+}
+
 :root[data-sidebar="collapsed"] #railSidebarBtn {
   border-color: #4b5563;
   background: #111827;
@@ -308,8 +312,19 @@ button {
 
 .side-actions {
   display: grid;
-  gap: 6px;
+  gap: 12px;
   margin-top: 18px;
+}
+
+.side-action-group {
+  display: grid;
+  gap: 6px;
+}
+
+.side-action-group h2 {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .sidebar .nav-tab,
@@ -530,6 +545,19 @@ body.resizing {
   color: var(--text);
   padding: 0 12px;
   font-weight: 700;
+}
+
+.settings-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.settings-actions .secondary-btn {
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 13px;
 }
 
 .accent-choices {
