@@ -2733,11 +2733,8 @@ function normalizeData() {
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
-  state.data.daily = Object.fromEntries(Object.entries(state.data.daily).map(([date, note]) => {
-    if (isPlainObject(note)) return [date, { date, ...note }];
-    return [date, { date, content: String(note || "") }];
-  }));
-  state.data.archivedDaily = state.data.archivedDaily.filter(isPlainObject);
+  state.data.daily = normalizeDailyNotes(state.data.daily);
+  state.data.archivedDaily = state.data.archivedDaily.filter((note) => isPlainObject(note) && isDateKey(note.date));
   state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
@@ -2765,6 +2762,25 @@ function normalizeData() {
     node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
   });
   normalizeTreeNodes(state.data.tree, null, 1);
+}
+
+function normalizeDailyNotes(daily) {
+  return Object.entries(daily).reduce((normalized, [dateKey, note]) => {
+    const date = isPlainObject(note) && isDateKey(note.date)
+      ? note.date
+      : dateKey;
+    if (!isDateKey(date)) return normalized;
+    const entry = isPlainObject(note)
+      ? { ...note, date }
+      : { date, content: String(note || "") };
+    if (normalized[date]?.content?.trim() && entry.content?.trim()) {
+      normalized[date].content = `${normalized[date].content.trimEnd()}\n\n${entry.content}`;
+      normalized[date].updatedAt = entry.updatedAt || normalized[date].updatedAt;
+    } else {
+      normalized[date] = { ...normalized[date], ...entry };
+    }
+    return normalized;
+  }, {});
 }
 
 function normalizeTreeNodes(nodes, parentId, level) {
@@ -3005,6 +3021,12 @@ function toDateKey(date) {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function isDateKey(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))) return false;
+  const date = new Date(`${value}T00:00:00`);
+  return !Number.isNaN(date.getTime()) && toDateKey(date) === value;
 }
 
 function monthLabel(date) {
