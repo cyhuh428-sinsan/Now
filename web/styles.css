@@ -1253,6 +1253,12 @@ kbd {
   color: var(--muted);
 }
 
+.markdown-preview hr {
+  margin: 18px 0;
+  border: 0;
+  border-top: 1px solid var(--line);
+}
+
 .task-list-item {
   display: flex;
   align-items: flex-start;

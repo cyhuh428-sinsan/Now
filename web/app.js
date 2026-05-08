@@ -846,6 +846,10 @@ function handleTreeContentShortcut(event) {
     event.preventDefault();
     wrapTreeContentAsCodeBlock();
   }
+  if (key === "h" && event.shiftKey) {
+    event.preventDefault();
+    insertHorizontalRuleIntoTreeContent();
+  }
   if (["1", "2", "3"].includes(key)) {
     event.preventDefault();
     applyHeadingToTreeContent(Number(key));
@@ -864,6 +868,31 @@ function wrapTreeContentSelection(prefix, suffix) {
   const cursorEnd = cursorStart + selectedText.length;
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(cursorStart, cursorEnd);
+  selected.content = elements.treeContent.value;
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  persist();
+  renderMarkdownPreview(selected.content);
+  renderTags();
+  renderNoteStats(selected);
+  renderOutlinePanel(selected);
+  renderLinkPanel();
+  showSaved(elements.treeSavedLabel);
+}
+
+function insertHorizontalRuleIntoTreeContent() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const start = elements.treeContent.selectionStart ?? 0;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const before = value.slice(0, start).trimEnd();
+  const after = value.slice(end).trimStart();
+  const rule = `${before ? `${before}\n\n` : ""}---${after ? `\n\n${after}` : ""}`;
+  elements.treeContent.value = rule;
+  const cursor = (before ? before.length + 2 : 0) + 3;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(cursor, cursor);
   selected.content = elements.treeContent.value;
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
@@ -1954,6 +1983,11 @@ function markdownToHtml(markdown) {
     }
     if (!trimmed) {
       flushList();
+      return;
+    }
+    if (/^(-{3,}|\*{3,})$/.test(trimmed)) {
+      flushList();
+      blocks.push("<hr>");
       return;
     }
     const heading = trimmed.match(/^(#{1,3})\s+(.+)$/);
