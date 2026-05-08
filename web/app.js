@@ -591,6 +591,7 @@ function renderQuickResults() {
   const query = elements.quickInput.value.trim().toLowerCase();
   const nodes = flattenTree(state.data.tree)
     .filter((node) => !query || searchableTreeText(node).includes(query))
+    .sort((a, b) => quickSwitchTime(b) - quickSwitchTime(a))
     .slice(0, 30);
   elements.quickCount.textContent = query
     ? `전환 후보 ${nodes.length}개`
@@ -612,6 +613,10 @@ function renderQuickResults() {
       return button;
     }),
   );
+}
+
+function quickSwitchTime(node) {
+  return new Date(node.updatedAt || node.createdAt || 0).getTime() || 0;
 }
 
 function openGraph() {
