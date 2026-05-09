@@ -19,6 +19,7 @@ def server_info() -> dict:
             "analysis_jobs": True,
             "admin_ops": True,
             "user_accounts": True,
+            "user_profile": True,
             "user_timezone": True,
             "two_factor_auth": "planned",
             "user_groups": True,
