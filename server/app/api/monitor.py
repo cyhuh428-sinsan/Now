@@ -895,6 +895,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
     </header>
@@ -1195,6 +1196,7 @@ def _admin_notes_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
     </header>
@@ -1503,6 +1505,7 @@ def _admin_recordings_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
     </header>
@@ -1791,6 +1794,7 @@ def _admin_devices_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
     </header>
@@ -2010,6 +2014,7 @@ def _admin_users_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
       </nav>
     </header>
 
@@ -2505,6 +2510,7 @@ def _admin_ops_html() -> str:
         <a href="/admin/sync">동기화</a>
         <a href="/admin/analysis">분석</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
       </nav>
     </header>
 
@@ -2784,6 +2790,7 @@ def _admin_sync_html() -> str:
         <a href="/admin/export">내보내기</a>
         <a href="/admin/analysis">분석</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
       </nav>
     </header>
 
@@ -2995,6 +3002,7 @@ def _admin_export_html() -> str:
         <a href="/admin/sync">동기화</a>
         <a href="/admin/ops">점검</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
       </nav>
     </header>
 
@@ -3154,6 +3162,7 @@ def _admin_help_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
     </header>
