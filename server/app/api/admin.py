@@ -1,7 +1,8 @@
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
@@ -9,12 +10,22 @@ from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
+from app.services.user_accounts import update_user_account
 
 router = APIRouter(
     prefix="/api/v1/admin",
     tags=["admin"],
     dependencies=[Depends(require_api_token)],
 )
+
+
+class UserAccountUpdate(BaseModel):
+    email: str | None = Field(default=None, max_length=240)
+    display_name: str | None = Field(default=None, max_length=120)
+    timezone: str = Field(default="Asia/Seoul", max_length=80)
+    group_name: str = Field(default="사용자", max_length=80)
+    two_factor_enabled: bool = False
+    is_active: bool = True
 
 
 @router.get("/export/notes")
@@ -91,6 +102,32 @@ def users(db: Session = Depends(get_db)) -> dict:
         "two_factor_enabled": sum(1 for row in rows if row.two_factor_enabled),
         "items": [_model_to_dict(row) for row in rows],
     }
+
+
+@router.patch("/users/{owner_id}")
+def update_user(
+    owner_id: str,
+    payload: UserAccountUpdate,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = update_user_account(
+        db,
+        owner_id=owner_id,
+        email=payload.email,
+        display_name=payload.display_name,
+        timezone=payload.timezone,
+        group_name=payload.group_name,
+        two_factor_enabled=payload.two_factor_enabled,
+        is_active=payload.is_active,
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="user not found",
+        )
+    db.commit()
+    db.refresh(user)
+    return {"status": "ok", "user": _model_to_dict(user)}
 
 
 @router.get("/ops")

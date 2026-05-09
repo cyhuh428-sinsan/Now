@@ -3,7 +3,7 @@ from html import escape
 from pathlib import Path
 from secrets import compare_digest
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import func, select, text
@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
+from app.services.user_accounts import update_user_account
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
@@ -65,6 +66,40 @@ def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.get("/admin/users", include_in_schema=False)
 def admin_users(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_users_html())
+
+
+@router.get("/admin/users/edit", include_in_schema=False)
+def admin_user_edit(
+    owner_id: str = Query(),
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_user_edit_html(owner_id))
+
+
+@router.post("/admin/users/edit", include_in_schema=False)
+def admin_user_update(
+    owner_id: str = Form(),
+    email: str = Form(default=""),
+    display_name: str = Form(default=""),
+    timezone: str = Form(default="Asia/Seoul"),
+    group_name: str = Form(default="사용자"),
+    two_factor_enabled: str | None = Form(default=None),
+    is_active: str | None = Form(default=None),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    with SessionLocal() as db:
+        update_user_account(
+            db,
+            owner_id=owner_id,
+            email=email,
+            display_name=display_name,
+            timezone=timezone,
+            group_name=group_name,
+            two_factor_enabled=two_factor_enabled == "on",
+            is_active=is_active == "on",
+        )
+        db.commit()
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/ops", include_in_schema=False)
@@ -1930,6 +1965,16 @@ def _admin_users_html() -> str:
       font-size: 13px;
       word-break: break-word;
     }}
+    .actions a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
     @media (max-width: 900px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
@@ -1972,7 +2017,7 @@ def _admin_users_html() -> str:
     <section>
       <div class="section-head"><span>사용자 목록</span><span class="sub">동기화 활동 기준 자동 생성</span></div>
       <table>
-        <tr><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th></tr>
+        <tr><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th><th>관리</th></tr>
         {_user_rows(users)}
       </table>
     </section>
@@ -1995,7 +2040,7 @@ def _admin_users_html() -> str:
 
 def _user_rows(users: list[UserAccount]) -> str:
     if not users:
-        return '<tr><td colspan="8">사용자가 없습니다. 동기화가 들어오면 자동 생성됩니다.</td></tr>'
+        return '<tr><td colspan="9">사용자가 없습니다. 동기화가 들어오면 자동 생성됩니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td>{user.id}</td>"
@@ -2006,6 +2051,7 @@ def _user_rows(users: list[UserAccount]) -> str:
         f"<td>{escape(user.group_name)}</td>"
         f"<td>{_simple_badge('ok' if user.is_active else 'bad', '활성' if user.is_active else '비활성')}</td>"
         f"<td>{_format_datetime(user.last_seen_at)}</td>"
+        f"<td class=\"actions\"><a href=\"/admin/users/edit?owner_id={escape(user.owner_id, quote=True)}\">수정</a></td>"
         "</tr>"
         for user in users
     )
@@ -2013,6 +2059,185 @@ def _user_rows(users: list[UserAccount]) -> str:
 
 def _simple_badge(status: str, label: str) -> str:
     return f'<span class="badge {escape(status)}">{escape(label)}</span>'
+
+
+def _admin_user_edit_html(owner_id: str) -> str:
+    error_message = ""
+    user: UserAccount | None = None
+    with SessionLocal() as db:
+        try:
+            db.execute(text("select 1"))
+            user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+        except Exception as exc:
+            error_message = str(exc)
+
+    if user is None:
+        return f"""<!doctype html>
+<html lang="ko">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>사용자 없음</title></head>
+<body><main><h1>사용자를 찾을 수 없습니다</h1><p>{escape(owner_id)}</p><p>{escape(error_message)}</p><a href="/admin/users">사용자 목록으로</a></main></body>
+</html>"""
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 사용자 수정</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{ max-width: 820px; margin: 0 auto; padding: 32px 18px 48px; }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{ margin: 0; font-size: 30px; line-height: 1.2; }}
+    a {{ color: var(--blue); text-decoration: none; font-weight: 650; }}
+    .sub {{ margin-top: 8px; color: var(--muted); font-size: 14px; }}
+    form {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .row {{
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr);
+      gap: 16px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      align-items: center;
+    }}
+    .row:last-child {{ border-bottom: 0; }}
+    label strong {{ display: block; margin-bottom: 4px; }}
+    label span {{ color: var(--muted); font-size: 13px; }}
+    input[type="text"], input[type="email"], select {{
+      width: 100%;
+      min-height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      font-size: 14px;
+    }}
+    .switch-row {{
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-height: 40px;
+    }}
+    .actions {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 16px 18px;
+      background: #fafafa;
+    }}
+    button, .secondary {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 40px;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 750;
+    }}
+    button {{
+      border-color: var(--blue);
+      background: var(--blue);
+      color: #fff;
+      cursor: pointer;
+    }}
+    @media (max-width: 640px) {{
+      main {{ padding: 22px 12px 36px; }}
+      header {{ display: block; }}
+      .row {{ grid-template-columns: 1fr; }}
+      h1 {{ font-size: 24px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>사용자 수정</h1>
+        <div class="sub">{escape(user.owner_id)}</div>
+      </div>
+      <a href="/admin/users">사용자 목록</a>
+    </header>
+
+    <form method="post" action="/admin/users/edit">
+      <input type="hidden" name="owner_id" value="{escape(user.owner_id, quote=True)}">
+      <div class="row">
+        <label><strong>이메일</strong><span>로그인 계정 또는 연락용 주소</span></label>
+        <input type="email" name="email" value="{escape(user.email or '', quote=True)}">
+      </div>
+      <div class="row">
+        <label><strong>표시 이름</strong><span>관리 화면에서 보이는 이름</span></label>
+        <input type="text" name="display_name" value="{escape(user.display_name or '', quote=True)}">
+      </div>
+      <div class="row">
+        <label><strong>시간대</strong><span>일자별 메모와 알림 기준</span></label>
+        <select name="timezone">
+          {_timezone_options(user.timezone)}
+        </select>
+      </div>
+      <div class="row">
+        <label><strong>사용자 그룹</strong><span>운영 권한 분류 기준</span></label>
+        <input type="text" name="group_name" value="{escape(user.group_name, quote=True)}">
+      </div>
+      <div class="row">
+        <label><strong>2단계 인증</strong><span>로그인 보안 사용 여부</span></label>
+        <div class="switch-row"><input type="checkbox" name="two_factor_enabled" {'checked' if user.two_factor_enabled else ''}> 사용</div>
+      </div>
+      <div class="row">
+        <label><strong>활성 상태</strong><span>서버 접속 허용 여부</span></label>
+        <div class="switch-row"><input type="checkbox" name="is_active" {'checked' if user.is_active else ''}> 활성</div>
+      </div>
+      <div class="actions">
+        <a class="secondary" href="/admin/users">취소</a>
+        <button type="submit">사용자 저장</button>
+      </div>
+    </form>
+  </main>
+</body>
+</html>"""
+
+
+def _timezone_options(selected: str) -> str:
+    timezones = [
+        "Asia/Seoul",
+        "UTC",
+        "Asia/Tokyo",
+        "Asia/Shanghai",
+        "America/Los_Angeles",
+        "America/New_York",
+        "Europe/London",
+    ]
+    return "\n".join(
+        f'<option value="{escape(timezone, quote=True)}" {"selected" if timezone == selected else ""}>{escape(timezone)}</option>'
+        for timezone in timezones
+    )
 
 
 def _admin_ops_html() -> str:
