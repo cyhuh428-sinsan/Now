@@ -8,6 +8,7 @@
   --blue: #2563eb;
   --blue-soft: #eef4ff;
   --green: #14b8a6;
+  --amber: #d97706;
   --red: #dc2626;
   --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
 }
@@ -1682,6 +1683,66 @@ kbd {
   color: var(--text);
   padding: 0 12px;
   outline: none;
+}
+
+.settings-input {
+  width: 100%;
+  min-height: 40px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 0 12px;
+  outline: none;
+}
+
+.settings-input:focus,
+.settings-select:focus {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.server-settings-row {
+  align-items: start;
+}
+
+.server-settings-form {
+  display: grid;
+  gap: 10px;
+  width: min(440px, 100%);
+}
+
+.server-settings-form label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.server-identity-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.server-status-text {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.server-status-text.ok {
+  color: var(--green);
+}
+
+.server-status-text.warn {
+  color: var(--amber);
+}
+
+.server-status-text.bad {
+  color: var(--red);
 }
 
 .search-popover-toolbar {

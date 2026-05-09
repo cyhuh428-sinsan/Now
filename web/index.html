@@ -373,6 +373,45 @@
             <div id="featureSettings" class="feature-toggle-list"></div>
           </section>
 
+          <section class="settings-row server-settings-row">
+            <div>
+              <h3 id="serverSettingTitle">서버 연결</h3>
+              <p id="serverSettingDesc">단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.</p>
+            </div>
+            <div class="server-settings-form">
+              <label>
+                <span id="serverModeLabel">사용 방식</span>
+                <select id="serverModeSelect" class="settings-select">
+                  <option id="serverModeLocalOption" value="local">단독 사용</option>
+                  <option id="serverModeServerOption" value="server">서버 연결</option>
+                </select>
+              </label>
+              <label>
+                <span id="serverUrlLabel">서버 주소</span>
+                <input id="serverUrlInput" class="settings-input" type="url" placeholder="http://localhost:8750">
+              </label>
+              <label>
+                <span id="serverTokenLabel">API 토큰</span>
+                <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="서버 API 토큰">
+              </label>
+              <div class="server-identity-grid">
+                <label>
+                  <span id="ownerIdLabel">사용자 ID</span>
+                  <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local-user">
+                </label>
+                <label>
+                  <span id="deviceIdLabel">기기 ID</span>
+                  <input id="deviceIdInput" class="settings-input" type="text" autocomplete="off" placeholder="web-desktop">
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button id="serverSaveBtn" class="secondary-btn" type="button">연결 설정 저장</button>
+                <button id="serverTestBtn" class="secondary-btn" type="button">연결 테스트</button>
+              </div>
+              <p id="serverStatusText" class="server-status-text">서버 연결을 사용하지 않습니다.</p>
+            </div>
+          </section>
+
           <section class="settings-row">
             <div>
               <h3>보조 목록 표시</h3>

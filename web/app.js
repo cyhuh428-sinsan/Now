@@ -58,6 +58,23 @@ const I18N = {
     "settings.language.desc": "앱 화면에 사용할 언어를 선택합니다.",
     "settings.theme.title": "기본 테마",
     "settings.theme.desc": "앱의 밝기 테마를 선택합니다.",
+    "settings.server.title": "서버 연결",
+    "settings.server.desc": "단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.",
+    "settings.server.mode.local": "단독 사용",
+    "settings.server.mode.server": "서버 연결",
+    "settings.server.mode": "사용 방식",
+    "settings.server.url": "서버 주소",
+    "settings.server.token": "API 토큰",
+    "settings.server.owner": "사용자 ID",
+    "settings.server.device": "기기 ID",
+    "settings.server.save": "연결 설정 저장",
+    "settings.server.test": "연결 테스트",
+    "settings.server.local": "서버 연결을 사용하지 않습니다.",
+    "settings.server.saved": "연결 설정을 저장했습니다.",
+    "settings.server.testing": "서버 연결을 확인하는 중입니다.",
+    "settings.server.ok": "서버 연결 확인됨",
+    "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
+    "settings.server.fail": "서버 연결 실패",
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
@@ -112,6 +129,23 @@ const I18N = {
     "settings.language.desc": "Choose the language used in the app.",
     "settings.theme.title": "Default theme",
     "settings.theme.desc": "Choose the brightness theme.",
+    "settings.server.title": "Server connection",
+    "settings.server.desc": "Choose standalone use or connect to a personal/public NowNote server.",
+    "settings.server.mode.local": "Standalone",
+    "settings.server.mode.server": "Server connection",
+    "settings.server.mode": "Mode",
+    "settings.server.url": "Server URL",
+    "settings.server.token": "API token",
+    "settings.server.owner": "User ID",
+    "settings.server.device": "Device ID",
+    "settings.server.save": "Save connection",
+    "settings.server.test": "Test connection",
+    "settings.server.local": "Server connection is disabled.",
+    "settings.server.saved": "Connection settings saved.",
+    "settings.server.testing": "Checking server connection.",
+    "settings.server.ok": "Server connection verified",
+    "settings.server.noUrl": "Enter a server URL first.",
+    "settings.server.fail": "Server connection failed",
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
@@ -200,11 +234,25 @@ function defaultSettings() {
     enableShortcuts: true,
     showTags: true,
     showSidebarAssist: false,
+    server: defaultServerSettings(),
     features: defaultFeatureSettings(),
     shortcuts: defaultShortcutSettings(),
     openTreeTabs: [],
     closedTreeTabs: [],
     pinnedTreeTabs: [],
+  };
+}
+
+function defaultServerSettings() {
+  return {
+    mode: "local",
+    url: "",
+    token: "",
+    ownerId: "local-user",
+    deviceId: "web-desktop",
+    lastCheckedAt: null,
+    lastStatus: "idle",
+    lastMessage: "",
   };
 }
 
@@ -354,6 +402,14 @@ const elements = {
   shortcutsToggle: $("#shortcutsToggle"),
   shortcutEditor: $("#shortcutEditor"),
   featureSettings: $("#featureSettings"),
+  serverModeSelect: $("#serverModeSelect"),
+  serverUrlInput: $("#serverUrlInput"),
+  serverTokenInput: $("#serverTokenInput"),
+  ownerIdInput: $("#ownerIdInput"),
+  deviceIdInput: $("#deviceIdInput"),
+  serverSaveBtn: $("#serverSaveBtn"),
+  serverTestBtn: $("#serverTestBtn"),
+  serverStatusText: $("#serverStatusText"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
@@ -572,6 +628,12 @@ function bindEvents() {
     renderFeatureSettings();
   });
 
+  elements.serverSaveBtn.addEventListener("click", () => {
+    saveServerSettingsFromForm();
+  });
+
+  elements.serverTestBtn.addEventListener("click", testServerConnection);
+
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
     persistSettings();
@@ -734,6 +796,7 @@ function renderSettings() {
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.sidebarAssistToggle.checked = state.settings.showSidebarAssist;
+  renderServerSettings();
   renderShortcutEditor();
   renderFeatureSettings();
   elements.accentChoices.replaceChildren(
@@ -765,6 +828,86 @@ function resetViewSettings() {
   applySettings();
   renderTree();
   renderSidebarKnowledge();
+}
+
+function renderServerSettings() {
+  const server = state.settings.server || defaultServerSettings();
+  elements.serverModeSelect.value = server.mode;
+  elements.serverUrlInput.value = server.url;
+  elements.serverTokenInput.value = server.token;
+  elements.ownerIdInput.value = server.ownerId;
+  elements.deviceIdInput.value = server.deviceId;
+  renderServerStatus(server.lastStatus, server.lastMessage);
+}
+
+function saveServerSettingsFromForm(message = t("settings.server.saved")) {
+  const previous = state.settings.server || defaultServerSettings();
+  state.settings.server = {
+    ...previous,
+    mode: elements.serverModeSelect.value === "server" ? "server" : "local",
+    url: normalizeServerUrl(elements.serverUrlInput.value),
+    token: elements.serverTokenInput.value.trim(),
+    ownerId: elements.ownerIdInput.value.trim() || "local-user",
+    deviceId: elements.deviceIdInput.value.trim() || "web-desktop",
+    lastStatus: "saved",
+    lastMessage: message,
+  };
+  persistSettings();
+  renderServerSettings();
+}
+
+function renderServerStatus(status, message) {
+  const server = state.settings.server || defaultServerSettings();
+  const fallback = server.mode === "server" ? t("settings.server.saved") : t("settings.server.local");
+  const text = message || fallback;
+  elements.serverStatusText.textContent = text;
+  elements.serverStatusText.classList.remove("ok", "warn", "bad");
+  if (status === "ok") elements.serverStatusText.classList.add("ok");
+  if (status === "saved" || status === "testing") elements.serverStatusText.classList.add("warn");
+  if (status === "bad") elements.serverStatusText.classList.add("bad");
+}
+
+async function testServerConnection() {
+  saveServerSettingsFromForm(t("settings.server.testing"));
+  const server = state.settings.server;
+  if (server.mode !== "server") {
+    server.lastStatus = "idle";
+    server.lastMessage = t("settings.server.local");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+  if (!server.url) {
+    server.lastStatus = "bad";
+    server.lastMessage = t("settings.server.noUrl");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  renderServerStatus("testing", t("settings.server.testing"));
+  try {
+    const response = await fetch(`${server.url}/api/v1/server`, {
+      headers: server.token ? { Authorization: `Bearer ${server.token}` } : {},
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    const serverName = payload.server || "NowNote";
+    const apiVersion = payload.api_version ? ` · API ${payload.api_version}` : "";
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}`;
+  } catch (error) {
+    server.lastStatus = "bad";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+function normalizeServerUrl(value) {
+  return value.trim().replace(/\/+$/, "");
 }
 
 function renderShortcutEditor() {
@@ -1010,9 +1153,21 @@ function applyLanguage() {
   setText("#languageSettingDesc", t("settings.language.desc"));
   setText("#themeSettingTitle", t("settings.theme.title"));
   setText("#themeSettingDesc", t("settings.theme.desc"));
+  setText("#serverSettingTitle", t("settings.server.title"));
+  setText("#serverSettingDesc", t("settings.server.desc"));
+  setText("#serverModeLocalOption", t("settings.server.mode.local"));
+  setText("#serverModeServerOption", t("settings.server.mode.server"));
+  setText("#serverModeLabel", t("settings.server.mode"));
+  setText("#serverUrlLabel", t("settings.server.url"));
+  setText("#serverTokenLabel", t("settings.server.token"));
+  setText("#ownerIdLabel", t("settings.server.owner"));
+  setText("#deviceIdLabel", t("settings.server.device"));
+  setText("#serverSaveBtn", t("settings.server.save"));
+  setText("#serverTestBtn", t("settings.server.test"));
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
+  renderServerStatus(state.settings.server.lastStatus, state.settings.server.lastMessage);
   setPlaceholder(elements.searchInput, t("search.placeholder"));
   setTitle(elements.railSidebarBtn, state.settings.sidebarCollapsed ? t("rail.sidebar.open") : t("rail.sidebar.close"));
   setTitle(document.querySelector(".app-rail .rail-btn.active"), t("rail.knowledge"));
@@ -3375,6 +3530,7 @@ function normalizeSettings(settings = {}) {
   normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
   normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
   normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
+  normalized.server = normalizeServerSettings(normalized.server, defaults.server);
   normalized.features = normalizeFeatureSettings(normalized.features, defaults.features);
   normalized.features.backlinks = normalized.showBacklinks;
   normalized.features.tags = normalized.showTags;
@@ -3385,6 +3541,22 @@ function normalizeSettings(settings = {}) {
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
   normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
+  return normalized;
+}
+
+function normalizeServerSettings(server = {}, defaults = defaultServerSettings()) {
+  const normalized = {
+    ...defaults,
+    ...(server && typeof server === "object" ? server : {}),
+  };
+  normalized.mode = normalized.mode === "server" ? "server" : "local";
+  normalized.url = typeof normalized.url === "string" ? normalizeServerUrl(normalized.url) : "";
+  normalized.token = typeof normalized.token === "string" ? normalized.token : "";
+  normalized.ownerId = typeof normalized.ownerId === "string" && normalized.ownerId.trim() ? normalized.ownerId.trim() : defaults.ownerId;
+  normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
+  normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
+  normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
+  normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
   return normalized;
 }
 

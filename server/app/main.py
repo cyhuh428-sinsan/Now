@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin import router as admin_router
 from app.api.analysis import router as analysis_router
@@ -16,6 +17,12 @@ from app.db import create_tables
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.server_name)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     @app.on_event("startup")
     def on_startup() -> None:
