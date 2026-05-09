@@ -129,6 +129,25 @@ def main() -> None:
         },
     )
 
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/admin/users/local_user",
+        args.token,
+        {
+            "email": "local_user@example.com",
+            "display_name": "Local User",
+            "timezone": "Asia/Seoul",
+            "group_name": "사용자",
+            "two_factor_enabled": False,
+            "is_active": True,
+        },
+    )
+    print(
+        "PATCH /api/v1/admin/users/local_user:",
+        status,
+        {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
+    )
+
 
 if __name__ == "__main__":
     try:
