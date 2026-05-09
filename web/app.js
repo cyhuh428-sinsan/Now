@@ -170,6 +170,12 @@ function setTitle(element, value) {
   if (element) element.title = value;
 }
 
+function setIconLabel(element, value) {
+  if (!element) return;
+  element.title = value;
+  element.setAttribute("aria-label", value);
+}
+
 const elements = {
   searchInput: $("#searchInput"),
   navTabs: document.querySelectorAll(".nav-tab"),
@@ -721,9 +727,9 @@ function applyLanguage() {
   setText("#settingsBtn", t("side.settings"));
   setText("#treeEyebrow", t("tree.eyebrow"));
   setText("#treeTitle", t("tree.title"));
-  setText("#expandAllBtn", t("tree.expandAll"));
-  setText("#collapseAllBtn", t("tree.collapseAll"));
-  setText("#addRootBtn", t("tree.addRoot"));
+  setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
+  setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
+  setIconLabel(elements.addRootBtn, t("tree.addRoot"));
   setText("#noteFindToggleBtn", t("editor.find"));
   setText("#outlineToggleBtn", t("editor.outline"));
   setText("#insertTimeBtn", t("editor.insertTime"));
