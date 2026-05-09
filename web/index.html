@@ -27,22 +27,22 @@
         <div class="brand-mark">N</div>
         <div>
           <h1>NowNote</h1>
-          <p>지식 메모</p>
+          <p id="brandSubtitle">지식 메모</p>
         </div>
       </div>
 
       <label class="search-box">
-        <span>검색</span>
+        <span id="searchLabel">검색</span>
         <input id="searchInput" type="search" placeholder="제목, 내용 검색">
       </label>
 
       <button id="dailyToggleBtn" class="today-chip" type="button">
-        <span>오늘 메모</span>
+        <span id="todayChipLabel">오늘 메모</span>
         <strong id="todayMemoState">비어 있음</strong>
       </button>
 
       <nav class="nav-tabs" aria-label="메모 보기">
-        <button class="nav-tab active" data-view="tree" type="button">지식 메모</button>
+        <button id="treeNavBtn" class="nav-tab active" data-view="tree" type="button">지식 메모</button>
       </nav>
 
       <section class="side-section side-knowledge-section" aria-labelledby="favoriteTitle">
@@ -71,19 +71,19 @@
 
       <div class="side-actions">
         <section class="side-action-group" aria-label="탐색">
-          <h2>탐색</h2>
+          <h2 id="exploreActionTitle">탐색</h2>
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
         </section>
         <section class="side-action-group" aria-label="파일">
-          <h2>파일</h2>
+          <h2 id="fileActionTitle">파일</h2>
           <button id="exportMarkdownBtn" class="ghost-btn" type="button">Markdown 내보내기</button>
           <button id="importMarkdownBtn" class="ghost-btn" type="button">Markdown 가져오기</button>
         </section>
         <section class="side-action-group" aria-label="관리">
-          <h2>관리</h2>
+          <h2 id="manageActionTitle">관리</h2>
           <button id="deletedTreeBtn" class="ghost-btn count-btn" type="button">
-            <span>삭제 보관함</span>
+            <span id="deletedTreeBtnLabel">삭제 보관함</span>
             <strong id="deletedTreeCount">0</strong>
           </button>
           <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
@@ -95,7 +95,7 @@
       <section id="treeView" class="view active" aria-labelledby="treeTitle">
         <header class="view-header">
           <div>
-            <p class="eyebrow">주제 / 분류 / 메모</p>
+            <p id="treeEyebrow" class="eyebrow">주제 / 분류 / 메모</p>
             <h2 id="treeTitle">지식 메모</h2>
           </div>
           <div class="header-actions">
@@ -250,7 +250,7 @@
       <div class="settings-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">사용자 취향에 맞게 조정</p>
+            <p id="settingsEyebrow" class="eyebrow">사용자 취향에 맞게 조정</p>
             <h2 id="settingsTitle">화면 설정</h2>
           </div>
           <button id="settingsCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
@@ -259,8 +259,19 @@
         <div class="settings-list">
           <section class="settings-row">
             <div>
-              <h3>기본 테마</h3>
-              <p>앱의 밝기 테마를 선택합니다.</p>
+              <h3 id="languageSettingTitle">언어</h3>
+              <p id="languageSettingDesc">앱 화면에 사용할 언어를 선택합니다.</p>
+            </div>
+            <select id="languageSelect" class="settings-select" aria-label="언어">
+              <option value="ko">한국어</option>
+              <option value="en">English</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="themeSettingTitle">기본 테마</h3>
+              <p id="themeSettingDesc">앱의 밝기 테마를 선택합니다.</p>
             </div>
             <select id="themeSelect" class="settings-select" aria-label="기본 테마">
               <option value="system">시스템 테마 적용</option>
