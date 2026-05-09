@@ -14,6 +14,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _baseUrlCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
+  DateTime? _lastSyncedAt;
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
@@ -34,6 +35,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _baseUrlCtrl.text = settings.baseUrl;
     _tokenCtrl.text = settings.token;
     _deviceIdCtrl.text = settings.deviceId;
+    _lastSyncedAt = settings.lastSyncedAt;
     _loaded = true;
   }
 
@@ -43,6 +45,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       baseUrl: _baseUrlCtrl.text,
       token: _tokenCtrl.text,
       deviceId: _deviceIdCtrl.text,
+      lastSyncedAt: _lastSyncedAt,
     );
   }
 
@@ -51,9 +54,9 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     await settings.save();
     ref.invalidate(serverSettingsProvider);
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('서버 설정을 저장했습니다')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('서버 설정을 저장했습니다')));
     }
   }
 
@@ -62,23 +65,27 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     try {
       final settings = _currentSettings();
       await settings.save();
-      final result =
-          await ref.read(serverSyncServiceProvider).testConnection(settings);
+      final result = await ref
+          .read(serverSyncServiceProvider)
+          .testConnection(settings);
       ServerOpsResult? opsResult;
       if (result.ok) {
-        opsResult =
-            await ref.read(serverSyncServiceProvider).loadOpsStatus(settings);
+        opsResult = await ref
+            .read(serverSyncServiceProvider)
+            .loadOpsStatus(settings);
       }
       if (mounted) {
         setState(() {
           _connectionResult = result;
           _opsResult = opsResult;
+          _lastSyncedAt = settings.lastSyncedAt;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(result.message),
-            backgroundColor:
-                result.ok ? const Color(0xFF059669) : const Color(0xFFEF4444),
+            backgroundColor: result.ok
+                ? const Color(0xFF059669)
+                : const Color(0xFFEF4444),
           ),
         );
       }
@@ -87,17 +94,21 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
-  Future<void> _uploadNotes() async {
+  Future<void> _syncNotes({required bool fullSync}) async {
     setState(() => _busy = true);
     try {
-      final settings = _currentSettings();
+      final settings = _currentSettings().copyWith(clearLastSyncedAt: fullSync);
       await settings.save();
-      final result =
-          await ref.read(serverSyncServiceProvider).syncNotes(settings);
+
+      final result = await ref
+          .read(serverSyncServiceProvider)
+          .syncNotes(settings, fullSync: fullSync);
+
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(result.message)),
-        );
+        _lastSyncedAt = result.syncedAt ?? settings.lastSyncedAt;
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(result.message)));
       }
     } catch (e) {
       if (mounted) {
@@ -113,6 +124,37 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
+  Future<void> _confirmFullSync() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('전체 다시 동기화'),
+        content: const Text('서버에 메모 전체를 다시 전송하고 마지막 동기화 시점을 초기화합니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('취소'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('진행'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _syncNotes(fullSync: true);
+    }
+  }
+
+  String _formatServerSyncTime(DateTime? value) {
+    if (value == null) return '없음';
+    final local = value.toLocal();
+    return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}';
+  }
+
   @override
   Widget build(BuildContext context) {
     final settingsAsync = ref.watch(serverSettingsProvider);
@@ -122,8 +164,11 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
         backgroundColor: const Color(0xFFF8F9FA),
         elevation: 0,
         leading: IconButton(
-          icon:
-              const Icon(Icons.chevron_left, color: Color(0xFF111827), size: 28),
+          icon: const Icon(
+            Icons.chevron_left,
+            color: Color(0xFF111827),
+            size: 28,
+          ),
           onPressed: () => Navigator.of(context).pop(),
         ),
         title: const Text(
@@ -228,7 +273,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    '일자별 메모와 계층 메모를 서버와 통합 동기화합니다. 이번 단계에서는 서버 변경분을 확인하고, 로컬 병합은 다음 단계에서 연결합니다.',
+                    '일자별 메모와 계층 메모를 서버와 통합 동기화합니다. 마지막 동기화 기준으로 증분 동기화를 진행하고, 필요한 경우 전체 동기화를 선택하세요.',
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,
@@ -236,22 +281,45 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 14),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 48,
-                    child: ElevatedButton.icon(
-                      onPressed: _busy ? null : _uploadNotes,
-                      icon: _busy
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
-                              ),
-                            )
-                          : const Icon(Icons.cloud_upload_outlined, size: 18),
-                      label: const Text('메모 동기화'),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _busy
+                              ? null
+                              : () => _syncNotes(fullSync: false),
+                          icon: _busy
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.cloud_upload_outlined,
+                                  size: 18,
+                                ),
+                          label: const Text('메모 동기화'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _confirmFullSync,
+                          icon: const Icon(Icons.refresh_outlined, size: 18),
+                          label: const Text('전체 다시 동기화'),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Text(
+                    '마지막 동기화: ${_formatServerSyncTime(_lastSyncedAt)}',
+                    style: const TextStyle(
+                      color: Color(0xFF6B7280),
+                      fontSize: 12,
                     ),
                   ),
                 ],
