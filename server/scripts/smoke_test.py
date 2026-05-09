@@ -59,6 +59,7 @@ def main() -> None:
         "/admin/ops",
         "/admin/export",
         "/admin/analysis",
+        "/admin/help",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)

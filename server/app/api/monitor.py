@@ -117,6 +117,11 @@ def admin_export(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_export_html())
 
 
+@router.get("/admin/help", include_in_schema=False)
+def admin_help(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_help_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -603,6 +608,7 @@ def _admin_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/admin/analysis">분석</a>
+        <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
         <a href="/health/ready">준비 상태</a>
       </nav>
@@ -3006,6 +3012,202 @@ def _admin_export_html() -> str:
         {_export_link_rows(export_links)}
       </table>
     </section>
+  </main>
+</body>
+</html>"""
+
+
+def _admin_help_html() -> str:
+    return """<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 도움말</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --soft: #eff6ff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main {
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }
+    h2 {
+      margin: 0 0 10px;
+      font-size: 20px;
+    }
+    p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+    a {
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }
+    .sub {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .nav a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }
+    .hero {
+      padding: 22px;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: var(--soft);
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .card {
+      padding: 18px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+    .card strong {
+      display: block;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+    ul {
+      margin: 10px 0 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: 14px;
+    }
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header { display: block; }
+      .nav { margin-top: 14px; }
+      main { padding: 22px 12px 36px; }
+      h1 { font-size: 24px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>NowNote 도움말</h1>
+        <div class="sub">단독 사용, 서버 연결, 운영 기준을 한 화면에서 확인합니다</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/users">사용자</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+        <a href="/docs">API 문서</a>
+      </nav>
+    </header>
+
+    <section class="hero">
+      <h2>운영 기준</h2>
+      <p>
+        NowNote는 서버가 없어도 로컬 메모 프로그램으로 동작하고, 서버에 연결하면 기기 간 동기화와
+        운영 백업을 사용할 수 있습니다. 개인 Docker 서버와 공용 NowNote 서버는 같은 서버 프로그램을
+        사용하되, 토큰 발급과 사용자 관리는 운영 방식에 맞게 나뉩니다.
+      </p>
+    </section>
+
+    <div class="grid">
+      <section class="card">
+        <strong>단독 사용자</strong>
+        <p>모바일 앱, Web, 설치형 프로그램이 각 기기 안에서 메모를 저장합니다.</p>
+        <ul>
+          <li>서버 주소와 API 토큰이 없어도 사용할 수 있습니다.</li>
+          <li>일자별 메모는 하나의 날짜 메모에 계속 추가합니다.</li>
+          <li>지식 메모는 주제, 분류, 메모 3단계 구조를 기본으로 합니다.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <strong>서버 연결 사용자</strong>
+        <p>개인 서버 또는 공용 서버에 연결하여 메모와 녹음 메타데이터를 동기화합니다.</p>
+        <ul>
+          <li>앱 설정에 서버 주소와 API 토큰을 입력합니다.</li>
+          <li>사용자별 시간대, 2단계 인증 사용 여부, 그룹, 활성 상태를 관리합니다.</li>
+          <li>동기화 상태는 <code>/admin/sync</code>와 <code>/admin/devices</code>에서 확인합니다.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <strong>개인 Docker 서버</strong>
+        <p>사용자가 직접 서버를 설치해 자기 자료를 자기 서버에 보관하는 방식입니다.</p>
+        <ul>
+          <li><code>.env</code>에서 <code>NOW_API_TOKEN</code>과 DB 비밀번호를 먼저 확정합니다.</li>
+          <li>앱에는 <code>http://서버주소:8750</code> 형식으로 연결합니다.</li>
+          <li>삭제 보관함의 비활성 백업은 자기 서버 안에서 유지하는 방향입니다.</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <strong>공용 NowNote 서버</strong>
+        <p>운영자가 사용자와 기기별 접속 권한을 발급하고 관리하는 방식입니다.</p>
+        <ul>
+          <li>운영자는 <code>/admin/users</code>에서 사용자 활성 상태와 최근 접속 시간을 확인합니다.</li>
+          <li>오픈 전에는 API 토큰, DB 비밀번호, LLM 제공자 상태를 <code>/admin/ops</code>에서 점검합니다.</li>
+          <li>민감 메모 암호화는 로그인 사용자 기능으로 단계적으로 연결합니다.</li>
+        </ul>
+      </section>
+    </div>
   </main>
 </body>
 </html>"""
