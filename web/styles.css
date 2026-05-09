@@ -571,6 +571,11 @@ body.resizing {
   font-size: 13px;
 }
 
+.help-link {
+  text-decoration: none;
+  justify-content: center;
+}
+
 .accent-choices {
   display: flex;
   gap: 10px;

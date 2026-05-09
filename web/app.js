@@ -28,6 +28,7 @@ const I18N = {
     "side.manage": "관리",
     "side.trash": "삭제 보관함",
     "side.settings": "화면 설정",
+    "side.help": "도움말",
     "rail.sidebar.open": "목록 펼치기",
     "rail.sidebar.close": "목록 접기",
     "rail.knowledge": "지식 메모",
@@ -57,6 +58,9 @@ const I18N = {
     "settings.language.desc": "앱 화면에 사용할 언어를 선택합니다.",
     "settings.theme.title": "기본 테마",
     "settings.theme.desc": "앱의 밝기 테마를 선택합니다.",
+    "settings.help.title": "도움말",
+    "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
+    "settings.help.open": "도움말 열기",
     "saved": "저장됨",
   },
   en: {
@@ -78,6 +82,7 @@ const I18N = {
     "side.manage": "Manage",
     "side.trash": "Trash",
     "side.settings": "Display settings",
+    "side.help": "Help",
     "rail.sidebar.open": "Open list",
     "rail.sidebar.close": "Close list",
     "rail.knowledge": "Knowledge notes",
@@ -107,6 +112,9 @@ const I18N = {
     "settings.language.desc": "Choose the language used in the app.",
     "settings.theme.title": "Default theme",
     "settings.theme.desc": "Choose the brightness theme.",
+    "settings.help.title": "Help",
+    "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
+    "settings.help.open": "Open help",
     "saved": "Saved",
   },
 };
@@ -323,6 +331,7 @@ const elements = {
   quickSwitchBtn: $("#quickSwitchBtn"),
   graphBtn: $("#graphBtn"),
   settingsBtn: $("#settingsBtn"),
+  helpBtn: $("#helpBtn"),
   railSidebarBtn: $("#railSidebarBtn"),
   railDailyBtn: $("#railDailyBtn"),
   railSearchBtn: $("#railSearchBtn"),
@@ -347,6 +356,7 @@ const elements = {
   featureSettings: $("#featureSettings"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
+  settingsHelpBtn: $("#settingsHelpBtn"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
@@ -981,6 +991,7 @@ function applyLanguage() {
   setText("#importMarkdownBtn", t("side.mdImport"));
   setText("#deletedTreeBtnLabel", t("side.trash"));
   setText("#settingsBtn", t("side.settings"));
+  setText("#helpBtn", t("side.help"));
   setText("#treeEyebrow", t("tree.eyebrow"));
   setText("#treeTitle", t("tree.title"));
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
@@ -999,6 +1010,9 @@ function applyLanguage() {
   setText("#languageSettingDesc", t("settings.language.desc"));
   setText("#themeSettingTitle", t("settings.theme.title"));
   setText("#themeSettingDesc", t("settings.theme.desc"));
+  setText("#helpSettingTitle", t("settings.help.title"));
+  setText("#helpSettingDesc", t("settings.help.desc"));
+  setText("#settingsHelpBtn", t("settings.help.open"));
   setPlaceholder(elements.searchInput, t("search.placeholder"));
   setTitle(elements.railSidebarBtn, state.settings.sidebarCollapsed ? t("rail.sidebar.open") : t("rail.sidebar.close"));
   setTitle(document.querySelector(".app-rail .rail-btn.active"), t("rail.knowledge"));
