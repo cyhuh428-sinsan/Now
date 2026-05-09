@@ -1745,6 +1745,16 @@ kbd {
   color: var(--red);
 }
 
+.server-meta-text {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.server-meta-text.has-pending {
+  color: var(--amber);
+}
+
 .search-popover-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px 160px;
