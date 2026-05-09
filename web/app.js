@@ -70,9 +70,12 @@ const I18N = {
     "settings.server.save": "연결 설정 저장",
     "settings.server.test": "연결 테스트",
     "settings.server.sync": "서버로 동기화",
+    "settings.server.fullSync": "전체 다시 동기화",
+    "settings.server.fullSyncConfirm": "서버에 모든 메모를 다시 전송합니다. 마지막 동기화 시점 기록을 초기화하고 전체 동기화를 진행할까요?",
     "settings.server.local": "서버 연결을 사용하지 않습니다.",
     "settings.server.saved": "연결 설정을 저장했습니다.",
     "settings.server.testing": "서버 연결을 확인하는 중입니다.",
+    "settings.server.fullSyncing": "서버와 전체 동기화를 진행합니다.",
     "settings.server.ok": "서버 연결 확인됨",
     "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
     "settings.server.fail": "서버 연결 실패",
@@ -149,9 +152,12 @@ const I18N = {
     "settings.server.save": "Save connection",
     "settings.server.test": "Test connection",
     "settings.server.sync": "Sync to server",
+    "settings.server.fullSync": "Full re-sync",
+    "settings.server.fullSyncConfirm": "Send all notes to server again? This will reset last sync marker and perform full sync.",
     "settings.server.local": "Server connection is disabled.",
     "settings.server.saved": "Connection settings saved.",
     "settings.server.testing": "Checking server connection.",
+    "settings.server.fullSyncing": "Forcing full sync with server.",
     "settings.server.ok": "Server connection verified",
     "settings.server.noUrl": "Enter a server URL first.",
     "settings.server.fail": "Server connection failed",
@@ -427,6 +433,7 @@ const elements = {
   serverSaveBtn: $("#serverSaveBtn"),
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
+  serverFullSyncBtn: $("#serverFullSyncBtn"),
   serverStatusText: $("#serverStatusText"),
   serverMetaText: $("#serverMetaText"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
@@ -654,6 +661,7 @@ function bindEvents() {
   elements.serverTestBtn.addEventListener("click", testServerConnection);
 
   elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
+  elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -858,6 +866,10 @@ function renderServerSettings() {
   elements.serverTokenInput.value = server.token;
   elements.ownerIdInput.value = server.ownerId;
   elements.deviceIdInput.value = server.deviceId;
+  const isServerMode = server.mode === "server";
+  elements.serverTestBtn.disabled = !isServerMode;
+  elements.serverSyncBtn.disabled = !isServerMode;
+  elements.serverFullSyncBtn.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
 }
@@ -876,6 +888,17 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   };
   persistSettings();
   renderServerSettings();
+}
+
+function syncAllWebNotesToServer() {
+  if (!confirm(t("settings.server.fullSyncConfirm"))) {
+    return;
+  }
+  const server = state.settings.server || defaultServerSettings();
+  server.lastSyncedAt = null;
+  persistSettings();
+  renderServerSettings();
+  syncWebNotesToServer(t("settings.server.fullSyncing"));
 }
 
 function renderServerStatus(status, message) {
@@ -931,7 +954,7 @@ async function testServerConnection() {
     const response = await fetch(`${server.url}/api/v1/server`, {
       headers: server.token ? { Authorization: `Bearer ${server.token}` } : {},
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
     const serverName = payload.server || "NowNote";
     const apiVersion = payload.api_version ? ` · API ${payload.api_version}` : "";
@@ -947,8 +970,8 @@ async function testServerConnection() {
   renderServerSettings();
 }
 
-async function syncWebNotesToServer() {
-  saveServerSettingsFromForm(t("settings.server.syncing"));
+async function syncWebNotesToServer(message = t("settings.server.syncing")) {
+  saveServerSettingsFromForm(message);
   const server = state.settings.server;
   if (server.mode !== "server") {
     server.lastStatus = "idle";
@@ -966,7 +989,7 @@ async function syncWebNotesToServer() {
   }
 
   const notes = buildServerSyncNotes(server);
-  renderServerStatus("testing", t("settings.server.syncing"));
+  renderServerStatus("testing", message);
   try {
     const response = await fetch(`${server.url}/api/v1/sync`, {
       method: "POST",
@@ -982,18 +1005,24 @@ async function syncWebNotesToServer() {
         notes,
       }),
     });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
-    const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
-    markServerSyncedNotes();
-    server.lastStatus = "ok";
-    server.lastCheckedAt = new Date().toISOString();
-    server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
-    server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${payload.pushed_notes?.length || 0}개, 받은 메모 ${mergeResult.applied}개`
-      + (mergeResult.skipped ? `, ${t("settings.server.mergeSkipped")} ${mergeResult.skipped}개` : "");
-    persist();
-    render();
-    renderServerMeta();
+      const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+      const pushedCount = payload.pushed_notes?.length || 0;
+      const pulledCount = (payload.pulled_notes || []).length;
+      markServerSyncedNotes();
+      server.lastStatus = "ok";
+      server.lastCheckedAt = new Date().toISOString();
+      server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
+      if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
+        server.lastMessage = t("settings.server.syncEmpty");
+      } else {
+        server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${pushedCount}개, 받은 메모 ${mergeResult.applied}개`
+          + (mergeResult.skipped ? `, ${t("settings.server.mergeSkipped")} ${mergeResult.skipped}개` : "");
+      }
+      persist();
+      render();
+      renderServerMeta();
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
@@ -1001,6 +1030,28 @@ async function syncWebNotesToServer() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+async function serverResponseError(response) {
+  const statusPart = `HTTP ${response.status}`;
+  try {
+    const body = await response.text();
+    if (!body) return statusPart;
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed && typeof parsed === "object" && typeof parsed.detail === "string") {
+        return `${statusPart}: ${parsed.detail}`;
+      }
+      if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
+        return `${statusPart}: ${parsed.message}`;
+      }
+      return `${statusPart}: ${body.slice(0, 200)}`;
+    } catch {
+      return `${statusPart}: ${body.slice(0, 200)}`;
+    }
+  } catch {
+    return statusPart;
+  }
 }
 
 function applyPulledServerNotes(serverNotes) {
@@ -1524,6 +1575,7 @@ function applyLanguage() {
   setText("#serverSaveBtn", t("settings.server.save"));
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
+  setText("#serverFullSyncBtn", t("settings.server.fullSync"));
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
