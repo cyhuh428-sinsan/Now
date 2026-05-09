@@ -80,6 +80,9 @@ const I18N = {
     "settings.server.syncOk": "서버 동기화 완료",
     "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
     "settings.server.mergeSkipped": "로컬 변경 보존",
+    "settings.server.pending": "보류 변경",
+    "settings.server.lastSync": "마지막 동기화",
+    "settings.server.never": "없음",
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
@@ -156,6 +159,9 @@ const I18N = {
     "settings.server.syncOk": "Server sync complete",
     "settings.server.syncEmpty": "There are no notes to sync.",
     "settings.server.mergeSkipped": "Local changes kept",
+    "settings.server.pending": "Pending changes",
+    "settings.server.lastSync": "Last sync",
+    "settings.server.never": "Never",
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
@@ -422,6 +428,7 @@ const elements = {
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
   serverStatusText: $("#serverStatusText"),
+  serverMetaText: $("#serverMetaText"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
@@ -852,6 +859,7 @@ function renderServerSettings() {
   elements.ownerIdInput.value = server.ownerId;
   elements.deviceIdInput.value = server.deviceId;
   renderServerStatus(server.lastStatus, server.lastMessage);
+  renderServerMeta();
 }
 
 function saveServerSettingsFromForm(message = t("settings.server.saved")) {
@@ -879,6 +887,25 @@ function renderServerStatus(status, message) {
   if (status === "ok") elements.serverStatusText.classList.add("ok");
   if (status === "saved" || status === "testing") elements.serverStatusText.classList.add("warn");
   if (status === "bad") elements.serverStatusText.classList.add("bad");
+}
+
+function renderServerMeta() {
+  const server = state.settings.server || defaultServerSettings();
+  const pendingCount = countPendingSyncNotes();
+  const lastSyncedAt = server.lastSyncedAt
+    ? new Date(server.lastSyncedAt).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR")
+    : t("settings.server.never");
+  elements.serverMetaText.textContent = `${t("settings.server.pending")} ${pendingCount}개 · ${t("settings.server.lastSync")} ${lastSyncedAt}`;
+  elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
+}
+
+function countPendingSyncNotes() {
+  return [
+    ...Object.values(state.data.daily),
+    ...state.data.archivedDaily,
+    ...flattenTree(state.data.tree),
+    ...state.data.deletedTree,
+  ].filter((item) => item?.syncState === "pending").length;
 }
 
 async function testServerConnection() {
@@ -966,6 +993,7 @@ async function syncWebNotesToServer() {
       + (mergeResult.skipped ? `, ${t("settings.server.mergeSkipped")} ${mergeResult.skipped}개` : "");
     persist();
     render();
+    renderServerMeta();
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
@@ -1500,6 +1528,7 @@ function applyLanguage() {
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
   renderServerStatus(state.settings.server.lastStatus, state.settings.server.lastMessage);
+  renderServerMeta();
   setPlaceholder(elements.searchInput, t("search.placeholder"));
   setTitle(elements.railSidebarBtn, state.settings.sidebarCollapsed ? t("rail.sidebar.open") : t("rail.sidebar.close"));
   setTitle(document.querySelector(".app-rail .rail-btn.active"), t("rail.knowledge"));
