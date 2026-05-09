@@ -111,6 +111,53 @@ const I18N = {
   },
 };
 
+const SHORTCUT_ACTIONS = [
+  { id: "addRoot", group: "창과 탭", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" } },
+  { id: "addChild", group: "창과 탭", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" } },
+  { id: "search", group: "창과 탭", label: "검색", defaultShortcut: { ctrl: true, key: "f" } },
+  { id: "noteFind", group: "창과 탭", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" } },
+  { id: "quickSwitch", group: "창과 탭", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" } },
+  { id: "quickOpen", group: "창과 탭", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" } },
+  { id: "daily", group: "창과 탭", label: "일자별 메모", defaultShortcut: { ctrl: true, key: "d" } },
+  { id: "graph", group: "창과 탭", label: "연결 보기", defaultShortcut: { ctrl: true, key: "g" } },
+  { id: "saveState", group: "창과 탭", label: "저장 상태 확인", defaultShortcut: { ctrl: true, key: "s" } },
+  { id: "insertTime", group: "창과 탭", label: "현재 시간 삽입", defaultShortcut: { ctrl: true, key: ";" } },
+  { id: "closeTab", group: "창과 탭", label: "현재 탭 닫기", defaultShortcut: { ctrl: true, key: "w" } },
+  { id: "reopenTab", group: "창과 탭", label: "닫은 탭 다시 열기", defaultShortcut: { ctrl: true, shift: true, key: "t" } },
+  { id: "closeOtherTabs", group: "창과 탭", label: "다른 탭 닫기", defaultShortcut: { ctrl: true, shift: true, key: "w" } },
+  { id: "pinTab", group: "창과 탭", label: "현재 탭 고정", defaultShortcut: { ctrl: true, shift: true, key: "p" } },
+  { id: "leftTab", group: "창과 탭", label: "왼쪽 탭", defaultShortcut: { ctrl: true, key: "pageup" } },
+  { id: "rightTab", group: "창과 탭", label: "오른쪽 탭", defaultShortcut: { ctrl: true, key: "pagedown" } },
+  { id: "moveUp", group: "창과 탭", label: "위로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowup" } },
+  { id: "moveDown", group: "창과 탭", label: "아래로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowdown" } },
+  { id: "settings", group: "창과 탭", label: "화면 설정", defaultShortcut: { ctrl: true, key: "," } },
+  { id: "closePopup", group: "창과 탭", label: "닫기", defaultShortcut: { key: "escape" } },
+  { id: "bold", group: "본문 편집", label: "굵게", defaultShortcut: { ctrl: true, key: "b" } },
+  { id: "italic", group: "본문 편집", label: "기울임", defaultShortcut: { ctrl: true, key: "i" } },
+  { id: "heading1", group: "본문 편집", label: "제목 1", defaultShortcut: { ctrl: true, key: "1" } },
+  { id: "heading2", group: "본문 편집", label: "제목 2", defaultShortcut: { ctrl: true, key: "2" } },
+  { id: "heading3", group: "본문 편집", label: "제목 3", defaultShortcut: { ctrl: true, key: "3" } },
+  { id: "checklist", group: "본문 편집", label: "체크리스트", defaultShortcut: { ctrl: true, shift: true, key: "c" } },
+  { id: "orderedList", group: "본문 편집", label: "번호 목록", defaultShortcut: { ctrl: true, shift: true, key: "7", code: "Digit7" } },
+  { id: "quote", group: "본문 편집", label: "인용", defaultShortcut: { ctrl: true, shift: true, key: "q" } },
+  { id: "codeBlock", group: "본문 편집", label: "코드블록", defaultShortcut: { ctrl: true, shift: true, key: "k" } },
+  { id: "horizontalRule", group: "본문 편집", label: "구분선", defaultShortcut: { ctrl: true, shift: true, key: "h" } },
+  { id: "link", group: "본문 편집", label: "링크", defaultShortcut: { ctrl: true, shift: true, key: "l" } },
+  { id: "indent", group: "본문 편집", label: "들여쓰기", defaultShortcut: { key: "tab" } },
+  { id: "outdent", group: "본문 편집", label: "내어쓰기", defaultShortcut: { shift: true, key: "tab" } },
+];
+
+const FEATURE_TOGGLES = [
+  { id: "search", label: "통합 검색", description: "일자별 메모와 지식 메모 전체 검색" },
+  { id: "daily", label: "일일 메모", description: "필요할 때 여는 날짜별 메모장" },
+  { id: "quickSwitch", label: "빠른 전환", description: "제목과 경로로 바로 이동" },
+  { id: "backlinks", label: "백링크", description: "현재 메모를 언급한 메모 표시" },
+  { id: "graph", label: "연결 보기", description: "[[메모 제목]] 연결 확인" },
+  { id: "tags", label: "태그", description: "본문의 #태그 인식과 검색" },
+  { id: "favorites", label: "즐겨찾기", description: "중요한 메모 표시" },
+  { id: "shortcuts", label: "단축키", description: "키보드 빠른 실행" },
+];
+
 const state = {
   view: "tree",
   selectedDate: toDateKey(new Date()),
@@ -118,6 +165,7 @@ const state = {
   selectedTreeId: null,
   expandedTreeIds: new Set(),
   selectedDeletedTreeIds: new Set(),
+  capturingShortcutId: null,
   search: "",
   data: {
     daily: {},
@@ -144,6 +192,8 @@ function defaultSettings() {
     enableShortcuts: true,
     showTags: true,
     showSidebarAssist: false,
+    features: defaultFeatureSettings(),
+    shortcuts: defaultShortcutSettings(),
     openTreeTabs: [],
     closedTreeTabs: [],
     pinnedTreeTabs: [],
@@ -174,6 +224,16 @@ function setIconLabel(element, value) {
   if (!element) return;
   element.title = value;
   element.setAttribute("aria-label", value);
+}
+
+function defaultShortcutSettings() {
+  return Object.fromEntries(
+    SHORTCUT_ACTIONS.map((action) => [action.id, { ...action.defaultShortcut }]),
+  );
+}
+
+function defaultFeatureSettings() {
+  return Object.fromEntries(FEATURE_TOGGLES.map((feature) => [feature.id, true]));
 }
 
 const elements = {
@@ -283,6 +343,8 @@ const elements = {
   backlinksToggle: $("#backlinksToggle"),
   tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
+  shortcutEditor: $("#shortcutEditor"),
+  featureSettings: $("#featureSettings"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   treeResizeHandle: $("#treeResizeHandle"),
@@ -477,21 +539,27 @@ function bindEvents() {
 
   elements.backlinksToggle.addEventListener("change", () => {
     state.settings.showBacklinks = elements.backlinksToggle.checked;
+    state.settings.features.backlinks = elements.backlinksToggle.checked;
     persistSettings();
     applySettings();
     renderLinkPanel();
+    renderFeatureSettings();
   });
 
   elements.tagsToggle.addEventListener("change", () => {
     state.settings.showTags = elements.tagsToggle.checked;
+    state.settings.features.tags = elements.tagsToggle.checked;
     persistSettings();
     applySettings();
     renderTags();
+    renderFeatureSettings();
   });
 
   elements.shortcutsToggle.addEventListener("change", () => {
     state.settings.enableShortcuts = elements.shortcutsToggle.checked;
+    state.settings.features.shortcuts = elements.shortcutsToggle.checked;
     persistSettings();
+    renderFeatureSettings();
   });
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
@@ -656,6 +724,8 @@ function renderSettings() {
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.sidebarAssistToggle.checked = state.settings.showSidebarAssist;
+  renderShortcutEditor();
+  renderFeatureSettings();
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
       const button = document.createElement("button");
@@ -687,6 +757,189 @@ function resetViewSettings() {
   renderSidebarKnowledge();
 }
 
+function renderShortcutEditor() {
+  const groups = Array.from(new Set(SHORTCUT_ACTIONS.map((action) => action.group)));
+  elements.shortcutEditor.replaceChildren(
+    ...groups.map((groupName) => {
+      const group = document.createElement("div");
+      group.className = "shortcut-group";
+      const title = document.createElement("strong");
+      title.textContent = groupName;
+      const list = document.createElement("div");
+      list.className = "shortcut-list shortcut-edit-list";
+      list.replaceChildren(
+        ...SHORTCUT_ACTIONS.filter((action) => action.group === groupName).map(renderShortcutRow),
+      );
+      group.append(title, list);
+      return group;
+    }),
+  );
+}
+
+function renderShortcutRow(action) {
+  const row = document.createElement("div");
+  row.className = "shortcut-edit-row";
+  const label = document.createElement("span");
+  label.textContent = action.label;
+  const current = shortcutForAction(action.id);
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "shortcut-capture-btn";
+  button.dataset.shortcutId = action.id;
+  button.textContent = state.capturingShortcutId === action.id ? "입력 대기..." : shortcutLabel(current);
+  button.addEventListener("click", () => {
+    state.capturingShortcutId = state.capturingShortcutId === action.id ? null : action.id;
+    renderShortcutEditor();
+  });
+  const reset = document.createElement("button");
+  reset.type = "button";
+  reset.className = "shortcut-reset-btn";
+  reset.textContent = "기본";
+  reset.title = "기본 단축키로 되돌리기";
+  reset.addEventListener("click", () => {
+    state.settings.shortcuts[action.id] = { ...action.defaultShortcut };
+    persistSettings();
+    renderShortcutEditor();
+  });
+  row.append(label, button, reset);
+  return row;
+}
+
+function renderFeatureSettings() {
+  elements.featureSettings.replaceChildren(
+    ...FEATURE_TOGGLES.map((feature) => {
+      const row = document.createElement("label");
+      row.className = "feature-toggle-row";
+      const text = document.createElement("span");
+      text.innerHTML = `<strong>${escapeHtml(feature.label)}</strong><small>${escapeHtml(feature.description)}</small>`;
+      const toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.checked = featureEnabled(feature.id);
+      toggle.addEventListener("change", () => {
+        state.settings.features[feature.id] = toggle.checked;
+        syncFeatureSettings();
+        persistSettings();
+        applySettings();
+        render();
+      });
+      row.append(text, toggle);
+      return row;
+    }),
+  );
+}
+
+function featureEnabled(featureId) {
+  return state.settings.features?.[featureId] !== false;
+}
+
+function syncFeatureSettings() {
+  state.settings.showBacklinks = featureEnabled("backlinks");
+  state.settings.showTags = featureEnabled("tags");
+  state.settings.enableShortcuts = featureEnabled("shortcuts");
+  elements.backlinksToggle.checked = state.settings.showBacklinks;
+  elements.tagsToggle.checked = state.settings.showTags;
+  elements.shortcutsToggle.checked = state.settings.enableShortcuts;
+}
+
+function handleShortcutCapture(event) {
+  if (!state.capturingShortcutId) return false;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.key === "Escape") {
+    state.capturingShortcutId = null;
+    renderShortcutEditor();
+    return true;
+  }
+  const shortcut = shortcutFromEvent(event);
+  if (!shortcut.key) return true;
+  assignShortcut(state.capturingShortcutId, shortcut);
+  state.capturingShortcutId = null;
+  persistSettings();
+  renderShortcutEditor();
+  return true;
+}
+
+function assignShortcut(actionId, shortcut) {
+  const signature = shortcutSignature(shortcut);
+  Object.entries(state.settings.shortcuts).forEach(([id, current]) => {
+    if (id !== actionId && shortcutSignature(current) === signature) {
+      delete state.settings.shortcuts[id];
+    }
+  });
+  state.settings.shortcuts[actionId] = shortcut;
+}
+
+function shortcutForAction(actionId) {
+  const action = SHORTCUT_ACTIONS.find((item) => item.id === actionId);
+  return state.settings.shortcuts?.[actionId] || action?.defaultShortcut || {};
+}
+
+function shortcutMatches(event, actionId) {
+  return shortcutSignature(shortcutFromEvent(event)) === shortcutSignature(shortcutForAction(actionId));
+}
+
+function shortcutFromEvent(event) {
+  return normalizeShortcut({
+    ctrl: event.ctrlKey || event.metaKey,
+    shift: event.shiftKey,
+    alt: event.altKey,
+    key: normalizeShortcutKey(event.key),
+    code: event.code || undefined,
+  });
+}
+
+function normalizeShortcut(shortcut = {}) {
+  return {
+    ctrl: Boolean(shortcut.ctrl),
+    shift: Boolean(shortcut.shift),
+    alt: Boolean(shortcut.alt),
+    key: normalizeShortcutKey(shortcut.key),
+    code: shortcut.code || undefined,
+  };
+}
+
+function normalizeShortcutKey(key = "") {
+  const value = String(key).toLowerCase();
+  if (value === "esc") return "escape";
+  if (value === " ") return "space";
+  return value;
+}
+
+function shortcutSignature(shortcut = {}) {
+  const normalized = normalizeShortcut(shortcut);
+  const code = normalized.code ? `:${normalized.code}` : "";
+  return [
+    normalized.ctrl ? "ctrl" : "",
+    normalized.shift ? "shift" : "",
+    normalized.alt ? "alt" : "",
+    `${normalized.key}${code}`,
+  ].filter(Boolean).join("+");
+}
+
+function shortcutLabel(shortcut = {}) {
+  const normalized = normalizeShortcut(shortcut);
+  if (!normalized.key) return "미지정";
+  const parts = [];
+  if (normalized.ctrl) parts.push("Ctrl");
+  if (normalized.shift) parts.push("Shift");
+  if (normalized.alt) parts.push("Alt");
+  parts.push(shortcutKeyLabel(normalized.key));
+  return parts.join(" + ");
+}
+
+function shortcutKeyLabel(key) {
+  const labels = {
+    arrowup: "↑",
+    arrowdown: "↓",
+    pageup: "PageUp",
+    pagedown: "PageDown",
+    escape: "Esc",
+    tab: "Tab",
+    space: "Space",
+  };
+  return labels[key] || key.toUpperCase();
+}
+
 function applySettings() {
   const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   const resolvedTheme = state.settings.theme === "system"
@@ -701,6 +954,9 @@ function applySettings() {
   document.documentElement.dataset.backlinks = state.settings.showBacklinks ? "show" : "hide";
   document.documentElement.dataset.tags = state.settings.showTags ? "show" : "hide";
   document.documentElement.dataset.sidebarAssist = state.settings.showSidebarAssist ? "show" : "hide";
+  FEATURE_TOGGLES.forEach((feature) => {
+    document.documentElement.dataset[`feature${feature.id[0].toUpperCase()}${feature.id.slice(1)}`] = featureEnabled(feature.id) ? "show" : "hide";
+  });
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
   applyLanguage();
@@ -917,8 +1173,9 @@ function closeDeletedTreeBox() {
 }
 
 function handleShortcuts(event) {
+  if (handleShortcutCapture(event)) return;
   if (!state.settings.enableShortcuts) return;
-  if (event.key === "Escape") {
+  if (shortcutMatches(event, "closePopup")) {
     if (!elements.noteFindBar.classList.contains("hidden")) {
       closeNoteFind();
       return;
@@ -931,83 +1188,81 @@ function handleShortcuts(event) {
     elements.settingsView.classList.add("hidden");
     return;
   }
-  if (!(event.ctrlKey || event.metaKey)) return;
-  const key = event.key.toLowerCase();
-  if (event.altKey && key === "arrowup") {
+  if (shortcutMatches(event, "moveUp")) {
     event.preventDefault();
     moveSelectedTreeNode(-1);
   }
-  if (event.altKey && key === "arrowdown") {
+  if (shortcutMatches(event, "moveDown")) {
     event.preventDefault();
     moveSelectedTreeNode(1);
   }
-  if (key === "k") {
+  if (shortcutMatches(event, "quickSwitch") || shortcutMatches(event, "quickOpen")) {
+    if (!featureEnabled("quickSwitch")) return;
     event.preventDefault();
     openQuickSwitch();
   }
-  if (key === "o") {
+  if (shortcutMatches(event, "search")) {
+    if (!featureEnabled("search")) return;
     event.preventDefault();
-    openQuickSwitch();
+    toggleSearchPopover();
   }
-  if (key === "f") {
+  if (shortcutMatches(event, "noteFind")) {
     event.preventDefault();
-    if (event.shiftKey) {
-      openNoteFind();
-    } else {
-      toggleSearchPopover();
-    }
+    openNoteFind();
   }
-  if (key === "d") {
+  if (shortcutMatches(event, "daily")) {
+    if (!featureEnabled("daily")) return;
     event.preventDefault();
     toggleDailyPopup();
   }
-  if (key === "g") {
+  if (shortcutMatches(event, "graph")) {
+    if (!featureEnabled("graph")) return;
     event.preventDefault();
     toggleGraph();
   }
-  if (key === "s") {
+  if (shortcutMatches(event, "saveState")) {
     event.preventDefault();
     showCurrentSaveState();
   }
-  if (key === ";") {
+  if (shortcutMatches(event, "insertTime")) {
     event.preventDefault();
     insertCurrentTimeIntoTreeNote();
   }
-  if (key === "w") {
+  if (shortcutMatches(event, "closeOtherTabs")) {
     event.preventDefault();
-    if (event.shiftKey) {
-      closeOtherTreeTabs();
-    } else {
-      closeOpenTreeTab(state.selectedTreeId);
-    }
+    closeOtherTreeTabs();
   }
-  if (key === "p" && event.shiftKey) {
+  if (shortcutMatches(event, "closeTab")) {
+    event.preventDefault();
+    closeOpenTreeTab(state.selectedTreeId);
+  }
+  if (shortcutMatches(event, "pinTab")) {
     event.preventDefault();
     toggleSelectedTreeTabPin();
   }
-  if (key === "t" && event.shiftKey) {
+  if (shortcutMatches(event, "reopenTab")) {
     event.preventDefault();
     reopenClosedTreeTab();
   }
-  if (key === "pageup") {
+  if (shortcutMatches(event, "leftTab")) {
     event.preventDefault();
     cycleOpenTreeTab(-1);
   }
-  if (key === "pagedown") {
+  if (shortcutMatches(event, "rightTab")) {
     event.preventDefault();
     cycleOpenTreeTab(1);
   }
-  if (key === ",") {
+  if (shortcutMatches(event, "settings")) {
     event.preventDefault();
     toggleSettings();
   }
-  if (key === "n") {
+  if (shortcutMatches(event, "addChild")) {
     event.preventDefault();
-    if (event.shiftKey) {
-      addChildToSelectedTreeNode();
-    } else {
-      addRootNote();
-    }
+    addChildToSelectedTreeNode();
+  }
+  if (shortcutMatches(event, "addRoot")) {
+    event.preventDefault();
+    addRootNote();
   }
 }
 
@@ -1046,48 +1301,48 @@ function handleTreeContentShortcut(event) {
     consumeTreeContentShortcut(event);
     return;
   }
-  if (event.key === "Tab") {
+  if (!state.settings.enableShortcuts) return;
+  if (shortcutMatches(event, "indent") || shortcutMatches(event, "outdent")) {
     consumeTreeContentShortcut(event);
-    indentTreeContentSelection(event.shiftKey ? -1 : 1);
+    indentTreeContentSelection(shortcutMatches(event, "outdent") ? -1 : 1);
     return;
   }
-  if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
-  const key = event.key.toLowerCase();
-  if (key === "b") {
+  if (shortcutMatches(event, "bold")) {
     consumeTreeContentShortcut(event);
     wrapTreeContentSelection("**", "**");
   }
-  if (key === "i") {
+  if (shortcutMatches(event, "italic")) {
     consumeTreeContentShortcut(event);
     wrapTreeContentSelection("*", "*");
   }
-  if (key === "c" && event.shiftKey) {
+  if (shortcutMatches(event, "checklist")) {
     consumeTreeContentShortcut(event);
     insertChecklistIntoTreeContent();
   }
-  if (event.code === "Digit7" && event.shiftKey) {
+  if (shortcutMatches(event, "orderedList")) {
     consumeTreeContentShortcut(event);
     insertOrderedListIntoTreeContent();
   }
-  if (key === "q" && event.shiftKey) {
+  if (shortcutMatches(event, "quote")) {
     consumeTreeContentShortcut(event);
     applyLinePrefixToTreeContent("> ", /^>\s*/);
   }
-  if (key === "k" && event.shiftKey) {
+  if (shortcutMatches(event, "codeBlock")) {
     consumeTreeContentShortcut(event);
     wrapTreeContentAsCodeBlock();
   }
-  if (key === "h" && event.shiftKey) {
+  if (shortcutMatches(event, "horizontalRule")) {
     consumeTreeContentShortcut(event);
     insertHorizontalRuleIntoTreeContent();
   }
-  if (key === "l" && event.shiftKey) {
+  if (shortcutMatches(event, "link")) {
     consumeTreeContentShortcut(event);
     wrapTreeContentAsMarkdownLink();
   }
-  if (["1", "2", "3"].includes(key)) {
+  if (shortcutMatches(event, "heading1") || shortcutMatches(event, "heading2") || shortcutMatches(event, "heading3")) {
     consumeTreeContentShortcut(event);
-    applyHeadingToTreeContent(Number(key));
+    const level = shortcutMatches(event, "heading1") ? 1 : shortcutMatches(event, "heading2") ? 2 : 3;
+    applyHeadingToTreeContent(level);
   }
 }
 
@@ -3106,6 +3361,11 @@ function normalizeSettings(settings = {}) {
   normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
   normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
   normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
+  normalized.features = normalizeFeatureSettings(normalized.features, defaults.features);
+  normalized.features.backlinks = normalized.showBacklinks;
+  normalized.features.tags = normalized.showTags;
+  normalized.features.shortcuts = normalized.enableShortcuts;
+  normalized.shortcuts = normalizeShortcutSettings(normalized.shortcuts, defaults.shortcuts);
   normalized.openTreeTabs = normalizeIdList(normalized.openTreeTabs, 100);
   normalized.closedTreeTabs = normalizeIdList(normalized.closedTreeTabs, 10);
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
@@ -3124,6 +3384,25 @@ function normalizeToggle(value, fallback) {
   if (value === "true") return true;
   if (value === "false") return false;
   return fallback;
+}
+
+function normalizeShortcutSettings(value, fallback) {
+  const source = value && typeof value === "object" ? value : {};
+  const normalized = {};
+  SHORTCUT_ACTIONS.forEach((action) => {
+    normalized[action.id] = normalizeShortcut(source[action.id] || fallback[action.id] || action.defaultShortcut);
+  });
+  return normalized;
+}
+
+function normalizeFeatureSettings(value, fallback) {
+  const source = value && typeof value === "object" ? value : {};
+  return Object.fromEntries(
+    FEATURE_TOGGLES.map((feature) => [
+      feature.id,
+      typeof source[feature.id] === "boolean" ? source[feature.id] : fallback[feature.id],
+    ]),
+  );
 }
 
 function persistSettings() {

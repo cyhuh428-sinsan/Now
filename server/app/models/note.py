@@ -71,6 +71,26 @@ class AnalysisJob(Base):
     )
 
 
+class UserAccount(Base):
+    __tablename__ = "user_accounts"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    email: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    timezone: Mapped[str] = mapped_column(String(80), default="Asia/Seoul")
+    group_name: Mapped[str] = mapped_column(String(80), default="사용자", index=True)
+    two_factor_enabled: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 

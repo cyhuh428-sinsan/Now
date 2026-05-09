@@ -10,7 +10,7 @@ from sqlalchemy import func, select, text
 
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording, SyncLog
+from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
@@ -60,6 +60,11 @@ def admin_recordings(_: None = Depends(_require_monitor_access)) -> HTMLResponse
 @router.get("/admin/devices", include_in_schema=False)
 def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_devices_html())
+
+
+@router.get("/admin/users", include_in_schema=False)
+def admin_users(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_users_html())
 
 
 @router.get("/admin/ops", include_in_schema=False)
@@ -557,6 +562,7 @@ def _admin_html() -> str:
         <a href="/monitor">모니터</a>
         <a href="/admin/notes">메모</a>
         <a href="/admin/recordings">녹음</a>
+        <a href="/admin/users">사용자</a>
         <a href="/admin/devices">기기</a>
         <a href="/admin/sync">동기화</a>
         <a href="/admin/ops">점검</a>
@@ -1738,6 +1744,7 @@ def _admin_devices_html() -> str:
         <a href="/admin">관리</a>
         <a href="/admin/notes">메모</a>
         <a href="/admin/recordings">녹음</a>
+        <a href="/admin/users">사용자</a>
         <a href="/admin/analysis">분석</a>
         <a href="/admin/sync">동기화</a>
         <a href="/admin/ops">점검</a>
@@ -1787,6 +1794,225 @@ def _admin_device_rows(devices: list[dict[str, object]]) -> str:
         "</tr>"
         for device in devices
     )
+
+
+def _admin_users_html() -> str:
+    error_message = ""
+    users: list[UserAccount] = []
+    group_counts: dict[str, int] = {}
+    timezone_counts: dict[str, int] = {}
+
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            users = list(
+                db.scalars(
+                    select(UserAccount).order_by(
+                        UserAccount.last_seen_at.desc().nullslast(),
+                        UserAccount.updated_at.desc(),
+                        UserAccount.id.desc(),
+                    )
+                ).all()
+            )
+            group_rows = db.execute(
+                select(UserAccount.group_name, func.count())
+                .group_by(UserAccount.group_name)
+                .order_by(func.count().desc(), UserAccount.group_name)
+            ).all()
+            timezone_rows = db.execute(
+                select(UserAccount.timezone, func.count())
+                .group_by(UserAccount.timezone)
+                .order_by(func.count().desc(), UserAccount.timezone)
+            ).all()
+            group_counts = {group_name: count for group_name, count in group_rows}
+            timezone_counts = {timezone_name: count for timezone_name, count in timezone_rows}
+    except Exception as exc:
+        error_message = str(exc)
+
+    active_count = sum(1 for user in users if user.is_active)
+    two_factor_count = sum(1 for user in users if user.two_factor_enabled)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 사용자 관리</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 32px 18px 48px; }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{ margin: 0; font-size: 30px; line-height: 1.2; }}
+    a {{ color: var(--blue); text-decoration: none; font-weight: 650; }}
+    .sub {{ margin-top: 8px; color: var(--muted); font-size: 14px; }}
+    .nav {{ display: flex; gap: 10px; flex-wrap: wrap; }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .grid {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .card, section {{
+      margin-top: 14px;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }}
+    .card {{ margin-top: 0; padding: 18px; min-height: 116px; }}
+    .label {{ color: var(--muted); font-size: 13px; margin-bottom: 12px; }}
+    .value {{ font-size: 24px; font-weight: 750; letter-spacing: 0; }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{ color: var(--muted); font-weight: 600; background: #fafafa; }}
+    tr:last-child td {{ border-bottom: 0; }}
+    .badge {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .ok {{ background: #dcfce7; color: #166534; }}
+    .warn {{ background: #fef3c7; color: #92400e; }}
+    .bad {{ background: #fee2e2; color: #991b1b; }}
+    .mono {{
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 13px;
+      word-break: break-word;
+    }}
+    @media (max-width: 900px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .grid {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
+    }}
+    @media (max-width: 620px) {{
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+      .grid {{ grid-template-columns: 1fr; }}
+      th, td {{ padding: 12px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>사용자 관리</h1>
+        <div class="sub">시간대, 2단계 인증, 사용자 그룹, 접속 시간을 확인합니다.</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/devices">기기</a>
+        <a href="/admin/sync">동기화</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/export">내보내기</a>
+        <a href="/monitor">모니터</a>
+      </nav>
+    </header>
+
+    <div class="grid">
+      <div class="card"><div class="label">전체 사용자</div><div class="value">{len(users)}</div></div>
+      <div class="card"><div class="label">활성 사용자</div><div class="value">{active_count}</div></div>
+      <div class="card"><div class="label">2단계 인증 사용</div><div class="value">{two_factor_count}</div></div>
+      <div class="card"><div class="label">사용자 그룹</div><div class="value">{len(group_counts)}</div></div>
+    </div>
+
+    <section>
+      <div class="section-head"><span>사용자 목록</span><span class="sub">동기화 활동 기준 자동 생성</span></div>
+      <table>
+        <tr><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th></tr>
+        {_user_rows(users)}
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head"><span>그룹별 사용자</span><span class="sub">운영 권한 분류 기준</span></div>
+      <table><tr><th>그룹</th><th>사용자 수</th></tr>{_note_group_rows(group_counts)}</table>
+    </section>
+
+    <section>
+      <div class="section-head"><span>시간대별 사용자</span><span class="sub">일자별 메모와 알림 기준</span></div>
+      <table><tr><th>시간대</th><th>사용자 수</th></tr>{_note_group_rows(timezone_counts)}</table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _user_rows(users: list[UserAccount]) -> str:
+    if not users:
+        return '<tr><td colspan="8">사용자가 없습니다. 동기화가 들어오면 자동 생성됩니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{user.id}</td>"
+        f"<td class=\"mono\">{escape(user.owner_id)}</td>"
+        f"<td>{escape(user.display_name or '-')}</td>"
+        f"<td>{escape(user.timezone)}</td>"
+        f"<td>{_simple_badge('ok' if user.two_factor_enabled else 'warn', '사용' if user.two_factor_enabled else '미사용')}</td>"
+        f"<td>{escape(user.group_name)}</td>"
+        f"<td>{_simple_badge('ok' if user.is_active else 'bad', '활성' if user.is_active else '비활성')}</td>"
+        f"<td>{_format_datetime(user.last_seen_at)}</td>"
+        "</tr>"
+        for user in users
+    )
+
+
+def _simple_badge(status: str, label: str) -> str:
+    return f'<span class="badge {escape(status)}">{escape(label)}</span>'
 
 
 def _admin_ops_html() -> str:
@@ -2405,6 +2631,7 @@ def _admin_export_html() -> str:
         ("Notes", "/api/v1/admin/export/notes", "메모 전체 export"),
         ("삭제 제외 메모", "/api/v1/admin/export/notes?include_deleted=false", "삭제 표시 제외 메모 export"),
         ("Recordings", "/api/v1/admin/export/recordings", "녹음 파일 메타데이터 export"),
+        ("Users", "/api/v1/admin/export/users", "사용자 계정과 운영 메타데이터 export"),
         ("분석 작업", "/api/v1/admin/export/analysis-jobs", "분석 작업 이력 export"),
         ("동기화 이력", "/api/v1/admin/export/sync-logs", "동기화 호출 이력 export"),
     ]
