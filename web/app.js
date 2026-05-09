@@ -259,6 +259,7 @@ function defaultServerSettings() {
     ownerId: "local-user",
     deviceId: "web-desktop",
     lastCheckedAt: null,
+    lastSyncedAt: null,
     lastStatus: "idle",
     lastMessage: "",
   };
@@ -955,6 +956,7 @@ async function syncWebNotesToServer() {
       body: JSON.stringify({
         owner_id: server.ownerId,
         device_id: server.deviceId,
+        updated_after: server.lastSyncedAt,
         include_deleted: true,
         notes,
       }),
@@ -964,6 +966,7 @@ async function syncWebNotesToServer() {
     markServerSyncedNotes();
     server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
+    server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
     server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${payload.pushed_notes?.length || 0}개, 받은 메모 ${payload.pulled_notes?.length || 0}개`;
     persist();
   } catch (error) {
@@ -976,17 +979,28 @@ async function syncWebNotesToServer() {
 }
 
 function buildServerSyncNotes(server) {
+  const changedOnly = Boolean(server.lastSyncedAt);
   const notes = [
     ...Object.values(state.data.daily)
       .filter((note) => note.content?.trim())
+      .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => dailyNoteToServerNote(note, server)),
     ...state.data.archivedDaily
       .filter((note) => note.content?.trim())
+      .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => archivedDailyNoteToServerNote(note, server)),
-    ...flattenTree(state.data.tree).map((node) => treeNodeToServerNote(node, server, null)),
-    ...state.data.deletedTree.map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
+    ...flattenTree(state.data.tree)
+      .filter((node) => shouldSendServerNote(node, changedOnly))
+      .map((node) => treeNodeToServerNote(node, server, null)),
+    ...state.data.deletedTree
+      .filter((node) => shouldSendServerNote(node, changedOnly))
+      .map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
   ];
   return notes.filter(Boolean);
+}
+
+function shouldSendServerNote(item, changedOnly) {
+  return !changedOnly || item.syncState === "pending";
 }
 
 function dailyNoteToServerNote(note, server) {
@@ -3705,6 +3719,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.ownerId = typeof normalized.ownerId === "string" && normalized.ownerId.trim() ? normalized.ownerId.trim() : defaults.ownerId;
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
+  normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
   normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
   normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
   return normalized;
