@@ -69,12 +69,16 @@ const I18N = {
     "settings.server.device": "기기 ID",
     "settings.server.save": "연결 설정 저장",
     "settings.server.test": "연결 테스트",
+    "settings.server.sync": "서버로 동기화",
     "settings.server.local": "서버 연결을 사용하지 않습니다.",
     "settings.server.saved": "연결 설정을 저장했습니다.",
     "settings.server.testing": "서버 연결을 확인하는 중입니다.",
     "settings.server.ok": "서버 연결 확인됨",
     "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
     "settings.server.fail": "서버 연결 실패",
+    "settings.server.syncing": "서버로 메모를 동기화하는 중입니다.",
+    "settings.server.syncOk": "서버 동기화 완료",
+    "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
@@ -140,12 +144,16 @@ const I18N = {
     "settings.server.device": "Device ID",
     "settings.server.save": "Save connection",
     "settings.server.test": "Test connection",
+    "settings.server.sync": "Sync to server",
     "settings.server.local": "Server connection is disabled.",
     "settings.server.saved": "Connection settings saved.",
     "settings.server.testing": "Checking server connection.",
     "settings.server.ok": "Server connection verified",
     "settings.server.noUrl": "Enter a server URL first.",
     "settings.server.fail": "Server connection failed",
+    "settings.server.syncing": "Syncing notes to the server.",
+    "settings.server.syncOk": "Server sync complete",
+    "settings.server.syncEmpty": "There are no notes to sync.",
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
@@ -409,6 +417,7 @@ const elements = {
   deviceIdInput: $("#deviceIdInput"),
   serverSaveBtn: $("#serverSaveBtn"),
   serverTestBtn: $("#serverTestBtn"),
+  serverSyncBtn: $("#serverSyncBtn"),
   serverStatusText: $("#serverStatusText"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
@@ -633,6 +642,8 @@ function bindEvents() {
   });
 
   elements.serverTestBtn.addEventListener("click", testServerConnection);
+
+  elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -906,6 +917,144 @@ async function testServerConnection() {
   renderServerSettings();
 }
 
+async function syncWebNotesToServer() {
+  saveServerSettingsFromForm(t("settings.server.syncing"));
+  const server = state.settings.server;
+  if (server.mode !== "server") {
+    server.lastStatus = "idle";
+    server.lastMessage = t("settings.server.local");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+  if (!server.url) {
+    server.lastStatus = "bad";
+    server.lastMessage = t("settings.server.noUrl");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  const notes = buildServerSyncNotes(server);
+  if (notes.length === 0) {
+    server.lastStatus = "saved";
+    server.lastMessage = t("settings.server.syncEmpty");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  renderServerStatus("testing", t("settings.server.syncing"));
+  try {
+    const response = await fetch(`${server.url}/api/v1/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+      },
+      body: JSON.stringify({
+        owner_id: server.ownerId,
+        device_id: server.deviceId,
+        include_deleted: true,
+        notes,
+      }),
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const payload = await response.json();
+    markServerSyncedNotes();
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${payload.pushed_notes?.length || 0}개, 받은 메모 ${payload.pulled_notes?.length || 0}개`;
+    persist();
+  } catch (error) {
+    server.lastStatus = "bad";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+function buildServerSyncNotes(server) {
+  const notes = [
+    ...Object.values(state.data.daily)
+      .filter((note) => note.content?.trim())
+      .map((note) => dailyNoteToServerNote(note, server)),
+    ...state.data.archivedDaily
+      .filter((note) => note.content?.trim())
+      .map((note) => archivedDailyNoteToServerNote(note, server)),
+    ...flattenTree(state.data.tree).map((node) => treeNodeToServerNote(node, server, null)),
+    ...state.data.deletedTree.map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
+  ];
+  return notes.filter(Boolean);
+}
+
+function dailyNoteToServerNote(note, server) {
+  return {
+    owner_id: server.ownerId,
+    device_id: server.deviceId,
+    local_id: `daily:${note.date}`,
+    note_type: "daily",
+    title: `${note.date} 일자별 메모`,
+    content: note.content || "",
+    parent_local_id: null,
+    level: 1,
+    tags: "",
+    source: "web-daily",
+    client_updated_at: note.updatedAt || new Date().toISOString(),
+    deleted_at: null,
+  };
+}
+
+function archivedDailyNoteToServerNote(note, server) {
+  return {
+    owner_id: server.ownerId,
+    device_id: server.deviceId,
+    local_id: `daily-archive:${note.id}`,
+    note_type: "daily",
+    title: `${note.date} 보관 메모`,
+    content: note.content || "",
+    parent_local_id: null,
+    level: 1,
+    tags: "",
+    source: "web-daily-archive",
+    client_updated_at: note.updatedAt || note.archivedAt || new Date().toISOString(),
+    deleted_at: note.restoredAt || null,
+  };
+}
+
+function treeNodeToServerNote(node, server, deletedAt) {
+  return {
+    owner_id: server.ownerId,
+    device_id: server.deviceId,
+    local_id: node.id,
+    note_type: "tree",
+    title: node.title || "제목 없음",
+    content: node.content || "",
+    parent_local_id: node.parentId || null,
+    level: node.level || 1,
+    tags: Array.isArray(node.tags) ? node.tags.join(",") : "",
+    source: "web-tree",
+    client_updated_at: node.updatedAt || new Date().toISOString(),
+    deleted_at: deletedAt,
+  };
+}
+
+function markServerSyncedNotes() {
+  Object.values(state.data.daily).forEach((note) => {
+    note.syncState = "synced";
+  });
+  state.data.archivedDaily.forEach((note) => {
+    note.syncState = "synced";
+  });
+  flattenTree(state.data.tree).forEach((node) => {
+    node.syncState = "synced";
+  });
+  state.data.deletedTree.forEach((node) => {
+    node.syncState = "synced";
+  });
+}
+
 function normalizeServerUrl(value) {
   return value.trim().replace(/\/+$/, "");
 }
@@ -1164,6 +1313,7 @@ function applyLanguage() {
   setText("#deviceIdLabel", t("settings.server.device"));
   setText("#serverSaveBtn", t("settings.server.save"));
   setText("#serverTestBtn", t("settings.server.test"));
+  setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
