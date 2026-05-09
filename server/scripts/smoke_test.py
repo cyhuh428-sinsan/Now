@@ -148,6 +148,35 @@ def main() -> None:
         {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
     )
 
+    status, data = request("GET", f"{base_url}/api/v1/users/local_user", args.token)
+    print(
+        "GET /api/v1/users/local_user:",
+        status,
+        {
+            "status": data.get("status"),
+            "timezone": data.get("user", {}).get("timezone"),
+        },
+    )
+
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/users/local_user",
+        args.token,
+        {
+            "email": "local_user@example.com",
+            "display_name": "Local User",
+            "timezone": "Asia/Seoul",
+        },
+    )
+    print(
+        "PATCH /api/v1/users/local_user:",
+        status,
+        {
+            "status": data.get("status"),
+            "timezone": data.get("user", {}).get("timezone"),
+        },
+    )
+
 
 if __name__ == "__main__":
     try:
