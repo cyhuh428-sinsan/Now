@@ -79,6 +79,7 @@ const I18N = {
     "settings.server.syncing": "서버로 메모를 동기화하는 중입니다.",
     "settings.server.syncOk": "서버 동기화 완료",
     "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
+    "settings.server.mergeSkipped": "로컬 변경 보존",
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
@@ -154,6 +155,7 @@ const I18N = {
     "settings.server.syncing": "Syncing notes to the server.",
     "settings.server.syncOk": "Server sync complete",
     "settings.server.syncEmpty": "There are no notes to sync.",
+    "settings.server.mergeSkipped": "Local changes kept",
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
@@ -937,14 +939,6 @@ async function syncWebNotesToServer() {
   }
 
   const notes = buildServerSyncNotes(server);
-  if (notes.length === 0) {
-    server.lastStatus = "saved";
-    server.lastMessage = t("settings.server.syncEmpty");
-    persistSettings();
-    renderServerSettings();
-    return;
-  }
-
   renderServerStatus("testing", t("settings.server.syncing"));
   try {
     const response = await fetch(`${server.url}/api/v1/sync`, {
@@ -963,12 +957,15 @@ async function syncWebNotesToServer() {
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const payload = await response.json();
+    const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
     markServerSyncedNotes();
     server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
-    server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${payload.pushed_notes?.length || 0}개, 받은 메모 ${payload.pulled_notes?.length || 0}개`;
+    server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${payload.pushed_notes?.length || 0}개, 받은 메모 ${mergeResult.applied}개`
+      + (mergeResult.skipped ? `, ${t("settings.server.mergeSkipped")} ${mergeResult.skipped}개` : "");
     persist();
+    render();
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
@@ -976,6 +973,177 @@ async function syncWebNotesToServer() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+function applyPulledServerNotes(serverNotes) {
+  const result = { applied: 0, skipped: 0 };
+  const notes = Array.isArray(serverNotes) ? serverNotes : [];
+  const dailyNotes = notes.filter((note) => note.note_type === "daily");
+  const activeTreeNotes = notes
+    .filter((note) => note.note_type === "tree" && !note.deleted_at)
+    .sort((a, b) => (a.level || 1) - (b.level || 1));
+  const deletedTreeNotes = notes.filter((note) => note.note_type === "tree" && note.deleted_at);
+
+  dailyNotes.forEach((note) => {
+    applyPulledDailyNote(note) ? result.applied += 1 : result.skipped += 1;
+  });
+  activeTreeNotes.forEach((note) => {
+    applyPulledTreeNote(note) ? result.applied += 1 : result.skipped += 1;
+  });
+  deletedTreeNotes.forEach((note) => {
+    applyPulledDeletedTreeNote(note) ? result.applied += 1 : result.skipped += 1;
+  });
+  normalizeData();
+  return result;
+}
+
+function applyPulledDailyNote(note) {
+  const date = dailyDateFromServerNote(note);
+  if (!date) return false;
+  if (note.source === "web-daily-archive" || String(note.local_id || "").startsWith("daily-archive:")) {
+    return applyPulledArchivedDailyNote(note, date);
+  }
+  const current = state.data.daily[date];
+  if (current?.syncState === "pending") return false;
+  state.data.daily[date] = {
+    ...(current || {}),
+    date,
+    content: note.content || "",
+    status: note.deleted_at ? "archived" : "active",
+    syncState: "synced",
+    updatedAt: note.client_updated_at || note.updated_at || new Date().toISOString(),
+  };
+  if (note.deleted_at) {
+    state.data.archivedDaily.unshift({
+      id: note.local_id,
+      date,
+      content: note.content || "",
+      status: "archived",
+      syncState: "synced",
+      archivedAt: note.deleted_at,
+      restoredAt: null,
+      updatedAt: note.client_updated_at || note.updated_at || note.deleted_at,
+    });
+    delete state.data.daily[date];
+  }
+  return true;
+}
+
+function applyPulledArchivedDailyNote(note, date) {
+  const id = note.local_id.replace(/^daily-archive:/, "") || note.local_id;
+  const current = state.data.archivedDaily.find((item) => item.id === id);
+  if (current?.syncState === "pending") return false;
+  const next = {
+    ...(current || {}),
+    id,
+    date,
+    content: note.content || "",
+    status: "archived",
+    syncState: "synced",
+    archivedAt: note.deleted_at || note.updated_at || new Date().toISOString(),
+    restoredAt: note.deleted_at || null,
+    updatedAt: note.client_updated_at || note.updated_at || new Date().toISOString(),
+  };
+  if (current) {
+    Object.assign(current, next);
+  } else {
+    state.data.archivedDaily.unshift(next);
+  }
+  return true;
+}
+
+function applyPulledTreeNote(note) {
+  const current = findTreeNode(state.data.tree, note.local_id);
+  if (current?.syncState === "pending") return false;
+  const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
+  if (deleted?.syncState === "pending") return false;
+  removePulledDeletedTreeNote(note.local_id);
+  const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
+  const nextLevel = Math.min(3, Math.max(1, note.level || (parent ? parent.level + 1 : 1)));
+  const nextParentId = parent && nextLevel > 1 ? parent.id : null;
+  if (current) {
+    current.title = note.title || "제목 없음";
+    current.content = note.content || "";
+    current.parentId = nextParentId;
+    current.level = nextLevel;
+    current.status = "active";
+    current.syncState = "synced";
+    current.tags = tagsFromServerNote(note);
+    current.updatedAt = note.client_updated_at || note.updated_at || new Date().toISOString();
+    return true;
+  }
+
+  const created = createPulledTreeNode(note, nextParentId, nextLevel);
+  if (parent && nextLevel > 1) {
+    parent.children.push(created);
+    state.expandedTreeIds.add(parent.id);
+  } else {
+    state.data.tree.push(created);
+  }
+  return true;
+}
+
+function applyPulledDeletedTreeNote(note) {
+  const current = findTreeNode(state.data.tree, note.local_id);
+  if (current?.syncState === "pending") return false;
+  if (current) {
+    detachTreeNode(note.local_id);
+    removeTreeTabReferences(note.local_id);
+  }
+  const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
+  if (deleted?.syncState === "pending") return false;
+  const next = createPulledTreeNode(note, note.parent_local_id || null, note.level || 1);
+  next.status = "deleted";
+  next.deletedAt = note.deleted_at || note.updated_at || new Date().toISOString();
+  if (deleted) {
+    Object.assign(deleted, next);
+  } else {
+    state.data.deletedTree.unshift(next);
+  }
+  return true;
+}
+
+function createPulledTreeNode(note, parentId, level) {
+  return {
+    id: note.local_id,
+    title: note.title || "제목 없음",
+    content: note.content || "",
+    parentId,
+    level,
+    children: [],
+    status: note.deleted_at ? "deleted" : "active",
+    syncState: "synced",
+    favorite: false,
+    tags: tagsFromServerNote(note),
+    createdAt: note.created_at || note.client_updated_at || note.updated_at || new Date().toISOString(),
+    updatedAt: note.client_updated_at || note.updated_at || new Date().toISOString(),
+  };
+}
+
+function dailyDateFromLocalId(localId) {
+  const text = String(localId || "");
+  const direct = text.match(/^daily:(\d{4}-\d{2}-\d{2})$/);
+  if (direct) return direct[1];
+  const archive = text.match(/^daily-archive:(\d{4}-\d{2}-\d{2})/);
+  if (archive) return archive[1];
+  return null;
+}
+
+function dailyDateFromServerNote(note) {
+  return dailyDateFromLocalId(note.local_id)
+    || String(note.title || "").match(/(\d{4}-\d{2}-\d{2})/)?.[1]
+    || null;
+}
+
+function tagsFromServerNote(note) {
+  return String(note.tags || "")
+    .split(",")
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
+
+function removePulledDeletedTreeNote(id) {
+  state.data.deletedTree = state.data.deletedTree.filter((node) => node.id !== id);
 }
 
 function buildServerSyncNotes(server) {
