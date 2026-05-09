@@ -8,6 +8,7 @@ from app.db import get_db
 from app.models.note import SyncLog
 from app.schemas.note import SyncRequest, SyncResponse
 from app.services.note_sync import as_naive_utc, list_changed_notes, upsert_note
+from app.services.user_accounts import touch_user_activity
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -18,6 +19,7 @@ router = APIRouter(
 
 @router.post("", response_model=SyncResponse)
 def sync(payload: SyncRequest, db: Session = Depends(get_db)) -> SyncResponse:
+    touch_user_activity(db, owner_id=payload.owner_id)
     pushed = [upsert_note(note, db) for note in payload.notes]
     db.commit()
     for note in pushed:

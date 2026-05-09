@@ -103,6 +103,7 @@ http://localhost:8750/monitor
 http://localhost:8750/admin
 http://localhost:8750/admin/notes
 http://localhost:8750/admin/recordings
+http://localhost:8750/admin/users
 http://localhost:8750/admin/devices
 http://localhost:8750/admin/sync
 http://localhost:8750/admin/ops
@@ -114,6 +115,7 @@ http://localhost:8750/admin/analysis
 `/admin`은 운영 설정, 메모 타입별 저장 현황, 최근 분석 작업을 확인하는 읽기 전용 관리 화면입니다.
 `/admin/notes`는 메모 타입/소스/사용자별 집계와 최근 변경 메모를 확인하는 읽기 전용 화면입니다.
 `/admin/recordings`는 원본 음성 파일 저장 현황과 최근 녹음 파일을 확인하는 읽기 전용 화면입니다.
+`/admin/users`는 시간대, 2단계 인증 사용 여부, 사용자 그룹, 활성 상태, 최근 접속 시간을 확인하는 읽기 전용 화면입니다.
 `/admin/devices`는 owner/device별 메모, 녹음, 마지막 동기화 흔적을 확인하는 읽기 전용 화면입니다.
 `/admin/sync`는 앱과 서버 사이의 동기화 호출 이력을 확인하는 읽기 전용 화면입니다.
 `/admin/ops`는 토큰, DB, 분석 작업, 삭제 표시 메모 등 운영 점검 항목을 확인하는 읽기 전용 화면입니다.
@@ -153,7 +155,7 @@ DB 연결까지 포함한 준비 상태 확인.
 `GET /api/v1/server`
 
 서버 이름, API 버전, 인증 필요 여부를 확인합니다.
-앱은 이 응답의 `capabilities` 값으로 동기화, 녹음 업로드, 분석 작업, 운영 점검 API 지원 여부와 계층 메모 최대 깊이를 확인할 수 있습니다.
+앱은 이 응답의 `capabilities` 값으로 동기화, 녹음 업로드, 분석 작업, 사용자 계정, 운영 점검 API 지원 여부와 계층 메모 최대 깊이를 확인할 수 있습니다.
 
 ### Notes
 

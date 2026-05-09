@@ -676,6 +676,60 @@ body.resizing {
   white-space: nowrap;
 }
 
+.shortcut-edit-row,
+.feature-toggle-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.shortcut-capture-btn,
+.shortcut-reset-btn {
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font-weight: 700;
+}
+
+.shortcut-capture-btn {
+  min-width: 120px;
+  color: var(--blue);
+}
+
+.shortcut-reset-btn {
+  padding: 0 8px;
+  color: var(--muted);
+}
+
+.feature-toggle-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 10px;
+  width: min(620px, 100%);
+}
+
+.feature-toggle-row {
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.feature-toggle-row span {
+  display: grid;
+  gap: 3px;
+}
+
+.feature-toggle-row small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 kbd {
   display: inline-grid;
   place-items: center;
@@ -688,6 +742,22 @@ kbd {
   font: inherit;
   font-size: 12px;
   font-weight: 800;
+}
+
+[data-feature-search="hide"] #railSearchBtn,
+[data-feature-search="hide"] #searchPopoverView,
+[data-feature-daily="hide"] #railDailyBtn,
+[data-feature-daily="hide"] #dailyToggleBtn,
+[data-feature-daily="hide"] #dailyView,
+[data-feature-quick-switch="hide"] #railQuickBtn,
+[data-feature-quick-switch="hide"] #quickSwitchBtn,
+[data-feature-quick-switch="hide"] #quickSwitchView,
+[data-feature-graph="hide"] #railGraphBtn,
+[data-feature-graph="hide"] #graphBtn,
+[data-feature-graph="hide"] #graphView,
+[data-feature-favorites="hide"] .side-section[aria-labelledby="favoriteTitle"],
+[data-feature-favorites="hide"] #favoriteBtn {
+  display: none !important;
 }
 
 .daily-popover.hidden {

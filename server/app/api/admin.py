@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
-from app.models.note import AnalysisJob, Note, Recording, SyncLog
+from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -64,6 +64,35 @@ def export_sync_logs(
     return _export_payload("sync_logs", list(db.scalars(stmt).all()))
 
 
+@router.get("/export/users")
+def export_users(db: Session = Depends(get_db)) -> dict:
+    stmt = select(UserAccount).order_by(
+        UserAccount.last_seen_at.desc().nullslast(),
+        UserAccount.updated_at.desc(),
+        UserAccount.id.desc(),
+    )
+    return _export_payload("users", list(db.scalars(stmt).all()))
+
+
+@router.get("/users")
+def users(db: Session = Depends(get_db)) -> dict:
+    rows = list(
+        db.scalars(
+            select(UserAccount).order_by(
+                UserAccount.last_seen_at.desc().nullslast(),
+                UserAccount.updated_at.desc(),
+                UserAccount.id.desc(),
+            )
+        ).all()
+    )
+    return {
+        "count": len(rows),
+        "active": sum(1 for row in rows if row.is_active),
+        "two_factor_enabled": sum(1 for row in rows if row.two_factor_enabled),
+        "items": [_model_to_dict(row) for row in rows],
+    }
+
+
 @router.get("/ops")
 def ops_status(db: Session = Depends(get_db)) -> dict:
     settings = get_settings()
@@ -73,6 +102,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     db_message = "DB 연결 정상"
     note_total = 0
     recording_total = 0
+    user_total = 0
     failed_jobs = 0
     queued_jobs = 0
     running_jobs = 0
@@ -82,6 +112,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
         db.execute(text("select 1"))
         note_total = db.scalar(select(func.count()).select_from(Note)) or 0
         recording_total = db.scalar(select(func.count()).select_from(Recording)) or 0
+        user_total = db.scalar(select(func.count()).select_from(UserAccount)) or 0
         failed_jobs = _count_jobs_by_status(db, "failed")
         queued_jobs = _count_jobs_by_status(db, "queued")
         running_jobs = _count_jobs_by_status(db, "running")
@@ -164,6 +195,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
         "summary": {
             "notes": note_total,
             "recordings": recording_total,
+            "users": user_total,
             "failed_analysis_jobs": failed_jobs,
             "queued_analysis_jobs": queued_jobs,
             "running_analysis_jobs": running_jobs,

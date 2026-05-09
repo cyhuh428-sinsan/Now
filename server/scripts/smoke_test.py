@@ -53,6 +53,7 @@ def main() -> None:
         "/admin",
         "/admin/notes",
         "/admin/recordings",
+        "/admin/users",
         "/admin/devices",
         "/admin/sync",
         "/admin/ops",
@@ -81,6 +82,16 @@ def main() -> None:
         {
             "status": data.get("status"),
             "checks": len(data.get("checks", [])),
+        },
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/users", args.token)
+    print(
+        "GET /api/v1/admin/users:",
+        status,
+        {
+            "count": data.get("count"),
+            "active": data.get("active"),
         },
     )
 
