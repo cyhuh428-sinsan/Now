@@ -8,6 +8,109 @@ const ACCENTS = [
   { id: "orange", label: "주황", value: "#f97316" },
 ];
 
+const I18N = {
+  ko: {
+    "app.title": "NowNote Web",
+    "brand.subtitle": "지식 메모",
+    "search.label": "검색",
+    "search.placeholder": "제목, 내용 검색",
+    "today.label": "오늘 메모",
+    "nav.tree": "지식 메모",
+    "side.favorite": "즐겨찾기",
+    "side.recent": "최근 수정",
+    "side.tags": "태그",
+    "side.explore": "탐색",
+    "side.quick": "빠른 전환",
+    "side.graph": "연결 보기",
+    "side.file": "파일",
+    "side.mdExport": "Markdown 내보내기",
+    "side.mdImport": "Markdown 가져오기",
+    "side.manage": "관리",
+    "side.trash": "삭제 보관함",
+    "side.settings": "화면 설정",
+    "rail.sidebar.open": "목록 펼치기",
+    "rail.sidebar.close": "목록 접기",
+    "rail.knowledge": "지식 메모",
+    "rail.daily": "오늘 메모",
+    "rail.search": "검색",
+    "rail.quick": "빠른 전환",
+    "rail.graph": "연결 보기",
+    "rail.mdExport": "Markdown 내보내기",
+    "rail.mdImport": "Markdown 가져오기",
+    "rail.trash": "삭제 보관함",
+    "rail.settings": "화면 설정",
+    "tree.eyebrow": "주제 / 분류 / 메모",
+    "tree.title": "지식 메모",
+    "tree.expandAll": "모두 펼치기",
+    "tree.collapseAll": "모두 접기",
+    "tree.addRoot": "주제 추가",
+    "editor.favorite": "즐겨찾기",
+    "editor.unfavorite": "즐겨찾기 해제",
+    "editor.find": "본문 찾기",
+    "editor.outline": "개요",
+    "editor.insertTime": "시간 넣기",
+    "editor.preview": "Markdown 보기",
+    "editor.edit": "편집하기",
+    "settings.eyebrow": "사용자 취향에 맞게 조정",
+    "settings.title": "화면 설정",
+    "settings.language.title": "언어",
+    "settings.language.desc": "앱 화면에 사용할 언어를 선택합니다.",
+    "settings.theme.title": "기본 테마",
+    "settings.theme.desc": "앱의 밝기 테마를 선택합니다.",
+    "saved": "저장됨",
+  },
+  en: {
+    "app.title": "NowNote Web",
+    "brand.subtitle": "Knowledge notes",
+    "search.label": "Search",
+    "search.placeholder": "Search title or content",
+    "today.label": "Today note",
+    "nav.tree": "Knowledge notes",
+    "side.favorite": "Favorites",
+    "side.recent": "Recent",
+    "side.tags": "Tags",
+    "side.explore": "Explore",
+    "side.quick": "Quick switch",
+    "side.graph": "Linked notes",
+    "side.file": "Files",
+    "side.mdExport": "Export Markdown",
+    "side.mdImport": "Import Markdown",
+    "side.manage": "Manage",
+    "side.trash": "Trash",
+    "side.settings": "Display settings",
+    "rail.sidebar.open": "Open list",
+    "rail.sidebar.close": "Close list",
+    "rail.knowledge": "Knowledge notes",
+    "rail.daily": "Today note",
+    "rail.search": "Search",
+    "rail.quick": "Quick switch",
+    "rail.graph": "Linked notes",
+    "rail.mdExport": "Export Markdown",
+    "rail.mdImport": "Import Markdown",
+    "rail.trash": "Trash",
+    "rail.settings": "Display settings",
+    "tree.eyebrow": "Topic / Category / Note",
+    "tree.title": "Knowledge notes",
+    "tree.expandAll": "Expand all",
+    "tree.collapseAll": "Collapse all",
+    "tree.addRoot": "Add topic",
+    "editor.favorite": "Favorite",
+    "editor.unfavorite": "Unfavorite",
+    "editor.find": "Find in note",
+    "editor.outline": "Outline",
+    "editor.insertTime": "Insert time",
+    "editor.preview": "Markdown preview",
+    "editor.edit": "Edit",
+    "settings.eyebrow": "Adjust the workspace to your taste",
+    "settings.title": "Display settings",
+    "settings.language.title": "Language",
+    "settings.language.desc": "Choose the language used in the app.",
+    "settings.theme.title": "Default theme",
+    "settings.theme.desc": "Choose the brightness theme.",
+    "saved": "Saved",
+  },
+};
+
 const state = {
   view: "tree",
   selectedDate: toDateKey(new Date()),
@@ -29,6 +132,7 @@ let storageWarningShown = false;
 
 function defaultSettings() {
   return {
+    language: "ko",
     theme: "system",
     accent: "blue",
     wideEditor: true,
@@ -47,6 +151,24 @@ function defaultSettings() {
 }
 
 const $ = (selector) => document.querySelector(selector);
+
+function t(key) {
+  const lang = state.settings.language || "ko";
+  return I18N[lang]?.[key] || I18N.ko[key] || key;
+}
+
+function setText(selector, value) {
+  const element = typeof selector === "string" ? $(selector) : selector;
+  if (element) element.textContent = value;
+}
+
+function setPlaceholder(element, value) {
+  if (element) element.placeholder = value;
+}
+
+function setTitle(element, value) {
+  if (element) element.title = value;
+}
 
 const elements = {
   searchInput: $("#searchInput"),
@@ -146,6 +268,7 @@ const elements = {
   railSettingsBtn: $("#railSettingsBtn"),
   settingsCloseBtn: $("#settingsCloseBtn"),
   settingsView: $("#settingsView"),
+  languageSelect: $("#languageSelect"),
   themeSelect: $("#themeSelect"),
   accentChoices: $("#accentChoices"),
   wideEditorToggle: $("#wideEditorToggle"),
@@ -313,6 +436,14 @@ function bindEvents() {
     elements.settingsView.classList.add("hidden");
   });
 
+  elements.languageSelect.addEventListener("change", () => {
+    state.settings.language = elements.languageSelect.value;
+    persistSettings();
+    renderSettings();
+    applyLanguage();
+    render();
+  });
+
   elements.themeSelect.addEventListener("change", () => {
     state.settings.theme = elements.themeSelect.value;
     persistSettings();
@@ -441,7 +572,7 @@ function bindEvents() {
     const isOpening = elements.markdownPreview.classList.contains("hidden");
     elements.markdownPreview.classList.toggle("hidden", !isOpening);
     elements.treeContent.classList.toggle("hidden", isOpening);
-    elements.previewToggleBtn.textContent = isOpening ? "편집하기" : "Markdown 보기";
+    elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
     if (isOpening) {
       renderMarkdownPreview(selected.content);
     } else {
@@ -510,6 +641,7 @@ function toggleSettings() {
 }
 
 function renderSettings() {
+  elements.languageSelect.value = state.settings.language;
   elements.themeSelect.value = state.settings.theme;
   elements.wideEditorToggle.checked = state.settings.wideEditor;
   elements.fontSizeSelect.value = state.settings.fontSize;
@@ -565,7 +697,57 @@ function applySettings() {
   document.documentElement.dataset.sidebarAssist = state.settings.showSidebarAssist ? "show" : "hide";
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
-  elements.railSidebarBtn.title = state.settings.sidebarCollapsed ? "목록 펼치기" : "목록 접기";
+  applyLanguage();
+}
+
+function applyLanguage() {
+  document.documentElement.lang = state.settings.language === "en" ? "en" : "ko";
+  document.title = t("app.title");
+  setText("#brandSubtitle", t("brand.subtitle"));
+  setText("#searchLabel", t("search.label"));
+  setText("#todayChipLabel", t("today.label"));
+  setText("#treeNavBtn", t("nav.tree"));
+  setText("#favoriteTitle", t("side.favorite"));
+  setText("#recentTitle", t("side.recent"));
+  setText("#tagTitle", t("side.tags"));
+  setText("#exploreActionTitle", t("side.explore"));
+  setText("#fileActionTitle", t("side.file"));
+  setText("#manageActionTitle", t("side.manage"));
+  setText("#quickSwitchBtn", t("side.quick"));
+  setText("#graphBtn", t("side.graph"));
+  setText("#exportMarkdownBtn", t("side.mdExport"));
+  setText("#importMarkdownBtn", t("side.mdImport"));
+  setText("#deletedTreeBtnLabel", t("side.trash"));
+  setText("#settingsBtn", t("side.settings"));
+  setText("#treeEyebrow", t("tree.eyebrow"));
+  setText("#treeTitle", t("tree.title"));
+  setText("#expandAllBtn", t("tree.expandAll"));
+  setText("#collapseAllBtn", t("tree.collapseAll"));
+  setText("#addRootBtn", t("tree.addRoot"));
+  setText("#noteFindToggleBtn", t("editor.find"));
+  setText("#outlineToggleBtn", t("editor.outline"));
+  setText("#insertTimeBtn", t("editor.insertTime"));
+  setText(
+    "#previewToggleBtn",
+    elements.markdownPreview.classList.contains("hidden") ? t("editor.preview") : t("editor.edit"),
+  );
+  setText("#settingsEyebrow", t("settings.eyebrow"));
+  setText("#settingsTitle", t("settings.title"));
+  setText("#languageSettingTitle", t("settings.language.title"));
+  setText("#languageSettingDesc", t("settings.language.desc"));
+  setText("#themeSettingTitle", t("settings.theme.title"));
+  setText("#themeSettingDesc", t("settings.theme.desc"));
+  setPlaceholder(elements.searchInput, t("search.placeholder"));
+  setTitle(elements.railSidebarBtn, state.settings.sidebarCollapsed ? t("rail.sidebar.open") : t("rail.sidebar.close"));
+  setTitle(document.querySelector(".app-rail .rail-btn.active"), t("rail.knowledge"));
+  setTitle(elements.railDailyBtn, t("rail.daily"));
+  setTitle(elements.railSearchBtn, t("rail.search"));
+  setTitle(elements.railQuickBtn, t("rail.quick"));
+  setTitle(elements.railGraphBtn, t("rail.graph"));
+  setTitle(elements.railMarkdownExportBtn, t("rail.mdExport"));
+  setTitle(elements.railMarkdownImportBtn, t("rail.mdImport"));
+  setTitle(elements.railDeletedTreeBtn, t("rail.trash"));
+  setTitle(elements.railSettingsBtn, t("rail.settings"));
 }
 
 function openQuickSwitch() {
@@ -839,7 +1021,7 @@ function insertCurrentTimeIntoTreeNote() {
   if (!elements.markdownPreview.classList.contains("hidden")) {
     elements.markdownPreview.classList.add("hidden");
     elements.treeContent.classList.remove("hidden");
-    elements.previewToggleBtn.textContent = "Markdown 보기";
+    elements.previewToggleBtn.textContent = t("editor.preview");
   }
   const marker = `[${timeLabel(new Date())}] `;
   const start = elements.treeContent.selectionStart ?? elements.treeContent.value.length;
@@ -1748,7 +1930,7 @@ function renderTreeEditor() {
   renderNoteStats(selected);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
-  elements.previewToggleBtn.textContent = "Markdown 보기";
+  elements.previewToggleBtn.textContent = t("editor.preview");
   renderTreePath(selected);
   renderMarkdownPreview(selected.content);
   renderOutlinePanel(selected);
@@ -1959,7 +2141,7 @@ function removeTreeTabReferences(id) {
 
 function renderFavorite(node) {
   elements.favoriteBtn.classList.toggle("active", Boolean(node.favorite));
-  elements.favoriteBtn.textContent = node.favorite ? "즐겨찾기 해제" : "즐겨찾기";
+  elements.favoriteBtn.textContent = node.favorite ? t("editor.unfavorite") : t("editor.favorite");
 }
 
 function renderTags() {
@@ -2035,7 +2217,7 @@ function renderOutlinePanel(node) {
       button.addEventListener("click", () => {
         elements.markdownPreview.classList.add("hidden");
         elements.treeContent.classList.remove("hidden");
-        elements.previewToggleBtn.textContent = "Markdown 보기";
+        elements.previewToggleBtn.textContent = t("editor.preview");
         elements.treeContent.focus();
         elements.treeContent.setSelectionRange(heading.index, heading.index + heading.raw.length);
       });
@@ -2133,7 +2315,7 @@ function selectNoteFindMatch(index) {
   updateNoteFindState(matches, query, safeIndex);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
-  elements.previewToggleBtn.textContent = "Markdown 보기";
+  elements.previewToggleBtn.textContent = t("editor.preview");
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(start, start + query.length);
 }
@@ -2907,6 +3089,7 @@ function normalizeSettings(settings = {}) {
     ...defaults,
     ...settings,
   };
+  normalized.language = ["ko", "en"].includes(normalized.language) ? normalized.language : defaults.language;
   normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
   normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
@@ -3581,7 +3764,7 @@ function downloadCurrentBackup(prefix = "nownote") {
 }
 
 function showSaved(label) {
-  label.textContent = "저장됨";
+  label.textContent = t("saved");
   label.animate(
     [
       { opacity: 0.35 },
