@@ -3699,15 +3699,21 @@ function parseSearchQuery(query, fallbackScope) {
   }
   const prefix = Object.keys(prefixes).find((item) => query.startsWith(item));
   if (!prefix) {
-    return { scope: fallbackScope, text: query };
+    return { scope: fallbackScope, text: query, valid: query.length > 0 };
+  }
+  const text = query.slice(prefix.length).trim();
+  if (!text) {
+    return { scope: prefixes[prefix], text: "", valid: false };
   }
   return {
     scope: prefixes[prefix],
-    text: query.slice(prefix.length).trim(),
+    text,
+    valid: true,
   };
 }
 
 function matchesSearchResult(result, parsed) {
+  if (!parsed.valid) return false;
   const text = parsed.text;
   if (!text) return true;
   const title = result.title.toLowerCase();
