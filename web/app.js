@@ -3687,8 +3687,10 @@ function parseSearchQuery(query, fallbackScope) {
   const prefixes = {
     "path:": "path",
     "file:": "title",
+    "title:": "title",
     "tag:": "tag",
     "line:": "content",
+    "content:": "content",
     "section:": "content",
     "[property]": "all",
   };
