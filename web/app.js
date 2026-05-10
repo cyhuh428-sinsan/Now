@@ -805,6 +805,12 @@ function bindEvents() {
   elements.quickInput.addEventListener("keydown", handleQuickInputKey);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
+  bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
+  bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
+  bindOverlayDismiss(elements.graphView, closeGraph);
+  bindOverlayDismiss(elements.deletedTreeView, closeDeletedTreeBox);
+  bindOverlayDismiss(elements.dailyView, closeDailyPopup);
+  bindOverlayDismiss(elements.settingsView, closeSettingsPopup);
   elements.markdownPreview.addEventListener("click", (event) => {
     const taskInput = event.target.closest(".task-list-item input");
     if (taskInput) {
@@ -823,8 +829,21 @@ function bindEvents() {
   });
 }
 
+function bindOverlayDismiss(overlay, closeAction) {
+  if (!overlay) return;
+  overlay.addEventListener("click", (event) => {
+    if (event.target !== overlay) return;
+    closeAction();
+  });
+}
+
+function closeSettingsPopup() {
+  elements.settingsView.classList.add("hidden");
+}
+
 function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
+    closePopupLayers();
     elements.settingsView.classList.remove("hidden");
   } else {
     elements.settingsView.classList.add("hidden");
@@ -1628,6 +1647,7 @@ function renderRailButtons() {
 }
 
 function openQuickSwitch() {
+  closePopupLayers();
   elements.quickSwitchView.classList.remove("hidden");
   elements.quickInput.value = "";
   renderQuickResults();
@@ -1655,6 +1675,7 @@ function toggleSearchPopover() {
 }
 
 function openSearchPopover() {
+  closePopupLayers();
   elements.searchPopoverView.classList.remove("hidden");
   elements.searchPopoverInput.value = state.search;
   renderSearchPopoverResults();
@@ -1751,6 +1772,7 @@ function quickSwitchText(node) {
 }
 
 function openGraph() {
+  closePopupLayers();
   renderGraph();
   elements.graphView.classList.remove("hidden");
 }
@@ -1768,6 +1790,7 @@ function closeGraph() {
 }
 
 function openDeletedTreeBox() {
+  closePopupLayers();
   state.selectedDeletedTreeIds.clear();
   renderDeletedTreeList();
   elements.deletedTreeView.classList.remove("hidden");
@@ -1795,12 +1818,7 @@ function handleShortcuts(event) {
       closeNoteFind();
       return;
     }
-    closeQuickSwitch();
-    closeSearchPopover();
-    closeGraph();
-    closeDeletedTreeBox();
-    closeDailyPopup();
-    elements.settingsView.classList.add("hidden");
+    closePopupLayers();
     return;
   }
   if (shortcutMatches(event, "moveUp")) {
@@ -2371,6 +2389,7 @@ function bindTreeResize() {
 }
 
 function setView(view) {
+  closePopupLayers();
   state.view = view;
   elements.navTabs.forEach((button) => {
     button.classList.toggle("active", button.dataset.view === view);
@@ -2388,10 +2407,16 @@ function selectTreeNode(id) {
 }
 
 function closeSelectionOverlays() {
+  closePopupLayers();
+}
+
+function closePopupLayers() {
   closeDailyPopup();
   closeQuickSwitch();
   closeSearchPopover();
   closeGraph();
+  closeDeletedTreeBox();
+  closeSettingsPopup();
 }
 
 function toggleDailyPopup() {
@@ -2403,6 +2428,7 @@ function toggleDailyPopup() {
 }
 
 function openDailyPopup() {
+  closePopupLayers();
   elements.dailyView.classList.remove("hidden");
   elements.dailyContent.focus();
 }
