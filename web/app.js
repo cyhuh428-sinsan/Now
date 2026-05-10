@@ -2411,12 +2411,19 @@ function closeSelectionOverlays() {
 }
 
 function closePopupLayers() {
+  cancelShortcutCapture();
   closeDailyPopup();
   closeQuickSwitch();
   closeSearchPopover();
   closeGraph();
   closeDeletedTreeBox();
   closeSettingsPopup();
+}
+
+function cancelShortcutCapture() {
+  if (!state.capturingShortcutId) return;
+  state.capturingShortcutId = null;
+  renderShortcutEditor();
 }
 
 function toggleDailyPopup() {
