@@ -3694,6 +3694,9 @@ function parseSearchQuery(query, fallbackScope) {
     "section:": "content",
     "[property]": "all",
   };
+  if (query.startsWith("#")) {
+    return { scope: "tag", text: query.slice(1).trim() };
+  }
   const prefix = Object.keys(prefixes).find((item) => query.startsWith(item));
   if (!prefix) {
     return { scope: fallbackScope, text: query };
