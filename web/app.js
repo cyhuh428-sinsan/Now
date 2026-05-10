@@ -22,6 +22,11 @@ const I18N = {
     "search.invalidDescription": "예: title:회의, tag:아이디어, #메모",
     "search.noResultTitle": "검색 결과가 없습니다",
     "search.noResultDescription": "다른 검색어를 입력해보세요.",
+    "search.resultCount": "검색 결과 {count}개",
+    "search.popoverHelp.path": "경로",
+    "search.popoverHelp.title": "제목",
+    "search.popoverHelp.tag": "태그",
+    "search.popoverHelp.content": "내용",
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
     "side.favorite": "즐겨찾기",
@@ -116,6 +121,11 @@ const I18N = {
     "search.invalidDescription": "Example: title:meeting, tag:idea, #memo",
     "search.noResultTitle": "No results",
     "search.noResultDescription": "Try a different search term.",
+    "search.resultCount": "Results {count}",
+    "search.popoverHelp.path": "Path",
+    "search.popoverHelp.title": "Title",
+    "search.popoverHelp.tag": "Tag",
+    "search.popoverHelp.content": "Content",
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
     "side.favorite": "Favorites",
@@ -478,6 +488,10 @@ const elements = {
   searchSortSelect: $("#searchSortSelect"),
   searchPopoverCount: $("#searchPopoverCount"),
   searchPopoverResults: $("#searchPopoverResults"),
+  searchHelpPath: $("#searchHelpPath"),
+  searchHelpTitle: $("#searchHelpTitle"),
+  searchHelpTag: $("#searchHelpTag"),
+  searchHelpContent: $("#searchHelpContent"),
   searchPopoverCloseBtn: $("#searchPopoverCloseBtn"),
   graphView: $("#graphView"),
   graphList: $("#graphList"),
@@ -1647,6 +1661,10 @@ function applyLanguage() {
   renderServerStatus(state.settings.server.lastStatus, state.settings.server.lastMessage);
   renderServerMeta();
   setPlaceholder(elements.searchInput, t("search.placeholder"));
+  elements.searchHelpPath.textContent = t("search.popoverHelp.path");
+  elements.searchHelpTitle.textContent = t("search.popoverHelp.title");
+  elements.searchHelpTag.textContent = t("search.popoverHelp.tag");
+  elements.searchHelpContent.textContent = t("search.popoverHelp.content");
   setTitle(elements.railSidebarBtn, state.settings.sidebarCollapsed ? t("rail.sidebar.open") : t("rail.sidebar.close"));
   setTitle(document.querySelector(".app-rail .rail-btn.active"), t("rail.knowledge"));
   setTitle(elements.railDailyBtn, t("rail.daily"));
@@ -1728,7 +1746,7 @@ function renderSearchPopoverResults() {
     scope: elements.searchScopeSelect.value,
     sort: elements.searchSortSelect.value,
   });
-  elements.searchPopoverCount.textContent = `검색 결과 ${results.length}개`;
+  elements.searchPopoverCount.textContent = t("search.resultCount").replace("{count}", String(results.length));
   renderSearchResultsInto(elements.searchPopoverResults, results, () => closeSearchPopover());
 }
 
@@ -3657,7 +3675,7 @@ function renderResults() {
   }
 
   const results = searchResults(query);
-  elements.resultsCount.textContent = `검색 결과 ${results.length}개`;
+  elements.resultsCount.textContent = t("search.resultCount").replace("{count}", String(results.length));
   renderSearchResultsInto(elements.resultsList, results);
 }
 
