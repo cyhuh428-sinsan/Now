@@ -1,16 +1,407 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_sound/flutter_sound.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../../core/database/app_database.dart';
+import '../../services/server_sync_service.dart';
+import '../../llm/services/llm_settings_service.dart';
 import '../../repositories/repository_providers.dart';
 
-class MemoTreePage extends ConsumerWidget {
+class TreeDeletedMemo {
+  final String memoId;
+  final String title;
+  final String content;
+  final int level;
+  final String? parentLocalId;
+  final String? tags;
+  final DateTime deletedAt;
+
+  const TreeDeletedMemo({
+    required this.memoId,
+    required this.title,
+    required this.content,
+    required this.level,
+    this.parentLocalId,
+    this.tags,
+    required this.deletedAt,
+  });
+}
+
+final treeMemosProvider = FutureProvider.autoDispose<List<Memo>>((ref) async {
+  final db = ref.watch(appDatabaseProvider);
+  return (db.select(db.memos)
+        ..where((m) => m.source.equals('note_tree'))
+        ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
+      .get();
+});
+
+final treeDeletedMemosProvider =
+    FutureProvider.autoDispose<List<TreeDeletedMemo>>((ref) async {
+      final syncService = ref.watch(serverSyncServiceProvider);
+      final entries = await syncService.getDeletedTreeMemoPendings();
+      final list = entries.entries.map((entry) {
+        final value = entry.value;
+        return TreeDeletedMemo(
+          memoId: entry.key,
+          title: value['title']?.toString() ?? '삭제된 메모',
+          content: value['content']?.toString() ?? '',
+          level: int.tryParse(value['level']?.toString() ?? '1') ?? 1,
+          parentLocalId: value['parent_local_id']?.toString(),
+          tags: value['tags']?.toString(),
+          deletedAt:
+              DateTime.tryParse(value['deleted_at']?.toString() ?? '') ??
+              DateTime.now(),
+        );
+      }).toList()..sort((a, b) => b.deletedAt.compareTo(a.deletedAt));
+      return list;
+    });
+
+class MemoTreePage extends ConsumerStatefulWidget {
   const MemoTreePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<MemoTreePage> createState() => _MemoTreePageState();
+}
+
+class _MemoTreePageState extends ConsumerState<MemoTreePage> {
+  bool _showDeleted = false;
+  final Set<String> _selectedDeletedIds = {};
+
+  int _deletedMemoCount(AsyncValue<List<TreeDeletedMemo>> async) {
+    if (async is AsyncData<List<TreeDeletedMemo>>) {
+      return async.value.length;
+    }
+    return 0;
+  }
+
+  void _clearDeletedSelection() {
+    if (_selectedDeletedIds.isNotEmpty) {
+      setState(() => _selectedDeletedIds.clear());
+    }
+  }
+
+  void _toggleDeletedSelection(String memoId) {
+    setState(() {
+      if (_selectedDeletedIds.contains(memoId)) {
+        _selectedDeletedIds.remove(memoId);
+      } else {
+        _selectedDeletedIds.add(memoId);
+      }
+    });
+  }
+
+  String _formatDateTime(DateTime value) {
+    final y = value.year.toString().padLeft(4, '0');
+    final m = value.month.toString().padLeft(2, '0');
+    final d = value.day.toString().padLeft(2, '0');
+    final hh = value.hour.toString().padLeft(2, '0');
+    final mm = value.minute.toString().padLeft(2, '0');
+    return '$y.$m.$d $hh:$mm';
+  }
+
+  Future<void> _deleteSelectedDeletedMemos() async {
+    if (_selectedDeletedIds.isEmpty) return;
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('선택한 메모 영구삭제'),
+        content: Text('선택한 ${_selectedDeletedIds.length}개 메모를 영구삭제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final syncService = ref.read(serverSyncServiceProvider);
+    await (db.delete(
+      db.memos,
+    )..where((t) => t.memoId.isIn(_selectedDeletedIds.toList()))).go();
+    await syncService.clearDeletedTreeMemoPendings(_selectedDeletedIds);
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _clearDeletedSelection();
+  }
+
+  Future<void> _deleteAllDeletedMemos() async {
+    final items = await ref.read(treeDeletedMemosProvider.future);
+    if (items.isEmpty) return;
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('삭제 보관함 비우기'),
+        content: Text('삭제 보관함의 ${items.length}개 항목을 모두 영구삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final syncService = ref.read(serverSyncServiceProvider);
+    final ids = items.map((item) => item.memoId).toList();
+    await (db.delete(db.memos)..where((t) => t.memoId.isIn(ids))).go();
+    await syncService.clearAllDeletedTreeMemoPendings();
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _clearDeletedSelection();
+  }
+
+  Future<void> _deleteSingleDeletedMemo(String memoId) async {
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('영구삭제'),
+        content: const Text('이 항목을 삭제 보관함에서 영구삭제할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+            ),
+            child: const Text('삭제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final db = ref.read(appDatabaseProvider);
+    final syncService = ref.read(serverSyncServiceProvider);
+    await (db.delete(db.memos)..where((t) => t.memoId.equals(memoId))).go();
+    await syncService.clearDeletedTreeMemoPendings({memoId});
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _selectedDeletedIds.remove(memoId);
+  }
+
+  Future<void> _restoreSingleDeletedMemo(String memoId) async {
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('메모 복원'),
+        content: const Text('이 항목을 복원할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            child: const Text('복원'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final syncService = ref.read(serverSyncServiceProvider);
+    final pendingMap = await syncService.getDeletedTreeMemoPendings();
+    final db = ref.read(appDatabaseProvider);
+    final restored = await _restoreDeletedMemoFromPending(
+      pendingMap: pendingMap,
+      memoId: memoId,
+      db: db,
+      now: DateTime.now(),
+    );
+    if (!restored) return;
+
+    await syncService.clearDeletedTreeMemoPendings({memoId});
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _selectedDeletedIds.remove(memoId);
+  }
+
+  Future<bool> _restoreDeletedMemoFromPending({
+    required Map<String, Map<String, dynamic>> pendingMap,
+    required String memoId,
+    required AppDatabase db,
+    required DateTime now,
+  }) async {
+    final data = pendingMap[memoId];
+    if (data == null) return false;
+
+    final title = data['title']?.toString() ?? '';
+    final content = data['content']?.toString() ?? '';
+    final tags = data['tags']?.toString() ?? '';
+    final fullContent = (content.trim().isEmpty ? title : content).trim();
+
+    await db
+        .into(db.memos)
+        .insert(
+          MemosCompanion.insert(
+            memoId: memoId,
+            userId: 'local_user',
+            content: fullContent,
+            tags: Value(tags),
+            source: const Value('note_tree'),
+            createdAt: Value(now),
+            updatedAt: Value(now),
+          ),
+          mode: InsertMode.replace,
+        );
+    return true;
+  }
+
+  Future<void> _restoreSelectedDeletedMemos() async {
+    if (_selectedDeletedIds.isEmpty) return;
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('선택한 메모 복원'),
+        content: Text('선택한 ${_selectedDeletedIds.length}개 메모를 복원할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            child: const Text('복원'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final syncService = ref.read(serverSyncServiceProvider);
+    final pendingMap = await syncService.getDeletedTreeMemoPendings();
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final selectedIds = _selectedDeletedIds.toList()
+      ..sort((a, b) {
+        final aLevel =
+            int.tryParse(pendingMap[a]?['level']?.toString() ?? '1') ?? 1;
+        final bLevel =
+            int.tryParse(pendingMap[b]?['level']?.toString() ?? '1') ?? 1;
+        final levelCmp = aLevel.compareTo(bLevel);
+        return levelCmp != 0 ? levelCmp : a.compareTo(b);
+      });
+
+    final restoredIds = <String>{};
+    for (final memoId in selectedIds) {
+      final restored = await _restoreDeletedMemoFromPending(
+        pendingMap: pendingMap,
+        memoId: memoId,
+        db: db,
+        now: now,
+      );
+      if (restored) restoredIds.add(memoId);
+    }
+
+    if (restoredIds.isNotEmpty) {
+      await syncService.clearDeletedTreeMemoPendings(restoredIds);
+    }
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _clearDeletedSelection();
+  }
+
+  Future<void> _restoreAllDeletedMemos() async {
+    final items = await ref.read(treeDeletedMemosProvider.future);
+    if (items.isEmpty) return;
+    if (!mounted) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('전체 복원'),
+        content: Text('삭제 보관함의 ${items.length}개 항목을 모두 복원할까요?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF2563EB),
+            ),
+            child: const Text('복원'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final syncService = ref.read(serverSyncServiceProvider);
+    final pendingMap = await syncService.getDeletedTreeMemoPendings();
+    final db = ref.read(appDatabaseProvider);
+    final now = DateTime.now();
+    final restoredIds = <String>{};
+    final orderedIds = items.map((item) => item.memoId).toList()
+      ..sort((a, b) {
+        final aLevel =
+            int.tryParse(pendingMap[a]?['level']?.toString() ?? '1') ?? 1;
+        final bLevel =
+            int.tryParse(pendingMap[b]?['level']?.toString() ?? '1') ?? 1;
+        final levelCmp = aLevel.compareTo(bLevel);
+        return levelCmp != 0 ? levelCmp : a.compareTo(b);
+      });
+
+    for (final memoId in orderedIds) {
+      final restored = await _restoreDeletedMemoFromPending(
+        pendingMap: pendingMap,
+        memoId: memoId,
+        db: db,
+        now: now,
+      );
+      if (restored) restoredIds.add(memoId);
+    }
+
+    if (restoredIds.isNotEmpty) {
+      await syncService.clearDeletedTreeMemoPendings(restoredIds);
+    }
+    ref.invalidate(treeDeletedMemosProvider);
+    ref.invalidate(treeMemosProvider);
+    _clearDeletedSelection();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final memosAsync = ref.watch(treeMemosProvider);
+    final deletedAsync = ref.watch(treeDeletedMemosProvider);
 
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
@@ -25,48 +416,181 @@ class MemoTreePage extends ConsumerWidget {
             color: Color(0xFF111827),
           ),
         ),
+        actions: [
+          if (_showDeleted && _selectedDeletedIds.isNotEmpty)
+            IconButton(
+              tooltip: '선택 복원',
+              icon: const Icon(Icons.restore),
+              onPressed: _restoreSelectedDeletedMemos,
+            ),
+          if (_showDeleted && _selectedDeletedIds.isNotEmpty)
+            IconButton(
+              tooltip: '선택 삭제',
+              icon: const Icon(Icons.delete),
+              onPressed: _deleteSelectedDeletedMemos,
+            ),
+          if (_showDeleted &&
+              _selectedDeletedIds.isEmpty &&
+              _deletedMemoCount(deletedAsync) > 0)
+            IconButton(
+              tooltip: '전체 복원',
+              icon: const Icon(Icons.restore_from_trash),
+              onPressed: _restoreAllDeletedMemos,
+            ),
+          if (_showDeleted &&
+              _selectedDeletedIds.isEmpty &&
+              _deletedMemoCount(deletedAsync) > 0)
+            IconButton(
+              tooltip: '전체 삭제',
+              icon: const Icon(Icons.delete_sweep),
+              onPressed: _deleteAllDeletedMemos,
+            ),
+        ],
       ),
-      body: memosAsync.when(
-        data: (memos) {
-          final nodes = memos.map(TreeMemoNode.fromMemo).toList();
-          final roots = nodes.where((n) => n.parentId == null).toList();
+      body: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        child: Column(
+          children: [
+            ToggleButtons(
+              isSelected: [!_showDeleted, _showDeleted],
+              onPressed: (index) {
+                setState(() {
+                  _showDeleted = index == 1;
+                  _selectedDeletedIds.clear();
+                });
+              },
+              borderRadius: BorderRadius.circular(12),
+              selectedColor: Colors.white,
+              fillColor: const Color(0xFF2563EB),
+              color: const Color(0xFF374151),
+              children: const [
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Text('계층 메모'),
+                ),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  child: Text('삭제 보관함'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _showDeleted
+                  ? deletedAsync.when(
+                      data: (items) {
+                        if (items.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              '삭제 보관함이 비어있습니다',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          );
+                        }
+                        return ListView.separated(
+                          padding: const EdgeInsets.only(bottom: 100),
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) =>
+                              const SizedBox(height: 8),
+                          itemBuilder: (ctx, index) {
+                            final item = items[index];
+                            final isChecked = _selectedDeletedIds.contains(
+                              item.memoId,
+                            );
+                            return Card(
+                              child: ListTile(
+                                leading: Checkbox(
+                                  value: isChecked,
+                                  onChanged: (_) {
+                                    _toggleDeletedSelection(item.memoId);
+                                  },
+                                ),
+                                title: Text(item.title),
+                                subtitle: Text(
+                                  '${_treeMemoKind(item.level)} · 삭제 시각 ${_formatDateTime(item.deletedAt)}',
+                                ),
+                                trailing: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(Icons.restore),
+                                      tooltip: '복원',
+                                      onPressed: () =>
+                                          _restoreSingleDeletedMemo(
+                                            item.memoId,
+                                          ),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(Icons.delete_forever),
+                                      tooltip: '영구 삭제',
+                                      onPressed: () =>
+                                          _deleteSingleDeletedMemo(item.memoId),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (e, _) => Center(child: Text('오류: $e')),
+                    )
+                  : memosAsync.when(
+                      data: (memos) {
+                        final nodes = memos.map(TreeMemoNode.fromMemo).toList();
+                        final roots = nodes
+                            .where((n) => n.parentId == null)
+                            .toList();
 
-          if (roots.isEmpty) {
-            return const Center(
-              child: Text(
-                '아직 계층 메모가 없습니다',
-                style: TextStyle(fontSize: 14, color: Color(0xFF9CA3AF)),
+                        if (roots.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              '아직 계층 메모가 없습니다',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          );
+                        }
+
+                        return ListView(
+                          padding: const EdgeInsets.only(bottom: 100),
+                          children: roots
+                              .map(
+                                (node) =>
+                                    _TreeMemoTile(node: node, allNodes: nodes),
+                              )
+                              .toList(),
+                        );
+                      },
+                      loading: () =>
+                          const Center(child: CircularProgressIndicator()),
+                      error: (e, _) => Center(child: Text('오류: $e')),
+                    ),
+            ),
+          ],
+        ),
+      ),
+      floatingActionButton: _showDeleted
+          ? null
+          : FloatingActionButton.extended(
+              onPressed: () => _showTreeMemoDialog(context, ref),
+              backgroundColor: const Color(0xFF2563EB),
+              icon: const Icon(Icons.edit_note, color: Colors.white),
+              label: const Text(
+                '부모메모 추가',
+                style: TextStyle(color: Colors.white),
               ),
-            );
-          }
-
-          return ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 100),
-            children: roots
-                .map((node) => _TreeMemoTile(node: node, allNodes: nodes))
-                .toList(),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('오류: $e')),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showTreeMemoDialog(context, ref),
-        backgroundColor: const Color(0xFF2563EB),
-        icon: const Icon(Icons.edit_note, color: Colors.white),
-        label: const Text('부모메모 추가', style: TextStyle(color: Colors.white)),
-      ),
+            ),
     );
   }
 }
-
-final treeMemosProvider = FutureProvider.autoDispose<List<Memo>>((ref) async {
-  final db = ref.watch(appDatabaseProvider);
-  return (db.select(db.memos)
-        ..where((m) => m.source.equals('note_tree'))
-        ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
-      .get();
-});
 
 class TreeMemoNode {
   final String id;
@@ -74,6 +598,7 @@ class TreeMemoNode {
   final String content;
   final String? parentId;
   final int level;
+  final String tags;
 
   const TreeMemoNode({
     required this.id,
@@ -81,6 +606,7 @@ class TreeMemoNode {
     required this.content,
     required this.parentId,
     required this.level,
+    required this.tags,
   });
 
   factory TreeMemoNode.fromMemo(Memo memo) {
@@ -94,6 +620,7 @@ class TreeMemoNode {
       content: body,
       parentId: tags['parent']?.isEmpty == true ? null : tags['parent'],
       level: int.tryParse(tags['level'] ?? '1') ?? 1,
+      tags: memo.tags ?? '',
     );
   }
 }
@@ -137,16 +664,12 @@ class _TreeMemoTile extends ConsumerWidget {
             node.level == 1
                 ? Icons.folder_outlined
                 : node.level == 2
-                    ? Icons.note_outlined
-                    : Icons.notes,
+                ? Icons.note_outlined
+                : Icons.notes,
             color: const Color(0xFF2563EB),
           ),
           title: InkWell(
-            onTap: () => _showTreeMemoDialog(
-              context,
-              ref,
-              editingNode: node,
-            ),
+            onTap: () => _showTreeMemoDialog(context, ref, editingNode: node),
             child: Text(
               node.title,
               style: const TextStyle(
@@ -162,8 +685,10 @@ class _TreeMemoTile extends ConsumerWidget {
                   node.content,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style:
-                      const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
                 ),
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
@@ -173,7 +698,8 @@ class _TreeMemoTile extends ConsumerWidget {
                 icon: const Icon(Icons.add, size: 18),
                 onPressed: addParent == null && node.level >= 3
                     ? null
-                    : () => _showTreeMemoDialog(context, ref, parent: addParent),
+                    : () =>
+                          _showTreeMemoDialog(context, ref, parent: addParent),
               ),
               IconButton(
                 tooltip: children.isEmpty ? '삭제' : '하위 메모가 있어 삭제 불가',
@@ -224,18 +750,59 @@ String _treeMemoKind(int level) {
 
 Future<void> _showTreeMemoDialog(
   BuildContext context,
-  WidgetRef ref,
-  {TreeMemoNode? parent, TreeMemoNode? editingNode}
-) async {
+  WidgetRef ref, {
+  TreeMemoNode? parent,
+  TreeMemoNode? editingNode,
+}) async {
   final titleCtrl = TextEditingController(text: editingNode?.title ?? '');
   final bodyCtrl = TextEditingController(text: editingNode?.content ?? '');
   final speech = SpeechToText();
+  final recorder = FlutterSoundRecorder();
+  String? recordingPath;
   final level = _resolveNextLevel(parent, editingNode: editingNode);
   final memoKind = _treeMemoKind(level);
   bool isListening = false;
+  bool isTranscribing = false;
   String voiceInputMode = 'realtime';
 
   if (level > 3) return;
+
+  Future<void> stopRecordingIfNeeded() async {
+    try {
+      if (voiceInputMode == 'record_then_transcribe') {
+        await recorder.stopRecorder();
+      } else {
+        await speech.stop();
+      }
+    } catch (_) {
+      // 음성 입력 세션 정리 실패는 사용자 체감 동작에 직접 영향이 크지 않으므로 무시
+    }
+
+    try {
+      await recorder.closeRecorder();
+    } catch (_) {}
+
+    if (recordingPath != null) {
+      try {
+        final file = File(recordingPath!);
+        if (await file.exists()) {
+          await file.delete();
+        }
+      } catch (_) {}
+      recordingPath = null;
+    }
+  }
+
+  Future<void> deleteRecordingFile() async {
+    if (recordingPath == null) return;
+    try {
+      final file = File(recordingPath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+    recordingPath = null;
+  }
 
   await showModalBottomSheet<void>(
     context: context,
@@ -270,8 +837,10 @@ Future<void> _showTreeMemoDialog(
               const SizedBox(height: 16),
               Text(
                 editingNode == null ? '$memoKind 추가' : '$memoKind 편집',
-                style:
-                    const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
               TextField(
@@ -334,28 +903,176 @@ Future<void> _showTreeMemoDialog(
                 child: OutlinedButton.icon(
                   onPressed: () async {
                     if (isListening) {
-                      await speech.stop();
-                      setDialogState(() => isListening = false);
+                      setDialogState(() {
+                        isListening = false;
+                        isTranscribing = true;
+                      });
+                      try {
+                        if (voiceInputMode == 'record_then_transcribe') {
+                          try {
+                            await recorder.stopRecorder();
+                            await recorder.closeRecorder();
+                          } catch (e) {
+                            debugPrint(
+                              '[MEMO_TREE_RECORD] recorder stop error: $e',
+                            );
+                          }
+
+                          if (recordingPath == null) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('녹음 파일을 찾을 수 없습니다.'),
+                                ),
+                              );
+                            }
+                          } else {
+                            final file = File(recordingPath!);
+                            if (!(await file.exists()) ||
+                                await file.length() < 1000) {
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('녹음이 짧아 변환을 생략했어요.'),
+                                  ),
+                                );
+                              }
+                            } else {
+                              final whisperUrl = await LlmSettingsService()
+                                  .loadWhisperUrl();
+                              if (whisperUrl.trim().isEmpty) {
+                                if (context.mounted) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text(
+                                        'Whisper 서버 URL이 없으면 녹음 후 변환을 시작할 수 없습니다.',
+                                      ),
+                                    ),
+                                  );
+                                }
+                              } else {
+                                try {
+                                  final dio = Dio();
+                                  final formData = FormData.fromMap({
+                                    'file': await MultipartFile.fromFile(
+                                      recordingPath!,
+                                      filename: 'memo_tree.aac',
+                                    ),
+                                  });
+                                  final response = await dio.post(
+                                    '$whisperUrl/transcribe',
+                                    data: formData,
+                                    options: Options(
+                                      receiveTimeout: const Duration(
+                                        seconds: 120,
+                                      ),
+                                    ),
+                                  );
+                                  final text =
+                                      response.data['text'] as String? ?? '';
+                                  final newText = text.trim();
+                                  if (newText.isNotEmpty) {
+                                    final current = bodyCtrl.text.trim();
+                                    bodyCtrl.text = current.isEmpty
+                                        ? newText
+                                        : '$current\n$newText';
+                                    bodyCtrl.selection =
+                                        TextSelection.fromPosition(
+                                          TextPosition(
+                                            offset: bodyCtrl.text.length,
+                                          ),
+                                        );
+                                  }
+                                } catch (e) {
+                                  debugPrint(
+                                    '[MEMO_TREE_RECORD] transcribe error: $e',
+                                  );
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('변환 실패: $e')),
+                                    );
+                                  }
+                                }
+                              }
+                              await deleteRecordingFile();
+                            }
+                          }
+                        } else {
+                          await speech.stop();
+                        }
+                      } finally {
+                        if (context.mounted) {
+                          setDialogState(() {
+                            isListening = false;
+                            isTranscribing = false;
+                          });
+                        }
+                      }
                       return;
                     }
+
+                    if (voiceInputMode == 'record_then_transcribe') {
+                      try {
+                        final dir = await getApplicationDocumentsDirectory();
+                        final folder = Directory('${dir.path}/recordings');
+                        if (!await folder.exists()) {
+                          await folder.create(recursive: true);
+                        }
+                        recordingPath =
+                            '${folder.path}/memo_tree_${DateTime.now().millisecondsSinceEpoch}.aac';
+                        await recorder.openRecorder();
+                        await recorder.startRecorder(
+                          toFile: recordingPath!,
+                          codec: Codec.aacADTS,
+                          bitRate: 128000,
+                          sampleRate: 16000,
+                        );
+                        setDialogState(() => isListening = true);
+                      } catch (e) {
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text('녹음 시작 실패: $e')),
+                          );
+                        }
+                      }
+                      return;
+                    }
+
                     final available = await speech.initialize();
-                    if (!available) return;
+                    if (!available) {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('음성 인식 엔진 초기화 실패')),
+                        );
+                      }
+                      return;
+                    }
                     setDialogState(() => isListening = true);
                     await speech.listen(
                       localeId: 'ko_KR',
                       onResult: (result) {
-                        bodyCtrl.text = result.recognizedWords;
-                        bodyCtrl.selection = TextSelection.fromPosition(
-                          TextPosition(offset: bodyCtrl.text.length),
-                        );
-                        if (result.finalResult) {
-                          setDialogState(() => isListening = false);
+                        if (voiceInputMode == 'realtime') {
+                          bodyCtrl.text = result.recognizedWords;
+                          bodyCtrl.selection = TextSelection.fromPosition(
+                            TextPosition(offset: bodyCtrl.text.length),
+                          );
                         }
                       },
                     );
                   },
-                  icon: Icon(isListening ? Icons.mic : Icons.mic_none, size: 18),
-                  label: Text(isListening ? '듣는 중' : '음성으로 입력'),
+                  icon: Icon(
+                    isListening ? Icons.mic : Icons.mic_none,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isListening
+                        ? (voiceInputMode == 'record_then_transcribe'
+                              ? '정지 후 변환'
+                              : '듣는 중')
+                        : isTranscribing
+                        ? '변환 중'
+                        : '음성으로 입력',
+                  ),
                 ),
               ),
               const SizedBox(height: 14),
@@ -364,7 +1081,16 @@ Future<void> _showTreeMemoDialog(
                   Expanded(
                     child: OutlinedButton(
                       onPressed: () async {
-                        await speech.stop();
+                        if (isTranscribing) return;
+                        if (isListening) {
+                          if (voiceInputMode == 'record_then_transcribe') {
+                            await recorder.stopRecorder();
+                            await recorder.closeRecorder();
+                            await deleteRecordingFile();
+                          } else {
+                            await speech.stop();
+                          }
+                        }
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
                       child: const Text('취소'),
@@ -374,7 +1100,16 @@ Future<void> _showTreeMemoDialog(
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () async {
-                        await speech.stop();
+                        if (isTranscribing) return;
+                        if (isListening) {
+                          if (voiceInputMode == 'record_then_transcribe') {
+                            await recorder.stopRecorder();
+                            await recorder.closeRecorder();
+                            await deleteRecordingFile();
+                          } else {
+                            await speech.stop();
+                          }
+                        }
                         final title = titleCtrl.text.trim();
                         if (title.isEmpty) return;
                         final db = ref.read(appDatabaseProvider);
@@ -384,7 +1119,9 @@ Future<void> _showTreeMemoDialog(
                             'kind=tree;parent=${parent?.id ?? editingNode?.parentId ?? ''};level=$level;voiceMode=$voiceInputMode';
                         if (editingNode == null) {
                           final id = now.microsecondsSinceEpoch.toString();
-                          await db.into(db.memos).insert(
+                          await db
+                              .into(db.memos)
+                              .insert(
                                 MemosCompanion.insert(
                                   memoId: id,
                                   userId: 'local_user',
@@ -398,11 +1135,13 @@ Future<void> _showTreeMemoDialog(
                         } else {
                           await (db.update(db.memos)
                                 ..where((m) => m.memoId.equals(editingNode.id)))
-                              .write(MemosCompanion(
-                            content: Value(content),
-                            tags: Value(tags),
-                            updatedAt: Value(now),
-                          ));
+                              .write(
+                                MemosCompanion(
+                                  content: Value(content),
+                                  tags: Value(tags),
+                                  updatedAt: Value(now),
+                                ),
+                              );
                         }
                         ref.invalidate(treeMemosProvider);
                         if (ctx.mounted) Navigator.pop(ctx);
@@ -418,6 +1157,8 @@ Future<void> _showTreeMemoDialog(
       ),
     ),
   );
+
+  await stopRecordingIfNeeded();
 }
 
 Future<void> _confirmDeleteTreeMemo(
@@ -448,8 +1189,19 @@ Future<void> _confirmDeleteTreeMemo(
 
   if (confirmed != true) return;
   final db = ref.read(appDatabaseProvider);
+  final syncService = ref.read(serverSyncServiceProvider);
+  await syncService.markTreeMemoDeleted(
+    node.id,
+    level: node.level,
+    parentLocalId: node.parentId,
+    tags: node.tags,
+    title: node.title,
+    content: '${node.title}\n${node.content}',
+    deletedAt: DateTime.now(),
+  );
   await (db.delete(db.memos)..where((m) => m.memoId.equals(node.id))).go();
   ref.invalidate(treeMemosProvider);
+  ref.invalidate(treeDeletedMemosProvider);
 }
 
 class _TreeVoiceModeButton extends StatelessWidget {
@@ -472,8 +1224,9 @@ class _TreeVoiceModeButton extends StatelessWidget {
       icon: Icon(icon, size: 16),
       label: Text(label, overflow: TextOverflow.ellipsis),
       style: OutlinedButton.styleFrom(
-        foregroundColor:
-            selected ? const Color(0xFF2563EB) : const Color(0xFF6B7280),
+        foregroundColor: selected
+            ? const Color(0xFF2563EB)
+            : const Color(0xFF6B7280),
         backgroundColor: selected ? const Color(0xFFEFF6FF) : Colors.white,
         side: BorderSide(
           color: selected ? const Color(0xFF2563EB) : const Color(0xFFE5E7EB),

@@ -58,6 +58,10 @@ const I18N = {
     "settings.language.desc": "앱 화면에 사용할 언어를 선택합니다.",
     "settings.theme.title": "기본 테마",
     "settings.theme.desc": "앱의 밝기 테마를 선택합니다.",
+    "settings.railMode.title": "빠른 메뉴 표시",
+    "settings.railMode.desc": "왼쪽 빠른 메뉴를 아이콘 또는 첫 글자로 표시합니다.",
+    "settings.railMode.icon": "아이콘",
+    "settings.railMode.letter": "첫 글자",
     "settings.server.title": "서버 연결",
     "settings.server.desc": "단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.",
     "settings.server.mode.local": "단독 사용",
@@ -140,6 +144,10 @@ const I18N = {
     "settings.language.desc": "Choose the language used in the app.",
     "settings.theme.title": "Default theme",
     "settings.theme.desc": "Choose the brightness theme.",
+    "settings.railMode.title": "Quick menu display",
+    "settings.railMode.desc": "Show the left quick menu as icons or first letters.",
+    "settings.railMode.icon": "Icons",
+    "settings.railMode.letter": "First letters",
     "settings.server.title": "Server connection",
     "settings.server.desc": "Choose standalone use or connect to a personal/public NowNote server.",
     "settings.server.mode.local": "Standalone",
@@ -250,6 +258,7 @@ function defaultSettings() {
     wideEditor: true,
     treeListWidth: 280,
     sidebarCollapsed: false,
+    railMode: "icon",
     fontSize: "medium",
     lineHeight: "normal",
     showBacklinks: true,
@@ -418,6 +427,7 @@ const elements = {
   themeSelect: $("#themeSelect"),
   accentChoices: $("#accentChoices"),
   wideEditorToggle: $("#wideEditorToggle"),
+  railModeSelect: $("#railModeSelect"),
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
   backlinksToggle: $("#backlinksToggle"),
@@ -613,6 +623,12 @@ function bindEvents() {
   elements.wideEditorToggle.addEventListener("change", () => {
     state.settings.wideEditor = elements.wideEditorToggle.checked;
     state.settings.treeListWidth = state.settings.wideEditor ? 280 : 360;
+    persistSettings();
+    applySettings();
+  });
+
+  elements.railModeSelect.addEventListener("change", () => {
+    state.settings.railMode = elements.railModeSelect.value === "letter" ? "letter" : "icon";
     persistSettings();
     applySettings();
   });
@@ -819,6 +835,7 @@ function renderSettings() {
   elements.languageSelect.value = state.settings.language;
   elements.themeSelect.value = state.settings.theme;
   elements.wideEditorToggle.checked = state.settings.wideEditor;
+  elements.railModeSelect.value = state.settings.railMode;
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
@@ -1512,6 +1529,7 @@ function applySettings() {
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
   document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
+  document.documentElement.dataset.railMode = state.settings.railMode;
   document.documentElement.dataset.fontSize = state.settings.fontSize;
   document.documentElement.dataset.lineHeight = state.settings.lineHeight;
   document.documentElement.dataset.backlinks = state.settings.showBacklinks ? "show" : "hide";
@@ -1563,6 +1581,10 @@ function applyLanguage() {
   setText("#languageSettingDesc", t("settings.language.desc"));
   setText("#themeSettingTitle", t("settings.theme.title"));
   setText("#themeSettingDesc", t("settings.theme.desc"));
+  setText("#railModeSettingTitle", t("settings.railMode.title"));
+  setText("#railModeSettingDesc", t("settings.railMode.desc"));
+  setText("#railModeIconOption", t("settings.railMode.icon"));
+  setText("#railModeLetterOption", t("settings.railMode.letter"));
   setText("#serverSettingTitle", t("settings.server.title"));
   setText("#serverSettingDesc", t("settings.server.desc"));
   setText("#serverModeLocalOption", t("settings.server.mode.local"));
@@ -1592,6 +1614,17 @@ function applyLanguage() {
   setTitle(elements.railMarkdownImportBtn, t("rail.mdImport"));
   setTitle(elements.railDeletedTreeBtn, t("rail.trash"));
   setTitle(elements.railSettingsBtn, t("rail.settings"));
+  renderRailButtons();
+}
+
+function renderRailButtons() {
+  const mode = state.settings.railMode === "letter" ? "letter" : "icon";
+  document.querySelectorAll(".rail-btn").forEach((button) => {
+    const value = mode === "icon" ? button.dataset.railIcon : button.dataset.railLetter;
+    if (value) {
+      button.textContent = value;
+    }
+  });
 }
 
 function openQuickSwitch() {
@@ -3935,6 +3968,7 @@ function normalizeSettings(settings = {}) {
   normalized.language = ["ko", "en"].includes(normalized.language) ? normalized.language : defaults.language;
   normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
   normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
+  normalized.railMode = ["icon", "letter"].includes(normalized.railMode) ? normalized.railMode : defaults.railMode;
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);

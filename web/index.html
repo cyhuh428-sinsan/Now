@@ -9,16 +9,16 @@
 <body>
   <div class="app-shell">
     <nav class="app-rail" aria-label="빠른 메뉴">
-      <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기">≡</button>
-      <button class="rail-btn active" type="button" title="지식 메모">지</button>
-      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모">일</button>
-      <button id="railSearchBtn" class="rail-btn" type="button" title="검색">검</button>
-      <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환">전</button>
-      <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기">연</button>
-      <button id="railMarkdownExportBtn" class="rail-btn" type="button" title="Markdown 내보내기">내</button>
-      <button id="railMarkdownImportBtn" class="rail-btn" type="button" title="Markdown 가져오기">가</button>
-      <button id="railDeletedTreeBtn" class="rail-btn" type="button" title="삭제 보관함">삭</button>
-      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정">설</button>
+      <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기" data-rail-letter="목" data-rail-icon="☰">목</button>
+      <button class="rail-btn active" type="button" title="지식 메모" data-rail-letter="지" data-rail-icon="◫">지</button>
+      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모" data-rail-letter="일" data-rail-icon="◷">일</button>
+      <button id="railSearchBtn" class="rail-btn" type="button" title="검색" data-rail-letter="검" data-rail-icon="⌕">검</button>
+      <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환" data-rail-letter="전" data-rail-icon="⇄">전</button>
+      <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기" data-rail-letter="연" data-rail-icon="⛓">연</button>
+      <button id="railMarkdownExportBtn" class="rail-btn" type="button" title="Markdown 내보내기" data-rail-letter="내" data-rail-icon="⇩">내</button>
+      <button id="railMarkdownImportBtn" class="rail-btn" type="button" title="Markdown 가져오기" data-rail-letter="가" data-rail-icon="⇧">가</button>
+      <button id="railDeletedTreeBtn" class="rail-btn" type="button" title="삭제 보관함" data-rail-letter="삭" data-rail-icon="♻">삭</button>
+      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정" data-rail-letter="설" data-rail-icon="⚙">설</button>
       <input id="importMarkdownInput" class="hidden-file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple>
     </nav>
 
@@ -298,6 +298,17 @@
               <input id="wideEditorToggle" type="checkbox">
               <span></span>
             </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="railModeSettingTitle">빠른 메뉴 표시</h3>
+              <p id="railModeSettingDesc">왼쪽 빠른 메뉴를 아이콘 또는 첫 글자로 표시합니다.</p>
+            </div>
+            <select id="railModeSelect" class="settings-select" aria-label="빠른 메뉴 표시">
+              <option id="railModeIconOption" value="icon">아이콘</option>
+              <option id="railModeLetterOption" value="letter">첫 글자</option>
+            </select>
           </section>
 
           <section class="settings-row">

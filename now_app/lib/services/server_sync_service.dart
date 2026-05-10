@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -12,6 +14,7 @@ const _serverBaseUrlKey = 'now_server_base_url';
 const _serverTokenKey = 'now_server_token';
 const _serverDeviceIdKey = 'now_server_device_id';
 const _serverLastSyncedAtKey = 'now_server_last_synced_at';
+const _serverDeletedTreeMemosKey = 'now_server_deleted_tree_memos';
 
 final serverSettingsProvider = FutureProvider.autoDispose<ServerSettings>((
   ref,
@@ -186,6 +189,12 @@ class ServerSyncService {
       ...await _dailyMemoPayloads(settings),
       ...await _treeMemoPayloads(settings),
     ];
+    final deletedTreeNotes = await _treeDeletedMemoPayloads(settings);
+    final deletedMemoIds = <String>{
+      for (final item in deletedTreeNotes)
+        if (item['local_id'] is String) item['local_id'] as String,
+    };
+    notes.addAll(deletedTreeNotes);
     if (notes.isEmpty && !fullSync && settings.lastSyncedAt == null) {
       return const ServerSyncResult(uploaded: 0, message: '동기화할 메모가 없습니다');
     }
@@ -205,13 +214,33 @@ class ServerSyncService {
           'notes': notes,
         },
       );
-      final pushed = (res.data?['pushed_notes'] as List?)?.length ?? 0;
+      final pushedNotes = (res.data?['pushed_notes'] as List?) ?? const [];
+      final pushed = pushedNotes.length;
       final pulledNotes = (res.data?['pulled_notes'] as List?) ?? const [];
       final pulled = pulledNotes.length;
 
       final serverTime = _parseSyncTime(res.data?['server_time']?.toString());
       if (serverTime != null) {
         await settings.copyWith(lastSyncedAt: serverTime).save();
+      }
+      if (deletedMemoIds.isNotEmpty) {
+        final syncedDeletedIds = <String>{};
+        for (final item in pushedNotes) {
+          if (item is! Map) continue;
+          final noteType = item['note_type']?.toString();
+          final deletedAt = item['deleted_at'];
+          final localId = item['local_id']?.toString();
+          if (noteType == 'tree' &&
+              localId != null &&
+              localId.isNotEmpty &&
+              deletedAt != null &&
+              deletedMemoIds.contains(localId)) {
+            syncedDeletedIds.add(localId);
+          }
+        }
+        if (syncedDeletedIds.isNotEmpty) {
+          await _clearPendingDeletedTreeMemos(syncedDeletedIds);
+        }
       }
 
       final emptySync = notes.isEmpty && pushed == 0 && pulled == 0;
@@ -226,6 +255,45 @@ class ServerSyncService {
     } on DioException catch (e) {
       throw Exception(_serverErrorMessage(e, fallback: '동기화 실패'));
     }
+  }
+
+  Future<void> markTreeMemoDeleted(
+    String memoId, {
+    required int level,
+    String? parentLocalId,
+    String? tags,
+    String? title,
+    String? content,
+    DateTime? deletedAt,
+  }) async {
+    if (memoId.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final current = await _loadDeletedTreeMemos(prefs);
+    final now = deletedAt ?? DateTime.now();
+    current[memoId] = {
+      'deleted_at': now.toIso8601String(),
+      'level': level,
+      'parent_local_id': parentLocalId ?? '',
+      'tags': tags ?? '',
+      'title': title ?? '삭제된 메모',
+      'content': content ?? '',
+      'source': 'note_tree',
+    };
+    await prefs.setString(_serverDeletedTreeMemosKey, jsonEncode(current));
+  }
+
+  Future<Map<String, Map<String, dynamic>>> getDeletedTreeMemoPendings() async {
+    return _loadDeletedTreeMemos();
+  }
+
+  Future<void> clearDeletedTreeMemoPendings(Set<String> memoIds) async {
+    await _clearPendingDeletedTreeMemos(memoIds);
+  }
+
+  Future<void> clearAllDeletedTreeMemoPendings() async {
+    final current = await _loadDeletedTreeMemos();
+    if (current.isEmpty) return;
+    await _clearPendingDeletedTreeMemos(current.keys.toSet());
   }
 
   Future<ServerOpsResult> loadOpsStatus(ServerSettings settings) async {
@@ -288,27 +356,114 @@ class ServerSyncService {
               ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
             .get();
 
-    return memos.map((memo) {
-      final tags = _parseTags(memo.tags);
-      final lines = memo.content.split('\n');
-      final title = lines.first.trim().isEmpty ? '제목 없음' : lines.first.trim();
-      final body = lines.skip(1).join('\n').trim();
-      final parent = tags['parent']?.trim();
-      return {
+    return memos
+        .where((memo) {
+          final tags = _parseTags(memo.tags);
+          return tags['deleted']?.toLowerCase() != 'true';
+        })
+        .map((memo) {
+          final tags = _parseTags(memo.tags);
+          final lines = memo.content.split('\n');
+          final title = lines.first.trim().isEmpty
+              ? '제목 없음'
+              : lines.first.trim();
+          final body = lines.skip(1).join('\n').trim();
+          final parent = tags['parent']?.trim();
+          return {
+            'owner_id': 'local_user',
+            'device_id': settings.deviceId,
+            'local_id': memo.memoId,
+            'note_type': 'tree',
+            'title': title,
+            'content': body,
+            'parent_local_id': parent == null || parent.isEmpty ? null : parent,
+            'level': int.tryParse(tags['level'] ?? '1') ?? 1,
+            'tags': memo.tags,
+            'source': memo.source,
+            'client_updated_at': memo.updatedAt.toIso8601String(),
+            'deleted_at': null,
+          };
+        })
+        .toList();
+  }
+
+  Future<List<Map<String, dynamic>>> _treeDeletedMemoPayloads(
+    ServerSettings settings,
+  ) async {
+    final deleted = await _loadDeletedTreeMemos();
+    final payloads = <Map<String, dynamic>>[];
+    for (final entry in deleted.entries) {
+      final deletedAt = DateTime.tryParse(
+        entry.value['deleted_at']?.toString() ?? '',
+      );
+      if (deletedAt == null) continue;
+
+      final level = int.tryParse(entry.value['level']?.toString() ?? '1') ?? 1;
+      final parentRaw = entry.value['parent_local_id']?.toString() ?? '';
+      final parentLocalId = parentRaw.isEmpty ? null : parentRaw;
+
+      payloads.add({
         'owner_id': 'local_user',
         'device_id': settings.deviceId,
-        'local_id': memo.memoId,
+        'local_id': entry.key,
         'note_type': 'tree',
-        'title': title,
-        'content': body,
-        'parent_local_id': parent == null || parent.isEmpty ? null : parent,
-        'level': int.tryParse(tags['level'] ?? '1') ?? 1,
-        'tags': memo.tags,
-        'source': memo.source,
-        'client_updated_at': memo.updatedAt.toIso8601String(),
-        'deleted_at': null,
-      };
-    }).toList();
+        'title': entry.value['title']?.toString() ?? '삭제된 메모',
+        'content': '',
+        'parent_local_id': parentLocalId,
+        'level': level,
+        'tags': entry.value['tags']?.toString().isEmpty == true
+            ? null
+            : entry.value['tags']?.toString(),
+        'source': entry.value['source']?.toString() ?? 'note_tree',
+        'client_updated_at': deletedAt.toIso8601String(),
+        'deleted_at': deletedAt.toIso8601String(),
+      });
+    }
+    return payloads;
+  }
+
+  Future<Map<String, Map<String, dynamic>>> _loadDeletedTreeMemos([
+    SharedPreferences? prefs,
+  ]) async {
+    final pref = prefs ?? await SharedPreferences.getInstance();
+    final raw = pref.getString(_serverDeletedTreeMemosKey);
+    if (raw == null || raw.isEmpty) return {};
+
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map) {
+        final result = <String, Map<String, dynamic>>{};
+        decoded.forEach((key, value) {
+          final memoId = key?.toString() ?? '';
+          if (memoId.isEmpty || value is! Map) return;
+          final item = <String, dynamic>{};
+          value.forEach((k, v) {
+            if (k != null) {
+              item[k.toString()] = v;
+            }
+          });
+          result[memoId] = item;
+        });
+        return result;
+      }
+    } catch (_) {
+      // 복구 목적: 손상된 저장 데이터를 즉시 초기화
+      await pref.remove(_serverDeletedTreeMemosKey);
+    }
+    return {};
+  }
+
+  Future<void> _clearPendingDeletedTreeMemos(Set<String> memoIds) async {
+    if (memoIds.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final current = await _loadDeletedTreeMemos(prefs);
+    if (current.isEmpty) return;
+    memoIds.forEach(current.remove);
+    if (current.isEmpty) {
+      await prefs.remove(_serverDeletedTreeMemosKey);
+      return;
+    }
+    await prefs.setString(_serverDeletedTreeMemosKey, jsonEncode(current));
   }
 
   Dio _dio(ServerSettings settings) {

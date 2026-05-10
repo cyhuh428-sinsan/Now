@@ -85,6 +85,16 @@ button {
   font-weight: 900;
 }
 
+:root[data-rail-mode="icon"] .rail-btn {
+  font-size: 18px;
+  font-weight: 800;
+}
+
+:root[data-rail-mode="letter"] .rail-btn {
+  font-size: 13px;
+  font-weight: 900;
+}
+
 .rail-btn:hover,
 .rail-btn.active {
   border-color: #4b5563;

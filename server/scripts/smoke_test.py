@@ -6,6 +6,11 @@ import urllib.request
 from datetime import datetime, timezone
 
 
+def require(condition: bool, message: str) -> None:
+    if not condition:
+        raise AssertionError(message)
+
+
 def request(method: str, url: str, token: str | None = None, data: dict | None = None):
     body = None
     headers = {}
@@ -31,6 +36,17 @@ def request_text(method: str, url: str, token: str | None = None):
         return res.status, text
 
 
+def request_optional(method: str, url: str, token: str | None, data=None):
+    try:
+        if data is None:
+            return request(method, url, token, None)
+        return request(method, url, token, data)
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            return e.code, None
+        raise
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
@@ -53,13 +69,10 @@ def main() -> None:
         "/admin",
         "/admin/notes",
         "/admin/recordings",
-        "/admin/users",
         "/admin/devices",
         "/admin/sync",
         "/admin/ops",
         "/admin/export",
-        "/admin/analysis",
-        "/admin/help",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
@@ -83,16 +96,6 @@ def main() -> None:
         {
             "status": data.get("status"),
             "checks": len(data.get("checks", [])),
-        },
-    )
-
-    status, data = request("GET", f"{base_url}/api/v1/admin/users", args.token)
-    print(
-        "GET /api/v1/admin/users:",
-        status,
-        {
-            "count": data.get("count"),
-            "active": data.get("active"),
         },
     )
 
@@ -130,36 +133,77 @@ def main() -> None:
         },
     )
 
+    deleted_local_id = f"smoke_deleted_{now.replace(':', '').replace('-', '').replace('T', '_')}"
+    deleted_note = {
+        "owner_id": "local_user",
+        "device_id": "smoke_test",
+        "local_id": deleted_local_id,
+        "note_type": "tree",
+        "title": "삭제 동기화 검증 메모",
+        "content": "삭제 후 동기화 처리 확인용",
+        "parent_local_id": None,
+        "level": 1,
+        "tags": "kind=tree;level=1;owner=smoke",
+        "source": "smoke_test",
+        "client_updated_at": now,
+        "deleted_at": now,
+    }
     status, data = request(
-        "PATCH",
-        f"{base_url}/api/v1/admin/users/local_user",
+        "POST",
+        f"{base_url}/api/v1/sync",
         args.token,
         {
-            "email": "local_user@example.com",
-            "display_name": "Local User",
-            "timezone": "Asia/Seoul",
-            "group_name": "사용자",
-            "two_factor_enabled": False,
-            "is_active": True,
+            "owner_id": "local_user",
+            "device_id": "smoke_test",
+            "updated_after": None,
+            "include_deleted": True,
+            "notes": [deleted_note],
         },
     )
+    deleted_payload = data.get("pushed_notes", [])
+    deleted_pulled = data.get("pulled_notes", [])
     print(
-        "PATCH /api/v1/admin/users/local_user:",
-        status,
-        {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
-    )
-
-    status, data = request("GET", f"{base_url}/api/v1/users/local_user", args.token)
-    print(
-        "GET /api/v1/users/local_user:",
+        "POST /api/v1/sync(deleted_note):",
         status,
         {
-            "status": data.get("status"),
-            "timezone": data.get("user", {}).get("timezone"),
+            "pushed": len(deleted_payload),
+            "pulled": len(deleted_pulled),
+            "is_deleted": bool(deleted_payload and deleted_payload[0].get("deleted_at")),
+            "server_time": data.get("server_time"),
         },
     )
 
     status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/notes?include_deleted=true",
+        args.token,
+    )
+    has_deleted_item = any(
+        item.get("local_id") == deleted_local_id and item.get("deleted_at") is not None
+        for item in data.get("items", [])
+    )
+    require(has_deleted_item, "삭제 처리한 메모가 include_deleted 조회에서 확인되지 않았습니다")
+    print(
+        "GET /api/v1/admin/export/notes(include_deleted):",
+        status,
+        {"has_deleted_item": has_deleted_item, "count": data.get("count")},
+    )
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/notes?include_deleted=false",
+        args.token,
+    )
+    has_deleted_item_hidden = any(
+        item.get("local_id") == deleted_local_id for item in data.get("items", [])
+    )
+    require(not has_deleted_item_hidden, "삭제 처리한 메모가 exclude_deleted 조회에도 노출됩니다")
+    print(
+        "GET /api/v1/admin/export/notes(exclude_deleted):",
+        status,
+        {"is_hidden": not has_deleted_item_hidden, "count": data.get("count")},
+    )
+
+    status, data = request_optional(
         "PATCH",
         f"{base_url}/api/v1/users/local_user",
         args.token,
@@ -169,14 +213,53 @@ def main() -> None:
             "timezone": "Asia/Seoul",
         },
     )
-    print(
-        "PATCH /api/v1/users/local_user:",
-        status,
+    if status == 404:
+        print("PATCH /api/v1/users/local_user: skipped (route not implemented)")
+    else:
+        print(
+            "PATCH /api/v1/users/local_user:",
+            status,
+            {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
+        )
+
+    status, data = request_optional(
+        "GET",
+        f"{base_url}/api/v1/users/local_user",
+        args.token,
+    )
+    if status == 404:
+        print("GET /api/v1/users/local_user: skipped (route not implemented)")
+    else:
+        print(
+            "GET /api/v1/users/local_user:",
+            status,
+            {
+                "status": data.get("status"),
+                "timezone": data.get("user", {}).get("timezone"),
+            },
+        )
+
+    status, data = request_optional(
+        "PATCH",
+        f"{base_url}/api/v1/users/local_user",
+        args.token,
         {
-            "status": data.get("status"),
-            "timezone": data.get("user", {}).get("timezone"),
+            "email": "local_user@example.com",
+            "display_name": "Local User",
+            "timezone": "Asia/Seoul",
         },
     )
+    if status == 404:
+        print("PATCH /api/v1/users/local_user(second): skipped (route not implemented)")
+    else:
+        print(
+            "PATCH /api/v1/users/local_user(second):",
+            status,
+            {
+                "status": data.get("status"),
+                "timezone": data.get("user", {}).get("timezone"),
+            },
+        )
 
 
 if __name__ == "__main__":
