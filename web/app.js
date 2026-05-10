@@ -822,6 +822,13 @@ function bindEvents() {
     openWikiLink(link.dataset.wikiLink);
   });
   window.addEventListener("keydown", handleShortcuts);
+  window.addEventListener("mousedown", (event) => {
+    if (!state.capturingShortcutId) return;
+    const editor = elements.shortcutEditor;
+    if (editor && !editor.contains(event.target)) {
+      cancelShortcutCapture();
+    }
+  });
   bindTreeResize();
 
   window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => {
