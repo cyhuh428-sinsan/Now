@@ -603,7 +603,7 @@ function bindEvents() {
   });
 
   elements.settingsCloseBtn.addEventListener("click", () => {
-    elements.settingsView.classList.add("hidden");
+    closeSettingsPopup();
   });
 
   elements.languageSelect.addEventListener("change", () => {
