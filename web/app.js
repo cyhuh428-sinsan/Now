@@ -838,6 +838,7 @@ function bindOverlayDismiss(overlay, closeAction) {
 }
 
 function closeSettingsPopup() {
+  cancelShortcutCapture();
   elements.settingsView.classList.add("hidden");
 }
 
