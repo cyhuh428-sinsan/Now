@@ -14,6 +14,14 @@ const I18N = {
     "brand.subtitle": "지식 메모",
     "search.label": "검색",
     "search.placeholder": "제목, 내용 검색",
+    "search.emptyHint": "검색어를 입력하세요.",
+    "search.emptyTitle": "검색어를 입력하세요",
+    "search.emptyDescription": "일자별 메모와 지식 메모를 함께 검색합니다.",
+    "search.invalidHint": "검색어 형식을 확인하세요.",
+    "search.invalidTitle": "접두어 뒤에 검색어를 입력하세요.",
+    "search.invalidDescription": "예: title:회의, tag:아이디어, #메모",
+    "search.noResultTitle": "검색 결과가 없습니다",
+    "search.noResultDescription": "다른 검색어를 입력해보세요.",
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
     "side.favorite": "즐겨찾기",
@@ -100,6 +108,14 @@ const I18N = {
     "brand.subtitle": "Knowledge notes",
     "search.label": "Search",
     "search.placeholder": "Search title or content",
+    "search.emptyHint": "Enter a search term.",
+    "search.emptyTitle": "Enter a search term",
+    "search.emptyDescription": "Search both daily notes and knowledge notes together.",
+    "search.invalidHint": "Please check the query format.",
+    "search.invalidTitle": "Enter text after the prefix.",
+    "search.invalidDescription": "Example: title:meeting, tag:idea, #memo",
+    "search.noResultTitle": "No results",
+    "search.noResultDescription": "Try a different search term.",
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
     "side.favorite": "Favorites",
@@ -1697,8 +1713,15 @@ function closeSearchPopover() {
 function renderSearchPopoverResults() {
   const query = elements.searchPopoverInput.value.trim();
   if (!query) {
-    elements.searchPopoverCount.textContent = "검색어를 입력하세요.";
-    elements.searchPopoverResults.innerHTML = '<div class="empty-compact">검색어를 입력하세요.</div>';
+    const emptyHint = t("search.emptyHint");
+    elements.searchPopoverCount.textContent = emptyHint;
+    elements.searchPopoverResults.innerHTML = `<div class="empty-compact">${escapeHtml(emptyHint)}</div>`;
+    return;
+  }
+  const parsed = parseSearchQuery(query, elements.searchScopeSelect.value);
+  if (parsed.valid === false) {
+    elements.searchPopoverCount.textContent = t("search.invalidHint");
+    elements.searchPopoverResults.innerHTML = `<div class="empty-compact">${escapeHtml(t("search.invalidTitle"))}</div>`;
     return;
   }
   const results = searchResults(query, {
@@ -3618,8 +3641,18 @@ function sectionTitle(title) {
 function renderResults() {
   const query = state.search.toLowerCase();
   if (!query) {
-    elements.resultsCount.textContent = "검색어를 입력하세요.";
-    elements.resultsList.innerHTML = '<div class="empty-state"><strong>검색어를 입력하세요</strong><span>일자별 메모와 지식 메모를 함께 검색합니다.</span></div>';
+    const emptyTitle = t("search.emptyTitle");
+    const emptyDescription = t("search.emptyDescription");
+    elements.resultsCount.textContent = t("search.emptyHint");
+    elements.resultsList.innerHTML = `<div class="empty-state"><strong>${escapeHtml(emptyTitle)}</strong><span>${escapeHtml(emptyDescription)}</span></div>`;
+    return;
+  }
+  const parsed = parseSearchQuery(query, "all");
+  if (parsed.valid === false) {
+    const invalidTitle = t("search.invalidTitle");
+    const invalidDescription = t("search.invalidDescription");
+    elements.resultsCount.textContent = t("search.invalidHint");
+    elements.resultsList.innerHTML = `<div class="empty-state"><strong>${escapeHtml(invalidTitle)}</strong><span>${escapeHtml(invalidDescription)}</span></div>`;
     return;
   }
 
@@ -3695,7 +3728,8 @@ function parseSearchQuery(query, fallbackScope) {
     "[property]": "all",
   };
   if (query.startsWith("#")) {
-    return { scope: "tag", text: query.slice(1).trim() };
+    const text = query.slice(1).trim();
+    return { scope: "tag", text, valid: text.length > 0 };
   }
   const prefix = Object.keys(prefixes).find((item) => query.startsWith(item));
   if (!prefix) {
@@ -3742,7 +3776,9 @@ function sortSearchResults(results, sort) {
 
 function renderSearchResultsInto(container, results, afterSelect) {
   if (results.length === 0) {
-    container.innerHTML = '<div class="empty-state"><strong>검색 결과가 없습니다</strong><span>다른 검색어를 입력해보세요.</span></div>';
+    const noResultTitle = t("search.noResultTitle");
+    const noResultDescription = t("search.noResultDescription");
+    container.innerHTML = `<div class="empty-state"><strong>${escapeHtml(noResultTitle)}</strong><span>${escapeHtml(noResultDescription)}</span></div>`;
     return;
   }
 
