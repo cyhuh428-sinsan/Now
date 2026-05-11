@@ -13,6 +13,7 @@ class ServerSettingsPage extends ConsumerStatefulWidget {
 class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _baseUrlCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
+  final _ownerIdCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
   DateTime? _lastSyncedAt;
   bool _enabled = false;
@@ -25,6 +26,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   void dispose() {
     _baseUrlCtrl.dispose();
     _tokenCtrl.dispose();
+    _ownerIdCtrl.dispose();
     _deviceIdCtrl.dispose();
     super.dispose();
   }
@@ -34,6 +36,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _enabled = settings.enabled;
     _baseUrlCtrl.text = settings.baseUrl;
     _tokenCtrl.text = settings.token;
+    _ownerIdCtrl.text = settings.ownerId;
     _deviceIdCtrl.text = settings.deviceId;
     _lastSyncedAt = settings.lastSyncedAt;
     _loaded = true;
@@ -44,6 +47,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       enabled: _enabled,
       baseUrl: _baseUrlCtrl.text,
       token: _tokenCtrl.text,
+      ownerId: _ownerIdCtrl.text,
       deviceId: _deviceIdCtrl.text,
       lastSyncedAt: _lastSyncedAt,
     );
@@ -219,6 +223,16 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     decoration: const InputDecoration(
                       labelText: 'API 토큰',
                       hintText: '서버 NOW_API_TOKEN 값',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _ownerIdCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '사용자 ID',
+                      hintText: 'local_user',
+                      helperText: '서버에서 메모 소유자를 구분하는 값입니다',
                       border: OutlineInputBorder(),
                     ),
                   ),
