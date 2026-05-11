@@ -1,6 +1,7 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,7 +22,18 @@ def touch_user_activity(
         return user
 
     user.last_seen_at = now
-    user.is_active = 1
+    return user
+
+
+def require_active_user(db: Session, *, owner_id: str) -> UserAccount:
+    user = touch_user_activity(db, owner_id=owner_id)
+    if not bool(user.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="user inactive",
+        )
+    db.commit()
+    db.refresh(user)
     return user
 
 

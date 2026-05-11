@@ -7,6 +7,7 @@ from app.db import get_db
 from app.models.note import Recording
 from app.schemas.note import RecordingOut
 from app.services.recording_storage import save_recording_file
+from app.services.user_accounts import require_active_user
 
 router = APIRouter(
     prefix="/api/v1/recordings",
@@ -20,6 +21,7 @@ def list_recordings(
     owner_id: str = "local_user",
     db: Session = Depends(get_db),
 ) -> list[Recording]:
+    require_active_user(db, owner_id=owner_id)
     return list(
         db.scalars(
             select(Recording)
@@ -39,6 +41,7 @@ async def upload_recording(
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
 ) -> Recording:
+    require_active_user(db, owner_id=owner_id)
     file_name, storage_path = await save_recording_file(
         owner_id=owner_id,
         device_id=device_id,

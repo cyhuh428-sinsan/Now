@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import UserAccount
-from app.services.user_accounts import touch_user_activity, update_user_account
+from app.services.user_accounts import require_active_user, touch_user_activity, update_user_account
 
 router = APIRouter(
     prefix="/api/v1/users",
@@ -37,12 +37,7 @@ def update_user_profile(
     payload: UserProfileUpdate,
     db: Session = Depends(get_db),
 ) -> dict:
-    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
-    if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="user not found",
-        )
+    user = require_active_user(db, owner_id=owner_id)
     updated = update_user_account(
         db,
         owner_id=owner_id,

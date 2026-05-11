@@ -25,6 +25,17 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
         return res.status, json.loads(text) if text else None
 
 
+def request_error(method: str, url: str, token: str | None = None, data: dict | None = None):
+    try:
+        return request(method, url, token, data)
+    except urllib.error.HTTPError as e:
+        text = e.read().decode("utf-8")
+        try:
+            return e.code, json.loads(text) if text else None
+        except json.JSONDecodeError:
+            return e.code, {"detail": text}
+
+
 def request_text(method: str, url: str, token: str | None = None):
     headers = {}
     if token:
@@ -245,6 +256,52 @@ def main() -> None:
             "status": data.get("status"),
             "timezone": data.get("user", {}).get("timezone"),
         },
+    )
+
+    inactive_payload = {
+        "email": "local_user@example.com",
+        "display_name": "Local User",
+        "timezone": "Asia/Seoul",
+        "group_name": "사용자",
+        "two_factor_enabled": False,
+        "is_active": False,
+    }
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/admin/users/local_user",
+        args.token,
+        inactive_payload,
+    )
+    require(data.get("user", {}).get("is_active") is False, "사용자 비활성 상태가 저장되지 않았습니다")
+    print(
+        "PATCH /api/v1/admin/users/local_user(inactive):",
+        status,
+        {"is_active": data.get("user", {}).get("is_active")},
+    )
+
+    status, data = request_error("POST", f"{base_url}/api/v1/sync", args.token, sync_payload)
+    require(status == 403, "비활성 사용자의 동기화 요청이 차단되지 않았습니다")
+    print(
+        "POST /api/v1/sync(inactive_user):",
+        status,
+        {"detail": data.get("detail") if isinstance(data, dict) else None},
+    )
+
+    active_payload = {
+        **inactive_payload,
+        "is_active": True,
+    }
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/admin/users/local_user",
+        args.token,
+        active_payload,
+    )
+    require(data.get("user", {}).get("is_active") is True, "사용자 활성 상태가 복구되지 않았습니다")
+    print(
+        "PATCH /api/v1/admin/users/local_user(active):",
+        status,
+        {"is_active": data.get("user", {}).get("is_active")},
     )
 
 
