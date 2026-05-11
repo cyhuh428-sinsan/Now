@@ -59,6 +59,23 @@
       color: var(--text);
       white-space: nowrap;
     }
+    .help-actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .language-select {
+      min-height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-weight: 700;
+    }
     .mode-grid {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -130,6 +147,7 @@
     @media (max-width: 760px) {
       .shell { padding: 24px 12px 40px; }
       header, .mode-grid, .split { grid-template-columns: 1fr; }
+      .help-actions { justify-content: flex-start; }
       h1 { font-size: 28px; }
     }
   </style>
@@ -138,116 +156,246 @@
   <main class="shell">
     <header>
       <div>
-        <h1>NowNote 도움말</h1>
-        <div class="sub">단독 사용자와 서버 연결 사용자의 차이를 먼저 정리합니다.</div>
+        <h1 data-i18n="page.title">NowNote 도움말</h1>
+        <div class="sub" data-i18n="page.subtitle">단독 사용자와 서버 연결 사용자의 차이를 먼저 정리합니다.</div>
       </div>
-      <a class="back" href="./index.html">NowNote로 돌아가기</a>
+      <div class="help-actions">
+        <select id="languageSelect" class="language-select" aria-label="언어">
+          <option value="ko">한국어</option>
+          <option value="en">English</option>
+        </select>
+        <a class="back" href="./index.html" data-i18n="back">NowNote로 돌아가기</a>
+      </div>
     </header>
 
     <div class="mode-grid">
       <article class="card">
-        <span class="badge">로컬 전용</span>
-        <h2>단독 사용자</h2>
-        <p>서버에 연결하지 않고 현재 기기 안에서만 메모를 저장합니다.</p>
+        <span class="badge" data-i18n="standalone.badge">로컬 전용</span>
+        <h2 data-i18n="standalone.title">단독 사용자</h2>
+        <p data-i18n="standalone.desc">서버에 연결하지 않고 현재 기기 안에서만 메모를 저장합니다.</p>
         <ul>
-          <li>바로 시작할 수 있습니다.</li>
-          <li>메모가 외부 서버로 올라가지 않습니다.</li>
-          <li>JSON 백업이나 Markdown 내보내기를 주기적으로 해두는 것이 좋습니다.</li>
+          <li data-i18n="standalone.point.start">바로 시작할 수 있습니다.</li>
+          <li data-i18n="standalone.point.private">메모가 외부 서버로 올라가지 않습니다.</li>
+          <li data-i18n="standalone.point.backup">JSON 백업이나 Markdown 내보내기를 주기적으로 해두는 것이 좋습니다.</li>
         </ul>
       </article>
 
       <article class="card">
-        <span class="badge">동기화 사용</span>
-        <h2>서버 연결 사용자</h2>
-        <p>개인 Docker 서버나 공용 NowNote 서버에 연결해서 여러 기기와 메모를 동기화합니다.</p>
+        <span class="badge" data-i18n="server.badge">동기화 사용</span>
+        <h2 data-i18n="server.title">서버 연결 사용자</h2>
+        <p data-i18n="server.desc">개인 Docker 서버나 공용 NowNote 서버에 연결해서 여러 기기와 메모를 동기화합니다.</p>
         <ul>
-          <li>서버 주소와 API 토큰이 필요합니다.</li>
-          <li>사용자 프로필, 시간대, 그룹, 활성 상태를 관리할 수 있습니다.</li>
-          <li>서버 백업, 녹음 저장, 분석 작업으로 확장할 수 있습니다.</li>
+          <li data-i18n="server.point.token">서버 주소와 API 토큰이 필요합니다.</li>
+          <li data-i18n="server.point.profile">사용자 프로필, 시간대, 그룹, 활성 상태를 관리할 수 있습니다.</li>
+          <li data-i18n="server.point.expand">서버 백업, 녹음 저장, 분석 작업으로 확장할 수 있습니다.</li>
         </ul>
       </article>
     </div>
 
     <section>
-      <h2>플랫폼별 기준</h2>
+      <h2 data-i18n="platform.title">플랫폼별 기준</h2>
       <div class="split">
         <div>
-          <h3>모바일 앱</h3>
-          <p>빠른 입력이 중심입니다. 홈에서 오늘 메모를 빠르게 작성하고, 음성 또는 타이핑으로 기록합니다.</p>
+          <h3 data-i18n="platform.mobile.title">모바일 앱</h3>
+          <p data-i18n="platform.mobile.desc">빠른 입력이 중심입니다. 홈에서 오늘 메모를 빠르게 작성하고, 음성 또는 타이핑으로 기록합니다.</p>
           <ul>
-            <li>일자별 메모</li>
-            <li>음성 메모</li>
-            <li>빠른 메모 입력</li>
-            <li>서버 연결 상태 확인</li>
+            <li data-i18n="platform.mobile.daily">일자별 메모</li>
+            <li data-i18n="platform.mobile.voice">음성 메모</li>
+            <li data-i18n="platform.mobile.quick">빠른 메모 입력</li>
+            <li data-i18n="platform.mobile.server">서버 연결 상태 확인</li>
           </ul>
         </div>
         <div>
-          <h3>Web / 설치형 프로그램</h3>
-          <p>지식 메모가 중심입니다. 주제 / 분류 / 메모 구조로 정리하고 Markdown으로 긴 글을 작성합니다.</p>
+          <h3 data-i18n="platform.web.title">Web / 설치형 프로그램</h3>
+          <p data-i18n="platform.web.desc">지식 메모가 중심입니다. 주제 / 분류 / 메모 구조로 정리하고 Markdown으로 긴 글을 작성합니다.</p>
           <ul>
-            <li>계층형 지식 메모</li>
-            <li>탭 기반 편집</li>
-            <li>본문 찾기와 빠른 전환</li>
-            <li>기능별 ON/OFF와 단축키 변경</li>
+            <li data-i18n="platform.web.tree">계층형 지식 메모</li>
+            <li data-i18n="platform.web.tabs">탭 기반 편집</li>
+            <li data-i18n="platform.web.find">본문 찾기와 빠른 전환</li>
+            <li data-i18n="platform.web.toggles">기능별 ON/OFF와 단축키 변경</li>
           </ul>
         </div>
       </div>
     </section>
 
     <section>
-      <h2>서버 연결 설정</h2>
-      <p>서버 연결에 필요한 값은 서버 주소, API 토큰, 기기 ID입니다.</p>
-      <pre><code>서버 주소: http://서버주소:8750
+      <h2 data-i18n="connection.title">서버 연결 설정</h2>
+      <p data-i18n="connection.desc">서버 연결에 필요한 값은 서버 주소, API 토큰, 기기 ID입니다.</p>
+      <pre><code data-i18n="connection.code">서버 주소: http://서버주소:8750
 API 토큰: 서버 .env의 NOW_API_TOKEN
 기기 ID: 앱 또는 설치형 프로그램에서 자동 생성</code></pre>
-      <p>Android 에뮬레이터에서 로컬 PC 서버에 연결할 때는 아래 주소를 사용합니다.</p>
+      <p data-i18n="connection.android">Android 에뮬레이터에서 로컬 PC 서버에 연결할 때는 아래 주소를 사용합니다.</p>
       <pre><code>http://10.0.2.2:8750</code></pre>
     </section>
 
     <section>
-      <h2>사용자 프로필</h2>
-      <p>서버 연결 사용자는 서버에 사용자 정보가 생성됩니다.</p>
+      <h2 data-i18n="profile.title">사용자 프로필</h2>
+      <p data-i18n="profile.desc">서버 연결 사용자는 서버에 사용자 정보가 생성됩니다.</p>
       <ul>
         <li>owner ID</li>
-        <li>이메일과 표시 이름</li>
-        <li>시간대</li>
-        <li>사용자 그룹</li>
-        <li>2단계 인증 사용 여부</li>
-        <li>활성 상태와 최근 접속 시간</li>
+        <li data-i18n="profile.email">이메일과 표시 이름</li>
+        <li data-i18n="profile.timezone">시간대</li>
+        <li data-i18n="profile.group">사용자 그룹</li>
+        <li data-i18n="profile.twoFactor">2단계 인증 사용 여부</li>
+        <li data-i18n="profile.active">활성 상태와 최근 접속 시간</li>
       </ul>
-      <p>앱과 설치형 프로그램은 자기 프로필의 이메일, 표시 이름, 시간대를 수정할 수 있습니다. 그룹, 2단계 인증, 활성 상태는 관리자 화면에서 관리합니다.</p>
+      <p data-i18n="profile.note">앱과 설치형 프로그램은 자기 프로필의 이메일, 표시 이름, 시간대를 수정할 수 있습니다. 그룹, 2단계 인증, 활성 상태는 관리자 화면에서 관리합니다.</p>
     </section>
 
     <section>
-      <h2>백업과 가져오기</h2>
-      <h3>JSON 백업</h3>
-      <p>JSON은 NowNote 전체 데이터를 백업하거나 복원할 때 사용합니다. 가져오기는 현재 데이터를 백업 파일 내용으로 교체하는 성격이 강합니다.</p>
-      <h3>Markdown 가져오기</h3>
-      <p>다른 곳에서 작성한 <code>.md</code>, <code>.markdown</code>, <code>.txt</code> 파일을 NowNote 지식 메모로 추가합니다.</p>
-      <div class="note">가져온 파일은 원본 파일과 연결하지 않습니다. NowNote에서 수정하거나 삭제해도 원본 파일은 그대로 남습니다.</div>
+      <h2 data-i18n="backup.title">백업과 가져오기</h2>
+      <h3 data-i18n="backup.json.title">JSON 백업</h3>
+      <p data-i18n="backup.json.desc">JSON은 NowNote 전체 데이터를 백업하거나 복원할 때 사용합니다. 가져오기는 현재 데이터를 백업 파일 내용으로 교체하는 성격이 강합니다.</p>
+      <h3 data-i18n="backup.markdown.title">Markdown 가져오기</h3>
+      <p data-i18n="backup.markdown.desc">다른 곳에서 작성한 <code>.md</code>, <code>.markdown</code>, <code>.txt</code> 파일을 NowNote 지식 메모로 추가합니다.</p>
+      <div class="note" data-i18n="backup.markdown.note">가져온 파일은 원본 파일과 연결하지 않습니다. NowNote에서 수정하거나 삭제해도 원본 파일은 그대로 남습니다.</div>
+      <h3 data-i18n="backup.markdownExport.title">Markdown 내보내기</h3>
+      <p data-i18n="backup.markdownExport.desc">NowNote에서 내보낸 Markdown은 현재 언어에 맞춰 생성됩니다. 한국어 내보내기와 영어 내보내기 모두 다시 가져올 수 있습니다.</p>
     </section>
 
     <section>
-      <h2>암호화 저장</h2>
-      <p>암호화 저장은 서버 로그인 사용자 전용 선택 기능으로 설계합니다. 기본값은 꺼짐입니다.</p>
+      <h2 data-i18n="encryption.title">암호화 저장</h2>
+      <p data-i18n="encryption.desc">암호화 저장은 서버 로그인 사용자 전용 선택 기능으로 설계합니다. 기본값은 꺼짐입니다.</p>
       <ul>
-        <li>로그인은 사용 권한 확인에 사용합니다.</li>
-        <li>실제 암호화 키는 사용자 비밀번호 또는 복구키 기반으로 분리합니다.</li>
-        <li>암호화된 메모는 서버 운영자도 원문을 읽을 수 없어야 합니다.</li>
-        <li>암호화 메모는 기본적으로 LLM 분석에서 제외합니다.</li>
+        <li data-i18n="encryption.login">로그인은 사용 권한 확인에 사용합니다.</li>
+        <li data-i18n="encryption.key">실제 암호화 키는 사용자 비밀번호 또는 복구키 기반으로 분리합니다.</li>
+        <li data-i18n="encryption.operator">암호화된 메모는 서버 운영자도 원문을 읽을 수 없어야 합니다.</li>
+        <li data-i18n="encryption.llm">암호화 메모는 기본적으로 LLM 분석에서 제외합니다.</li>
       </ul>
     </section>
 
     <section>
-      <h2>추천 시작 방법</h2>
+      <h2 data-i18n="start.title">추천 시작 방법</h2>
       <ol>
-        <li>처음에는 단독 사용자로 메모 구조를 먼저 정합니다.</li>
-        <li>일자별 메모와 지식 메모를 사용해 봅니다.</li>
-        <li>여러 기기에서 같은 메모가 필요해지면 서버를 연결합니다.</li>
-        <li>서버 연결 후 사용자 프로필과 시간대를 확인합니다.</li>
-        <li>운영이 안정되면 백업, 분석, 암호화 기능을 단계적으로 켭니다.</li>
+        <li data-i18n="start.step.structure">처음에는 단독 사용자로 메모 구조를 먼저 정합니다.</li>
+        <li data-i18n="start.step.try">일자별 메모와 지식 메모를 사용해 봅니다.</li>
+        <li data-i18n="start.step.server">여러 기기에서 같은 메모가 필요해지면 서버를 연결합니다.</li>
+        <li data-i18n="start.step.profile">서버 연결 후 사용자 프로필과 시간대를 확인합니다.</li>
+        <li data-i18n="start.step.expand">운영이 안정되면 백업, 분석, 암호화 기능을 단계적으로 켭니다.</li>
       </ol>
     </section>
   </main>
+  <script>
+    const SETTINGS_KEY = "nownote.web.settings.v1";
+    const TRANSLATIONS = {
+      ko: {
+        title: "NowNote 도움말",
+      },
+      en: {
+        title: "NowNote Help",
+        "page.title": "NowNote Help",
+        "page.subtitle": "Start by understanding the difference between standalone use and server-connected use.",
+        "back": "Back to NowNote",
+        "standalone.badge": "Local only",
+        "standalone.title": "Standalone user",
+        "standalone.desc": "Save notes only on the current device without connecting to a server.",
+        "standalone.point.start": "You can start immediately.",
+        "standalone.point.private": "Notes are not uploaded to an external server.",
+        "standalone.point.backup": "It is a good idea to periodically use JSON backup or Markdown export.",
+        "server.badge": "Sync enabled",
+        "server.title": "Server-connected user",
+        "server.desc": "Connect to a personal Docker server or public NowNote server to sync notes across devices.",
+        "server.point.token": "A server URL and API token are required.",
+        "server.point.profile": "User profiles, time zones, groups, and active status can be managed.",
+        "server.point.expand": "This can expand into server backups, recording storage, and analysis jobs.",
+        "platform.title": "Platform Guidelines",
+        "platform.mobile.title": "Mobile app",
+        "platform.mobile.desc": "Fast input is the focus. Write today's note quickly from Home, using voice or typing.",
+        "platform.mobile.daily": "Daily notes",
+        "platform.mobile.voice": "Voice notes",
+        "platform.mobile.quick": "Quick note input",
+        "platform.mobile.server": "Check server connection status",
+        "platform.web.title": "Web / Installed app",
+        "platform.web.desc": "Knowledge notes are the focus. Organize by topic / category / note, and write longer content in Markdown.",
+        "platform.web.tree": "Hierarchical knowledge notes",
+        "platform.web.tabs": "Tab-based editing",
+        "platform.web.find": "Find in note and quick switch",
+        "platform.web.toggles": "Feature toggles and editable shortcuts",
+        "connection.title": "Server Connection Settings",
+        "connection.desc": "Server connection requires a server URL, API token, and device ID.",
+        "connection.code": "Server URL: http://server-address:8750\nAPI token: NOW_API_TOKEN in the server .env\nDevice ID: Automatically generated by the app or installed program",
+        "connection.android": "Use the address below when connecting from an Android emulator to a local PC server.",
+        "profile.title": "User Profile",
+        "profile.desc": "Server-connected users have user information created on the server.",
+        "profile.email": "Email and display name",
+        "profile.timezone": "Time zone",
+        "profile.group": "User group",
+        "profile.twoFactor": "Two-factor authentication enabled",
+        "profile.active": "Active status and last access time",
+        "profile.note": "The app and installed program can edit your own email, display name, and time zone. Groups, two-factor authentication, and active status are managed in the admin screen.",
+        "backup.title": "Backup And Import",
+        "backup.json.title": "JSON backup",
+        "backup.json.desc": "JSON is used to back up or restore all NowNote data. Importing usually replaces current data with the backup file contents.",
+        "backup.markdown.title": "Markdown import",
+        "backup.markdown.desc": "Import <code>.md</code>, <code>.markdown</code>, <code>.txt</code> files written elsewhere as NowNote knowledge notes.",
+        "backup.markdown.note": "Imported files are not linked to the original files. Editing or deleting them in NowNote does not change the original files.",
+        "backup.markdownExport.title": "Markdown export",
+        "backup.markdownExport.desc": "Markdown exported from NowNote is generated in the current language. Both Korean and English exports can be imported back into NowNote.",
+        "encryption.title": "Encrypted Storage",
+        "encryption.desc": "Encrypted storage is designed as an optional feature for server-login users. It is off by default.",
+        "encryption.login": "Login is used to verify access permission.",
+        "encryption.key": "The actual encryption key is separated based on the user password or recovery key.",
+        "encryption.operator": "Even the server operator should not be able to read encrypted note contents.",
+        "encryption.llm": "Encrypted notes are excluded from LLM analysis by default.",
+        "start.title": "Recommended Start",
+        "start.step.structure": "Start as a standalone user and decide your note structure first.",
+        "start.step.try": "Try daily notes and knowledge notes.",
+        "start.step.server": "Connect a server when you need the same notes on multiple devices.",
+        "start.step.profile": "After connecting a server, check your user profile and time zone.",
+        "start.step.expand": "Once operation is stable, enable backup, analysis, and encryption step by step.",
+      },
+    };
+
+    function readLanguage() {
+      const queryLanguage = new URLSearchParams(location.search).get("lang");
+      if (queryLanguage === "en" || queryLanguage === "ko") return queryLanguage;
+      try {
+        const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+        return settings.language === "en" ? "en" : "ko";
+      } catch {
+        return "ko";
+      }
+    }
+
+    function persistLanguage(language) {
+      try {
+        const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
+        settings.language = language;
+        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+      } catch {
+        // 도움말 언어 전환만 실패합니다. 본문 표시는 계속 유지합니다.
+      }
+    }
+
+    function translateTextNodes(root, language) {
+      const map = TRANSLATIONS[language] || {};
+      root.querySelectorAll("[data-i18n]").forEach((element) => {
+        const value = map[element.dataset.i18n];
+        if (!value) return;
+        if (value.includes("<")) {
+          element.innerHTML = value;
+        } else {
+          element.textContent = value;
+        }
+      });
+    }
+
+    function applyLanguage(language) {
+      document.documentElement.lang = language;
+      document.title = TRANSLATIONS[language]?.title || TRANSLATIONS.ko.title;
+      document.getElementById("languageSelect").value = language;
+      document.getElementById("languageSelect").setAttribute("aria-label", language === "en" ? "Language" : "언어");
+      document.querySelector(".back").setAttribute("href", `./index.html?lang=${encodeURIComponent(language)}`);
+      if (language === "en") translateTextNodes(document.body, language);
+    }
+
+    const languageSelect = document.getElementById("languageSelect");
+    applyLanguage(readLanguage());
+    languageSelect.addEventListener("change", () => {
+      const language = languageSelect.value;
+      persistLanguage(language);
+      location.href = `./help.html?lang=${encodeURIComponent(language)}`;
+    });
+  </script>
 </body>
 </html>
