@@ -36,17 +36,6 @@ def request_text(method: str, url: str, token: str | None = None):
         return res.status, text
 
 
-def request_optional(method: str, url: str, token: str | None, data=None):
-    try:
-        if data is None:
-            return request(method, url, token, None)
-        return request(method, url, token, data)
-    except urllib.error.HTTPError as e:
-        if e.code == 404:
-            return e.code, None
-        raise
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
@@ -203,7 +192,7 @@ def main() -> None:
         {"is_hidden": not has_deleted_item_hidden, "count": data.get("count")},
     )
 
-    status, data = request_optional(
+    status, data = request(
         "PATCH",
         f"{base_url}/api/v1/users/local_user",
         args.token,
@@ -213,33 +202,31 @@ def main() -> None:
             "timezone": "Asia/Seoul",
         },
     )
-    if status == 404:
-        print("PATCH /api/v1/users/local_user: skipped (route not implemented)")
-    else:
-        print(
-            "PATCH /api/v1/users/local_user:",
-            status,
-            {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
-        )
+    require(data.get("status") == "ok", "사용자 프로필 수정 응답 상태가 ok가 아닙니다")
+    require(data.get("user", {}).get("owner_id") == "local_user", "사용자 프로필 owner_id가 일치하지 않습니다")
+    print(
+        "PATCH /api/v1/users/local_user:",
+        status,
+        {"status": data.get("status"), "owner_id": data.get("user", {}).get("owner_id")},
+    )
 
-    status, data = request_optional(
+    status, data = request(
         "GET",
         f"{base_url}/api/v1/users/local_user",
         args.token,
     )
-    if status == 404:
-        print("GET /api/v1/users/local_user: skipped (route not implemented)")
-    else:
-        print(
-            "GET /api/v1/users/local_user:",
-            status,
-            {
-                "status": data.get("status"),
-                "timezone": data.get("user", {}).get("timezone"),
-            },
-        )
+    require(data.get("status") == "ok", "사용자 프로필 조회 응답 상태가 ok가 아닙니다")
+    require(data.get("user", {}).get("timezone") == "Asia/Seoul", "사용자 프로필 시간대가 저장되지 않았습니다")
+    print(
+        "GET /api/v1/users/local_user:",
+        status,
+        {
+            "status": data.get("status"),
+            "timezone": data.get("user", {}).get("timezone"),
+        },
+    )
 
-    status, data = request_optional(
+    status, data = request(
         "PATCH",
         f"{base_url}/api/v1/users/local_user",
         args.token,
@@ -249,17 +236,16 @@ def main() -> None:
             "timezone": "Asia/Seoul",
         },
     )
-    if status == 404:
-        print("PATCH /api/v1/users/local_user(second): skipped (route not implemented)")
-    else:
-        print(
-            "PATCH /api/v1/users/local_user(second):",
-            status,
-            {
-                "status": data.get("status"),
-                "timezone": data.get("user", {}).get("timezone"),
-            },
-        )
+    require(data.get("status") == "ok", "사용자 프로필 두 번째 수정 응답 상태가 ok가 아닙니다")
+    require(data.get("user", {}).get("timezone") == "Asia/Seoul", "사용자 프로필 두 번째 수정 시간대가 일치하지 않습니다")
+    print(
+        "PATCH /api/v1/users/local_user(second):",
+        status,
+        {
+            "status": data.get("status"),
+            "timezone": data.get("user", {}).get("timezone"),
+        },
+    )
 
 
 if __name__ == "__main__":
