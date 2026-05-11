@@ -21,6 +21,7 @@ def server_info() -> dict:
             "user_accounts": True,
             "user_profile": True,
             "user_timezone": True,
+            "two_factor_status": True,
             "two_factor_auth": "planned",
             "user_groups": True,
             "max_tree_note_level": 3,
