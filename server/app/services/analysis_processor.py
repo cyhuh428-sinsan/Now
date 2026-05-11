@@ -63,7 +63,7 @@ def _build_llm_prompt(job: AnalysisJob) -> str:
 {
   "index_terms": ["검색 색인어"],
   "summary": "지식 메모 요약",
-  "related_questions": ["나중에 확장할 질문"]
+  "related_questions": ["관련해서 이어서 검토할 질문"]
 }
 """
         instruction = "계층형 지식 메모를 검색과 재사용이 쉬운 색인 정보로 정리하세요."
@@ -148,10 +148,13 @@ def _daily_briefing(text: str) -> str:
 
 def _tree_note_index(text: str) -> str:
     keywords = _keywords(text, limit=12)
+    sentences = _split_sentences(text)
     return json.dumps(
         {
             "index_terms": keywords,
             "search_text": " ".join(keywords),
+            "summary": "\n".join(sentences[:3]) if sentences else text[:300],
+            "related_questions": _related_questions(keywords),
             "source": "local_worker",
         },
         ensure_ascii=False,
@@ -207,3 +210,7 @@ def _keywords(text: str, limit: int = 8) -> list[str]:
     ]
     counts = Counter(candidates)
     return [word for word, _ in counts.most_common(limit)]
+
+
+def _related_questions(keywords: list[str]) -> list[str]:
+    return [f"{keyword}와 관련해 더 확인할 내용은 무엇인가요?" for keyword in keywords[:3]]
