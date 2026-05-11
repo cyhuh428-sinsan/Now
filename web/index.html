@@ -8,7 +8,7 @@
 </head>
 <body>
   <div class="app-shell">
-    <nav class="app-rail" aria-label="빠른 메뉴">
+    <nav id="appRail" class="app-rail" aria-label="빠른 메뉴">
       <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기" data-rail-letter="목" data-rail-icon="☰">목</button>
       <button class="rail-btn active" type="button" title="지식 메모" data-rail-letter="지" data-rail-icon="◫">지</button>
       <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모" data-rail-letter="일" data-rail-icon="◷">일</button>
@@ -22,7 +22,7 @@
       <input id="importMarkdownInput" class="hidden-file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple>
     </nav>
 
-    <aside class="sidebar" aria-label="NowNote 메뉴">
+    <aside id="sidebarMenu" class="sidebar" aria-label="NowNote 메뉴">
       <div class="brand">
         <div class="brand-mark">N</div>
         <div>
@@ -41,7 +41,7 @@
         <strong id="todayMemoState">비어 있음</strong>
       </button>
 
-      <nav class="nav-tabs" aria-label="메모 보기">
+      <nav id="noteViewNav" class="nav-tabs" aria-label="메모 보기">
         <button id="treeNavBtn" class="nav-tab active" data-view="tree" type="button">지식 메모</button>
       </nav>
 
@@ -70,17 +70,17 @@
       </section>
 
       <div class="side-actions">
-        <section class="side-action-group" aria-label="탐색">
+        <section id="exploreActionGroup" class="side-action-group" aria-label="탐색">
           <h2 id="exploreActionTitle">탐색</h2>
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
         </section>
-        <section class="side-action-group" aria-label="파일">
+        <section id="fileActionGroup" class="side-action-group" aria-label="파일">
           <h2 id="fileActionTitle">파일</h2>
           <button id="exportMarkdownBtn" class="ghost-btn" type="button">Markdown 내보내기</button>
           <button id="importMarkdownBtn" class="ghost-btn" type="button">Markdown 가져오기</button>
         </section>
-        <section class="side-action-group" aria-label="관리">
+        <section id="manageActionGroup" class="side-action-group" aria-label="관리">
           <h2 id="manageActionTitle">관리</h2>
           <button id="deletedTreeBtn" class="ghost-btn count-btn" type="button">
             <span id="deletedTreeBtnLabel">삭제 보관함</span>
@@ -107,13 +107,13 @@
         </header>
 
         <div class="tree-layout">
-          <section class="panel tree-panel" aria-label="지식 목록">
+          <section id="treePanel" class="panel tree-panel" aria-label="지식 목록">
             <div id="treeList" class="tree-list"></div>
           </section>
 
           <div id="treeResizeHandle" class="resize-handle" role="separator" aria-label="목록 폭 조정"></div>
 
-          <section class="panel editor-panel" aria-label="지식 메모 편집">
+          <section id="treeEditorPanel" class="panel editor-panel" aria-label="지식 메모 편집">
             <div id="openTabsBar" class="open-tabs-bar hidden">
               <div id="openTabs" class="open-tabs" aria-label="열린 메모"></div>
               <div class="open-tab-actions">
@@ -124,8 +124,8 @@
               </div>
             </div>
             <div id="emptyTreeEditor" class="empty-state">
-              <strong>메모를 선택하세요</strong>
-              <span>왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.</span>
+              <strong id="emptyTreeEditorTitle">메모를 선택하세요</strong>
+              <span id="emptyTreeEditorDesc">왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.</span>
               <button id="emptyAddRootBtn" class="primary-btn" type="button">주제 만들기</button>
             </div>
             <div id="treeEditor" class="tree-editor hidden">
@@ -140,7 +140,7 @@
                   <span id="treeSavedLabel" class="save-state">저장됨</span>
                 </div>
               </div>
-              <div class="editor-tools" aria-label="지식 메모 도구">
+              <div id="treeTools" class="editor-tools" aria-label="지식 메모 도구">
                 <span id="treePathLabel" class="path-label"></span>
                 <div class="editor-tool-actions">
                   <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
@@ -179,7 +179,7 @@
       <section id="resultsView" class="view" aria-labelledby="resultsTitle">
         <header class="view-header">
           <div>
-            <p class="eyebrow">통합 검색</p>
+            <p id="resultsEyebrow" class="eyebrow">통합 검색</p>
             <h2 id="resultsTitle">검색 결과</h2>
           </div>
           <div class="results-header-actions">
@@ -197,7 +197,7 @@
       <div class="daily-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">필요할 때 잠깐 여는 날짜 기록</p>
+            <p id="dailyEyebrow" class="eyebrow">필요할 때 잠깐 여는 날짜 기록</p>
             <h2 id="dailyTitle">일자별 메모</h2>
           </div>
           <div class="header-actions">
@@ -210,23 +210,23 @@
         </header>
 
         <div class="daily-layout compact">
-          <section class="panel calendar-panel" aria-label="달력">
+          <section id="calendarPanel" class="panel calendar-panel" aria-label="달력">
             <div class="month-bar">
               <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
               <strong id="monthLabel"></strong>
               <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
             </div>
             <div class="calendar-weekdays">
-              <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              <span id="weekdaySun">일</span><span id="weekdayMon">월</span><span id="weekdayTue">화</span><span id="weekdayWed">수</span><span id="weekdayThu">목</span><span id="weekdayFri">금</span><span id="weekdaySat">토</span>
             </div>
             <div id="calendarGrid" class="calendar-grid"></div>
           </section>
 
-          <section class="panel editor-panel" aria-label="선택한 날짜 메모">
+          <section id="dailyEditorPanel" class="panel editor-panel" aria-label="선택한 날짜 메모">
             <div class="editor-head">
               <div>
                 <p id="selectedDateLabel" class="eyebrow"></p>
-                <h3>하루 하나의 메모장</h3>
+                <h3 id="dailyMemoTitle">하루 하나의 메모장</h3>
               </div>
               <span id="dailySavedLabel" class="save-state">저장됨</span>
             </div>
@@ -237,8 +237,8 @@
         <section id="archivePanel" class="panel archive-panel hidden" aria-label="일자별 메모 보관함">
           <div class="archive-head">
             <div>
-              <p class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
-              <h3>보관함</h3>
+              <p id="dailyArchiveEyebrow" class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
+              <h3 id="dailyArchiveTitle">보관함</h3>
             </div>
             <span id="archiveCountLabel" class="save-state">0개</span>
           </div>
@@ -283,16 +283,16 @@
 
           <section class="settings-row">
             <div>
-              <h3>강조 색상</h3>
-              <p>버튼과 선택 상태에 사용할 색상을 선택합니다.</p>
+              <h3 id="accentSettingTitle">강조 색상</h3>
+              <p id="accentSettingDesc">버튼과 선택 상태에 사용할 색상을 선택합니다.</p>
             </div>
             <div id="accentChoices" class="accent-choices" aria-label="강조 색상"></div>
           </section>
 
           <section class="settings-row">
             <div>
-              <h3>넓은 작성 공간</h3>
-              <p>목록 폭을 줄여 메모 작성 공간을 넓게 사용합니다.</p>
+              <h3 id="wideEditorSettingTitle">넓은 작성 공간</h3>
+              <p id="wideEditorSettingDesc">목록 폭을 줄여 메모 작성 공간을 넓게 사용합니다.</p>
             </div>
             <label class="switch">
               <input id="wideEditorToggle" type="checkbox">
@@ -313,8 +313,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>글자 크기</h3>
-              <p>메모 작성 화면의 글자 크기를 조정합니다.</p>
+              <h3 id="fontSizeSettingTitle">글자 크기</h3>
+              <p id="fontSizeSettingDesc">메모 작성 화면의 글자 크기를 조정합니다.</p>
             </div>
             <select id="fontSizeSelect" class="settings-select" aria-label="글자 크기">
               <option value="small">작게</option>
@@ -325,8 +325,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>줄 간격</h3>
-              <p>긴 메모를 읽기 편한 간격으로 조정합니다.</p>
+              <h3 id="lineHeightSettingTitle">줄 간격</h3>
+              <p id="lineHeightSettingDesc">긴 메모를 읽기 편한 간격으로 조정합니다.</p>
             </div>
             <select id="lineHeightSelect" class="settings-select" aria-label="줄 간격">
               <option value="compact">좁게</option>
@@ -337,8 +337,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>백링크 표시</h3>
-              <p>현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.</p>
+              <h3 id="backlinksSettingTitle">백링크 표시</h3>
+              <p id="backlinksSettingDesc">현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.</p>
             </div>
             <label class="switch">
               <input id="backlinksToggle" type="checkbox">
@@ -348,8 +348,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>태그 표시</h3>
-              <p>본문의 #태그를 인식해 편집 화면과 검색에서 사용합니다.</p>
+              <h3 id="tagsSettingTitle">태그 표시</h3>
+              <p id="tagsSettingDesc">본문의 #태그를 인식해 편집 화면과 검색에서 사용합니다.</p>
             </div>
             <label class="switch">
               <input id="tagsToggle" type="checkbox">
@@ -359,8 +359,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>단축키 사용</h3>
-              <p>빠른 전환, 새 주제 만들기 같은 기본 단축키를 사용합니다.</p>
+              <h3 id="shortcutsSettingTitle">단축키 사용</h3>
+              <p id="shortcutsSettingDesc">빠른 전환, 새 주제 만들기 같은 기본 단축키를 사용합니다.</p>
             </div>
             <label class="switch">
               <input id="shortcutsToggle" type="checkbox">
@@ -370,16 +370,16 @@
 
           <section class="settings-row shortcuts-row">
             <div>
-              <h3>단축키 안내</h3>
-              <p>자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.</p>
+              <h3 id="shortcutGuideSettingTitle">단축키 안내</h3>
+              <p id="shortcutGuideSettingDesc">자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.</p>
             </div>
             <div id="shortcutEditor" class="shortcut-groups"></div>
           </section>
 
           <section class="settings-row feature-row">
             <div>
-              <h3>지식 기능</h3>
-              <p>사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.</p>
+              <h3 id="featuresSettingTitle">지식 기능</h3>
+              <p id="featuresSettingDesc">사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.</p>
             </div>
             <div id="featureSettings" class="feature-toggle-list"></div>
           </section>
@@ -428,8 +428,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>보조 목록 표시</h3>
-              <p>왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.</p>
+              <h3 id="sidebarAssistSettingTitle">보조 목록 표시</h3>
+              <p id="sidebarAssistSettingDesc">왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.</p>
             </div>
             <label class="switch">
               <input id="sidebarAssistToggle" type="checkbox">
@@ -439,13 +439,13 @@
 
           <section class="settings-row">
             <div>
-              <h3>백업 / 복원</h3>
-              <p>JSON은 NowNote 전체 데이터를 백업하거나 현재 데이터를 백업 파일로 교체할 때 사용합니다.</p>
+              <h3 id="backupSettingTitle">백업 / 복원</h3>
+              <p id="backupSettingDesc">JSON은 NowNote 전체 데이터를 백업하거나 현재 데이터를 백업 파일로 교체할 때 사용합니다.</p>
             </div>
             <div class="settings-actions">
               <button id="exportBtn" class="secondary-btn" type="button">JSON 내보내기</button>
               <label class="secondary-btn file-btn">
-                JSON 가져오기
+                <span id="importBtnLabel">JSON 가져오기</span>
                 <input id="importInput" type="file" accept="application/json">
               </label>
             </div>
@@ -453,8 +453,8 @@
 
           <section class="settings-row">
             <div>
-              <h3>화면 설정 초기화</h3>
-              <p>메모는 유지하고 테마, 폭, 글자 크기, 열린 탭 같은 화면 설정만 기본값으로 되돌립니다.</p>
+              <h3 id="resetSettingTitle">화면 설정 초기화</h3>
+              <p id="resetSettingDesc">메모는 유지하고 테마, 폭, 글자 크기, 열린 탭 같은 화면 설정만 기본값으로 되돌립니다.</p>
             </div>
             <button id="resetSettingsBtn" class="danger-btn" type="button">기본값으로</button>
           </section>
@@ -474,7 +474,7 @@
       <div class="quick-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">제목과 경로로 바로 이동</p>
+            <p id="quickSwitchEyebrow" class="eyebrow">제목과 경로로 바로 이동</p>
             <h2 id="quickSwitchTitle">빠른 전환</h2>
           </div>
           <button id="quickCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
@@ -489,7 +489,7 @@
       <div class="quick-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">일자별 메모와 지식 메모 전체</p>
+            <p id="searchPopoverEyebrow" class="eyebrow">일자별 메모와 지식 메모 전체</p>
             <h2 id="searchPopoverTitle">검색</h2>
           </div>
           <button id="searchPopoverCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
@@ -527,7 +527,7 @@
       <div class="quick-card graph-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">[[제목]] 연결 기준</p>
+            <p id="graphEyebrow" class="eyebrow">[[제목]] 연결 기준</p>
             <h2 id="graphTitle">연결 보기</h2>
           </div>
           <button id="graphCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
@@ -540,7 +540,7 @@
       <div class="quick-card">
         <header class="view-header">
           <div>
-            <p class="eyebrow">실수 삭제를 막기 위한 임시 보관</p>
+            <p id="deletedTreeEyebrow" class="eyebrow">실수 삭제를 막기 위한 임시 보관</p>
             <h2 id="deletedTreeTitle">삭제 보관함</h2>
           </div>
           <button id="deletedTreeCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>

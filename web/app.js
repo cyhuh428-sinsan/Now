@@ -2,26 +2,142 @@ const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
 
 const ACCENTS = [
-  { id: "blue", label: "파랑", value: "#2563eb" },
-  { id: "purple", label: "보라", value: "#8b5cf6" },
-  { id: "green", label: "초록", value: "#14b8a6" },
-  { id: "orange", label: "주황", value: "#f97316" },
+  { id: "blue", labelKey: "accent.blue", label: "파랑", value: "#2563eb" },
+  { id: "purple", labelKey: "accent.purple", label: "보라", value: "#8b5cf6" },
+  { id: "green", labelKey: "accent.green", label: "초록", value: "#14b8a6" },
+  { id: "orange", labelKey: "accent.orange", label: "주황", value: "#f97316" },
 ];
 
 const I18N = {
   ko: {
+    "note.untitled": "제목 없음",
+    "note.emptyTitle": "주제가 없습니다",
+    "note.emptyDescription": "먼저 주제를 추가하세요.",
+    "note.pinnedPrefix": "고정 · ",
+    "note.unpinTab": "고정 해제",
+    "note.pinTab": "탭 고정",
+    "note.dailyHasContent": "기록 있음",
+    "note.dailyEmpty": "비어 있음",
+    "note.backlinks": "백링크",
+    "note.linkToNote": "메모로 이동",
+    "note.linkMissing": "아직 없는 메모",
+    "note.outlineEmpty": "개요로 표시할 제목이 없습니다.",
+    "note.previewEmpty": "미리 볼 내용이 없습니다.",
+    "note.stats.backlinks": "{count}개 백링크",
+    "note.stats.edit": "편집",
+    "note.stats.words": "{count}개 단어",
+    "note.stats.chars": "{count}개 문자",
+    "note.stats.lines": "{count}줄",
+    "note.stats.links": "{count}개 링크",
+    "note.stats.tags": "{count}개 태그",
+    "note.stats.missingLinks": "{count}개 미생성 링크",
+    "note.stats.updated": "수정 {time}",
+    "note.sectionOut": "연결",
+    "note.sectionBacklink": "백링크",
+    "note.sectionOutEmpty": "본문에 [[메모 제목]]을 적으면 다른 메모와 연결됩니다.",
+    "note.sectionBacklinkEmpty": "이 메모를 언급한 다른 메모가 없습니다.",
+    "note.nodeDelete.childrenBlocked": "아래에 연결된 항목이 있으면 삭제할 수 없습니다.",
+    "note.nodeDelete.toTrashConfirm": "'{title}' 메모를 삭제 보관함으로 이동할까요?",
+    "note.nodeDelete.permanentConfirm": "'{title}' 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+    "note.nodeDelete.permanentSelected": "선택한 {count}개 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+    "note.nodeDelete.permanentAll": "삭제 보관함의 {count}개 메모를 모두 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+    "note.noArchive": "보관할 메모가 없습니다.",
+    "note.archiveConfirm": "{date} 메모를 보관함으로 이동할까요?",
+    "note.archiveRestoreConfirm": "같은 날짜의 활성 메모가 있습니다. 보관본 내용을 아래에 추가할까요?",
+    "note.graphEmpty": "아직 연결된 메모가 없습니다. 본문에 [[메모 제목]]을 적으면 연결됩니다.",
+    "note.deletedTreeEmpty": "삭제 보관함이 비어 있습니다.",
+    "note.deletedSelection": "선택 {selected}개 / 전체 {total}개",
+    "note.deletedSelectAll": "전체 선택",
+    "note.deletedClearAll": "전체 해제",
+    "note.emptyState": "없음",
+    "note.dailyArchiveEmpty": "보관된 일자별 메모가 없습니다.",
+    "note.archiveLabel": "보관 시각:",
+    "note.archivedAt": "{time} 보관",
+    "note.archiveCount": "{count}개",
+    "note.archiveViewHint": "보관본 열람",
+    "note.deletedAt": "{time} 삭제",
+    "note.selectLabel": "{title} 선택",
+    "note.childCount": "아래 {count}개",
+    "note.tagEmpty": "태그 없음",
+    "note.linkFallbackTitle": "링크 제목",
+    "note.archiveRestoreMarker": "보관본 복원",
+    "note.importDone": "가져오기가 완료되었습니다.",
+    "note.importReadError": "JSON 파일을 읽을 수 없습니다.",
+    "note.markdownImportedMore": "외 {count}개",
+    "note.markdownStructureTitle": "{name} 구조",
+    "note.restoredArchivedDailyCount": ", 복원된 보관본 {count}개",
+    "note.dateMissing": "날짜 없음",
+    "note.emptyContent": "내용 없음",
+    "note.mergeChildrenMarker": "하위 메모 병합",
+    "note.storageFail": "브라우저 저장소에 저장할 수 없습니다. 중요한 내용은 JSON 내보내기로 백업해 주세요.",
+    "note.backupImportError": "NowNote 백업 JSON 형식이 아닙니다.",
+    "note.backupReplaceConfirm": "JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다.\n\n백업 파일: {file}\n백업 시각: {time}\n백업 내용: 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개{restoredArchivedDaily}, 지식 메모 {tree}개, 삭제 보관 {deletedTree}개\n\n계속할까요?",
+    "note.unknownDate": "확인 안 됨",
+    "note.linkCreateConfirm": "'{title}' 메모가 없습니다. 새로 만들까요?",
+    "note.backupFileReadError": "JSON 파일을 읽을 수 없습니다.",
+    "note.backupFileOpenError": "JSON 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
+    "note.backupFileParseError": "JSON 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
+    "note.markdownNoContent": "가져올 Markdown 내용이 없습니다.",
+    "note.markdownImportConfirm": "{count}개 Markdown 파일을 가져올까요? 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
+    "note.markdownImportDone": "Markdown 가져오기 완료: 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
+    "note.markdownImportError": "Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
+    "note.fallbackMarkDownTitle": "가져온 Markdown",
+    "note.exportDenied": "파일을 내보낼 수 없습니다. 브라우저 다운로드 권한이나 저장 공간을 확인해 주세요.",
+    "note.newNote": "새 메모",
+    "note.newCategory": "새 분류",
+    "note.newTopic": "새 주제",
+    "note.labelTopic": "주제",
+    "note.labelCategory": "분류",
+    "note.labelNote": "메모",
+    "note.expand": "펼치기",
+    "note.collapse": "접기",
+    "note.addChild": "아래에 추가",
+    "note.open": "열기",
+    "note.restored": "복원됨",
+    "note.syncMessage": "보낸 메모 {sent}개, 받은 메모 {received}개",
+    "note.treeDepthLimit": "최대 3단계까지만 추가할 수 있습니다.",
+    "note.tabClose": "닫기",
+    "note.restore": "복원",
+    "note.nodeDeletePermanent": "영구 삭제",
     "app.title": "NowNote Web",
+    "accent.blue": "파랑",
+    "accent.purple": "보라",
+    "accent.green": "초록",
+    "accent.orange": "주황",
     "brand.subtitle": "지식 메모",
+    "quick.eyebrow": "제목과 경로로 바로 이동",
+    "quick.title": "빠른 전환",
+    "quick.placeholder": "제목 또는 경로 검색",
+    "quick.empty": "이동할 메모가 없습니다.",
+    "quick.count.recent": "최근 기준 {count}개 표시",
+    "quick.count.recentLimited": "최근 기준 {shown}개 표시 / 전체 {count}개",
+    "quick.count.match": "전환 후보 {count}개",
+    "quick.count.matchLimited": "전환 후보 {count}개 중 {shown}개 표시",
     "search.label": "검색",
     "search.placeholder": "제목, 내용 검색",
     "search.emptyHint": "검색어를 입력하세요.",
     "search.emptyTitle": "검색어를 입력하세요",
     "search.emptyDescription": "일자별 메모와 지식 메모를 함께 검색합니다.",
+    "search.popoverEyebrow": "일자별 메모와 지식 메모 전체",
+    "search.popoverTitle": "검색",
+    "search.popoverPlaceholder": "입력하여 검색하기...",
     "search.invalidHint": "검색어 형식을 확인하세요.",
     "search.invalidTitle": "접두어 뒤에 검색어를 입력하세요.",
     "search.invalidDescription": "예: title:회의, tag:아이디어, #메모",
     "search.noResultTitle": "검색 결과가 없습니다",
     "search.noResultDescription": "다른 검색어를 입력해보세요.",
+    "search.scope.all": "전체",
+    "search.scope.title": "제목",
+    "search.scope.content": "내용",
+    "search.scope.tag": "태그",
+    "search.scope.path": "경로",
+    "search.sort.updatedDesc": "수정일 최신순",
+    "search.sort.updatedAsc": "수정일 오래된 순",
+    "search.sort.createdDesc": "생성일 최신순",
+    "search.sort.createdAsc": "생성일 오래된 순",
+    "search.sort.titleAsc": "이름 가나다순",
+    "search.sort.titleDesc": "이름 가나다 역순",
+    "search.dailyMeta": "일자별 메모",
     "search.resultCount": "검색 결과 {count}개",
     "search.popoverHelp.path": "경로",
     "search.popoverHelp.title": "제목",
@@ -29,6 +145,39 @@ const I18N = {
     "search.popoverHelp.content": "내용",
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
+    "aria.quickMenu": "빠른 메뉴",
+    "aria.sidebar": "NowNote 메뉴",
+    "aria.noteView": "메모 보기",
+    "aria.explore": "탐색",
+    "aria.files": "파일",
+    "aria.manage": "관리",
+    "aria.treeList": "지식 목록",
+    "aria.treeResize": "목록 폭 조정",
+    "aria.treeEditor": "지식 메모 편집",
+    "aria.openTabs": "열린 메모",
+    "aria.treeTools": "지식 메모 도구",
+    "aria.noteFind": "현재 메모에서 찾기",
+    "aria.outline": "현재 메모 개요",
+    "aria.tags": "태그",
+    "aria.noteStats": "메모 정보",
+    "aria.markdownPreview": "Markdown 미리보기",
+    "aria.calendar": "달력",
+    "aria.dailyEditor": "선택한 날짜 메모",
+    "aria.dailyArchive": "일자별 메모 보관함",
+    "aria.language": "언어",
+    "aria.theme": "기본 테마",
+    "aria.accent": "강조 색상",
+    "aria.railMode": "빠른 메뉴 표시",
+    "aria.fontSize": "글자 크기",
+    "aria.lineHeight": "줄 간격",
+    "aria.searchScope": "검색 범위",
+    "aria.searchSort": "검색 정렬",
+    "aria.searchOption": "검색 옵션",
+    "aria.close": "닫기",
+    "aria.prevResult": "이전 결과",
+    "aria.nextResult": "다음 결과",
+    "aria.prevMonth": "이전 달",
+    "aria.nextMonth": "다음 달",
     "side.favorite": "즐겨찾기",
     "side.recent": "최근 수정",
     "side.tags": "태그",
@@ -53,28 +202,98 @@ const I18N = {
     "rail.mdImport": "Markdown 가져오기",
     "rail.trash": "삭제 보관함",
     "rail.settings": "화면 설정",
+    "rail.letter.sidebar": "목",
+    "rail.letter.knowledge": "지",
+    "rail.letter.daily": "일",
+    "rail.letter.search": "검",
+    "rail.letter.quick": "전",
+    "rail.letter.graph": "연",
+    "rail.letter.mdExport": "내",
+    "rail.letter.mdImport": "가",
+    "rail.letter.trash": "삭",
+    "rail.letter.settings": "설",
     "tree.eyebrow": "주제 / 분류 / 메모",
     "tree.title": "지식 메모",
     "tree.expandAll": "모두 펼치기",
     "tree.collapseAll": "모두 접기",
     "tree.addRoot": "주제 추가",
+    "tree.emptySelectTitle": "메모를 선택하세요",
+    "tree.emptySelectDesc": "왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.",
+    "tree.createTopic": "주제 만들기",
+    "tree.titlePlaceholder": "제목",
+    "tree.contentPlaceholder": "메모 내용을 입력하세요.",
+    "tree.moveUp": "위로",
+    "tree.moveDown": "아래로",
+    "tree.delete": "삭제",
+    "tabs.reopen": "다시 열기",
+    "tabs.closeOther": "다른 탭 닫기",
+    "tabs.closeAll": "모두 닫기",
     "editor.favorite": "즐겨찾기",
     "editor.unfavorite": "즐겨찾기 해제",
+    "editor.copyLink": "링크 복사",
     "editor.find": "본문 찾기",
+    "editor.findPlaceholder": "본문에서 검색",
+    "editor.findTitle": "Enter 다음, Shift+Enter 이전",
     "editor.outline": "개요",
     "editor.insertTime": "시간 넣기",
     "editor.preview": "Markdown 보기",
     "editor.edit": "편집하기",
+    "results.eyebrow": "통합 검색",
+    "results.title": "검색 결과",
+    "results.close": "검색 닫기",
+    "daily.eyebrow": "필요할 때 잠깐 여는 날짜 기록",
+    "daily.title": "일자별 메모",
+    "daily.today": "오늘",
+    "daily.appendTime": "시간 추가",
+    "daily.archive": "보관",
+    "daily.archiveBox": "보관함",
+    "daily.memoTitle": "하루 하나의 메모장",
+    "daily.placeholder": "이 날짜의 메모장 하나에 계속 추가해서 적어두세요.",
+    "daily.archiveEyebrow": "활성 메모에서 빠진 날짜 기록",
+    "daily.week.sun": "일",
+    "daily.week.mon": "월",
+    "daily.week.tue": "화",
+    "daily.week.wed": "수",
+    "daily.week.thu": "목",
+    "daily.week.fri": "금",
+    "daily.week.sat": "토",
     "settings.eyebrow": "사용자 취향에 맞게 조정",
     "settings.title": "화면 설정",
     "settings.language.title": "언어",
     "settings.language.desc": "앱 화면에 사용할 언어를 선택합니다.",
     "settings.theme.title": "기본 테마",
     "settings.theme.desc": "앱의 밝기 테마를 선택합니다.",
+    "settings.theme.system": "시스템 테마 적용",
+    "settings.theme.light": "밝은 테마",
+    "settings.theme.dark": "어두운 테마",
+    "settings.accent.title": "강조 색상",
+    "settings.accent.desc": "버튼과 선택 상태에 사용할 색상을 선택합니다.",
+    "settings.wide.title": "넓은 작성 공간",
+    "settings.wide.desc": "목록 폭을 줄여 메모 작성 공간을 넓게 사용합니다.",
     "settings.railMode.title": "빠른 메뉴 표시",
     "settings.railMode.desc": "왼쪽 빠른 메뉴를 아이콘 또는 첫 글자로 표시합니다.",
     "settings.railMode.icon": "아이콘",
     "settings.railMode.letter": "첫 글자",
+    "settings.font.title": "글자 크기",
+    "settings.font.desc": "메모 작성 화면의 글자 크기를 조정합니다.",
+    "settings.font.small": "작게",
+    "settings.font.medium": "보통",
+    "settings.font.large": "크게",
+    "settings.line.title": "줄 간격",
+    "settings.line.desc": "긴 메모를 읽기 편한 간격으로 조정합니다.",
+    "settings.line.compact": "좁게",
+    "settings.line.normal": "보통",
+    "settings.line.relaxed": "넓게",
+    "settings.backlinks.title": "백링크 표시",
+    "settings.backlinks.desc": "현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.",
+    "settings.tags.title": "태그 표시",
+    "settings.tags.desc": "본문의 #태그를 인식해 편집 화면과 검색에서 사용합니다.",
+    "settings.shortcuts.title": "단축키 사용",
+    "settings.shortcuts.desc": "빠른 전환, 새 주제 만들기 같은 기본 단축키를 사용합니다.",
+    "settings.shortcutGuide.title": "단축키 안내",
+    "settings.shortcutGuide.desc": "자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.",
+    "settings.features.title": "지식 기능",
+    "settings.features.desc": "사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.",
     "settings.server.title": "서버 연결",
     "settings.server.desc": "단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.",
     "settings.server.mode.local": "단독 사용",
@@ -100,27 +319,243 @@ const I18N = {
     "settings.server.syncOk": "서버 동기화 완료",
     "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
     "settings.server.mergeSkipped": "로컬 변경 보존",
+    "settings.server.mergeSkippedCount": "로컬 변경 보존 {count}개",
     "settings.server.pending": "보류 변경",
     "settings.server.lastSync": "마지막 동기화",
+    "settings.server.pendingMeta": "보류 변경 {count}개 · 마지막 동기화 {time}",
     "settings.server.never": "없음",
+    "settings.sidebarAssist.title": "보조 목록 표시",
+    "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
+    "settings.backup.title": "백업 / 복원",
+    "settings.backup.desc": "JSON은 NowNote 전체 데이터를 백업하거나 현재 데이터를 백업 파일로 교체할 때 사용합니다.",
+    "settings.backup.export": "JSON 내보내기",
+    "settings.backup.import": "JSON 가져오기",
+    "settings.resetSection.title": "화면 설정 초기화",
+    "settings.resetSection.desc": "메모는 유지하고 테마, 폭, 글자 크기, 열린 탭 같은 화면 설정만 기본값으로 되돌립니다.",
+    "shortcut.group.tabs": "창과 탭",
+    "shortcut.group.editor": "본문 편집",
+    "shortcut.captureWaiting": "입력 대기...",
+    "shortcut.unset": "미지정",
+    "shortcut.reset": "기본",
+    "shortcut.resetHint": "기본 단축키로 되돌리기",
+    "shortcut.action.addRoot": "새 주제",
+    "shortcut.action.addChild": "아래에 추가",
+    "shortcut.action.search": "검색",
+    "shortcut.action.noteFind": "본문 찾기",
+    "shortcut.action.quickSwitch": "빠른 전환",
+    "shortcut.action.quickOpen": "빠른 전환 보조",
+    "shortcut.action.daily": "일자별 메모",
+    "shortcut.action.graph": "연결 보기",
+    "shortcut.action.saveState": "저장 상태 확인",
+    "shortcut.action.insertTime": "현재 시간 삽입",
+    "shortcut.action.closeTab": "현재 탭 닫기",
+    "shortcut.action.reopenTab": "닫은 탭 다시 열기",
+    "shortcut.action.closeOtherTabs": "다른 탭 닫기",
+    "shortcut.action.pinTab": "현재 탭 고정",
+    "shortcut.action.leftTab": "왼쪽 탭",
+    "shortcut.action.rightTab": "오른쪽 탭",
+    "shortcut.action.moveUp": "위로 이동",
+    "shortcut.action.moveDown": "아래로 이동",
+    "shortcut.action.openSettings": "화면 설정",
+    "shortcut.action.closePopup": "닫기",
+    "shortcut.action.bold": "굵게",
+    "shortcut.action.italic": "기울임",
+    "shortcut.action.heading1": "제목 1",
+    "shortcut.action.heading2": "제목 2",
+    "shortcut.action.heading3": "제목 3",
+    "shortcut.action.checklist": "체크리스트",
+    "shortcut.action.orderedList": "번호 목록",
+    "shortcut.action.quote": "인용",
+    "shortcut.action.codeBlock": "코드블록",
+    "shortcut.action.horizontalRule": "구분선",
+    "shortcut.action.link": "링크",
+    "shortcut.action.indent": "들여쓰기",
+    "shortcut.action.outdent": "내어쓰기",
+    "feature.search.label": "통합 검색",
+    "feature.search.description": "일자별 메모와 지식 메모 전체 검색",
+    "feature.daily.label": "일일 메모",
+    "feature.daily.description": "필요할 때 여는 날짜별 메모장",
+    "feature.quickSwitch.label": "빠른 전환",
+    "feature.quickSwitch.description": "제목과 경로로 바로 이동",
+    "feature.backlinks.label": "백링크",
+    "feature.backlinks.description": "현재 메모를 언급한 메모 표시",
+    "feature.graph.label": "연결 보기",
+    "feature.graph.description": "[[메모 제목]] 연결 확인",
+    "feature.tags.label": "태그",
+    "feature.tags.description": "본문의 #태그 인식과 검색",
+    "feature.favorites.label": "즐겨찾기",
+    "feature.favorites.description": "중요한 메모 표시",
+    "feature.shortcuts.label": "단축키",
+    "feature.shortcuts.description": "키보드 빠른 실행",
+    "editor.copyLinkSuccess": "링크 복사됨",
+    "editor.copyLinkFail": "복사 실패",
+    "settings.resetConfirm": "화면 설정을 기본값으로 되돌릴까요? 메모 내용은 유지됩니다.",
+    "settings.resetTitle": "기본값으로",
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
+    "quick.count.all": "전체 메모를 표시합니다.",
+    "graph.eyebrow": "[[제목]] 연결 기준",
+    "graph.title": "연결 보기",
+    "trash.eyebrow": "실수 삭제를 막기 위한 임시 보관",
+    "trash.title": "삭제 보관함",
+    "trash.deleteSelected": "선택 영구 삭제",
+    "trash.deleteAll": "전체 영구 삭제",
     "saved": "저장됨",
+    "relative.now": "방금 전",
+    "relative.minutes": "{count}분 전",
+    "relative.hours": "{count}시간 전",
+    "relative.days": "{count}일 전",
+    "markdownExport.title": "NowNote 내보내기",
+    "markdownExport.exportedAt": "내보낸 날짜",
+    "markdownExport.treeCount": "지식 메모",
+    "markdownExport.dailyCount": "일자별 메모",
+    "markdownExport.archivedDailyCount": "보관 일자별 메모",
+    "markdownExport.restoredArchivedDailyCount": "복원된 보관본",
+    "markdownExport.treeSection": "지식 메모",
+    "markdownExport.dailySection": "일자별 메모",
+    "markdownExport.archivedDailySection": "보관된 일자별 메모",
+    "markdownExport.emptyTree": "_지식 메모가 없습니다._",
+    "markdownExport.emptyDaily": "_일자별 메모가 없습니다._",
+    "markdownExport.emptyArchivedDaily": "_보관된 일자별 메모가 없습니다._",
+    "markdownExport.path": "경로",
+    "markdownExport.updated": "수정",
+    "markdownExport.tags": "태그",
+    "markdownExport.favorite": "즐겨찾기",
+    "markdownExport.yes": "예",
+    "markdownExport.emptyContent": "_내용 없음_",
+    "markdownExport.archivedAt": "보관 시각",
+    "markdownExport.restoredAt": "복원 시각",
   },
   en: {
+    "note.untitled": "Untitled",
+    "note.emptyTitle": "No topics yet",
+    "note.emptyDescription": "Please add a topic first.",
+    "note.pinnedPrefix": "Pinned · ",
+    "note.unpinTab": "Unpin tab",
+    "note.pinTab": "Pin tab",
+    "note.dailyHasContent": "Recorded",
+    "note.dailyEmpty": "Empty",
+    "note.backlinks": "Backlinks",
+    "note.linkToNote": "Open note",
+    "note.linkMissing": "Not created yet",
+    "note.outlineEmpty": "No headings for outline.",
+    "note.previewEmpty": "No preview content.",
+    "note.stats.backlinks": "{count} backlinks",
+    "note.stats.edit": "Edit",
+    "note.stats.words": "{count} words",
+    "note.stats.chars": "{count} chars",
+    "note.stats.lines": "{count} lines",
+    "note.stats.links": "{count} links",
+    "note.stats.tags": "{count} tags",
+    "note.stats.missingLinks": "{count} missing links",
+    "note.stats.updated": "Updated {time}",
+    "note.sectionOut": "Links",
+    "note.sectionBacklink": "Backlinks",
+    "note.sectionOutEmpty": "Type [[note title]] in content to link another note.",
+    "note.sectionBacklinkEmpty": "No other notes mention this note.",
+    "note.nodeDelete.childrenBlocked": "Cannot delete because child notes exist.",
+    "note.nodeDelete.toTrashConfirm": "Move '{title}' to trash?",
+    "note.nodeDelete.permanentConfirm": "Permanently delete '{title}'? This cannot be undone.",
+    "note.nodeDelete.permanentSelected": "Permanently delete the selected {count} notes? This cannot be undone.",
+    "note.nodeDelete.permanentAll": "Permanently delete all {count} notes in trash? This cannot be undone.",
+    "note.noArchive": "There is no content to archive.",
+    "note.archiveConfirm": "Move {date} note to archive?",
+    "note.archiveRestoreConfirm": "There is already an active note for this date. Append archived content below?",
+    "note.graphEmpty": "No linked notes yet. Add [[note title]] in content to link notes.",
+    "note.deletedTreeEmpty": "Trash is empty.",
+    "note.deletedSelection": "{selected} selected / {total} total",
+    "note.deletedSelectAll": "Select all",
+    "note.deletedClearAll": "Clear all",
+    "note.emptyState": "None",
+    "note.dailyArchiveEmpty": "No archived daily notes.",
+    "note.archiveLabel": "Archived:",
+    "note.archivedAt": "{time} archived",
+    "note.archiveCount": "{count}",
+    "note.archiveViewHint": "View archived",
+    "note.deletedAt": "{time} deleted",
+    "note.selectLabel": "Select {title}",
+    "note.childCount": "{count} below",
+    "note.tagEmpty": "No tags",
+    "note.linkFallbackTitle": "Link title",
+    "note.archiveRestoreMarker": "Restored archived copy",
+    "note.importDone": "Import complete.",
+    "note.importReadError": "Unable to read JSON file.",
+    "note.markdownImportedMore": "{count} more",
+    "note.markdownStructureTitle": "{name} structure",
+    "note.restoredArchivedDailyCount": ", restored archived {count}",
+    "note.dateMissing": "No date",
+    "note.emptyContent": "No content",
+    "note.mergeChildrenMarker": "Merged child notes",
+    "note.storageFail": "Failed to save to browser storage. Please back up in JSON now.",
+    "note.backupImportError": "Not a NowNote backup JSON file.",
+    "note.backupReplaceConfirm": "Importing JSON backup will replace current notes and settings.\n\nBackup file: {file}\nBackup time: {time}\nBackup summary: daily {daily}, archived daily {archivedDaily}{restoredArchivedDaily}, notes {tree}, deleted {deletedTree}\n\nContinue?",
+    "note.unknownDate": "Unknown",
+    "note.linkCreateConfirm": "'{title}' note does not exist. Create it now?",
+    "note.backupFileReadError": "Unable to read JSON file.",
+    "note.backupFileOpenError": "Unable to open JSON file. Please check file permission or format.",
+    "note.backupFileParseError": "Unable to read JSON file. Please check file permission or format.",
+    "note.markdownNoContent": "No markdown content to import.",
+    "note.markdownImportConfirm": "Import {count} Markdown file(s)? Notes: {nodes}, daily {daily}, archived daily {archivedDaily}",
+    "note.markdownImportDone": "Markdown import complete: note {nodes}, daily {daily}, archived daily {archivedDaily}",
+    "note.markdownImportError": "Unable to read Markdown file. Please check file permission or format.",
+    "note.fallbackMarkDownTitle": "Imported markdown",
+    "note.exportDenied": "Unable to export file. Please check browser download permission or disk space.",
+    "note.newNote": "New note",
+    "note.newCategory": "New category",
+    "note.newTopic": "New topic",
+    "note.labelTopic": "Topic",
+    "note.labelCategory": "Category",
+    "note.labelNote": "Note",
+    "note.expand": "Expand",
+    "note.collapse": "Collapse",
+    "note.addChild": "Add child",
+    "note.open": "Open",
+    "note.restored": "Restored",
+    "note.syncMessage": "Sent {sent} notes, received {received} notes",
+    "note.treeDepthLimit": "You can add up to 3 levels.",
+    "note.tabClose": "Close",
+    "note.restore": "Restore",
+    "note.nodeDeletePermanent": "Delete permanently",
     "app.title": "NowNote Web",
+    "accent.blue": "Blue",
+    "accent.purple": "Purple",
+    "accent.green": "Green",
+    "accent.orange": "Orange",
     "brand.subtitle": "Knowledge notes",
+    "quick.eyebrow": "Jump directly by title or path",
+    "quick.title": "Quick switch",
+    "quick.placeholder": "Search title or path",
+    "quick.empty": "No notes to jump to.",
+    "quick.count.recent": "Showing {count} recent notes",
+    "quick.count.recentLimited": "Showing {shown} of {count} recent notes",
+    "quick.count.match": "Found {count} candidates",
+    "quick.count.matchLimited": "Found {count} candidates, showing {shown}",
     "search.label": "Search",
     "search.placeholder": "Search title or content",
     "search.emptyHint": "Enter a search term.",
     "search.emptyTitle": "Enter a search term",
     "search.emptyDescription": "Search both daily notes and knowledge notes together.",
+    "search.popoverEyebrow": "Search daily and knowledge notes together",
+    "search.popoverTitle": "Search",
+    "search.popoverPlaceholder": "Type to search...",
     "search.invalidHint": "Please check the query format.",
     "search.invalidTitle": "Enter text after the prefix.",
     "search.invalidDescription": "Example: title:meeting, tag:idea, #memo",
     "search.noResultTitle": "No results",
     "search.noResultDescription": "Try a different search term.",
+    "search.scope.all": "All",
+    "search.scope.title": "Title",
+    "search.scope.content": "Content",
+    "search.scope.tag": "Tag",
+    "search.scope.path": "Path",
+    "search.sort.updatedDesc": "Updated (newest)",
+    "search.sort.updatedAsc": "Updated (oldest)",
+    "search.sort.createdDesc": "Created (newest)",
+    "search.sort.createdAsc": "Created (oldest)",
+    "search.sort.titleAsc": "Title A-Z",
+    "search.sort.titleDesc": "Title Z-A",
+    "search.dailyMeta": "Daily note",
     "search.resultCount": "Results {count}",
     "search.popoverHelp.path": "Path",
     "search.popoverHelp.title": "Title",
@@ -128,6 +563,39 @@ const I18N = {
     "search.popoverHelp.content": "Content",
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
+    "aria.quickMenu": "Quick menu",
+    "aria.sidebar": "NowNote menu",
+    "aria.noteView": "Note view",
+    "aria.explore": "Explore",
+    "aria.files": "Files",
+    "aria.manage": "Manage",
+    "aria.treeList": "Knowledge list",
+    "aria.treeResize": "Resize list width",
+    "aria.treeEditor": "Knowledge note editor",
+    "aria.openTabs": "Open notes",
+    "aria.treeTools": "Knowledge note tools",
+    "aria.noteFind": "Find in current note",
+    "aria.outline": "Current note outline",
+    "aria.tags": "Tags",
+    "aria.noteStats": "Note information",
+    "aria.markdownPreview": "Markdown preview",
+    "aria.calendar": "Calendar",
+    "aria.dailyEditor": "Selected date note",
+    "aria.dailyArchive": "Daily note archive",
+    "aria.language": "Language",
+    "aria.theme": "Default theme",
+    "aria.accent": "Accent color",
+    "aria.railMode": "Quick menu display",
+    "aria.fontSize": "Font size",
+    "aria.lineHeight": "Line height",
+    "aria.searchScope": "Search scope",
+    "aria.searchSort": "Search sort",
+    "aria.searchOption": "Search options",
+    "aria.close": "Close",
+    "aria.prevResult": "Previous result",
+    "aria.nextResult": "Next result",
+    "aria.prevMonth": "Previous month",
+    "aria.nextMonth": "Next month",
     "side.favorite": "Favorites",
     "side.recent": "Recent",
     "side.tags": "Tags",
@@ -152,28 +620,98 @@ const I18N = {
     "rail.mdImport": "Import Markdown",
     "rail.trash": "Trash",
     "rail.settings": "Display settings",
+    "rail.letter.sidebar": "L",
+    "rail.letter.knowledge": "K",
+    "rail.letter.daily": "D",
+    "rail.letter.search": "S",
+    "rail.letter.quick": "Q",
+    "rail.letter.graph": "G",
+    "rail.letter.mdExport": "E",
+    "rail.letter.mdImport": "I",
+    "rail.letter.trash": "T",
+    "rail.letter.settings": "C",
     "tree.eyebrow": "Topic / Category / Note",
     "tree.title": "Knowledge notes",
     "tree.expandAll": "Expand all",
     "tree.collapseAll": "Collapse all",
     "tree.addRoot": "Add topic",
+    "tree.emptySelectTitle": "Select a note",
+    "tree.emptySelectDesc": "Choose a topic, category, or note from the left to edit its content.",
+    "tree.createTopic": "Create topic",
+    "tree.titlePlaceholder": "Title",
+    "tree.contentPlaceholder": "Write your note here.",
+    "tree.moveUp": "Up",
+    "tree.moveDown": "Down",
+    "tree.delete": "Delete",
+    "tabs.reopen": "Reopen",
+    "tabs.closeOther": "Close others",
+    "tabs.closeAll": "Close all",
     "editor.favorite": "Favorite",
     "editor.unfavorite": "Unfavorite",
+    "editor.copyLink": "Copy link",
     "editor.find": "Find in note",
+    "editor.findPlaceholder": "Find in content",
+    "editor.findTitle": "Enter next, Shift+Enter previous",
     "editor.outline": "Outline",
     "editor.insertTime": "Insert time",
     "editor.preview": "Markdown preview",
     "editor.edit": "Edit",
+    "results.eyebrow": "Global search",
+    "results.title": "Search results",
+    "results.close": "Close search",
+    "daily.eyebrow": "A date note you open only when needed",
+    "daily.title": "Daily note",
+    "daily.today": "Today",
+    "daily.appendTime": "Add time",
+    "daily.archive": "Archive",
+    "daily.archiveBox": "Archive",
+    "daily.memoTitle": "One note per day",
+    "daily.placeholder": "Keep adding notes to this single note for the date.",
+    "daily.archiveEyebrow": "Date notes removed from active notes",
+    "daily.week.sun": "Sun",
+    "daily.week.mon": "Mon",
+    "daily.week.tue": "Tue",
+    "daily.week.wed": "Wed",
+    "daily.week.thu": "Thu",
+    "daily.week.fri": "Fri",
+    "daily.week.sat": "Sat",
     "settings.eyebrow": "Adjust the workspace to your taste",
     "settings.title": "Display settings",
     "settings.language.title": "Language",
     "settings.language.desc": "Choose the language used in the app.",
     "settings.theme.title": "Default theme",
     "settings.theme.desc": "Choose the brightness theme.",
+    "settings.theme.system": "Use system theme",
+    "settings.theme.light": "Light theme",
+    "settings.theme.dark": "Dark theme",
+    "settings.accent.title": "Accent color",
+    "settings.accent.desc": "Choose the color used for buttons and selected states.",
+    "settings.wide.title": "Wide writing area",
+    "settings.wide.desc": "Reduce the list width to use a wider note editor.",
     "settings.railMode.title": "Quick menu display",
     "settings.railMode.desc": "Show the left quick menu as icons or first letters.",
     "settings.railMode.icon": "Icons",
     "settings.railMode.letter": "First letters",
+    "settings.font.title": "Font size",
+    "settings.font.desc": "Adjust the note editor font size.",
+    "settings.font.small": "Small",
+    "settings.font.medium": "Medium",
+    "settings.font.large": "Large",
+    "settings.line.title": "Line spacing",
+    "settings.line.desc": "Adjust spacing for easier reading of long notes.",
+    "settings.line.compact": "Compact",
+    "settings.line.normal": "Normal",
+    "settings.line.relaxed": "Relaxed",
+    "settings.backlinks.title": "Show backlinks",
+    "settings.backlinks.desc": "Show notes that mention the current note below the editor.",
+    "settings.tags.title": "Show tags",
+    "settings.tags.desc": "Recognize #tags in content and use them in editor and search.",
+    "settings.shortcuts.title": "Use shortcuts",
+    "settings.shortcuts.desc": "Use default shortcuts such as quick switch and new topic.",
+    "settings.shortcutGuide.title": "Shortcut guide",
+    "settings.shortcutGuide.desc": "Run common windows, tabs, and editing actions from the keyboard.",
+    "settings.features.title": "Knowledge features",
+    "settings.features.desc": "Hide unused features from the screen and stop their actions.",
     "settings.server.title": "Server connection",
     "settings.server.desc": "Choose standalone use or connect to a personal/public NowNote server.",
     "settings.server.mode.local": "Standalone",
@@ -199,61 +737,161 @@ const I18N = {
     "settings.server.syncOk": "Server sync complete",
     "settings.server.syncEmpty": "There are no notes to sync.",
     "settings.server.mergeSkipped": "Local changes kept",
+    "settings.server.mergeSkippedCount": "Local changes kept {count}",
     "settings.server.pending": "Pending changes",
     "settings.server.lastSync": "Last sync",
+    "settings.server.pendingMeta": "Pending changes {count} · Last sync {time}",
     "settings.server.never": "Never",
+    "settings.sidebarAssist.title": "Show helper lists",
+    "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
+    "settings.backup.title": "Backup / restore",
+    "settings.backup.desc": "JSON is used to back up all NowNote data or replace current data with a backup file.",
+    "settings.backup.export": "Export JSON",
+    "settings.backup.import": "Import JSON",
+    "settings.resetSection.title": "Reset display settings",
+    "settings.resetSection.desc": "Keep notes and reset only display settings such as theme, width, font size, and open tabs.",
+    "shortcut.group.tabs": "Tabs",
+    "shortcut.group.editor": "Editor",
+    "shortcut.captureWaiting": "Waiting for input...",
+    "shortcut.unset": "Unassigned",
+    "shortcut.reset": "Default",
+    "shortcut.resetHint": "Reset to default shortcut",
+    "shortcut.action.addRoot": "New root",
+    "shortcut.action.addChild": "Add child",
+    "shortcut.action.search": "Search",
+    "shortcut.action.noteFind": "Find in note",
+    "shortcut.action.quickSwitch": "Quick switch",
+    "shortcut.action.quickOpen": "Quick switch helper",
+    "shortcut.action.daily": "Daily note",
+    "shortcut.action.graph": "Linked notes",
+    "shortcut.action.saveState": "Check sync state",
+    "shortcut.action.insertTime": "Insert now",
+    "shortcut.action.closeTab": "Close tab",
+    "shortcut.action.reopenTab": "Reopen tab",
+    "shortcut.action.closeOtherTabs": "Close other tabs",
+    "shortcut.action.pinTab": "Pin current tab",
+    "shortcut.action.leftTab": "Left tab",
+    "shortcut.action.rightTab": "Right tab",
+    "shortcut.action.moveUp": "Move up",
+    "shortcut.action.moveDown": "Move down",
+    "shortcut.action.openSettings": "Display settings",
+    "shortcut.action.closePopup": "Close",
+    "shortcut.action.bold": "Bold",
+    "shortcut.action.italic": "Italic",
+    "shortcut.action.heading1": "Heading 1",
+    "shortcut.action.heading2": "Heading 2",
+    "shortcut.action.heading3": "Heading 3",
+    "shortcut.action.checklist": "Checklist",
+    "shortcut.action.orderedList": "Number list",
+    "shortcut.action.quote": "Quote",
+    "shortcut.action.codeBlock": "Code block",
+    "shortcut.action.horizontalRule": "Horizontal rule",
+    "shortcut.action.link": "Link",
+    "shortcut.action.indent": "Indent",
+    "shortcut.action.outdent": "Outdent",
+    "feature.search.label": "Global search",
+    "feature.search.description": "Search both daily and knowledge notes",
+    "feature.daily.label": "Daily note",
+    "feature.daily.description": "Open a date-based note on demand",
+    "feature.quickSwitch.label": "Quick switch",
+    "feature.quickSwitch.description": "Jump directly with title and path",
+    "feature.backlinks.label": "Backlinks",
+    "feature.backlinks.description": "Show notes that mention the current note",
+    "feature.graph.label": "Graph view",
+    "feature.graph.description": "Check note links with [[note title]]",
+    "feature.tags.label": "Tags",
+    "feature.tags.description": "Recognize and search #tags in content",
+    "feature.favorites.label": "Favorites",
+    "feature.favorites.description": "Mark important notes",
+    "feature.shortcuts.label": "Shortcuts",
+    "feature.shortcuts.description": "Keyboard quick actions",
+    "editor.copyLinkSuccess": "Copied",
+    "editor.copyLinkFail": "Copy failed",
+    "settings.resetConfirm": "Would you like to reset display settings to defaults? Notes will be kept.",
+    "settings.resetTitle": "Reset to default",
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
+    "quick.count.all": "Showing all notes.",
+    "graph.eyebrow": "Based on [[title]] links",
+    "graph.title": "Linked notes",
+    "trash.eyebrow": "Temporary storage to prevent accidental deletion",
+    "trash.title": "Trash",
+    "trash.deleteSelected": "Delete selected",
+    "trash.deleteAll": "Delete all",
     "saved": "Saved",
+    "relative.now": "Just now",
+    "relative.minutes": "{count} min ago",
+    "relative.hours": "{count} hr ago",
+    "relative.days": "{count} days ago",
+    "markdownExport.title": "NowNote Export",
+    "markdownExport.exportedAt": "Exported at",
+    "markdownExport.treeCount": "Knowledge notes",
+    "markdownExport.dailyCount": "Daily notes",
+    "markdownExport.archivedDailyCount": "Archived daily notes",
+    "markdownExport.restoredArchivedDailyCount": "Restored archived notes",
+    "markdownExport.treeSection": "Knowledge notes",
+    "markdownExport.dailySection": "Daily notes",
+    "markdownExport.archivedDailySection": "Archived daily notes",
+    "markdownExport.emptyTree": "_No knowledge notes._",
+    "markdownExport.emptyDaily": "_No daily notes._",
+    "markdownExport.emptyArchivedDaily": "_No archived daily notes._",
+    "markdownExport.path": "Path",
+    "markdownExport.updated": "Updated",
+    "markdownExport.tags": "Tags",
+    "markdownExport.favorite": "Favorite",
+    "markdownExport.yes": "Yes",
+    "markdownExport.emptyContent": "_No content_",
+    "markdownExport.archivedAt": "Archived at",
+    "markdownExport.restoredAt": "Restored at",
   },
 };
 
 const SHORTCUT_ACTIONS = [
-  { id: "addRoot", group: "창과 탭", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" } },
-  { id: "addChild", group: "창과 탭", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" } },
-  { id: "search", group: "창과 탭", label: "검색", defaultShortcut: { ctrl: true, key: "f" } },
-  { id: "noteFind", group: "창과 탭", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" } },
-  { id: "quickSwitch", group: "창과 탭", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" } },
-  { id: "quickOpen", group: "창과 탭", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" } },
-  { id: "daily", group: "창과 탭", label: "일자별 메모", defaultShortcut: { ctrl: true, key: "d" } },
-  { id: "graph", group: "창과 탭", label: "연결 보기", defaultShortcut: { ctrl: true, key: "g" } },
-  { id: "saveState", group: "창과 탭", label: "저장 상태 확인", defaultShortcut: { ctrl: true, key: "s" } },
-  { id: "insertTime", group: "창과 탭", label: "현재 시간 삽입", defaultShortcut: { ctrl: true, key: ";" } },
-  { id: "closeTab", group: "창과 탭", label: "현재 탭 닫기", defaultShortcut: { ctrl: true, key: "w" } },
-  { id: "reopenTab", group: "창과 탭", label: "닫은 탭 다시 열기", defaultShortcut: { ctrl: true, shift: true, key: "t" } },
-  { id: "closeOtherTabs", group: "창과 탭", label: "다른 탭 닫기", defaultShortcut: { ctrl: true, shift: true, key: "w" } },
-  { id: "pinTab", group: "창과 탭", label: "현재 탭 고정", defaultShortcut: { ctrl: true, shift: true, key: "p" } },
-  { id: "leftTab", group: "창과 탭", label: "왼쪽 탭", defaultShortcut: { ctrl: true, key: "pageup" } },
-  { id: "rightTab", group: "창과 탭", label: "오른쪽 탭", defaultShortcut: { ctrl: true, key: "pagedown" } },
-  { id: "moveUp", group: "창과 탭", label: "위로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowup" } },
-  { id: "moveDown", group: "창과 탭", label: "아래로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowdown" } },
-  { id: "settings", group: "창과 탭", label: "화면 설정", defaultShortcut: { ctrl: true, key: "," } },
-  { id: "closePopup", group: "창과 탭", label: "닫기", defaultShortcut: { key: "escape" } },
-  { id: "bold", group: "본문 편집", label: "굵게", defaultShortcut: { ctrl: true, key: "b" } },
-  { id: "italic", group: "본문 편집", label: "기울임", defaultShortcut: { ctrl: true, key: "i" } },
-  { id: "heading1", group: "본문 편집", label: "제목 1", defaultShortcut: { ctrl: true, key: "1" } },
-  { id: "heading2", group: "본문 편집", label: "제목 2", defaultShortcut: { ctrl: true, key: "2" } },
-  { id: "heading3", group: "본문 편집", label: "제목 3", defaultShortcut: { ctrl: true, key: "3" } },
-  { id: "checklist", group: "본문 편집", label: "체크리스트", defaultShortcut: { ctrl: true, shift: true, key: "c" } },
-  { id: "orderedList", group: "본문 편집", label: "번호 목록", defaultShortcut: { ctrl: true, shift: true, key: "7", code: "Digit7" } },
-  { id: "quote", group: "본문 편집", label: "인용", defaultShortcut: { ctrl: true, shift: true, key: "q" } },
-  { id: "codeBlock", group: "본문 편집", label: "코드블록", defaultShortcut: { ctrl: true, shift: true, key: "k" } },
-  { id: "horizontalRule", group: "본문 편집", label: "구분선", defaultShortcut: { ctrl: true, shift: true, key: "h" } },
-  { id: "link", group: "본문 편집", label: "링크", defaultShortcut: { ctrl: true, shift: true, key: "l" } },
-  { id: "indent", group: "본문 편집", label: "들여쓰기", defaultShortcut: { key: "tab" } },
-  { id: "outdent", group: "본문 편집", label: "내어쓰기", defaultShortcut: { shift: true, key: "tab" } },
+  { id: "addRoot", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addRoot", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" }, group: "창과 탭" },
+  { id: "addChild", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addChild", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" }, group: "창과 탭" },
+  { id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, key: "f" }, group: "창과 탭" },
+  { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
+  { id: "quickSwitch", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickSwitch", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" }, group: "창과 탭" },
+  { id: "quickOpen", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickOpen", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" }, group: "창과 탭" },
+  { id: "daily", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.daily", label: "일자별 메모", defaultShortcut: { ctrl: true, key: "d" }, group: "창과 탭" },
+  { id: "graph", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.graph", label: "연결 보기", defaultShortcut: { ctrl: true, key: "g" }, group: "창과 탭" },
+  { id: "saveState", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.saveState", label: "저장 상태 확인", defaultShortcut: { ctrl: true, key: "s" }, group: "창과 탭" },
+  { id: "insertTime", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.insertTime", label: "현재 시간 삽입", defaultShortcut: { ctrl: true, key: ";" }, group: "창과 탭" },
+  { id: "closeTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.closeTab", label: "현재 탭 닫기", defaultShortcut: { ctrl: true, key: "w" }, group: "창과 탭" },
+  { id: "reopenTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.reopenTab", label: "닫은 탭 다시 열기", defaultShortcut: { ctrl: true, shift: true, key: "t" }, group: "창과 탭" },
+  { id: "closeOtherTabs", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.closeOtherTabs", label: "다른 탭 닫기", defaultShortcut: { ctrl: true, shift: true, key: "w" }, group: "창과 탭" },
+  { id: "pinTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.pinTab", label: "현재 탭 고정", defaultShortcut: { ctrl: true, shift: true, key: "p" }, group: "창과 탭" },
+  { id: "leftTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.leftTab", label: "왼쪽 탭", defaultShortcut: { ctrl: true, key: "pageup" }, group: "창과 탭" },
+  { id: "rightTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.rightTab", label: "오른쪽 탭", defaultShortcut: { ctrl: true, key: "pagedown" }, group: "창과 탭" },
+  { id: "moveUp", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.moveUp", label: "위로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowup" }, group: "창과 탭" },
+  { id: "moveDown", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.moveDown", label: "아래로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowdown" }, group: "창과 탭" },
+  { id: "settings", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.openSettings", label: "화면 설정", defaultShortcut: { ctrl: true, key: "," }, group: "창과 탭" },
+  { id: "closePopup", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.closePopup", label: "닫기", defaultShortcut: { key: "escape" }, group: "창과 탭" },
+  { id: "bold", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.bold", label: "굵게", defaultShortcut: { ctrl: true, key: "b" }, group: "본문 편집" },
+  { id: "italic", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.italic", label: "기울임", defaultShortcut: { ctrl: true, key: "i" }, group: "본문 편집" },
+  { id: "heading1", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.heading1", label: "제목 1", defaultShortcut: { ctrl: true, key: "1" }, group: "본문 편집" },
+  { id: "heading2", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.heading2", label: "제목 2", defaultShortcut: { ctrl: true, key: "2" }, group: "본문 편집" },
+  { id: "heading3", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.heading3", label: "제목 3", defaultShortcut: { ctrl: true, key: "3" }, group: "본문 편집" },
+  { id: "checklist", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.checklist", label: "체크리스트", defaultShortcut: { ctrl: true, shift: true, key: "c" }, group: "본문 편집" },
+  { id: "orderedList", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.orderedList", label: "번호 목록", defaultShortcut: { ctrl: true, shift: true, key: "7", code: "Digit7" }, group: "본문 편집" },
+  { id: "quote", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.quote", label: "인용", defaultShortcut: { ctrl: true, shift: true, key: "q" }, group: "본문 편집" },
+  { id: "codeBlock", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.codeBlock", label: "코드블록", defaultShortcut: { ctrl: true, shift: true, key: "k" }, group: "본문 편집" },
+  { id: "horizontalRule", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.horizontalRule", label: "구분선", defaultShortcut: { ctrl: true, shift: true, key: "h" }, group: "본문 편집" },
+  { id: "link", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.link", label: "링크", defaultShortcut: { ctrl: true, shift: true, key: "l" }, group: "본문 편집" },
+  { id: "indent", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.indent", label: "들여쓰기", defaultShortcut: { key: "tab" }, group: "본문 편집" },
+  { id: "outdent", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.outdent", label: "내어쓰기", defaultShortcut: { shift: true, key: "tab" }, group: "본문 편집" },
 ];
 
 const FEATURE_TOGGLES = [
-  { id: "search", label: "통합 검색", description: "일자별 메모와 지식 메모 전체 검색" },
-  { id: "daily", label: "일일 메모", description: "필요할 때 여는 날짜별 메모장" },
-  { id: "quickSwitch", label: "빠른 전환", description: "제목과 경로로 바로 이동" },
-  { id: "backlinks", label: "백링크", description: "현재 메모를 언급한 메모 표시" },
-  { id: "graph", label: "연결 보기", description: "[[메모 제목]] 연결 확인" },
-  { id: "tags", label: "태그", description: "본문의 #태그 인식과 검색" },
-  { id: "favorites", label: "즐겨찾기", description: "중요한 메모 표시" },
-  { id: "shortcuts", label: "단축키", description: "키보드 빠른 실행" },
+  { id: "search", labelKey: "feature.search.label", descriptionKey: "feature.search.description", label: "통합 검색", description: "일자별 메모와 지식 메모 전체 검색" },
+  { id: "daily", labelKey: "feature.daily.label", descriptionKey: "feature.daily.description", label: "일일 메모", description: "필요할 때 여는 날짜별 메모장" },
+  { id: "quickSwitch", labelKey: "feature.quickSwitch.label", descriptionKey: "feature.quickSwitch.description", label: "빠른 전환", description: "제목과 경로로 바로 이동" },
+  { id: "backlinks", labelKey: "feature.backlinks.label", descriptionKey: "feature.backlinks.description", label: "백링크", description: "현재 메모를 언급한 메모 표시" },
+  { id: "graph", labelKey: "feature.graph.label", descriptionKey: "feature.graph.description", label: "연결 보기", description: "[[메모 제목]] 연결 확인" },
+  { id: "tags", labelKey: "feature.tags.label", descriptionKey: "feature.tags.description", label: "태그", description: "본문의 #태그 인식과 검색" },
+  { id: "favorites", labelKey: "feature.favorites.label", descriptionKey: "feature.favorites.description", label: "즐겨찾기", description: "중요한 메모 표시" },
+  { id: "shortcuts", labelKey: "feature.shortcuts.label", descriptionKey: "feature.shortcuts.description", label: "단축키", description: "키보드 빠른 실행" },
 ];
 
 const state = {
@@ -316,9 +954,19 @@ function defaultServerSettings() {
 
 const $ = (selector) => document.querySelector(selector);
 
-function t(key) {
+function t(key, vars = null) {
   const lang = state.settings.language || "ko";
-  return I18N[lang]?.[key] || I18N.ko[key] || key;
+  const value = I18N[lang]?.[key] || I18N.ko[key];
+  if (typeof value !== "string") return key;
+  if (!vars) return value;
+  return value.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, token) => {
+    const resolved = vars[token];
+    return resolved === undefined ? `{${token}}` : String(resolved);
+  });
+}
+
+function noteTitle(value) {
+  return value ? String(value) : t("note.untitled");
 }
 
 function setText(selector, value) {
@@ -330,6 +978,18 @@ function setPlaceholder(element, value) {
   if (element) element.placeholder = value;
 }
 
+function localizeOrFallback(key, fallback) {
+  if (!key) return fallback;
+  const value = t(key);
+  return value === key ? fallback : value;
+}
+
+function tList(key, replacements) {
+  const value = t(key);
+  if (typeof value === "string") return value;
+  return "";
+}
+
 function setTitle(element, value) {
   if (element) element.title = value;
 }
@@ -338,6 +998,14 @@ function setIconLabel(element, value) {
   if (!element) return;
   element.title = value;
   element.setAttribute("aria-label", value);
+}
+
+function setOptionLabels(selectElement, labels) {
+  if (!selectElement) return;
+  Array.from(selectElement.options).forEach((option) => {
+    const key = option.value;
+    if (labels[key]) option.textContent = labels[key];
+  });
 }
 
 function defaultShortcutSettings() {
@@ -500,6 +1168,7 @@ const elements = {
 
 load();
 loadSettings();
+applyLanguageQueryOverride();
 bindEvents();
 renderSettings();
 applySettings();
@@ -639,6 +1308,7 @@ function bindEvents() {
   elements.languageSelect.addEventListener("change", () => {
     state.settings.language = elements.languageSelect.value;
     persistSettings();
+    syncLanguageQueryParam(state.settings.language);
     renderSettings();
     applyLanguage();
     render();
@@ -807,10 +1477,10 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     if (selected.children.length > 0) {
-      alert("아래에 연결된 항목이 있으면 삭제할 수 없습니다.");
+      alert(t("note.nodeDelete.childrenBlocked"));
       return;
     }
-    if (!confirm(`'${selected.title || "제목 없음"}' 메모를 삭제 보관함으로 이동할까요?`)) return;
+    if (!confirm(t("note.nodeDelete.toTrashConfirm", { title: noteTitle(selected.title) }))) return;
     if (!archiveDeletedTreeNode(selected.id)) return;
     state.selectedTreeId = null;
     persist();
@@ -907,7 +1577,7 @@ function renderSettings() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "accent-btn";
-      button.title = accent.label;
+      setIconLabel(button, localizeOrFallback(accent.labelKey, accent.label));
       button.style.setProperty("--accent-preview", accent.value);
       button.classList.toggle("active", accent.id === state.settings.accent);
       button.addEventListener("click", () => {
@@ -922,7 +1592,7 @@ function renderSettings() {
 }
 
 function resetViewSettings() {
-  if (!confirm("화면 설정을 기본값으로 되돌릴까요? 메모 내용은 유지됩니다.")) {
+  if (!confirm(t("settings.resetConfirm"))) {
     return;
   }
   state.settings = defaultSettings();
@@ -992,7 +1662,7 @@ function renderServerMeta() {
   const lastSyncedAt = server.lastSyncedAt
     ? new Date(server.lastSyncedAt).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR")
     : t("settings.server.never");
-  elements.serverMetaText.textContent = `${t("settings.server.pending")} ${pendingCount}개 · ${t("settings.server.lastSync")} ${lastSyncedAt}`;
+  elements.serverMetaText.textContent = t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt });
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
 }
 
@@ -1091,8 +1761,8 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
       if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
         server.lastMessage = t("settings.server.syncEmpty");
       } else {
-        server.lastMessage = `${t("settings.server.syncOk")}: 보낸 메모 ${pushedCount}개, 받은 메모 ${mergeResult.applied}개`
-          + (mergeResult.skipped ? `, ${t("settings.server.mergeSkipped")} ${mergeResult.skipped}개` : "");
+        const syncSummary = t("note.syncMessage", { sent: pushedCount, received: mergeResult.applied });
+        server.lastMessage = `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`;
       }
       persist();
       render();
@@ -1215,7 +1885,7 @@ function applyPulledTreeNote(note) {
   const nextLevel = Math.min(3, Math.max(1, note.level || (parent ? parent.level + 1 : 1)));
   const nextParentId = parent && nextLevel > 1 ? parent.id : null;
   if (current) {
-    current.title = note.title || "제목 없음";
+    current.title = noteTitle(note.title);
     current.content = note.content || "";
     current.parentId = nextParentId;
     current.level = nextLevel;
@@ -1259,7 +1929,7 @@ function applyPulledDeletedTreeNote(note) {
 function createPulledTreeNode(note, parentId, level) {
   return {
     id: note.local_id,
-    title: note.title || "제목 없음",
+    title: noteTitle(note.title),
     content: note.content || "",
     parentId,
     level,
@@ -1330,7 +2000,7 @@ function dailyNoteToServerNote(note, server) {
     device_id: server.deviceId,
     local_id: `daily:${note.date}`,
     note_type: "daily",
-    title: `${note.date} 일자별 메모`,
+    title: `${note.date} ${t("daily.title")}`,
     content: note.content || "",
     parent_local_id: null,
     level: 1,
@@ -1347,7 +2017,7 @@ function archivedDailyNoteToServerNote(note, server) {
     device_id: server.deviceId,
     local_id: `daily-archive:${note.id}`,
     note_type: "daily",
-    title: `${note.date} 보관 메모`,
+    title: `${note.date} ${t("daily.archiveBox")}`,
     content: note.content || "",
     parent_local_id: null,
     level: 1,
@@ -1364,7 +2034,7 @@ function treeNodeToServerNote(node, server, deletedAt) {
     device_id: server.deviceId,
     local_id: node.id,
     note_type: "tree",
-    title: node.title || "제목 없음",
+    title: noteTitle(node.title),
     content: node.content || "",
     parent_local_id: node.parentId || null,
     level: node.level || 1,
@@ -1395,17 +2065,18 @@ function normalizeServerUrl(value) {
 }
 
 function renderShortcutEditor() {
-  const groups = Array.from(new Set(SHORTCUT_ACTIONS.map((action) => action.group)));
+  const groups = Array.from(new Set(SHORTCUT_ACTIONS.map((action) => action.groupKey || action.group)));
   elements.shortcutEditor.replaceChildren(
     ...groups.map((groupName) => {
       const group = document.createElement("div");
       group.className = "shortcut-group";
       const title = document.createElement("strong");
-      title.textContent = groupName;
+      const sample = SHORTCUT_ACTIONS.find((action) => (action.groupKey || action.group) === groupName);
+      title.textContent = localizeOrFallback(sample?.groupKey, sample?.group);
       const list = document.createElement("div");
       list.className = "shortcut-list shortcut-edit-list";
       list.replaceChildren(
-        ...SHORTCUT_ACTIONS.filter((action) => action.group === groupName).map(renderShortcutRow),
+        ...SHORTCUT_ACTIONS.filter((action) => (action.groupKey || action.group) === groupName).map(renderShortcutRow),
       );
       group.append(title, list);
       return group;
@@ -1417,13 +2088,13 @@ function renderShortcutRow(action) {
   const row = document.createElement("div");
   row.className = "shortcut-edit-row";
   const label = document.createElement("span");
-  label.textContent = action.label;
+  label.textContent = localizeOrFallback(action.labelKey, action.label);
   const current = shortcutForAction(action.id);
   const button = document.createElement("button");
   button.type = "button";
   button.className = "shortcut-capture-btn";
   button.dataset.shortcutId = action.id;
-  button.textContent = state.capturingShortcutId === action.id ? "입력 대기..." : shortcutLabel(current);
+  button.textContent = state.capturingShortcutId === action.id ? t("shortcut.captureWaiting") : shortcutLabel(current);
   button.addEventListener("click", () => {
     state.capturingShortcutId = state.capturingShortcutId === action.id ? null : action.id;
     renderShortcutEditor();
@@ -1431,8 +2102,8 @@ function renderShortcutRow(action) {
   const reset = document.createElement("button");
   reset.type = "button";
   reset.className = "shortcut-reset-btn";
-  reset.textContent = "기본";
-  reset.title = "기본 단축키로 되돌리기";
+  reset.textContent = t("shortcut.reset");
+  reset.title = t("shortcut.resetHint");
   reset.addEventListener("click", () => {
     state.settings.shortcuts[action.id] = { ...action.defaultShortcut };
     persistSettings();
@@ -1448,7 +2119,9 @@ function renderFeatureSettings() {
       const row = document.createElement("label");
       row.className = "feature-toggle-row";
       const text = document.createElement("span");
-      text.innerHTML = `<strong>${escapeHtml(feature.label)}</strong><small>${escapeHtml(feature.description)}</small>`;
+      const featureLabel = localizeOrFallback(feature.labelKey, feature.label);
+      const featureDescription = localizeOrFallback(feature.descriptionKey, feature.description);
+      text.innerHTML = `<strong>${escapeHtml(featureLabel)}</strong><small>${escapeHtml(featureDescription)}</small>`;
       const toggle = document.createElement("input");
       toggle.type = "checkbox";
       toggle.checked = featureEnabled(feature.id);
@@ -1555,7 +2228,7 @@ function shortcutSignature(shortcut = {}) {
 
 function shortcutLabel(shortcut = {}) {
   const normalized = normalizeShortcut(shortcut);
-  if (!normalized.key) return "미지정";
+  if (!normalized.key) return t("shortcut.unset");
   const parts = [];
   if (normalized.ctrl) parts.push("Ctrl");
   if (normalized.shift) parts.push("Shift");
@@ -1603,6 +2276,33 @@ function applySettings() {
 function applyLanguage() {
   document.documentElement.lang = state.settings.language === "en" ? "en" : "ko";
   document.title = t("app.title");
+  updateHelpLinks();
+  setIconLabel($("#appRail"), t("aria.quickMenu"));
+  setIconLabel($("#sidebarMenu"), t("aria.sidebar"));
+  setIconLabel($("#noteViewNav"), t("aria.noteView"));
+  setIconLabel($("#exploreActionGroup"), t("aria.explore"));
+  setIconLabel($("#fileActionGroup"), t("aria.files"));
+  setIconLabel($("#manageActionGroup"), t("aria.manage"));
+  setIconLabel($("#treePanel"), t("aria.treeList"));
+  setIconLabel(elements.treeResizeHandle, t("aria.treeResize"));
+  setIconLabel($("#treeEditorPanel"), t("aria.treeEditor"));
+  setIconLabel(elements.openTabs, t("aria.openTabs"));
+  setIconLabel($("#treeTools"), t("aria.treeTools"));
+  setIconLabel(elements.noteFindBar, t("aria.noteFind"));
+  setIconLabel(elements.outlinePanel, t("aria.outline"));
+  setIconLabel(elements.tagList, t("aria.tags"));
+  setIconLabel(elements.noteStats, t("aria.noteStats"));
+  setIconLabel(elements.markdownPreview, t("aria.markdownPreview"));
+  setIconLabel($("#calendarPanel"), t("aria.calendar"));
+  setIconLabel($("#dailyEditorPanel"), t("aria.dailyEditor"));
+  setIconLabel(elements.archivePanel, t("aria.dailyArchive"));
+  setText("#quickSwitchTitle", t("quick.title"));
+  setText("#quickSwitchEyebrow", t("quick.eyebrow"));
+  setText("#quickCount", t("quick.count.all"));
+  setPlaceholder(elements.quickInput, t("quick.placeholder"));
+  setText("#searchPopoverTitle", t("search.popoverTitle"));
+  setText("#searchPopoverEyebrow", t("search.popoverEyebrow"));
+  setPlaceholder(elements.searchPopoverInput, t("search.popoverPlaceholder"));
   setText("#brandSubtitle", t("brand.subtitle"));
   setText("#searchLabel", t("search.label"));
   setText("#todayChipLabel", t("today.label"));
@@ -1625,23 +2325,104 @@ function applyLanguage() {
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
   setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
   setIconLabel(elements.addRootBtn, t("tree.addRoot"));
+  setText("#emptyTreeEditorTitle", t("tree.emptySelectTitle"));
+  setText("#emptyTreeEditorDesc", t("tree.emptySelectDesc"));
+  setText("#emptyAddRootBtn", t("tree.createTopic"));
+  setPlaceholder(elements.treeTitleInput, t("tree.titlePlaceholder"));
+  setPlaceholder(elements.treeContent, t("tree.contentPlaceholder"));
+  setText("#copyLinkBtn", t("editor.copyLink"));
+  setText("#reopenClosedTabBtn", t("tabs.reopen"));
+  setText("#closeOtherTabsBtn", t("tabs.closeOther"));
+  setText("#closeAllTabsBtn", t("tabs.closeAll"));
   setText("#noteFindToggleBtn", t("editor.find"));
+  setPlaceholder(elements.noteFindInput, t("editor.findPlaceholder"));
+  setTitle(elements.noteFindInput, t("editor.findTitle"));
+  setIconLabel(elements.noteFindPrevBtn, t("aria.prevResult"));
+  setIconLabel(elements.noteFindNextBtn, t("aria.nextResult"));
+  setIconLabel(elements.noteFindCloseBtn, t("aria.close"));
   setText("#outlineToggleBtn", t("editor.outline"));
   setText("#insertTimeBtn", t("editor.insertTime"));
   setText(
     "#previewToggleBtn",
     elements.markdownPreview.classList.contains("hidden") ? t("editor.preview") : t("editor.edit"),
   );
+  setText("#moveUpBtn", t("tree.moveUp"));
+  setText("#moveDownBtn", t("tree.moveDown"));
+  setText("#addChildBtn", t("note.addChild"));
+  setText("#deleteTreeBtn", t("tree.delete"));
+  setText("#resultsEyebrow", t("results.eyebrow"));
+  setText("#resultsTitle", t("results.title"));
+  setText("#clearResultsBtn", t("results.close"));
+  setText("#dailyEyebrow", t("daily.eyebrow"));
+  setText("#dailyTitle", t("daily.title"));
+  setText("#todayBtn", t("daily.today"));
+  setText("#appendTimeBtn", t("daily.appendTime"));
+  setText("#archiveSelectedBtn", t("daily.archive"));
+  setText("#archiveToggleBtn", t("daily.archiveBox"));
+  setIconLabel(elements.dailyCloseBtn, t("aria.close"));
+  setIconLabel(elements.prevMonthBtn, t("aria.prevMonth"));
+  setIconLabel(elements.nextMonthBtn, t("aria.nextMonth"));
+  setText("#weekdaySun", t("daily.week.sun"));
+  setText("#weekdayMon", t("daily.week.mon"));
+  setText("#weekdayTue", t("daily.week.tue"));
+  setText("#weekdayWed", t("daily.week.wed"));
+  setText("#weekdayThu", t("daily.week.thu"));
+  setText("#weekdayFri", t("daily.week.fri"));
+  setText("#weekdaySat", t("daily.week.sat"));
+  setText("#dailyMemoTitle", t("daily.memoTitle"));
+  setPlaceholder(elements.dailyContent, t("daily.placeholder"));
+  setText("#dailyArchiveEyebrow", t("daily.archiveEyebrow"));
+  setText("#dailyArchiveTitle", t("daily.archiveBox"));
   setText("#settingsEyebrow", t("settings.eyebrow"));
   setText("#settingsTitle", t("settings.title"));
+  setIconLabel(elements.settingsCloseBtn, t("aria.close"));
   setText("#languageSettingTitle", t("settings.language.title"));
   setText("#languageSettingDesc", t("settings.language.desc"));
+  setIconLabel(elements.languageSelect, t("aria.language"));
   setText("#themeSettingTitle", t("settings.theme.title"));
   setText("#themeSettingDesc", t("settings.theme.desc"));
+  setIconLabel(elements.themeSelect, t("aria.theme"));
+  setOptionLabels(elements.themeSelect, {
+    system: t("settings.theme.system"),
+    light: t("settings.theme.light"),
+    dark: t("settings.theme.dark"),
+  });
+  setText("#accentSettingTitle", t("settings.accent.title"));
+  setText("#accentSettingDesc", t("settings.accent.desc"));
+  setIconLabel(elements.accentChoices, t("aria.accent"));
+  setText("#wideEditorSettingTitle", t("settings.wide.title"));
+  setText("#wideEditorSettingDesc", t("settings.wide.desc"));
   setText("#railModeSettingTitle", t("settings.railMode.title"));
   setText("#railModeSettingDesc", t("settings.railMode.desc"));
+  setIconLabel(elements.railModeSelect, t("aria.railMode"));
   setText("#railModeIconOption", t("settings.railMode.icon"));
   setText("#railModeLetterOption", t("settings.railMode.letter"));
+  setText("#fontSizeSettingTitle", t("settings.font.title"));
+  setText("#fontSizeSettingDesc", t("settings.font.desc"));
+  setIconLabel(elements.fontSizeSelect, t("aria.fontSize"));
+  setOptionLabels(elements.fontSizeSelect, {
+    small: t("settings.font.small"),
+    medium: t("settings.font.medium"),
+    large: t("settings.font.large"),
+  });
+  setText("#lineHeightSettingTitle", t("settings.line.title"));
+  setText("#lineHeightSettingDesc", t("settings.line.desc"));
+  setIconLabel(elements.lineHeightSelect, t("aria.lineHeight"));
+  setOptionLabels(elements.lineHeightSelect, {
+    compact: t("settings.line.compact"),
+    normal: t("settings.line.normal"),
+    relaxed: t("settings.line.relaxed"),
+  });
+  setText("#backlinksSettingTitle", t("settings.backlinks.title"));
+  setText("#backlinksSettingDesc", t("settings.backlinks.desc"));
+  setText("#tagsSettingTitle", t("settings.tags.title"));
+  setText("#tagsSettingDesc", t("settings.tags.desc"));
+  setText("#shortcutsSettingTitle", t("settings.shortcuts.title"));
+  setText("#shortcutsSettingDesc", t("settings.shortcuts.desc"));
+  setText("#shortcutGuideSettingTitle", t("settings.shortcutGuide.title"));
+  setText("#shortcutGuideSettingDesc", t("settings.shortcutGuide.desc"));
+  setText("#featuresSettingTitle", t("settings.features.title"));
+  setText("#featuresSettingDesc", t("settings.features.desc"));
   setText("#serverSettingTitle", t("settings.server.title"));
   setText("#serverSettingDesc", t("settings.server.desc"));
   setText("#serverModeLocalOption", t("settings.server.mode.local"));
@@ -1655,12 +2436,48 @@ function applyLanguage() {
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
+  setPlaceholder(elements.serverTokenInput, t("settings.server.token"));
+  setText("#sidebarAssistSettingTitle", t("settings.sidebarAssist.title"));
+  setText("#sidebarAssistSettingDesc", t("settings.sidebarAssist.desc"));
+  setText("#backupSettingTitle", t("settings.backup.title"));
+  setText("#backupSettingDesc", t("settings.backup.desc"));
+  setText("#exportBtn", t("settings.backup.export"));
+  setText("#importBtnLabel", t("settings.backup.import"));
+  setText("#resetSettingTitle", t("settings.resetSection.title"));
+  setText("#resetSettingDesc", t("settings.resetSection.desc"));
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
+  setOptionLabels(elements.searchScopeSelect, {
+    all: t("search.scope.all"),
+    title: t("search.scope.title"),
+    content: t("search.scope.content"),
+    tag: t("search.scope.tag"),
+    path: t("search.scope.path"),
+  });
+  setOptionLabels(elements.searchSortSelect, {
+    "updated-desc": t("search.sort.updatedDesc"),
+    "updated-asc": t("search.sort.updatedAsc"),
+    "created-desc": t("search.sort.createdDesc"),
+    "created-asc": t("search.sort.createdAsc"),
+    "title-asc": t("search.sort.titleAsc"),
+    "title-desc": t("search.sort.titleDesc"),
+  });
+  setText("#resetSettingsBtn", t("settings.resetTitle"));
+  setText("#graphEyebrow", t("graph.eyebrow"));
+  setText("#graphTitle", t("graph.title"));
+  setIconLabel(elements.graphCloseBtn, t("aria.close"));
+  setText("#deletedTreeEyebrow", t("trash.eyebrow"));
+  setText("#deletedTreeTitle", t("trash.title"));
+  setIconLabel(elements.deletedTreeCloseBtn, t("aria.close"));
+  setText("#deletedBulkDeleteBtn", t("trash.deleteSelected"));
+  setText("#deletedDeleteAllBtn", t("trash.deleteAll"));
   renderServerStatus(state.settings.server.lastStatus, state.settings.server.lastMessage);
   renderServerMeta();
   setPlaceholder(elements.searchInput, t("search.placeholder"));
+  setIconLabel(elements.searchScopeSelect, t("aria.searchScope"));
+  setIconLabel(elements.searchSortSelect, t("aria.searchSort"));
+  setIconLabel(document.querySelector(".search-option-help"), t("aria.searchOption"));
   elements.searchHelpPath.textContent = t("search.popoverHelp.path");
   elements.searchHelpTitle.textContent = t("search.popoverHelp.title");
   elements.searchHelpTag.textContent = t("search.popoverHelp.tag");
@@ -1675,16 +2492,50 @@ function applyLanguage() {
   setTitle(elements.railMarkdownImportBtn, t("rail.mdImport"));
   setTitle(elements.railDeletedTreeBtn, t("rail.trash"));
   setTitle(elements.railSettingsBtn, t("rail.settings"));
+  setIconLabel(elements.quickCloseBtn, t("aria.close"));
+  setIconLabel(elements.searchPopoverCloseBtn, t("aria.close"));
+  renderShortcutEditor();
+  renderFeatureSettings();
+  renderTree();
+  renderDaily();
+  renderResults();
+  renderSidebarKnowledge();
+  renderOpenTreeTabs();
+  renderDeletedTreeList();
+  renderSearchPopoverResults();
+  if (getSelectedTreeNode()) {
+    renderLinkPanel();
+    renderNoteStats(getSelectedTreeNode());
+  }
   renderRailButtons();
+}
+
+function updateHelpLinks() {
+  const language = state.settings.language === "en" ? "en" : "ko";
+  const helpUrl = `./help.html?lang=${encodeURIComponent(language)}`;
+  [elements.helpBtn, elements.settingsHelpBtn].forEach((link) => {
+    if (link) link.href = helpUrl;
+  });
 }
 
 function renderRailButtons() {
   const mode = state.settings.railMode === "letter" ? "letter" : "icon";
-  document.querySelectorAll(".rail-btn").forEach((button) => {
-    const value = mode === "icon" ? button.dataset.railIcon : button.dataset.railLetter;
-    if (value) {
-      button.textContent = value;
-    }
+  const letterMap = new Map([
+    [elements.railSidebarBtn, "rail.letter.sidebar"],
+    [document.querySelector(".app-rail .rail-btn.active"), "rail.letter.knowledge"],
+    [elements.railDailyBtn, "rail.letter.daily"],
+    [elements.railSearchBtn, "rail.letter.search"],
+    [elements.railQuickBtn, "rail.letter.quick"],
+    [elements.railGraphBtn, "rail.letter.graph"],
+    [elements.railMarkdownExportBtn, "rail.letter.mdExport"],
+    [elements.railMarkdownImportBtn, "rail.letter.mdImport"],
+    [elements.railDeletedTreeBtn, "rail.letter.trash"],
+    [elements.railSettingsBtn, "rail.letter.settings"],
+  ]);
+  letterMap.forEach((letterKey, button) => {
+    if (!button) return;
+    const value = mode === "icon" ? button.dataset.railIcon : t(letterKey);
+    button.textContent = value || button.dataset.railLetter || "";
   });
 }
 
@@ -1756,11 +2607,17 @@ function renderQuickResults() {
     .filter((node) => !query || quickSwitchText(node).includes(query))
     .sort((a, b) => quickSwitchTime(b) - quickSwitchTime(a));
   const nodes = matches.slice(0, 30);
-  elements.quickCount.textContent = query
-    ? `전환 후보 ${matches.length}개${matches.length > nodes.length ? ` 중 ${nodes.length}개 표시` : ""}`
-    : `최근 기준 ${nodes.length}개 표시${matches.length > nodes.length ? ` / 전체 ${matches.length}개` : ""}`;
+  if (query) {
+    elements.quickCount.textContent = matches.length > nodes.length
+      ? t("quick.count.matchLimited").replace("{count}", String(matches.length)).replace("{shown}", String(nodes.length))
+      : t("quick.count.match").replace("{count}", String(matches.length));
+  } else {
+    elements.quickCount.textContent = matches.length > nodes.length
+      ? t("quick.count.recentLimited").replace("{shown}", String(nodes.length)).replace("{count}", String(matches.length))
+      : t("quick.count.recent").replace("{count}", String(nodes.length));
+  }
   if (nodes.length === 0) {
-    elements.quickResults.innerHTML = '<div class="empty-compact">이동할 메모가 없습니다.</div>';
+    elements.quickResults.innerHTML = `<div class="empty-compact">${escapeHtml(t("quick.empty"))}</div>`;
     return;
   }
   elements.quickResults.replaceChildren(
@@ -1768,7 +2625,7 @@ function renderQuickResults() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "quick-result";
-      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(treePath(node.id).join(" / "))}</span>`;
+      button.innerHTML = `<strong>${escapeHtml(noteTitle(node.title))}</strong><span>${escapeHtml(treePath(node.id).join(" / "))}</span>`;
       button.addEventListener("click", () => {
         openQuickNode(node.id);
       });
@@ -2170,7 +3027,7 @@ function wrapTreeContentAsMarkdownLink() {
   const start = elements.treeContent.selectionStart ?? 0;
   const end = elements.treeContent.selectionEnd ?? start;
   const value = elements.treeContent.value;
-  const selectedText = value.slice(start, end) || "링크 제목";
+  const selectedText = value.slice(start, end) || t("note.linkFallbackTitle");
   const linkText = `[${selectedText}](https://)`;
   elements.treeContent.value = `${value.slice(0, start)}${linkText}${value.slice(end)}`;
   const urlStart = start + selectedText.length + 3;
@@ -2284,7 +3141,7 @@ function insertOrderedListIntoTreeContent() {
 function renderGraph() {
   const links = graphLinks();
   if (links.length === 0) {
-    elements.graphList.innerHTML = '<div class="empty-compact">아직 연결된 메모가 없습니다. 본문에 [[메모 제목]]을 적으면 연결됩니다.</div>';
+    elements.graphList.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.graphEmpty"))}</div>`;
     return;
   }
   elements.graphList.replaceChildren(
@@ -2292,7 +3149,9 @@ function renderGraph() {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "graph-link";
-      row.innerHTML = `<strong>${escapeHtml(link.from.title || "제목 없음")}</strong><span>→</span><strong>${escapeHtml(link.to.title || "제목 없음")}</strong>`;
+      const fromTitle = noteTitle(link.from.title);
+      const toTitle = noteTitle(link.to.title);
+      row.innerHTML = `<strong>${escapeHtml(fromTitle)}</strong><span>→</span><strong>${escapeHtml(toTitle)}</strong>`;
       row.addEventListener("click", () => {
         selectTreeNode(link.to.id);
         closeGraph();
@@ -2308,7 +3167,7 @@ function renderDeletedTreeList() {
   pruneDeletedTreeSelection();
   renderDeletedTreeControls();
   if (deleted.length === 0) {
-    elements.deletedTreeList.innerHTML = '<div class="empty-compact">삭제 보관함이 비어 있습니다.</div>';
+    elements.deletedTreeList.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.deletedTreeEmpty"))}</div>`;
     return;
   }
   elements.deletedTreeList.replaceChildren(
@@ -2318,17 +3177,17 @@ function renderDeletedTreeList() {
       item.className = "archive-item";
       item.classList.toggle("selected", selected);
       item.innerHTML = `
-        <label class="archive-check" aria-label="${escapeHtml(node.title || "제목 없음")} 선택">
+        <label class="archive-check" aria-label="${escapeHtml(t("note.selectLabel", { title: noteTitle(node.title) }))}">
           <input type="checkbox" data-action="select" ${selected ? "checked" : ""}>
         </label>
         <div class="archive-info">
-          <strong>${escapeHtml(node.title || "제목 없음")}</strong>
-          <span>${escapeHtml(formatArchivedAt(node.deletedAt))} 삭제</span>
+          <strong>${escapeHtml(noteTitle(node.title))}</strong>
+          <span>${escapeHtml(t("note.deletedAt", { time: formatArchivedAt(node.deletedAt) }))}</span>
           <p>${escapeHtml(snippet(node.content || ""))}</p>
         </div>
         <div class="archive-actions">
-          <button class="secondary-btn" type="button" data-action="restore">복원</button>
-          <button class="danger-btn" type="button" data-action="remove">영구 삭제</button>
+          <button class="secondary-btn" type="button" data-action="restore">${t("note.restore")}</button>
+          <button class="danger-btn" type="button" data-action="remove">${t("note.nodeDeletePermanent")}</button>
         </div>
       `;
       item.querySelector('[data-action="select"]').addEventListener("change", (event) => {
@@ -2355,9 +3214,9 @@ function renderDeletedTreeControls() {
   const deleted = state.data.deletedTree || [];
   const selectedCount = state.selectedDeletedTreeIds.size;
   const totalCount = deleted.length;
-  elements.deletedSelectionLabel.textContent = `선택 ${selectedCount}개 / 전체 ${totalCount}개`;
+  elements.deletedSelectionLabel.textContent = t("note.deletedSelection", { selected: selectedCount, total: totalCount });
   elements.deletedSelectAllBtn.disabled = totalCount === 0;
-  elements.deletedSelectAllBtn.textContent = selectedCount === totalCount && totalCount > 0 ? "전체 해제" : "전체 선택";
+  elements.deletedSelectAllBtn.textContent = selectedCount === totalCount && totalCount > 0 ? t("note.deletedClearAll") : t("note.deletedSelectAll");
   elements.deletedBulkDeleteBtn.disabled = selectedCount === 0;
   elements.deletedDeleteAllBtn.disabled = totalCount === 0;
 }
@@ -2387,7 +3246,7 @@ function deleteSelectedTreeNodes() {
   pruneDeletedTreeSelection();
   const selectedIds = [...state.selectedDeletedTreeIds];
   if (selectedIds.length === 0) return;
-  if (!confirm(`선택한 ${selectedIds.length}개 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+  if (!confirm(t("note.nodeDelete.permanentSelected", { count: selectedIds.length }))) {
     return;
   }
   const selectedSet = new Set(selectedIds);
@@ -2401,7 +3260,7 @@ function deleteSelectedTreeNodes() {
 function deleteAllArchivedTreeNodes() {
   const deleted = state.data.deletedTree || [];
   if (deleted.length === 0) return;
-  if (!confirm(`삭제 보관함의 ${deleted.length}개 메모를 모두 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+  if (!confirm(t("note.nodeDelete.permanentAll", { count: deleted.length }))) {
     return;
   }
   state.data.deletedTree = [];
@@ -2513,8 +3372,8 @@ function renderDaily() {
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
   elements.dailyContent.value = state.data.daily[state.selectedDate]?.content || "";
   elements.todayMemoState.textContent = state.data.daily[toDateKey(new Date())]?.content?.trim()
-    ? "기록 있음"
-    : "비어 있음";
+    ? t("note.dailyHasContent")
+    : t("note.dailyEmpty");
   renderCalendar();
   renderArchiveList();
 }
@@ -2529,15 +3388,16 @@ function renderFavoriteList() {
   const favorites = flattenTree(state.data.tree).filter((node) => node.favorite);
   elements.favoriteCount.textContent = String(favorites.length);
   if (favorites.length === 0) {
-    elements.favoriteList.innerHTML = '<div class="side-empty">없음</div>';
+    elements.favoriteList.innerHTML = `<div class="side-empty">${escapeHtml(t("note.emptyState"))}</div>`;
     return;
   }
   elements.favoriteList.replaceChildren(
     ...favorites.slice(0, 8).map((node) => {
+      const title = noteTitle(node.title);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "side-link";
-      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(levelName(node.level))}</span>`;
+      button.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(levelName(node.level))}</span>`;
       button.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -2553,15 +3413,16 @@ function renderRecentList() {
     .slice(0, 8);
   elements.recentCount.textContent = String(recent.length);
   if (recent.length === 0) {
-    elements.recentList.innerHTML = '<div class="side-empty">없음</div>';
+    elements.recentList.innerHTML = `<div class="side-empty">${escapeHtml(t("note.emptyState"))}</div>`;
     return;
   }
   elements.recentList.replaceChildren(
     ...recent.map((node) => {
+      const title = noteTitle(node.title);
       const button = document.createElement("button");
       button.type = "button";
       button.className = "side-link";
-      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(relativeTime(node.updatedAt))}</span>`;
+      button.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(relativeTime(node.updatedAt))}</span>`;
       button.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -2574,7 +3435,7 @@ function renderSideTags() {
   const tags = tagSummary();
   elements.tagCount.textContent = String(tags.length);
   if (tags.length === 0) {
-    elements.sideTagList.innerHTML = '<div class="side-empty">없음</div>';
+    elements.sideTagList.innerHTML = `<div class="side-empty">${escapeHtml(t("note.emptyState"))}</div>`;
     return;
   }
   elements.sideTagList.replaceChildren(
@@ -2643,10 +3504,10 @@ function saveDailyFromEditor() {
 function archiveSelectedDailyNote() {
   const note = state.data.daily[state.selectedDate];
   if (!note?.content?.trim()) {
-    alert("보관할 메모가 없습니다.");
+    alert(t("note.noArchive"));
     return;
   }
-  if (!confirm(`${longDateLabel(state.selectedDate)} 메모를 보관함으로 이동할까요?`)) return;
+  if (!confirm(t("note.archiveConfirm", { date: longDateLabel(state.selectedDate) }))) return;
 
   state.data.archivedDaily.unshift({
     id: crypto.randomUUID(),
@@ -2665,9 +3526,9 @@ function archiveSelectedDailyNote() {
 
 function renderArchiveList() {
   const archives = state.data.archivedDaily || [];
-  elements.archiveCountLabel.textContent = `${archives.length}개`;
+  elements.archiveCountLabel.textContent = t("note.archiveCount", { count: archives.length });
   if (archives.length === 0) {
-    elements.archiveList.innerHTML = '<div class="empty-compact">보관된 일자별 메모가 없습니다.</div>';
+    elements.archiveList.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.dailyArchiveEmpty"))}</div>`;
     return;
   }
 
@@ -2679,12 +3540,12 @@ function renderArchiveList() {
       item.innerHTML = `
         <div>
           <strong>${escapeHtml(longDateLabel(note.date))}</strong>
-          <span>${escapeHtml(formatArchivedAt(note.archivedAt))} 보관${restored ? ` · ${escapeHtml(formatArchivedAt(note.restoredAt))} 복원됨` : ""}</span>
+          <span>${escapeHtml(t("note.archivedAt", { time: formatArchivedAt(note.archivedAt) }))}${restored ? ` · ${escapeHtml(formatArchivedAt(note.restoredAt))} ${t("note.restored")}` : ""}</span>
           <p>${escapeHtml(snippet(note.content))}</p>
         </div>
         <div class="archive-actions">
-          <button class="secondary-btn" type="button" data-action="view">열람</button>
-          <button class="secondary-btn" type="button" data-action="restore"${restored ? " disabled" : ""}>${restored ? "복원됨" : "복원"}</button>
+          <button class="secondary-btn" type="button" data-action="view">${t("note.open")}</button>
+          <button class="secondary-btn" type="button" data-action="restore"${restored ? " disabled" : ""}>${restored ? t("note.restored") : t("note.restore")}</button>
         </div>
       `;
       item.querySelector('[data-action="view"]').addEventListener("click", () => {
@@ -2692,7 +3553,7 @@ function renderArchiveList() {
         const [year, month] = note.date.split("-").map(Number);
         state.visibleMonth = new Date(year, month - 1, 1);
         elements.dailyContent.value = note.content;
-        elements.selectedDateLabel.textContent = `${longDateLabel(note.date)} · 보관본 열람`;
+        elements.selectedDateLabel.textContent = `${longDateLabel(note.date)} · ${t("note.archiveViewHint")}`;
         setDailyArchivePreviewMode(true);
         elements.dailyContent.focus();
       });
@@ -2717,9 +3578,9 @@ function restoreArchivedDailyNote(id) {
   const active = state.data.daily[note.date];
   const restoredAt = new Date().toISOString();
   if (active?.content?.trim()) {
-    const ok = confirm("같은 날짜의 활성 메모가 있습니다. 보관본 내용을 아래에 추가할까요?");
+    const ok = confirm(t("note.archiveRestoreConfirm"));
     if (!ok) return;
-    state.data.daily[note.date].content = `${active.content.trimEnd()}\n\n--- 보관본 복원 ---\n${note.content}`;
+    state.data.daily[note.date].content = `${active.content.trimEnd()}\n\n--- ${t("note.archiveRestoreMarker")} ---\n${note.content}`;
     state.data.daily[note.date].syncState = "pending";
     state.data.daily[note.date].updatedAt = restoredAt;
   } else {
@@ -2749,7 +3610,7 @@ function renderTree() {
 }
 
 function addRootNote() {
-  const node = createNode("새 주제", "", null, 1);
+  const node = createNode(t("note.newTopic"), "", null, 1);
   state.data.tree.push(node);
   state.selectedTreeId = node.id;
   state.expandedTreeIds.add(node.id);
@@ -2764,7 +3625,7 @@ function addChildToSelectedTreeNode() {
     return;
   }
   if (selected.level >= 3) {
-    alert("지식 메모는 주제, 분류, 메모 3단계까지만 만들 수 있습니다.");
+    alert(t("note.treeDepthLimit"));
     return;
   }
   const node = createNode(defaultTitleForLevel(selected.level + 1), "", selected.id, selected.level + 1);
@@ -2779,7 +3640,7 @@ function renderTreeListOnly() {
   if (state.data.tree.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
-    empty.innerHTML = "<strong>주제가 없습니다</strong><span>먼저 주제를 추가하세요.</span>";
+    empty.innerHTML = `<strong>${escapeHtml(t("note.emptyTitle"))}</strong><span>${escapeHtml(t("note.emptyDescription"))}</span>`;
     elements.treeList.replaceChildren(empty);
     return;
   }
@@ -2803,7 +3664,7 @@ function treeNodeElement(node) {
   toggleButton.className = "tree-toggle";
   toggleButton.textContent = hasChildren ? (expanded ? "⌄" : "›") : "";
   toggleButton.disabled = !hasChildren;
-  toggleButton.title = expanded ? "접기" : "펼치기";
+  toggleButton.title = expanded ? t("note.collapse") : t("note.expand");
   toggleButton.addEventListener("click", () => {
     toggleTreeNode(node.id);
   });
@@ -2819,16 +3680,17 @@ function treeNodeElement(node) {
 
   const metaParts = [
     levelName(node.level),
-    node.children.length > 0 ? `아래 ${node.children.length}개` : "",
+    node.children.length > 0 ? t("note.childCount", { count: node.children.length }) : "",
     node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
   ].filter(Boolean);
-  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${node.title || "제목 없음"}` : node.title || "제목 없음")}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
+  const nodeTitle = noteTitle(node.title);
+  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${nodeTitle}` : nodeTitle)}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
   addButton.className = "small-btn";
   addButton.textContent = "+";
-  addButton.title = "아래에 추가";
+  addButton.title = t("note.addChild");
   addButton.disabled = node.level >= 3;
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -2914,7 +3776,7 @@ function renderTreePath(node) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "path-link";
-      button.textContent = pathNode.title || "제목 없음";
+      button.textContent = noteTitle(pathNode.title);
       button.addEventListener("click", () => {
         selectTreeNode(pathNode.id);
       });
@@ -2986,7 +3848,9 @@ function renderOpenTreeTabs() {
       tab.className = "open-tab";
       tab.classList.toggle("active", node.id === state.selectedTreeId);
       tab.classList.toggle("pinned", pinned);
-      tab.innerHTML = `<span>${pinned ? "고정 · " : ""}${escapeHtml(node.title || "제목 없음")}</span><strong aria-label="닫기">×</strong>`;
+      const pinnedPrefix = pinned ? t("note.pinnedPrefix") : "";
+      const tabTitle = noteTitle(node.title);
+      tab.innerHTML = `<span>${escapeHtml(pinnedPrefix)}${escapeHtml(tabTitle)}</span><strong aria-label="${t("note.tabClose")}" title="${t("note.tabClose")}">×</strong>`;
       tab.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -2999,7 +3863,7 @@ function renderOpenTreeTabs() {
   );
   const selectedPinned = state.settings.pinnedTreeTabs.includes(state.selectedTreeId);
   elements.pinTabBtn.disabled = !state.selectedTreeId || !state.settings.openTreeTabs.includes(state.selectedTreeId);
-  elements.pinTabBtn.textContent = selectedPinned ? "고정 해제" : "탭 고정";
+  elements.pinTabBtn.textContent = selectedPinned ? t("note.unpinTab") : t("note.pinTab");
   elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
 }
@@ -3110,7 +3974,7 @@ function renderTags() {
   }
   selected.tags = extractTags(selected.content);
   if (selected.tags.length === 0) {
-    elements.tagList.innerHTML = '<span class="tag-empty">태그 없음</span>';
+    elements.tagList.innerHTML = `<span class="tag-empty">${escapeHtml(t("note.tagEmpty"))}</span>`;
     return;
   }
   elements.tagList.replaceChildren(
@@ -3140,15 +4004,15 @@ function renderNoteStats(node) {
   const backlinks = backlinksFor(node).length;
   const tags = extractTags(text).length;
   elements.noteStats.innerHTML = [
-    `<span>${backlinks}개 백링크</span>`,
-    `<span>편집</span>`,
-    `<span>${words}개 단어</span>`,
-    `<span>${chars}개 문자</span>`,
-    `<span>${lines}줄</span>`,
-    `<span>${links}개 링크</span>`,
-    `<span>${tags}개 태그</span>`,
-    ...(missingLinks ? [`<span class="warning">${missingLinks}개 미생성 링크</span>`] : []),
-    `<span>수정 ${escapeHtml(relativeTime(node.updatedAt))}</span>`,
+    `<span>${escapeHtml(t("note.stats.backlinks", { count: backlinks }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.edit"))}</span>`,
+    `<span>${escapeHtml(t("note.stats.words", { count: words }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.chars", { count: chars }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.lines", { count: lines }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.links", { count: links }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.tags", { count: tags }))}</span>`,
+    ...(missingLinks ? [`<span class="warning">${escapeHtml(t("note.stats.missingLinks", { count: missingLinks }))}</span>`] : []),
+    `<span>${escapeHtml(t("note.stats.updated", { time: relativeTime(node.updatedAt) }))}</span>`,
   ].join("");
 }
 
@@ -3162,7 +4026,7 @@ function renderOutlinePanel(node) {
   if (elements.outlinePanel.classList.contains("hidden")) return;
   const headings = extractHeadings(node.content);
   if (headings.length === 0) {
-    elements.outlinePanel.innerHTML = '<div class="empty-compact">개요로 표시할 제목이 없습니다.</div>';
+    elements.outlinePanel.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.outlineEmpty"))}</div>`;
     return;
   }
   elements.outlinePanel.replaceChildren(
@@ -3293,9 +4157,9 @@ function updateNoteFindState(matches, query, index = -1) {
 }
 
 async function copyNoteLink(node) {
-  const link = `[[${node.title || "제목 없음"}]]`;
+  const link = `[[${noteTitle(node.title)}]]`;
   const copied = await copyText(link);
-  elements.treeSavedLabel.textContent = copied ? "링크 복사됨" : "복사 실패";
+  elements.treeSavedLabel.textContent = copied ? t("editor.copyLinkSuccess") : t("editor.copyLinkFail");
   showSaved(elements.treeSavedLabel);
 }
 
@@ -3322,7 +4186,7 @@ async function copyText(text) {
 
 function treePath(id, nodes = state.data.tree, parents = []) {
   for (const node of nodes) {
-    const current = [...parents, node.title || "제목 없음"];
+    const current = [...parents, noteTitle(node.title)];
     if (node.id === id) return current;
     const childPath = treePath(id, node.children, current);
     if (childPath.length > 0) return childPath;
@@ -3342,7 +4206,7 @@ function treePathNodes(id, nodes = state.data.tree, parents = []) {
 
 function renderMarkdownPreview(content) {
   const html = markdownToHtml(content || "");
-  elements.markdownPreview.innerHTML = html || '<p class="empty-compact">미리 볼 내용이 없습니다.</p>';
+  elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
 }
 
 function renderLinkPanel() {
@@ -3355,11 +4219,11 @@ function renderLinkPanel() {
   const backlinks = backlinksFor(selected);
   const blocks = [];
 
-  blocks.push(sectionTitle("연결"));
+  blocks.push(sectionTitle(t("note.sectionOut")));
   if (outgoing.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-compact";
-    empty.textContent = "본문에 [[메모 제목]]을 적으면 다른 메모와 연결됩니다.";
+    empty.textContent = t("note.sectionOutEmpty");
     blocks.push(empty);
   } else {
     const list = document.createElement("div");
@@ -3368,11 +4232,11 @@ function renderLinkPanel() {
     blocks.push(list);
   }
 
-  blocks.push(sectionTitle("백링크"));
+  blocks.push(sectionTitle(t("note.sectionBacklink")));
   if (backlinks.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-compact";
-    empty.textContent = "이 메모를 언급한 다른 메모가 없습니다.";
+    empty.textContent = t("note.sectionBacklinkEmpty");
     blocks.push(empty);
     elements.backlinksPanel.replaceChildren(...blocks);
     return;
@@ -3384,7 +4248,7 @@ function renderLinkPanel() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "backlink-item";
-      button.innerHTML = `<strong>${escapeHtml(node.title || "제목 없음")}</strong><span>${escapeHtml(snippet(node.content))}</span>`;
+      button.innerHTML = `<strong>${escapeHtml(noteTitle(node.title))}</strong><span>${escapeHtml(snippet(node.content))}</span>`;
       button.addEventListener("click", () => {
         selectTreeNode(node.id);
       });
@@ -3539,7 +4403,7 @@ function openWikiLink(title) {
     selectTreeNode(existing.id);
     return;
   }
-  if (!confirm(`'${normalized}' 메모가 없습니다. 새로 만들까요?`)) return;
+  if (!confirm(t("note.linkCreateConfirm", { title: normalized }))) return;
   const node = createLinkedNote(normalized);
   selectTreeNode(node.id);
 }
@@ -3595,7 +4459,7 @@ function linkButton(title, node, exists) {
   button.type = "button";
   button.className = "backlink-item";
   button.classList.toggle("missing-link", !exists);
-  button.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${exists ? "메모로 이동" : "아직 없는 메모"}</span>`;
+  button.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${exists ? t("note.linkToNote") : t("note.linkMissing")}</span>`;
   button.addEventListener("click", () => {
     if (node) {
       selectTreeNode(node.id);
@@ -3690,15 +4554,16 @@ function searchResults(query, options = {}) {
   const normalizedQuery = String(query || "").trim().toLowerCase();
   const parsed = parseSearchQuery(normalizedQuery, options.scope || "all");
   const sort = options.sort || "updated-desc";
+  const dailyMeta = t("search.dailyMeta");
   const dailyResults = Object.values(state.data.daily)
     .map((note) => ({
       type: "daily",
       id: note.date,
       title: longDateLabel(note.date),
-      meta: "일자별 메모",
+      meta: dailyMeta,
       preview: note.content,
       content: note.content,
-      path: `일자별 메모 / ${longDateLabel(note.date)}`,
+      path: `${dailyMeta} / ${longDateLabel(note.date)}`,
       tags: [],
       updatedAt: note.updatedAt || note.date,
       createdAt: note.date,
@@ -3719,7 +4584,7 @@ function searchResults(query, options = {}) {
     .map((node) => ({
       type: "tree",
       id: node.id,
-      title: node.title || "제목 없음",
+      title: noteTitle(node.title),
       meta: `${levelName(node.level)} · ${treePath(node.id).join(" / ")}`,
       preview: node.content,
       content: node.content,
@@ -3895,15 +4760,15 @@ function createNode(title, content, parentId, level) {
 }
 
 function defaultTitleForLevel(level) {
-  if (level === 1) return "새 주제";
-  if (level === 2) return "새 분류";
-  return "새 메모";
+  if (level === 1) return t("note.newTopic");
+  if (level === 2) return t("note.newCategory");
+  return t("note.newNote");
 }
 
 function levelName(level) {
-  if (level === 1) return "주제";
-  if (level === 2) return "분류";
-  return "메모";
+  if (level === 1) return t("note.labelTopic");
+  if (level === 2) return t("note.labelCategory");
+  return t("note.labelNote");
 }
 
 function markTreeNodeChanged(node) {
@@ -4008,7 +4873,7 @@ function permanentlyDeleteTreeNode(id) {
   const index = state.data.deletedTree.findIndex((node) => node.id === id);
   if (index < 0) return;
   const node = state.data.deletedTree[index];
-  if (!confirm(`'${node.title || "제목 없음"}' 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.`)) {
+  if (!confirm(t("note.nodeDelete.permanentConfirm", { title: noteTitle(node.title) }))) {
     return;
   }
   state.data.deletedTree.splice(index, 1);
@@ -4063,6 +4928,25 @@ function loadSettings() {
   } catch {
     localStorage.removeItem(SETTINGS_KEY);
   }
+}
+
+function applyLanguageQueryOverride() {
+  const language = getLanguageFromQuery();
+  if (!language || language === state.settings.language) return;
+  state.settings.language = language;
+  persistSettings();
+}
+
+function getLanguageFromQuery() {
+  const language = new URLSearchParams(window.location.search).get("lang");
+  return ["ko", "en"].includes(language) ? language : "";
+}
+
+function syncLanguageQueryParam(language) {
+  if (!getLanguageFromQuery()) return;
+  const url = new URL(window.location.href);
+  url.searchParams.set("lang", language);
+  window.history.replaceState(null, "", url);
 }
 
 function normalizeSettings(settings = {}) {
@@ -4248,10 +5132,10 @@ function normalizeTreeNodes(nodes, parentId, level) {
 
 function mergeOverflowTreeChildren(content, children) {
   const overflow = flattenTree(children)
-    .map((child) => [`### ${child.title || "제목 없음"}`, child.content || ""].join("\n").trim())
+    .map((child) => [`### ${noteTitle(child.title)}`, child.content || ""].join("\n").trim())
     .filter(Boolean)
     .join("\n\n");
-  return [content || "", overflow].filter((part) => part.trim()).join("\n\n--- 하위 메모 병합 ---\n\n");
+  return [content || "", overflow].filter((part) => part.trim()).join(`\n\n--- ${t("note.mergeChildrenMarker")} ---\n\n`);
 }
 
 function persist() {
@@ -4265,7 +5149,7 @@ function writeStorage(key, value) {
   } catch {
     if (!storageWarningShown) {
       storageWarningShown = true;
-      alert("브라우저 저장소에 저장할 수 없습니다. 중요한 내용은 JSON 내보내기로 백업해 주세요.");
+      alert(t("note.storageFail"));
     }
     return false;
   }
@@ -4278,23 +5162,23 @@ function exportData() {
 function exportMarkdown() {
   const restoredArchivedDailyCount = state.data.archivedDaily.filter((note) => note.restoredAt).length;
   const markdown = [
-    "# NowNote 내보내기",
+    `# ${t("markdownExport.title")}`,
     "",
-    `- 내보낸 날짜: ${new Date().toLocaleString("ko-KR")}`,
-    `- 지식 메모: ${flattenTree(state.data.tree).length}개`,
-    `- 일자별 메모: ${Object.keys(state.data.daily).length}개`,
-    `- 보관 일자별 메모: ${state.data.archivedDaily.length}개`,
-    ...(restoredArchivedDailyCount ? [`- 복원된 보관본: ${restoredArchivedDailyCount}개`] : []),
+    `- ${t("markdownExport.exportedAt")}: ${new Date().toLocaleString(currentLocale())}`,
+    `- ${t("markdownExport.treeCount")}: ${flattenTree(state.data.tree).length}`,
+    `- ${t("markdownExport.dailyCount")}: ${Object.keys(state.data.daily).length}`,
+    `- ${t("markdownExport.archivedDailyCount")}: ${state.data.archivedDaily.length}`,
+    ...(restoredArchivedDailyCount ? [`- ${t("markdownExport.restoredArchivedDailyCount")}: ${restoredArchivedDailyCount}`] : []),
     "",
-    "## 지식 메모",
+    `## ${t("markdownExport.treeSection")}`,
     "",
     treeToMarkdown(state.data.tree),
     "",
-    "## 일자별 메모",
+    `## ${t("markdownExport.dailySection")}`,
     "",
     dailyToMarkdown(),
     "",
-    "## 보관된 일자별 메모",
+    `## ${t("markdownExport.archivedDailySection")}`,
     "",
     archivedDailyToMarkdown(),
   ].join("\n");
@@ -4302,22 +5186,22 @@ function exportMarkdown() {
 }
 
 function treeToMarkdown(nodes) {
-  if (nodes.length === 0) return "_지식 메모가 없습니다._\n";
+  if (nodes.length === 0) return `${t("markdownExport.emptyTree")}\n`;
   return nodes.map((node) => nodeToMarkdown(node)).join("\n\n");
 }
 
 function nodeToMarkdown(node) {
   const headingLevel = Math.min(node.level + 1, 6);
-  const tags = node.tags.length ? `\n\n태그: ${node.tags.map((tag) => `#${tag}`).join(" ")}` : "";
-  const favorite = node.favorite ? "\n\n즐겨찾기: 예" : "";
+  const tags = node.tags.length ? `\n\n${t("markdownExport.tags")}: ${node.tags.map((tag) => `#${tag}`).join(" ")}` : "";
+  const favorite = node.favorite ? `\n\n${t("markdownExport.favorite")}: ${t("markdownExport.yes")}` : "";
   const meta = [
-    `경로: ${treePath(node.id).join(" / ")}`,
-    `수정: ${formatDateTime(node.updatedAt)}`,
+    `${t("markdownExport.path")}: ${treePath(node.id).join(" / ")}`,
+    `${t("markdownExport.updated")}: ${formatDateTime(node.updatedAt)}`,
   ].join("\n");
-  const content = node.content?.trim() || "_내용 없음_";
+  const content = node.content?.trim() || t("markdownExport.emptyContent");
   const children = node.children.map((child) => nodeToMarkdown(child)).join("\n\n");
   return [
-    `${"#".repeat(headingLevel)} [${levelName(node.level)}] ${node.title || "제목 없음"}`,
+    `${"#".repeat(headingLevel)} [${levelName(node.level)}] ${noteTitle(node.title)}`,
     "",
     meta,
     tags,
@@ -4333,9 +5217,9 @@ function dailyToMarkdown() {
   const entries = Object.values(state.data.daily)
     .filter((note) => note.content?.trim())
     .sort((a, b) => a.date.localeCompare(b.date));
-  if (entries.length === 0) return "_일자별 메모가 없습니다._\n";
+  if (entries.length === 0) return `${t("markdownExport.emptyDaily")}\n`;
   return entries.map((note) => [
-    `### ${longDateLabel(note.date)}`,
+    `### ${markdownDateHeading(note.date)}`,
     "",
     note.content.trim(),
     "",
@@ -4346,16 +5230,21 @@ function archivedDailyToMarkdown() {
   const entries = state.data.archivedDaily
     .filter((note) => note.content?.trim())
     .sort((a, b) => (a.date || "").localeCompare(b.date || "") || (a.archivedAt || "").localeCompare(b.archivedAt || ""));
-  if (entries.length === 0) return "_보관된 일자별 메모가 없습니다._\n";
+  if (entries.length === 0) return `${t("markdownExport.emptyArchivedDaily")}\n`;
   return entries.map((note) => [
-    `### ${longDateLabel(note.date)}`,
+    `### ${markdownDateHeading(note.date)}`,
     "",
-    `- 보관 시각: ${formatDateTime(note.archivedAt || note.updatedAt)}`,
-    ...(note.restoredAt ? [`- 복원 시각: ${formatDateTime(note.restoredAt)}`] : []),
+    `- ${t("markdownExport.archivedAt")}: ${formatDateTime(note.archivedAt || note.updatedAt)}`,
+    ...(note.restoredAt ? [`- ${t("markdownExport.restoredAt")}: ${formatDateTime(note.restoredAt)}`] : []),
     "",
     note.content.trim(),
     "",
   ].join("\n")).join("\n");
+}
+
+function markdownDateHeading(dateKey) {
+  if (state.settings.language === "en") return `${dateKey} · ${longDateLabel(dateKey)}`;
+  return longDateLabel(dateKey);
 }
 
 function downloadText(filename, content, type) {
@@ -4368,7 +5257,7 @@ function downloadText(filename, content, type) {
     link.download = filename;
     link.click();
   } catch {
-    alert("파일을 내보낼 수 없습니다. 브라우저 다운로드 권한이나 저장 공간을 확인해 주세요.");
+    alert(t("note.exportDenied"));
   } finally {
     if (url) URL.revokeObjectURL(url);
   }
@@ -4383,19 +5272,19 @@ function importData(event) {
       const parsed = JSON.parse(String(reader.result));
       const imported = parseBackupData(parsed);
       if (!imported.data) {
-        alert("NowNote 백업 JSON 형식이 아닙니다.");
+        alert(t("note.backupImportError"));
         return;
       }
       const summary = backupSummary(imported.data);
-      if (!confirm([
-        "JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다.",
-        "",
-        `백업 파일: ${file.name}`,
-        `백업 시각: ${imported.exportedAt ? formatBackupTime(imported.exportedAt) : "확인 안 됨"}`,
-        `백업 내용: 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개${summary.restoredArchivedDaily ? `, 복원된 보관본 ${summary.restoredArchivedDaily}개` : ""}, 지식 메모 ${summary.tree}개, 삭제 보관 ${summary.deletedTree}개`,
-        "",
-        "계속할까요?",
-      ].join("\n"))) {
+      if (!confirm(t("note.backupReplaceConfirm", {
+        file: file.name,
+        time: imported.exportedAt ? formatBackupTime(imported.exportedAt) : t("note.unknownDate"),
+        daily: summary.daily,
+        archivedDaily: summary.archivedDaily,
+        restoredArchivedDaily: summary.restoredArchivedDaily ? t("note.restoredArchivedDailyCount", { count: summary.restoredArchivedDaily }) : "",
+        tree: summary.tree,
+        deletedTree: summary.deletedTree,
+      }))) {
         return;
       }
       downloadCurrentBackup("nownote-before-import");
@@ -4410,21 +5299,21 @@ function importData(event) {
       state.selectedTreeId = null;
       persist();
       render();
-      alert("가져오기가 완료되었습니다.");
+      alert(t("note.importDone"));
     } catch {
-      alert("JSON 파일을 읽을 수 없습니다.");
+      alert(t("note.importReadError"));
     } finally {
       event.target.value = "";
     }
   };
   reader.onerror = () => {
-    alert("JSON 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    alert(t("note.backupFileParseError"));
     event.target.value = "";
   };
   try {
     reader.readAsText(file);
   } catch {
-    alert("JSON 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    alert(t("note.backupFileOpenError"));
     event.target.value = "";
   }
 }
@@ -4441,7 +5330,7 @@ async function importMarkdownData(event) {
       const archivedDailyNotes = parseNowNoteMarkdownArchivedDaily(content);
       if (treeNodes.length > 0 || dailyNotes.length > 0 || archivedDailyNotes.length > 0) {
         return {
-          title: `${file.name} 구조`,
+          title: t("note.markdownStructureTitle", { name: file.name }),
           nodes: treeNodes,
           dailyNotes,
           archivedDailyNotes,
@@ -4456,15 +5345,14 @@ async function importMarkdownData(event) {
       };
     }))).filter(Boolean);
     if (imports.length === 0) {
-      alert("가져올 Markdown 내용이 없습니다.");
+      alert(t("note.markdownNoContent"));
       return;
     }
     const summary = markdownImportSummary(imports);
     const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
-    const moreText = imports.length > 5 ? `\n- 외 ${imports.length - 5}개` : "";
+    const moreText = imports.length > 5 ? `\n- ${t("note.markdownImportedMore", { count: imports.length - 5 })}` : "";
     if (!confirm([
-      `${imports.length}개 Markdown 파일을 가져올까요?`,
-      `지식 메모 ${summary.nodes}개, 일자별 메모 ${summary.daily}개, 보관 일자 ${summary.archivedDaily}개`,
+      t("note.markdownImportConfirm", { count: imports.length, nodes: summary.nodes, daily: summary.daily, archivedDaily: summary.archivedDaily }),
       "",
       previewNames + moreText,
     ].join("\n"))) {
@@ -4482,9 +5370,9 @@ async function importMarkdownData(event) {
     state.data.archivedDaily.unshift(...archivedDailyNotes);
     persist();
     showMarkdownImportResult(nodes, dailyNotes);
-    alert(`Markdown 가져오기 완료: 지식 메모 ${nodes.length}개, 일자별 메모 ${dailyNotes.length}개, 보관 일자 ${archivedDailyNotes.length}개`);
+    alert(t("note.markdownImportDone", { nodes: nodes.length, daily: dailyNotes.length, archivedDaily: archivedDailyNotes.length }));
   } catch {
-    alert("Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.");
+    alert(t("note.markdownImportError"));
   } finally {
     event.target.value = "";
   }
@@ -4529,8 +5417,8 @@ function readTextFile(file) {
 }
 
 function parseNowNoteMarkdownTree(content) {
-  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
-  const treeSection = markdownSectionContent(content, "지식 메모");
+  if (!isNowNoteMarkdownExport(content)) return [];
+  const treeSection = nowNoteMarkdownSection(content, ["지식 메모", "Knowledge notes"]);
   if (!treeSection) return [];
   const blocks = splitNowNoteTreeBlocks(treeSection);
   if (blocks.length === 0) return [];
@@ -4557,11 +5445,11 @@ function parseNowNoteMarkdownTree(content) {
 }
 
 function parseNowNoteMarkdownDaily(content) {
-  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
-  const section = markdownSectionContent(content, "일자별 메모");
+  if (!isNowNoteMarkdownExport(content)) return [];
+  const section = nowNoteMarkdownSection(content, ["일자별 메모", "Daily notes"]);
   if (!section) return [];
   return splitNowNoteDateBlocks(section).map((block) => {
-    const date = dateKeyFromKoreanLabel(block.title);
+    const date = dateKeyFromMarkdownLabel(block.title);
     if (!date) return null;
     const noteContent = cleanNowNoteDateContent(block.body, false);
     if (!noteContent.trim()) return null;
@@ -4576,11 +5464,11 @@ function parseNowNoteMarkdownDaily(content) {
 }
 
 function parseNowNoteMarkdownArchivedDaily(content) {
-  if (!/^#\s+NowNote 내보내기/m.test(content)) return [];
-  const section = markdownSectionContent(content, "보관된 일자별 메모");
+  if (!isNowNoteMarkdownExport(content)) return [];
+  const section = nowNoteMarkdownSection(content, ["보관된 일자별 메모", "Archived daily notes"]);
   if (!section) return [];
   return splitNowNoteDateBlocks(section).map((block) => {
-    const date = dateKeyFromKoreanLabel(block.title);
+    const date = dateKeyFromMarkdownLabel(block.title);
     if (!date) return null;
     const noteContent = cleanNowNoteDateContent(block.body, true);
     if (!noteContent.trim()) return null;
@@ -4595,6 +5483,18 @@ function parseNowNoteMarkdownArchivedDaily(content) {
       updatedAt: new Date().toISOString(),
     };
   }).filter(Boolean);
+}
+
+function isNowNoteMarkdownExport(content) {
+  return /^#\s+NowNote\s+(내보내기|Export)\s*$/im.test(content);
+}
+
+function nowNoteMarkdownSection(content, titles) {
+  for (const title of titles) {
+    const section = markdownSectionContent(content, title);
+    if (section) return section;
+  }
+  return "";
 }
 
 function markdownSectionContent(content, title) {
@@ -4612,7 +5512,7 @@ function splitNowNoteTreeBlocks(content) {
     if (/^\s*```/.test(line)) {
       inCodeBlock = !inCodeBlock;
     }
-    const heading = !inCodeBlock ? line.match(/^(#{2,4})\s+\[(주제|분류|메모)\]\s+(.+)\s*$/) : null;
+    const heading = !inCodeBlock ? line.match(/^(#{2,4})\s+\[(주제|분류|메모|Topic|Category|Note)\]\s+(.+)\s*$/i) : null;
     if (heading) {
       if (current) blocks.push(current);
       current = {
@@ -4662,17 +5562,25 @@ function cleanNowNoteDateContent(lines, hasArchiveMeta) {
   lines.forEach((line) => {
     const trimmed = line.trim();
     if (!readingContent && trimmed === "") return;
-    if (hasArchiveMeta && !readingContent && /^-\s+(보관|복원)\s*시각:\s*/.test(trimmed)) return;
+    if (hasArchiveMeta && !readingContent && /^-\s+((보관|복원)\s*시각|Archived at|Restored at):\s*/i.test(trimmed)) return;
     readingContent = true;
     content.push(line);
   });
   return content.join("\n").trim();
 }
 
-function dateKeyFromKoreanLabel(label) {
-  const match = String(label || "").match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
-  if (!match) return "";
-  const dateKey = `${match[1]}-${match[2].padStart(2, "0")}-${match[3].padStart(2, "0")}`;
+function dateKeyFromMarkdownLabel(label) {
+  const value = String(label || "");
+  const isoMatch = value.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+  if (isoMatch && isDateKey(isoMatch[1])) return isoMatch[1];
+  const koreanMatch = value.match(/(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/);
+  if (koreanMatch) {
+    const dateKey = `${koreanMatch[1]}-${koreanMatch[2].padStart(2, "0")}-${koreanMatch[3].padStart(2, "0")}`;
+    return isDateKey(dateKey) ? dateKey : "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const dateKey = toDateKey(parsed);
   return isDateKey(dateKey) ? dateKey : "";
 }
 
@@ -4695,13 +5603,13 @@ function readNowNoteMarkdownMeta(lines) {
   lines.forEach((line) => {
     const trimmed = line.trim();
     if (!readingContent && trimmed === "") return;
-    if (!readingContent && /^경로:\s*/.test(trimmed)) return;
-    if (!readingContent && /^수정:\s*/.test(trimmed)) return;
-    if (!readingContent && /^태그:\s*/.test(trimmed)) {
+    if (!readingContent && /^(경로|Path):\s*/i.test(trimmed)) return;
+    if (!readingContent && /^(수정|Updated):\s*/i.test(trimmed)) return;
+    if (!readingContent && /^(태그|Tags):\s*/i.test(trimmed)) {
       trimmed.match(/#[0-9A-Za-z가-힣_-]+/g)?.forEach((tag) => tags.push(tag.slice(1)));
       return;
     }
-    if (!readingContent && /^즐겨찾기:\s*예/.test(trimmed)) {
+    if (!readingContent && /^(즐겨찾기:\s*예|Favorite:\s*Yes)/i.test(trimmed)) {
       favorite = true;
       return;
     }
@@ -4710,7 +5618,7 @@ function readNowNoteMarkdownMeta(lines) {
   });
   const text = content.join("\n").trim();
   return {
-    content: text === "_내용 없음_" ? "" : text,
+    content: ["_내용 없음_", "_No content_"].includes(text) ? "" : text,
     tags: [...new Set(tags)],
     favorite,
   };
@@ -4719,7 +5627,7 @@ function readNowNoteMarkdownMeta(lines) {
 function titleFromMarkdownFile(fileName, content) {
   const heading = content.split("\n").find((line) => /^#\s+/.test(line.trim()));
   const title = heading ? heading.replace(/^#\s+/, "").trim() : fileName.replace(/\.(md|markdown|txt)$/i, "").trim();
-  return normalizeText(title).slice(0, 80) || "가져온 Markdown";
+  return normalizeText(title).slice(0, 80) || t("note.fallbackMarkDownTitle");
 }
 
 function backupDataShape(data) {
@@ -4773,8 +5681,9 @@ function backupSummary(data) {
 
 function formatBackupTime(value) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "확인 안 됨";
-  return `${date.toLocaleDateString("ko-KR")} ${date.toLocaleTimeString("ko-KR")}`;
+  if (Number.isNaN(date.getTime())) return t("note.unknownDate");
+  const locale = currentLocale();
+  return `${date.toLocaleDateString(locale)} ${date.toLocaleTimeString(locale)}`;
 }
 
 function downloadCurrentBackup(prefix = "nownote") {
@@ -4819,13 +5728,20 @@ function isDateKey(value) {
   return !Number.isNaN(date.getTime()) && toDateKey(date) === value;
 }
 
+function currentLocale() {
+  return state.settings.language === "en" ? "en-US" : "ko-KR";
+}
+
 function monthLabel(date) {
-  return `${date.getFullYear()}년 ${date.getMonth() + 1}월`;
+  return new Intl.DateTimeFormat(currentLocale(), {
+    year: "numeric",
+    month: "long",
+  }).format(date);
 }
 
 function longDateLabel(key) {
   const date = new Date(`${key}T00:00:00`);
-  return new Intl.DateTimeFormat("ko-KR", {
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -4834,7 +5750,7 @@ function longDateLabel(key) {
 }
 
 function timeLabel(date) {
-  return new Intl.DateTimeFormat("ko-KR", {
+  return new Intl.DateTimeFormat(currentLocale(), {
     hour: "2-digit",
     minute: "2-digit",
     hour12: false,
@@ -4842,8 +5758,8 @@ function timeLabel(date) {
 }
 
 function formatArchivedAt(value) {
-  if (!value) return "날짜 없음";
-  return new Intl.DateTimeFormat("ko-KR", {
+  if (!value) return t("note.dateMissing");
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: "numeric",
     month: "short",
     day: "numeric",
@@ -4851,8 +5767,8 @@ function formatArchivedAt(value) {
 }
 
 function formatDateTime(value) {
-  if (!value) return "날짜 없음";
-  return new Intl.DateTimeFormat("ko-KR", {
+  if (!value) return t("note.dateMissing");
+  return new Intl.DateTimeFormat(currentLocale(), {
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
@@ -4862,16 +5778,16 @@ function formatDateTime(value) {
 }
 
 function relativeTime(value) {
-  if (!value) return "날짜 없음";
+  if (!value) return t("note.dateMissing");
   const diffMs = Date.now() - new Date(value).getTime();
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
-  if (diffMs < minute) return "방금 전";
-  if (diffMs < hour) return `${Math.floor(diffMs / minute)}분 전`;
-  if (diffMs < day) return `${Math.floor(diffMs / hour)}시간 전`;
-  if (diffMs < day * 7) return `${Math.floor(diffMs / day)}일 전`;
-  return new Intl.DateTimeFormat("ko-KR", {
+  if (diffMs < minute) return t("relative.now");
+  if (diffMs < hour) return t("relative.minutes", { count: Math.floor(diffMs / minute) });
+  if (diffMs < day) return t("relative.hours", { count: Math.floor(diffMs / hour) });
+  if (diffMs < day * 7) return t("relative.days", { count: Math.floor(diffMs / day) });
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
   }).format(new Date(value));
@@ -4879,7 +5795,7 @@ function relativeTime(value) {
 
 function snippet(text, query = "") {
   const normalized = (text || "").replace(/\s+/g, " ").trim();
-  if (!normalized) return "내용 없음";
+  if (!normalized) return t("note.emptyContent");
   const term = String(query || "").trim().toLowerCase();
   if (term) {
     const index = normalized.toLowerCase().indexOf(term);
