@@ -501,8 +501,21 @@ String _serverConnectionMessage(
   final sync = capabilities['sync'] == true ? '동기화 지원' : '동기화 미확인';
   final maxLevel = capabilities['max_tree_note_level'];
   final levelText = maxLevel is int ? '계층 $maxLevel단계' : '계층 확인';
+  final userText = capabilities['user_profile'] == true
+      ? '사용자 프로필'
+      : '사용자 미확인';
+  final twoFactorText = capabilities['two_factor_status'] == true
+      ? '2단계 상태'
+      : '2단계 미확인';
   final authText = authRequired ? '토큰 필요' : '토큰 없음';
-  return '$name 연결됨 · $authText · $sync · $levelText';
+  return [
+    '$name 연결됨',
+    authText,
+    sync,
+    levelText,
+    userText,
+    twoFactorText,
+  ].join(' · ');
 }
 
 DateTime? _parseSyncTime(String? value) {
