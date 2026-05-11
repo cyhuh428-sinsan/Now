@@ -148,7 +148,7 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
 python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
-스모크 테스트는 health/API/sync와 운영 화면 응답을 함께 확인합니다.
+스모크 테스트는 health/API/sync, 운영 화면 응답, 사용자 프로필 조회/수정을 함께 확인합니다.
 
 ## 1차 API
 
@@ -297,8 +297,8 @@ python -m app.worker
 
 ## 다음 단계
 
-- 앱에 서버 주소 설정 화면 추가
-- 앱 로컬 DB 변경분을 `/api/v1/sync`로 전송
+- 모바일 앱과 Web/설치형 클라이언트의 서버 연결 UI를 같은 기준으로 맞추기
+- 앱 로컬 DB 변경분과 Web 로컬 변경분을 `/api/v1/sync`로 안정적으로 전송
 - 녹음 후 변환 모드의 원본 파일을 `/api/v1/recordings`로 업로드
 - 서버 인증 토큰을 앱 설정과 연결
 - 서버 측 분석 결과를 앱 화면과 연결
