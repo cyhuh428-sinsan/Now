@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
-from app.services.user_accounts import update_user_account
+from app.services.user_accounts import create_user_account, update_user_account
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -26,6 +26,10 @@ class UserAccountUpdate(BaseModel):
     group_name: str = Field(default="사용자", max_length=80)
     two_factor_enabled: bool = False
     is_active: bool = True
+
+
+class UserAccountCreate(UserAccountUpdate):
+    owner_id: str = Field(max_length=80)
 
 
 @router.get("/export/notes")
@@ -102,6 +106,31 @@ def users(db: Session = Depends(get_db)) -> dict:
         "two_factor_enabled": sum(1 for row in rows if row.two_factor_enabled),
         "items": [_model_to_dict(row) for row in rows],
     }
+
+
+@router.post("/users")
+def create_user(
+    payload: UserAccountCreate,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = create_user_account(
+        db,
+        owner_id=payload.owner_id,
+        email=payload.email,
+        display_name=payload.display_name,
+        timezone=payload.timezone,
+        group_name=payload.group_name,
+        two_factor_enabled=payload.two_factor_enabled,
+        is_active=payload.is_active,
+    )
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="user already exists or owner_id is empty",
+        )
+    db.commit()
+    db.refresh(user)
+    return {"status": "ok", "user": _model_to_dict(user)}
 
 
 @router.patch("/users/{owner_id}")
