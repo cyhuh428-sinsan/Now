@@ -73,6 +73,8 @@ def main() -> None:
         "/admin/sync",
         "/admin/ops",
         "/admin/export",
+        "/admin/users",
+        "/admin/users/new",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
@@ -96,6 +98,30 @@ def main() -> None:
         {
             "status": data.get("status"),
             "checks": len(data.get("checks", [])),
+        },
+    )
+
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/admin/users",
+        args.token,
+        {
+            "owner_id": "smoke_admin_user",
+            "email": "smoke_admin_user@example.com",
+            "display_name": "Smoke Admin User",
+            "timezone": "Asia/Seoul",
+            "group_name": "테스트",
+            "two_factor_enabled": False,
+            "is_active": True,
+        },
+    )
+    require(status in (200, 409), "관리자 사용자 생성 API 응답이 예상과 다릅니다")
+    print(
+        "POST /api/v1/admin/users:",
+        status,
+        {
+            "status": data.get("status") if isinstance(data, dict) else None,
+            "detail": data.get("detail") if isinstance(data, dict) else None,
         },
     )
 
