@@ -646,6 +646,9 @@ String _serverErrorMessage(
   if (body is Map<String, dynamic>) {
     final detail = body['detail'];
     final message = body['message'];
+    if (detail == 'user inactive') {
+      return '$prefix: 비활성 사용자라 서버 기능을 사용할 수 없습니다.';
+    }
     if (detail is String && detail.isNotEmpty) return '$prefix: $detail';
     if (message is String && message.isNotEmpty) return '$prefix: $message';
   }
