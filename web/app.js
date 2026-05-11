@@ -303,6 +303,24 @@ const I18N = {
     "settings.server.token": "API 토큰",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
+    "settings.server.profile.title": "사용자 프로필",
+    "settings.server.profile.desc": "표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.",
+    "settings.server.profile.displayName": "표시 이름",
+    "settings.server.profile.email": "이메일",
+    "settings.server.profile.timezone": "시간대",
+    "settings.server.profile.load": "프로필 불러오기",
+    "settings.server.profile.save": "프로필 저장",
+    "settings.server.profile.none": "프로필을 불러오지 않았습니다.",
+    "settings.server.profile.loading": "사용자 프로필을 불러오는 중입니다.",
+    "settings.server.profile.saving": "사용자 프로필을 저장하는 중입니다.",
+    "settings.server.profile.loaded": "사용자 프로필을 불러왔습니다.",
+    "settings.server.profile.saved": "사용자 프로필을 저장했습니다.",
+    "settings.server.profile.summary": "그룹 {group} · {twoFactor} · {active} · 최근 접속 {lastSeen}",
+    "settings.server.profile.twoFactorOn": "2단계 사용",
+    "settings.server.profile.twoFactorOff": "2단계 미사용",
+    "settings.server.profile.active": "활성",
+    "settings.server.profile.inactive": "비활성",
+    "settings.server.profile.lastSeenNone": "접속 기록 없음",
     "settings.server.save": "연결 설정 저장",
     "settings.server.test": "연결 테스트",
     "settings.server.sync": "서버로 동기화",
@@ -721,6 +739,24 @@ const I18N = {
     "settings.server.token": "API token",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
+    "settings.server.profile.title": "User profile",
+    "settings.server.profile.desc": "Save display name, email, and time zone as server user information.",
+    "settings.server.profile.displayName": "Display name",
+    "settings.server.profile.email": "Email",
+    "settings.server.profile.timezone": "Time zone",
+    "settings.server.profile.load": "Load profile",
+    "settings.server.profile.save": "Save profile",
+    "settings.server.profile.none": "Profile has not been loaded.",
+    "settings.server.profile.loading": "Loading user profile.",
+    "settings.server.profile.saving": "Saving user profile.",
+    "settings.server.profile.loaded": "User profile loaded.",
+    "settings.server.profile.saved": "User profile saved.",
+    "settings.server.profile.summary": "Group {group} · {twoFactor} · {active} · Last seen {lastSeen}",
+    "settings.server.profile.twoFactorOn": "2FA on",
+    "settings.server.profile.twoFactorOff": "2FA off",
+    "settings.server.profile.active": "Active",
+    "settings.server.profile.inactive": "Inactive",
+    "settings.server.profile.lastSeenNone": "No access record",
     "settings.server.save": "Save connection",
     "settings.server.test": "Test connection",
     "settings.server.sync": "Sync to server",
@@ -943,12 +979,26 @@ function defaultServerSettings() {
     mode: "local",
     url: "",
     token: "",
-    ownerId: "local-user",
+    ownerId: "local_user",
     deviceId: "web-desktop",
+    userProfile: defaultServerUserProfile(),
     lastCheckedAt: null,
     lastSyncedAt: null,
     lastStatus: "idle",
     lastMessage: "",
+  };
+}
+
+function defaultServerUserProfile() {
+  return {
+    email: "",
+    displayName: "",
+    timezone: "Asia/Seoul",
+    groupName: "",
+    twoFactorEnabled: false,
+    isActive: true,
+    lastSeenAt: null,
+    loadedAt: null,
   };
 }
 
@@ -1134,6 +1184,12 @@ const elements = {
   serverTokenInput: $("#serverTokenInput"),
   ownerIdInput: $("#ownerIdInput"),
   deviceIdInput: $("#deviceIdInput"),
+  serverDisplayNameInput: $("#serverDisplayNameInput"),
+  serverEmailInput: $("#serverEmailInput"),
+  serverTimezoneInput: $("#serverTimezoneInput"),
+  serverProfileLoadBtn: $("#serverProfileLoadBtn"),
+  serverProfileSaveBtn: $("#serverProfileSaveBtn"),
+  serverProfileText: $("#serverProfileText"),
   serverSaveBtn: $("#serverSaveBtn"),
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
@@ -1378,6 +1434,8 @@ function bindEvents() {
 
   elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
   elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
+  elements.serverProfileLoadBtn.addEventListener("click", loadServerUserProfile);
+  elements.serverProfileSaveBtn.addEventListener("click", saveServerUserProfile);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -1610,12 +1668,19 @@ function renderServerSettings() {
   elements.serverTokenInput.value = server.token;
   elements.ownerIdInput.value = server.ownerId;
   elements.deviceIdInput.value = server.deviceId;
+  const profile = normalizeServerUserProfile(server.userProfile);
+  elements.serverDisplayNameInput.value = profile.displayName;
+  elements.serverEmailInput.value = profile.email;
+  elements.serverTimezoneInput.value = profile.timezone;
   const isServerMode = server.mode === "server";
   elements.serverTestBtn.disabled = !isServerMode;
   elements.serverSyncBtn.disabled = !isServerMode;
   elements.serverFullSyncBtn.disabled = !isServerMode;
+  elements.serverProfileLoadBtn.disabled = !isServerMode;
+  elements.serverProfileSaveBtn.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
+  renderServerProfileMeta(profile);
 }
 
 function saveServerSettingsFromForm(message = t("settings.server.saved")) {
@@ -1625,8 +1690,14 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
     mode: elements.serverModeSelect.value === "server" ? "server" : "local",
     url: normalizeServerUrl(elements.serverUrlInput.value),
     token: elements.serverTokenInput.value.trim(),
-    ownerId: elements.ownerIdInput.value.trim() || "local-user",
+    ownerId: normalizeOwnerId(elements.ownerIdInput.value),
     deviceId: elements.deviceIdInput.value.trim() || "web-desktop",
+    userProfile: {
+      ...normalizeServerUserProfile(previous.userProfile),
+      displayName: elements.serverDisplayNameInput.value.trim(),
+      email: elements.serverEmailInput.value.trim(),
+      timezone: elements.serverTimezoneInput.value.trim() || "Asia/Seoul",
+    },
     lastStatus: "saved",
     lastMessage: message,
   };
@@ -1664,6 +1735,29 @@ function renderServerMeta() {
     : t("settings.server.never");
   elements.serverMetaText.textContent = t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt });
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
+}
+
+function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
+  const loaded = profile.loadedAt || profile.groupName || profile.lastSeenAt;
+  if (!loaded) {
+    elements.serverProfileText.textContent = t("settings.server.profile.none");
+    return;
+  }
+  const twoFactor = profile.twoFactorEnabled
+    ? t("settings.server.profile.twoFactorOn")
+    : t("settings.server.profile.twoFactorOff");
+  const active = profile.isActive
+    ? t("settings.server.profile.active")
+    : t("settings.server.profile.inactive");
+  const lastSeen = profile.lastSeenAt
+    ? new Date(profile.lastSeenAt).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR")
+    : t("settings.server.profile.lastSeenNone");
+  elements.serverProfileText.textContent = t("settings.server.profile.summary", {
+    group: profile.groupName || "-",
+    twoFactor,
+    active,
+    lastSeen,
+  });
 }
 
 function countPendingSyncNotes() {
@@ -1714,6 +1808,80 @@ async function testServerConnection() {
   renderServerSettings();
 }
 
+async function loadServerUserProfile() {
+  saveServerSettingsFromForm(t("settings.server.profile.loading"));
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+
+  renderServerStatus("testing", t("settings.server.profile.loading"));
+  try {
+    const payload = await requestServerJson(
+      server,
+      `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+    );
+    applyServerUserProfile(payload.user);
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = t("settings.server.profile.loaded");
+  } catch (error) {
+    server.lastStatus = "bad";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+async function saveServerUserProfile() {
+  saveServerSettingsFromForm(t("settings.server.profile.saving"));
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+
+  const path = `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}`;
+  const data = {
+    email: blankToNull(elements.serverEmailInput.value),
+    display_name: blankToNull(elements.serverDisplayNameInput.value),
+    timezone: elements.serverTimezoneInput.value.trim() || "Asia/Seoul",
+  };
+  renderServerStatus("testing", t("settings.server.profile.saving"));
+  try {
+    let payload = await requestServerJson(server, path, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+    applyServerUserProfile(payload.user);
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = t("settings.server.profile.saved");
+  } catch (error) {
+    if (!String(error.message).includes("404")) {
+      server.lastStatus = "bad";
+      server.lastCheckedAt = new Date().toISOString();
+      server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+      persistSettings();
+      renderServerSettings();
+      return;
+    }
+    try {
+      await requestServerJson(server, path);
+      const payload = await requestServerJson(server, path, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+      applyServerUserProfile(payload.user);
+      server.lastStatus = "ok";
+      server.lastCheckedAt = new Date().toISOString();
+      server.lastMessage = t("settings.server.profile.saved");
+    } catch (retryError) {
+      server.lastStatus = "bad";
+      server.lastCheckedAt = new Date().toISOString();
+      server.lastMessage = `${t("settings.server.fail")}: ${retryError.message}`;
+    }
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
 async function syncWebNotesToServer(message = t("settings.server.syncing")) {
   saveServerSettingsFromForm(message);
   const server = state.settings.server;
@@ -1742,7 +1910,7 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
         ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
       },
       body: JSON.stringify({
-        owner_id: server.ownerId,
+        owner_id: normalizeOwnerId(server.ownerId),
         device_id: server.deviceId,
         updated_after: server.lastSyncedAt,
         include_deleted: true,
@@ -1774,6 +1942,51 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
   }
   persistSettings();
   renderServerSettings();
+}
+
+function prepareServerRequest(server) {
+  if (server.mode !== "server") {
+    server.lastStatus = "idle";
+    server.lastMessage = t("settings.server.local");
+    persistSettings();
+    renderServerSettings();
+    return false;
+  }
+  if (!server.url) {
+    server.lastStatus = "bad";
+    server.lastMessage = t("settings.server.noUrl");
+    persistSettings();
+    renderServerSettings();
+    return false;
+  }
+  return true;
+}
+
+async function requestServerJson(server, path, options = {}) {
+  const response = await fetch(`${server.url}${path}`, {
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+      ...(options.headers || {}),
+    },
+  });
+  if (!response.ok) throw new Error(await serverResponseError(response));
+  return response.json();
+}
+
+function applyServerUserProfile(user) {
+  const server = state.settings.server || defaultServerSettings();
+  server.userProfile = normalizeServerUserProfile({
+    email: user?.email || "",
+    displayName: user?.display_name || "",
+    timezone: user?.timezone || "Asia/Seoul",
+    groupName: user?.group_name || "",
+    twoFactorEnabled: user?.two_factor_enabled === true,
+    isActive: user?.is_active !== false,
+    lastSeenAt: user?.last_seen_at || null,
+    loadedAt: new Date().toISOString(),
+  });
 }
 
 async function serverResponseError(response) {
@@ -2432,6 +2645,13 @@ function applyLanguage() {
   setText("#serverTokenLabel", t("settings.server.token"));
   setText("#ownerIdLabel", t("settings.server.owner"));
   setText("#deviceIdLabel", t("settings.server.device"));
+  setText("#serverProfileTitle", t("settings.server.profile.title"));
+  setText("#serverProfileDesc", t("settings.server.profile.desc"));
+  setText("#serverDisplayNameLabel", t("settings.server.profile.displayName"));
+  setText("#serverEmailLabel", t("settings.server.profile.email"));
+  setText("#serverTimezoneLabel", t("settings.server.profile.timezone"));
+  setText("#serverProfileLoadBtn", t("settings.server.profile.load"));
+  setText("#serverProfileSaveBtn", t("settings.server.profile.save"));
   setText("#serverSaveBtn", t("settings.server.save"));
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
@@ -4989,13 +5209,39 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.mode = normalized.mode === "server" ? "server" : "local";
   normalized.url = typeof normalized.url === "string" ? normalizeServerUrl(normalized.url) : "";
   normalized.token = typeof normalized.token === "string" ? normalized.token : "";
-  normalized.ownerId = typeof normalized.ownerId === "string" && normalized.ownerId.trim() ? normalized.ownerId.trim() : defaults.ownerId;
+  normalized.ownerId = normalizeOwnerId(normalized.ownerId || defaults.ownerId);
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
+  normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
   normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
   normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
   normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
   normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
   return normalized;
+}
+
+function normalizeServerUserProfile(profile = {}, defaults = defaultServerUserProfile()) {
+  const source = profile && typeof profile === "object" ? profile : {};
+  return {
+    ...defaults,
+    email: typeof source.email === "string" ? source.email : defaults.email,
+    displayName: typeof source.displayName === "string" ? source.displayName : defaults.displayName,
+    timezone: typeof source.timezone === "string" && source.timezone.trim() ? source.timezone.trim() : defaults.timezone,
+    groupName: typeof source.groupName === "string" ? source.groupName : defaults.groupName,
+    twoFactorEnabled: source.twoFactorEnabled === true,
+    isActive: source.isActive !== false,
+    lastSeenAt: typeof source.lastSeenAt === "string" ? source.lastSeenAt : null,
+    loadedAt: typeof source.loadedAt === "string" ? source.loadedAt : null,
+  };
+}
+
+function normalizeOwnerId(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || "local_user";
+}
+
+function blankToNull(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || null;
 }
 
 function normalizeIdList(value, limit) {
