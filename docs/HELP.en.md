@@ -176,6 +176,7 @@ Apps and installed programs can edit the user's own email, display name, and tim
 In the mobile app and the Web/installed program, open server settings, enter the user ID, then load or save the user profile.
 
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
+Inactive users are blocked from server sync and data APIs except profile lookup.
 
 ## Backup And Import
 
