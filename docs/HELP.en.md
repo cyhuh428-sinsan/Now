@@ -173,7 +173,7 @@ User information:
 - Last access time
 
 Apps and installed programs can edit the user's own email, display name, and time zone.
-In the mobile app, open `Settings > NowNote Server`, enter the user ID, then load or save the user profile.
+In the mobile app and the Web/installed program, open server settings, enter the user ID, then load or save the user profile.
 
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
 
