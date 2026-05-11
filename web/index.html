@@ -408,12 +408,37 @@
               <div class="server-identity-grid">
                 <label>
                   <span id="ownerIdLabel">사용자 ID</span>
-                  <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local-user">
+                  <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local_user">
                 </label>
                 <label>
                   <span id="deviceIdLabel">기기 ID</span>
                   <input id="deviceIdInput" class="settings-input" type="text" autocomplete="off" placeholder="web-desktop">
                 </label>
+              </div>
+              <div class="server-profile-box">
+                <div>
+                  <strong id="serverProfileTitle">사용자 프로필</strong>
+                  <p id="serverProfileDesc">표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.</p>
+                </div>
+                <div class="server-profile-grid">
+                  <label>
+                    <span id="serverDisplayNameLabel">표시 이름</span>
+                    <input id="serverDisplayNameInput" class="settings-input" type="text" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="serverEmailLabel">이메일</span>
+                    <input id="serverEmailInput" class="settings-input" type="email" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="serverTimezoneLabel">시간대</span>
+                    <input id="serverTimezoneInput" class="settings-input" type="text" autocomplete="off" placeholder="Asia/Seoul">
+                  </label>
+                </div>
+                <div class="settings-actions">
+                  <button id="serverProfileLoadBtn" class="secondary-btn" type="button">프로필 불러오기</button>
+                  <button id="serverProfileSaveBtn" class="secondary-btn" type="button">프로필 저장</button>
+                </div>
+                <p id="serverProfileText" class="server-meta-text">프로필을 불러오지 않았습니다.</p>
               </div>
               <div class="settings-actions">
                 <button id="serverSaveBtn" class="secondary-btn" type="button">연결 설정 저장</button>

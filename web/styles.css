@@ -1736,6 +1736,30 @@ kbd {
   gap: 8px;
 }
 
+.server-profile-box {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 86%, var(--bg));
+}
+
+.server-profile-box strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.server-profile-box p {
+  margin: 3px 0 0;
+}
+
+.server-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
 .server-status-text {
   margin: 0;
   color: var(--muted);
@@ -1974,6 +1998,11 @@ kbd {
   }
 
   .shortcut-list {
+    grid-template-columns: 1fr;
+  }
+
+  .server-identity-grid,
+  .server-profile-grid {
     grid-template-columns: 1fr;
   }
 
