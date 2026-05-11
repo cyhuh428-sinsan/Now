@@ -15,12 +15,16 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _tokenCtrl = TextEditingController();
   final _ownerIdCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
+  final _displayNameCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _timezoneCtrl = TextEditingController(text: 'Asia/Seoul');
   DateTime? _lastSyncedAt;
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
   ServerConnectionResult? _connectionResult;
   ServerOpsResult? _opsResult;
+  ServerUserProfile? _profile;
 
   @override
   void dispose() {
@@ -28,6 +32,9 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _tokenCtrl.dispose();
     _ownerIdCtrl.dispose();
     _deviceIdCtrl.dispose();
+    _displayNameCtrl.dispose();
+    _emailCtrl.dispose();
+    _timezoneCtrl.dispose();
     super.dispose();
   }
 
@@ -38,6 +45,9 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _tokenCtrl.text = settings.token;
     _ownerIdCtrl.text = settings.ownerId;
     _deviceIdCtrl.text = settings.deviceId;
+    if (_timezoneCtrl.text.trim().isEmpty) {
+      _timezoneCtrl.text = 'Asia/Seoul';
+    }
     _lastSyncedAt = settings.lastSyncedAt;
     _loaded = true;
   }
@@ -90,6 +100,77 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
             backgroundColor: result.ok
                 ? const Color(0xFF059669)
                 : const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _loadProfile() async {
+    setState(() => _busy = true);
+    try {
+      final settings = _currentSettings();
+      await settings.save();
+      final profile = await ref
+          .read(serverSyncServiceProvider)
+          .loadUserProfile(settings);
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+          _displayNameCtrl.text = profile.displayName ?? '';
+          _emailCtrl.text = profile.email ?? '';
+          _timezoneCtrl.text = profile.timezone;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('사용자 프로필을 불러왔습니다')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('프로필 조회 실패: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() => _busy = true);
+    try {
+      final settings = _currentSettings();
+      await settings.save();
+      final profile = await ref
+          .read(serverSyncServiceProvider)
+          .saveUserProfile(
+            settings,
+            email: _emailCtrl.text,
+            displayName: _displayNameCtrl.text,
+            timezone: _timezoneCtrl.text,
+          );
+      if (mounted) {
+        setState(() {
+          _profile = profile;
+          _displayNameCtrl.text = profile.displayName ?? '';
+          _emailCtrl.text = profile.email ?? '';
+          _timezoneCtrl.text = profile.timezone;
+        });
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('사용자 프로필을 저장했습니다')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('프로필 저장 실패: $e'),
+            backgroundColor: const Color(0xFFEF4444),
           ),
         );
       }
@@ -157,6 +238,20 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     final local = value.toLocal();
     return '${local.year}-${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
         '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}:${local.second.toString().padLeft(2, '0')}';
+  }
+
+  String _profileSummary(ServerUserProfile profile) {
+    final twoFactor = profile.twoFactorEnabled ? '2단계 사용' : '2단계 미사용';
+    final active = profile.isActive ? '활성' : '비활성';
+    final lastSeen = profile.lastSeenAt == null
+        ? '접속 기록 없음'
+        : profile.lastSeenAt!;
+    return '그룹 ${profile.groupName} · $twoFactor · $active · 최근 접속 $lastSeen';
+  }
+
+  String _profileOwnerIdText() {
+    final ownerId = _ownerIdCtrl.text.trim();
+    return ownerId.isEmpty ? 'local_user' : ownerId;
   }
 
   @override
@@ -229,6 +324,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   const SizedBox(height: 12),
                   TextField(
                     controller: _ownerIdCtrl,
+                    onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
                       labelText: '사용자 ID',
                       hintText: 'local_user',
@@ -253,6 +349,91 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   opsResult: _opsResult,
                 ),
               ],
+              const SizedBox(height: 14),
+              _ServerCard(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    '사용자 프로필',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '사용자 ID: ${_profileOwnerIdText()}',
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _displayNameCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '표시 이름',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: const InputDecoration(
+                      labelText: '이메일',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _timezoneCtrl,
+                    decoration: const InputDecoration(
+                      labelText: '시간대',
+                      hintText: 'Asia/Seoul',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  if (_profile != null) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      _profileSummary(_profile!),
+                      style: const TextStyle(
+                        fontSize: 12,
+                        height: 1.35,
+                        color: Color(0xFF6B7280),
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _loadProfile,
+                          icon: const Icon(
+                            Icons.person_search_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('불러오기'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _busy ? null : _saveProfile,
+                          icon: const Icon(
+                            Icons.manage_accounts_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('프로필 저장'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
               const SizedBox(height: 14),
               Row(
                 children: [

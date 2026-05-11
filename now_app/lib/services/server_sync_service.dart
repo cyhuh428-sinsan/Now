@@ -62,7 +62,9 @@ class ServerSettings {
       enabled: prefs.getBool(_serverEnabledKey) ?? false,
       baseUrl: prefs.getString(_serverBaseUrlKey) ?? '',
       token: prefs.getString(_serverTokenKey) ?? '',
-      ownerId: prefs.getString(_serverOwnerIdKey) ?? 'local_user',
+      ownerId: _normalizeOwnerId(
+        prefs.getString(_serverOwnerIdKey) ?? 'local_user',
+      ),
       deviceId: prefs.getString(_serverDeviceIdKey) ?? '',
       lastSyncedAt: _parseSyncTime(prefs.getString(_serverLastSyncedAtKey)),
     );
@@ -148,6 +150,41 @@ class ServerOpsResult {
   }
 }
 
+class ServerUserProfile {
+  final String ownerId;
+  final String? email;
+  final String? displayName;
+  final String timezone;
+  final String groupName;
+  final bool twoFactorEnabled;
+  final bool isActive;
+  final String? lastSeenAt;
+
+  const ServerUserProfile({
+    required this.ownerId,
+    required this.email,
+    required this.displayName,
+    required this.timezone,
+    required this.groupName,
+    required this.twoFactorEnabled,
+    required this.isActive,
+    required this.lastSeenAt,
+  });
+
+  factory ServerUserProfile.fromJson(Map<String, dynamic> json) {
+    return ServerUserProfile(
+      ownerId: json['owner_id']?.toString() ?? 'local_user',
+      email: json['email']?.toString(),
+      displayName: json['display_name']?.toString(),
+      timezone: json['timezone']?.toString() ?? 'Asia/Seoul',
+      groupName: json['group_name']?.toString() ?? '사용자',
+      twoFactorEnabled: json['two_factor_enabled'] == true,
+      isActive: json['is_active'] != false,
+      lastSeenAt: json['last_seen_at']?.toString(),
+    );
+  }
+}
+
 class ServerSyncService {
   final AppDatabase _db;
 
@@ -218,7 +255,7 @@ class ServerSyncService {
       final res = await dio.post<Map<String, dynamic>>(
         '/api/v1/sync',
         data: {
-          'owner_id': settings.ownerId,
+          'owner_id': _normalizeOwnerId(settings.ownerId),
           'device_id': settings.deviceId,
           'updated_after': effectiveSyncPoint,
           'include_deleted': true,
@@ -307,6 +344,52 @@ class ServerSyncService {
     await _clearPendingDeletedTreeMemos(current.keys.toSet());
   }
 
+  Future<ServerUserProfile> loadUserProfile(ServerSettings settings) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _dio(settings);
+    try {
+      final ownerId = _normalizeOwnerId(settings.ownerId);
+      final res = await dio.get<Map<String, dynamic>>(
+        '/api/v1/users/${Uri.encodeComponent(ownerId)}',
+      );
+      return _profileFromResponse(res.data);
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '사용자 프로필 조회 실패'));
+    }
+  }
+
+  Future<ServerUserProfile> saveUserProfile(
+    ServerSettings settings, {
+    required String? email,
+    required String? displayName,
+    required String timezone,
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _dio(settings);
+    final ownerId = _normalizeOwnerId(settings.ownerId);
+    final path = '/api/v1/users/${Uri.encodeComponent(ownerId)}';
+    final data = {
+      'email': _blankToNull(email),
+      'display_name': _blankToNull(displayName),
+      'timezone': timezone.trim().isEmpty ? 'Asia/Seoul' : timezone.trim(),
+    };
+    try {
+      final res = await dio.patch<Map<String, dynamic>>(path, data: data);
+      return _profileFromResponse(res.data);
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        await dio.get<Map<String, dynamic>>(path);
+        final res = await dio.patch<Map<String, dynamic>>(path, data: data);
+        return _profileFromResponse(res.data);
+      }
+      throw Exception(_serverErrorMessage(e, fallback: '사용자 프로필 저장 실패'));
+    }
+  }
+
   Future<ServerOpsResult> loadOpsStatus(ServerSettings settings) async {
     if (!settings.isConfigured) {
       return const ServerOpsResult(status: 'warn', checks: []);
@@ -341,7 +424,7 @@ class ServerSyncService {
               .get();
       final content = segments.map((s) => s.content).join('\n\n').trim();
       payloads.add({
-        'owner_id': settings.ownerId,
+        'owner_id': _normalizeOwnerId(settings.ownerId),
         'device_id': settings.deviceId,
         'local_id': meeting.meetingId,
         'note_type': 'daily',
@@ -381,7 +464,7 @@ class ServerSyncService {
           final body = lines.skip(1).join('\n').trim();
           final parent = tags['parent']?.trim();
           return {
-            'owner_id': settings.ownerId,
+            'owner_id': _normalizeOwnerId(settings.ownerId),
             'device_id': settings.deviceId,
             'local_id': memo.memoId,
             'note_type': 'tree',
@@ -414,7 +497,7 @@ class ServerSyncService {
       final parentLocalId = parentRaw.isEmpty ? null : parentRaw;
 
       payloads.add({
-        'owner_id': settings.ownerId,
+        'owner_id': _normalizeOwnerId(settings.ownerId),
         'device_id': settings.deviceId,
         'local_id': entry.key,
         'note_type': 'tree',
@@ -507,6 +590,16 @@ String _normalizeBaseUrl(String value) {
 String _normalizeOwnerId(String value) {
   final trimmed = value.trim();
   return trimmed.isEmpty ? 'local_user' : trimmed;
+}
+
+String? _blankToNull(String? value) {
+  final trimmed = value?.trim() ?? '';
+  return trimmed.isEmpty ? null : trimmed;
+}
+
+ServerUserProfile _profileFromResponse(Map<String, dynamic>? data) {
+  final user = Map<String, dynamic>.from((data?['user'] as Map?) ?? const {});
+  return ServerUserProfile.fromJson(user);
 }
 
 String _serverConnectionMessage(
