@@ -37,6 +37,36 @@ def require_active_user(db: Session, *, owner_id: str) -> UserAccount:
     return user
 
 
+def create_user_account(
+    db: Session,
+    *,
+    owner_id: str,
+    email: str | None = None,
+    display_name: str | None = None,
+    timezone: str = "Asia/Seoul",
+    group_name: str = "사용자",
+    two_factor_enabled: bool = False,
+    is_active: bool = True,
+) -> UserAccount | None:
+    cleaned_owner_id = _clean_required(owner_id, "", 80)
+    if not cleaned_owner_id:
+        return None
+    existing = db.scalar(select(UserAccount).where(UserAccount.owner_id == cleaned_owner_id))
+    if existing is not None:
+        return None
+    user = UserAccount(
+        owner_id=cleaned_owner_id,
+        email=_clean_optional(email, 240),
+        display_name=_clean_optional(display_name, 120),
+        timezone=_valid_timezone(timezone),
+        group_name=_clean_required(group_name, "사용자", 80),
+        two_factor_enabled=1 if two_factor_enabled else 0,
+        is_active=1 if is_active else 0,
+    )
+    db.add(user)
+    return user
+
+
 def update_user_account(
     db: Session,
     *,
