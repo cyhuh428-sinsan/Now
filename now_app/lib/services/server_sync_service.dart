@@ -12,6 +12,7 @@ import '../repositories/repository_providers.dart';
 const _serverEnabledKey = 'now_server_enabled';
 const _serverBaseUrlKey = 'now_server_base_url';
 const _serverTokenKey = 'now_server_token';
+const _serverOwnerIdKey = 'now_server_owner_id';
 const _serverDeviceIdKey = 'now_server_device_id';
 const _serverLastSyncedAtKey = 'now_server_last_synced_at';
 const _serverDeletedTreeMemosKey = 'now_server_deleted_tree_memos';
@@ -31,6 +32,7 @@ class ServerSettings {
   final bool enabled;
   final String baseUrl;
   final String token;
+  final String ownerId;
   final String deviceId;
   final DateTime? lastSyncedAt;
 
@@ -38,6 +40,7 @@ class ServerSettings {
     required this.enabled,
     required this.baseUrl,
     required this.token,
+    required this.ownerId,
     required this.deviceId,
     required this.lastSyncedAt,
   });
@@ -51,10 +54,15 @@ class ServerSettings {
       final generated = 'android_${DateTime.now().microsecondsSinceEpoch}';
       await prefs.setString(_serverDeviceIdKey, generated);
     }
+    final ownerId = prefs.getString(_serverOwnerIdKey);
+    if (ownerId == null || ownerId.trim().isEmpty) {
+      await prefs.setString(_serverOwnerIdKey, 'local_user');
+    }
     return ServerSettings(
       enabled: prefs.getBool(_serverEnabledKey) ?? false,
       baseUrl: prefs.getString(_serverBaseUrlKey) ?? '',
       token: prefs.getString(_serverTokenKey) ?? '',
+      ownerId: prefs.getString(_serverOwnerIdKey) ?? 'local_user',
       deviceId: prefs.getString(_serverDeviceIdKey) ?? '',
       lastSyncedAt: _parseSyncTime(prefs.getString(_serverLastSyncedAtKey)),
     );
@@ -65,6 +73,7 @@ class ServerSettings {
     await prefs.setBool(_serverEnabledKey, enabled);
     await prefs.setString(_serverBaseUrlKey, _normalizeBaseUrl(baseUrl));
     await prefs.setString(_serverTokenKey, token.trim());
+    await prefs.setString(_serverOwnerIdKey, _normalizeOwnerId(ownerId));
     await prefs.setString(_serverDeviceIdKey, deviceId.trim());
     if (lastSyncedAt == null) {
       await prefs.remove(_serverLastSyncedAtKey);
@@ -80,6 +89,7 @@ class ServerSettings {
     bool? enabled,
     String? baseUrl,
     String? token,
+    String? ownerId,
     String? deviceId,
     DateTime? lastSyncedAt,
     bool clearLastSyncedAt = false,
@@ -88,6 +98,7 @@ class ServerSettings {
       enabled: enabled ?? this.enabled,
       baseUrl: baseUrl ?? this.baseUrl,
       token: token ?? this.token,
+      ownerId: ownerId ?? this.ownerId,
       deviceId: deviceId ?? this.deviceId,
       lastSyncedAt: clearLastSyncedAt
           ? null
@@ -207,7 +218,7 @@ class ServerSyncService {
       final res = await dio.post<Map<String, dynamic>>(
         '/api/v1/sync',
         data: {
-          'owner_id': 'local_user',
+          'owner_id': settings.ownerId,
           'device_id': settings.deviceId,
           'updated_after': effectiveSyncPoint,
           'include_deleted': true,
@@ -330,7 +341,7 @@ class ServerSyncService {
               .get();
       final content = segments.map((s) => s.content).join('\n\n').trim();
       payloads.add({
-        'owner_id': 'local_user',
+        'owner_id': settings.ownerId,
         'device_id': settings.deviceId,
         'local_id': meeting.meetingId,
         'note_type': 'daily',
@@ -370,7 +381,7 @@ class ServerSyncService {
           final body = lines.skip(1).join('\n').trim();
           final parent = tags['parent']?.trim();
           return {
-            'owner_id': 'local_user',
+            'owner_id': settings.ownerId,
             'device_id': settings.deviceId,
             'local_id': memo.memoId,
             'note_type': 'tree',
@@ -403,7 +414,7 @@ class ServerSyncService {
       final parentLocalId = parentRaw.isEmpty ? null : parentRaw;
 
       payloads.add({
-        'owner_id': 'local_user',
+        'owner_id': settings.ownerId,
         'device_id': settings.deviceId,
         'local_id': entry.key,
         'note_type': 'tree',
@@ -491,6 +502,11 @@ String _normalizeBaseUrl(String value) {
     return trimmed.substring(0, trimmed.length - 1);
   }
   return trimmed;
+}
+
+String _normalizeOwnerId(String value) {
+  final trimmed = value.trim();
+  return trimmed.isEmpty ? 'local_user' : trimmed;
 }
 
 String _serverConnectionMessage(
