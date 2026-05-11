@@ -320,6 +320,7 @@ const I18N = {
     "settings.server.profile.twoFactorOff": "2단계 미사용",
     "settings.server.profile.active": "활성",
     "settings.server.profile.inactive": "비활성",
+    "settings.server.inactiveDenied": "비활성 사용자라 서버 기능을 사용할 수 없습니다.",
     "settings.server.profile.lastSeenNone": "접속 기록 없음",
     "settings.server.save": "연결 설정 저장",
     "settings.server.test": "연결 테스트",
@@ -756,6 +757,7 @@ const I18N = {
     "settings.server.profile.twoFactorOff": "2FA off",
     "settings.server.profile.active": "Active",
     "settings.server.profile.inactive": "Inactive",
+    "settings.server.inactiveDenied": "This inactive user cannot use server features.",
     "settings.server.profile.lastSeenNone": "No access record",
     "settings.server.save": "Save connection",
     "settings.server.test": "Test connection",
@@ -1997,6 +1999,9 @@ async function serverResponseError(response) {
     try {
       const parsed = JSON.parse(body);
       if (parsed && typeof parsed === "object" && typeof parsed.detail === "string") {
+        if (parsed.detail === "user inactive") {
+          return `${statusPart}: ${t("settings.server.inactiveDenied")}`;
+        }
         return `${statusPart}: ${parsed.detail}`;
       }
       if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
