@@ -131,6 +131,7 @@ Required values:
 
 - Server URL
 - API token
+- User ID
 - Device ID
 
 Personal Docker server example:
@@ -138,6 +139,7 @@ Personal Docker server example:
 ```text
 Server URL: http://server-address:8750
 API token: NOW_API_TOKEN in server .env
+User ID: local_user or the user ID issued by the operator
 Device ID: Generated automatically by the app or installed program
 ```
 
@@ -171,6 +173,7 @@ User information:
 - Last access time
 
 Apps and installed programs can edit the user's own email, display name, and time zone.
+In the mobile app, open `Settings > NowNote Server`, enter the user ID, then load or save the user profile.
 
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
 
