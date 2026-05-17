@@ -355,6 +355,13 @@ $env:NOWNOTE_KEY_PASSWORD='직접정한_긴_비밀번호'
 powershell -ExecutionPolicy Bypass -File .\create_upload_key.ps1
 ```
 
+`keytool`을 자동으로 찾지 못하면 현재 PowerShell 세션에 아래 중 하나를 설정한 뒤 다시 실행합니다.
+
+```powershell
+$env:JAVA_HOME='JDK_설치_경로'
+$env:NOWNOTE_KEYTOOL='keytool.exe_전체_경로'
+```
+
 생성되는 파일:
 
 ```text
@@ -375,6 +382,13 @@ upload-keystore.jks와 key.properties는 절대 Git에 올리면 안 됩니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\build_release_aab.ps1
+```
+
+Flutter 또는 JDK를 자동으로 찾지 못하면 아래 값을 현재 PowerShell 세션에 설정합니다.
+
+```powershell
+$env:NOWNOTE_FLUTTER_BIN='flutter.bat_전체_경로'
+$env:NOWNOTE_JAVA_HOME='JDK_설치_경로'
 ```
 
 성공하면 아래 파일이 생성됩니다.

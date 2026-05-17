@@ -33,6 +33,7 @@
 - [x] 서버 API 토큰 보안 저장소 저장 적용
 - [x] Google Play용 AAB 빌드 경로 확인
 - [x] 업로드 키 설정 템플릿 추가: `android/key.properties.example`
+- [x] 키 생성/릴리스 빌드 스크립트의 Flutter/JDK 경로 환경변수 지원
 - [ ] 실제 업로드 키 생성
 - [ ] `android/key.properties` 작성
 - [ ] 서명된 AAB 빌드
@@ -49,6 +50,7 @@ powershell -ExecutionPolicy Bypass -File .\create_upload_key.ps1
 ```
 
 `android/key.properties`와 `upload-keystore.jks`는 절대 Git에 올리면 안 됩니다.
+`JAVA_HOME`, `NOWNOTE_KEYTOOL`, `NOWNOTE_FLUTTER_BIN`, `NOWNOTE_JAVA_HOME`으로 로컬 경로를 지정할 수 있습니다.
 
 ## AAB 빌드
 ```powershell
