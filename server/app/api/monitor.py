@@ -55,8 +55,11 @@ def admin_notes(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/recordings", include_in_schema=False)
-def admin_recordings(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_recordings_html())
+def admin_recordings(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_recordings_html(request))
 
 
 @router.get("/admin/devices", include_in_schema=False)
@@ -1356,7 +1359,7 @@ def _note_state_badge(note: Note) -> str:
     return '<span class="pill pill-deleted">deleted</span>'
 
 
-def _admin_recordings_html() -> str:
+def _admin_recordings_html(request: Request) -> str:
     error_message = ""
     content_type_counts: dict[str, int] = {}
     owner_counts: dict[str, int] = {}
@@ -1364,6 +1367,14 @@ def _admin_recordings_html() -> str:
     latest_recording_at = None
     recording_total = 0
     transcript_count = 0
+    query = request.query_params
+    owner_filter = (query.get("owner_id") or "").strip()
+    device_filter = (query.get("device_id") or "").strip()
+    transcript_filter = query.get("transcript") or "all"
+    export_query = _recording_export_query(owner_filter, device_filter, transcript_filter)
+    export_url = "/api/v1/admin/export/recordings"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -1394,9 +1405,18 @@ def _admin_recordings_html() -> str:
                 or 0
             )
             latest_recording_at = db.scalar(select(func.max(Recording.updated_at)))
+            stmt = select(Recording)
+            if owner_filter:
+                stmt = stmt.where(Recording.owner_id == owner_filter)
+            if device_filter:
+                stmt = stmt.where(Recording.device_id == device_filter)
+            if transcript_filter == "with":
+                stmt = stmt.where(Recording.transcript.is_not(None))
+            elif transcript_filter == "without":
+                stmt = stmt.where(Recording.transcript.is_(None))
             recent_recordings = list(
                 db.scalars(
-                    select(Recording).order_by(Recording.updated_at.desc()).limit(100)
+                    stmt.order_by(Recording.updated_at.desc()).limit(100)
                 ).all()
             )
     except Exception as exc:
@@ -1609,8 +1629,16 @@ def _admin_recordings_html() -> str:
     <section>
       <div class="section-head">
         <span>최근 녹음 파일</span>
-        <span class="sub">최근 100건 · transcript는 앞부분만 표시</span>
+        <a href="{escape(export_url, quote=True)}">현재 조건 JSON</a>
       </div>
+      <form method="get" action="/admin/recordings" style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr)) auto;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fafafa;">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <select name="transcript" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+          {_recording_transcript_options(transcript_filter)}
+        </select>
+        <button type="submit" style="min-height:36px;border:1px solid var(--blue);border-radius:8px;padding:0 12px;background:var(--blue);color:#fff;font-weight:750;">필터 적용</button>
+      </form>
       <table>
         <tr>
           <th>ID</th>
@@ -1646,6 +1674,29 @@ def _admin_recording_rows(recordings: list[Recording]) -> str:
         "</tr>"
         for recording in recordings
     )
+
+
+def _recording_transcript_options(selected: str) -> str:
+    options = [
+        ("all", "텍스트 전체"),
+        ("with", "텍스트 있음"),
+        ("without", "텍스트 없음"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
+
+
+def _recording_export_query(owner_id: str, device_id: str, transcript_filter: str) -> str:
+    params = {}
+    if owner_id:
+        params["owner_id"] = owner_id
+    if device_id:
+        params["device_id"] = device_id
+    if transcript_filter in {"with", "without"}:
+        params["transcript_status"] = transcript_filter
+    return urlencode(params)
 
 
 def _admin_devices_html() -> str:
@@ -2125,7 +2176,6 @@ def _admin_users_html(request: Request) -> str:
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
       .grid {{ grid-template-columns: 1fr; }}
-      .filter-form {{ grid-template-columns: 1fr; }}
       .filter-form {{ grid-template-columns: 1fr; }}
       th, td {{ padding: 12px; }}
     }}
@@ -3210,13 +3260,13 @@ def _admin_sync_html(request: Request) -> str:
         <span>최근 동기화 이력</span>
         <a href="{escape(export_url, quote=True)}">현재 조건 JSON</a>
       </div>
-      <form class="filter-form" method="get" action="/admin/sync">
-        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID">
-        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID">
-        <select name="include_deleted">
+      <form method="get" action="/admin/sync" style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr)) auto;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fafafa;">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <select name="include_deleted" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
           {_sync_include_deleted_options(include_deleted_filter)}
         </select>
-        <button type="submit">필터 적용</button>
+        <button type="submit" style="min-height:36px;border:1px solid var(--blue);border-radius:8px;padding:0 12px;background:var(--blue);color:#fff;font-weight:750;">필터 적용</button>
       </form>
       <table>
         <tr>

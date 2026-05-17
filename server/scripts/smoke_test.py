@@ -69,6 +69,8 @@ def main() -> None:
         "/admin",
         "/admin/notes",
         "/admin/recordings",
+        "/admin/recordings?owner_id=local_user",
+        "/admin/recordings?device_id=smoke_test&transcript=without",
         "/admin/devices",
         "/admin/sync",
         "/admin/sync?owner_id=local_user",
