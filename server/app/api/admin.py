@@ -108,6 +108,7 @@ def users(
     owner_id: str | None = Query(default=None),
     group_name: str | None = Query(default=None),
     status_filter: str | None = Query(default=None, alias="status"),
+    token_filter: str | None = Query(default=None, alias="token"),
     q: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
@@ -122,6 +123,10 @@ def users(
         stmt = stmt.where(UserAccount.is_active == 0)
     elif status_filter == "never_seen":
         stmt = stmt.where(UserAccount.last_seen_at.is_(None))
+    if token_filter == "issued":
+        stmt = stmt.where(UserAccount.access_token_hash.is_not(None))
+    elif token_filter == "missing":
+        stmt = stmt.where(UserAccount.access_token_hash.is_(None))
     if q:
         keyword = f"%{q.strip()}%"
         stmt = stmt.where(
@@ -141,6 +146,8 @@ def users(
         "count": len(rows),
         "active": sum(1 for row in rows if row.is_active),
         "two_factor_enabled": sum(1 for row in rows if row.two_factor_enabled),
+        "token_issued": sum(1 for row in rows if row.access_token_hash),
+        "token_missing": sum(1 for row in rows if not row.access_token_hash),
         "items": [_model_to_dict(row) for row in rows],
     }
 
