@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../llm/providers/llm_providers.dart';
 import '../../services/notification_service.dart';
 import '../../services/backup_service.dart';
@@ -137,27 +138,9 @@ class SettingsPage extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
-          // ── 고급 기능 ──
-          const _SectionHeader(title: '고급 기능'),
-          const _SettingsCard(
-            children: [
-              _ComingSoonTile(
-                icon: Icons.people_outline,
-                title: '화자 분리',
-                subtitle: '여러 명의 발언을 자동으로 구분합니다',
-                badgeText: '3차 예정',
-                badgeColor: Color(0xFF6B7280),
-              ),
-              _Divider(),
-              _ComingSoonTile(
-                icon: Icons.emoji_emotions_outlined,
-                title: '음성 감정 분석',
-                subtitle: '발언의 톤과 감정을 분석합니다',
-                badgeText: '3차 예정',
-                badgeColor: Color(0xFF6B7280),
-              ),
-            ],
-          ),
+          // ── 기능별 사용 설정 ──
+          const _SectionHeader(title: '기능별 사용 설정'),
+          const _FeatureToggleCard(),
           const SizedBox(height: 20),
 
           // ── 데이터 관리 ──
@@ -190,6 +173,119 @@ class SettingsPage extends ConsumerWidget {
           const SizedBox(height: 32),
         ],
       ),
+    );
+  }
+}
+
+// ============================================================
+// 기능별 사용 설정 카드
+// ============================================================
+
+class _FeatureToggleCard extends StatefulWidget {
+  const _FeatureToggleCard();
+
+  @override
+  State<_FeatureToggleCard> createState() => _FeatureToggleCardState();
+}
+
+class _FeatureToggleCardState extends State<_FeatureToggleCard> {
+  static const _speakerSeparationKey = 'feature_speaker_separation_enabled';
+  static const _voiceEmotionKey = 'feature_voice_emotion_enabled';
+
+  bool _loading = true;
+  bool _speakerSeparation = false;
+  bool _voiceEmotion = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (!mounted) return;
+    setState(() {
+      _speakerSeparation = prefs.getBool(_speakerSeparationKey) ?? false;
+      _voiceEmotion = prefs.getBool(_voiceEmotionKey) ?? false;
+      _loading = false;
+    });
+  }
+
+  Future<void> _save(String key, bool value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(key, value);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _SettingsCard(
+      children: [
+        _FeatureSwitchTile(
+          icon: Icons.people_outline,
+          title: '화자 분리',
+          subtitle: '회의와 대화 분석에서 사람별 발언 구분',
+          value: _speakerSeparation,
+          enabled: !_loading,
+          onChanged: (value) {
+            setState(() => _speakerSeparation = value);
+            _save(_speakerSeparationKey, value);
+          },
+        ),
+        const _Divider(),
+        _FeatureSwitchTile(
+          icon: Icons.emoji_emotions_outlined,
+          title: '음성 감정 분석',
+          subtitle: '음성 기록 분석에서 감정 단서 포함',
+          value: _voiceEmotion,
+          enabled: !_loading,
+          onChanged: (value) {
+            setState(() => _voiceEmotion = value);
+            _save(_voiceEmotionKey, value);
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class _FeatureSwitchTile extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final bool value;
+  final bool enabled;
+  final ValueChanged<bool> onChanged;
+
+  const _FeatureSwitchTile({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.value,
+    required this.enabled,
+    required this.onChanged,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SwitchListTile(
+      value: value,
+      onChanged: enabled ? onChanged : null,
+      secondary: Icon(icon, size: 20, color: const Color(0xFF6B7280)),
+      title: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 15,
+          fontWeight: FontWeight.w500,
+          color: Color(0xFF111827),
+        ),
+      ),
+      subtitle: Text(
+        subtitle,
+        style: const TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+      ),
+      activeThumbColor: const Color(0xFF2563EB),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
     );
   }
 }
@@ -417,67 +513,6 @@ class _InfoTile extends StatelessWidget {
             if (trailing != null) trailing!,
           ],
         ),
-      ),
-    );
-  }
-}
-
-// ============================================================
-// 준비 중 타일
-// ============================================================
-
-class _ComingSoonTile extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final String badgeText;
-  final Color badgeColor;
-
-  const _ComingSoonTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.badgeText,
-    required this.badgeColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: const Color(0xFF9CA3AF)),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(title,
-                    style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF9CA3AF))),
-                Text(subtitle,
-                    style: const TextStyle(
-                        fontSize: 12, color: Color(0xFFD1D5DB))),
-              ],
-            ),
-          ),
-          Container(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-            decoration: BoxDecoration(
-              color: badgeColor.withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(badgeText,
-                style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: badgeColor)),
-          ),
-        ],
       ),
     );
   }
