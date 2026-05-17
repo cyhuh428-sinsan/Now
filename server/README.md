@@ -54,12 +54,18 @@ openssl rand -hex 32
 `.env` 예시:
 
 ```env
+NOW_SERVER_NAME=NowNote Local Server
 NOW_API_TOKEN=여기에-긴-랜덤-토큰
 NOW_POSTGRES_PASSWORD=여기에-긴-랜덤-DB-비밀번호
+NOW_STORAGE_DIR=/data/recordings
+NOW_WORKER_POLL_SECONDS=5
+NOW_WORKER_BATCH_SIZE=5
 ```
 
 기존 DB 볼륨이 이미 만들어진 뒤 `NOW_POSTGRES_PASSWORD`를 바꾸면 PostgreSQL 저장 비밀번호와 설정이 달라질 수 있으므로, 운영 시작 전에 먼저 확정합니다.
 DB 비밀번호는 연결 URL에도 들어가므로 처음에는 영문/숫자 중심의 긴 값으로 설정합니다.
+Docker Compose 실행에서는 `NOW_POSTGRES_PASSWORD`로 DB 연결 URL을 자동 구성하고, `NOW_DATABASE_URL`은 서버를 Docker Compose 밖에서 직접 실행할 때만 별도로 사용합니다.
+`NOW_STORAGE_DIR`은 컨테이너 내부의 녹음 저장 경로이며, Docker Compose의 `now_recording_data` 볼륨도 같은 경로에 붙습니다.
 
 자체 서버 사용자는 앱 설정 화면에 다음 값을 입력합니다.
 
@@ -309,8 +315,8 @@ python -m app.worker
 
 ## 다음 단계
 
-- 모바일 앱의 서버 연결 UI를 Web/설치형 클라이언트 기준과 맞추기
-- 모바일 앱 로컬 DB 변경분을 `/api/v1/sync`로 안정적으로 전송
-- 모바일 앱의 녹음 후 변환 모드 원본 파일을 `/api/v1/recordings`로 업로드
-- 서버 분석 작업 결과를 Web/설치형 메모 화면에 자연스럽게 표시
+- 릴리스 AAB 재빌드 후 실제 Android 기기에서 서버 연결, 동기화, 녹음 업로드 검증
+- 릴리스 병합 Manifest에서 불필요한 음성 출력 캡처 권한 제거 여부 확인
+- 서버 분석 작업 결과를 앱/Web 메모 화면에서 더 자연스럽게 확인하는 UX 보완
+- 공개 운영 도메인, HTTPS, reverse proxy, 백업/복구 절차 최종 점검
 - 공용 서버 운영 전 사용자별 토큰/로그인 정책 확정
