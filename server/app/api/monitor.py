@@ -2,6 +2,7 @@ from datetime import datetime
 from html import escape
 from pathlib import Path
 from secrets import compare_digest
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -2969,6 +2970,10 @@ def _admin_sync_html(request: Request) -> str:
     owner_filter = (query.get("owner_id") or "").strip()
     device_filter = (query.get("device_id") or "").strip()
     include_deleted_filter = query.get("include_deleted") or "all"
+    export_query = _sync_export_query(owner_filter, device_filter, include_deleted_filter)
+    export_url = "/api/v1/admin/export/sync-logs"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -3203,7 +3208,7 @@ def _admin_sync_html(request: Request) -> str:
     <section>
       <div class="section-head">
         <span>최근 동기화 이력</span>
-        <span class="sub">최근 100건</span>
+        <a href="{escape(export_url, quote=True)}">현재 조건 JSON</a>
       </div>
       <form class="filter-form" method="get" action="/admin/sync">
         <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID">
@@ -3262,6 +3267,23 @@ def _sync_include_deleted_options(selected: str) -> str:
         f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
         for value, label in options
     )
+
+
+def _sync_export_query(
+    owner_id: str,
+    device_id: str,
+    include_deleted_filter: str,
+) -> str:
+    params = {}
+    if owner_id:
+        params["owner_id"] = owner_id
+    if device_id:
+        params["device_id"] = device_id
+    if include_deleted_filter == "yes":
+        params["include_deleted"] = "true"
+    elif include_deleted_filter == "no":
+        params["include_deleted"] = "false"
+    return urlencode(params)
 
 
 def _admin_export_html() -> str:
