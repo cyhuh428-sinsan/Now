@@ -71,11 +71,17 @@ def export_analysis_jobs(
 @router.get("/export/sync-logs")
 def export_sync_logs(
     owner_id: str | None = Query(default=None),
+    device_id: str | None = Query(default=None),
+    include_deleted: bool | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     stmt = select(SyncLog).order_by(SyncLog.created_at.desc(), SyncLog.id.desc())
     if owner_id:
         stmt = stmt.where(SyncLog.owner_id == owner_id)
+    if device_id:
+        stmt = stmt.where(SyncLog.device_id == device_id)
+    if include_deleted is not None:
+        stmt = stmt.where(SyncLog.include_deleted == (1 if include_deleted else 0))
     return _export_payload("sync_logs", list(db.scalars(stmt).all()))
 
 

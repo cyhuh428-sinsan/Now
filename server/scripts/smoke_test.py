@@ -71,6 +71,8 @@ def main() -> None:
         "/admin/recordings",
         "/admin/devices",
         "/admin/sync",
+        "/admin/sync?owner_id=local_user",
+        "/admin/sync?device_id=smoke_test&include_deleted=yes",
         "/admin/ops",
         "/admin/export",
         "/admin/users",

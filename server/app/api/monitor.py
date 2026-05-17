@@ -161,8 +161,11 @@ def admin_ops(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/sync", include_in_schema=False)
-def admin_sync(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_sync_html())
+def admin_sync(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_sync_html(request))
 
 
 @router.get("/admin/export", include_in_schema=False)
@@ -2122,6 +2125,7 @@ def _admin_users_html(request: Request) -> str:
       h1 {{ font-size: 24px; }}
       .grid {{ grid-template-columns: 1fr; }}
       .filter-form {{ grid-template-columns: 1fr; }}
+      .filter-form {{ grid-template-columns: 1fr; }}
       th, td {{ padding: 12px; }}
     }}
   </style>
@@ -2955,26 +2959,47 @@ def _database_password_state(database_url: str) -> tuple[str, str]:
     return "ok", "기본 DB 비밀번호 아님"
 
 
-def _admin_sync_html() -> str:
+def _admin_sync_html(request: Request) -> str:
     error_message = ""
     sync_total = 0
     latest_sync_at = None
     recent_logs: list[SyncLog] = []
     device_counts: dict[str, int] = {}
+    query = request.query_params
+    owner_filter = (query.get("owner_id") or "").strip()
+    device_filter = (query.get("device_id") or "").strip()
+    include_deleted_filter = query.get("include_deleted") or "all"
 
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
             sync_total = db.scalar(select(func.count()).select_from(SyncLog)) or 0
             latest_sync_at = db.scalar(select(func.max(SyncLog.created_at)))
+            stmt = select(SyncLog)
+            if owner_filter:
+                stmt = stmt.where(SyncLog.owner_id == owner_filter)
+            if device_filter:
+                stmt = stmt.where(SyncLog.device_id == device_filter)
+            if include_deleted_filter == "yes":
+                stmt = stmt.where(SyncLog.include_deleted == 1)
+            elif include_deleted_filter == "no":
+                stmt = stmt.where(SyncLog.include_deleted == 0)
             recent_logs = list(
                 db.scalars(
-                    select(SyncLog).order_by(SyncLog.created_at.desc()).limit(100)
+                    stmt.order_by(SyncLog.created_at.desc()).limit(100)
                 ).all()
             )
+            group_stmt = select(SyncLog.owner_id, SyncLog.device_id, func.count())
+            if owner_filter:
+                group_stmt = group_stmt.where(SyncLog.owner_id == owner_filter)
+            if device_filter:
+                group_stmt = group_stmt.where(SyncLog.device_id == device_filter)
+            if include_deleted_filter == "yes":
+                group_stmt = group_stmt.where(SyncLog.include_deleted == 1)
+            elif include_deleted_filter == "no":
+                group_stmt = group_stmt.where(SyncLog.include_deleted == 0)
             rows = db.execute(
-                select(SyncLog.owner_id, SyncLog.device_id, func.count())
-                .group_by(SyncLog.owner_id, SyncLog.device_id)
+                group_stmt.group_by(SyncLog.owner_id, SyncLog.device_id)
                 .order_by(func.count().desc())
                 .limit(30)
             ).all()
@@ -3180,6 +3205,14 @@ def _admin_sync_html() -> str:
         <span>최근 동기화 이력</span>
         <span class="sub">최근 100건</span>
       </div>
+      <form class="filter-form" method="get" action="/admin/sync">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID">
+        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID">
+        <select name="include_deleted">
+          {_sync_include_deleted_options(include_deleted_filter)}
+        </select>
+        <button type="submit">필터 적용</button>
+      </form>
       <table>
         <tr>
           <th>ID</th>
@@ -3216,6 +3249,18 @@ def _sync_log_rows(logs: list[SyncLog]) -> str:
         f"<td>{_format_datetime(log.created_at)}</td>"
         "</tr>"
         for log in logs
+    )
+
+
+def _sync_include_deleted_options(selected: str) -> str:
+    options = [
+        ("all", "삭제 포함 전체"),
+        ("yes", "삭제 포함만"),
+        ("no", "삭제 미포함만"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
     )
 
 
@@ -3308,6 +3353,34 @@ def _admin_export_html() -> str:
       padding: 16px 18px;
       border-bottom: 1px solid var(--line);
       font-weight: 700;
+    }}
+    .filter-form {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+    }}
+    .filter-form input,
+    .filter-form select {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+    }}
+    .filter-form button {{
+      min-height: 36px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 750;
+      cursor: pointer;
     }}
     table {{
       width: 100%;
