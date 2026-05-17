@@ -474,6 +474,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     decoration: const InputDecoration(
                       labelText: 'API 토큰',
                       hintText: '서버 NOW_API_TOKEN 값',
+                      helperText: '기기 보안 저장소에 저장합니다',
                       border: OutlineInputBorder(),
                     ),
                   ),

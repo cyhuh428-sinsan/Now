@@ -76,6 +76,7 @@ Available features:
 Notes:
 
 - A server URL and API token are required.
+- API tokens entered in the app and installed programs are stored in the device secure storage.
 - Personal server users must change the token and database password in `.env`.
 - Public server users use connection information issued by the operator.
 - Archived daily notes are not deleted after server connection. They stay as inactive backup records.
@@ -92,6 +93,7 @@ Recommended flow:
 - Add daily notes by voice or typing.
 - Create hierarchical notes when needed.
 - Server-connected users enter the server URL and token in settings.
+- API tokens entered in the app are stored in the device secure storage.
 
 Important mobile features:
 
