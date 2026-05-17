@@ -685,3 +685,25 @@
 - `메모에 사진`, `메모 또는 기록`, 오래된 인터넷 권한 설명 재검색 후 잔여 항목 없음.
 - `git diff --check` 통과.
 - 현재 작업 환경에서 `dart`/`flutter` 명령을 찾을 수 없어 모바일 정적 분석과 포맷 실행은 보류.
+
+## 2026-05-18 01:20 KST
+
+### 다음 작업 시작
+
+- 서버 배포 문서와 Docker Compose 설정이 현재 구현 상태와 맞는지 점검.
+
+### 확인 내용
+
+- 서버 README의 `다음 단계`에 모바일 서버 연결 UI, `/api/v1/sync`, `/api/v1/recordings` 업로드처럼 이미 구현된 항목이 남아 있었음.
+- `.env.example`에는 서버 이름, 녹음 저장 경로, 워커 주기 설정이 있지만 `docker-compose.yml`은 일부 값을 고정값으로 사용하고 있었음.
+
+### 구현 내용
+
+- `docker-compose.yml`에서 `NOW_SERVER_NAME`, `NOW_STORAGE_DIR`, `NOW_WORKER_POLL_SECONDS`, `NOW_WORKER_BATCH_SIZE`를 `.env` 값으로 받을 수 있게 정리.
+- 녹음 저장 볼륨도 `NOW_STORAGE_DIR` 경로에 붙도록 맞춤.
+- 서버 README의 `.env` 예시와 다음 단계 목록을 현재 1차 마무리 기준으로 갱신.
+
+### 검증
+
+- `git diff --check` 통과.
+- 현재 작업 환경에서 `docker` 명령을 찾을 수 없어 `docker compose config` 검증은 보류.
