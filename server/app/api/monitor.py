@@ -138,6 +138,23 @@ def admin_user_update(
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
 
 
+@router.post("/admin/users/bulk", include_in_schema=False)
+def admin_user_bulk_update(
+    owner_ids: list[str] = Form(default=[]),
+    action: str = Form(default=""),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    if action not in {"activate", "deactivate"} or not owner_ids:
+        return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+    next_active = 1 if action == "activate" else 0
+    with SessionLocal() as db:
+        users = list(db.scalars(select(UserAccount).where(UserAccount.owner_id.in_(owner_ids))).all())
+        for user in users:
+            user.is_active = next_active
+        db.commit()
+    return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
 @router.get("/admin/ops", include_in_schema=False)
 def admin_ops(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_ops_html())
@@ -2069,6 +2086,32 @@ def _admin_users_html(request: Request) -> str:
       background: var(--panel);
       font-size: 13px;
     }}
+    .bulk-actions {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 12px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }}
+    .bulk-actions button {{
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--text);
+      font-weight: 750;
+      cursor: pointer;
+    }}
+    .bulk-actions button.danger {{
+      border-color: #fecaca;
+      color: #991b1b;
+    }}
+    .row-select {{
+      width: 42px;
+      text-align: center;
+    }}
     @media (max-width: 900px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
@@ -2122,10 +2165,16 @@ def _admin_users_html(request: Request) -> str:
         </select>
         <button type="submit">필터 적용</button>
       </form>
+      <form method="post" action="/admin/users/bulk">
+        <div class="bulk-actions">
+          <button type="submit" name="action" value="activate">선택 활성</button>
+          <button class="danger" type="submit" name="action" value="deactivate">선택 비활성</button>
+        </div>
       <table>
-        <tr><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th><th>관리</th></tr>
+        <tr><th class="row-select">선택</th><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th><th>관리</th></tr>
         {_user_rows(users)}
       </table>
+      </form>
     </section>
 
     <section>
@@ -2146,9 +2195,10 @@ def _admin_users_html(request: Request) -> str:
 
 def _user_rows(users: list[UserAccount]) -> str:
     if not users:
-        return '<tr><td colspan="9">조건에 맞는 사용자가 없습니다.</td></tr>'
+        return '<tr><td colspan="10">조건에 맞는 사용자가 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
+        f"<td class=\"row-select\"><input type=\"checkbox\" name=\"owner_ids\" value=\"{escape(user.owner_id, quote=True)}\"></td>"
         f"<td>{user.id}</td>"
         f"<td class=\"mono\">{escape(user.owner_id)}</td>"
         f"<td>{escape(user.display_name or '-')}</td>"
