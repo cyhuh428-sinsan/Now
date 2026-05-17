@@ -365,6 +365,10 @@ const I18N = {
     "settings.server.analysis.inputPreview": "입력: {text}",
     "settings.server.analysis.errorPreview": "오류: {text}",
     "settings.server.analysis.doneNoResult": "완료됐지만 표시할 결과가 없습니다.",
+    "settings.server.analysis.apply": "메모에 추가",
+    "settings.server.analysis.applied": "분석 결과를 메모에 추가했습니다.",
+    "settings.server.analysis.applyMissing": "연결된 메모를 찾을 수 없습니다.",
+    "settings.server.analysis.sectionTitle": "서버 분석 결과",
     "settings.server.never": "없음",
     "settings.sidebarAssist.title": "보조 목록 표시",
     "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
@@ -825,6 +829,10 @@ const I18N = {
     "settings.server.analysis.inputPreview": "Input: {text}",
     "settings.server.analysis.errorPreview": "Error: {text}",
     "settings.server.analysis.doneNoResult": "Done, but no displayable result.",
+    "settings.server.analysis.apply": "Add to note",
+    "settings.server.analysis.applied": "Analysis result was added to the note.",
+    "settings.server.analysis.applyMissing": "The linked note could not be found.",
+    "settings.server.analysis.sectionTitle": "Server analysis result",
     "settings.server.never": "Never",
     "settings.sidebarAssist.title": "Show helper lists",
     "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
@@ -1492,6 +1500,7 @@ function bindEvents() {
   elements.serverProfileSaveBtn.addEventListener("click", saveServerUserProfile);
   elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
+  elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -1879,7 +1888,19 @@ function renderServerAnalysisJobs(jobs = []) {
       const status = document.createElement("span");
       status.className = `server-analysis-status ${job.status || ""}`;
       status.textContent = job.status || "-";
-      item.append(info, status);
+      const side = document.createElement("div");
+      side.className = "server-analysis-side";
+      side.append(status);
+      if (job.note_local_id && extractServerAnalysisResultText(job.result_json)) {
+        const applyButton = document.createElement("button");
+        applyButton.className = "server-analysis-apply";
+        applyButton.type = "button";
+        applyButton.dataset.analysisAction = "append";
+        applyButton.dataset.analysisId = String(job.id);
+        applyButton.textContent = t("settings.server.analysis.apply");
+        side.append(applyButton);
+      }
+      item.append(info, side);
       const previewText = getServerAnalysisPreview(job);
       if (previewText) {
         const preview = document.createElement("div");
@@ -1890,6 +1911,51 @@ function renderServerAnalysisJobs(jobs = []) {
       return item;
     }),
   );
+}
+
+function handleServerAnalysisListClick(event) {
+  const button = event.target.closest("[data-analysis-action='append']");
+  if (!button) return;
+  const id = Number(button.dataset.analysisId);
+  const job = (state.settings.server.analysisJobs || []).find((item) => Number(item.id) === id);
+  if (!job) return;
+  appendAnalysisResultToNote(job);
+}
+
+function appendAnalysisResultToNote(job) {
+  const node = findTreeNode(state.data.tree, job.note_local_id);
+  const resultText = extractServerAnalysisResultText(job.result_json);
+  if (!node || !resultText) {
+    state.settings.server.lastStatus = "bad";
+    state.settings.server.lastMessage = t("settings.server.analysis.applyMissing");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  const time = formatServerJobTime(job.updated_at || job.created_at || new Date().toISOString());
+  const section = [
+    `## ${t("settings.server.analysis.sectionTitle")}`,
+    "",
+    `- ${t("settings.server.analysis.item", {
+      id: job.id || "-",
+      type: job.job_type || "-",
+      time,
+    })}`,
+    "",
+    resultText,
+  ].join("\n");
+
+  node.content = [node.content || "", section].filter((part) => part.trim()).join("\n\n");
+  node.tags = extractTags(node.content);
+  markTreeNodeChanged(node);
+  state.selectedTreeId = node.id;
+  state.settings.server.lastStatus = "ok";
+  state.settings.server.lastMessage = t("settings.server.analysis.applied");
+  persist();
+  renderTree();
+  renderServerSettings();
+  showSaved(elements.treeSavedLabel);
 }
 
 function getServerAnalysisPreview(job) {
