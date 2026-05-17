@@ -159,6 +159,29 @@
 - `git diff --check` 통과.
 - 현재 환경에서는 Flutter SDK가 PATH에 없어 모바일 정적 분석은 보류.
 
+## 2026-05-18 01:31 KST
+
+### 다음 작업 시작
+
+- Android Manifest 권한 제거 규칙 재점검.
+
+### 확인 내용
+
+- 알림 아이콘 참조는 `ic_launcher`와 `launcher_icon` 리소스가 모두 있어 즉시 깨질 가능성은 낮음.
+- `CAPTURE_AUDIO_OUTPUT` 제거 규칙이 `Manifest.permission.CAPTURE_AUDIO_OUTPUT`로 작성되어 있었음.
+- Android 실제 권한명은 `android.permission.CAPTURE_AUDIO_OUTPUT`이므로 병합 Manifest 제거가 적용되지 않을 위험이 있음.
+
+### 구현 내용
+
+- 제거 규칙 권한명을 `android.permission.CAPTURE_AUDIO_OUTPUT`로 수정.
+- 출시 체크리스트의 설명도 실제 Android 권한명 기준으로 수정.
+
+### 검증
+
+- 권한명 재검색 후 체크리스트의 오래된 `Manifest.permission.CAPTURE_AUDIO_OUTPUT` 표현까지 정리.
+- `git diff --check` 통과.
+- 현재 환경에서는 Flutter SDK가 PATH에 없어 릴리스 병합 Manifest 확인은 보류.
+
 ## 2026-05-18 01:18 KST
 
 ### 다음 작업 시작
