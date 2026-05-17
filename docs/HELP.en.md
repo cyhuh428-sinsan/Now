@@ -128,6 +128,7 @@ Important web and installed-app features:
 - Feature on/off settings
 - Editable shortcuts
 - Markdown import and export
+- Server analysis job creation, result summary review, and adding results to notes
 
 ## Server Connection
 
