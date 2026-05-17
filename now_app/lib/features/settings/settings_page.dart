@@ -646,7 +646,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF111827))),
-                      Text('DB 파일을 공유/저장합니다',
+                      Text('로컬 DB를 사용자가 선택한 위치에 저장합니다',
                           style: TextStyle(
                               fontSize: 12, color: Color(0xFF9CA3AF))),
                     ],
@@ -698,7 +698,7 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
                               fontSize: 15,
                               fontWeight: FontWeight.w500,
                               color: Color(0xFF111827))),
-                      Text('.db 백업 파일로 복원합니다',
+                      Text('현재 데이터를 .db 백업 파일로 교체합니다',
                           style: TextStyle(
                               fontSize: 12, color: Color(0xFF9CA3AF))),
                     ],
