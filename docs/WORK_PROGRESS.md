@@ -159,6 +159,31 @@
 - `git diff --check` 통과.
 - 현재 환경에서는 Flutter SDK가 PATH에 없어 모바일 정적 분석은 보류.
 
+## 2026-05-18 01:07 KST
+
+### 다음 작업 시작
+
+- Android 자동 백업 규칙과 개인정보 설명 정합성 점검.
+
+### 확인 내용
+
+- 기존 Android 백업 규칙은 DB, SharedPreferences, 앱 내부 파일을 Google Drive 자동 백업에 포함하고 있었음.
+- SharedPreferences에는 서버 URL, API 토큰, owner/device ID가 저장됨.
+- 기본 사용은 로컬 중심이라는 개인정보 설명과 자동 클라우드 백업 포함 정책이 충돌할 수 있음.
+
+### 구현 내용
+
+- Android 11 이하 `backup_rules.xml`에서 DB, SharedPreferences, 앱 내부 파일을 클라우드 자동 백업 제외로 변경.
+- Android 12+ `data_extraction_rules.xml`에서 cloud-backup은 제외하고 device-transfer는 유지.
+- 개인정보처리방침 초안과 공개 사이트에 Android 자동 클라우드 백업 제외 기준을 명시.
+- 출시 체크리스트에 릴리스 병합 리소스 확인 항목 추가.
+
+### 검증
+
+- XML/문서 변경 확인.
+- `git diff --check` 통과.
+- 현재 환경에서는 Flutter SDK가 PATH에 없어 릴리스 병합 리소스 확인은 보류.
+
 ## 2026-05-18 00:45 KST
 
 ### 다음 작업 시작

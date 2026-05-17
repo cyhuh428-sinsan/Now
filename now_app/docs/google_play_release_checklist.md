@@ -72,6 +72,7 @@ powershell -ExecutionPolicy Bypass -File .\build_release_aab.ps1
 - [ ] LLM 브리핑이 데이터 없음/생성 실패 상태에서도 화면을 깨뜨리지 않음
 - [ ] 앱 실행 중 주요 오류 로그 없음
 - [ ] Play Console 심사 위험 권한의 사용 목적 문구 준비
+- [ ] Android 자동 클라우드 백업 제외 규칙이 릴리스 병합 리소스에 반영됐는지 확인
 
 검증 중 핵심 기능 실패가 발견되면, 그 상태는 "등록용 파일 생성 완료"일 뿐 "등록 가능"이 아닙니다.
 
