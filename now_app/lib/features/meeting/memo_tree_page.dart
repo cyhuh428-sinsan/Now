@@ -759,6 +759,8 @@ Future<void> _showTreeMemoDialog(
   final speech = SpeechToText();
   final recorder = FlutterSoundRecorder();
   String? recordingPath;
+  String? pendingUploadRecordingPath;
+  String pendingUploadTranscript = '';
   final level = _resolveNextLevel(parent, editingNode: editingNode);
   final memoKind = _treeMemoKind(level);
   bool isListening = false;
@@ -766,6 +768,18 @@ Future<void> _showTreeMemoDialog(
   String voiceInputMode = 'realtime';
 
   if (level > 3) return;
+
+  Future<void> deletePendingUploadFile() async {
+    if (pendingUploadRecordingPath == null) return;
+    try {
+      final file = File(pendingUploadRecordingPath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    } catch (_) {}
+    pendingUploadRecordingPath = null;
+    pendingUploadTranscript = '';
+  }
 
   Future<void> stopRecordingIfNeeded() async {
     try {
@@ -791,6 +805,8 @@ Future<void> _showTreeMemoDialog(
       } catch (_) {}
       recordingPath = null;
     }
+
+    await deletePendingUploadFile();
   }
 
   Future<void> deleteRecordingFile() async {
@@ -930,6 +946,7 @@ Future<void> _showTreeMemoDialog(
                             final file = File(recordingPath!);
                             if (!(await file.exists()) ||
                                 await file.length() < 1000) {
+                              await deleteRecordingFile();
                               if (context.mounted) {
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   const SnackBar(
@@ -982,6 +999,10 @@ Future<void> _showTreeMemoDialog(
                                             offset: bodyCtrl.text.length,
                                           ),
                                         );
+                                    await deletePendingUploadFile();
+                                    pendingUploadRecordingPath = recordingPath;
+                                    pendingUploadTranscript = newText;
+                                    recordingPath = null;
                                   }
                                 } catch (e) {
                                   debugPrint(
@@ -994,7 +1015,9 @@ Future<void> _showTreeMemoDialog(
                                   }
                                 }
                               }
-                              await deleteRecordingFile();
+                              if (recordingPath != null) {
+                                await deleteRecordingFile();
+                              }
                             }
                           }
                         } else {
@@ -1117,13 +1140,15 @@ Future<void> _showTreeMemoDialog(
                         final content = '$title\n${bodyCtrl.text.trim()}';
                         final tags =
                             'kind=tree;parent=${parent?.id ?? editingNode?.parentId ?? ''};level=$level;voiceMode=$voiceInputMode';
+                        final memoId =
+                            editingNode?.id ??
+                            now.microsecondsSinceEpoch.toString();
                         if (editingNode == null) {
-                          final id = now.microsecondsSinceEpoch.toString();
                           await db
                               .into(db.memos)
                               .insert(
                                 MemosCompanion.insert(
-                                  memoId: id,
+                                  memoId: memoId,
                                   userId: 'local_user',
                                   content: content,
                                   tags: Value(tags),
@@ -1143,6 +1168,14 @@ Future<void> _showTreeMemoDialog(
                                 ),
                               );
                         }
+                        await _uploadTreeRecordingIfConfigured(
+                          context,
+                          ref,
+                          memoId: memoId,
+                          audioFilePath: pendingUploadRecordingPath,
+                          transcript: pendingUploadTranscript,
+                        );
+                        await deletePendingUploadFile();
                         ref.invalidate(treeMemosProvider);
                         if (ctx.mounted) Navigator.pop(ctx);
                       },
@@ -1159,6 +1192,40 @@ Future<void> _showTreeMemoDialog(
   );
 
   await stopRecordingIfNeeded();
+}
+
+Future<void> _uploadTreeRecordingIfConfigured(
+  BuildContext context,
+  WidgetRef ref, {
+  required String memoId,
+  required String? audioFilePath,
+  required String transcript,
+}) async {
+  if (audioFilePath == null || transcript.trim().isEmpty) return;
+
+  final settings = await ServerSettings.load();
+  if (!settings.enabled || !settings.isConfigured) return;
+
+  final file = File(audioFilePath);
+  if (!await file.exists()) return;
+
+  try {
+    await ref.read(serverSyncServiceProvider).uploadRecordingFile(
+          settings,
+          filePath: audioFilePath,
+          localId: 'tree_recording_$memoId',
+          noteLocalId: memoId,
+          transcript: transcript,
+        );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('계층 메모 녹음 업로드 실패: $e'),
+        backgroundColor: const Color(0xFFEF4444),
+      ),
+    );
+  }
 }
 
 Future<void> _confirmDeleteTreeMemo(
