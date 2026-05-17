@@ -20,7 +20,10 @@ class OllamaLlmRepository extends BaseLlmRepository {
   // 1. 회의록/데이터 추출 (OpenAI 호환 방식)
   @override
   Future<List<LlmExtractedItem>> extractItems(List<String> segments,
-      {String recordType = 'meeting', String participantName = ''}) async {
+      {String recordType = 'meeting',
+      String participantName = '',
+      bool includeSpeakerSeparation = false,
+      bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       '$_baseUrl/chat/completions',
       options: Options(
@@ -36,7 +39,10 @@ class OllamaLlmRepository extends BaseLlmRepository {
           {
             'role': 'user',
             'content': buildPrompt(segments,
-                recordType: recordType, participantName: participantName)
+                recordType: recordType,
+                participantName: participantName,
+                includeSpeakerSeparation: includeSpeakerSeparation,
+                includeVoiceEmotion: includeVoiceEmotion)
           }
         ],
         'temperature': 0.2,

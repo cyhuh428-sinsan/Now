@@ -12,6 +12,7 @@ import 'package:path_provider/path_provider.dart';
 import '../../llm/services/llm_settings_service.dart';
 import '../home/home_page.dart';
 import '../../llm/providers/llm_providers.dart';
+import '../../services/feature_settings_service.dart';
 import '../items/items_review_page.dart';
 
 // ============================================================
@@ -774,10 +775,13 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
 
       // LLM에는 화자 정보 제외, 텍스트만 전달
       final textSegments = segments.map((s) => s.text).toList();
+      final featureSettings = await FeatureSettingsService.load();
       final extracted = await llmRepo.extractItems(
         textSegments,
         recordType: widget.recordType,
         participantName: widget.participantName,
+        includeSpeakerSeparation: featureSettings.speakerSeparationEnabled,
+        includeVoiceEmotion: featureSettings.voiceEmotionEnabled,
       );
 
       ref.read(extractedItemsProvider.notifier).state = extracted

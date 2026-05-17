@@ -20,7 +20,13 @@ abstract class BaseLlmRepository implements LlmRepository {
   // 프롬프트 — 회의 종료 시점 날짜 포함, 실제 날짜 반환 요청
   // ============================================================
 
-  String buildPrompt(List<String> segments, {String recordType = 'meeting', String participantName = ''}) {
+  String buildPrompt(
+    List<String> segments, {
+    String recordType = 'meeting',
+    String participantName = '',
+    bool includeSpeakerSeparation = false,
+    bool includeVoiceEmotion = false,
+  }) {
     final now = DateTime.now();
     final today = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     final weekday = ['월', '화', '수', '목', '금', '토', '일'][now.weekday - 1];
@@ -44,6 +50,11 @@ abstract class BaseLlmRepository implements LlmRepository {
             ? '- Action Item: 면담에서 도출된 후속 조치\n- Decision: 면담에서 합의/결정된 사항'
             : '- Action Item: 대화에서 도출된 실행 항목\n- Decision: 합의된 사항 또는 중요 발언';
 
+    final optionalRules = [
+      if (includeSpeakerSeparation) '- 가능하면 발언 흐름을 기준으로 화자를 구분하고 ownerLabel에 반영',
+      if (includeVoiceEmotion) '- 발언의 감정 단서가 있으면 content에 과장 없이 짧게 반영',
+    ].join('\n');
+
     return '''
 다음은 $typeLabel 내용입니다. 발언자 구분 없이 대화 흐름 전체를 분석하여 Action Item과 Decision을 추출해주세요.
 
@@ -54,6 +65,7 @@ $transcript
 
 [추출 규칙]
 $ruleLabel
+$optionalRules
 - 각 항목은 간결하게 한 문장으로 정리
 - confidence는 0.0~1.0 사이 확신도
 - dueDate는 반드시 "YYYY-MM-DD" 형식으로 변환해서 반환

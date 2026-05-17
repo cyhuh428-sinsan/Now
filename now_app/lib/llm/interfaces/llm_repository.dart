@@ -21,7 +21,13 @@ class LlmExtractedItem {
 
 abstract class LlmRepository {
   /// 발언 세그먼트 목록에서 Action/Decision 추출
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType, String participantName});
+  Future<List<LlmExtractedItem>> extractItems(
+    List<String> segments, {
+    String recordType = 'meeting',
+    String participantName = '',
+    bool includeSpeakerSeparation = false,
+    bool includeVoiceEmotion = false,
+  });
 
   /// 단순 텍스트 프롬프트 전송 → 텍스트 응답 반환
   Future<String> chat(String prompt);
