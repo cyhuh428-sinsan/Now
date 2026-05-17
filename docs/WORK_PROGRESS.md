@@ -958,3 +958,14 @@
 - `py_compile` 통과.
 - `git diff --check` 통과.
 - 기본 `python`/`py` 실행은 이 셸에서 경로 문제로 실패해, 확인 가능한 Python 전체 경로로 검증.
+
+## 2026-05-18 05:05 KST
+
+### 다음 작업 시작
+
+- 서버 README의 실행 순서가 예시값 그대로 `docker compose up`을 먼저 실행하게 보이는 문제 정리.
+
+### 구현 내용
+
+- 실행 흐름을 `.env` 복사/수정 → 배포 전 점검 → `docker compose up --build` 순서로 변경.
+- PowerShell/WSL 준비 명령에서는 서버 시작 명령을 분리해 예시값 변경 전 실행하지 않도록 안내.
