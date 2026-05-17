@@ -689,7 +689,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                   const SizedBox(height: 6),
                   const Text(
-                    '서버 분석 큐에 점검용 작업을 등록하고 최근 작업 상태를 확인합니다. 실제 메모 선택 분석은 메모 화면 연결 후 확장합니다.',
+                    '서버 분석 큐의 최근 작업 상태를 확인합니다. 계층 메모 화면에서 선택 메모 분석을 등록할 수 있습니다.',
                     style: TextStyle(
                       fontSize: 13,
                       height: 1.4,

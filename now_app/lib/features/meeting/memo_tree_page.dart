@@ -694,8 +694,23 @@ class _TreeMemoTile extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
+                tooltip: '서버 분석',
+                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: () => _requestTreeMemoAnalysis(context, ref, node),
+              ),
+              IconButton(
                 tooltip: '${_treeMemoKind(addLevel)} 추가',
                 icon: const Icon(Icons.add, size: 18),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
                 onPressed: addParent == null && node.level >= 3
                     ? null
                     : () =>
@@ -710,6 +725,11 @@ class _TreeMemoTile extends ConsumerWidget {
                       ? const Color(0xFF9CA3AF)
                       : const Color(0xFFD1D5DB),
                 ),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
                 onPressed: children.isEmpty
                     ? () => _confirmDeleteTreeMemo(context, ref, node)
                     : null,
@@ -720,6 +740,51 @@ class _TreeMemoTile extends ConsumerWidget {
               .map((child) => _TreeMemoTile(node: child, allNodes: allNodes))
               .toList(),
         ),
+      ),
+    );
+  }
+}
+
+Future<void> _requestTreeMemoAnalysis(
+  BuildContext context,
+  WidgetRef ref,
+  TreeMemoNode node,
+) async {
+  final settings = await ServerSettings.load();
+  if (!settings.enabled || !settings.isConfigured) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('서버 연결을 켠 뒤 분석 작업을 등록할 수 있습니다.')),
+    );
+    return;
+  }
+
+  final inputText = '${node.title}\n${node.content}'.trim();
+  if (inputText.isEmpty) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('분석할 메모 내용이 없습니다.')),
+    );
+    return;
+  }
+
+  try {
+    final job = await ref.read(serverSyncServiceProvider).createAnalysisJob(
+          settings,
+          jobType: 'memo_summary',
+          noteLocalId: node.id,
+          inputText: inputText,
+        );
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('서버 분석 작업을 등록했습니다. #${job.id}')),
+    );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('서버 분석 등록 실패: $e'),
+        backgroundColor: const Color(0xFFEF4444),
       ),
     );
   }
