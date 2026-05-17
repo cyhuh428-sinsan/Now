@@ -41,6 +41,7 @@ class HelpPage extends StatelessWidget {
               '설정 없이 바로 사용할 수 있습니다.',
               '메모가 외부 서버로 올라가지 않습니다.',
               '주기적으로 JSON 백업이나 Markdown 내보내기를 해두는 것이 좋습니다.',
+              '서버 녹음 저장과 서버 분석 작업은 사용할 수 없습니다.',
             ],
           ),
           SizedBox(height: 14),
@@ -51,6 +52,7 @@ class HelpPage extends StatelessWidget {
             points: [
               '서버 주소, API 토큰, 사용자 ID가 필요합니다.',
               '메모 동기화, 서버 백업, 녹음 저장, 분석 작업을 사용할 수 있습니다.',
+              '서버 설정 화면에서 최근 녹음과 분석 결과를 확인할 수 있습니다.',
               '개인 서버 사용자는 .env의 토큰과 DB 비밀번호를 반드시 변경해야 합니다.',
             ],
           ),
