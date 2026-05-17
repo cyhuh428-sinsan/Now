@@ -72,3 +72,11 @@ if (-not (Test-Path $aab)) {
 
 Write-Host "서명된 AAB 빌드 완료:"
 Write-Host $aab
+
+$preflight = Join-Path $androidDir "check_play_release_inputs.ps1"
+if (Test-Path $preflight) {
+    & $preflight
+    if ($LASTEXITCODE -ne 0) {
+        throw "Play release preflight failed after AAB build"
+    }
+}
