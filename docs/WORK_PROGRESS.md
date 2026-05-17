@@ -29,6 +29,24 @@
 - `node --check web/app.js` 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 05:35 KST
+
+### 다음 작업 시작
+
+- 공용 서버 인증 준비 상태가 문서뿐 아니라 운영 점검 화면/API에도 보이도록 보완.
+
+### 구현 내용
+
+- `/api/v1/admin/ops` 점검 항목에 `공용 서버 인증` 정보 항목 추가.
+- `/admin/ops` 화면의 점검 항목에도 동일한 기준을 표시.
+- 상태는 `info`로 두어 개인 Docker 서버의 정상 운영 상태를 불필요하게 `warn`으로 낮추지 않음.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `monitor.py`, `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점
