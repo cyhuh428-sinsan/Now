@@ -265,7 +265,7 @@ NowNote 첫 출시 버전입니다.
 
 ### 앱 아이콘
 ```text
-512 x 512 PNG
+D:\Project\Now\now_app\docs\play_assets\app_icon_512.png
 ```
 
 ### 기능 그래픽

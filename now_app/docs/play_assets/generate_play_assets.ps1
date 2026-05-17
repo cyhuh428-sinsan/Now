@@ -229,7 +229,37 @@ function New-FeatureGraphic {
     return $path
 }
 
+function New-PlayAppIcon {
+    $source = Join-Path (Split-Path -Parent $OutDir) "..\assets\icon\app_icon.png"
+    $source = [System.IO.Path]::GetFullPath($source)
+    if (-not (Test-Path $source)) {
+        throw "앱 아이콘 원본을 찾을 수 없습니다: $source"
+    }
+
+    $img = [System.Drawing.Image]::FromFile($source)
+    try {
+        $bmp = New-Bitmap 512 512
+        $g = [System.Drawing.Graphics]::FromImage($bmp)
+        try {
+            $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+            $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+            $g.DrawImage($img, 0, 0, 512, 512)
+            $path = Save-Png $bmp "app_icon_512.png"
+        }
+        finally {
+            $g.Dispose()
+            $bmp.Dispose()
+        }
+    }
+    finally {
+        $img.Dispose()
+    }
+    return $path
+}
+
 $created = @()
+$created += New-PlayAppIcon
 $created += New-FeatureGraphic
 $created += New-HomeScreenshot
 $created += New-DailyNoteScreenshot

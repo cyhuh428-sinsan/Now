@@ -1,6 +1,7 @@
 # NowNote Google Play 이미지 자료
 
 ## 생성된 파일
+- `app_icon_512.png`: Play Console 앱 아이콘
 - `feature_graphic_1024x500.png`: 기능 그래픽
 - `screenshot_01_home.png`: 홈 화면 소개
 - `screenshot_02_daily_notes.png`: 날짜별 메모 소개
@@ -8,6 +9,7 @@
 - `screenshot_04_voice.png`: 음성 기록 소개
 
 ## 규격
+- 앱 아이콘: 512 x 512
 - 기능 그래픽: 1024 x 500
 - 휴대전화 스크린샷: 1080 x 1920
 

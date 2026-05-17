@@ -59,6 +59,32 @@
 - `where dart`, `where flutter`도 PATH에서 SDK를 찾지 못함.
 - 수동으로 긴 줄과 타입 추론 위험 지점을 정리함.
 - `git diff --check` 통과.
+
+## 2026-05-18 02:25 KST
+
+### 다음 작업 시작
+
+- Play 그래픽 파일 존재/규격 점검.
+
+### 확인 내용
+
+- 기능 그래픽과 4개 스크린샷은 모두 존재하고 규격도 맞음.
+- 런처 아이콘 원본 `assets/icon/app_icon.png`는 1024x1024로, Play Console 앱 아이콘 규격 512x512와 다름.
+
+### 구현 내용
+
+- Play Console 업로드용 `app_icon_512.png` 생성.
+- Play 이미지 생성 스크립트가 `app_icon_512.png`도 함께 재생성하도록 보완.
+- Play 등록 문서와 이미지 README가 512 앱 아이콘 파일을 직접 가리키도록 수정.
+
+### 검증
+
+- 이미지 치수 재확인:
+  - `app_icon_512.png`: 512 x 512
+  - `feature_graphic_1024x500.png`: 1024 x 500
+  - 스크린샷 4개: 1080 x 1920
+- PowerShell 7 기준 이미지 생성 스크립트 파서 확인 통과.
+- `git diff --check` 통과.
 - Flutter/Dart SDK가 PATH에 없어 `flutter analyze`와 위젯 테스트는 실행하지 못함.
 
 ### 남은 후속
