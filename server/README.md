@@ -51,6 +51,18 @@ Linux/WSL에서는 다음 명령을 사용할 수 있습니다.
 openssl rand -hex 32
 ```
 
+배포 전 점검:
+
+```bash
+python3 scripts/preflight.py
+```
+
+저장소의 예시 파일 구조만 확인할 때는 아래처럼 실행합니다.
+
+```bash
+python3 scripts/preflight.py --env-file .env.example --allow-example
+```
+
 `.env` 예시:
 
 ```env
@@ -165,7 +177,8 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
 python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
-스모크 테스트는 health/API/sync, 운영 화면 응답, 사용자 프로필 조회/수정을 함께 확인합니다.
+배포 전 점검은 `.env`의 토큰/DB 비밀번호 변경 여부, Docker Compose 포트/볼륨/재시작 정책, 스모크 테스트 파일 존재를 확인합니다.
+스모크 테스트는 서버를 띄운 뒤 health/API/sync, 운영 화면 응답, 사용자 프로필 조회/수정을 함께 확인합니다.
 
 ## 1차 API
 

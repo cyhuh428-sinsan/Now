@@ -938,3 +938,23 @@
 - `check_play_release_inputs.ps1` 실행 결과, 오래된 릴리스 packaged resource의 백업 규칙 때문에 실패하는 것을 확인.
 - 실패가 맞는 상태이므로 체크리스트의 백업 제외 릴리스 반영 항목은 미완료로 유지.
 - `git diff --check` 통과.
+
+## 2026-05-18 04:45 KST
+
+### 다음 작업 시작
+
+- 공개 서버 배포자가 `.env` 예시값을 그대로 쓰거나 Docker Compose 설정을 놓치는 실수 방지.
+
+### 구현 내용
+
+- `server/scripts/preflight.py` 추가.
+- 실제 배포용 기본 실행은 `.env` 파일 존재, API 토큰/DB 비밀번호 변경, 워커 설정, Docker Compose 포트/볼륨/재시작 정책, 스모크 테스트 파일 존재를 확인.
+- 저장소 검증용으로 `.env.example --allow-example` 구조 점검 모드 제공.
+- 서버 README에 배포 전 점검과 스모크 테스트의 역할 차이를 추가.
+
+### 검증
+
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `py_compile` 통과.
+- `git diff --check` 통과.
+- 기본 `python`/`py` 실행은 이 셸에서 경로 문제로 실패해, 확인 가능한 Python 전체 경로로 검증.
