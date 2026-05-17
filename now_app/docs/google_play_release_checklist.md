@@ -61,8 +61,10 @@ powershell -ExecutionPolicy Bypass -File .\build_release_aab.ps1
 결과 파일:
 `build/app/outputs/bundle/release/app-release.aab`
 
+`build_release_aab.ps1`은 빌드 성공 후 `check_play_release_inputs.ps1`을 자동으로 실행해 Manifest 권한, 백업 제외 규칙, Play 이미지, 민감 파일 Git 제외 상태를 다시 확인합니다.
+
 ## Play 출시 사전 점검
-빌드 전후로 아래 점검을 실행해 민감 파일 제외, Manifest 권한, 백업 제외 규칙, Play 이미지 자료를 확인합니다.
+빌드 전 별도 점검이 필요하거나 빌드 후 다시 확인하고 싶을 때 아래 점검을 실행합니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1

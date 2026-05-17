@@ -874,6 +874,24 @@
 
 - `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
 - `git diff --check` 통과.
+
+## 2026-05-18 04:10 KST
+
+### 다음 작업 시작
+
+- AAB 빌드 후 Play 사전 점검을 별도로 실행해야 하는 실수 가능성 제거.
+
+### 구현 내용
+
+- `build_release_aab.ps1`이 AAB 생성 후 `check_play_release_inputs.ps1`을 자동 실행하도록 변경.
+- Play 출시 체크리스트와 단계별 문서에 빌드 후 자동 점검 흐름을 반영.
+
+### 검증
+
+- PowerShell 파서로 `build_release_aab.ps1`, `check_play_release_inputs.ps1` 문법 확인.
+- `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
+- `git diff --check` 통과.
+- 실제 AAB 재빌드는 현재 Flutter 실행 환경과 산출물 영향 때문에 실행하지 않음.
 - Windows PowerShell 5 출력 깨짐을 피하기 위해 스크립트 최종 성공/실패 문구는 영어로 정리.
 
 ## 2026-05-18 03:55 KST
