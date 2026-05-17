@@ -188,6 +188,19 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
 python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+`NOW_USER_TOKEN_REQUIRED=true`로 공용 서버 모드를 점검할 때는 사용자별 접속 토큰을 함께 넣습니다.
+관리자 토큰으로 테스트용 `local_user` 토큰을 새로 발급해 바로 점검하려면 아래처럼 실행합니다.
+
+```powershell
+python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --issue-local-user-token
+```
+
+이미 발급된 사용자별 접속 토큰을 사용할 때:
+
+```powershell
+python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --user-token 사용자별-접속-토큰
+```
+
 배포 전 점검은 `.env`의 토큰/DB 비밀번호 변경 여부, Docker Compose 포트/볼륨/재시작 정책, 스모크 테스트 파일 존재를 확인합니다.
 스모크 테스트는 서버를 띄운 뒤 health/API/sync, 운영 화면 응답, 사용자 프로필 조회/수정을 함께 확인합니다.
 
