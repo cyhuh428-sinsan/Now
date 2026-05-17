@@ -7,6 +7,8 @@ $mergedReleaseManifestPath = Join-Path $repoRoot "build\app\intermediates\merged
 $bundleReleaseManifestPath = Join-Path $repoRoot "build\app\intermediates\bundle_manifest\release\processApplicationManifestReleaseForBundle\AndroidManifest.xml"
 $backupRulesPath = Join-Path $repoRoot "android\app\src\main\res\xml\backup_rules.xml"
 $dataExtractionRulesPath = Join-Path $repoRoot "android\app\src\main\res\xml\data_extraction_rules.xml"
+$packagedReleaseBackupRulesPath = Join-Path $repoRoot "build\app\intermediates\packaged_res\release\packageReleaseResources\xml\backup_rules.xml"
+$packagedReleaseDataExtractionRulesPath = Join-Path $repoRoot "build\app\intermediates\packaged_res\release\packageReleaseResources\xml\data_extraction_rules.xml"
 $playAssetsDir = Join-Path $repoRoot "docs\play_assets"
 
 function Add-Check {
@@ -75,6 +77,22 @@ $backupRules = if (Test-Path $backupRulesPath) { Get-Content $backupRulesPath -R
 $dataExtractionRules = if (Test-Path $dataExtractionRulesPath) { Get-Content $dataExtractionRulesPath -Raw } else { "" }
 Add-Check $checks "Full backup excludes private data" ($backupRules -match '<exclude') "backup_rules.xml"
 Add-Check $checks "Cloud backup excludes private data" ($dataExtractionRules -match '<cloud-backup>' -and $dataExtractionRules -match '<exclude') "data_extraction_rules.xml"
+
+if (Test-Path $packagedReleaseBackupRulesPath) {
+    $packagedBackupRules = Get-Content $packagedReleaseBackupRulesPath -Raw
+    Add-Check $checks "Packaged release full backup excludes private data" ($packagedBackupRules -match '<exclude') "packaged release backup_rules.xml"
+}
+else {
+    Add-Check $checks "Packaged release backup rules exist" $false "Run release build to package backup rules"
+}
+
+if (Test-Path $packagedReleaseDataExtractionRulesPath) {
+    $packagedDataExtractionRules = Get-Content $packagedReleaseDataExtractionRulesPath -Raw
+    Add-Check $checks "Packaged release cloud backup excludes private data" ($packagedDataExtractionRules -match '<cloud-backup>' -and $packagedDataExtractionRules -match '<exclude') "packaged release data_extraction_rules.xml"
+}
+else {
+    Add-Check $checks "Packaged release data extraction rules exist" $false "Run release build to package data extraction rules"
+}
 
 @(
     "app_icon_512.png",
