@@ -156,6 +156,8 @@ class ServerAnalysisJob {
   final String jobType;
   final String status;
   final String? noteLocalId;
+  final String? inputText;
+  final String? resultJson;
   final String? errorMessage;
   final String? updatedAt;
 
@@ -164,6 +166,8 @@ class ServerAnalysisJob {
     required this.jobType,
     required this.status,
     required this.noteLocalId,
+    required this.inputText,
+    required this.resultJson,
     required this.errorMessage,
     required this.updatedAt,
   });
@@ -174,9 +178,48 @@ class ServerAnalysisJob {
       jobType: json['job_type']?.toString() ?? '-',
       status: json['status']?.toString() ?? '-',
       noteLocalId: json['note_local_id']?.toString(),
+      inputText: json['input_text']?.toString(),
+      resultJson: json['result_json']?.toString(),
       errorMessage: json['error_message']?.toString(),
       updatedAt: json['updated_at']?.toString(),
     );
+  }
+
+  String get resultPreview {
+    final error = errorMessage?.trim() ?? '';
+    if (error.isNotEmpty) return error;
+
+    final result = resultJson?.trim() ?? '';
+    if (result.isEmpty) {
+      final input = inputText?.trim() ?? '';
+      return input.isEmpty ? '결과 없음' : input;
+    }
+
+    try {
+      final decoded = jsonDecode(result);
+      if (decoded is Map) {
+        for (final key in [
+          'summary',
+          'advice',
+          'search_text',
+          'result',
+          'adviceBasis',
+        ]) {
+          final value = decoded[key];
+          if (value is String && value.trim().isNotEmpty) {
+            return value.trim();
+          }
+        }
+        for (final key in ['keywords', 'index_terms', 'mustDo', 'tasks']) {
+          final value = decoded[key];
+          if (value is List && value.isNotEmpty) {
+            return value.map((item) => item.toString()).join(', ');
+          }
+        }
+      }
+    } catch (_) {}
+
+    return result;
   }
 }
 

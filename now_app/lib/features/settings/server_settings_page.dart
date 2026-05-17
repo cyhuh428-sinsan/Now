@@ -709,6 +709,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                         child: _AnalysisJobTile(
                           job: job,
                           timeText: _formatAnalysisTime(job.updatedAt),
+                          onTap: () => _showAnalysisJobDetail(context, job),
                         ),
                       ),
                     ),
@@ -742,6 +743,86 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('설정 로드 실패: $e')),
+      ),
+    );
+  }
+}
+
+void _showAnalysisJobDetail(BuildContext context, ServerAnalysisJob job) {
+  final resultText = job.resultJson?.trim().isNotEmpty == true
+      ? job.resultJson!.trim()
+      : job.resultPreview;
+  showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: Text('분석 작업 #${job.id}'),
+      content: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _AnalysisDetailLine(label: '작업', value: job.jobType),
+            _AnalysisDetailLine(label: '상태', value: job.status),
+            _AnalysisDetailLine(
+              label: '메모',
+              value: job.noteLocalId ?? '연결 없음',
+            ),
+            const SizedBox(height: 12),
+            Text(
+              resultText,
+              style: const TextStyle(
+                fontSize: 13,
+                height: 1.45,
+                color: Color(0xFF374151),
+              ),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('닫기'),
+        ),
+      ],
+    ),
+  );
+}
+
+class _AnalysisDetailLine extends StatelessWidget {
+  final String label;
+  final String value;
+
+  const _AnalysisDetailLine({required this.label, required this.value});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 42,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Color(0xFF111827),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -828,65 +909,88 @@ class _RecordingTile extends StatelessWidget {
 class _AnalysisJobTile extends StatelessWidget {
   final ServerAnalysisJob job;
   final String timeText;
+  final VoidCallback onTap;
 
-  const _AnalysisJobTile({required this.job, required this.timeText});
+  const _AnalysisJobTile({
+    required this.job,
+    required this.timeText,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
     final color = _statusColor(job.status);
-    return Container(
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF9FAFB),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '#${job.id} · ${job.jobType} · $timeText',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w700,
-                    color: Color(0xFF111827),
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Container(
+        padding: const EdgeInsets.all(10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF9FAFB),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: const Color(0xFFE5E7EB)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '#${job.id} · ${job.jobType} · $timeText',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  job.noteLocalId ?? '메모 연결 없음',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    color: Color(0xFF6B7280),
+                  const SizedBox(height: 3),
+                  Text(
+                    job.resultPreview,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      height: 1.3,
+                      color: Color(0xFF6B7280),
+                    ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(999),
-            ),
-            child: Text(
-              job.status,
-              style: TextStyle(
-                color: color,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
+                  const SizedBox(height: 3),
+                  Text(
+                    job.noteLocalId ?? '메모 연결 없음',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: Color(0xFF9CA3AF),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 5,
+              ),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                job.status,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
