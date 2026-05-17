@@ -90,15 +90,38 @@ def export_users(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/users")
-def users(db: Session = Depends(get_db)) -> dict:
+def users(
+    owner_id: str | None = Query(default=None),
+    group_name: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    q: str | None = Query(default=None),
+    db: Session = Depends(get_db),
+) -> dict:
+    stmt = select(UserAccount)
+    if owner_id:
+        stmt = stmt.where(UserAccount.owner_id == owner_id)
+    if group_name:
+        stmt = stmt.where(UserAccount.group_name == group_name)
+    if status_filter == "active":
+        stmt = stmt.where(UserAccount.is_active == 1)
+    elif status_filter == "inactive":
+        stmt = stmt.where(UserAccount.is_active == 0)
+    elif status_filter == "never_seen":
+        stmt = stmt.where(UserAccount.last_seen_at.is_(None))
+    if q:
+        keyword = f"%{q.strip()}%"
+        stmt = stmt.where(
+            UserAccount.owner_id.ilike(keyword)
+            | UserAccount.email.ilike(keyword)
+            | UserAccount.display_name.ilike(keyword)
+        )
+    stmt = stmt.order_by(
+        UserAccount.last_seen_at.desc().nullslast(),
+        UserAccount.updated_at.desc(),
+        UserAccount.id.desc(),
+    )
     rows = list(
-        db.scalars(
-            select(UserAccount).order_by(
-                UserAccount.last_seen_at.desc().nullslast(),
-                UserAccount.updated_at.desc(),
-                UserAccount.id.desc(),
-            )
-        ).all()
+        db.scalars(stmt).all()
     )
     return {
         "count": len(rows),
