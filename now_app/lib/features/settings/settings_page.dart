@@ -122,6 +122,21 @@ class SettingsPage extends ConsumerWidget {
           ),
           const SizedBox(height: 20),
 
+          // ── 사용 안내 ──
+          const _SectionHeader(title: '사용 안내'),
+          _SettingsCard(
+            children: [
+              _NavTile(
+                icon: Icons.help_outline,
+                iconColor: const Color(0xFF6366F1),
+                title: 'NowNote 사용 안내',
+                summary: '로컬/서버 기준',
+                onTap: () => context.push('/settings/help'),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
           // ── 고급 기능 ──
           const _SectionHeader(title: '고급 기능'),
           const _SettingsCard(

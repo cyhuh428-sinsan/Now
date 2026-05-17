@@ -10,6 +10,7 @@ import '../../features/meeting/memo_tree_page.dart';
 import '../../features/meeting/meeting_detail_page.dart';
 import '../../features/items/items_review_page.dart';
 import '../../features/settings/settings_page.dart';
+import '../../features/settings/help_page.dart';
 import '../../features/meal/meal_page.dart';
 import '../../features/money/money_page.dart';
 import '../../features/life/life_page.dart';
@@ -86,6 +87,7 @@ GoRouter appRouter(AppRouterRef ref) {
         ),
       ),
       GoRoute(path: '/settings', builder: (_, __) => const SettingsPage()),
+      GoRoute(path: '/settings/help', builder: (_, __) => const HelpPage()),
       GoRoute(path: '/settings/routines', builder: (_, __) => const RoutineManagementPage()),
       GoRoute(path: '/settings/server', builder: (_, __) => const ServerSettingsPage()),
       GoRoute(path: '/settings/voice',    builder: (_, __) => const VoiceSettingsPage()),
