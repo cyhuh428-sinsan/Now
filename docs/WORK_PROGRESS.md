@@ -3,6 +3,32 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 05:20 KST
+
+### 다음 작업 시작
+
+- 서버 인증/운영 기준을 개인 Docker 서버와 공용 NowNote 서버로 분리 정리.
+
+### 확인 내용
+
+- 현재 서버 API 인증은 `.env`의 단일 `NOW_API_TOKEN` 기준임.
+- 사용자 프로필, 시간대, 사용자 그룹, 2단계 인증 사용 여부, 활성 상태 관리는 구현되어 있음.
+- 2단계 인증은 실제 로그인 챌린지가 아니라 관리 상태값이며, `/api/v1/server`도 `two_factor_auth: planned`로 표시함.
+
+### 구현 내용
+
+- 서버 인증 기준 문서 `docs/SERVER_AUTH_POLICY.md` 추가.
+- 서버 README, 공통 도움말, Web 도움말, 서버 관리 도움말에 개인 서버/공용 서버 인증 차이를 명확히 반영.
+- `server/scripts/preflight.py`에 `--public-server` 점검 모드를 추가해, 공용 서버 오픈 전 남은 사용자별 인증/운영 항목을 의도적으로 실패로 표시하도록 함.
+
+### 검증
+
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example --public-server`는 사용자별 인증/HTTPS 준비 항목 때문에 의도적으로 실패하는 것 확인.
+- `py_compile` 통과.
+- `node --check web/app.js` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점

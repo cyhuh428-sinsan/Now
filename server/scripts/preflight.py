@@ -36,6 +36,11 @@ def main() -> None:
         action="store_true",
         help="Allow placeholder values when checking .env.example structure",
     )
+    parser.add_argument(
+        "--public-server",
+        action="store_true",
+        help="Also check whether this build is ready for a public multi-user server",
+    )
     args = parser.parse_args()
 
     server_dir = Path(__file__).resolve().parents[1]
@@ -104,6 +109,20 @@ def main() -> None:
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
+
+    if args.public_server:
+        check(
+            False,
+            "Public server auth model",
+            "Per-user login/token and real two-factor challenge are not implemented yet",
+            failures,
+        )
+        check(
+            False,
+            "Public server HTTPS/reverse proxy",
+            "Confirm domain, HTTPS, reverse proxy, backup, and recovery before opening",
+            failures,
+        )
 
     if failures:
         print("\nPreflight failed:")

@@ -3693,6 +3693,7 @@ def _admin_help_html() -> str:
         <ul>
           <li>앱 설정에 서버 주소와 API 토큰을 입력합니다.</li>
           <li>사용자별 시간대, 2단계 인증 사용 여부, 그룹, 활성 상태를 관리합니다.</li>
+          <li>현재 2단계 인증은 사용 여부 관리 상태이며, 실제 로그인 2단계 인증 절차는 이후 연결합니다.</li>
           <li>동기화 상태는 <code>/admin/sync</code>와 <code>/admin/devices</code>에서 확인합니다.</li>
         </ul>
       </section>
@@ -3711,6 +3712,8 @@ def _admin_help_html() -> str:
         <strong>공용 NowNote 서버</strong>
         <p>운영자가 사용자와 기기별 접속 권한을 발급하고 관리하는 방식입니다.</p>
         <ul>
+          <li>현재 단일 <code>NOW_API_TOKEN</code>만으로는 공용 서버 정식 오픈 기준에 부족합니다.</li>
+          <li>오픈 전에는 사용자별 로그인 또는 사용자별 API 토큰 정책을 확정해야 합니다.</li>
           <li>운영자는 <code>/admin/users</code>에서 사용자 활성 상태와 최근 접속 시간을 확인합니다.</li>
           <li>오픈 전에는 API 토큰, DB 비밀번호, LLM 제공자 상태를 <code>/admin/ops</code>에서 점검합니다.</li>
           <li>민감 메모 암호화는 로그인 사용자 기능으로 단계적으로 연결합니다.</li>
