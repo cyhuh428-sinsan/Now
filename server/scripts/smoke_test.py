@@ -144,6 +144,7 @@ def main() -> None:
         "/admin/users?status=inactive",
         "/admin/users?status=never_seen&q=smoke",
         "/admin/users?group=테스트",
+        "/admin/users?token=missing",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
@@ -192,6 +193,14 @@ def main() -> None:
             "status": data.get("status"),
             "checks": len(data.get("checks", [])),
         },
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/users?token=missing", args.token)
+    require("token_missing" in data, "사용자 토큰 미발급 집계가 없습니다")
+    print(
+        "GET /api/v1/admin/users(token=missing):",
+        status,
+        {"count": data.get("count"), "token_missing": data.get("token_missing")},
     )
 
     if args.issue_local_user_token:
@@ -257,6 +266,14 @@ def main() -> None:
         "POST /api/v1/admin/users/{owner_id}/token:",
         status,
         {"owner_id": data.get("owner_id"), "issued": bool(data.get("token"))},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/users?token=issued", args.token)
+    require(data.get("token_issued", 0) >= 1, "사용자 토큰 발급 집계가 증가하지 않았습니다")
+    print(
+        "GET /api/v1/admin/users(token=issued):",
+        status,
+        {"count": data.get("count"), "token_issued": data.get("token_issued")},
     )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()

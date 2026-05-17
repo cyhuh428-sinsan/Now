@@ -61,6 +61,25 @@
 - FastAPI `TestClient`로 `token=issued`, `token=missing` API 필터와 `/admin/users?token=missing` 화면 확인 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 08:15 KST
+
+### 다음 작업 시작
+
+- 사용자 토큰 필터가 배포 후 smoke test에서도 확인되도록 보강.
+
+### 구현 내용
+
+- smoke test의 관리자 화면 확인 목록에 `/admin/users?token=missing` 추가.
+- smoke test에 `GET /api/v1/admin/users?token=missing` 집계 확인 추가.
+- smoke test에서 사용자별 토큰 발급 후 `GET /api/v1/admin/users?token=issued` 집계 확인 추가.
+
+### 검증
+
+- `py_compile`로 `server/scripts/smoke_test.py` 확인 통과.
+- `server/scripts/smoke_test.py --help` 확인 통과.
+- 토큰 필터 smoke test 연결 지점 재검색 완료.
+- `git diff --check` 통과.
+
 ## 2026-05-18 05:20 KST
 
 ### 다음 작업 시작
