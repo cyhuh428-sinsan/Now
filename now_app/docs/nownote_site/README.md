@@ -24,6 +24,6 @@ curl http://localhost:8080/
 ## Play Console 입력값
 - 개인정보처리방침 URL: `https://nownote.sinsan.kr/`
 
-## 게시 전 필수 수정
-- `index.html`의 `개발자 이메일 입력`을 실제 Play Console 개발자 이메일로 교체해야 합니다.
+## 게시 전 확인
+- `index.html`의 개인정보 문의 이메일이 Play Console 개발자 이메일과 일치하는지 확인해야 합니다.
 - 선택형 서버 동기화, 녹음 업로드, 서버 분석 기능을 실제 출시 범위와 동일하게 개인정보처리방침 및 Data safety에 반영했는지 확인해야 합니다.
