@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -5,6 +7,7 @@ import '../meeting/meetings_page.dart';
 import '../meeting/meeting_progress_page.dart';
 import '../../repositories/repository_providers.dart';
 import '../../llm/providers/llm_providers.dart';
+import '../../services/server_sync_service.dart';
 
 // ============================================================
 // 모델
@@ -247,6 +250,19 @@ class ItemsReviewPage extends ConsumerWidget {
               await repo.saveSegments(meetingId, segments);
             }
 
+            if (audioFilePath != null) {
+              await _uploadRecordingIfConfigured(
+                context,
+                ref,
+                meetingId: meetingId,
+                audioFilePath: audioFilePath,
+                transcript: segments
+                    .map((s) => s['text'] as String? ?? '')
+                    .where((text) => text.trim().isNotEmpty)
+                    .join('\n\n'),
+              );
+            }
+
             // 추출 아이템 저장
             if (extracted.isNotEmpty) {
               await repo.saveExtractedItems(
@@ -288,6 +304,38 @@ class ItemsReviewPage extends ConsumerWidget {
           ref.read(selectedTabProvider.notifier).state = ItemType.action;
           context.go('/meetings');
         },
+      ),
+    );
+  }
+}
+
+Future<void> _uploadRecordingIfConfigured(
+  BuildContext context,
+  WidgetRef ref, {
+  required String meetingId,
+  required String audioFilePath,
+  required String transcript,
+}) async {
+  final settings = await ServerSettings.load();
+  if (!settings.enabled || !settings.isConfigured) return;
+
+  final file = File(audioFilePath);
+  if (!await file.exists()) return;
+
+  try {
+    await ref.read(serverSyncServiceProvider).uploadRecordingFile(
+          settings,
+          filePath: audioFilePath,
+          localId: 'recording_$meetingId',
+          noteLocalId: meetingId,
+          transcript: transcript,
+        );
+  } catch (e) {
+    if (!context.mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('녹음 파일 서버 업로드 실패: $e'),
+        backgroundColor: const Color(0xFFEF4444),
       ),
     );
   }

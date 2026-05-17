@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
@@ -175,6 +176,26 @@ class ServerAnalysisJob {
       noteLocalId: json['note_local_id']?.toString(),
       errorMessage: json['error_message']?.toString(),
       updatedAt: json['updated_at']?.toString(),
+    );
+  }
+}
+
+class ServerRecordingUploadResult {
+  final String localId;
+  final String fileName;
+  final String? transcript;
+
+  const ServerRecordingUploadResult({
+    required this.localId,
+    required this.fileName,
+    required this.transcript,
+  });
+
+  factory ServerRecordingUploadResult.fromJson(Map<String, dynamic> json) {
+    return ServerRecordingUploadResult(
+      localId: json['local_id']?.toString() ?? '',
+      fileName: json['file_name']?.toString() ?? '',
+      transcript: json['transcript']?.toString(),
     );
   }
 }
@@ -483,6 +504,49 @@ class ServerSyncService {
       return ServerAnalysisJob.fromJson(res.data ?? const <String, dynamic>{});
     } on DioException catch (e) {
       throw Exception(_serverErrorMessage(e, fallback: '분석 작업 생성 실패'));
+    }
+  }
+
+  Future<ServerRecordingUploadResult> uploadRecordingFile(
+    ServerSettings settings, {
+    required String filePath,
+    required String localId,
+    required String? noteLocalId,
+    required String? transcript,
+  }) async {
+    if (!settings.enabled) {
+      throw Exception('서버 동기화가 꺼져 있습니다');
+    }
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final file = File(filePath);
+    if (!await file.exists()) {
+      throw Exception('녹음 파일을 찾을 수 없습니다');
+    }
+
+    final dio = _dio(settings);
+    final fileName = file.uri.pathSegments.isEmpty
+        ? 'recording.aac'
+        : file.uri.pathSegments.last;
+    try {
+      final formData = FormData.fromMap({
+        'owner_id': _normalizeOwnerId(settings.ownerId),
+        'device_id': settings.deviceId,
+        'local_id': localId,
+        'note_local_id': _blankToNull(noteLocalId),
+        'transcript': _blankToNull(transcript),
+        'file': await MultipartFile.fromFile(filePath, filename: fileName),
+      });
+      final res = await dio.post<Map<String, dynamic>>(
+        '/api/v1/recordings',
+        data: formData,
+      );
+      return ServerRecordingUploadResult.fromJson(
+        res.data ?? const <String, dynamic>{},
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '녹음 업로드 실패'));
     }
   }
 
