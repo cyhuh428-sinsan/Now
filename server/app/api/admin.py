@@ -169,6 +169,8 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     note_total = 0
     recording_total = 0
     user_total = 0
+    inactive_users = 0
+    users_without_seen = 0
     failed_jobs = 0
     queued_jobs = 0
     running_jobs = 0
@@ -179,6 +181,20 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
         note_total = db.scalar(select(func.count()).select_from(Note)) or 0
         recording_total = db.scalar(select(func.count()).select_from(Recording)) or 0
         user_total = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+        inactive_users = (
+            db.scalar(
+                select(func.count()).select_from(UserAccount).where(UserAccount.is_active == 0)
+            )
+            or 0
+        )
+        users_without_seen = (
+            db.scalar(
+                select(func.count())
+                .select_from(UserAccount)
+                .where(UserAccount.last_seen_at.is_(None))
+            )
+            or 0
+        )
         failed_jobs = _count_jobs_by_status(db, "failed")
         queued_jobs = _count_jobs_by_status(db, "queued")
         running_jobs = _count_jobs_by_status(db, "running")
@@ -242,6 +258,20 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     )
     checks.append(
         {
+            "name": "비활성 사용자",
+            "status": "info" if inactive_users else "ok",
+            "message": f"비활성 사용자 {inactive_users}명",
+        }
+    )
+    checks.append(
+        {
+            "name": "접속 기록 없는 사용자",
+            "status": "info" if users_without_seen else "ok",
+            "message": f"최근 접속 기록 없음 {users_without_seen}명",
+        }
+    )
+    checks.append(
+        {
             "name": "삭제 표시 메모",
             "status": "info" if deleted_notes else "ok",
             "message": f"삭제 표시 메모 {deleted_notes}건",
@@ -262,6 +292,8 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             "notes": note_total,
             "recordings": recording_total,
             "users": user_total,
+            "inactive_users": inactive_users,
+            "users_without_seen": users_without_seen,
             "failed_analysis_jobs": failed_jobs,
             "queued_analysis_jobs": queued_jobs,
             "running_analysis_jobs": running_jobs,
