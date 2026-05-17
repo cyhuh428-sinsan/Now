@@ -35,14 +35,14 @@ class BackupService {
     // 임시 디렉터리에 날짜 이름으로 복사
     final tempDir = await getTemporaryDirectory();
     final now = DateFormat('yyyyMMdd_HHmm').format(DateTime.now());
-    final exportFile = File(p.join(tempDir.path, 'now_backup_$now.db'));
+    final exportFile = File(p.join(tempDir.path, 'nownote_backup_$now.db'));
     await dbFile.copy(exportFile.path);
 
     await SharePlus.instance.share(
       ShareParams(
         files: [XFile(exportFile.path, mimeType: 'application/octet-stream')],
-        subject: 'Now App 백업 ${DateFormat('yyyy.MM.dd').format(DateTime.now())}',
-        text: 'Now App 데이터 백업 파일입니다.\n복원: 설정 > 데이터 관리 > 가져오기',
+        subject: 'NowNote 백업 ${DateFormat('yyyy.MM.dd').format(DateTime.now())}',
+        text: 'NowNote 데이터 백업 파일입니다.\n복원: 설정 > 데이터 관리 > 백업 가져오기',
       ),
     );
   }
