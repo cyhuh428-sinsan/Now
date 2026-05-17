@@ -200,6 +200,49 @@ class ServerRecordingUploadResult {
   }
 }
 
+class ServerRecording {
+  final int id;
+  final String ownerId;
+  final String deviceId;
+  final String localId;
+  final String? noteLocalId;
+  final String fileName;
+  final String contentType;
+  final String? transcript;
+  final String? createdAt;
+  final String? updatedAt;
+
+  const ServerRecording({
+    required this.id,
+    required this.ownerId,
+    required this.deviceId,
+    required this.localId,
+    required this.noteLocalId,
+    required this.fileName,
+    required this.contentType,
+    required this.transcript,
+    required this.createdAt,
+    required this.updatedAt,
+  });
+
+  bool get hasTranscript => transcript?.trim().isNotEmpty == true;
+
+  factory ServerRecording.fromJson(Map<String, dynamic> json) {
+    return ServerRecording(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      ownerId: json['owner_id']?.toString() ?? 'local_user',
+      deviceId: json['device_id']?.toString() ?? '-',
+      localId: json['local_id']?.toString() ?? '',
+      noteLocalId: json['note_local_id']?.toString(),
+      fileName: json['file_name']?.toString() ?? '',
+      contentType: json['content_type']?.toString() ?? '',
+      transcript: json['transcript']?.toString(),
+      createdAt: json['created_at']?.toString(),
+      updatedAt: json['updated_at']?.toString(),
+    );
+  }
+}
+
 class ServerUserProfile {
   final String ownerId;
   final String? email;
@@ -547,6 +590,29 @@ class ServerSyncService {
       );
     } on DioException catch (e) {
       throw Exception(_serverErrorMessage(e, fallback: '녹음 업로드 실패'));
+    }
+  }
+
+  Future<List<ServerRecording>> loadRecordings(ServerSettings settings) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _dio(settings);
+    try {
+      final ownerId = _normalizeOwnerId(settings.ownerId);
+      final res = await dio.get<List<dynamic>>(
+        '/api/v1/recordings',
+        queryParameters: {'owner_id': ownerId},
+      );
+      return (res.data ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                ServerRecording.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '녹음 목록 조회 실패'));
     }
   }
 

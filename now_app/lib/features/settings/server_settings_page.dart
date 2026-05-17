@@ -26,6 +26,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   ServerOpsResult? _opsResult;
   ServerUserProfile? _profile;
   List<ServerAnalysisJob> _analysisJobs = const [];
+  List<ServerRecording> _recordings = const [];
 
   @override
   void dispose() {
@@ -296,6 +297,34 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
+  Future<void> _refreshRecordings() async {
+    setState(() => _busy = true);
+    try {
+      final settings = _currentSettings();
+      await settings.save();
+      final recordings = await ref
+          .read(serverSyncServiceProvider)
+          .loadRecordings(settings);
+      if (mounted) {
+        setState(() => _recordings = recordings.take(5).toList());
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('서버 녹음 목록을 불러왔습니다')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('녹음 목록 조회 실패: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   String _formatServerSyncTime(DateTime? value) {
     if (value == null) return '없음';
     final local = value.toLocal();
@@ -318,6 +347,14 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   }
 
   String _formatAnalysisTime(String? value) {
+    final parsed = DateTime.tryParse(value ?? '');
+    if (parsed == null) return '-';
+    final local = parsed.toLocal();
+    return '${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
+  }
+
+  String _formatServerTimeText(String? value) {
     final parsed = DateTime.tryParse(value ?? '');
     if (parsed == null) return '-';
     final local = parsed.toLocal();
@@ -366,6 +403,54 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     title: const Text('서버 동기화 사용'),
                     subtitle: const Text('꺼두면 기기 로컬에서만 사용합니다'),
                     activeThumbColor: const Color(0xFF2563EB),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              _ServerCard(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    '서버 녹음',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '서버에 저장된 최근 녹음 파일을 확인합니다. 회의/대화/메모와 계층 메모에서 업로드된 원본 녹음의 상태 점검용입니다.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_recordings.isEmpty)
+                    const Text(
+                      '서버 녹음 목록을 불러오지 않았습니다.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    )
+                  else
+                    ..._recordings.map(
+                      (recording) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _RecordingTile(
+                          recording: recording,
+                          timeText: _formatServerTimeText(recording.updatedAt),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: _busy ? null : _refreshRecordings,
+                      icon: const Icon(Icons.graphic_eq_outlined, size: 18),
+                      label: const Text('녹음 목록 새로고침'),
+                    ),
                   ),
                 ],
               ),
@@ -657,6 +742,84 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
         },
         loading: () => const Center(child: CircularProgressIndicator()),
         error: (e, _) => Center(child: Text('설정 로드 실패: $e')),
+      ),
+    );
+  }
+}
+
+class _RecordingTile extends StatelessWidget {
+  final ServerRecording recording;
+  final String timeText;
+
+  const _RecordingTile({required this.recording, required this.timeText});
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = recording.hasTranscript
+        ? const Color(0xFF059669)
+        : const Color(0xFFD97706);
+    final statusText = recording.hasTranscript ? '텍스트 있음' : '원본만';
+    final noteText = recording.noteLocalId?.trim().isEmpty == false
+        ? recording.noteLocalId!
+        : '연결 메모 없음';
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.mic_none_outlined, size: 18, color: statusColor),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  recording.fileName.isEmpty
+                      ? recording.localId
+                      : recording.fileName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${recording.deviceId} · $noteText · $timeText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: statusColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              statusText,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
