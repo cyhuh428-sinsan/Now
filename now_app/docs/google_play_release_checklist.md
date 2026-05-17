@@ -34,8 +34,8 @@
 - [x] Google Play용 AAB 빌드 경로 확인
 - [x] 업로드 키 설정 템플릿 추가: `android/key.properties.example`
 - [x] 키 생성/릴리스 빌드 스크립트의 Flutter/JDK 경로 환경변수 지원
-- [ ] 실제 업로드 키 생성
-- [ ] `android/key.properties` 작성
+- [x] 로컬 업로드 키 파일 존재 확인: `android/upload-keystore.jks` (Git 제외)
+- [x] 로컬 `android/key.properties` 존재 확인 (Git 제외)
 - [ ] 서명된 AAB 빌드
 
 ## 업로드 키 생성 예시
@@ -59,6 +59,13 @@ powershell -ExecutionPolicy Bypass -File .\build_release_aab.ps1
 
 결과 파일:
 `build/app/outputs/bundle/release/app-release.aab`
+
+## Play 출시 사전 점검
+빌드 전후로 아래 점검을 실행해 민감 파일 제외, Manifest 권한, 백업 제외 규칙, Play 이미지 자료를 확인합니다.
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1
+```
 
 ## 등록 가능 판정 기준
 이전 SectorMap 등록 준비 로그 기준으로, AAB 생성만으로는 "등록 가능"이라고 판단하지 않습니다.

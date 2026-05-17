@@ -846,3 +846,32 @@
 
 - `git diff --check` 통과.
 - Play 이미지 6개 파일 존재 확인.
+
+## 2026-05-18 03:40 KST
+
+### 다음 작업 시작
+
+- Play 등록 전 수동 확인 항목 중 빌드 없이 자동 점검할 수 있는 항목을 스크립트화.
+
+### 확인 내용
+
+- 로컬에 `android/upload-keystore.jks`, `android/key.properties`가 존재함.
+- 두 파일은 `.gitignore`로 Git 추적에서 제외되고 있음.
+- 릴리스 체크리스트는 아직 업로드 키/`key.properties`를 미완료로 표시하고 있었음.
+
+### 구현 내용
+
+- `android/check_play_release_inputs.ps1` 추가:
+  - 업로드 키와 `key.properties` 존재 확인
+  - 두 민감 파일의 Git ignore 확인
+  - Manifest의 `POST_NOTIFICATIONS`와 `CAPTURE_AUDIO_OUTPUT` 제거 규칙 확인
+  - 백업 제외 규칙 리소스 연결과 exclude 존재 확인
+  - Play 이미지 6개 파일 존재 확인
+- Play 출시 체크리스트에 사전 점검 스크립트 실행 절차 추가.
+- 로컬 업로드 키/`key.properties` 존재 확인 항목을 완료로 반영하되, 파일 내용은 기록하지 않음.
+
+### 검증
+
+- `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
+- `git diff --check` 통과.
+- Windows PowerShell 5 출력 깨짐을 피하기 위해 스크립트 최종 성공/실패 문구는 영어로 정리.
