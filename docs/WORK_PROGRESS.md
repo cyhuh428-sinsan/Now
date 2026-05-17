@@ -160,6 +160,33 @@
 - `git diff --check` 통과.
 - 현재 환경에서는 Flutter SDK가 PATH에 없어 모바일 정적 분석은 보류.
 
+## 2026-05-18 02:05 KST
+
+### 다음 작업 시작
+
+- Android 키 생성/릴리스 빌드 스크립트의 공개 저장소 사용성 점검.
+
+### 확인 내용
+
+- `key.properties`, `upload-keystore.jks`, JVM 오류 로그는 로컬에 존재하지만 Git 추적 대상은 아니고 ignore 규칙에 걸려 있음.
+- 키 생성 스크립트는 Android Studio JBR의 `keytool.exe` 고정 경로만 사용하고 있었음.
+- 릴리스 빌드 스크립트는 특정 사용자 Flutter 경로와 Android Studio JBR 경로에 묶여 있었음.
+
+### 구현 내용
+
+- 키 생성 스크립트가 `NOWNOTE_KEYTOOL`, `JAVA_HOME`, PATH, Android Studio JBR 순서로 `keytool`을 찾도록 수정.
+- 릴리스 빌드 스크립트가 `NOWNOTE_JAVA_HOME`, `JAVA_HOME`, Android Studio JBR 순서로 JDK를 찾도록 수정.
+- 릴리스 빌드 스크립트가 `NOWNOTE_FLUTTER_BIN`, PATH, 사용자 홈의 Flutter 경로 순서로 Flutter를 찾도록 수정.
+- 기본 빌드는 `flutter build appbundle --release`로 실행하고, `NOWNOTE_SKIP_PUB=1`일 때만 `--no-pub`를 붙이도록 변경.
+- Play 등록 순서/체크리스트에 환경변수로 로컬 경로를 지정할 수 있음을 추가.
+
+### 검증
+
+- PowerShell `scriptblock` 파서로 `create_upload_key.ps1`, `build_release_aab.ps1` 문법 확인.
+- 환경변수/경로 문구 재검색 완료.
+- `git diff --check` 통과.
+- 실제 키 생성과 릴리스 AAB 빌드는 로컬 민감 파일/빌드 산출물에 영향을 주므로 실행하지 않음.
+
 ## 2026-05-18 01:47 KST
 
 ### 다음 작업 시작
