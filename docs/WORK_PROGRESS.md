@@ -47,6 +47,34 @@
 - `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 05:55 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비를 위해 사용자별 접속 토큰 발급/저장 구조 추가.
+
+### 구현 내용
+
+- `user_accounts`에 사용자별 접속 토큰 해시, 발급 시각, 마지막 사용 시각 컬럼 추가.
+- 기존 DB도 시작 시 누락 컬럼을 추가하도록 최소 스키마 마이그레이션 추가.
+- 관리자 API `POST /api/v1/admin/users/{owner_id}/token` 추가.
+- 사용자 수정 화면에서 사용자별 접속 토큰 발급/재발급 지원.
+- 토큰 원문은 저장하지 않고 발급 직후 한 번만 표시.
+- 사용자 export/API 응답에서는 토큰 해시를 숨기고 발급 여부만 표시.
+- smoke test에 사용자별 토큰 발급 검증 추가.
+
+### 남은 내용
+
+- 발급된 사용자별 토큰을 실제 데이터 API 요청의 `owner_id`와 묶어 강제 검증하는 단계는 다음 작업으로 진행.
+
+### 검증
+
+- `py_compile`로 DB, 모델, 사용자 서비스, 관리자 API, 모니터 화면, smoke test 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `uv run --with-requirements server/requirements.txt` 환경에서 SQLite 임시 DB 토큰 발급 서비스 검증 통과.
+- FastAPI `TestClient`로 관리자 사용자 생성과 사용자별 토큰 발급 API 검증 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점

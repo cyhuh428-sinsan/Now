@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
-from app.services.user_accounts import create_user_account, update_user_account
+from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
@@ -140,6 +140,20 @@ def admin_user_update(
         )
         db.commit()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/admin/users/token", include_in_schema=False)
+def admin_user_issue_token(
+    owner_id: str = Form(),
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    with SessionLocal() as db:
+        issued = issue_user_access_token(db, owner_id=owner_id)
+        if issued is None:
+            return HTMLResponse(_admin_user_token_html(owner_id, "", "사용자를 찾을 수 없습니다."))
+        user, raw_token = issued
+        db.commit()
+        return HTMLResponse(_admin_user_token_html(user.owner_id, raw_token, ""))
 
 
 @router.post("/admin/users/bulk", include_in_schema=False)
@@ -2250,7 +2264,7 @@ def _admin_users_html(request: Request) -> str:
 
 def _user_rows(users: list[UserAccount]) -> str:
     if not users:
-        return '<tr><td colspan="10">조건에 맞는 사용자가 없습니다.</td></tr>'
+        return '<tr><td colspan="11">조건에 맞는 사용자가 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td class=\"row-select\"><input type=\"checkbox\" name=\"owner_ids\" value=\"{escape(user.owner_id, quote=True)}\"></td>"
@@ -2261,6 +2275,7 @@ def _user_rows(users: list[UserAccount]) -> str:
         f"<td>{_simple_badge('ok' if user.two_factor_enabled else 'warn', '사용' if user.two_factor_enabled else '미사용')}</td>"
         f"<td>{escape(user.group_name)}</td>"
         f"<td>{_simple_badge('ok' if user.is_active else 'bad', '활성' if user.is_active else '비활성')}</td>"
+        f"<td>{_simple_badge('ok' if user.access_token_hash else 'warn', '발급됨' if user.access_token_hash else '없음')}</td>"
         f"<td>{_format_datetime(user.last_seen_at)}</td>"
         f"<td class=\"actions\"><a href=\"/admin/users/edit?owner_id={escape(user.owner_id, quote=True)}\">수정</a></td>"
         "</tr>"
@@ -2602,6 +2617,54 @@ def _admin_user_edit_html(owner_id: str) -> str:
         <button type="submit">사용자 저장</button>
       </div>
     </form>
+
+    <form method="post" action="/admin/users/token" style="margin-top:14px;">
+      <input type="hidden" name="owner_id" value="{escape(user.owner_id, quote=True)}">
+      <div class="row">
+        <label><strong>사용자별 접속 토큰</strong><span>공용 서버 준비용입니다. 발급된 토큰은 한 번만 표시됩니다.</span></label>
+        <div class="switch-row">
+          <span>{'발급됨' if user.access_token_hash else '아직 없음'}</span>
+          <button type="submit">{'재발급' if user.access_token_hash else '발급'}</button>
+        </div>
+      </div>
+      <div class="row">
+        <label><strong>발급 시각</strong><span>마지막 사용자별 토큰 발급 시각</span></label>
+        <div>{_format_datetime(user.access_token_issued_at)}</div>
+      </div>
+    </form>
+  </main>
+</body>
+</html>"""
+
+
+def _admin_user_token_html(owner_id: str, token: str, error_message: str) -> str:
+    token_block = (
+        f"<pre>{escape(token)}</pre><p>이 토큰은 다시 표시되지 않습니다. 필요한 위치에 바로 입력해야 합니다.</p>"
+        if token
+        else f"<p>{escape(error_message or '토큰 발급에 실패했습니다.')}</p>"
+    )
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 사용자 토큰</title>
+  <style>
+    body {{ margin:0; background:#f5f7fb; color:#111827; font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
+    main {{ max-width:820px; margin:0 auto; padding:32px 18px 48px; }}
+    .card {{ background:#fff; border:1px solid #e5e7eb; border-radius:8px; padding:20px; }}
+    pre {{ white-space:pre-wrap; word-break:break-all; background:#0f172a; color:#e5e7eb; padding:14px; border-radius:8px; }}
+    a {{ color:#2563eb; font-weight:700; text-decoration:none; }}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>사용자별 접속 토큰</h1>
+      <p><strong>{escape(owner_id)}</strong></p>
+      {token_block}
+      <p><a href="/admin/users/edit?owner_id={escape(owner_id, quote=True)}">사용자 수정으로 돌아가기</a></p>
+    </div>
   </main>
 </body>
 </html>"""

@@ -10,7 +10,7 @@ from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
-from app.services.user_accounts import create_user_account, update_user_account
+from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -196,6 +196,29 @@ def update_user(
     return {"status": "ok", "user": _model_to_dict(user)}
 
 
+@router.post("/users/{owner_id}/token")
+def issue_user_token(
+    owner_id: str,
+    db: Session = Depends(get_db),
+) -> dict:
+    issued = issue_user_access_token(db, owner_id=owner_id)
+    if issued is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="user not found",
+        )
+    user, raw_token = issued
+    db.commit()
+    db.refresh(user)
+    return {
+        "status": "ok",
+        "owner_id": user.owner_id,
+        "token": raw_token,
+        "issued_at": user.access_token_issued_at,
+        "message": "이 토큰은 다시 표시되지 않습니다.",
+    }
+
+
 @router.get("/ops")
 def ops_status(db: Session = Depends(get_db)) -> dict:
     settings = get_settings()
@@ -356,7 +379,11 @@ def _export_payload(name: str, rows: list) -> dict:
 
 
 def _model_to_dict(row) -> dict:
-    return {column.name: getattr(row, column.name) for column in row.__table__.columns}
+    data = {column.name: getattr(row, column.name) for column in row.__table__.columns}
+    if isinstance(row, UserAccount):
+        data.pop("access_token_hash", None)
+        data["access_token_configured"] = bool(row.access_token_hash)
+    return data
 
 
 def _count_jobs_by_status(db: Session, job_status: str) -> int:
