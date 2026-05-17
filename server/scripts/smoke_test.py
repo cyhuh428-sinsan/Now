@@ -4,6 +4,7 @@ import json
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from uuid import uuid4
 
 
 def require(condition: bool, message: str) -> None:
@@ -34,6 +35,48 @@ def request_error(method: str, url: str, token: str | None = None, data: dict | 
             return e.code, json.loads(text) if text else None
         except json.JSONDecodeError:
             return e.code, {"detail": text}
+
+
+def request_multipart(
+    url: str,
+    token: str | None,
+    fields: dict[str, str],
+    file_field: str,
+    file_name: str,
+    content_type: str,
+    file_bytes: bytes,
+):
+    boundary = f"----nownote-smoke-{uuid4().hex}"
+    chunks: list[bytes] = []
+    for name, value in fields.items():
+        chunks.extend(
+            [
+                f"--{boundary}\r\n".encode("utf-8"),
+                f'Content-Disposition: form-data; name="{name}"\r\n\r\n'.encode("utf-8"),
+                str(value).encode("utf-8"),
+                b"\r\n",
+            ]
+        )
+    chunks.extend(
+        [
+            f"--{boundary}\r\n".encode("utf-8"),
+            (
+                f'Content-Disposition: form-data; name="{file_field}"; '
+                f'filename="{file_name}"\r\n'
+            ).encode("utf-8"),
+            f"Content-Type: {content_type}\r\n\r\n".encode("utf-8"),
+            file_bytes,
+            b"\r\n",
+            f"--{boundary}--\r\n".encode("utf-8"),
+        ]
+    )
+    headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    req = urllib.request.Request(url, data=b"".join(chunks), headers=headers, method="POST")
+    with urllib.request.urlopen(req, timeout=10) as res:
+        text = res.read().decode("utf-8")
+        return res.status, json.loads(text) if text else None
 
 
 def request_text(method: str, url: str, token: str | None = None):
@@ -188,6 +231,45 @@ def main() -> None:
             "pulled": len(data.get("pulled_notes", [])),
             "server_time": data.get("server_time"),
         },
+    )
+
+    recording_local_id = f"smoke_recording_{now.replace(':', '').replace('-', '').replace('T', '_')}"
+    status, data = request_multipart(
+        f"{base_url}/api/v1/recordings",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "device_id": "smoke_test",
+            "local_id": recording_local_id,
+            "note_local_id": "smoke_note_001",
+            "transcript": "Smoke recording transcript",
+        },
+        "file",
+        "smoke-recording.webm",
+        "audio/webm",
+        b"NowNote smoke recording bytes",
+    )
+    require(data.get("local_id") == recording_local_id, "녹음 업로드 local_id가 일치하지 않습니다")
+    print(
+        "POST /api/v1/recordings:",
+        status,
+        {
+            "local_id": data.get("local_id"),
+            "content_type": data.get("content_type"),
+        },
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/recordings?owner_id=local_user",
+        args.token,
+    )
+    has_recording = any(item.get("local_id") == recording_local_id for item in data)
+    require(has_recording, "업로드한 녹음이 목록에서 확인되지 않았습니다")
+    print(
+        "GET /api/v1/recordings:",
+        status,
+        {"has_recording": has_recording, "count": len(data)},
     )
 
     deleted_local_id = f"smoke_deleted_{now.replace(':', '').replace('-', '').replace('T', '_')}"
