@@ -198,6 +198,18 @@ def main() -> None:
             "detail": data.get("detail") if isinstance(data, dict) else None,
         },
     )
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/users/smoke_admin_user/token",
+        args.token,
+    )
+    require(status == 200, "사용자별 토큰 발급 API가 실패했습니다")
+    require(len(data.get("token", "")) >= 32, "사용자별 토큰 길이가 너무 짧습니다")
+    print(
+        "POST /api/v1/admin/users/{owner_id}/token:",
+        status,
+        {"owner_id": data.get("owner_id"), "issued": bool(data.get("token"))},
+    )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     sync_payload = {

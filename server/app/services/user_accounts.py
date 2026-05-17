@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import datetime
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -6,6 +8,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.note import UserAccount
+
+
+def hash_access_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def touch_user_activity(
@@ -89,6 +95,17 @@ def update_user_account(
     user.two_factor_enabled = 1 if two_factor_enabled else 0
     user.is_active = 1 if is_active else 0
     return user
+
+
+def issue_user_access_token(db: Session, *, owner_id: str) -> tuple[UserAccount, str] | None:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+    if user is None:
+        return None
+    raw_token = secrets.token_urlsafe(32)
+    user.access_token_hash = hash_access_token(raw_token)
+    user.access_token_issued_at = datetime.utcnow()
+    user.access_token_last_used_at = None
+    return user, raw_token
 
 
 def _clean_optional(value: str | None, max_length: int) -> str | None:
