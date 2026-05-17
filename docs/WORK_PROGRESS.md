@@ -42,6 +42,25 @@
 - `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 08:00 KST
+
+### 다음 작업 시작
+
+- 사용자 관리에서 토큰 발급 상태별 필터 추가.
+
+### 구현 내용
+
+- 관리자 사용자 API `GET /api/v1/admin/users`에 `token=issued|missing` 필터 추가.
+- 사용자 API 응답에 `token_issued`, `token_missing` 집계 추가.
+- `/admin/users` 화면에 토큰 필터와 `토큰 없음` 집계 카드 추가.
+- 서버 README의 사용자 관리 설명에 토큰 발급 여부 필터 반영.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `monitor.py` 확인 통과.
+- FastAPI `TestClient`로 `token=issued`, `token=missing` API 필터와 `/admin/users?token=missing` 화면 확인 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-18 05:20 KST
 
 ### 다음 작업 시작

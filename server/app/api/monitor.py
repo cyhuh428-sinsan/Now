@@ -1972,6 +1972,7 @@ def _admin_users_html(request: Request) -> str:
     search = (query.get("q") or "").strip()
     status_filter = query.get("status") or "all"
     group_filter = (query.get("group") or "").strip()
+    token_filter = query.get("token") or "all"
 
     try:
         with SessionLocal() as db:
@@ -1983,6 +1984,10 @@ def _admin_users_html(request: Request) -> str:
                 stmt = stmt.where(UserAccount.is_active == 0)
             elif status_filter == "never_seen":
                 stmt = stmt.where(UserAccount.last_seen_at.is_(None))
+            if token_filter == "issued":
+                stmt = stmt.where(UserAccount.access_token_hash.is_not(None))
+            elif token_filter == "missing":
+                stmt = stmt.where(UserAccount.access_token_hash.is_(None))
             if group_filter:
                 stmt = stmt.where(UserAccount.group_name == group_filter)
             if search:
@@ -2017,6 +2022,7 @@ def _admin_users_html(request: Request) -> str:
 
     active_count = sum(1 for user in users if user.is_active)
     two_factor_count = sum(1 for user in users if user.two_factor_enabled)
+    token_missing_count = sum(1 for user in users if not user.access_token_hash)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -2068,7 +2074,7 @@ def _admin_users_html(request: Request) -> str:
     }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(4, minmax(0, 1fr));
+      grid-template-columns: repeat(5, minmax(0, 1fr));
       gap: 12px;
     }}
     .card, section {{
@@ -2219,6 +2225,7 @@ def _admin_users_html(request: Request) -> str:
       <div class="card"><div class="label">전체 사용자</div><div class="value">{len(users)}</div></div>
       <div class="card"><div class="label">활성 사용자</div><div class="value">{active_count}</div></div>
       <div class="card"><div class="label">2단계 인증 사용</div><div class="value">{two_factor_count}</div></div>
+      <div class="card"><div class="label">토큰 없음</div><div class="value">{token_missing_count}</div></div>
       <div class="card"><div class="label">사용자 그룹</div><div class="value">{len(group_counts)}</div></div>
     </div>
 
@@ -2231,6 +2238,9 @@ def _admin_users_html(request: Request) -> str:
         </select>
         <select name="group">
           {_user_group_options(group_counts, group_filter)}
+        </select>
+        <select name="token">
+          {_user_token_options(token_filter)}
         </select>
         <button type="submit">필터 적용</button>
       </form>
@@ -2303,6 +2313,18 @@ def _user_group_options(group_counts: dict[str, int], selected: str) -> str:
             f'<option value="{escape(group_name, quote=True)}" {"selected" if selected == group_name else ""}>{escape(group_name)}</option>'
         )
     return "\n".join(options)
+
+
+def _user_token_options(selected: str) -> str:
+    options = [
+        ("all", "전체 토큰"),
+        ("issued", "토큰 발급됨"),
+        ("missing", "토큰 없음"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
 
 
 def _simple_badge(status: str, label: str) -> str:
