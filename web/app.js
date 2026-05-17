@@ -301,6 +301,7 @@ const I18N = {
     "settings.server.mode": "사용 방식",
     "settings.server.url": "서버 주소",
     "settings.server.token": "API 토큰",
+    "settings.server.userToken": "사용자별 접속 토큰",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
     "settings.server.profile.title": "사용자 프로필",
@@ -348,6 +349,7 @@ const I18N = {
     "settings.server.capabilities.analysis": "분석 작업",
     "settings.server.capabilities.admin": "운영 점검",
     "settings.server.capabilities.users": "사용자 관리",
+    "settings.server.capabilities.userTokenRequired": "사용자 토큰 필요",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
     "settings.server.analysis.title": "분석 작업",
     "settings.server.analysis.desc": "선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.",
@@ -765,6 +767,7 @@ const I18N = {
     "settings.server.mode": "Mode",
     "settings.server.url": "Server URL",
     "settings.server.token": "API token",
+    "settings.server.userToken": "Per-user access token",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
     "settings.server.profile.title": "User profile",
@@ -812,6 +815,7 @@ const I18N = {
     "settings.server.capabilities.analysis": "Analysis jobs",
     "settings.server.capabilities.admin": "Ops checks",
     "settings.server.capabilities.users": "User management",
+    "settings.server.capabilities.userTokenRequired": "User token required",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
     "settings.server.analysis.title": "Analysis jobs",
     "settings.server.analysis.desc": "Queue the selected knowledge note for server analysis and check recent status.",
@@ -1035,6 +1039,7 @@ function defaultServerSettings() {
     mode: "local",
     url: "",
     token: "",
+    userToken: "",
     ownerId: "local_user",
     deviceId: "web-desktop",
     userProfile: defaultServerUserProfile(),
@@ -1240,6 +1245,7 @@ const elements = {
   serverModeSelect: $("#serverModeSelect"),
   serverUrlInput: $("#serverUrlInput"),
   serverTokenInput: $("#serverTokenInput"),
+  serverUserTokenInput: $("#serverUserTokenInput"),
   ownerIdInput: $("#ownerIdInput"),
   deviceIdInput: $("#deviceIdInput"),
   serverDisplayNameInput: $("#serverDisplayNameInput"),
@@ -1731,6 +1737,7 @@ function renderServerSettings() {
   elements.serverModeSelect.value = server.mode;
   elements.serverUrlInput.value = server.url;
   elements.serverTokenInput.value = server.token;
+  elements.serverUserTokenInput.value = server.userToken || "";
   elements.ownerIdInput.value = server.ownerId;
   elements.deviceIdInput.value = server.deviceId;
   const profile = normalizeServerUserProfile(server.userProfile);
@@ -1756,6 +1763,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   const previous = state.settings.server || defaultServerSettings();
   const nextUrl = normalizeServerUrl(elements.serverUrlInput.value);
   const nextToken = elements.serverTokenInput.value.trim();
+  const nextUserToken = elements.serverUserTokenInput.value.trim();
   const nextMode = elements.serverModeSelect.value === "server" ? "server" : "local";
   const connectionChanged = previous.mode !== nextMode || previous.url !== nextUrl || previous.token !== nextToken;
   state.settings.server = {
@@ -1763,6 +1771,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
     mode: nextMode,
     url: nextUrl,
     token: nextToken,
+    userToken: nextUserToken,
     ownerId: normalizeOwnerId(elements.ownerIdInput.value),
     deviceId: elements.deviceIdInput.value.trim() || "web-desktop",
     userProfile: {
@@ -1834,6 +1843,7 @@ function serverCapabilityLabels(capabilities) {
   if (capabilities.analysis_jobs) labels.push(t("settings.server.capabilities.analysis"));
   if (capabilities.admin_ops) labels.push(t("settings.server.capabilities.admin"));
   if (capabilities.user_accounts || capabilities.user_profile) labels.push(t("settings.server.capabilities.users"));
+  if (capabilities.user_access_tokens || capabilities.user_token_required) labels.push(t("settings.server.capabilities.userTokenRequired"));
   if (capabilities.max_tree_note_level) {
     labels.push(t("settings.server.capabilities.treeLevel", { level: capabilities.max_tree_note_level }));
   }
@@ -2032,7 +2042,7 @@ async function testServerConnection() {
   renderServerStatus("testing", t("settings.server.testing"));
   try {
     const response = await fetch(`${server.url}/api/v1/server`, {
-      headers: server.token ? { Authorization: `Bearer ${server.token}` } : {},
+      headers: serverAuthHeaders(server),
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
@@ -2221,7 +2231,7 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+        ...serverAuthHeaders(server),
       },
       body: JSON.stringify({
         owner_id: normalizeOwnerId(server.ownerId),
@@ -2281,12 +2291,19 @@ async function requestServerJson(server, path, options = {}) {
     ...options,
     headers: {
       ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+      ...serverAuthHeaders(server),
       ...(options.headers || {}),
     },
   });
   if (!response.ok) throw new Error(await serverResponseError(response));
   return response.json();
+}
+
+function serverAuthHeaders(server) {
+  return {
+    ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+    ...(server.userToken ? { "X-Now-User-Token": server.userToken } : {}),
+  };
 }
 
 function applyServerUserProfile(user) {
@@ -2960,6 +2977,7 @@ function applyLanguage() {
   setText("#serverModeLabel", t("settings.server.mode"));
   setText("#serverUrlLabel", t("settings.server.url"));
   setText("#serverTokenLabel", t("settings.server.token"));
+  setText("#serverUserTokenLabel", t("settings.server.userToken"));
   setText("#ownerIdLabel", t("settings.server.owner"));
   setText("#deviceIdLabel", t("settings.server.device"));
   setText("#serverProfileTitle", t("settings.server.profile.title"));
@@ -2978,6 +2996,7 @@ function applyLanguage() {
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
   setPlaceholder(elements.serverTokenInput, t("settings.server.token"));
+  setPlaceholder(elements.serverUserTokenInput, t("settings.server.userToken"));
   setText("#sidebarAssistSettingTitle", t("settings.sidebarAssist.title"));
   setText("#sidebarAssistSettingDesc", t("settings.sidebarAssist.desc"));
   setText("#backupSettingTitle", t("settings.backup.title"));
@@ -5532,6 +5551,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.mode = normalized.mode === "server" ? "server" : "local";
   normalized.url = typeof normalized.url === "string" ? normalizeServerUrl(normalized.url) : "";
   normalized.token = typeof normalized.token === "string" ? normalized.token : "";
+  normalized.userToken = typeof normalized.userToken === "string" ? normalized.userToken : "";
   normalized.ownerId = normalizeOwnerId(normalized.ownerId || defaults.ownerId);
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
