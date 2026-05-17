@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import '../../llm/providers/llm_providers.dart';
 import '../../services/notification_service.dart';
 import '../../services/backup_service.dart';
+import '../../services/feature_settings_service.dart';
 import '../../repositories/repository_providers.dart';
 
 // ============================================================
@@ -189,9 +189,6 @@ class _FeatureToggleCard extends StatefulWidget {
 }
 
 class _FeatureToggleCardState extends State<_FeatureToggleCard> {
-  static const _speakerSeparationKey = 'feature_speaker_separation_enabled';
-  static const _voiceEmotionKey = 'feature_voice_emotion_enabled';
-
   bool _loading = true;
   bool _speakerSeparation = false;
   bool _voiceEmotion = false;
@@ -203,18 +200,13 @@ class _FeatureToggleCardState extends State<_FeatureToggleCard> {
   }
 
   Future<void> _load() async {
-    final prefs = await SharedPreferences.getInstance();
+    final settings = await FeatureSettingsService.load();
     if (!mounted) return;
     setState(() {
-      _speakerSeparation = prefs.getBool(_speakerSeparationKey) ?? false;
-      _voiceEmotion = prefs.getBool(_voiceEmotionKey) ?? false;
+      _speakerSeparation = settings.speakerSeparationEnabled;
+      _voiceEmotion = settings.voiceEmotionEnabled;
       _loading = false;
     });
-  }
-
-  Future<void> _save(String key, bool value) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(key, value);
   }
 
   @override
@@ -229,7 +221,7 @@ class _FeatureToggleCardState extends State<_FeatureToggleCard> {
           enabled: !_loading,
           onChanged: (value) {
             setState(() => _speakerSeparation = value);
-            _save(_speakerSeparationKey, value);
+            FeatureSettingsService.saveSpeakerSeparation(value);
           },
         ),
         const _Divider(),
@@ -241,7 +233,7 @@ class _FeatureToggleCardState extends State<_FeatureToggleCard> {
           enabled: !_loading,
           onChanged: (value) {
             setState(() => _voiceEmotion = value);
-            _save(_voiceEmotionKey, value);
+            FeatureSettingsService.saveVoiceEmotion(value);
           },
         ),
       ],

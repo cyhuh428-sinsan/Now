@@ -9,11 +9,11 @@ class GroqLlmRepository extends BaseLlmRepository {
   GroqLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://api.groq.com/openai/v1/chat/completions',
       options: Options(headers: {'Authorization': 'Bearer ${config.apiKey}', 'Content-Type': 'application/json'}),
-      data: {'model': 'llama-3.3-70b-versatile', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName)}], 'temperature': 0.2, 'max_tokens': 2048},
+      data: {'model': 'llama-3.3-70b-versatile', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}], 'temperature': 0.2, 'max_tokens': 2048},
     );
     return parseResponse(r.data['choices'][0]['message']['content'] as String);
   }
@@ -43,11 +43,11 @@ class DeepSeekLlmRepository extends BaseLlmRepository {
   DeepSeekLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://api.deepseek.com/chat/completions',
       options: Options(headers: {'Authorization': 'Bearer ${config.apiKey}', 'Content-Type': 'application/json'}),
-      data: {'model': 'deepseek-chat', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName)}], 'temperature': 0.2, 'max_tokens': 2048},
+      data: {'model': 'deepseek-chat', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}], 'temperature': 0.2, 'max_tokens': 2048},
     );
     return parseResponse(r.data['choices'][0]['message']['content'] as String);
   }
@@ -77,11 +77,11 @@ class GeminiLlmRepository extends BaseLlmRepository {
   GeminiLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${config.apiKey}',
       options: Options(headers: {'Content-Type': 'application/json'}),
-      data: {'contents': [{'parts': [{'text': buildPrompt(segments, recordType: recordType, participantName: participantName)}]}], 'generationConfig': {'temperature': 0.2, 'maxOutputTokens': 2048}},
+      data: {'contents': [{'parts': [{'text': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}]}], 'generationConfig': {'temperature': 0.2, 'maxOutputTokens': 2048}},
     );
     return parseResponse(r.data['candidates'][0]['content']['parts'][0]['text'] as String);
   }
@@ -111,11 +111,11 @@ class OpenAiLlmRepository extends BaseLlmRepository {
   OpenAiLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://api.openai.com/v1/chat/completions',
       options: Options(headers: {'Authorization': 'Bearer ${config.apiKey}', 'Content-Type': 'application/json'}),
-      data: {'model': 'gpt-4o-mini', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName)}], 'temperature': 0.2, 'max_tokens': 2048},
+      data: {'model': 'gpt-4o-mini', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}], 'temperature': 0.2, 'max_tokens': 2048},
     );
     return parseResponse(r.data['choices'][0]['message']['content'] as String);
   }
@@ -145,11 +145,11 @@ class ClaudeLlmRepository extends BaseLlmRepository {
   ClaudeLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://api.anthropic.com/v1/messages',
       options: Options(headers: {'x-api-key': config.apiKey, 'anthropic-version': '2023-06-01', 'Content-Type': 'application/json'}),
-      data: {'model': 'claude-3-5-haiku-20241022', 'max_tokens': 2048, 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName)}]},
+      data: {'model': 'claude-3-5-haiku-20241022', 'max_tokens': 2048, 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}]},
     );
     return parseResponse(r.data['content'][0]['text'] as String);
   }
@@ -183,11 +183,11 @@ class GrokLlmRepository extends BaseLlmRepository {
   GrokLlmRepository(this.config);
 
   @override
-  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = ''}) async {
+  Future<List<LlmExtractedItem>> extractItems(List<String> segments, {String recordType = 'meeting', String participantName = '', bool includeSpeakerSeparation = false, bool includeVoiceEmotion = false}) async {
     final r = await dio.post(
       'https://api.x.ai/v1/chat/completions',
       options: Options(headers: {'Authorization': 'Bearer ${config.apiKey}', 'Content-Type': 'application/json'}),
-      data: {'model': 'grok-2-latest', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName)}], 'temperature': 0.2, 'max_tokens': 2048},
+      data: {'model': 'grok-2-latest', 'messages': [{'role': 'user', 'content': buildPrompt(segments, recordType: recordType, participantName: participantName, includeSpeakerSeparation: includeSpeakerSeparation, includeVoiceEmotion: includeVoiceEmotion)}], 'temperature': 0.2, 'max_tokens': 2048},
     );
     return parseResponse(r.data['choices'][0]['message']['content'] as String);
   }
