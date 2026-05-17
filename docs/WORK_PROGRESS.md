@@ -892,9 +892,8 @@
 - `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
 - `git diff --check` 통과.
 - 실제 AAB 재빌드는 현재 Flutter 실행 환경과 산출물 영향 때문에 실행하지 않음.
-- Windows PowerShell 5 출력 깨짐을 피하기 위해 스크립트 최종 성공/실패 문구는 영어로 정리.
 
-## 2026-05-18 03:55 KST
+## 2026-05-18 04:15 KST
 
 ### 다음 작업 시작
 
@@ -914,4 +913,28 @@
 ### 검증
 
 - `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
+- `git diff --check` 통과.
+
+## 2026-05-18 04:25 KST
+
+### 다음 작업 시작
+
+- Play 등록 가능 판정 기준 중 이미 준비된 권한 문구와 릴리스 패키징 리소스 확인 항목을 분리.
+
+### 확인 내용
+
+- 권한 사용 목적 문구는 `google_play_paste_ready_ko.md`, `google_play_step_by_step_ko.md`에 준비되어 있음.
+- 빌드 산출물의 릴리스 packaged resource에는 `backup_rules.xml`, `data_extraction_rules.xml`이 존재함.
+- 하지만 현재 남아 있는 오래된 릴리스 packaged resource의 `backup_rules.xml`에는 과거 include 규칙이 남아 있어, 최신 AAB 재빌드 전에는 완료로 볼 수 없음.
+
+### 구현 내용
+
+- Play 사전 점검 스크립트가 릴리스 packaged resource의 백업 제외 규칙도 확인하도록 확장.
+- 출시 체크리스트에서 위험 권한 목적 문구 준비만 완료로 표시.
+- Android 자동 클라우드 백업 제외 규칙 반영은 최신 릴리스 빌드 후 확인 항목으로 유지.
+
+### 검증
+
+- `check_play_release_inputs.ps1` 실행 결과, 오래된 릴리스 packaged resource의 백업 규칙 때문에 실패하는 것을 확인.
+- 실패가 맞는 상태이므로 체크리스트의 백업 제외 릴리스 반영 항목은 미완료로 유지.
 - `git diff --check` 통과.

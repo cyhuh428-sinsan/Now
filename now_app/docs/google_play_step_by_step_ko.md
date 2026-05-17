@@ -402,7 +402,7 @@ D:\Project\Now\now_app\build\app\outputs\bundle\release\app-release.aab
 ```
 
 빌드 스크립트는 성공 후 Play 출시 사전 점검도 자동으로 실행합니다.
-별도 점검만 다시 실행하려면 아래 명령을 사용합니다.
+최신 릴리스 빌드가 끝난 뒤 별도 점검만 다시 실행하려면 아래 명령을 사용합니다.
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1
