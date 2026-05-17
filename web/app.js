@@ -342,6 +342,13 @@ const I18N = {
     "settings.server.pending": "보류 변경",
     "settings.server.lastSync": "마지막 동기화",
     "settings.server.pendingMeta": "보류 변경 {count}개 · 마지막 동기화 {time}",
+    "settings.server.capabilities.none": "서버 기능 확인 전",
+    "settings.server.capabilities.sync": "동기화",
+    "settings.server.capabilities.recordings": "녹음",
+    "settings.server.capabilities.analysis": "분석 작업",
+    "settings.server.capabilities.admin": "운영 점검",
+    "settings.server.capabilities.users": "사용자 관리",
+    "settings.server.capabilities.treeLevel": "계층 {level}단계",
     "settings.server.never": "없음",
     "settings.sidebarAssist.title": "보조 목록 표시",
     "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
@@ -779,6 +786,13 @@ const I18N = {
     "settings.server.pending": "Pending changes",
     "settings.server.lastSync": "Last sync",
     "settings.server.pendingMeta": "Pending changes {count} · Last sync {time}",
+    "settings.server.capabilities.none": "Server features not checked",
+    "settings.server.capabilities.sync": "Sync",
+    "settings.server.capabilities.recordings": "Recordings",
+    "settings.server.capabilities.analysis": "Analysis jobs",
+    "settings.server.capabilities.admin": "Ops checks",
+    "settings.server.capabilities.users": "User management",
+    "settings.server.capabilities.treeLevel": "{level}-level tree",
     "settings.server.never": "Never",
     "settings.sidebarAssist.title": "Show helper lists",
     "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
@@ -984,6 +998,7 @@ function defaultServerSettings() {
     ownerId: "local_user",
     deviceId: "web-desktop",
     userProfile: defaultServerUserProfile(),
+    capabilities: null,
     lastCheckedAt: null,
     lastSyncedAt: null,
     lastStatus: "idle",
@@ -1198,6 +1213,7 @@ const elements = {
   serverFullSyncBtn: $("#serverFullSyncBtn"),
   serverStatusText: $("#serverStatusText"),
   serverMetaText: $("#serverMetaText"),
+  serverCapabilitiesText: $("#serverCapabilitiesText"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
@@ -1682,16 +1698,21 @@ function renderServerSettings() {
   elements.serverProfileSaveBtn.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
+  renderServerCapabilities(server.capabilities);
   renderServerProfileMeta(profile);
 }
 
 function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   const previous = state.settings.server || defaultServerSettings();
+  const nextUrl = normalizeServerUrl(elements.serverUrlInput.value);
+  const nextToken = elements.serverTokenInput.value.trim();
+  const nextMode = elements.serverModeSelect.value === "server" ? "server" : "local";
+  const connectionChanged = previous.mode !== nextMode || previous.url !== nextUrl || previous.token !== nextToken;
   state.settings.server = {
     ...previous,
-    mode: elements.serverModeSelect.value === "server" ? "server" : "local",
-    url: normalizeServerUrl(elements.serverUrlInput.value),
-    token: elements.serverTokenInput.value.trim(),
+    mode: nextMode,
+    url: nextUrl,
+    token: nextToken,
     ownerId: normalizeOwnerId(elements.ownerIdInput.value),
     deviceId: elements.deviceIdInput.value.trim() || "web-desktop",
     userProfile: {
@@ -1700,6 +1721,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
       email: elements.serverEmailInput.value.trim(),
       timezone: elements.serverTimezoneInput.value.trim() || "Asia/Seoul",
     },
+    capabilities: connectionChanged ? null : previous.capabilities,
     lastStatus: "saved",
     lastMessage: message,
   };
@@ -1737,6 +1759,35 @@ function renderServerMeta() {
     : t("settings.server.never");
   elements.serverMetaText.textContent = t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt });
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
+}
+
+function renderServerCapabilities(capabilities) {
+  if (!elements.serverCapabilitiesText) return;
+  const chips = serverCapabilityLabels(capabilities).map((label) => {
+    const chip = document.createElement("span");
+    chip.className = "server-capability-chip";
+    chip.textContent = label;
+    return chip;
+  });
+  if (!chips.length) {
+    elements.serverCapabilitiesText.textContent = t("settings.server.capabilities.none");
+    return;
+  }
+  elements.serverCapabilitiesText.replaceChildren(...chips);
+}
+
+function serverCapabilityLabels(capabilities) {
+  if (!capabilities || typeof capabilities !== "object") return [];
+  const labels = [];
+  if (capabilities.sync) labels.push(t("settings.server.capabilities.sync"));
+  if (capabilities.recordings) labels.push(t("settings.server.capabilities.recordings"));
+  if (capabilities.analysis_jobs) labels.push(t("settings.server.capabilities.analysis"));
+  if (capabilities.admin_ops) labels.push(t("settings.server.capabilities.admin"));
+  if (capabilities.user_accounts || capabilities.user_profile) labels.push(t("settings.server.capabilities.users"));
+  if (capabilities.max_tree_note_level) {
+    labels.push(t("settings.server.capabilities.treeLevel", { level: capabilities.max_tree_note_level }));
+  }
+  return labels;
 }
 
 function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
@@ -1800,10 +1851,12 @@ async function testServerConnection() {
     const apiVersion = payload.api_version ? ` · API ${payload.api_version}` : "";
     server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
+    server.capabilities = payload.capabilities || null;
     server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}`;
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
+    server.capabilities = null;
     server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
   }
   persistSettings();
