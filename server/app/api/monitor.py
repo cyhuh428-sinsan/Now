@@ -540,7 +540,7 @@ def _admin_html() -> str:
     }}
     .grid {{
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 12px;
     }}
     .card, section {{
@@ -2448,12 +2448,32 @@ def _admin_ops_html() -> str:
     recordings_without_transcript = 0
     note_total = 0
     recording_total = 0
+    user_total = 0
+    inactive_users = 0
+    users_without_seen = 0
 
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
             note_total = db.scalar(select(func.count()).select_from(Note)) or 0
             recording_total = db.scalar(select(func.count()).select_from(Recording)) or 0
+            user_total = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+            inactive_users = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(UserAccount)
+                    .where(UserAccount.is_active == 0)
+                )
+                or 0
+            )
+            users_without_seen = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(UserAccount)
+                    .where(UserAccount.last_seen_at.is_(None))
+                )
+                or 0
+            )
             failed_jobs = _count_jobs_by_status(db, "failed")
             queued_jobs = _count_jobs_by_status(db, "queued")
             running_jobs = _count_jobs_by_status(db, "running")
@@ -2515,6 +2535,20 @@ def _admin_ops_html() -> str:
             "name": "대기 중인 분석 작업",
             "status": "warn" if queued_jobs > 20 else "ok",
             "message": f"queued {queued_jobs}건, running {running_jobs}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "비활성 사용자",
+            "status": "info" if inactive_users else "ok",
+            "message": f"비활성 사용자 {inactive_users}명",
+        }
+    )
+    checks.append(
+        {
+            "name": "접속 기록 없는 사용자",
+            "status": "info" if users_without_seen else "ok",
+            "message": f"최근 접속 기록 없음 {users_without_seen}명",
         }
     )
     checks.append(
@@ -2710,6 +2744,10 @@ def _admin_ops_html() -> str:
       <div class="card">
         <div class="label">녹음 파일</div>
         <div class="value">{recording_total}</div>
+      </div>
+      <div class="card">
+        <div class="label">사용자</div>
+        <div class="value">{user_total}</div>
       </div>
     </div>
 
