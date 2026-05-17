@@ -121,6 +121,28 @@
 - `git diff --check` 통과.
 - `serverUserToken`, `userToken`, `X-Now-User-Token` 연결 지점 재검색 완료.
 
+## 2026-05-18 06:50 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 서버 설정에도 사용자별 접속 토큰 연결.
+
+### 구현 내용
+
+- 모바일 `ServerSettings`에 `userToken` 추가.
+- 사용자별 접속 토큰을 `flutter_secure_storage`에 저장.
+- 기존 SharedPreferences에 같은 키가 있으면 보안 저장소로 이전하는 공통 로더 사용.
+- 모든 모바일 서버 요청에 `X-Now-User-Token` 헤더 추가.
+- 모바일 서버 설정 화면에 `사용자별 접속 토큰` 입력칸 추가.
+- 공통 도움말에 모바일 사용자별 접속 토큰 입력 기준 추가.
+
+### 검증
+
+- `ServerSettings(` 생성자 호출부 재검색으로 `userToken` 누락 없음 확인.
+- `X-Now-User-Token` 모바일 헤더 연결 확인.
+- `git diff --check` 통과.
+- 현재 Windows 셸 PATH에서 `dart`, `flutter` 명령을 찾지 못해 모바일 정적 분석은 보류.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점
