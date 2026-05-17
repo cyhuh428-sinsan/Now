@@ -176,7 +176,7 @@
         <ul>
           <li data-i18n="standalone.point.start">바로 시작할 수 있습니다.</li>
           <li data-i18n="standalone.point.private">메모가 외부 서버로 올라가지 않습니다.</li>
-          <li data-i18n="standalone.point.backup">JSON 백업이나 Markdown 내보내기를 주기적으로 해두는 것이 좋습니다.</li>
+          <li data-i18n="standalone.point.backup">Web/설치형은 JSON 백업, 모바일은 DB 백업을 주기적으로 해두는 것이 좋습니다.</li>
         </ul>
       </article>
 
@@ -246,8 +246,10 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
 
     <section>
       <h2 data-i18n="backup.title">백업과 가져오기</h2>
-      <h3 data-i18n="backup.json.title">JSON 백업</h3>
-      <p data-i18n="backup.json.desc">JSON은 NowNote 전체 데이터를 백업하거나 복원할 때 사용합니다. 가져오기는 현재 데이터를 백업 파일 내용으로 교체하는 성격이 강합니다.</p>
+      <h3 data-i18n="backup.json.title">Web / 설치형 JSON 백업</h3>
+      <p data-i18n="backup.json.desc">JSON은 Web/설치형 NowNote 전체 데이터를 백업하거나 복원할 때 사용합니다. 가져오기는 현재 데이터를 백업 파일 내용으로 교체하는 성격이 강합니다.</p>
+      <h3 data-i18n="backup.mobile.title">모바일 DB 백업</h3>
+      <p data-i18n="backup.mobile.desc">모바일 앱은 .db 파일로 전체 데이터를 백업하거나 복원합니다. 가져오기는 현재 모바일 데이터를 백업 파일 내용으로 교체하며, 완료 후 앱을 다시 실행해야 합니다.</p>
       <h3 data-i18n="backup.markdown.title">Markdown 가져오기</h3>
       <p data-i18n="backup.markdown.desc">다른 곳에서 작성한 <code>.md</code>, <code>.markdown</code>, <code>.txt</code> 파일을 NowNote 지식 메모로 추가합니다.</p>
       <div class="note" data-i18n="backup.markdown.note">가져온 파일은 원본 파일과 연결하지 않습니다. NowNote에서 수정하거나 삭제해도 원본 파일은 그대로 남습니다.</div>
@@ -293,7 +295,7 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "standalone.desc": "Save notes only on the current device without connecting to a server.",
         "standalone.point.start": "You can start immediately.",
         "standalone.point.private": "Notes are not uploaded to an external server.",
-        "standalone.point.backup": "It is a good idea to periodically use JSON backup or Markdown export.",
+        "standalone.point.backup": "Periodically back up your data: JSON for Web/installed apps, DB backup for mobile.",
         "server.badge": "Sync enabled",
         "server.title": "Server-connected user",
         "server.desc": "Connect to a personal Docker server or public NowNote server to sync notes across devices.",
@@ -328,8 +330,10 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "profile.active": "Active status and last access time",
         "profile.note": "The app and installed program can edit your own email, display name, and time zone. Groups, two-factor authentication, and active status are managed in the admin screen.",
         "backup.title": "Backup And Import",
-        "backup.json.title": "JSON backup",
-        "backup.json.desc": "JSON is used to back up or restore all NowNote data. Importing usually replaces current data with the backup file contents.",
+        "backup.json.title": "Web / Installed App JSON Backup",
+        "backup.json.desc": "JSON is used to back up or restore all NowNote data in the Web/installed app. Importing usually replaces current data with the backup file contents.",
+        "backup.mobile.title": "Mobile DB Backup",
+        "backup.mobile.desc": "The mobile app backs up and restores all data with a .db file. Import replaces current mobile data with the backup file contents, and the app must be restarted after import.",
         "backup.markdown.title": "Markdown import",
         "backup.markdown.desc": "Import <code>.md</code>, <code>.markdown</code>, <code>.txt</code> files written elsewhere as NowNote knowledge notes.",
         "backup.markdown.note": "Imported files are not linked to the original files. Editing or deleting them in NowNote does not change the original files.",

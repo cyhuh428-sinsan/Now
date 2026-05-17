@@ -26,7 +26,7 @@ Available features:
 - Backlinks and linked-note view
 - Markdown writing and preview
 - Trash
-- JSON backup and restore
+- Backup and restore: JSON for Web/installed apps, DB for mobile
 - Markdown import and export
 - Display settings
 - Shortcut settings
@@ -39,7 +39,7 @@ Unavailable features:
 - Server-based LLM analysis jobs
 - Encrypted storage for server-login users
 
-Standalone users should periodically use JSON backup or Markdown export.
+Standalone users should periodically use backup or Markdown export. Web/installed apps use JSON backup, while the mobile app uses DB backup.
 
 ### 2. Server-Connected User
 
@@ -185,9 +185,9 @@ Inactive users are blocked from server sync and data APIs except profile lookup.
 
 ## Backup And Import
 
-### JSON Backup
+### Web / Installed App JSON Backup
 
-JSON is used to back up or restore all NowNote data.
+JSON is used to back up or restore all NowNote data in the Web/installed app.
 
 Included data:
 
@@ -199,6 +199,14 @@ Included data:
 - Open tab settings
 
 JSON import usually replaces current data with the backup file contents.
+
+### Mobile DB Backup
+
+The mobile app backs up and restores all data with a `.db` file.
+
+- Use Settings > Data Management > Export backup to save a DB backup file.
+- Importing a backup replaces the current mobile data with the backup file contents.
+- After import, restart the app.
 
 ### Markdown Import
 
