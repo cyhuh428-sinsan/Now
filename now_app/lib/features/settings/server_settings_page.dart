@@ -25,6 +25,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   ServerConnectionResult? _connectionResult;
   ServerOpsResult? _opsResult;
   ServerUserProfile? _profile;
+  List<ServerAnalysisJob> _analysisJobs = const [];
 
   @override
   void dispose() {
@@ -233,6 +234,68 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
+  Future<void> _refreshAnalysisJobs() async {
+    setState(() => _busy = true);
+    try {
+      final settings = _currentSettings();
+      await settings.save();
+      final jobs = await ref
+          .read(serverSyncServiceProvider)
+          .loadAnalysisJobs(settings);
+      if (mounted) {
+        setState(() => _analysisJobs = jobs.take(5).toList());
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('분석 작업을 불러왔습니다')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('분석 작업 조회 실패: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _createAnalysisJob() async {
+    setState(() => _busy = true);
+    try {
+      final settings = _currentSettings();
+      await settings.save();
+      final job = await ref
+          .read(serverSyncServiceProvider)
+          .createAnalysisJob(
+            settings,
+            jobType: 'daily_briefing',
+            inputText: 'NowNote 모바일 앱 서버 분석 연결 점검',
+          );
+      if (mounted) {
+        setState(
+          () => _analysisJobs = [job, ..._analysisJobs].take(5).toList(),
+        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('분석 작업을 등록했습니다')));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('분석 작업 등록 실패: $e'),
+            backgroundColor: const Color(0xFFEF4444),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   String _formatServerSyncTime(DateTime? value) {
     if (value == null) return '없음';
     final local = value.toLocal();
@@ -252,6 +315,14 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   String _profileOwnerIdText() {
     final ownerId = _ownerIdCtrl.text.trim();
     return ownerId.isEmpty ? 'local_user' : ownerId;
+  }
+
+  String _formatAnalysisTime(String? value) {
+    final parsed = DateTime.tryParse(value ?? '');
+    if (parsed == null) return '-';
+    final local = parsed.toLocal();
+    return '${local.month.toString().padLeft(2, '0')}-${local.day.toString().padLeft(2, '0')} '
+        '${local.hour.toString().padLeft(2, '0')}:${local.minute.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -519,6 +590,68 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                 ],
               ),
+              const SizedBox(height: 14),
+              _ServerCard(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  const Text(
+                    '분석 작업',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '서버 분석 큐에 점검용 작업을 등록하고 최근 작업 상태를 확인합니다. 실제 메모 선택 분석은 메모 화면 연결 후 확장합니다.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_analysisJobs.isEmpty)
+                    const Text(
+                      '분석 작업을 불러오지 않았습니다.',
+                      style: TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+                    )
+                  else
+                    ..._analysisJobs.map(
+                      (job) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _AnalysisJobTile(
+                          job: job,
+                          timeText: _formatAnalysisTime(job.updatedAt),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _busy ? null : _createAnalysisJob,
+                          icon: const Icon(
+                            Icons.auto_awesome_outlined,
+                            size: 18,
+                          ),
+                          label: const Text('점검 작업 등록'),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: _busy ? null : _refreshAnalysisJobs,
+                          icon: const Icon(Icons.refresh_outlined, size: 18),
+                          label: const Text('작업 새로고침'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ],
           );
         },
@@ -526,6 +659,82 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
         error: (e, _) => Center(child: Text('설정 로드 실패: $e')),
       ),
     );
+  }
+}
+
+class _AnalysisJobTile extends StatelessWidget {
+  final ServerAnalysisJob job;
+  final String timeText;
+
+  const _AnalysisJobTile({required this.job, required this.timeText});
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(job.status);
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF9FAFB),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '#${job.id} · ${job.jobType} · $timeText',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF111827),
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  job.noteLocalId ?? '메모 연결 없음',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: Color(0xFF6B7280),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(999),
+            ),
+            child: Text(
+              job.status,
+              style: TextStyle(
+                color: color,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    if (status == 'done') return const Color(0xFF059669);
+    if (status == 'failed') return const Color(0xFFEF4444);
+    if (status == 'running' || status == 'queued') {
+      return const Color(0xFFD97706);
+    }
+    return const Color(0xFF6366F1);
   }
 }
 
