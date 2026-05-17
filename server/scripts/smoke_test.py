@@ -315,6 +315,54 @@ def main() -> None:
         },
     )
 
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/analysis/jobs",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "job_type": "memo_summary",
+            "note_local_id": "smoke_note_001",
+            "input_text": "Smoke test memo\n\nNowNote server smoke test",
+        },
+    )
+    analysis_job_id = data.get("id")
+    require(analysis_job_id is not None, "분석 작업 ID가 반환되지 않았습니다")
+    print(
+        "POST /api/v1/analysis/jobs:",
+        status,
+        {
+            "id": analysis_job_id,
+            "status": data.get("status"),
+            "job_type": data.get("job_type"),
+        },
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/analysis/jobs?owner_id=local_user",
+        args.token,
+    )
+    has_analysis_job = any(item.get("id") == analysis_job_id for item in data)
+    require(has_analysis_job, "생성한 분석 작업이 목록에서 확인되지 않았습니다")
+    print(
+        "GET /api/v1/analysis/jobs:",
+        status,
+        {"has_analysis_job": has_analysis_job, "count": len(data)},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/analysis/jobs/{analysis_job_id}",
+        args.token,
+    )
+    require(data.get("id") == analysis_job_id, "분석 작업 단건 조회 ID가 일치하지 않습니다")
+    print(
+        "GET /api/v1/analysis/jobs/{id}:",
+        status,
+        {"id": data.get("id"), "status": data.get("status")},
+    )
+
     inactive_payload = {
         "email": "local_user@example.com",
         "display_name": "Local User",
