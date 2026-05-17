@@ -2240,7 +2240,7 @@ def _admin_users_html(request: Request) -> str:
           <button class="danger" type="submit" name="action" value="deactivate">선택 비활성</button>
         </div>
       <table>
-        <tr><th class="row-select">선택</th><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th><th>관리</th></tr>
+        <tr><th class="row-select">선택</th><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>토큰</th><th>최근 접속</th><th>관리</th></tr>
         {_user_rows(users)}
       </table>
       </form>
@@ -2702,6 +2702,7 @@ def _admin_ops_html() -> str:
     user_total = 0
     inactive_users = 0
     users_without_seen = 0
+    users_without_token = 0
 
     try:
         with SessionLocal() as db:
@@ -2722,6 +2723,14 @@ def _admin_ops_html() -> str:
                     select(func.count())
                     .select_from(UserAccount)
                     .where(UserAccount.last_seen_at.is_(None))
+                )
+                or 0
+            )
+            users_without_token = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(UserAccount)
+                    .where(UserAccount.access_token_hash.is_(None))
                 )
                 or 0
             )
@@ -2762,8 +2771,8 @@ def _admin_ops_html() -> str:
     checks.append(
         {
             "name": "공용 서버 인증",
-            "status": "info",
-            "message": "현재는 단일 API 토큰 기반입니다. 공용 오픈 전 사용자별 로그인/토큰과 실제 2단계 인증 절차가 필요합니다.",
+            "status": "warn" if settings.user_token_required and users_without_token else "info",
+            "message": _user_token_state(settings.user_token_required, users_without_token),
         }
     )
     password_status, password_message = _database_password_state(settings.database_url)
@@ -3078,6 +3087,16 @@ def _database_password_state(database_url: str) -> tuple[str, str]:
     if "change-this-postgres-password" in database_url:
         return "warn", ".env.example 예시 DB 비밀번호 사용 중"
     return "ok", "기본 DB 비밀번호 아님"
+
+
+def _user_token_state(required: bool, users_without_token: int) -> str:
+    if required and users_without_token:
+        return f"사용자별 토큰 필수, 토큰 없는 사용자 {users_without_token}명"
+    if required:
+        return "사용자별 토큰 필수, 모든 사용자 토큰 발급됨"
+    if users_without_token:
+        return f"개인 서버 기본값, 사용자별 토큰 선택 사용 가능, 토큰 없는 사용자 {users_without_token}명"
+    return "개인 서버 기본값, 사용자별 토큰 선택 사용 가능"
 
 
 def _admin_sync_html(request: Request) -> str:
