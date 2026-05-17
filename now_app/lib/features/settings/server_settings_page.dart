@@ -13,6 +13,7 @@ class ServerSettingsPage extends ConsumerStatefulWidget {
 class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _baseUrlCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
+  final _userTokenCtrl = TextEditingController();
   final _ownerIdCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
@@ -32,6 +33,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   void dispose() {
     _baseUrlCtrl.dispose();
     _tokenCtrl.dispose();
+    _userTokenCtrl.dispose();
     _ownerIdCtrl.dispose();
     _deviceIdCtrl.dispose();
     _displayNameCtrl.dispose();
@@ -45,6 +47,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _enabled = settings.enabled;
     _baseUrlCtrl.text = settings.baseUrl;
     _tokenCtrl.text = settings.token;
+    _userTokenCtrl.text = settings.userToken;
     _ownerIdCtrl.text = settings.ownerId;
     _deviceIdCtrl.text = settings.deviceId;
     if (_timezoneCtrl.text.trim().isEmpty) {
@@ -59,6 +62,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       enabled: _enabled,
       baseUrl: _baseUrlCtrl.text,
       token: _tokenCtrl.text,
+      userToken: _userTokenCtrl.text,
       ownerId: _ownerIdCtrl.text,
       deviceId: _deviceIdCtrl.text,
       lastSyncedAt: _lastSyncedAt,
@@ -475,6 +479,17 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                       labelText: 'API 토큰',
                       hintText: '서버 NOW_API_TOKEN 값',
                       helperText: '기기 보안 저장소에 저장합니다',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _userTokenCtrl,
+                    obscureText: true,
+                    decoration: const InputDecoration(
+                      labelText: '사용자별 접속 토큰',
+                      hintText: '공용 서버에서 발급한 사용자 토큰',
+                      helperText: '공용 서버가 요구할 때 입력합니다. 기기 보안 저장소에 저장합니다',
                       border: OutlineInputBorder(),
                     ),
                   ),

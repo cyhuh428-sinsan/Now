@@ -95,6 +95,7 @@ Recommended flow:
 - Create hierarchical notes when needed.
 - Server-connected users enter the server URL and token in settings.
 - API tokens entered in the app are stored in the device secure storage.
+- If a public server requires it, also enter the per-user access token.
 
 Important mobile features:
 

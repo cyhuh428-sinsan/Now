@@ -14,6 +14,7 @@ import '../repositories/repository_providers.dart';
 const _serverEnabledKey = 'now_server_enabled';
 const _serverBaseUrlKey = 'now_server_base_url';
 const _serverTokenKey = 'now_server_token';
+const _serverUserTokenKey = 'now_server_user_token';
 const _serverOwnerIdKey = 'now_server_owner_id';
 const _serverDeviceIdKey = 'now_server_device_id';
 const _serverLastSyncedAtKey = 'now_server_last_synced_at';
@@ -36,6 +37,7 @@ class ServerSettings {
   final bool enabled;
   final String baseUrl;
   final String token;
+  final String userToken;
   final String ownerId;
   final String deviceId;
   final DateTime? lastSyncedAt;
@@ -44,6 +46,7 @@ class ServerSettings {
     required this.enabled,
     required this.baseUrl,
     required this.token,
+    required this.userToken,
     required this.ownerId,
     required this.deviceId,
     required this.lastSyncedAt,
@@ -63,10 +66,15 @@ class ServerSettings {
       await prefs.setString(_serverOwnerIdKey, 'local_user');
     }
     final token = await _loadServerToken(prefs);
+    final userToken = await _loadSecureToken(
+      prefs,
+      key: _serverUserTokenKey,
+    );
     return ServerSettings(
       enabled: prefs.getBool(_serverEnabledKey) ?? false,
       baseUrl: prefs.getString(_serverBaseUrlKey) ?? '',
       token: token,
+      userToken: userToken,
       ownerId: _normalizeOwnerId(
         prefs.getString(_serverOwnerIdKey) ?? 'local_user',
       ),
@@ -79,7 +87,12 @@ class ServerSettings {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(_serverEnabledKey, enabled);
     await prefs.setString(_serverBaseUrlKey, _normalizeBaseUrl(baseUrl));
-    await _saveServerToken(token.trim(), prefs);
+    await _saveSecureToken(token.trim(), prefs, key: _serverTokenKey);
+    await _saveSecureToken(
+      userToken.trim(),
+      prefs,
+      key: _serverUserTokenKey,
+    );
     await prefs.setString(_serverOwnerIdKey, _normalizeOwnerId(ownerId));
     await prefs.setString(_serverDeviceIdKey, deviceId.trim());
     if (lastSyncedAt == null) {
@@ -96,6 +109,7 @@ class ServerSettings {
     bool? enabled,
     String? baseUrl,
     String? token,
+    String? userToken,
     String? ownerId,
     String? deviceId,
     DateTime? lastSyncedAt,
@@ -105,6 +119,7 @@ class ServerSettings {
       enabled: enabled ?? this.enabled,
       baseUrl: baseUrl ?? this.baseUrl,
       token: token ?? this.token,
+      userToken: userToken ?? this.userToken,
       ownerId: ownerId ?? this.ownerId,
       deviceId: deviceId ?? this.deviceId,
       lastSyncedAt: clearLastSyncedAt
@@ -822,6 +837,9 @@ class ServerSyncService {
     if (settings.token.trim().isNotEmpty) {
       dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
     }
+    if (settings.userToken.trim().isNotEmpty) {
+      dio.options.headers['X-Now-User-Token'] = settings.userToken.trim();
+    }
     return dio;
   }
 }
@@ -850,27 +868,38 @@ String _normalizeOwnerId(String value) {
 }
 
 Future<String> _loadServerToken(SharedPreferences prefs) async {
-  final secureToken = await _secureStorage.read(key: _serverTokenKey);
+  return _loadSecureToken(prefs, key: _serverTokenKey);
+}
+
+Future<String> _loadSecureToken(
+  SharedPreferences prefs, {
+  required String key,
+}) async {
+  final secureToken = await _secureStorage.read(key: key);
   if (secureToken != null && secureToken.isNotEmpty) {
-    await prefs.remove(_serverTokenKey);
+    await prefs.remove(key);
     return secureToken;
   }
 
-  final legacyToken = prefs.getString(_serverTokenKey)?.trim() ?? '';
+  final legacyToken = prefs.getString(key)?.trim() ?? '';
   if (legacyToken.isNotEmpty) {
-    await _secureStorage.write(key: _serverTokenKey, value: legacyToken);
-    await prefs.remove(_serverTokenKey);
+    await _secureStorage.write(key: key, value: legacyToken);
+    await prefs.remove(key);
   }
   return legacyToken;
 }
 
-Future<void> _saveServerToken(String token, SharedPreferences prefs) async {
-  await prefs.remove(_serverTokenKey);
+Future<void> _saveSecureToken(
+  String token,
+  SharedPreferences prefs, {
+  required String key,
+}) async {
+  await prefs.remove(key);
   if (token.isEmpty) {
-    await _secureStorage.delete(key: _serverTokenKey);
+    await _secureStorage.delete(key: key);
     return;
   }
-  await _secureStorage.write(key: _serverTokenKey, value: token);
+  await _secureStorage.write(key: key, value: token);
 }
 
 String? _blankToNull(String? value) {
