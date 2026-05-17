@@ -17,10 +17,10 @@
 - [x] 릴리스 AAB 산출물 존재: `build/app/outputs/bundle/release/app-release.aab`
 - [x] 릴리스 Manifest targetSdkVersion 36 확인
 - [ ] 현재 AAB가 최신 수정 사항으로 다시 빌드되었는지 확인
-- [ ] 릴리스 Manifest에서 `Manifest.permission.CAPTURE_AUDIO_OUTPUT` 제거 반영 확인
+- [ ] 릴리스 Manifest에서 `android.permission.CAPTURE_AUDIO_OUTPUT` 제거 반영 확인
 
 ## 현재 의심되는 부분
-- `flutter_sound_core`가 릴리스 Manifest에 `Manifest.permission.CAPTURE_AUDIO_OUTPUT` 권한을 추가하고 있었음.
+- `flutter_sound_core`가 릴리스 Manifest에 `android.permission.CAPTURE_AUDIO_OUTPUT` 권한을 추가하고 있었음.
 - 앱 Manifest에 `tools:node="remove"`로 제거 규칙을 추가했으나, 최신 AAB 재빌드 후 병합 Manifest에서 제거 여부를 다시 확인해야 함.
 - `flutter --version`, `flutter pub get` 명령이 현재 셸에서 장시간 응답하지 않았음.
 - Gradle 실행은 Android Studio 내장 JDK와 프로젝트 내부 `GRADLE_USER_HOME` 지정이 필요했음.
