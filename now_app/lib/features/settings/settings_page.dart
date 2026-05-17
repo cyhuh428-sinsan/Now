@@ -173,7 +173,7 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.info_outline,
                 title: '버전',
                 trailing: Text(
-                  '2.0.0 (2차-A)',
+                  '1.0.0 (1차)',
                   style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
                 ),
               ),
