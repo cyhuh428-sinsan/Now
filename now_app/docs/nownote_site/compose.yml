@@ -5,12 +5,3 @@ services:
     restart: unless-stopped
     ports:
       - "8080:80"
-    networks:
-      - common_default
-      - proxy-network
-      
-networks:
-  common_default:
-    external: true
-  proxy-network:
-    external: true

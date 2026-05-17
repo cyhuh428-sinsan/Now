@@ -21,6 +21,8 @@ curl http://localhost:8080/
 ## 도메인 연결
 `https://nownote.sinsan.kr/`는 서버의 리버스 프록시에서 이 컨테이너의 `http://127.0.0.1:8080`으로 연결합니다.
 
+리버스 프록시가 Docker 네트워크로 컨테이너를 직접 찾아야 하는 서버에서는 운영 환경에 맞는 외부 네트워크를 compose 파일에 추가합니다. 기본 compose 파일은 새 서버에서도 바로 실행되도록 외부 네트워크를 요구하지 않습니다.
+
 ## Play Console 입력값
 - 개인정보처리방침 URL: `https://nownote.sinsan.kr/`
 
