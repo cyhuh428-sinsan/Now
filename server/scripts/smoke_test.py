@@ -98,6 +98,30 @@ def main() -> None:
         {"count": data.get("count"), "name": data.get("name")},
     )
 
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/recordings?device_id=smoke_test&transcript_status=without",
+        args.token,
+    )
+    require(data.get("name") == "recordings", "녹음 export 이름이 recordings가 아닙니다")
+    print(
+        "GET /api/v1/admin/export/recordings(filtered):",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/sync-logs?device_id=smoke_test&include_deleted=true",
+        args.token,
+    )
+    require(data.get("name") == "sync_logs", "동기화 이력 export 이름이 sync_logs가 아닙니다")
+    print(
+        "GET /api/v1/admin/export/sync-logs(filtered):",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
     print(
         "GET /api/v1/admin/ops:",
