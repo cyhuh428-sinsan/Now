@@ -150,6 +150,35 @@ class ServerOpsResult {
   }
 }
 
+class ServerAnalysisJob {
+  final int id;
+  final String jobType;
+  final String status;
+  final String? noteLocalId;
+  final String? errorMessage;
+  final String? updatedAt;
+
+  const ServerAnalysisJob({
+    required this.id,
+    required this.jobType,
+    required this.status,
+    required this.noteLocalId,
+    required this.errorMessage,
+    required this.updatedAt,
+  });
+
+  factory ServerAnalysisJob.fromJson(Map<String, dynamic> json) {
+    return ServerAnalysisJob(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      jobType: json['job_type']?.toString() ?? '-',
+      status: json['status']?.toString() ?? '-',
+      noteLocalId: json['note_local_id']?.toString(),
+      errorMessage: json['error_message']?.toString(),
+      updatedAt: json['updated_at']?.toString(),
+    );
+  }
+}
+
 class ServerUserProfile {
   final String ownerId;
   final String? email;
@@ -404,6 +433,57 @@ class ServerSyncService {
       status: res.data?['status']?.toString() ?? 'warn',
       checks: checks,
     );
+  }
+
+  Future<List<ServerAnalysisJob>> loadAnalysisJobs(
+    ServerSettings settings,
+  ) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _dio(settings);
+    try {
+      final ownerId = _normalizeOwnerId(settings.ownerId);
+      final res = await dio.get<List<dynamic>>(
+        '/api/v1/analysis/jobs',
+        queryParameters: {'owner_id': ownerId},
+      );
+      return (res.data ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) =>
+                ServerAnalysisJob.fromJson(Map<String, dynamic>.from(item)),
+          )
+          .toList();
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '분석 작업 조회 실패'));
+    }
+  }
+
+  Future<ServerAnalysisJob> createAnalysisJob(
+    ServerSettings settings, {
+    required String jobType,
+    String? noteLocalId,
+    String? inputText,
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _dio(settings);
+    try {
+      final res = await dio.post<Map<String, dynamic>>(
+        '/api/v1/analysis/jobs',
+        data: {
+          'owner_id': _normalizeOwnerId(settings.ownerId),
+          'job_type': jobType,
+          'note_local_id': _blankToNull(noteLocalId),
+          'input_text': _blankToNull(inputText),
+        },
+      );
+      return ServerAnalysisJob.fromJson(res.data ?? const <String, dynamic>{});
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '분석 작업 생성 실패'));
+    }
   }
 
   Future<List<Map<String, dynamic>>> _dailyMemoPayloads(
