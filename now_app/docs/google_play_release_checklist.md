@@ -17,14 +17,15 @@
 - [x] 릴리스 AAB 산출물 존재: `build/app/outputs/bundle/release/app-release.aab`
 - [x] 릴리스 Manifest targetSdkVersion 36 확인
 - [ ] 현재 AAB가 최신 수정 사항으로 다시 빌드되었는지 확인
-- [ ] 릴리스 Manifest에서 `android.permission.CAPTURE_AUDIO_OUTPUT` 제거 반영 확인
+- [x] 마지막 생성된 릴리스 병합 Manifest에서 `android.permission.CAPTURE_AUDIO_OUTPUT` 제거 반영 확인
 
 ## 현재 의심되는 부분
 - `flutter_sound_core`가 릴리스 Manifest에 `android.permission.CAPTURE_AUDIO_OUTPUT` 권한을 추가하고 있었음.
-- 앱 Manifest에 `tools:node="remove"`로 제거 규칙을 추가했으나, 최신 AAB 재빌드 후 병합 Manifest에서 제거 여부를 다시 확인해야 함.
+- 앱 Manifest에 `tools:node="remove"`로 제거 규칙을 추가했고, 현재 남아 있는 릴리스 병합 Manifest와 bundle Manifest에서는 제거됨.
+- 다만 현재 AAB 산출물은 최신 수정 이후 다시 빌드된 파일인지 아직 확정하지 않았으므로, 최종 업로드 전 재빌드와 재점검이 필요함.
 - `flutter --version`, `flutter pub get` 명령이 현재 셸에서 장시간 응답하지 않았음.
 - Gradle 실행은 Android Studio 내장 JDK와 프로젝트 내부 `GRADLE_USER_HOME` 지정이 필요했음.
-- 실제 업로드 키가 아직 없으므로 현재 산출물은 정식 Play 업로드용 최종 서명본으로 확정할 수 없음.
+- 로컬 업로드 키와 `key.properties`는 존재하지만 Git에 올리지 않으며, 현재 AAB가 최신 빌드인지 별도 확인 전까지 정식 Play 업로드용 최종본으로 확정하지 않음.
 
 ## 코드/빌드 준비
 - [x] 앱 표시 이름 NowNote 적용

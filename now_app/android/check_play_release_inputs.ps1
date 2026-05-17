@@ -3,6 +3,8 @@ $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectRoot = Split-Path -Parent $repoRoot
 $manifestPath = Join-Path $repoRoot "android\app\src\main\AndroidManifest.xml"
+$mergedReleaseManifestPath = Join-Path $repoRoot "build\app\intermediates\merged_manifests\release\processReleaseManifest\AndroidManifest.xml"
+$bundleReleaseManifestPath = Join-Path $repoRoot "build\app\intermediates\bundle_manifest\release\processApplicationManifestReleaseForBundle\AndroidManifest.xml"
 $backupRulesPath = Join-Path $repoRoot "android\app\src\main\res\xml\backup_rules.xml"
 $dataExtractionRulesPath = Join-Path $repoRoot "android\app\src\main\res\xml\data_extraction_rules.xml"
 $playAssetsDir = Join-Path $repoRoot "docs\play_assets"
@@ -51,6 +53,23 @@ $manifest = if (Test-Path $manifestPath) { Get-Content $manifestPath -Raw } else
 Add-Check $checks "POST_NOTIFICATIONS declared" ($manifest -match "android\.permission\.POST_NOTIFICATIONS") "Android 13+ notification permission"
 Add-Check $checks "CAPTURE_AUDIO_OUTPUT removed" ($manifest -match "android\.permission\.CAPTURE_AUDIO_OUTPUT" -and $manifest -match 'tools:node="remove"') "Source manifest removal rule"
 Add-Check $checks "Backup rules linked" ($manifest -match "android:fullBackupContent" -and $manifest -match "android:dataExtractionRules") "Cloud backup rule resources"
+
+if (Test-Path $mergedReleaseManifestPath) {
+    $mergedReleaseManifest = Get-Content $mergedReleaseManifestPath -Raw
+    Add-Check $checks "Merged release manifest excludes CAPTURE_AUDIO_OUTPUT" ($mergedReleaseManifest -notmatch "android\.permission\.CAPTURE_AUDIO_OUTPUT") "build/intermediates merged release manifest"
+    Add-Check $checks "Merged release manifest keeps POST_NOTIFICATIONS" ($mergedReleaseManifest -match "android\.permission\.POST_NOTIFICATIONS") "build/intermediates merged release manifest"
+}
+else {
+    Add-Check $checks "Merged release manifest exists" $false "Run release build to generate merged manifest"
+}
+
+if (Test-Path $bundleReleaseManifestPath) {
+    $bundleReleaseManifest = Get-Content $bundleReleaseManifestPath -Raw
+    Add-Check $checks "Bundle release manifest excludes CAPTURE_AUDIO_OUTPUT" ($bundleReleaseManifest -notmatch "android\.permission\.CAPTURE_AUDIO_OUTPUT") "bundle manifest for AAB"
+}
+else {
+    Add-Check $checks "Bundle release manifest exists" $false "Run release build to generate AAB bundle manifest"
+}
 
 $backupRules = if (Test-Path $backupRulesPath) { Get-Content $backupRulesPath -Raw } else { "" }
 $dataExtractionRules = if (Test-Path $dataExtractionRulesPath) { Get-Content $dataExtractionRulesPath -Raw } else { "" }

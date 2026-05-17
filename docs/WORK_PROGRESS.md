@@ -875,3 +875,25 @@
 - `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
 - `git diff --check` 통과.
 - Windows PowerShell 5 출력 깨짐을 피하기 위해 스크립트 최종 성공/실패 문구는 영어로 정리.
+
+## 2026-05-18 03:55 KST
+
+### 다음 작업 시작
+
+- 릴리스 Manifest의 위험 권한 제거 상태와 최신 AAB 여부를 구분해 정리.
+
+### 확인 내용
+
+- 현재 남아 있는 릴리스 병합 Manifest와 bundle Manifest에는 `android.permission.CAPTURE_AUDIO_OUTPUT`이 없음.
+- `POST_NOTIFICATIONS`와 targetSdkVersion 36은 릴리스 병합 Manifest에서 확인됨.
+- 현재 AAB 파일은 최신 수정 이후 재빌드됐는지 아직 확정할 수 없음.
+
+### 구현 내용
+
+- Play 사전 점검 스크립트가 릴리스 병합 Manifest와 bundle Manifest의 `CAPTURE_AUDIO_OUTPUT` 제거 상태도 확인하도록 확장.
+- Play 출시 체크리스트에서 위험 권한 제거 확인은 완료로 표시하고, 최신 AAB 재빌드 확인은 별도 미완료 항목으로 유지.
+
+### 검증
+
+- `powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1` 통과.
+- `git diff --check` 통과.
