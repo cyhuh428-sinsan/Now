@@ -53,4 +53,4 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --public-server
 ```
 
-`--public-server`는 현재 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 사용자별 인증과 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.
+`--public-server`는 현재 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 로그인 UI, 실제 2단계 인증, 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.
