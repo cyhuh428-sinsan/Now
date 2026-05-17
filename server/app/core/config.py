@@ -8,6 +8,7 @@ class Settings(BaseSettings):
     database_url: str = "sqlite:///./now_server.db"
     storage_dir: str = "./data/recordings"
     api_token: str | None = None
+    user_token_required: bool = False
     worker_poll_seconds: int = 5
     worker_batch_size: int = 5
     llm_provider: str = "local"

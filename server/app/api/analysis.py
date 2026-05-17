@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -6,7 +6,7 @@ from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob
 from app.schemas.analysis import AnalysisJobCreate, AnalysisJobOut, AnalysisJobUpdate
-from app.services.user_accounts import require_active_user
+from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(
     prefix="/api/v1/analysis",
@@ -22,9 +22,10 @@ ALLOWED_STATUSES = {"queued", "running", "done", "failed", "cancelled"}
 def list_jobs(
     owner_id: str = Query(default="local_user"),
     status_filter: str | None = Query(default=None, alias="status"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> list[AnalysisJob]:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     stmt = select(AnalysisJob).where(AnalysisJob.owner_id == owner_id)
     if status_filter is not None:
         stmt = stmt.where(AnalysisJob.status == status_filter)
@@ -35,9 +36,10 @@ def list_jobs(
 @router.post("/jobs", response_model=AnalysisJobOut)
 def create_job(
     payload: AnalysisJobCreate,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> AnalysisJob:
-    require_active_user(db, owner_id=payload.owner_id)
+    require_user_api_access(db, owner_id=payload.owner_id, access_token=user_token)
     if payload.job_type not in ALLOWED_JOB_TYPES:
         raise HTTPException(status_code=400, detail="unsupported analysis job type")
     job = AnalysisJob(**payload.model_dump(), status="queued")
@@ -48,11 +50,15 @@ def create_job(
 
 
 @router.get("/jobs/{job_id}", response_model=AnalysisJobOut)
-def get_job(job_id: int, db: Session = Depends(get_db)) -> AnalysisJob:
+def get_job(
+    job_id: int,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> AnalysisJob:
     job = db.get(AnalysisJob, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
-    require_active_user(db, owner_id=job.owner_id)
+    require_user_api_access(db, owner_id=job.owner_id, access_token=user_token)
     return job
 
 
@@ -60,6 +66,7 @@ def get_job(job_id: int, db: Session = Depends(get_db)) -> AnalysisJob:
 def update_job(
     job_id: int,
     payload: AnalysisJobUpdate,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> AnalysisJob:
     if payload.status not in ALLOWED_STATUSES:
@@ -67,7 +74,7 @@ def update_job(
     job = db.get(AnalysisJob, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
-    require_active_user(db, owner_id=job.owner_id)
+    require_user_api_access(db, owner_id=job.owner_id, access_token=user_token)
     job.status = payload.status
     job.result_json = payload.result_json
     job.error_message = payload.error_message

@@ -57,6 +57,7 @@ def main() -> None:
     required_keys = [
         "NOW_SERVER_NAME",
         "NOW_API_TOKEN",
+        "NOW_USER_TOKEN_REQUIRED",
         "NOW_POSTGRES_PASSWORD",
         "NOW_STORAGE_DIR",
         "NOW_WORKER_POLL_SECONDS",
@@ -71,6 +72,7 @@ def main() -> None:
     storage_dir = values.get("NOW_STORAGE_DIR", "")
     poll_seconds = values.get("NOW_WORKER_POLL_SECONDS", "")
     batch_size = values.get("NOW_WORKER_BATCH_SIZE", "")
+    user_token_required = values.get("NOW_USER_TOKEN_REQUIRED", "").lower()
 
     if args.allow_example:
         check(
@@ -100,6 +102,7 @@ def main() -> None:
         )
 
     check(storage_dir.startswith("/"), "Storage dir is container absolute path", storage_dir, failures)
+    check(user_token_required in {"true", "false"}, "User token required flag valid", "NOW_USER_TOKEN_REQUIRED true/false", failures)
     check(poll_seconds.isdigit() and int(poll_seconds) > 0, "Worker poll seconds valid", poll_seconds, failures)
     check(batch_size.isdigit() and int(batch_size) > 0, "Worker batch size valid", batch_size, failures)
 
@@ -111,6 +114,12 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
 
     if args.public_server:
+        check(
+            user_token_required == "true",
+            "Public server user token check enabled",
+            "NOW_USER_TOKEN_REQUIRED must be true before public opening",
+            failures,
+        )
         check(
             False,
             "Public server auth model",

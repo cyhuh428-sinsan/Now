@@ -75,6 +75,32 @@
 - FastAPI `TestClient`로 관리자 사용자 생성과 사용자별 토큰 발급 API 검증 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 06:15 KST
+
+### 다음 작업 시작
+
+- 발급된 사용자별 접속 토큰을 실제 데이터 API 요청의 `owner_id`와 묶어 검증.
+
+### 구현 내용
+
+- 설정값 `NOW_USER_TOKEN_REQUIRED` 추가. 기본값은 개인 Docker 서버 호환을 위해 `false`.
+- `NOW_USER_TOKEN_REQUIRED=true`일 때 데이터 API가 `X-Now-User-Token` 헤더를 요구하도록 추가.
+- 메모, 통합 동기화, 녹음, 분석, 사용자 프로필 API에 사용자별 토큰 검증 연결.
+- 사용자별 토큰 검증 성공 시 `access_token_last_used_at` 갱신.
+- `/api/v1/server` 응답에 `user_token_required`, `user_access_tokens` capability 추가.
+- 공용 서버 preflight에서 `NOW_USER_TOKEN_REQUIRED=true` 여부도 점검하도록 추가.
+
+### 검증
+
+- `py_compile`로 설정, 사용자 서비스, 데이터 API, preflight 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example --public-server`는 `NOW_USER_TOKEN_REQUIRED=false`, 실제 2단계 인증, HTTPS/reverse proxy 항목 때문에 의도적으로 실패하는 것 확인.
+- FastAPI `TestClient`에서 `NOW_USER_TOKEN_REQUIRED=true` 기준:
+  - 사용자 토큰 없음: 401 `user token required`
+  - 잘못된 사용자 토큰: 401 `invalid user token`
+  - 올바른 사용자 토큰: `/api/v1/sync` 200
+- `git diff --check` 통과.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점
