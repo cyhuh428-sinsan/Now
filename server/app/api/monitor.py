@@ -2696,6 +2696,13 @@ def _admin_ops_html() -> str:
     )
     token_status, token_message = _api_token_state(settings.api_token)
     checks.append({"name": "API 토큰", "status": token_status, "message": token_message})
+    checks.append(
+        {
+            "name": "공용 서버 인증",
+            "status": "info",
+            "message": "현재는 단일 API 토큰 기반입니다. 공용 오픈 전 사용자별 로그인/토큰과 실제 2단계 인증 절차가 필요합니다.",
+        }
+    )
     password_status, password_message = _database_password_state(settings.database_url)
     checks.append(
         {
