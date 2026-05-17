@@ -349,6 +349,18 @@ const I18N = {
     "settings.server.capabilities.admin": "운영 점검",
     "settings.server.capabilities.users": "사용자 관리",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
+    "settings.server.analysis.title": "분석 작업",
+    "settings.server.analysis.desc": "선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.",
+    "settings.server.analysis.create": "선택 메모 분석",
+    "settings.server.analysis.refresh": "작업 새로고침",
+    "settings.server.analysis.none": "분석 작업을 불러오지 않았습니다.",
+    "settings.server.analysis.noNote": "분석할 지식 메모를 먼저 선택해야 합니다.",
+    "settings.server.analysis.emptyNote": "선택한 메모에 분석할 내용이 없습니다.",
+    "settings.server.analysis.creating": "분석 작업을 서버에 등록하는 중입니다.",
+    "settings.server.analysis.created": "분석 작업을 등록했습니다.",
+    "settings.server.analysis.loading": "분석 작업을 불러오는 중입니다.",
+    "settings.server.analysis.loaded": "분석 작업을 불러왔습니다.",
+    "settings.server.analysis.item": "#{id} · {type} · {time}",
     "settings.server.never": "없음",
     "settings.sidebarAssist.title": "보조 목록 표시",
     "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
@@ -793,6 +805,18 @@ const I18N = {
     "settings.server.capabilities.admin": "Ops checks",
     "settings.server.capabilities.users": "User management",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
+    "settings.server.analysis.title": "Analysis jobs",
+    "settings.server.analysis.desc": "Queue the selected knowledge note for server analysis and check recent status.",
+    "settings.server.analysis.create": "Analyze selected note",
+    "settings.server.analysis.refresh": "Refresh jobs",
+    "settings.server.analysis.none": "Analysis jobs have not been loaded.",
+    "settings.server.analysis.noNote": "Select a knowledge note to analyze first.",
+    "settings.server.analysis.emptyNote": "The selected note has no content to analyze.",
+    "settings.server.analysis.creating": "Creating an analysis job on the server.",
+    "settings.server.analysis.created": "Analysis job created.",
+    "settings.server.analysis.loading": "Loading analysis jobs.",
+    "settings.server.analysis.loaded": "Analysis jobs loaded.",
+    "settings.server.analysis.item": "#{id} · {type} · {time}",
     "settings.server.never": "Never",
     "settings.sidebarAssist.title": "Show helper lists",
     "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
@@ -999,6 +1023,7 @@ function defaultServerSettings() {
     deviceId: "web-desktop",
     userProfile: defaultServerUserProfile(),
     capabilities: null,
+    analysisJobs: [],
     lastCheckedAt: null,
     lastSyncedAt: null,
     lastStatus: "idle",
@@ -1207,6 +1232,9 @@ const elements = {
   serverProfileLoadBtn: $("#serverProfileLoadBtn"),
   serverProfileSaveBtn: $("#serverProfileSaveBtn"),
   serverProfileText: $("#serverProfileText"),
+  serverAnalysisCreateBtn: $("#serverAnalysisCreateBtn"),
+  serverAnalysisRefreshBtn: $("#serverAnalysisRefreshBtn"),
+  serverAnalysisList: $("#serverAnalysisList"),
   serverSaveBtn: $("#serverSaveBtn"),
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
@@ -1454,6 +1482,8 @@ function bindEvents() {
   elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
   elements.serverProfileLoadBtn.addEventListener("click", loadServerUserProfile);
   elements.serverProfileSaveBtn.addEventListener("click", saveServerUserProfile);
+  elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
+  elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -1696,9 +1726,12 @@ function renderServerSettings() {
   elements.serverFullSyncBtn.disabled = !isServerMode;
   elements.serverProfileLoadBtn.disabled = !isServerMode;
   elements.serverProfileSaveBtn.disabled = !isServerMode;
+  elements.serverAnalysisCreateBtn.disabled = !isServerMode;
+  elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
   renderServerCapabilities(server.capabilities);
+  renderServerAnalysisJobs(server.analysisJobs);
   renderServerProfileMeta(profile);
 }
 
@@ -1811,6 +1844,44 @@ function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
     active,
     lastSeen,
   });
+}
+
+function renderServerAnalysisJobs(jobs = []) {
+  if (!elements.serverAnalysisList) return;
+  const rows = Array.isArray(jobs) ? jobs.slice(0, 5) : [];
+  if (!rows.length) {
+    elements.serverAnalysisList.textContent = t("settings.server.analysis.none");
+    return;
+  }
+  elements.serverAnalysisList.replaceChildren(
+    ...rows.map((job) => {
+      const item = document.createElement("div");
+      item.className = "server-analysis-item";
+      const info = document.createElement("div");
+      const title = document.createElement("strong");
+      const time = job.updated_at || job.created_at || "";
+      title.textContent = t("settings.server.analysis.item", {
+        id: job.id || "-",
+        type: job.job_type || "-",
+        time: formatServerJobTime(time),
+      });
+      const note = document.createElement("span");
+      note.textContent = job.note_local_id || "-";
+      info.append(title, note);
+      const status = document.createElement("span");
+      status.className = `server-analysis-status ${job.status || ""}`;
+      status.textContent = job.status || "-";
+      item.append(info, status);
+      return item;
+    }),
+  );
+}
+
+function formatServerJobTime(value) {
+  if (!value) return "-";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR");
 }
 
 function countPendingSyncNotes() {
@@ -1932,6 +2003,76 @@ async function saveServerUserProfile() {
       server.lastCheckedAt = new Date().toISOString();
       server.lastMessage = `${t("settings.server.fail")}: ${retryError.message}`;
     }
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+async function createSelectedNoteAnalysisJob() {
+  saveServerSettingsFromForm(t("settings.server.analysis.creating"));
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+
+  const selected = getSelectedTreeNode();
+  if (!selected) {
+    server.lastStatus = "bad";
+    server.lastMessage = t("settings.server.analysis.noNote");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+  const inputText = `${selected.title || ""}\n\n${selected.content || ""}`.trim();
+  if (!inputText) {
+    server.lastStatus = "bad";
+    server.lastMessage = t("settings.server.analysis.emptyNote");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  renderServerStatus("testing", t("settings.server.analysis.creating"));
+  try {
+    const job = await requestServerJson(server, "/api/v1/analysis/jobs", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        job_type: "memo_summary",
+        note_local_id: selected.id,
+        input_text: inputText,
+      }),
+    });
+    server.analysisJobs = [job, ...(server.analysisJobs || [])].slice(0, 5);
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = t("settings.server.analysis.created");
+  } catch (error) {
+    server.lastStatus = "bad";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+async function refreshServerAnalysisJobs() {
+  saveServerSettingsFromForm(t("settings.server.analysis.loading"));
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+
+  renderServerStatus("testing", t("settings.server.analysis.loading"));
+  try {
+    const jobs = await requestServerJson(
+      server,
+      `/api/v1/analysis/jobs?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+    );
+    server.analysisJobs = Array.isArray(jobs) ? jobs.slice(0, 5) : [];
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = t("settings.server.analysis.loaded");
+  } catch (error) {
+    server.lastStatus = "bad";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
   }
   persistSettings();
   renderServerSettings();
@@ -2710,6 +2851,10 @@ function applyLanguage() {
   setText("#serverTimezoneLabel", t("settings.server.profile.timezone"));
   setText("#serverProfileLoadBtn", t("settings.server.profile.load"));
   setText("#serverProfileSaveBtn", t("settings.server.profile.save"));
+  setText("#serverAnalysisTitle", t("settings.server.analysis.title"));
+  setText("#serverAnalysisDesc", t("settings.server.analysis.desc"));
+  setText("#serverAnalysisCreateBtn", t("settings.server.analysis.create"));
+  setText("#serverAnalysisRefreshBtn", t("settings.server.analysis.refresh"));
   setText("#serverSaveBtn", t("settings.server.save"));
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
@@ -2752,6 +2897,8 @@ function applyLanguage() {
   setText("#deletedDeleteAllBtn", t("trash.deleteAll"));
   renderServerStatus(state.settings.server.lastStatus, state.settings.server.lastMessage);
   renderServerMeta();
+  renderServerCapabilities(state.settings.server.capabilities);
+  renderServerAnalysisJobs(state.settings.server.analysisJobs);
   setPlaceholder(elements.searchInput, t("search.placeholder"));
   setIconLabel(elements.searchScopeSelect, t("aria.searchScope"));
   setIconLabel(elements.searchSortSelect, t("aria.searchSort"));
@@ -5270,6 +5417,8 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.ownerId = normalizeOwnerId(normalized.ownerId || defaults.ownerId);
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
+  normalized.capabilities = normalized.capabilities && typeof normalized.capabilities === "object" ? normalized.capabilities : null;
+  normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
   normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
   normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
   normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
