@@ -100,6 +100,8 @@ Important mobile features:
 - Quick note input
 - Server sync
 - Connection status
+- Server recording upload status
+- Server analysis job creation and result review
 
 ### Web / Installed App
 
