@@ -143,6 +143,24 @@
 - `git diff --check` 통과.
 - 현재 Windows 셸 PATH에서 `dart`, `flutter` 명령을 찾지 못해 모바일 정적 분석은 보류.
 
+## 2026-05-18 07:05 KST
+
+### 다음 작업 시작
+
+- 사용자별 토큰 발급/검증 구현 후 공용 서버 preflight와 문서의 남은 항목 표현 정리.
+
+### 구현 내용
+
+- 공용 서버 preflight 실패 문구를 `사용자별 토큰 미구현`에서 `로그인 UI/실제 2단계 인증 미구현` 기준으로 수정.
+- 서버 인증 기준 문서와 서버 README의 다음 단계를 현재 구현 상태에 맞게 정리.
+
+### 검증
+
+- `py_compile`로 `server/scripts/preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example --public-server`가 사용자 토큰 필수 설정, 로그인 UI/실제 2단계 인증, HTTPS 운영 항목으로 의도적 실패하는 것 확인.
+- 오래된 README 문구 재검색 완료.
+- `git diff --check` 통과.
+
 ## 2026-05-17 22:35 KST
 
 ### 현재 기준점

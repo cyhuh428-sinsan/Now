@@ -122,8 +122,8 @@ def main() -> None:
         )
         check(
             False,
-            "Public server auth model",
-            "Per-user login/token and real two-factor challenge are not implemented yet",
+            "Public server login flow",
+            "User-token validation exists, but login UI and real two-factor challenge are not implemented yet",
             failures,
         )
         check(
