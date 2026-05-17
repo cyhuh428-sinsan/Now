@@ -182,6 +182,29 @@
 - `git diff --check` 통과.
 - 현재 환경에서는 Flutter SDK가 PATH에 없어 릴리스 병합 Manifest 확인은 보류.
 
+## 2026-05-18 01:38 KST
+
+### 다음 작업 시작
+
+- 모바일 서버 API 토큰 저장 방식 점검.
+
+### 확인 내용
+
+- `pubspec.yaml`에는 `flutter_secure_storage`가 있고 LLM API 키는 보안 저장소에 저장됨.
+- 서버 API 토큰은 `SharedPreferences`에 저장되고 있었음.
+- 서버 토큰은 인증 정보이므로 일반 설정 저장소보다 보안 저장소에 두는 것이 현재 개인정보/보안 설명과 더 맞음.
+
+### 구현 내용
+
+- 서버 토큰 로드/저장을 `FlutterSecureStorage`로 변경.
+- 기존 `SharedPreferences`에 저장된 서버 토큰은 최초 로드 시 보안 저장소로 옮기고 기존 값을 제거하도록 마이그레이션 추가.
+
+### 검증
+
+- 서버 토큰 저장 코드 재검색 후 일반 설정 저장소 직접 저장 제거 확인.
+- `git diff --check` 통과.
+- 현재 환경에서는 Flutter SDK가 PATH에 없어 모바일 정적 분석은 보류.
+
 ## 2026-05-18 01:18 KST
 
 ### 다음 작업 시작
