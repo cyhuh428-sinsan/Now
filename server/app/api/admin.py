@@ -49,11 +49,19 @@ def export_notes(
 @router.get("/export/recordings")
 def export_recordings(
     owner_id: str | None = Query(default=None),
+    device_id: str | None = Query(default=None),
+    transcript_status: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     stmt = select(Recording).order_by(Recording.updated_at.desc(), Recording.id.desc())
     if owner_id:
         stmt = stmt.where(Recording.owner_id == owner_id)
+    if device_id:
+        stmt = stmt.where(Recording.device_id == device_id)
+    if transcript_status == "with":
+        stmt = stmt.where(Recording.transcript.is_not(None))
+    elif transcript_status == "without":
+        stmt = stmt.where(Recording.transcript.is_(None))
     return _export_payload("recordings", list(db.scalars(stmt).all()))
 
 
