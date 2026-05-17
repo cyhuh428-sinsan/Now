@@ -2,7 +2,7 @@
 
 시행일: 2026년 5월 5일
 
-공개 예정 URL: https://nownote.sinsan.kr/
+공개 URL: https://nownote.sinsan.kr/
 
 NowNote는 사용자의 개인 기록을 안전하게 관리하기 위해 필요한 최소한의 권한과 데이터를 사용합니다.
 
@@ -56,4 +56,4 @@ NowNote는 사용자 데이터 보호를 위해 기기 권한, 로컬 저장소,
 ## 문의
 개인정보 관련 문의: cyhuh428@gmail.com
 
-이 문서는 Google Play 등록 전 공개 URL에 게시해야 하며, 실제 앱 동작과 일치하도록 최종 확인이 필요합니다.
+이 문서는 Google Play 등록 전 실제 앱 동작과 일치하는지 최종 확인이 필요합니다.
