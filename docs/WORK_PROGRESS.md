@@ -22,6 +22,26 @@
 - 사용자 목록 표 헤더에 `토큰` 열이 있는지 재검색 완료.
 - `git diff --check` 통과.
 
+## 2026-05-18 07:40 KST
+
+### 다음 작업 시작
+
+- 공용 서버 모드에서 스모크 테스트가 사용자별 접속 토큰을 사용할 수 있도록 보완.
+
+### 구현 내용
+
+- `server/scripts/smoke_test.py`에 `--user-token` 옵션 추가.
+- `server/scripts/smoke_test.py`에 `--issue-local-user-token` 옵션 추가.
+- 스모크 테스트의 API 요청과 multipart 요청에 `X-Now-User-Token` 헤더 자동 포함.
+- 서버 README와 서버 인증 기준 문서에 사용자별 토큰 필수 모드 스모크 테스트 방법 추가.
+
+### 검증
+
+- `py_compile`로 `server/scripts/smoke_test.py` 확인 통과.
+- `server/scripts/smoke_test.py --help`에서 새 옵션 표시 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-18 05:20 KST
 
 ### 다음 작업 시작

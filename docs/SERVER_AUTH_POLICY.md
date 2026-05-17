@@ -53,4 +53,10 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --public-server
 ```
 
+사용자별 토큰 필수 모드에서 서버 동작을 점검할 때:
+
+```bash
+python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --issue-local-user-token
+```
+
 `--public-server`는 현재 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 로그인 UI, 실제 2단계 인증, 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.

@@ -7,6 +7,9 @@ from datetime import datetime, timezone
 from uuid import uuid4
 
 
+USER_TOKEN: str | None = None
+
+
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
@@ -20,6 +23,8 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if USER_TOKEN:
+        headers["X-Now-User-Token"] = USER_TOKEN
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=10) as res:
         text = res.read().decode("utf-8")
@@ -73,6 +78,8 @@ def request_multipart(
     headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
+    if USER_TOKEN:
+        headers["X-Now-User-Token"] = USER_TOKEN
     req = urllib.request.Request(url, data=b"".join(chunks), headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=10) as res:
         text = res.read().decode("utf-8")
@@ -91,10 +98,22 @@ def request_text(method: str, url: str, token: str | None = None):
 
 
 def main() -> None:
+    global USER_TOKEN
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
     parser.add_argument("--token", default=None)
+    parser.add_argument(
+        "--user-token",
+        default=None,
+        help="Per-user access token used when NOW_USER_TOKEN_REQUIRED=true",
+    )
+    parser.add_argument(
+        "--issue-local-user-token",
+        action="store_true",
+        help="Issue a fresh local_user token through the admin API before data checks",
+    )
     args = parser.parse_args()
+    USER_TOKEN = args.user_token
 
     base_url = args.base_url.rstrip("/")
     checks = [
@@ -174,6 +193,35 @@ def main() -> None:
             "checks": len(data.get("checks", [])),
         },
     )
+
+    if args.issue_local_user_token:
+        status, data = request_error(
+            "POST",
+            f"{base_url}/api/v1/admin/users",
+            args.token,
+            {
+                "owner_id": "local_user",
+                "email": "local_user@example.com",
+                "display_name": "Local User",
+                "timezone": "Asia/Seoul",
+                "group_name": "사용자",
+                "two_factor_enabled": False,
+                "is_active": True,
+            },
+        )
+        require(status in (200, 409), "local_user 생성 API 응답이 예상과 다릅니다")
+        status, data = request(
+            "POST",
+            f"{base_url}/api/v1/admin/users/local_user/token",
+            args.token,
+        )
+        USER_TOKEN = data.get("token")
+        require(USER_TOKEN and len(USER_TOKEN) >= 32, "local_user 사용자별 토큰 발급에 실패했습니다")
+        print(
+            "POST /api/v1/admin/users/local_user/token:",
+            status,
+            {"owner_id": data.get("owner_id"), "issued": bool(USER_TOKEN)},
+        )
 
     status, data = request_error(
         "POST",
