@@ -12,6 +12,7 @@ def server_info() -> dict:
         "status": "ok",
         "server": settings.server_name,
         "auth_required": bool(settings.api_token),
+        "user_token_required": bool(settings.user_token_required),
         "api_version": "v1",
         "capabilities": {
             "sync": True,
@@ -24,6 +25,7 @@ def server_info() -> dict:
             "two_factor_status": True,
             "two_factor_auth": "planned",
             "user_groups": True,
+            "user_access_tokens": True,
             "max_tree_note_level": 3,
             "supported_note_types": ["daily", "tree", "record"],
         },

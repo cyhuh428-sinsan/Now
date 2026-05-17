@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from sqlalchemy.orm import Session
 
 from app.core.security import require_api_token
@@ -8,7 +8,7 @@ from app.db import get_db
 from app.models.note import SyncLog
 from app.schemas.note import SyncRequest, SyncResponse
 from app.services.note_sync import as_naive_utc, list_changed_notes, upsert_note
-from app.services.user_accounts import require_active_user
+from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -18,8 +18,12 @@ router = APIRouter(
 
 
 @router.post("", response_model=SyncResponse)
-def sync(payload: SyncRequest, db: Session = Depends(get_db)) -> SyncResponse:
-    require_active_user(db, owner_id=payload.owner_id)
+def sync(
+    payload: SyncRequest,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> SyncResponse:
+    require_user_api_access(db, owner_id=payload.owner_id, access_token=user_token)
     pushed = [upsert_note(note, db) for note in payload.notes]
     db.commit()
     for note in pushed:

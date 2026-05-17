@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, File, Form, UploadFile
+from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -7,7 +7,7 @@ from app.db import get_db
 from app.models.note import Recording
 from app.schemas.note import RecordingOut
 from app.services.recording_storage import save_recording_file
-from app.services.user_accounts import require_active_user
+from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(
     prefix="/api/v1/recordings",
@@ -19,9 +19,10 @@ router = APIRouter(
 @router.get("", response_model=list[RecordingOut])
 def list_recordings(
     owner_id: str = "local_user",
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> list[Recording]:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     return list(
         db.scalars(
             select(Recording)
@@ -39,9 +40,10 @@ async def upload_recording(
     note_local_id: str | None = Form(default=None),
     transcript: str | None = Form(default=None),
     file: UploadFile = File(...),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> Recording:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     file_name, storage_path = await save_recording_file(
         owner_id=owner_id,
         device_id=device_id,

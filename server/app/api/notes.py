@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
@@ -9,7 +9,7 @@ from app.db import get_db
 from app.models.note import Note
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
 from app.services.note_sync import list_changed_notes, upsert_note as save_note
-from app.services.user_accounts import require_active_user
+from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(
     prefix="/api/v1/notes",
@@ -23,9 +23,10 @@ def list_notes(
     owner_id: str = Query(default="local_user"),
     updated_after: datetime | None = None,
     include_deleted: bool = False,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> list[Note]:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     return list_changed_notes(
         db,
         owner_id=owner_id,
@@ -35,8 +36,12 @@ def list_notes(
 
 
 @router.post("", response_model=NoteOut)
-def upsert_note(payload: NoteIn, db: Session = Depends(get_db)) -> Note:
-    require_active_user(db, owner_id=payload.owner_id)
+def upsert_note(
+    payload: NoteIn,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> Note:
+    require_user_api_access(db, owner_id=payload.owner_id, access_token=user_token)
     note = save_note(payload, db)
     db.commit()
     db.refresh(note)
@@ -48,9 +53,10 @@ def search_notes(
     q: str = Query(min_length=1),
     owner_id: str = Query(default="local_user"),
     note_type: str | None = None,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> list[Note]:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     keyword = f"%{q}%"
     stmt = (
         select(Note)
@@ -69,9 +75,10 @@ def delete_note(
     local_id: str,
     owner_id: str = Query(default="local_user"),
     device_id: str | None = None,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> Note:
-    require_active_user(db, owner_id=owner_id)
+    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     stmt = select(Note).where(Note.owner_id == owner_id, Note.local_id == local_id)
     if device_id is not None:
         stmt = stmt.where(Note.device_id == device_id)
@@ -85,11 +92,15 @@ def delete_note(
 
 
 @router.post("/sync", response_model=NoteSyncResponse)
-def sync_notes(payload: NoteSyncRequest, db: Session = Depends(get_db)) -> NoteSyncResponse:
+def sync_notes(
+    payload: NoteSyncRequest,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> NoteSyncResponse:
     saved: list[Note] = []
     owner_ids = {item.owner_id for item in payload.notes}
     for owner_id in owner_ids:
-        require_active_user(db, owner_id=owner_id)
+        require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     for item in payload.notes:
         saved.append(save_note(item, db))
     db.commit()

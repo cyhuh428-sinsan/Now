@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Header
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import UserAccount
-from app.services.user_accounts import require_active_user, touch_user_activity, update_user_account
+from app.services.user_accounts import require_user_api_access, update_user_account
 
 router = APIRouter(
     prefix="/api/v1/users",
@@ -22,12 +22,12 @@ class UserProfileUpdate(BaseModel):
 
 
 @router.get("/{owner_id}")
-def user_profile(owner_id: str, db: Session = Depends(get_db)) -> dict:
-    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
-    if user is None:
-        user = touch_user_activity(db, owner_id=owner_id)
-        db.commit()
-        db.refresh(user)
+def user_profile(
+    owner_id: str,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     return {"status": "ok", "user": _user_payload(user)}
 
 
@@ -35,9 +35,10 @@ def user_profile(owner_id: str, db: Session = Depends(get_db)) -> dict:
 def update_user_profile(
     owner_id: str,
     payload: UserProfileUpdate,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = require_active_user(db, owner_id=owner_id)
+    user = require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     updated = update_user_account(
         db,
         owner_id=owner_id,

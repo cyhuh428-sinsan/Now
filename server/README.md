@@ -74,6 +74,7 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 ```env
 NOW_SERVER_NAME=NowNote Local Server
 NOW_API_TOKEN=여기에-긴-랜덤-토큰
+NOW_USER_TOKEN_REQUIRED=false
 NOW_POSTGRES_PASSWORD=여기에-긴-랜덤-DB-비밀번호
 NOW_STORAGE_DIR=/data/recordings
 NOW_WORKER_POLL_SECONDS=5
@@ -84,6 +85,8 @@ NOW_WORKER_BATCH_SIZE=5
 DB 비밀번호는 연결 URL에도 들어가므로 처음에는 영문/숫자 중심의 긴 값으로 설정합니다.
 Docker Compose 실행에서는 `NOW_POSTGRES_PASSWORD`로 DB 연결 URL을 자동 구성하고, `NOW_DATABASE_URL`은 서버를 Docker Compose 밖에서 직접 실행할 때만 별도로 사용합니다.
 `NOW_STORAGE_DIR`은 컨테이너 내부의 녹음 저장 경로이며, Docker Compose의 `now_recording_data` 볼륨도 같은 경로에 붙습니다.
+`NOW_USER_TOKEN_REQUIRED=false`는 개인 Docker 서버 기본값입니다.
+공용 서버 오픈 전에는 사용자별 접속 토큰을 발급한 뒤 `NOW_USER_TOKEN_REQUIRED=true`로 바꿔 데이터 API에서 `X-Now-User-Token`을 요구하게 합니다.
 
 자체 서버 사용자는 앱 설정 화면에 다음 값을 입력합니다.
 
@@ -204,6 +207,7 @@ DB 연결까지 포함한 준비 상태 확인.
 
 서버 이름, API 버전, 인증 필요 여부를 확인합니다.
 앱은 이 응답의 `capabilities` 값으로 동기화, 녹음 업로드, 분석 작업, 사용자 계정, 사용자 프로필, 2단계 인증 상태 관리, 운영 점검 API 지원 여부와 계층 메모 최대 깊이를 확인할 수 있습니다.
+`user_token_required`가 `true`이면 데이터 API 요청에 사용자별 접속 토큰 헤더 `X-Now-User-Token`이 필요합니다.
 `two_factor_status`는 관리자 화면에서 사용 여부를 관리할 수 있다는 뜻이고, `two_factor_auth`는 실제 로그인 2단계 인증 기능의 구현 상태를 나타냅니다.
 현재 `two_factor_auth` 값은 `planned`입니다.
 

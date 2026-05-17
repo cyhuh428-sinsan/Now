@@ -1,12 +1,14 @@
 import hashlib
 import secrets
 from datetime import datetime
+from secrets import compare_digest
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.models.note import UserAccount
 
 
@@ -38,6 +40,43 @@ def require_active_user(db: Session, *, owner_id: str) -> UserAccount:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="user inactive",
         )
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def require_user_api_access(
+    db: Session,
+    *,
+    owner_id: str,
+    access_token: str | None = None,
+) -> UserAccount:
+    user = touch_user_activity(db, owner_id=owner_id)
+    if not bool(user.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="user inactive",
+        )
+
+    settings = get_settings()
+    if settings.user_token_required:
+        if not access_token:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="user token required",
+            )
+        if not user.access_token_hash:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="user token not issued",
+            )
+        if not compare_digest(hash_access_token(access_token), user.access_token_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="invalid user token",
+            )
+        user.access_token_last_used_at = datetime.utcnow()
+
     db.commit()
     db.refresh(user)
     return user
