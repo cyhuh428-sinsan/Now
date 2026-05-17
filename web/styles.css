@@ -1866,6 +1866,18 @@ kbd {
   color: #92400e;
 }
 
+.server-analysis-preview {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .search-popover-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 140px 160px;

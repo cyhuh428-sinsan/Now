@@ -361,6 +361,10 @@ const I18N = {
     "settings.server.analysis.loading": "분석 작업을 불러오는 중입니다.",
     "settings.server.analysis.loaded": "분석 작업을 불러왔습니다.",
     "settings.server.analysis.item": "#{id} · {type} · {time}",
+    "settings.server.analysis.resultPreview": "결과: {text}",
+    "settings.server.analysis.inputPreview": "입력: {text}",
+    "settings.server.analysis.errorPreview": "오류: {text}",
+    "settings.server.analysis.doneNoResult": "완료됐지만 표시할 결과가 없습니다.",
     "settings.server.never": "없음",
     "settings.sidebarAssist.title": "보조 목록 표시",
     "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
@@ -817,6 +821,10 @@ const I18N = {
     "settings.server.analysis.loading": "Loading analysis jobs.",
     "settings.server.analysis.loaded": "Analysis jobs loaded.",
     "settings.server.analysis.item": "#{id} · {type} · {time}",
+    "settings.server.analysis.resultPreview": "Result: {text}",
+    "settings.server.analysis.inputPreview": "Input: {text}",
+    "settings.server.analysis.errorPreview": "Error: {text}",
+    "settings.server.analysis.doneNoResult": "Done, but no displayable result.",
     "settings.server.never": "Never",
     "settings.sidebarAssist.title": "Show helper lists",
     "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
@@ -1872,9 +1880,53 @@ function renderServerAnalysisJobs(jobs = []) {
       status.className = `server-analysis-status ${job.status || ""}`;
       status.textContent = job.status || "-";
       item.append(info, status);
+      const previewText = getServerAnalysisPreview(job);
+      if (previewText) {
+        const preview = document.createElement("div");
+        preview.className = "server-analysis-preview";
+        preview.textContent = previewText;
+        item.append(preview);
+      }
       return item;
     }),
   );
+}
+
+function getServerAnalysisPreview(job) {
+  if (job.status === "failed" && job.error_message) {
+    return t("settings.server.analysis.errorPreview", { text: compactText(job.error_message, 160) });
+  }
+  const resultText = extractServerAnalysisResultText(job.result_json);
+  if (resultText) {
+    return t("settings.server.analysis.resultPreview", { text: compactText(resultText, 180) });
+  }
+  if (job.status === "done") return t("settings.server.analysis.doneNoResult");
+  if (job.input_text) {
+    return t("settings.server.analysis.inputPreview", { text: compactText(job.input_text, 140) });
+  }
+  return "";
+}
+
+function extractServerAnalysisResultText(resultJson) {
+  if (!resultJson) return "";
+  try {
+    const parsed = typeof resultJson === "string" ? JSON.parse(resultJson) : resultJson;
+    if (typeof parsed === "string") return parsed;
+    if (parsed && typeof parsed.summary === "string") return parsed.summary;
+    if (parsed && Array.isArray(parsed.keywords) && parsed.keywords.length) {
+      return parsed.keywords.filter(Boolean).join(", ");
+    }
+    if (parsed && typeof parsed === "object") return JSON.stringify(parsed);
+  } catch (_) {
+    return String(resultJson);
+  }
+  return "";
+}
+
+function compactText(value, maxLength = 160) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength - 1)}…`;
 }
 
 function formatServerJobTime(value) {
