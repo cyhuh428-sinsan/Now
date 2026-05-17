@@ -40,7 +40,7 @@ class HelpPage extends StatelessWidget {
             points: [
               '설정 없이 바로 사용할 수 있습니다.',
               '메모가 외부 서버로 올라가지 않습니다.',
-              '주기적으로 JSON 백업이나 Markdown 내보내기를 해두는 것이 좋습니다.',
+              '주기적으로 DB 백업이나 Markdown 내보내기를 해두는 것이 좋습니다.',
               '서버 녹음 저장과 서버 분석 작업은 사용할 수 없습니다.',
             ],
           ),
@@ -73,9 +73,22 @@ class HelpPage extends StatelessWidget {
             title: '백업과 가져오기',
             description: '백업과 가져오기는 목적이 다릅니다.',
             points: [
-              'JSON 백업은 NowNote 전체 데이터를 복원할 때 사용합니다.',
+              'DB 백업은 NowNote 모바일 앱 전체 데이터를 복원할 때 사용합니다.',
               'Markdown 가져오기는 외부 .md/.txt 파일을 새 지식 메모로 추가합니다.',
               '가져온 파일은 원본과 연결하지 않으며, 삭제해도 원본 파일은 남습니다.',
+              'Android 자동 클라우드 백업에는 개인 기록과 서버 접속 정보를 포함하지 않습니다.',
+            ],
+          ),
+          SizedBox(height: 14),
+          _HelpSection(
+            icon: Icons.privacy_tip_outlined,
+            title: '권한과 개인정보',
+            description: '권한은 필요한 기능을 사용할 때만 요청합니다.',
+            points: [
+              '마이크는 음성 메모와 음성 기록에 사용합니다.',
+              '카메라와 사진은 캡처, 식사, 패션, 여행 같은 생활 기록에 사용합니다.',
+              '캘린더와 Health Connect는 사용자가 허용한 경우에만 조회합니다.',
+              '서버 연결을 켠 경우에만 메모, 녹음, 분석 입력이 지정한 서버로 전송될 수 있습니다.',
             ],
           ),
           SizedBox(height: 14),
