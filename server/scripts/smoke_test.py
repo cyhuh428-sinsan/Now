@@ -75,6 +75,8 @@ def main() -> None:
         "/admin/export",
         "/admin/users",
         "/admin/users/new",
+        "/admin/users?status=inactive",
+        "/admin/users?status=never_seen&q=smoke",
     ]
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)

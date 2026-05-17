@@ -3,7 +3,7 @@ from html import escape
 from pathlib import Path
 from secrets import compare_digest
 
-from fastapi import APIRouter, Depends, Form, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import func, select, text
@@ -64,8 +64,11 @@ def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/users", include_in_schema=False)
-def admin_users(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_users_html())
+def admin_users(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_users_html(request))
 
 
 @router.get("/admin/users/new", include_in_schema=False)
@@ -1874,23 +1877,42 @@ def _admin_device_rows(devices: list[dict[str, object]]) -> str:
     )
 
 
-def _admin_users_html() -> str:
+def _admin_users_html(request: Request) -> str:
     error_message = ""
     users: list[UserAccount] = []
     group_counts: dict[str, int] = {}
     timezone_counts: dict[str, int] = {}
+    query = request.query_params
+    search = (query.get("q") or "").strip()
+    status_filter = query.get("status") or "all"
+    group_filter = (query.get("group") or "").strip()
 
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
+            stmt = select(UserAccount)
+            if status_filter == "active":
+                stmt = stmt.where(UserAccount.is_active == 1)
+            elif status_filter == "inactive":
+                stmt = stmt.where(UserAccount.is_active == 0)
+            elif status_filter == "never_seen":
+                stmt = stmt.where(UserAccount.last_seen_at.is_(None))
+            if group_filter:
+                stmt = stmt.where(UserAccount.group_name == group_filter)
+            if search:
+                keyword = f"%{search}%"
+                stmt = stmt.where(
+                    UserAccount.owner_id.ilike(keyword)
+                    | UserAccount.email.ilike(keyword)
+                    | UserAccount.display_name.ilike(keyword)
+                )
+            stmt = stmt.order_by(
+                UserAccount.last_seen_at.desc().nullslast(),
+                UserAccount.updated_at.desc(),
+                UserAccount.id.desc(),
+            )
             users = list(
-                db.scalars(
-                    select(UserAccount).order_by(
-                        UserAccount.last_seen_at.desc().nullslast(),
-                        UserAccount.updated_at.desc(),
-                        UserAccount.id.desc(),
-                    )
-                ).all()
+                db.scalars(stmt).all()
             )
             group_rows = db.execute(
                 select(UserAccount.group_name, func.count())
@@ -1982,6 +2004,34 @@ def _admin_users_html() -> str:
       border-bottom: 1px solid var(--line);
       font-weight: 700;
     }}
+    .filter-form {{
+      display: grid;
+      grid-template-columns: minmax(180px, 1fr) 150px 150px auto;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+    }}
+    .filter-form input,
+    .filter-form select {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+    }}
+    .filter-form button {{
+      min-height: 36px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 750;
+      cursor: pointer;
+    }}
     table {{ width: 100%; border-collapse: collapse; }}
     th, td {{
       padding: 13px 18px;
@@ -2028,6 +2078,7 @@ def _admin_users_html() -> str:
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
       .grid {{ grid-template-columns: 1fr; }}
+      .filter-form {{ grid-template-columns: 1fr; }}
       th, td {{ padding: 12px; }}
     }}
   </style>
@@ -2061,6 +2112,16 @@ def _admin_users_html() -> str:
 
     <section>
       <div class="section-head"><span>사용자 목록</span><a href="/admin/users/new">사용자 추가</a></div>
+      <form class="filter-form" method="get" action="/admin/users">
+        <input type="search" name="q" value="{escape(search, quote=True)}" placeholder="Owner, 이메일, 표시 이름 검색">
+        <select name="status">
+          {_user_status_options(status_filter)}
+        </select>
+        <select name="group">
+          {_user_group_options(group_counts, group_filter)}
+        </select>
+        <button type="submit">필터 적용</button>
+      </form>
       <table>
         <tr><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>최근 접속</th><th>관리</th></tr>
         {_user_rows(users)}
@@ -2085,7 +2146,7 @@ def _admin_users_html() -> str:
 
 def _user_rows(users: list[UserAccount]) -> str:
     if not users:
-        return '<tr><td colspan="9">사용자가 없습니다. 동기화가 들어오면 자동 생성됩니다.</td></tr>'
+        return '<tr><td colspan="9">조건에 맞는 사용자가 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td>{user.id}</td>"
@@ -2100,6 +2161,28 @@ def _user_rows(users: list[UserAccount]) -> str:
         "</tr>"
         for user in users
     )
+
+
+def _user_status_options(selected: str) -> str:
+    options = [
+        ("all", "전체 상태"),
+        ("active", "활성"),
+        ("inactive", "비활성"),
+        ("never_seen", "접속 기록 없음"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
+
+
+def _user_group_options(group_counts: dict[str, int], selected: str) -> str:
+    options = ['<option value="">전체 그룹</option>']
+    for group_name in sorted(group_counts):
+        options.append(
+            f'<option value="{escape(group_name, quote=True)}" {"selected" if selected == group_name else ""}>{escape(group_name)}</option>'
+        )
+    return "\n".join(options)
 
 
 def _simple_badge(status: str, label: str) -> str:
