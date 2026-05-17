@@ -65,3 +65,38 @@
 
 - 실제 메모 화면에서 선택한 계층 메모를 `memo_summary`로 보내는 연결은 별도 작업으로 진행.
 - 모바일 녹음 파일 업로드 연결은 다음 큰 작업 후보.
+
+## 2026-05-17 22:55 KST
+
+### 다음 작업 시작
+
+- 모바일 회의/대화/메모의 `record_then_transcribe` 녹음 파일을 서버 `/api/v1/recordings`로 업로드하는 흐름 추가.
+
+### 확인 내용
+
+- `MeetingProgressPage`는 녹음 후 변환 모드에서 `_fullRecordingPath`를 만들고, 리뷰 화면 `pendingMeetingMetaProvider`에 `audioFilePath`로 넘김.
+- `ItemsReviewPage`는 완료 시 `audioFilePath`를 meeting summary에 `audio:...` 형태로 저장함.
+- 로컬 저장을 먼저 완료하고, 서버 설정이 켜져 있고 파일이 존재할 때만 업로드하는 방식이 기존 동작에 가장 안전함.
+
+### 구현 방침
+
+- `ServerSyncService`에 multipart 녹음 업로드 메서드 추가.
+- `ItemsReviewPage` 저장 완료 후 서버 설정이 enabled/configured이고 파일이 존재하면 업로드.
+- 업로드 실패는 스낵바로 알리고 로컬 저장은 유지.
+
+## 2026-05-17 23:05 KST
+
+### 구현 완료
+
+- 모바일 앱 `ServerSyncService`에 `/api/v1/recordings` multipart 업로드 메서드 추가.
+- `ItemsReviewPage` 완료 저장 흐름에서 로컬 저장과 세그먼트 저장을 먼저 수행한 뒤, 서버 연결이 켜져 있으면 녹음 파일을 업로드하도록 연결.
+- 업로드 실패 시 로컬 저장은 유지하고 스낵바 경고만 표시하도록 처리.
+
+### 검증
+
+- `git diff --check` 통과.
+- 현재 작업 환경에서 `dart`/`flutter` 명령을 찾을 수 없어 모바일 정적 분석과 포맷 실행은 보류.
+
+### 남은 점검
+
+- 계층 메모 화면의 음성 입력은 임시 파일 삭제 흐름이 달라 별도 업로드 연결 작업 필요.
