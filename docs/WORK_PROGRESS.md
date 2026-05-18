@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:10 KST
+
+### 다음 작업 시작
+
+- 운영 점검 화면 smoke 검증 강화.
+
+### 구현 내용
+
+- `server/scripts/smoke_test.py`가 `/admin/ops` HTML 화면의 핵심 운영 항목을 직접 확인하도록 보강.
+- 백업/복구 절차, `status_counts.bad=0`, 공용 서버 로그인 화면, 공용 서버 2단계 인증, 공개 운영 환경 항목을 화면 기준으로 확인.
+- preflight가 smoke test의 운영 점검 화면 검증 문구 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `smoke_test.py`, `preflight.py` 확인 통과.
+- TestClient로 `/admin/ops` 화면의 백업/복구 절차, `status_counts.bad=0`, 공용 서버 점검 항목 표시 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (91/91 checks)` 출력 확인.
+
 ## 2026-05-18 22:02 KST
 
 ### 다음 작업 시작
