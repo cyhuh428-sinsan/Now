@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 18:40 KST
+
+### 다음 작업 시작
+
+- 관리자 화면에서 WSL/Docker 배포 체크리스트를 직접 확인할 수 있게 연결.
+
+### 구현 내용
+
+- `/admin/deploy` 읽기 전용 화면 추가.
+- `/admin/help`에 배포 체크리스트 카드와 `/admin/deploy` 링크 추가.
+- smoke test가 `/admin/deploy` 화면과 핵심 배포 명령을 확인하도록 보강.
+- preflight가 smoke test의 `/admin/deploy` 포함 여부를 확인하도록 보강.
+- 서버 README의 운영 화면 목록과 설명에 `/admin/deploy` 추가.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py`, `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `Smoke covers deploy admin page` 항목이 OK로 출력되는 것 확인.
+- TestClient로 `/admin/help`와 `/admin/deploy` 관리자 인증 접근 확인 통과.
+- `/admin/deploy` 화면에 `DEPLOY.md` 본문과 `git pull origin main` 안내가 표시되는 것 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 18:25 KST
 
 ### 다음 작업 시작

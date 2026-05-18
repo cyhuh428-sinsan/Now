@@ -201,6 +201,11 @@ def admin_recovery(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_recovery_html())
 
 
+@router.get("/admin/deploy", include_in_schema=False)
+def admin_deploy(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_deploy_html())
+
+
 @router.get("/monitor", response_class=HTMLResponse, include_in_schema=False)
 def monitor(_: None = Depends(_require_monitor_access)) -> str:
     settings = get_settings()
@@ -974,6 +979,7 @@ def _admin_analysis_html() -> str:
         <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
+        <a href="/admin/deploy">배포</a>
         <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
       </nav>
@@ -3948,6 +3954,16 @@ def _admin_help_html() -> str:
       </section>
 
       <section class="card">
+        <strong>배포 체크리스트</strong>
+        <p>WSL/Docker 서버 갱신은 소스 갱신, 환경 파일 확인, preflight, 컨테이너 시작, smoke test 순서로 진행합니다.</p>
+        <ul>
+          <li>배포 전 점검은 <code>scripts/preflight.py</code>를 사용합니다.</li>
+          <li>서버 시작 후 <code>/health</code>, <code>/health/ready</code>, <code>/api/v1/server</code>를 확인합니다.</li>
+          <li>상세 절차는 <a href="/admin/deploy">DEPLOY.md</a>를 기준으로 확인합니다.</li>
+        </ul>
+      </section>
+
+      <section class="card">
         <strong>복구 절차</strong>
         <p>장애 발생 시에는 백업 JSON을 먼저 검증하고 DB/저장소 상태를 확인한 뒤 복구합니다.</p>
         <ul>
@@ -4065,6 +4081,118 @@ def _admin_recovery_html() -> str:
         <a href="/admin">관리</a>
         <a href="/admin/export">내보내기</a>
         <a href="/admin/ops">점검</a>
+        <a href="/admin/help">도움말</a>
+      </nav>
+    </header>
+    <pre>{escape(content)}</pre>
+  </main>
+</body>
+</html>"""
+
+
+def _admin_deploy_html() -> str:
+    deploy_path = Path(__file__).resolve().parents[2] / "DEPLOY.md"
+    if deploy_path.exists():
+        content = deploy_path.read_text(encoding="utf-8")
+    else:
+        content = "DEPLOY.md 파일을 찾을 수 없습니다."
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 배포 체크리스트</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1040px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    pre {{
+      margin: 0;
+      padding: 22px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      white-space: pre-wrap;
+      word-break: keep-all;
+      overflow-wrap: anywhere;
+      line-height: 1.7;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 13px;
+    }}
+    @media (max-width: 760px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      main {{ padding: 22px 12px 36px; }}
+      h1 {{ font-size: 24px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>NowNote 배포 체크리스트</h1>
+        <div class="sub">WSL/Docker 서버 갱신과 확인 순서를 봅니다</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/recovery">복구</a>
         <a href="/admin/help">도움말</a>
       </nav>
     </header>

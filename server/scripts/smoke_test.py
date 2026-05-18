@@ -151,6 +151,7 @@ def main() -> None:
         "/admin/ops",
         "/admin/export",
         "/admin/recovery",
+        "/admin/deploy",
         "/admin/users",
         "/admin/users/new",
         "/admin/users?status=inactive",
@@ -166,6 +167,9 @@ def main() -> None:
         if path == "/admin/recovery":
             require("NowNote 서버 복구 절차" in text, "복구 절차 화면에 RECOVERY.md 내용이 없습니다")
             require("/api/v1/admin/export/verify" in text, "복구 절차 화면에 백업 검증 API 안내가 없습니다")
+        if path == "/admin/deploy":
+            require("NowNote 서버 배포 체크리스트" in text, "배포 체크리스트 화면에 DEPLOY.md 내용이 없습니다")
+            require("git pull origin main" in text, "배포 체크리스트 화면에 소스 갱신 안내가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, data = request(
