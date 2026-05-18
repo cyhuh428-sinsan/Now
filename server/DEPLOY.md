@@ -37,6 +37,9 @@ nano .env
 python3 scripts/preflight.py
 ```
 
+성공하면 `NowNote server preflight passed (통과/전체 checks)` 형식으로 점검 수가 표시됩니다.
+실패하면 `Preflight failed (통과/전체 checks)`와 실패 항목 목록을 먼저 확인합니다.
+
 공용 서버 오픈 전 점검:
 
 ```bash
