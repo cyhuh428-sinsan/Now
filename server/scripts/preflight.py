@@ -258,6 +258,8 @@ def main() -> None:
             [
                 ("git pull origin main", "Deploy checklist covers source update", "git pull origin main"),
                 ("python3 scripts/preflight.py", "Deploy checklist covers preflight", "preflight"),
+                ("NowNote server preflight passed", "Deploy checklist explains preflight pass summary", "preflight passed summary"),
+                ("Preflight failed", "Deploy checklist explains preflight failure summary", "preflight failed summary"),
                 ("docker compose up --build -d", "Deploy checklist covers compose up", "docker compose up --build -d"),
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("백업/복구 절차", "Deploy checklist covers backup recovery ops check", "backup recovery ops"),
