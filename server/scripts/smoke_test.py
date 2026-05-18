@@ -201,6 +201,8 @@ def main() -> None:
         if path == "/admin/help":
             require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
             require("/admin/deploy" in text, "도움말 화면에 배포 체크리스트 링크가 없습니다")
+            require("배포 직후" in text and "/admin/export" in text, "도움말 화면에 배포 후 백업 확인 안내가 없습니다")
+            require("bad" in text and "warn" in text and "/admin/ops" in text, "도움말 화면에 복구 검증 결과 대응 안내가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, data = request(
