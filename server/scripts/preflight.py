@@ -216,6 +216,9 @@ def main() -> None:
                 ("content_sha256", "Recovery procedure covers checksum", "content_sha256"),
                 ("원본 녹음 파일", "Recovery procedure covers recording files", "recording files"),
                 ("DB와 저장소를 먼저 별도 백업", "Recovery procedure covers pre-restore backup", "pre-restore backup"),
+                ("checks`에 `bad`", "Recovery procedure covers bad checks", "bad checks"),
+                ("checks`에 `warn`", "Recovery procedure covers warn checks", "warn checks"),
+                ("/admin/ops", "Recovery procedure covers ops follow-up", "admin/ops"),
             ],
             failures,
         )
