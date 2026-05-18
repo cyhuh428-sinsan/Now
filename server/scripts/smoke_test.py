@@ -1,5 +1,6 @@
 import argparse
 import base64
+import hashlib
 import json
 import re
 import urllib.error
@@ -217,6 +218,17 @@ def main() -> None:
         re.fullmatch(r"[0-9a-f]{64}", data.get("content_sha256", "") or "") is not None,
         "전체 백업 체크섬 형식이 올바르지 않습니다",
     )
+    checksum_payload = dict(data)
+    checksum = checksum_payload.pop("content_sha256", "")
+    recalculated_checksum = hashlib.sha256(
+        json.dumps(
+            checksum_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    require(checksum == recalculated_checksum, "전체 백업 체크섬이 본문 내용과 일치하지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
     print(
         "GET /api/v1/admin/export/all:",
