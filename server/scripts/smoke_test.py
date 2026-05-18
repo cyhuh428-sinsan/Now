@@ -262,6 +262,20 @@ def main() -> None:
         },
     )
 
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/export/verify",
+        args.token,
+        {"backup": {}},
+    )
+    require(data.get("status") == "bad", "빈 백업 검증이 실패 상태를 반환하지 않았습니다")
+    require(len(data.get("checks", [])) >= 1, "빈 백업 검증 결과가 비어 있습니다")
+    print(
+        "POST /api/v1/admin/export/verify(empty):",
+        status,
+        {"status": data.get("status"), "checks": len(data.get("checks", []))},
+    )
+
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
     print(
         "GET /api/v1/admin/ops:",
