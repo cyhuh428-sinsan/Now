@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 23:25 KST
+
+### 다음 작업 시작
+
+- 백업 검증 API 응답에 검증 상태 집계 추가.
+
+### 구현 내용
+
+- `POST /api/v1/admin/export/verify` 응답에 `status_counts` 추가.
+- 검증 결과 전체 상태를 `bad > warn > ok` 우선순위로 계산하는 `_verification_status()` 추가.
+- smoke test가 정상 백업과 빈 백업 검증 응답의 `status_counts`를 확인하도록 보강.
+- README와 RECOVERY 문서에 `status_counts` 기준을 추가.
+- preflight가 README/RECOVERY의 `status_counts` 문서화 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `smoke_test.py`, `preflight.py` 확인 통과.
+- TestClient로 정상 백업 검증의 `status_counts.bad=0`, 빈 백업 검증의 `status_counts.bad>=1` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 23:10 KST
 
 ### 다음 작업 시작

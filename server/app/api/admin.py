@@ -179,10 +179,12 @@ def export_summary(db: Session = Depends(get_db)) -> dict:
 @router.post("/export/verify")
 def verify_export(payload: BackupVerifyRequest) -> dict:
     checks = _verify_backup_payload(payload.backup)
+    status_counts = _check_status_counts(checks)
     return {
-        "status": "ok" if all(check["status"] == "ok" for check in checks) else "bad",
+        "status": _verification_status(status_counts),
         "checked_at": datetime.utcnow(),
         "summary": _backup_verify_summary(payload.backup),
+        "status_counts": status_counts,
         "checks": checks,
     }
 
@@ -579,6 +581,24 @@ def _verify_check(name: str, passed: bool, expected: str, actual: str) -> dict[s
         "expected": expected,
         "actual": actual,
     }
+
+
+def _check_status_counts(checks: list[dict[str, str]]) -> dict[str, int]:
+    counts = {"ok": 0, "warn": 0, "bad": 0}
+    for check in checks:
+        status = check.get("status")
+        if status not in counts:
+            continue
+        counts[status] += 1
+    return counts
+
+
+def _verification_status(status_counts: dict[str, int]) -> str:
+    if status_counts.get("bad", 0):
+        return "bad"
+    if status_counts.get("warn", 0):
+        return "warn"
+    return "ok"
 
 
 def _export_summary_counts(db: Session) -> dict:

@@ -136,6 +136,7 @@ def main() -> None:
                 ("supported_note_types", "README documents supported note types", "supported_note_types"),
                 ("max_tree_note_level", "README documents tree depth capability", "max_tree_note_level"),
                 ("user_access_tokens", "README documents user token capability", "user_access_tokens"),
+                ("status_counts", "README documents backup verify status counts", "status_counts"),
             ],
             failures,
         )
@@ -214,6 +215,7 @@ def main() -> None:
             [
                 ("/api/v1/admin/export/verify", "Recovery procedure covers backup verification", "export/verify"),
                 ("content_sha256", "Recovery procedure covers checksum", "content_sha256"),
+                ("status_counts.bad", "Recovery procedure covers status counts", "status_counts.bad"),
                 ("원본 녹음 파일", "Recovery procedure covers recording files", "recording files"),
                 ("DB와 저장소를 먼저 별도 백업", "Recovery procedure covers pre-restore backup", "pre-restore backup"),
                 ("checks`에 `bad`", "Recovery procedure covers bad checks", "bad checks"),
