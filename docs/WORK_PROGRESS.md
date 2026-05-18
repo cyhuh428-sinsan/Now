@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:40 KST
+
+### 다음 작업 시작
+
+- `/admin/export` 화면에 백업 검증 결과 판단 기준 추가.
+
+### 구현 내용
+
+- `/admin/export` 화면의 백업 검증 예시 아래에 결과 판단 기준 추가.
+- `status=ok`, `warn/bad` 시 `/admin/recovery`, `/admin/ops` 확인 안내 추가.
+- 원본 음성 파일은 백업 JSON에 포함되지 않고 `NOW_STORAGE_DIR`/Docker 볼륨 별도 보존이 필요하다는 안내 추가.
+- smoke test가 `/admin/export` 화면의 검증 성공 기준, 복구 절차 링크, 원본 음성 파일 보존 안내를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py` 확인 통과.
+- TestClient로 `/admin/export` 화면에 `status=ok`, `/admin/recovery`, `/admin/ops`, `NOW_STORAGE_DIR`, 검증 API 안내가 포함되는지 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 22:25 KST
 
 ### 다음 작업 시작

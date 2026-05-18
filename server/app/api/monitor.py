@@ -3683,6 +3683,12 @@ def _admin_export_html() -> str:
       color: #92400e;
       font-size: 14px;
     }}
+    .result-list {{
+      margin: 0;
+      padding: 14px 18px 16px 34px;
+      font-size: 14px;
+      line-height: 1.7;
+    }}
     code, pre {{
       font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
     }}
@@ -3753,6 +3759,11 @@ def _admin_export_html() -> str:
         <span class="sub">JSON</span>
       </div>
       <pre>{escape(_backup_verify_example())}</pre>
+      <ul class="result-list">
+        <li><code>status=ok</code>이면 백업 구조와 체크섬 기준이 정상입니다.</li>
+        <li><code>warn</code> 또는 <code>bad</code>가 있으면 복구 작업 전에 <code>/admin/recovery</code>와 <code>/admin/ops</code>를 먼저 확인합니다.</li>
+        <li>원본 음성 파일은 백업 JSON에 포함되지 않으므로 Docker 볼륨 또는 <code>NOW_STORAGE_DIR</code> 저장소를 별도로 보존합니다.</li>
+      </ul>
     </section>
   </main>
 </body>
