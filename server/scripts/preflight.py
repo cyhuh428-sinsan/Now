@@ -48,6 +48,7 @@ def main() -> None:
     compose_path = server_dir / "docker-compose.yml"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
+    deploy_path = server_dir / "DEPLOY.md"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -114,6 +115,7 @@ def main() -> None:
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
+    check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     if smoke_path.exists():
         smoke = smoke_path.read_text(encoding="utf-8")
         check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
