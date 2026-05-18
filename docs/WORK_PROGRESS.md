@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 09:35 KST
+
+### 다음 작업 시작
+
+- 운영자가 서버 백업/내보내기 전에 항목별 건수를 화면과 API로 확인할 수 있게 보완.
+
+### 구현 내용
+
+- `GET /api/v1/admin/export/summary` 추가.
+- `/admin/export` 화면에 전체 메모, 삭제 표시, 녹음 메타데이터, 사용자 건수 카드 추가.
+- 내보내기 링크 표에 항목별 건수와 요약 JSON 링크 추가.
+- smoke test에 내보내기 요약 API 검증 추가.
+- 서버 README의 내보내기 화면 설명 갱신.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `monitor.py`, `smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 `/api/v1/admin/export/summary`와 `/admin/export` 요약 표시 확인 통과.
+
 ## 2026-05-18 09:10 KST
 
 ### 다음 작업 시작

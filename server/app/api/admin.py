@@ -103,6 +103,15 @@ def export_users(db: Session = Depends(get_db)) -> dict:
     return _export_payload("users", list(db.scalars(stmt).all()))
 
 
+@router.get("/export/summary")
+def export_summary(db: Session = Depends(get_db)) -> dict:
+    return {
+        "name": "export_summary",
+        "checked_at": datetime.utcnow(),
+        "items": _export_summary_counts(db),
+    }
+
+
 @router.get("/users")
 def users(
     owner_id: str | None = Query(default=None),
@@ -392,6 +401,42 @@ def _export_payload(name: str, rows: list) -> dict:
         "exported_at": datetime.utcnow(),
         "count": len(rows),
         "items": [_model_to_dict(row) for row in rows],
+    }
+
+
+def _export_summary_counts(db: Session) -> dict:
+    note_total = db.scalar(select(func.count()).select_from(Note)) or 0
+    active_notes = (
+        db.scalar(select(func.count()).select_from(Note).where(Note.deleted_at.is_(None)))
+        or 0
+    )
+    deleted_notes = note_total - active_notes
+    recordings = db.scalar(select(func.count()).select_from(Recording)) or 0
+    recordings_without_transcript = (
+        db.scalar(
+            select(func.count()).select_from(Recording).where(Recording.transcript.is_(None))
+        )
+        or 0
+    )
+    users = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+    users_with_token = (
+        db.scalar(
+            select(func.count())
+            .select_from(UserAccount)
+            .where(UserAccount.access_token_hash.is_not(None))
+        )
+        or 0
+    )
+    return {
+        "notes": note_total,
+        "active_notes": active_notes,
+        "deleted_notes": deleted_notes,
+        "recordings": recordings,
+        "recordings_without_transcript": recordings_without_transcript,
+        "users": users,
+        "users_with_token": users_with_token,
+        "analysis_jobs": db.scalar(select(func.count()).select_from(AnalysisJob)) or 0,
+        "sync_logs": db.scalar(select(func.count()).select_from(SyncLog)) or 0,
     }
 
 
