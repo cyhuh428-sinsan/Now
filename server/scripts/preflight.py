@@ -43,6 +43,10 @@ def check_text_contains(
         check(needle in text, name, message, failures)
 
 
+def check_summary() -> str:
+    return f"{CHECK_PASSED}/{CHECK_TOTAL} checks"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NowNote server deployment preflight check")
     parser.add_argument("--env-file", default=".env", help="Path to .env file")
@@ -313,12 +317,12 @@ def main() -> None:
         )
 
     if failures:
-        print("\nPreflight failed:")
+        print(f"\nPreflight failed ({check_summary()}):")
         for failure in failures:
             print(f"- {failure}")
         raise SystemExit(1)
 
-    print(f"NowNote server preflight passed ({CHECK_PASSED}/{CHECK_TOTAL} checks)")
+    print(f"NowNote server preflight passed ({check_summary()})")
 
 
 if __name__ == "__main__":
