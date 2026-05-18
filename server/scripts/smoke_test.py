@@ -770,6 +770,9 @@ def main() -> None:
 if __name__ == "__main__":
     try:
         main()
+    except AssertionError as e:
+        print(f"SMOKE TEST FAILED: {e}")
+        raise
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code}: {e.read().decode('utf-8')}")
         raise

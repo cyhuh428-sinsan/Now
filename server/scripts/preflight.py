@@ -151,6 +151,7 @@ def main() -> None:
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
                 ("Preflight failed", "README explains preflight failure summary", "preflight failed summary"),
                 ("NowNote server smoke test passed", "README explains smoke pass summary", "smoke passed summary"),
+                ("SMOKE TEST FAILED", "README explains smoke failure summary", "smoke failure summary"),
                 ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
                 ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
                 ("비활성 사용자 차단", "README explains smoke inactive user check", "smoke inactive user check"),
@@ -269,6 +270,7 @@ def main() -> None:
                 ("docker compose up --build -d", "Deploy checklist covers compose up", "docker compose up --build -d"),
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
+                ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("백업/복구 절차", "Deploy checklist covers backup recovery ops check", "backup recovery ops"),
                 ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
@@ -305,6 +307,7 @@ def main() -> None:
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
                 ("NowNote server smoke test passed", "Smoke prints pass summary", "smoke passed summary"),
+                ("SMOKE TEST FAILED", "Smoke prints failure summary", "smoke failure summary"),
             ],
             failures,
         )
