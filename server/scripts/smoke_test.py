@@ -185,6 +185,23 @@ def main() -> None:
         {"count": data.get("count"), "name": data.get("name")},
     )
 
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/summary",
+        args.token,
+    )
+    require(data.get("name") == "export_summary", "내보내기 요약 이름이 export_summary가 아닙니다")
+    require("notes" in data.get("items", {}), "내보내기 요약에 메모 건수가 없습니다")
+    print(
+        "GET /api/v1/admin/export/summary:",
+        status,
+        {
+            "notes": data.get("items", {}).get("notes"),
+            "recordings": data.get("items", {}).get("recordings"),
+            "users": data.get("items", {}).get("users"),
+        },
+    )
+
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
     print(
         "GET /api/v1/admin/ops:",

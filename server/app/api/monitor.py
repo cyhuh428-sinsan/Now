@@ -3453,13 +3453,39 @@ def _sync_export_query(
 
 
 def _admin_export_html() -> str:
+    summary = _export_summary_counts_for_page()
     export_links = [
-        ("Notes", "/api/v1/admin/export/notes", "메모 전체 export"),
-        ("삭제 제외 메모", "/api/v1/admin/export/notes?include_deleted=false", "삭제 표시 제외 메모 export"),
-        ("Recordings", "/api/v1/admin/export/recordings", "녹음 파일 메타데이터 export"),
-        ("Users", "/api/v1/admin/export/users", "사용자 계정과 운영 메타데이터 export"),
-        ("분석 작업", "/api/v1/admin/export/analysis-jobs", "분석 작업 이력 export"),
-        ("동기화 이력", "/api/v1/admin/export/sync-logs", "동기화 호출 이력 export"),
+        ("Notes", "/api/v1/admin/export/notes", "메모 전체 export", summary["notes"]),
+        (
+            "삭제 제외 메모",
+            "/api/v1/admin/export/notes?include_deleted=false",
+            "삭제 표시 제외 메모 export",
+            summary["active_notes"],
+        ),
+        (
+            "Recordings",
+            "/api/v1/admin/export/recordings",
+            "녹음 파일 메타데이터 export",
+            summary["recordings"],
+        ),
+        (
+            "Users",
+            "/api/v1/admin/export/users",
+            "사용자 계정과 운영 메타데이터 export",
+            summary["users"],
+        ),
+        (
+            "분석 작업",
+            "/api/v1/admin/export/analysis-jobs",
+            "분석 작업 이력 export",
+            summary["analysis_jobs"],
+        ),
+        (
+            "동기화 이력",
+            "/api/v1/admin/export/sync-logs",
+            "동기화 호출 이력 export",
+            summary["sync_logs"],
+        ),
     ]
     return f"""<!doctype html>
 <html lang="ko">
@@ -3542,6 +3568,28 @@ def _admin_export_html() -> str:
       border-bottom: 1px solid var(--line);
       font-weight: 700;
     }}
+    .cards {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin: 14px 0;
+    }}
+    .card {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px 16px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }}
+    .value {{
+      margin-top: 6px;
+      font-size: 24px;
+      font-weight: 800;
+    }}
     .filter-form {{
       display: grid;
       grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
@@ -3599,6 +3647,7 @@ def _admin_export_html() -> str:
     @media (max-width: 760px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
+      .cards {{ grid-template-columns: repeat(2, minmax(0, 1fr)); }}
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
       th, td {{ padding: 12px; }}
@@ -3626,13 +3675,20 @@ def _admin_export_html() -> str:
       원본 음성 파일 자체는 내려받지 않고, 녹음 파일의 메타데이터만 export합니다.
     </div>
 
+    <div class="cards">
+      <div class="card"><div class="label">전체 메모</div><div class="value">{summary["notes"]}</div></div>
+      <div class="card"><div class="label">삭제 표시</div><div class="value">{summary["deleted_notes"]}</div></div>
+      <div class="card"><div class="label">녹음 메타</div><div class="value">{summary["recordings"]}</div></div>
+      <div class="card"><div class="label">사용자</div><div class="value">{summary["users"]}</div></div>
+    </div>
+
     <section>
       <div class="section-head">
         <span>내보내기 링크</span>
-        <span class="sub">JSON</span>
+        <a class="sub" href="/api/v1/admin/export/summary">요약 JSON</a>
       </div>
       <table>
-        <tr><th>항목</th><th>설명</th><th>링크</th></tr>
+        <tr><th>항목</th><th>설명</th><th>건수</th><th>링크</th></tr>
         {_export_link_rows(export_links)}
       </table>
     </section>
@@ -3841,12 +3897,33 @@ def _admin_help_html() -> str:
 </html>"""
 
 
-def _export_link_rows(links: list[tuple[str, str, str]]) -> str:
+def _export_link_rows(links: list[tuple[str, str, str, int]]) -> str:
     return "\n".join(
         "<tr>"
         f"<td>{escape(name)}</td>"
         f"<td>{escape(description)}</td>"
+        f"<td>{count}</td>"
         f'<td><a href="{escape(url)}">{escape(url)}</a></td>'
         "</tr>"
-        for name, url, description in links
+        for name, url, description, count in links
     )
+
+
+def _export_summary_counts_for_page() -> dict[str, int]:
+    with SessionLocal() as db:
+        note_total = db.scalar(select(func.count()).select_from(Note)) or 0
+        active_notes = (
+            db.scalar(select(func.count()).select_from(Note).where(Note.deleted_at.is_(None)))
+            or 0
+        )
+        recordings = db.scalar(select(func.count()).select_from(Recording)) or 0
+        users = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+        return {
+            "notes": note_total,
+            "active_notes": active_notes,
+            "deleted_notes": note_total - active_notes,
+            "recordings": recordings,
+            "users": users,
+            "analysis_jobs": db.scalar(select(func.count()).select_from(AnalysisJob)) or 0,
+            "sync_logs": db.scalar(select(func.count()).select_from(SyncLog)) or 0,
+        }
