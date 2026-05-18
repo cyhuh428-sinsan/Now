@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 10:15 KST
+
+### 다음 작업 시작
+
+- 전체 백업 JSON이 브라우저에서 파일 다운로드로 인식되도록 보완.
+
+### 구현 내용
+
+- `GET /api/v1/admin/export/all` 응답에 `Content-Disposition` 헤더 추가.
+- 파일명은 `nownote-server-backup-YYYYMMDD-HHMMSS.json` 형식으로 생성.
+- JSON 응답 변환은 FastAPI `jsonable_encoder`를 사용해 날짜 필드 직렬화 기준 유지.
+
+### 검증
+
+- `py_compile`로 `admin.py` 확인 통과.
+- FastAPI `TestClient`로 `/api/v1/admin/export/all`의 JSON 구조와 `Content-Disposition` 헤더 확인 통과.
+
 ## 2026-05-18 09:55 KST
 
 ### 다음 작업 시작
