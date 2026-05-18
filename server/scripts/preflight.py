@@ -187,6 +187,9 @@ def main() -> None:
                     "Backup verify uses shared API version",
                     "verify api_version",
                 ),
+                ('"status_counts": status_counts', "Backup verify returns status counts", "status_counts response"),
+                ("_check_status_counts", "Backup verify counts check statuses", "_check_status_counts"),
+                ("_verification_status", "Backup verify derives overall status", "_verification_status"),
             ],
             failures,
         )
@@ -260,6 +263,7 @@ def main() -> None:
                 ("TWO_FACTOR_AUTH_STATUS", "Smoke checks two-factor auth status", "TWO_FACTOR_AUTH_STATUS"),
                 ("MAX_TREE_NOTE_LEVEL", "Smoke checks tree depth constant", "MAX_TREE_NOTE_LEVEL"),
                 ("SUPPORTED_NOTE_TYPES", "Smoke checks supported note type constant", "SUPPORTED_NOTE_TYPES"),
+                ("status_counts", "Smoke checks backup verify status counts", "status_counts"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
             ],
             failures,

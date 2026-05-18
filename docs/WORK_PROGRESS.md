@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 23:55 KST
+
+### 다음 작업 시작
+
+- preflight가 백업 검증 `status_counts` 응답 구조를 점검하도록 보강.
+
+### 구현 내용
+
+- preflight가 Admin API의 `status_counts` 응답 포함 여부를 확인하도록 보강.
+- preflight가 `_check_status_counts`, `_verification_status` 존재 여부를 확인하도록 보강.
+- preflight가 smoke test의 `status_counts` 검증 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 23:40 KST
 
 ### 다음 작업 시작
