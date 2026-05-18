@@ -351,6 +351,10 @@ const I18N = {
     "settings.server.capabilities.backup": "백업",
     "settings.server.capabilities.backupVerify": "백업 검증",
     "settings.server.capabilities.users": "사용자 관리",
+    "settings.server.capabilities.userTimezone": "시간대",
+    "settings.server.capabilities.userGroups": "사용자 그룹",
+    "settings.server.capabilities.twoFactorStatus": "2단계 상태",
+    "settings.server.capabilities.twoFactorPlanned": "2단계 예정",
     "settings.server.capabilities.userTokenRequired": "사용자 토큰 필요",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
     "settings.server.analysis.title": "분석 작업",
@@ -819,6 +823,10 @@ const I18N = {
     "settings.server.capabilities.backup": "Backup",
     "settings.server.capabilities.backupVerify": "Backup verify",
     "settings.server.capabilities.users": "User management",
+    "settings.server.capabilities.userTimezone": "Time zone",
+    "settings.server.capabilities.userGroups": "User groups",
+    "settings.server.capabilities.twoFactorStatus": "2FA status",
+    "settings.server.capabilities.twoFactorPlanned": "2FA planned",
     "settings.server.capabilities.userTokenRequired": "User token required",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
     "settings.server.analysis.title": "Analysis jobs",
@@ -1849,6 +1857,10 @@ function serverCapabilityLabels(capabilities) {
   if (capabilities.backup_export) labels.push(t("settings.server.capabilities.backup"));
   if (capabilities.backup_verify) labels.push(t("settings.server.capabilities.backupVerify"));
   if (capabilities.user_accounts || capabilities.user_profile) labels.push(t("settings.server.capabilities.users"));
+  if (capabilities.user_timezone) labels.push(t("settings.server.capabilities.userTimezone"));
+  if (capabilities.user_groups) labels.push(t("settings.server.capabilities.userGroups"));
+  if (capabilities.two_factor_status) labels.push(t("settings.server.capabilities.twoFactorStatus"));
+  if (capabilities.two_factor_auth === "planned") labels.push(t("settings.server.capabilities.twoFactorPlanned"));
   if (capabilities.user_access_tokens || capabilities.user_token_required) labels.push(t("settings.server.capabilities.userTokenRequired"));
   if (capabilities.max_tree_note_level) {
     labels.push(t("settings.server.capabilities.treeLevel", { level: capabilities.max_tree_note_level }));

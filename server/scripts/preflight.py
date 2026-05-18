@@ -120,6 +120,7 @@ def main() -> None:
         check("/api/v1/admin/export/verify" in smoke, "Smoke covers backup verification", "export/verify", failures)
         check("/admin/recovery" in smoke, "Smoke covers recovery admin page", "admin/recovery", failures)
         check("backup_export" in smoke and "backup_verify" in smoke, "Smoke covers backup capabilities", "server capabilities", failures)
+        check("user_timezone" in smoke and "two_factor_auth" in smoke, "Smoke covers user operation capabilities", "user operation capabilities", failures)
 
     if args.public_server:
         check(

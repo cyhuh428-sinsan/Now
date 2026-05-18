@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 17:25 KST
+
+### 다음 작업 시작
+
+- 서버 사용자 운영 capability 표시 정합성 보강.
+
+### 구현 내용
+
+- Web 서버 capability 표시 항목에 시간대, 사용자 그룹, 2단계 상태, 2단계 예정 추가.
+- 모바일 서버 연결 성공 메시지에 시간대, 사용자 그룹, 2단계 예정 표시 추가.
+- smoke test가 사용자 프로필, 시간대, 그룹, 2단계 상태, 2단계 인증 예정 capability를 확인하도록 보강.
+- preflight가 smoke test의 사용자 운영 capability 확인 여부를 점검하도록 보강.
+
+### 검증
+
+- `node --check web/app.js` 통과.
+- `py_compile`로 `smoke_test.py`, `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/server`의 사용자 운영 capability 응답 확인 통과.
+- 모바일 서버 연결 메시지 문구는 정적 검색으로 반영 확인.
+
 ## 2026-05-18 17:10 KST
 
 ### 다음 작업 시작
