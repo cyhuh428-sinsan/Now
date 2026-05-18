@@ -118,6 +118,7 @@ def main() -> None:
         smoke = smoke_path.read_text(encoding="utf-8")
         check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
         check("/api/v1/admin/export/verify" in smoke, "Smoke covers backup verification", "export/verify", failures)
+        check("/admin/recovery" in smoke, "Smoke covers recovery admin page", "admin/recovery", failures)
         check("backup_export" in smoke and "backup_verify" in smoke, "Smoke covers backup capabilities", "server capabilities", failures)
 
     if args.public_server:
