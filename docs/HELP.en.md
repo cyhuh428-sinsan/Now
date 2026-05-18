@@ -63,6 +63,7 @@ Available features:
 - All standalone-user features
 - Server sync
 - Server backup
+- Server backup verification
 - User profile
 - Per-user time zone
 - User groups
@@ -80,6 +81,7 @@ Notes:
 - Personal server users must change the token and database password in `.env`.
 - Public server users use connection information issued by the operator.
 - The current first-phase server uses a single API token model for personal Docker servers. A per-user login or per-user token policy is still required before a public server can be officially opened.
+- Server backup verification checks backup schema, checksum, required sections, and token-sensitive data exposure.
 - Archived daily notes are not deleted after server connection. They stay as inactive backup records.
 
 ## Platform Guidelines
