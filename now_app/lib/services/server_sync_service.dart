@@ -926,6 +926,10 @@ String _serverConnectionMessage(
   final twoFactorText = capabilities['two_factor_status'] == true
       ? '2단계 상태'
       : '2단계 미확인';
+  final backupText = capabilities['backup_export'] == true ? '백업' : '백업 미확인';
+  final backupVerifyText = capabilities['backup_verify'] == true
+      ? '백업 검증'
+      : '검증 미확인';
   final authText = authRequired ? '토큰 필요' : '토큰 선택';
   return [
     '$name 연결됨',
@@ -934,6 +938,8 @@ String _serverConnectionMessage(
     levelText,
     userText,
     twoFactorText,
+    backupText,
+    backupVerifyText,
   ].join(' · ');
 }
 
