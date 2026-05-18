@@ -132,6 +132,7 @@ def main() -> None:
         check_text_contains(
             readme,
             [
+                ('`api_version` 값은 `v1`', "README documents current API version", "api_version v1"),
                 ("supported_note_types", "README documents supported note types", "supported_note_types"),
                 ("max_tree_note_level", "README documents tree depth capability", "max_tree_note_level"),
                 ("user_access_tokens", "README documents user token capability", "user_access_tokens"),
