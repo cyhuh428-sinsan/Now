@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 21:10 KST
+
+### 다음 작업 시작
+
+- 백업 export/검증의 API 버전 기준을 공통 상수로 정리.
+
+### 구현 내용
+
+- `server/app/api/admin.py`의 전체 백업 `api_version` 값을 공통 `API_VERSION` 상수로 변경.
+- 백업 검증 API의 기대 API 버전도 공통 `API_VERSION` 상수를 사용하도록 변경.
+- smoke test가 `/api/v1/server` 응답과 전체 백업의 API 버전을 같은 기준값으로 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `smoke_test.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/admin/export/all` 백업 생성 후 `/api/v1/admin/export/verify` 검증 통과.
+
 ## 2026-05-18 20:55 KST
 
 ### 다음 작업 시작
