@@ -302,6 +302,8 @@ def main() -> None:
     )
     require(data.get("status") == "ok", "전체 백업 검증 API가 실패했습니다")
     require("notes" in data.get("summary", {}), "전체 백업 검증 요약에 메모 건수가 없습니다")
+    require(data.get("status_counts", {}).get("bad") == 0, "전체 백업 검증 결과에 bad가 있습니다")
+    require(data.get("status_counts", {}).get("ok", 0) >= 1, "전체 백업 검증 결과의 ok 집계가 없습니다")
     print(
         "POST /api/v1/admin/export/verify:",
         status,
@@ -309,6 +311,7 @@ def main() -> None:
             "status": data.get("status"),
             "checks": len(data.get("checks", [])),
             "notes": data.get("summary", {}).get("notes"),
+            "status_counts": data.get("status_counts"),
         },
     )
 
@@ -320,6 +323,7 @@ def main() -> None:
     )
     require(data.get("status") == "bad", "빈 백업 검증이 실패 상태를 반환하지 않았습니다")
     require(len(data.get("checks", [])) >= 1, "빈 백업 검증 결과가 비어 있습니다")
+    require(data.get("status_counts", {}).get("bad", 0) >= 1, "빈 백업 검증 결과의 bad 집계가 없습니다")
     print(
         "POST /api/v1/admin/export/verify(empty):",
         status,
