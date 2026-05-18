@@ -150,6 +150,9 @@ def main() -> None:
                 ("백업/복구 절차 확인 상태", "README documents backup recovery ops check", "backup recovery ops"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
                 ("Preflight failed", "README explains preflight failure summary", "preflight failed summary"),
+                ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
+                ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
+                ("비활성 사용자 차단", "README explains smoke inactive user check", "smoke inactive user check"),
             ],
             failures,
         )
