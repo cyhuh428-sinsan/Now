@@ -145,6 +145,7 @@ def main() -> None:
         "/admin/sync?device_id=smoke_test&include_deleted=yes",
         "/admin/ops",
         "/admin/export",
+        "/admin/recovery",
         "/admin/users",
         "/admin/users/new",
         "/admin/users?status=inactive",
@@ -157,6 +158,9 @@ def main() -> None:
         if path == "/admin/export":
             require("/api/v1/admin/export/verify" in text, "내보내기 화면에 백업 검증 API 안내가 없습니다")
             require("YOUR_ADMIN_TOKEN" in text, "내보내기 화면에 백업 검증 요청 예시가 없습니다")
+        if path == "/admin/recovery":
+            require("NowNote 서버 복구 절차" in text, "복구 절차 화면에 RECOVERY.md 내용이 없습니다")
+            require("/api/v1/admin/export/verify" in text, "복구 절차 화면에 백업 검증 API 안내가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, data = request(
