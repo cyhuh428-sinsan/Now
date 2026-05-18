@@ -112,6 +112,11 @@ def main() -> None:
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
+    if smoke_path.exists():
+        smoke = smoke_path.read_text(encoding="utf-8")
+        check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
+        check("/api/v1/admin/export/verify" in smoke, "Smoke covers backup verification", "export/verify", failures)
+        check("backup_export" in smoke and "backup_verify" in smoke, "Smoke covers backup capabilities", "server capabilities", failures)
 
     if args.public_server:
         check(
@@ -129,7 +134,7 @@ def main() -> None:
         check(
             False,
             "Public server HTTPS/reverse proxy",
-            "Confirm domain, HTTPS, reverse proxy, backup, and recovery before opening",
+            "Confirm domain, HTTPS, reverse proxy, and recovery procedure before opening",
             failures,
         )
 
