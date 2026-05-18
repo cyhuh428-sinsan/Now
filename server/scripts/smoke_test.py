@@ -776,3 +776,6 @@ if __name__ == "__main__":
     except urllib.error.HTTPError as e:
         print(f"HTTP {e.code}: {e.read().decode('utf-8')}")
         raise
+    except urllib.error.URLError as e:
+        print(f"SMOKE TEST CONNECTION FAILED: {e.reason}")
+        raise
