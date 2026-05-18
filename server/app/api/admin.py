@@ -181,6 +181,7 @@ def verify_export(payload: BackupVerifyRequest) -> dict:
     return {
         "status": "ok" if all(check["status"] == "ok" for check in checks) else "bad",
         "checked_at": datetime.utcnow(),
+        "summary": _backup_verify_summary(payload.backup),
         "checks": checks,
     }
 
@@ -551,6 +552,17 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
         )
     )
     return checks
+
+
+def _backup_verify_summary(payload: dict) -> dict:
+    items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
+    summary = {}
+    for section in ["notes", "recordings", "users", "analysis_jobs", "sync_logs"]:
+        value = items.get(section)
+        summary[section] = len(value) if isinstance(value, list) else None
+    summary["exported_at"] = payload.get("exported_at")
+    summary["content_sha256"] = payload.get("content_sha256")
+    return summary
 
 
 def _verify_check(name: str, passed: bool, expected: str, actual: str) -> dict[str, str]:

@@ -248,10 +248,15 @@ def main() -> None:
         {"backup": full_backup},
     )
     require(data.get("status") == "ok", "전체 백업 검증 API가 실패했습니다")
+    require("notes" in data.get("summary", {}), "전체 백업 검증 요약에 메모 건수가 없습니다")
     print(
         "POST /api/v1/admin/export/verify:",
         status,
-        {"status": data.get("status"), "checks": len(data.get("checks", []))},
+        {
+            "status": data.get("status"),
+            "checks": len(data.get("checks", [])),
+            "notes": data.get("summary", {}).get("notes"),
+        },
     )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
