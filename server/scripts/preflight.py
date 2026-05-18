@@ -28,6 +28,15 @@ def check(condition: bool, name: str, message: str, failures: list[str]) -> None
         failures.append(f"{name}: {message}")
 
 
+def check_text_contains(
+    text: str,
+    requirements: list[tuple[str, str, str]],
+    failures: list[str],
+) -> None:
+    for needle, name, message in requirements:
+        check(needle in text, name, message, failures)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="NowNote server deployment preflight check")
     parser.add_argument("--env-file", default=".env", help="Path to .env file")
@@ -118,24 +127,44 @@ def main() -> None:
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     if recovery_path.exists():
         recovery = recovery_path.read_text(encoding="utf-8")
-        check("/api/v1/admin/export/verify" in recovery, "Recovery procedure covers backup verification", "export/verify", failures)
-        check("content_sha256" in recovery, "Recovery procedure covers checksum", "content_sha256", failures)
-        check("원본 녹음 파일" in recovery, "Recovery procedure covers recording files", "recording files", failures)
-        check("DB와 저장소를 먼저 별도 백업" in recovery, "Recovery procedure covers pre-restore backup", "pre-restore backup", failures)
+        check_text_contains(
+            recovery,
+            [
+                ("/api/v1/admin/export/verify", "Recovery procedure covers backup verification", "export/verify"),
+                ("content_sha256", "Recovery procedure covers checksum", "content_sha256"),
+                ("원본 녹음 파일", "Recovery procedure covers recording files", "recording files"),
+                ("DB와 저장소를 먼저 별도 백업", "Recovery procedure covers pre-restore backup", "pre-restore backup"),
+            ],
+            failures,
+        )
     if deploy_path.exists():
         deploy = deploy_path.read_text(encoding="utf-8")
-        check("git pull origin main" in deploy, "Deploy checklist covers source update", "git pull origin main", failures)
-        check("python3 scripts/preflight.py" in deploy, "Deploy checklist covers preflight", "preflight", failures)
-        check("docker compose up --build -d" in deploy, "Deploy checklist covers compose up", "docker compose up --build -d", failures)
-        check("python3 scripts/smoke_test.py" in deploy, "Deploy checklist covers smoke test", "smoke_test.py", failures)
+        check_text_contains(
+            deploy,
+            [
+                ("git pull origin main", "Deploy checklist covers source update", "git pull origin main"),
+                ("python3 scripts/preflight.py", "Deploy checklist covers preflight", "preflight"),
+                ("docker compose up --build -d", "Deploy checklist covers compose up", "docker compose up --build -d"),
+                ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
+            ],
+            failures,
+        )
     if smoke_path.exists():
         smoke = smoke_path.read_text(encoding="utf-8")
-        check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
-        check("/api/v1/admin/export/verify" in smoke, "Smoke covers backup verification", "export/verify", failures)
-        check("/admin/recovery" in smoke, "Smoke covers recovery admin page", "admin/recovery", failures)
-        check("/admin/deploy" in smoke, "Smoke covers deploy admin page", "admin/deploy", failures)
-        check("backup_export" in smoke and "backup_verify" in smoke, "Smoke covers backup capabilities", "server capabilities", failures)
-        check("user_timezone" in smoke and "two_factor_auth" in smoke, "Smoke covers user operation capabilities", "user operation capabilities", failures)
+        check_text_contains(
+            smoke,
+            [
+                ("/api/v1/admin/export/all", "Smoke covers full backup export", "export/all"),
+                ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
+                ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
+                ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
+                ("backup_export", "Smoke covers backup export capability", "backup_export"),
+                ("backup_verify", "Smoke covers backup verify capability", "backup_verify"),
+                ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
+                ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
+            ],
+            failures,
+        )
 
     if args.public_server:
         check(
