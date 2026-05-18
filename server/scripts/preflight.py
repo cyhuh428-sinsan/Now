@@ -208,6 +208,16 @@ def main() -> None:
                     "Monitor API uses shared two-factor auth status",
                     "TWO_FACTOR_AUTH_STATUS",
                 ),
+                (
+                    "status_counts.bad=0",
+                    "Monitor export page explains backup status counts",
+                    "status_counts.bad=0",
+                ),
+                (
+                    "NOW_STORAGE_DIR",
+                    "Monitor export page explains recording storage backup",
+                    "NOW_STORAGE_DIR",
+                ),
             ],
             failures,
         )
