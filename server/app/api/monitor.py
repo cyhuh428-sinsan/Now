@@ -2250,7 +2250,7 @@ def _admin_users_html(request: Request) -> str:
           <button class="danger" type="submit" name="action" value="deactivate">선택 비활성</button>
         </div>
       <table>
-        <tr><th class="row-select">선택</th><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>토큰</th><th>최근 접속</th><th>관리</th></tr>
+        <tr><th class="row-select">선택</th><th>ID</th><th>Owner</th><th>표시 이름</th><th>시간대</th><th>2단계 인증</th><th>그룹</th><th>상태</th><th>토큰</th><th>토큰 사용</th><th>최근 접속</th><th>관리</th></tr>
         {_user_rows(users)}
       </table>
       </form>
@@ -2274,7 +2274,7 @@ def _admin_users_html(request: Request) -> str:
 
 def _user_rows(users: list[UserAccount]) -> str:
     if not users:
-        return '<tr><td colspan="11">조건에 맞는 사용자가 없습니다.</td></tr>'
+        return '<tr><td colspan="12">조건에 맞는 사용자가 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td class=\"row-select\"><input type=\"checkbox\" name=\"owner_ids\" value=\"{escape(user.owner_id, quote=True)}\"></td>"
@@ -2286,6 +2286,7 @@ def _user_rows(users: list[UserAccount]) -> str:
         f"<td>{escape(user.group_name)}</td>"
         f"<td>{_simple_badge('ok' if user.is_active else 'bad', '활성' if user.is_active else '비활성')}</td>"
         f"<td>{_simple_badge('ok' if user.access_token_hash else 'warn', '발급됨' if user.access_token_hash else '없음')}</td>"
+        f"<td>{_format_datetime(user.access_token_last_used_at)}</td>"
         f"<td>{_format_datetime(user.last_seen_at)}</td>"
         f"<td class=\"actions\"><a href=\"/admin/users/edit?owner_id={escape(user.owner_id, quote=True)}\">수정</a></td>"
         "</tr>"
@@ -2652,6 +2653,10 @@ def _admin_user_edit_html(owner_id: str) -> str:
       <div class="row">
         <label><strong>발급 시각</strong><span>마지막 사용자별 토큰 발급 시각</span></label>
         <div>{_format_datetime(user.access_token_issued_at)}</div>
+      </div>
+      <div class="row">
+        <label><strong>마지막 사용</strong><span>사용자별 토큰이 마지막으로 검증된 시각</span></label>
+        <div>{_format_datetime(user.access_token_last_used_at)}</div>
       </div>
     </form>
   </main>
