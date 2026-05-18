@@ -116,6 +116,12 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    if recovery_path.exists():
+        recovery = recovery_path.read_text(encoding="utf-8")
+        check("/api/v1/admin/export/verify" in recovery, "Recovery procedure covers backup verification", "export/verify", failures)
+        check("content_sha256" in recovery, "Recovery procedure covers checksum", "content_sha256", failures)
+        check("원본 녹음 파일" in recovery, "Recovery procedure covers recording files", "recording files", failures)
+        check("DB와 저장소를 먼저 별도 백업" in recovery, "Recovery procedure covers pre-restore backup", "pre-restore backup", failures)
     if deploy_path.exists():
         deploy = deploy_path.read_text(encoding="utf-8")
         check("git pull origin main" in deploy, "Deploy checklist covers source update", "git pull origin main", failures)
