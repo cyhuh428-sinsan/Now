@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 15:35 KST
+
+### 다음 작업 시작
+
+- Web 도움말 화면에 서버 백업 검증 설명 반영.
+
+### 구현 내용
+
+- `web/help.html` 서버 연결 사용자 항목에 백업 검증 설명 추가.
+- 영어 i18n에도 schema, checksum, required sections, token-sensitive data exposure 설명 추가.
+
+### 검증
+
+- `server.point.backupVerify` 한국어/영어 문구 재검색 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-18 15:20 KST
 
 ### 다음 작업 시작
