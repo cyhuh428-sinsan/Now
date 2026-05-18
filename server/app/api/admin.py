@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import datetime
 from pathlib import Path
 
@@ -147,10 +149,16 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
             "sync_logs": [_model_to_dict(row) for row in sync_logs],
         },
     }
+    encoded_payload = jsonable_encoder(payload)
+    content_sha256 = _backup_content_sha256(encoded_payload)
+    encoded_payload["content_sha256"] = content_sha256
     filename = f"nownote-server-backup-{exported_at.strftime('%Y%m%d-%H%M%S')}.json"
     return JSONResponse(
-        content=jsonable_encoder(payload),
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        content=encoded_payload,
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "X-Now-Backup-Sha256": content_sha256,
+        },
     )
 
 
@@ -453,6 +461,11 @@ def _export_payload(name: str, rows: list) -> dict:
         "count": len(rows),
         "items": [_model_to_dict(row) for row in rows],
     }
+
+
+def _backup_content_sha256(payload: dict) -> str:
+    canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 def _export_summary_counts(db: Session) -> dict:
