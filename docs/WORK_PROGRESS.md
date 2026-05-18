@@ -22,6 +22,23 @@
 - FastAPI `TestClient`로 `/admin/users`의 `토큰 사용` 열과 사용자 수정 화면의 `마지막 사용` 표시 확인 통과.
 - `git diff --check` 통과.
 
+## 2026-05-18 08:45 KST
+
+### 다음 작업 시작
+
+- 사용자별 토큰을 사용하는 smoke test에서 마지막 사용 시각 갱신까지 확인.
+
+### 구현 내용
+
+- `USER_TOKEN`이 설정된 smoke test 실행에서는 `/api/v1/sync` 이후 `local_user`의 `access_token_last_used_at`이 갱신됐는지 확인.
+- 갱신되지 않으면 smoke test가 실패하도록 처리.
+
+### 검증
+
+- `py_compile`로 `server/scripts/smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 사용자별 토큰을 사용한 `/api/v1/sync` 후 `access_token_last_used_at` 갱신 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 07:20 KST
 
 ### 다음 작업 시작

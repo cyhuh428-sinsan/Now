@@ -310,6 +310,17 @@ def main() -> None:
         },
     )
 
+    if USER_TOKEN:
+        status, data = request("GET", f"{base_url}/api/v1/admin/users?owner_id=local_user", args.token)
+        items = data.get("items", []) if isinstance(data, dict) else []
+        last_used_at = items[0].get("access_token_last_used_at") if items else None
+        require(last_used_at is not None, "사용자별 토큰 마지막 사용 시각이 갱신되지 않았습니다")
+        print(
+            "GET /api/v1/admin/users(owner_id=local_user token_used):",
+            status,
+            {"access_token_last_used_at": last_used_at},
+        )
+
     recording_local_id = f"smoke_recording_{now.replace(':', '').replace('-', '').replace('T', '_')}"
     status, data = request_multipart(
         f"{base_url}/api/v1/recordings",
