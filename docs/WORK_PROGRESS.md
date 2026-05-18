@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 17:40 KST
+
+### 다음 작업 시작
+
+- 공용 서버 preflight 실패 의미를 사용자 문서에 명확히 반영.
+
+### 구현 내용
+
+- `server/README.md`에 공용 서버 preflight 명령과 현재 의도적 실패 항목 설명 추가.
+- 서버 README 다음 단계에 현재 1차 서버의 public preflight 실패가 정상적인 미완료 표시임을 명시.
+- 한국어/영어 도움말에 public preflight 실패의 의미를 추가.
+
+### 검증
+
+- 문구 재검색으로 README, 한국어 도움말, 영어 도움말 반영 확인.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 17:25 KST
 
 ### 다음 작업 시작

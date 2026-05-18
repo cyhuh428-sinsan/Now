@@ -69,6 +69,20 @@ docker compose up --build
 python3 scripts/preflight.py --env-file .env.example --allow-example
 ```
 
+공용 서버 오픈 전 점검은 아래 명령을 사용합니다.
+
+```bash
+python3 scripts/preflight.py --public-server
+```
+
+현재 1차 서버에서 이 명령은 일부 항목이 의도적으로 실패합니다.
+실패 항목은 공용 서버 오픈 전에 남은 작업을 보여주는 안전장치입니다.
+
+- `NOW_USER_TOKEN_REQUIRED=true` 설정
+- 사용자별 토큰 전달 UI 또는 로그인 화면
+- 실제 2단계 인증 절차
+- 공개 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인
+
 `.env` 예시:
 
 ```env
@@ -386,7 +400,7 @@ python -m app.worker
 - 개인 서버는 `.env`에 `NOW_API_TOKEN`을 설정한 뒤 필요하면 `NOW_USER_TOKEN_REQUIRED=true`로 사용자별 접속 토큰을 강제합니다.
 - 공용 서버는 사용자별 토큰 전달 UI, 로그인 화면, 실제 2단계 인증 정책을 확정한 뒤 오픈합니다.
 - 공개 운영 도메인, HTTPS, reverse proxy, 복구 절차를 최종 점검합니다.
-- 공용 서버 오픈 전 `python3 scripts/preflight.py --public-server` 실패 항목을 모두 해소합니다.
+- 공용 서버 오픈 전 `python3 scripts/preflight.py --public-server` 실패 항목을 모두 해소합니다. 현재 1차 서버에서는 이 실패가 정상적인 미완료 표시입니다.
 
 ### 앱/출시 연계
 
