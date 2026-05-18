@@ -299,6 +299,7 @@ def main() -> None:
     )
     require(status == 200, "사용자별 토큰 발급 API가 실패했습니다")
     require(len(data.get("token", "")) >= 32, "사용자별 토큰 길이가 너무 짧습니다")
+    issued_smoke_token = data.get("token", "")
     print(
         "POST /api/v1/admin/users/{owner_id}/token:",
         status,
@@ -311,6 +312,26 @@ def main() -> None:
         "GET /api/v1/admin/users(token=issued):",
         status,
         {"count": data.get("count"), "token_issued": data.get("token_issued")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/all",
+        args.token,
+    )
+    exported_users = data.get("items", {}).get("users", [])
+    require(
+        all("access_token_hash" not in user for user in exported_users),
+        "전체 백업에 사용자 토큰 해시가 포함되었습니다",
+    )
+    require(
+        issued_smoke_token not in json.dumps(exported_users, ensure_ascii=False),
+        "전체 백업에 사용자 토큰 원문이 포함되었습니다",
+    )
+    print(
+        "GET /api/v1/admin/export/all(token_safety):",
+        status,
+        {"users": len(exported_users), "token_hash_hidden": True},
     )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
