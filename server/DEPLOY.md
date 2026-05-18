@@ -82,6 +82,8 @@ docker-compose logs now-worker --tail=80
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+성공하면 마지막에 `NowNote server smoke test passed`가 표시됩니다.
+
 사용자별 접속 토큰 필수 모드에서는 아래 중 하나를 사용합니다.
 
 ```bash
