@@ -250,6 +250,8 @@ def main() -> None:
                 ("python3 scripts/preflight.py", "Deploy checklist covers preflight", "preflight"),
                 ("docker compose up --build -d", "Deploy checklist covers compose up", "docker compose up --build -d"),
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
+                ("백업/복구 절차", "Deploy checklist covers backup recovery ops check", "backup recovery ops"),
+                ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
                 ("/api/v1/admin/export/verify", "Deploy checklist covers backup verification", "export/verify"),
             ],
