@@ -278,6 +278,7 @@ def main() -> None:
                 ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
+                ("/admin/help", "Smoke covers help admin page", "admin/help"),
                 ("공용 서버 로그인 화면", "Smoke covers public ops help", "public ops help"),
                 ("admin_ops", "Smoke covers admin ops capability", "admin_ops"),
                 ("backup_export", "Smoke covers backup export capability", "backup_export"),
