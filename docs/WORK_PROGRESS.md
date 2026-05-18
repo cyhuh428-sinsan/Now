@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 16:05 KST
+
+### 다음 작업 시작
+
+- 서버 preflight가 백업 내보내기/검증 smoke 범위를 확인하도록 보강.
+
+### 구현 내용
+
+- `server/scripts/preflight.py`가 smoke test 안의 `/api/v1/admin/export/all` 확인.
+- smoke test 안의 `/api/v1/admin/export/verify` 확인.
+- smoke test 안의 `backup_export`, `backup_verify` capability 확인.
+- 공용 서버 preflight 메시지에서 이미 구현된 백업 표현은 빼고 복구 절차 확인으로 좁힘.
+- 서버 README 다음 단계에서도 백업/복구를 복구 절차 점검으로 정리.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- 새 smoke 백업 범위 확인 체크 3개가 모두 OK로 출력되는 것 확인.
+
 ## 2026-05-18 15:50 KST
 
 ### 다음 작업 시작

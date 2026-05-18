@@ -382,7 +382,7 @@ python -m app.worker
 
 - 개인 서버는 `.env`에 `NOW_API_TOKEN`을 설정한 뒤 필요하면 `NOW_USER_TOKEN_REQUIRED=true`로 사용자별 접속 토큰을 강제합니다.
 - 공용 서버는 사용자별 토큰 전달 UI, 로그인 화면, 실제 2단계 인증 정책을 확정한 뒤 오픈합니다.
-- 공개 운영 도메인, HTTPS, reverse proxy, 백업/복구 절차를 최종 점검합니다.
+- 공개 운영 도메인, HTTPS, reverse proxy, 복구 절차를 최종 점검합니다.
 - 공용 서버 오픈 전 `python3 scripts/preflight.py --public-server` 실패 항목을 모두 해소합니다.
 
 ### 앱/출시 연계
