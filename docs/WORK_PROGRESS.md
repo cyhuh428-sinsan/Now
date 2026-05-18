@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 13:45 KST
+
+### 다음 작업 시작
+
+- smoke test에서 `/admin/export` 화면의 백업 검증 안내 회귀 방지.
+
+### 구현 내용
+
+- smoke test의 `/admin/export` HTML 검사에 백업 검증 API 경로 포함 여부 확인 추가.
+- 백업 검증 요청 예시의 `YOUR_ADMIN_TOKEN` 문구 포함 여부 확인 추가.
+
+### 검증
+
+- `py_compile`로 `smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 `/admin/export` HTML에 백업 검증 API 경로와 `YOUR_ADMIN_TOKEN` 예시가 포함되는 것 확인.
+
 ## 2026-05-18 13:30 KST
 
 ### 다음 작업 시작
