@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 19:40 KST
+
+### 다음 작업 시작
+
+- preflight 문서/스크립트 내용 확인 로직을 공통 헬퍼로 정리.
+
+### 구현 내용
+
+- `check_text_contains()` 헬퍼 추가.
+- `RECOVERY.md` 핵심 기준 확인을 헬퍼 기반으로 정리.
+- `DEPLOY.md` 핵심 명령 확인을 헬퍼 기반으로 정리.
+- smoke test 내용 확인을 헬퍼 기반으로 정리.
+- 기존 점검 의미는 유지하되 capability 항목은 개별 체크로 더 명확히 분리.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- 문서/배포/smoke 핵심 항목이 기존처럼 OK로 출력되는 것 확인.
+- 분리된 capability 체크 4개가 OK로 출력되는 것 확인.
+
 ## 2026-05-18 19:25 KST
 
 ### 다음 작업 시작
