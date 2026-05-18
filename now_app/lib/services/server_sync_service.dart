@@ -923,9 +923,14 @@ String _serverConnectionMessage(
   final userText = capabilities['user_profile'] == true
       ? '사용자 프로필'
       : '사용자 미확인';
+  final timezoneText = capabilities['user_timezone'] == true ? '시간대' : '시간대 미확인';
+  final groupText = capabilities['user_groups'] == true ? '사용자 그룹' : '그룹 미확인';
   final twoFactorText = capabilities['two_factor_status'] == true
       ? '2단계 상태'
       : '2단계 미확인';
+  final twoFactorAuthText = capabilities['two_factor_auth'] == 'planned'
+      ? '2단계 예정'
+      : '2단계 인증 미확인';
   final backupText = capabilities['backup_export'] == true ? '백업' : '백업 미확인';
   final backupVerifyText = capabilities['backup_verify'] == true
       ? '백업 검증'
@@ -937,7 +942,10 @@ String _serverConnectionMessage(
     sync,
     levelText,
     userText,
+    timezoneText,
+    groupText,
     twoFactorText,
+    twoFactorAuthText,
     backupText,
     backupVerifyText,
   ].join(' · ');

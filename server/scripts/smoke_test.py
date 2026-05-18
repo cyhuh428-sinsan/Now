@@ -130,6 +130,11 @@ def main() -> None:
             capabilities = data.get("capabilities", {})
             require(capabilities.get("backup_export") is True, "서버 capability에 backup_export가 없습니다")
             require(capabilities.get("backup_verify") is True, "서버 capability에 backup_verify가 없습니다")
+            require(capabilities.get("user_profile") is True, "서버 capability에 user_profile이 없습니다")
+            require(capabilities.get("user_timezone") is True, "서버 capability에 user_timezone이 없습니다")
+            require(capabilities.get("user_groups") is True, "서버 capability에 user_groups가 없습니다")
+            require(capabilities.get("two_factor_status") is True, "서버 capability에 two_factor_status가 없습니다")
+            require(capabilities.get("two_factor_auth") == "planned", "서버 capability의 two_factor_auth 상태가 planned가 아닙니다")
         print(f"{method} {path}: {status} {data}")
 
     admin_pages = [
