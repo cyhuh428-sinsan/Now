@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 09:55 KST
+
+### 다음 작업 시작
+
+- 운영 백업용 전체 JSON 내보내기 추가.
+
+### 구현 내용
+
+- `GET /api/v1/admin/export/all` 추가.
+- 전체 백업에는 메모, 녹음 메타데이터, 사용자, 분석 작업, 동기화 이력을 함께 포함.
+- `/admin/export` 화면에 `전체 백업` 링크 추가.
+- 내보내기 요약에 전체 export 대상 건수 추가.
+- smoke test에 전체 백업 API 검증 추가.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `monitor.py`, `smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 `/api/v1/admin/export/all`, `/api/v1/admin/export/summary`, `/admin/export` 링크 확인 통과.
+
 ## 2026-05-18 09:35 KST
 
 ### 다음 작업 시작

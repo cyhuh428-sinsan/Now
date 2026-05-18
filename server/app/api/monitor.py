@@ -3455,6 +3455,12 @@ def _sync_export_query(
 def _admin_export_html() -> str:
     summary = _export_summary_counts_for_page()
     export_links = [
+        (
+            "전체 백업",
+            "/api/v1/admin/export/all",
+            "메모, 녹음 메타데이터, 사용자, 분석 작업, 동기화 이력 전체",
+            summary["total_export_items"],
+        ),
         ("Notes", "/api/v1/admin/export/notes", "메모 전체 export", summary["notes"]),
         (
             "삭제 제외 메모",
@@ -3672,7 +3678,7 @@ def _admin_export_html() -> str:
     </header>
 
     <div class="notice">
-      원본 음성 파일 자체는 내려받지 않고, 녹음 파일의 메타데이터만 export합니다.
+      전체 백업 JSON에도 원본 음성 파일 자체는 포함하지 않고, 녹음 파일의 메타데이터만 export합니다.
     </div>
 
     <div class="cards">
@@ -3918,12 +3924,15 @@ def _export_summary_counts_for_page() -> dict[str, int]:
         )
         recordings = db.scalar(select(func.count()).select_from(Recording)) or 0
         users = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+        analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
+        sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
         return {
             "notes": note_total,
             "active_notes": active_notes,
             "deleted_notes": note_total - active_notes,
             "recordings": recordings,
             "users": users,
-            "analysis_jobs": db.scalar(select(func.count()).select_from(AnalysisJob)) or 0,
-            "sync_logs": db.scalar(select(func.count()).select_from(SyncLog)) or 0,
+            "analysis_jobs": analysis_jobs,
+            "sync_logs": sync_logs,
+            "total_export_items": note_total + recordings + users + analysis_jobs + sync_logs,
         }

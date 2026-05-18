@@ -103,6 +103,43 @@ def export_users(db: Session = Depends(get_db)) -> dict:
     return _export_payload("users", list(db.scalars(stmt).all()))
 
 
+@router.get("/export/all")
+def export_all(db: Session = Depends(get_db)) -> dict:
+    notes = list(db.scalars(select(Note).order_by(Note.updated_at.desc(), Note.id.desc())).all())
+    recordings = list(
+        db.scalars(select(Recording).order_by(Recording.updated_at.desc(), Recording.id.desc())).all()
+    )
+    users = list(
+        db.scalars(
+            select(UserAccount).order_by(
+                UserAccount.last_seen_at.desc().nullslast(),
+                UserAccount.updated_at.desc(),
+                UserAccount.id.desc(),
+            )
+        ).all()
+    )
+    analysis_jobs = list(
+        db.scalars(
+            select(AnalysisJob).order_by(AnalysisJob.updated_at.desc(), AnalysisJob.id.desc())
+        ).all()
+    )
+    sync_logs = list(
+        db.scalars(select(SyncLog).order_by(SyncLog.created_at.desc(), SyncLog.id.desc())).all()
+    )
+    return {
+        "name": "now_note_server_backup",
+        "exported_at": datetime.utcnow(),
+        "summary": _export_summary_counts(db),
+        "items": {
+            "notes": [_model_to_dict(row) for row in notes],
+            "recordings": [_model_to_dict(row) for row in recordings],
+            "users": [_model_to_dict(row) for row in users],
+            "analysis_jobs": [_model_to_dict(row) for row in analysis_jobs],
+            "sync_logs": [_model_to_dict(row) for row in sync_logs],
+        },
+    }
+
+
 @router.get("/export/summary")
 def export_summary(db: Session = Depends(get_db)) -> dict:
     return {
@@ -427,6 +464,8 @@ def _export_summary_counts(db: Session) -> dict:
         )
         or 0
     )
+    analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
+    sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
     return {
         "notes": note_total,
         "active_notes": active_notes,
@@ -435,8 +474,9 @@ def _export_summary_counts(db: Session) -> dict:
         "recordings_without_transcript": recordings_without_transcript,
         "users": users,
         "users_with_token": users_with_token,
-        "analysis_jobs": db.scalar(select(func.count()).select_from(AnalysisJob)) or 0,
-        "sync_logs": db.scalar(select(func.count()).select_from(SyncLog)) or 0,
+        "analysis_jobs": analysis_jobs,
+        "sync_logs": sync_logs,
+        "total_export_items": note_total + recordings + users + analysis_jobs + sync_logs,
     }
 
 
