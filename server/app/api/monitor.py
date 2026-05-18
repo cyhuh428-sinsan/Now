@@ -3679,6 +3679,7 @@ def _admin_export_html() -> str:
 
     <div class="notice">
       전체 백업 JSON에도 원본 음성 파일 자체는 포함하지 않고, 녹음 파일의 메타데이터만 export합니다.
+      사용자별 접속 토큰 원문과 토큰 해시는 포함하지 않습니다.
     </div>
 
     <div class="cards">
