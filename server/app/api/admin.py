@@ -137,6 +137,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
         "server": settings.server_name,
         "exported_at": exported_at,
         "includes_recording_files": False,
+        "includes_deleted_notes": True,
         "summary": _export_summary_counts(db),
         "items": {
             "notes": [_model_to_dict(row) for row in notes],
