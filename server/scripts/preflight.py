@@ -155,6 +155,12 @@ def main() -> None:
                     "Capabilities defines two-factor auth status",
                     "TWO_FACTOR_AUTH_STATUS",
                 ),
+                ("MAX_TREE_NOTE_LEVEL = 3", "Capabilities defines tree depth limit", "MAX_TREE_NOTE_LEVEL"),
+                (
+                    'SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]',
+                    "Capabilities defines supported note types",
+                    "SUPPORTED_NOTE_TYPES",
+                ),
             ],
             failures,
         )
@@ -244,6 +250,8 @@ def main() -> None:
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
                 ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
                 ("TWO_FACTOR_AUTH_STATUS", "Smoke checks two-factor auth status", "TWO_FACTOR_AUTH_STATUS"),
+                ("MAX_TREE_NOTE_LEVEL", "Smoke checks tree depth constant", "MAX_TREE_NOTE_LEVEL"),
+                ("SUPPORTED_NOTE_TYPES", "Smoke checks supported note type constant", "SUPPORTED_NOTE_TYPES"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
             ],
             failures,

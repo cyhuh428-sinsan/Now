@@ -12,6 +12,8 @@ from uuid import uuid4
 USER_TOKEN: str | None = None
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
+MAX_TREE_NOTE_LEVEL = 3
+SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 
 
 def require(condition: bool, message: str) -> None:
@@ -147,9 +149,12 @@ def main() -> None:
                 capabilities.get("two_factor_auth") == TWO_FACTOR_AUTH_STATUS,
                 "서버 capability의 two_factor_auth 상태가 planned가 아닙니다",
             )
-            require(capabilities.get("max_tree_note_level") == 3, "서버 capability의 max_tree_note_level이 3이 아닙니다")
             require(
-                capabilities.get("supported_note_types") == ["daily", "tree", "record"],
+                capabilities.get("max_tree_note_level") == MAX_TREE_NOTE_LEVEL,
+                "서버 capability의 max_tree_note_level이 3이 아닙니다",
+            )
+            require(
+                capabilities.get("supported_note_types") == SUPPORTED_NOTE_TYPES,
                 "서버 capability의 supported_note_types가 예상과 다릅니다",
             )
         print(f"{method} {path}: {status} {data}")

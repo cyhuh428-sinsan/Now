@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 21:55 KST
+
+### 다음 작업 시작
+
+- 계층 메모 단계 제한과 지원 메모 타입 기준을 공통 상수로 정리.
+
+### 구현 내용
+
+- `server/app/core/capabilities.py`에 `MAX_TREE_NOTE_LEVEL`, `SUPPORTED_NOTE_TYPES` 상수 추가.
+- `/api/v1/server` capability의 `max_tree_note_level`, `supported_note_types`가 공통 상수를 사용하도록 변경.
+- smoke test가 `MAX_TREE_NOTE_LEVEL`, `SUPPORTED_NOTE_TYPES` 기준으로 capability를 확인하도록 변경.
+- preflight가 capability 소스와 smoke test의 계층 단계/지원 타입 상수 사용 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 capability, smoke test, preflight 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/server`의 `max_tree_note_level=3`, `supported_note_types=daily/tree/record` 확인 통과.
+- `server_capabilities()`가 `supported_note_types` list를 응답마다 복사하는 것 확인 통과.
+
 ## 2026-05-18 21:40 KST
 
 ### 다음 작업 시작
