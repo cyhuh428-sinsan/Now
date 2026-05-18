@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 00:10 KST
+
+### 다음 작업 시작
+
+- preflight가 `/admin/export` 화면의 `status_counts.bad=0` 안내를 점검하도록 보강.
+
+### 구현 내용
+
+- preflight가 monitor/Admin export 화면의 `status_counts.bad=0` 안내 포함 여부를 확인하도록 보강.
+- preflight가 monitor/Admin export 화면의 `NOW_STORAGE_DIR` 원본 녹음 파일 보존 안내 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 23:55 KST
 
 ### 다음 작업 시작
