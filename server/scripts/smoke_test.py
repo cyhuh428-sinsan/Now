@@ -128,13 +128,24 @@ def main() -> None:
         status, data = request(method, f"{base_url}{path}", args.token, payload)
         if path == "/api/v1/server":
             capabilities = data.get("capabilities", {})
+            require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
+            require(capabilities.get("recordings") is True, "서버 capability에 recordings가 없습니다")
+            require(capabilities.get("analysis_jobs") is True, "서버 capability에 analysis_jobs가 없습니다")
+            require(capabilities.get("admin_ops") is True, "서버 capability에 admin_ops가 없습니다")
             require(capabilities.get("backup_export") is True, "서버 capability에 backup_export가 없습니다")
             require(capabilities.get("backup_verify") is True, "서버 capability에 backup_verify가 없습니다")
+            require(capabilities.get("user_accounts") is True, "서버 capability에 user_accounts가 없습니다")
             require(capabilities.get("user_profile") is True, "서버 capability에 user_profile이 없습니다")
             require(capabilities.get("user_timezone") is True, "서버 capability에 user_timezone이 없습니다")
             require(capabilities.get("user_groups") is True, "서버 capability에 user_groups가 없습니다")
+            require(capabilities.get("user_access_tokens") is True, "서버 capability에 user_access_tokens가 없습니다")
             require(capabilities.get("two_factor_status") is True, "서버 capability에 two_factor_status가 없습니다")
             require(capabilities.get("two_factor_auth") == "planned", "서버 capability의 two_factor_auth 상태가 planned가 아닙니다")
+            require(capabilities.get("max_tree_note_level") == 3, "서버 capability의 max_tree_note_level이 3이 아닙니다")
+            require(
+                capabilities.get("supported_note_types") == ["daily", "tree", "record"],
+                "서버 capability의 supported_note_types가 예상과 다릅니다",
+            )
         print(f"{method} {path}: {status} {data}")
 
     admin_pages = [
