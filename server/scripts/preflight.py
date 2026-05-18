@@ -59,6 +59,8 @@ def main() -> None:
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
+    admin_api_path = server_dir / "app" / "api" / "admin.py"
+    capabilities_path = server_dir / "app" / "core" / "capabilities.py"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -138,6 +140,36 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
+    check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
+    if capabilities_path.exists():
+        capabilities_source = capabilities_path.read_text(encoding="utf-8")
+        check_text_contains(
+            capabilities_source,
+            [
+                ('API_VERSION = "v1"', "Capabilities defines API version", "API_VERSION"),
+            ],
+            failures,
+        )
+    if admin_api_path.exists():
+        admin_source = admin_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            admin_source,
+            [
+                (
+                    "from app.core.capabilities import API_VERSION",
+                    "Admin API imports shared API version",
+                    "API_VERSION import",
+                ),
+                ('"api_version": API_VERSION', "Backup export uses shared API version", "export api_version"),
+                (
+                    'payload.get("api_version") == API_VERSION',
+                    "Backup verify uses shared API version",
+                    "verify api_version",
+                ),
+            ],
+            failures,
+        )
     if recovery_path.exists():
         recovery = recovery_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -181,6 +213,7 @@ def main() -> None:
                 ("supported_note_types", "Smoke covers supported note types", "supported_note_types"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
                 ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
+                ("API_VERSION", "Smoke checks API version", "API_VERSION"),
             ],
             failures,
         )

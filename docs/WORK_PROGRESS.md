@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 21:25 KST
+
+### 다음 작업 시작
+
+- preflight가 백업 API 버전 기준의 공통 상수 사용 여부를 점검하도록 보강.
+
+### 구현 내용
+
+- `server/scripts/preflight.py`에 Admin API 소스와 capability 소스 존재 확인 추가.
+- `app.core.capabilities.API_VERSION` 정의 여부를 preflight에서 확인.
+- 백업 export/verify가 공통 `API_VERSION`을 사용하는지 preflight에서 확인.
+- smoke test가 API 버전 확인을 포함하는지 preflight에서 확인.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 21:10 KST
 
 ### 다음 작업 시작
