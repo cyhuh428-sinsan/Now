@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 14:30 KST
+
+### 다음 작업 시작
+
+- 서버 정보 API에 백업 기능 capability 표시 추가.
+
+### 구현 내용
+
+- `/api/v1/server`의 `capabilities`에 `backup_export`, `backup_verify` 추가.
+- smoke test에서 두 capability가 `true`인지 확인.
+- 서버 README의 server info 설명에 백업 내보내기/검증 지원 여부를 반영.
+
+### 검증
+
+- `py_compile`로 `server.py`, `smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 `/api/v1/server`의 `backup_export=true`, `backup_verify=true` 확인 통과.
+
 ## 2026-05-18 14:15 KST
 
 ### 다음 작업 시작
