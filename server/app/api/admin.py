@@ -107,6 +107,8 @@ def export_users(db: Session = Depends(get_db)) -> dict:
 
 @router.get("/export/all")
 def export_all(db: Session = Depends(get_db)) -> JSONResponse:
+    settings = get_settings()
+    exported_at = datetime.utcnow()
     notes = list(db.scalars(select(Note).order_by(Note.updated_at.desc(), Note.id.desc())).all())
     recordings = list(
         db.scalars(select(Recording).order_by(Recording.updated_at.desc(), Recording.id.desc())).all()
@@ -130,7 +132,11 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
     )
     payload = {
         "name": "now_note_server_backup",
-        "exported_at": datetime.utcnow(),
+        "backup_schema_version": 1,
+        "api_version": "v1",
+        "server": settings.server_name,
+        "exported_at": exported_at,
+        "includes_recording_files": False,
         "summary": _export_summary_counts(db),
         "items": {
             "notes": [_model_to_dict(row) for row in notes],
@@ -140,7 +146,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
             "sync_logs": [_model_to_dict(row) for row in sync_logs],
         },
     }
-    filename = f"nownote-server-backup-{datetime.utcnow().strftime('%Y%m%d-%H%M%S')}.json"
+    filename = f"nownote-server-backup-{exported_at.strftime('%Y%m%d-%H%M%S')}.json"
     return JSONResponse(
         content=jsonable_encoder(payload),
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
