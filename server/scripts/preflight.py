@@ -137,6 +137,7 @@ def main() -> None:
                 ("max_tree_note_level", "README documents tree depth capability", "max_tree_note_level"),
                 ("user_access_tokens", "README documents user token capability", "user_access_tokens"),
                 ("status_counts", "README documents backup verify status counts", "status_counts"),
+                ("백업/복구 절차 확인 상태", "README documents backup recovery ops check", "backup recovery ops"),
             ],
             failures,
         )

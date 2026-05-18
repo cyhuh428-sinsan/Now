@@ -219,7 +219,8 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
 ```
 
 `NOW_API_TOKEN`이 설정된 경우 `Authorization: Bearer 긴-랜덤-토큰` 헤더가 필요합니다.
-이 API는 `/admin/ops` 화면과 같은 기준으로 DB, 녹음 저장소, 토큰, DB 기본 비밀번호, 사용자 상태, 분석 작업 상태를 JSON으로 반환합니다.
+이 API는 `/admin/ops` 화면과 같은 기준으로 DB, 녹음 저장소, 토큰, DB 기본 비밀번호, 사용자 상태, 분석 작업 상태, 백업/복구 절차 확인 상태를 JSON으로 반환합니다.
+백업/복구 절차 항목은 `/admin/export` 전체 백업, `status_counts.bad=0` 검증 기준, `/admin/recovery` 복구 기준 확인을 안내합니다.
 공용 서버 오픈 전 남은 항목인 로그인 화면, 실제 2단계 인증, 공개 운영 환경도 정보성 점검으로 함께 반환합니다.
 
 스모크 테스트:

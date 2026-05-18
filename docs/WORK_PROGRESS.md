@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 00:40 KST
+
+### 다음 작업 시작
+
+- README 운영 점검 API 설명에 백업/복구 점검 항목 반영.
+
+### 구현 내용
+
+- `server/README.md`의 운영 점검 API 설명에 `백업/복구 절차 확인 상태` 포함.
+- README에 `/admin/export`, `status_counts.bad=0`, `/admin/recovery` 확인 기준 설명 추가.
+- preflight가 README의 백업/복구 운영 점검 설명 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-19 00:25 KST
 
 ### 다음 작업 시작
