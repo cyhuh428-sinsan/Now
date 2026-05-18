@@ -36,6 +36,10 @@ class UserAccountCreate(UserAccountUpdate):
     owner_id: str = Field(max_length=80)
 
 
+class BackupVerifyRequest(BaseModel):
+    backup: dict = Field(default_factory=dict)
+
+
 @router.get("/export/notes")
 def export_notes(
     owner_id: str | None = Query(default=None),
@@ -168,6 +172,16 @@ def export_summary(db: Session = Depends(get_db)) -> dict:
         "name": "export_summary",
         "checked_at": datetime.utcnow(),
         "items": _export_summary_counts(db),
+    }
+
+
+@router.post("/export/verify")
+def verify_export(payload: BackupVerifyRequest) -> dict:
+    checks = _verify_backup_payload(payload.backup)
+    return {
+        "status": "ok" if all(check["status"] == "ok" for check in checks) else "bad",
+        "checked_at": datetime.utcnow(),
+        "checks": checks,
     }
 
 
@@ -466,6 +480,86 @@ def _export_payload(name: str, rows: list) -> dict:
 def _backup_content_sha256(payload: dict) -> str:
     canonical = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
+def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
+    checks = [
+        _verify_check(
+            "백업 이름",
+            payload.get("name") == "now_note_server_backup",
+            "now_note_server_backup",
+            str(payload.get("name")),
+        ),
+        _verify_check(
+            "스키마 버전",
+            payload.get("backup_schema_version") == 1,
+            "1",
+            str(payload.get("backup_schema_version")),
+        ),
+        _verify_check("API 버전", payload.get("api_version") == "v1", "v1", str(payload.get("api_version"))),
+        _verify_check(
+            "녹음 파일 포함 여부",
+            payload.get("includes_recording_files") is False,
+            "false",
+            str(payload.get("includes_recording_files")),
+        ),
+        _verify_check(
+            "삭제 표시 메모 포함 여부",
+            payload.get("includes_deleted_notes") is True,
+            "true",
+            str(payload.get("includes_deleted_notes")),
+        ),
+    ]
+
+    items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
+    required_sections = ["notes", "recordings", "users", "analysis_jobs", "sync_logs"]
+    missing_sections = [section for section in required_sections if not isinstance(items.get(section), list)]
+    checks.append(
+        _verify_check(
+            "백업 항목",
+            not missing_sections,
+            "필수 항목 모두 존재",
+            ", ".join(missing_sections) if missing_sections else "정상",
+        )
+    )
+
+    checksum = payload.get("content_sha256")
+    checksum_payload = dict(payload)
+    checksum_payload.pop("content_sha256", None)
+    recalculated = _backup_content_sha256(checksum_payload)
+    checks.append(
+        _verify_check(
+            "체크섬",
+            checksum == recalculated,
+            "본문 기준 SHA-256 일치",
+            "일치" if checksum == recalculated else "불일치",
+        )
+    )
+
+    users = items.get("users") if isinstance(items.get("users"), list) else []
+    token_leaks = [
+        user
+        for user in users
+        if isinstance(user, dict) and ("access_token_hash" in user or "token" in user)
+    ]
+    checks.append(
+        _verify_check(
+            "토큰 민감정보",
+            not token_leaks,
+            "원문 토큰/토큰 해시 없음",
+            f"{len(token_leaks)}건 발견" if token_leaks else "정상",
+        )
+    )
+    return checks
+
+
+def _verify_check(name: str, passed: bool, expected: str, actual: str) -> dict[str, str]:
+    return {
+        "name": name,
+        "status": "ok" if passed else "bad",
+        "expected": expected,
+        "actual": actual,
+    }
 
 
 def _export_summary_counts(db: Session) -> dict:
