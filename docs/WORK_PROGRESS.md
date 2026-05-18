@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 18:55 KST
+
+### 다음 작업 시작
+
+- 관리자 문서 화면의 중복 HTML 렌더링 정리.
+
+### 구현 내용
+
+- `_admin_markdown_doc_html()` 공통 렌더러 추가.
+- `/admin/recovery`, `/admin/deploy` 화면이 공통 렌더러를 호출하도록 정리.
+- 기존 문서 내용, 제목, 관리자 인증 흐름은 유지.
+
+### 검증
+
+- `py_compile`로 `monitor.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/admin/recovery`, `/admin/deploy` 관리자 인증 접근 확인 통과.
+- 복구 화면에 `RECOVERY.md` 본문과 배포 링크가 표시되는 것 확인.
+- 배포 화면에 `DEPLOY.md` 본문과 복구 링크가 표시되는 것 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 18:40 KST
 
 ### 다음 작업 시작

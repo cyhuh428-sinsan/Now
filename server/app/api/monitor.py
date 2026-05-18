@@ -3979,129 +3979,59 @@ def _admin_help_html() -> str:
 
 
 def _admin_recovery_html() -> str:
-    recovery_path = Path(__file__).resolve().parents[2] / "RECOVERY.md"
-    if recovery_path.exists():
-        content = recovery_path.read_text(encoding="utf-8")
-    else:
-        content = "RECOVERY.md 파일을 찾을 수 없습니다."
-    return f"""<!doctype html>
-<html lang="ko">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote 복구 절차</title>
-  <style>
-    :root {{
-      color-scheme: light;
-      --bg: #f5f7fb;
-      --panel: #ffffff;
-      --text: #111827;
-      --muted: #6b7280;
-      --line: #e5e7eb;
-      --blue: #2563eb;
-    }}
-    * {{ box-sizing: border-box; }}
-    body {{
-      margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    }}
-    main {{
-      max-width: 1040px;
-      margin: 0 auto;
-      padding: 32px 18px 48px;
-    }}
-    header {{
-      display: flex;
-      justify-content: space-between;
-      gap: 18px;
-      align-items: flex-start;
-      margin-bottom: 22px;
-    }}
-    h1 {{
-      margin: 0;
-      font-size: 30px;
-      line-height: 1.2;
-    }}
-    a {{
-      color: var(--blue);
-      text-decoration: none;
-      font-weight: 650;
-    }}
-    .sub {{
-      margin-top: 8px;
-      color: var(--muted);
-      font-size: 14px;
-    }}
-    .nav {{
-      display: flex;
-      gap: 10px;
-      flex-wrap: wrap;
-    }}
-    .nav a {{
-      display: inline-flex;
-      align-items: center;
-      min-height: 34px;
-      padding: 0 12px;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: var(--panel);
-      font-size: 13px;
-    }}
-    pre {{
-      margin: 0;
-      padding: 22px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: var(--panel);
-      white-space: pre-wrap;
-      word-break: keep-all;
-      overflow-wrap: anywhere;
-      line-height: 1.7;
-      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
-      font-size: 13px;
-    }}
-    @media (max-width: 760px) {{
-      header {{ display: block; }}
-      .nav {{ margin-top: 14px; }}
-      main {{ padding: 22px 12px 36px; }}
-      h1 {{ font-size: 24px; }}
-    }}
-  </style>
-</head>
-<body>
-  <main>
-    <header>
-      <div>
-        <h1>NowNote 복구 절차</h1>
-        <div class="sub">백업 검증, 서버 점검, 복구 판단 기준을 확인합니다</div>
-      </div>
-      <nav class="nav">
-        <a href="/admin">관리</a>
-        <a href="/admin/export">내보내기</a>
-        <a href="/admin/ops">점검</a>
-        <a href="/admin/help">도움말</a>
-      </nav>
-    </header>
-    <pre>{escape(content)}</pre>
-  </main>
-</body>
-</html>"""
+    return _admin_markdown_doc_html(
+        filename="RECOVERY.md",
+        title="NowNote 복구 절차",
+        subtitle="백업 검증, 서버 점검, 복구 판단 기준을 확인합니다",
+        missing_message="RECOVERY.md 파일을 찾을 수 없습니다.",
+        nav_links=[
+            ("/admin", "관리"),
+            ("/admin/export", "내보내기"),
+            ("/admin/ops", "점검"),
+            ("/admin/deploy", "배포"),
+            ("/admin/help", "도움말"),
+        ],
+    )
 
 
 def _admin_deploy_html() -> str:
-    deploy_path = Path(__file__).resolve().parents[2] / "DEPLOY.md"
-    if deploy_path.exists():
-        content = deploy_path.read_text(encoding="utf-8")
+    return _admin_markdown_doc_html(
+        filename="DEPLOY.md",
+        title="NowNote 배포 체크리스트",
+        subtitle="WSL/Docker 서버 갱신과 확인 순서를 봅니다",
+        missing_message="DEPLOY.md 파일을 찾을 수 없습니다.",
+        nav_links=[
+            ("/admin", "관리"),
+            ("/admin/ops", "점검"),
+            ("/admin/recovery", "복구"),
+            ("/admin/help", "도움말"),
+        ],
+    )
+
+
+def _admin_markdown_doc_html(
+    *,
+    filename: str,
+    title: str,
+    subtitle: str,
+    missing_message: str,
+    nav_links: list[tuple[str, str]],
+) -> str:
+    doc_path = Path(__file__).resolve().parents[2] / filename
+    if doc_path.exists():
+        content = doc_path.read_text(encoding="utf-8")
     else:
-        content = "DEPLOY.md 파일을 찾을 수 없습니다."
+        content = missing_message
+    nav_html = "\n".join(
+        f'        <a href="{escape(href)}">{escape(label)}</a>'
+        for href, label in nav_links
+    )
     return f"""<!doctype html>
 <html lang="ko">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote 배포 체크리스트</title>
+  <title>{escape(title)}</title>
   <style>
     :root {{
       color-scheme: light;
@@ -4186,14 +4116,11 @@ def _admin_deploy_html() -> str:
   <main>
     <header>
       <div>
-        <h1>NowNote 배포 체크리스트</h1>
-        <div class="sub">WSL/Docker 서버 갱신과 확인 순서를 봅니다</div>
+        <h1>{escape(title)}</h1>
+        <div class="sub">{escape(subtitle)}</div>
       </div>
       <nav class="nav">
-        <a href="/admin">관리</a>
-        <a href="/admin/ops">점검</a>
-        <a href="/admin/recovery">복구</a>
-        <a href="/admin/help">도움말</a>
+{nav_html}
       </nav>
     </header>
     <pre>{escape(content)}</pre>
