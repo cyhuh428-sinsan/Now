@@ -336,6 +336,11 @@ def main() -> None:
     require("공용 서버 로그인 화면" in ops_check_names, "운영 점검에 공용 서버 로그인 화면 항목이 없습니다")
     require("공용 서버 2단계 인증" in ops_check_names, "운영 점검에 공용 서버 2단계 인증 항목이 없습니다")
     require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
+    require("백업/복구 절차" in ops_check_names, "운영 점검에 백업/복구 절차 항목이 없습니다")
+    require(
+        any("status_counts.bad=0" in str(item.get("message", "")) for item in data.get("checks", [])),
+        "운영 점검에 백업 검증 status_counts 기준 안내가 없습니다",
+    )
     print(
         "GET /api/v1/admin/ops:",
         status,

@@ -190,6 +190,8 @@ def main() -> None:
                 ('"status_counts": status_counts', "Backup verify returns status counts", "status_counts response"),
                 ("_check_status_counts", "Backup verify counts check statuses", "_check_status_counts"),
                 ("_verification_status", "Backup verify derives overall status", "_verification_status"),
+                ("백업/복구 절차", "Admin ops covers backup recovery procedure", "backup recovery ops"),
+                ("status_counts.bad=0", "Admin ops covers backup status count target", "status_counts.bad=0"),
             ],
             failures,
         )
@@ -213,6 +215,7 @@ def main() -> None:
                     "Monitor export page explains backup status counts",
                     "status_counts.bad=0",
                 ),
+                ("백업/복구 절차", "Monitor ops covers backup recovery procedure", "backup recovery ops"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",

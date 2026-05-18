@@ -2872,6 +2872,13 @@ def _admin_ops_html() -> str:
             "message": f"transcript 없는 녹음 {recordings_without_transcript}건",
         }
     )
+    checks.append(
+        {
+            "name": "백업/복구 절차",
+            "status": "info",
+            "message": "/admin/export에서 전체 백업과 status_counts.bad=0 검증, /admin/recovery에서 복구 기준 확인",
+        }
+    )
 
     summary_status = _ops_summary_status(checks)
 
