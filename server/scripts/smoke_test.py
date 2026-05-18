@@ -126,6 +126,10 @@ def main() -> None:
 
     for method, path, payload in checks:
         status, data = request(method, f"{base_url}{path}", args.token, payload)
+        if path == "/api/v1/server":
+            capabilities = data.get("capabilities", {})
+            require(capabilities.get("backup_export") is True, "서버 capability에 backup_export가 없습니다")
+            require(capabilities.get("backup_verify") is True, "서버 capability에 backup_verify가 없습니다")
         print(f"{method} {path}: {status} {data}")
 
     admin_pages = [

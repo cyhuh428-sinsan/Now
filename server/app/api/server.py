@@ -19,6 +19,8 @@ def server_info() -> dict:
             "recordings": True,
             "analysis_jobs": True,
             "admin_ops": True,
+            "backup_export": True,
+            "backup_verify": True,
             "user_accounts": True,
             "user_profile": True,
             "user_timezone": True,
