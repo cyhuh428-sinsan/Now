@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 20:10 KST
+
+### 다음 작업 시작
+
+- 관리자 도움말의 공용 서버 운영 점검 설명 보강.
+
+### 구현 내용
+
+- `/admin/help`의 공용 NowNote 서버 항목에 `/admin/ops`의 공용 서버 로그인 화면, 실제 2단계 인증, 공개 운영 환경 점검 설명 추가.
+- smoke test가 `/admin/help` 안의 공용 서버 로그인 화면 점검 안내와 `/admin/deploy` 링크를 확인하도록 보강.
+- preflight가 smoke test 안의 공용 운영 도움말 확인 여부를 점검하도록 보강.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py`, `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `Smoke covers public ops help` 항목이 OK로 출력되는 것 확인.
+- TestClient로 `/admin/help`에 공용 서버 로그인 화면 점검 안내와 `/admin/deploy` 링크가 표시되는 것 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 19:55 KST
 
 ### 다음 작업 시작
