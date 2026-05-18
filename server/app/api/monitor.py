@@ -9,6 +9,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import func, select, text
 
+from app.core.capabilities import TWO_FACTOR_AUTH_STATUS
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
@@ -3148,7 +3149,7 @@ def _public_server_readiness_checks() -> list[dict[str, str]]:
         {
             "name": "공용 서버 2단계 인증",
             "status": "info",
-            "message": "현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 planned",
+            "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
         },
         {
             "name": "공개 운영 환경",

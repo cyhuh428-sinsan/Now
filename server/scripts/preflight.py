@@ -56,6 +56,7 @@ def main() -> None:
     env_path = (server_dir / args.env_file).resolve()
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
+    monitor_api_path = server_dir / "app" / "api" / "monitor.py"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
@@ -141,6 +142,7 @@ def main() -> None:
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
+    check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
@@ -148,6 +150,11 @@ def main() -> None:
             capabilities_source,
             [
                 ('API_VERSION = "v1"', "Capabilities defines API version", "API_VERSION"),
+                (
+                    'TWO_FACTOR_AUTH_STATUS = "planned"',
+                    "Capabilities defines two-factor auth status",
+                    "TWO_FACTOR_AUTH_STATUS",
+                ),
             ],
             failures,
         )
@@ -161,11 +168,34 @@ def main() -> None:
                     "Admin API imports shared API version",
                     "API_VERSION import",
                 ),
+                (
+                    "TWO_FACTOR_AUTH_STATUS",
+                    "Admin API uses shared two-factor auth status",
+                    "TWO_FACTOR_AUTH_STATUS",
+                ),
                 ('"api_version": API_VERSION', "Backup export uses shared API version", "export api_version"),
                 (
                     'payload.get("api_version") == API_VERSION',
                     "Backup verify uses shared API version",
                     "verify api_version",
+                ),
+            ],
+            failures,
+        )
+    if monitor_api_path.exists():
+        monitor_source = monitor_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            monitor_source,
+            [
+                (
+                    "from app.core.capabilities import TWO_FACTOR_AUTH_STATUS",
+                    "Monitor API imports shared two-factor auth status",
+                    "TWO_FACTOR_AUTH_STATUS import",
+                ),
+                (
+                    "TWO_FACTOR_AUTH_STATUS",
+                    "Monitor API uses shared two-factor auth status",
+                    "TWO_FACTOR_AUTH_STATUS",
                 ),
             ],
             failures,
@@ -213,6 +243,7 @@ def main() -> None:
                 ("supported_note_types", "Smoke covers supported note types", "supported_note_types"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
                 ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
+                ("TWO_FACTOR_AUTH_STATUS", "Smoke checks two-factor auth status", "TWO_FACTOR_AUTH_STATUS"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
             ],
             failures,

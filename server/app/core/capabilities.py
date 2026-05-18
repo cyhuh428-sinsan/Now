@@ -1,4 +1,5 @@
 API_VERSION = "v1"
+TWO_FACTOR_AUTH_STATUS = "planned"
 
 SERVER_CAPABILITIES = {
     "sync": True,
@@ -11,7 +12,7 @@ SERVER_CAPABILITIES = {
     "user_profile": True,
     "user_timezone": True,
     "two_factor_status": True,
-    "two_factor_auth": "planned",
+    "two_factor_auth": TWO_FACTOR_AUTH_STATUS,
     "user_groups": True,
     "user_access_tokens": True,
     "max_tree_note_level": 3,
