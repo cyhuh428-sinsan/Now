@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 11:20 KST
+
+### 다음 작업 시작
+
+- 전체 백업이 삭제 표시 메모를 포함한다는 기준을 메타정보와 문서로 명시.
+
+### 구현 내용
+
+- 전체 백업 JSON에 `includes_deleted_notes: true` 추가.
+- smoke test에 삭제 표시 메모 포함 기준 검증 추가.
+- 서버 README에 전체 백업은 삭제 표시 메모도 포함한다고 명시.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `smoke_test.py` 확인 통과.
+- FastAPI `TestClient`로 전체 백업의 `includes_deleted_notes=true`, `includes_recording_files=false` 확인 통과.
+
 ## 2026-05-18 11:05 KST
 
 ### 다음 작업 시작
