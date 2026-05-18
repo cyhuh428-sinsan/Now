@@ -3972,6 +3972,7 @@ def _admin_help_html() -> str:
         <ul>
           <li>배포 전 점검은 <code>scripts/preflight.py</code>를 사용합니다.</li>
           <li>서버 시작 후 <code>/health</code>, <code>/health/ready</code>, <code>/api/v1/server</code>를 확인합니다.</li>
+          <li>배포 직후 <code>/admin/export</code>에서 전체 백업을 내려받고 백업 검증 결과를 확인합니다.</li>
           <li>상세 절차는 <a href="/admin/deploy">DEPLOY.md</a>를 기준으로 확인합니다.</li>
         </ul>
       </section>
@@ -3982,6 +3983,7 @@ def _admin_help_html() -> str:
         <ul>
           <li>전체 백업은 <code>/admin/export</code>에서 내려받습니다.</li>
           <li>백업 검증은 <code>/api/v1/admin/export/verify</code>를 사용합니다.</li>
+          <li><code>bad</code>가 있으면 복구를 시작하지 않고, <code>warn</code>은 <code>/admin/ops</code>에서 원인을 먼저 확인합니다.</li>
           <li>상세 절차는 <a href="/admin/recovery">RECOVERY.md</a>를 기준으로 확인합니다.</li>
         </ul>
       </section>

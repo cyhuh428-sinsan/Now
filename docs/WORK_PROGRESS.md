@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 23:10 KST
+
+### 다음 작업 시작
+
+- 도움말 화면의 배포/복구 운영 흐름 요약 보강.
+
+### 구현 내용
+
+- `/admin/help`의 배포 체크리스트 카드에 배포 직후 `/admin/export` 백업 확인 안내 추가.
+- `/admin/help`의 복구 절차 카드에 `bad`, `warn`, `/admin/ops` 대응 기준 추가.
+- smoke test가 도움말 화면의 배포 후 백업 확인 안내와 복구 검증 결과 대응 안내를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py` 확인 통과.
+- TestClient로 `/admin/help` 화면에 배포 직후 백업 확인, `bad/warn`, `/admin/ops`, 배포/복구 링크가 포함되는지 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 22:55 KST
 
 ### 다음 작업 시작
