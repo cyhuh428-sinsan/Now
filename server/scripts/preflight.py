@@ -293,6 +293,8 @@ def main() -> None:
                 ("MAX_TREE_NOTE_LEVEL", "Smoke checks tree depth constant", "MAX_TREE_NOTE_LEVEL"),
                 ("SUPPORTED_NOTE_TYPES", "Smoke checks supported note type constant", "SUPPORTED_NOTE_TYPES"),
                 ("status_counts", "Smoke checks backup verify status counts", "status_counts"),
+                ("운영 점검 화면에 백업/복구 절차 항목", "Smoke checks ops page backup recovery guidance", "ops page backup recovery"),
+                ("운영 점검 화면에 공용 서버 로그인 화면 항목", "Smoke checks ops page public login guidance", "ops page public login"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
             ],
