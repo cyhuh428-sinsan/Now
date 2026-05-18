@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 19:10 KST
+
+### 다음 작업 시작
+
+- preflight가 배포 체크리스트의 핵심 명령 포함 여부를 확인하도록 보강.
+
+### 구현 내용
+
+- `server/scripts/preflight.py`가 `DEPLOY.md` 안의 `git pull origin main` 포함 여부 확인.
+- `DEPLOY.md` 안의 `python3 scripts/preflight.py` 포함 여부 확인.
+- `DEPLOY.md` 안의 `docker compose up --build -d` 포함 여부 확인.
+- `DEPLOY.md` 안의 `python3 scripts/smoke_test.py` 포함 여부 확인.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- 배포 체크리스트 핵심 명령 확인 항목 4개가 OK로 출력되는 것 확인.
+- 핵심 명령 문구 재검색 통과.
+
 ## 2026-05-18 18:55 KST
 
 ### 다음 작업 시작

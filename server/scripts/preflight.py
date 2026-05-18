@@ -116,6 +116,12 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    if deploy_path.exists():
+        deploy = deploy_path.read_text(encoding="utf-8")
+        check("git pull origin main" in deploy, "Deploy checklist covers source update", "git pull origin main", failures)
+        check("python3 scripts/preflight.py" in deploy, "Deploy checklist covers preflight", "preflight", failures)
+        check("docker compose up --build -d" in deploy, "Deploy checklist covers compose up", "docker compose up --build -d", failures)
+        check("python3 scripts/smoke_test.py" in deploy, "Deploy checklist covers smoke test", "smoke_test.py", failures)
     if smoke_path.exists():
         smoke = smoke_path.read_text(encoding="utf-8")
         check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
