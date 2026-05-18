@@ -47,6 +47,7 @@ def main() -> None:
     env_path = (server_dir / args.env_file).resolve()
     compose_path = server_dir / "docker-compose.yml"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
+    recovery_path = server_dir / "RECOVERY.md"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -112,6 +113,7 @@ def main() -> None:
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
+    check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     if smoke_path.exists():
         smoke = smoke_path.read_text(encoding="utf-8")
         check("/api/v1/admin/export/all" in smoke, "Smoke covers full backup export", "export/all", failures)
