@@ -8,6 +8,8 @@ PLACEHOLDER_VALUES = {
     "change-this-postgres-password",
     "now-local-password",
 }
+CHECK_TOTAL = 0
+CHECK_PASSED = 0
 
 
 def load_env(path: Path) -> dict[str, str]:
@@ -22,9 +24,13 @@ def load_env(path: Path) -> dict[str, str]:
 
 
 def check(condition: bool, name: str, message: str, failures: list[str]) -> None:
+    global CHECK_TOTAL, CHECK_PASSED
+    CHECK_TOTAL += 1
     prefix = "[OK]" if condition else "[FAIL]"
     print(f"{prefix} {name} - {message}")
-    if not condition:
+    if condition:
+        CHECK_PASSED += 1
+    else:
         failures.append(f"{name}: {message}")
 
 
@@ -312,7 +318,7 @@ def main() -> None:
             print(f"- {failure}")
         raise SystemExit(1)
 
-    print("NowNote server preflight passed")
+    print(f"NowNote server preflight passed ({CHECK_PASSED}/{CHECK_TOTAL} checks)")
 
 
 if __name__ == "__main__":
