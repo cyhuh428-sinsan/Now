@@ -361,8 +361,14 @@ python -m app.worker
 
 ## 다음 단계
 
-- 릴리스 AAB 재빌드 후 실제 Android 기기에서 서버 연결, 동기화, 녹음 업로드 검증
-- 릴리스 병합 Manifest에서 불필요한 음성 출력 캡처 권한 제거 여부 확인
-- 공개 운영 도메인, HTTPS, reverse proxy, 백업/복구 절차 최종 점검
-- 공용 서버 운영 전 사용자별 토큰 전달 UI, 로그인 화면, 실제 2단계 인증 정책 확정
-- 공용 서버 오픈 전 `python3 scripts/preflight.py --public-server` 실패 항목을 모두 해소
+### 서버 운영
+
+- 개인 서버는 `.env`에 `NOW_API_TOKEN`을 설정한 뒤 필요하면 `NOW_USER_TOKEN_REQUIRED=true`로 사용자별 접속 토큰을 강제합니다.
+- 공용 서버는 사용자별 토큰 전달 UI, 로그인 화면, 실제 2단계 인증 정책을 확정한 뒤 오픈합니다.
+- 공개 운영 도메인, HTTPS, reverse proxy, 백업/복구 절차를 최종 점검합니다.
+- 공용 서버 오픈 전 `python3 scripts/preflight.py --public-server` 실패 항목을 모두 해소합니다.
+
+### 앱/출시 연계
+
+- 릴리스 AAB를 재빌드한 뒤 실제 Android 기기에서 서버 연결, 동기화, 녹음 업로드를 검증합니다.
+- 릴리스 병합 Manifest에서 불필요한 음성 출력 캡처 권한이 포함되지 않는지 재확인합니다.
