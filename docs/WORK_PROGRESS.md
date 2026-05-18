@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 23:40 KST
+
+### 다음 작업 시작
+
+- `/admin/export` 화면에 `status_counts` 백업 검증 기준 안내 추가.
+
+### 구현 내용
+
+- `/admin/export` 화면의 백업 검증 안내에 `status_counts.bad=0` 기준 추가.
+- smoke test가 `/admin/export` 화면의 `status_counts.bad=0` 안내를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py` 확인 통과.
+- TestClient로 `/admin/export` 화면에 `status=ok`, `status_counts.bad=0`, `/admin/recovery`, `/admin/ops`, `NOW_STORAGE_DIR` 안내가 포함되는지 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 23:25 KST
 
 ### 다음 작업 시작

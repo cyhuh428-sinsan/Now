@@ -187,6 +187,7 @@ def main() -> None:
             require("/api/v1/admin/export/verify" in text, "내보내기 화면에 백업 검증 API 안내가 없습니다")
             require("YOUR_ADMIN_TOKEN" in text, "내보내기 화면에 백업 검증 요청 예시가 없습니다")
             require("status=ok" in text, "내보내기 화면에 백업 검증 성공 기준 안내가 없습니다")
+            require("status_counts.bad=0" in text, "내보내기 화면에 백업 검증 상태 집계 기준 안내가 없습니다")
             require("/admin/recovery" in text, "내보내기 화면에 복구 절차 안내가 없습니다")
             require("NOW_STORAGE_DIR" in text, "내보내기 화면에 원본 음성 파일 보존 안내가 없습니다")
         if path == "/admin/recovery":
