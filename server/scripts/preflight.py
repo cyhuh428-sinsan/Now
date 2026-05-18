@@ -148,6 +148,8 @@ def main() -> None:
                 ("user_access_tokens", "README documents user token capability", "user_access_tokens"),
                 ("status_counts", "README documents backup verify status counts", "status_counts"),
                 ("백업/복구 절차 확인 상태", "README documents backup recovery ops check", "backup recovery ops"),
+                ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
+                ("Preflight failed", "README explains preflight failure summary", "preflight failed summary"),
             ],
             failures,
         )

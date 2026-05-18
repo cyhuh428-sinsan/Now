@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:18 KST
+
+### 다음 작업 시작
+
+- README의 preflight 결과 해석 기준 보강.
+
+### 구현 내용
+
+- `server/README.md`에 preflight 성공/실패 메시지의 `통과/전체 checks` 형식 설명 추가.
+- preflight가 README의 성공/실패 요약 설명 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `rg`로 README와 preflight의 성공/실패 요약 문구 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (93/93 checks)` 출력 확인.
+
 ## 2026-05-18 22:10 KST
 
 ### 다음 작업 시작
