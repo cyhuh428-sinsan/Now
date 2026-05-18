@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 16:55 KST
+
+### 다음 작업 시작
+
+- 서버 복구 절차 문서를 관리자 화면에서 직접 확인할 수 있게 연결.
+
+### 구현 내용
+
+- `/admin/help`의 복구 절차 안내를 실제 관리자 화면 링크로 수정.
+- `/admin/recovery` 읽기 전용 화면을 추가해 `server/RECOVERY.md` 내용을 표시.
+- smoke test가 `/admin/recovery` 화면과 백업 검증 API 안내 문구를 확인하도록 보강.
+- 서버 README의 관리 화면 목록에 `/admin/recovery` 추가.
+
+### 검증
+
+- `py_compile`로 `monitor.py`, `smoke_test.py` 확인 통과.
+- TestClient로 `/admin/help`와 `/admin/recovery` 관리자 인증 접근 확인 통과.
+- `/admin/recovery` 화면에 `RECOVERY.md` 본문과 백업 검증 API 안내가 표시되는 것 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 16:35 KST
 
 ### 다음 작업 시작
