@@ -230,6 +230,7 @@ def main() -> None:
     ).hexdigest()
     require(checksum == recalculated_checksum, "전체 백업 체크섬이 본문 내용과 일치하지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
+    full_backup = data
     print(
         "GET /api/v1/admin/export/all:",
         status,
@@ -238,6 +239,19 @@ def main() -> None:
             "recordings": len(data.get("items", {}).get("recordings", [])),
             "users": len(data.get("items", {}).get("users", [])),
         },
+    )
+
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/export/verify",
+        args.token,
+        {"backup": full_backup},
+    )
+    require(data.get("status") == "ok", "전체 백업 검증 API가 실패했습니다")
+    print(
+        "POST /api/v1/admin/export/verify:",
+        status,
+        {"status": data.get("status"), "checks": len(data.get("checks", []))},
     )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
