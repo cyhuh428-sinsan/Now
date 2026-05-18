@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 01:25 KST
+
+### 다음 작업 시작
+
+- preflight 완료 메시지에 전체 점검 항목 수 표시 추가.
+
+### 구현 내용
+
+- `server/scripts/preflight.py`에 전체 점검 수와 통과 수 카운터 추가.
+- preflight 성공 메시지를 `NowNote server preflight passed (통과/전체 checks)` 형식으로 변경.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (86/86 checks)` 출력 확인.
+
 ## 2026-05-19 01:10 KST
 
 ### 다음 작업 시작
