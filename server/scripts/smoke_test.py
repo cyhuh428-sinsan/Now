@@ -764,6 +764,7 @@ def main() -> None:
         status,
         {"is_active": data.get("user", {}).get("is_active")},
     )
+    print("NowNote server smoke test passed")
 
 
 if __name__ == "__main__":
