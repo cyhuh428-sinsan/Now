@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:27 KST
+
+### 다음 작업 시작
+
+- README의 smoke test 범위 설명 보강.
+
+### 구현 내용
+
+- `server/README.md`의 smoke test 설명에 실제 확인 범위인 백업 내보내기/검증, 녹음 업로드, 분석 작업, 사용자별 접속 토큰, 비활성 사용자 차단 기준 추가.
+- preflight가 README의 smoke test 주요 범위 설명 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `rg`로 README smoke test 범위 설명과 preflight 확인 문구 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (96/96 checks)` 출력 확인.
+
 ## 2026-05-18 22:18 KST
 
 ### 다음 작업 시작
