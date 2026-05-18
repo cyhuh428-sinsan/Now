@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:10 KST
+
+### 다음 작업 시작
+
+- README와 preflight에 현재 API 버전 기준 문서화 확인 추가.
+
+### 구현 내용
+
+- `server/README.md`의 `/api/v1/server` 설명에 현재 `api_version=v1` 기준 명시.
+- preflight가 README의 현재 API 버전 문서화 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+
 ## 2026-05-18 21:55 KST
 
 ### 다음 작업 시작
