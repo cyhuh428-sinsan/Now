@@ -11,6 +11,7 @@ from uuid import uuid4
 
 USER_TOKEN: str | None = None
 API_VERSION = "v1"
+TWO_FACTOR_AUTH_STATUS = "planned"
 
 
 def require(condition: bool, message: str) -> None:
@@ -142,7 +143,10 @@ def main() -> None:
             require(capabilities.get("user_groups") is True, "서버 capability에 user_groups가 없습니다")
             require(capabilities.get("user_access_tokens") is True, "서버 capability에 user_access_tokens가 없습니다")
             require(capabilities.get("two_factor_status") is True, "서버 capability에 two_factor_status가 없습니다")
-            require(capabilities.get("two_factor_auth") == "planned", "서버 capability의 two_factor_auth 상태가 planned가 아닙니다")
+            require(
+                capabilities.get("two_factor_auth") == TWO_FACTOR_AUTH_STATUS,
+                "서버 capability의 two_factor_auth 상태가 planned가 아닙니다",
+            )
             require(capabilities.get("max_tree_note_level") == 3, "서버 capability의 max_tree_note_level이 3이 아닙니다")
             require(
                 capabilities.get("supported_note_types") == ["daily", "tree", "record"],

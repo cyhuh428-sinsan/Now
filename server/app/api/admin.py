@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
-from app.core.capabilities import API_VERSION
+from app.core.capabilities import API_VERSION, TWO_FACTOR_AUTH_STATUS
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
@@ -684,7 +684,7 @@ def _public_server_readiness_checks() -> list[dict[str, str]]:
         {
             "name": "공용 서버 2단계 인증",
             "status": "info",
-            "message": "현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 planned",
+            "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
         },
         {
             "name": "공개 운영 환경",

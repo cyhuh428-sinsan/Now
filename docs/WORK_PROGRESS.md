@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 21:40 KST
+
+### 다음 작업 시작
+
+- 2단계 인증 구현 상태값 `planned`를 공통 상수로 정리.
+
+### 구현 내용
+
+- `server/app/core/capabilities.py`에 `TWO_FACTOR_AUTH_STATUS` 상수 추가.
+- `/api/v1/server` capability의 `two_factor_auth`가 공통 상수를 사용하도록 변경.
+- Admin API와 monitor 운영 화면의 공용 서버 2단계 인증 안내 문구가 같은 상수를 사용하도록 변경.
+- smoke test가 `TWO_FACTOR_AUTH_STATUS` 기준으로 capability를 확인하도록 변경.
+- preflight가 capability/Admin API/monitor/smoke test의 2단계 인증 상태 기준을 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 capability, Admin API, monitor, smoke test, preflight 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/server`, `/api/v1/admin/ops`, `/admin/ops`의 `planned` 상태 표시 확인 통과.
+
 ## 2026-05-18 21:25 KST
 
 ### 다음 작업 시작
