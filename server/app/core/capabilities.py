@@ -1,5 +1,7 @@
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
+MAX_TREE_NOTE_LEVEL = 3
+SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 
 SERVER_CAPABILITIES = {
     "sync": True,
@@ -15,8 +17,8 @@ SERVER_CAPABILITIES = {
     "two_factor_auth": TWO_FACTOR_AUTH_STATUS,
     "user_groups": True,
     "user_access_tokens": True,
-    "max_tree_note_level": 3,
-    "supported_note_types": ["daily", "tree", "record"],
+    "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
+    "supported_note_types": SUPPORTED_NOTE_TYPES,
 }
 
 
