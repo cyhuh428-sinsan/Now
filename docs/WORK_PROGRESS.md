@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 01:40 KST
+
+### 다음 작업 시작
+
+- preflight 실패 메시지에 통과/전체 점검 수 요약 추가.
+
+### 구현 내용
+
+- `check_summary()`를 추가해 성공/실패 메시지가 같은 통과/전체 점검 수 형식을 사용하도록 변경.
+- preflight 실패 메시지를 `Preflight failed (통과/전체 checks)` 형식으로 변경.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (86/86 checks)` 출력 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example --public-server` 실행 결과 의도된 실패와 `Preflight failed (86/89 checks)` 출력 확인.
+
 ## 2026-05-19 01:25 KST
 
 ### 다음 작업 시작
