@@ -1,6 +1,7 @@
 import argparse
 import base64
 import json
+import re
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -212,6 +213,10 @@ def main() -> None:
     require(data.get("api_version") == "v1", "전체 백업 API 버전이 올바르지 않습니다")
     require(data.get("includes_recording_files") is False, "전체 백업의 녹음 파일 포함 여부가 올바르지 않습니다")
     require(data.get("includes_deleted_notes") is True, "전체 백업의 삭제 표시 메모 포함 여부가 올바르지 않습니다")
+    require(
+        re.fullmatch(r"[0-9a-f]{64}", data.get("content_sha256", "") or "") is not None,
+        "전체 백업 체크섬 형식이 올바르지 않습니다",
+    )
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
     print(
         "GET /api/v1/admin/export/all:",
