@@ -348,6 +348,8 @@ const I18N = {
     "settings.server.capabilities.recordings": "녹음",
     "settings.server.capabilities.analysis": "분석 작업",
     "settings.server.capabilities.admin": "운영 점검",
+    "settings.server.capabilities.backup": "백업",
+    "settings.server.capabilities.backupVerify": "백업 검증",
     "settings.server.capabilities.users": "사용자 관리",
     "settings.server.capabilities.userTokenRequired": "사용자 토큰 필요",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
@@ -814,6 +816,8 @@ const I18N = {
     "settings.server.capabilities.recordings": "Recordings",
     "settings.server.capabilities.analysis": "Analysis jobs",
     "settings.server.capabilities.admin": "Ops checks",
+    "settings.server.capabilities.backup": "Backup",
+    "settings.server.capabilities.backupVerify": "Backup verify",
     "settings.server.capabilities.users": "User management",
     "settings.server.capabilities.userTokenRequired": "User token required",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
@@ -1842,6 +1846,8 @@ function serverCapabilityLabels(capabilities) {
   if (capabilities.recordings) labels.push(t("settings.server.capabilities.recordings"));
   if (capabilities.analysis_jobs) labels.push(t("settings.server.capabilities.analysis"));
   if (capabilities.admin_ops) labels.push(t("settings.server.capabilities.admin"));
+  if (capabilities.backup_export) labels.push(t("settings.server.capabilities.backup"));
+  if (capabilities.backup_verify) labels.push(t("settings.server.capabilities.backupVerify"));
   if (capabilities.user_accounts || capabilities.user_profile) labels.push(t("settings.server.capabilities.users"));
   if (capabilities.user_access_tokens || capabilities.user_token_required) labels.push(t("settings.server.capabilities.userTokenRequired"));
   if (capabilities.max_tree_note_level) {
