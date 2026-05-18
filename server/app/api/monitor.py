@@ -3761,6 +3761,7 @@ def _admin_export_html() -> str:
       <pre>{escape(_backup_verify_example())}</pre>
       <ul class="result-list">
         <li><code>status=ok</code>이면 백업 구조와 체크섬 기준이 정상입니다.</li>
+        <li><code>status_counts.bad=0</code>이면 실패 검증 항목이 없다는 뜻입니다.</li>
         <li><code>warn</code> 또는 <code>bad</code>가 있으면 복구 작업 전에 <code>/admin/recovery</code>와 <code>/admin/ops</code>를 먼저 확인합니다.</li>
         <li>원본 음성 파일은 백업 JSON에 포함되지 않으므로 Docker 볼륨 또는 <code>NOW_STORAGE_DIR</code> 저장소를 별도로 보존합니다.</li>
       </ul>
