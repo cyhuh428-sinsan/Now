@@ -3650,6 +3650,18 @@ def _admin_export_html() -> str:
       color: #92400e;
       font-size: 14px;
     }}
+    code, pre {{
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+    }}
+    pre {{
+      margin: 0;
+      overflow-x: auto;
+      padding: 14px 16px;
+      background: #111827;
+      color: #f9fafb;
+      font-size: 13px;
+      line-height: 1.55;
+    }}
     @media (max-width: 760px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
@@ -3700,6 +3712,14 @@ def _admin_export_html() -> str:
         <tr><th>항목</th><th>설명</th><th>건수</th><th>링크</th></tr>
         {_export_link_rows(export_links)}
       </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>백업 검증 요청 예시</span>
+        <span class="sub">JSON</span>
+      </div>
+      <pre>{escape(_backup_verify_example())}</pre>
     </section>
   </main>
 </body>
@@ -3916,6 +3936,13 @@ def _export_link_rows(links: list[tuple[str, str, str, int]]) -> str:
         "</tr>"
         for name, url, description, count in links
     )
+
+
+def _backup_verify_example() -> str:
+    return """curl -X POST http://localhost:8750/api/v1/admin/export/verify \\
+  -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_ADMIN_TOKEN" \\
+  -d '{"backup": { ... 전체 백업 JSON ... }}'"""
 
 
 def _export_summary_counts_for_page() -> dict[str, int]:
