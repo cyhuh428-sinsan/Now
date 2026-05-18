@@ -174,6 +174,7 @@ def main() -> None:
         "/admin/export",
         "/admin/recovery",
         "/admin/deploy",
+        "/admin/help",
         "/admin/users",
         "/admin/users/new",
         "/admin/users?status=inactive",
