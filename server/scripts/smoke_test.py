@@ -202,6 +202,23 @@ def main() -> None:
         },
     )
 
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/all",
+        args.token,
+    )
+    require(data.get("name") == "now_note_server_backup", "전체 백업 이름이 올바르지 않습니다")
+    require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
+    print(
+        "GET /api/v1/admin/export/all:",
+        status,
+        {
+            "notes": len(data.get("items", {}).get("notes", [])),
+            "recordings": len(data.get("items", {}).get("recordings", [])),
+            "users": len(data.get("items", {}).get("users", [])),
+        },
+    )
+
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
     print(
         "GET /api/v1/admin/ops:",
