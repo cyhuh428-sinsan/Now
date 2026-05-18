@@ -10,6 +10,7 @@ from uuid import uuid4
 
 
 USER_TOKEN: str | None = None
+API_VERSION = "v1"
 
 
 def require(condition: bool, message: str) -> None:
@@ -127,6 +128,7 @@ def main() -> None:
     for method, path, payload in checks:
         status, data = request(method, f"{base_url}{path}", args.token, payload)
         if path == "/api/v1/server":
+            require(data.get("api_version") == API_VERSION, "서버 API 버전이 올바르지 않습니다")
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
             require(capabilities.get("recordings") is True, "서버 capability에 recordings가 없습니다")
@@ -245,7 +247,7 @@ def main() -> None:
     )
     require(data.get("name") == "now_note_server_backup", "전체 백업 이름이 올바르지 않습니다")
     require(data.get("backup_schema_version") == 1, "전체 백업 스키마 버전이 올바르지 않습니다")
-    require(data.get("api_version") == "v1", "전체 백업 API 버전이 올바르지 않습니다")
+    require(data.get("api_version") == API_VERSION, "전체 백업 API 버전이 올바르지 않습니다")
     require(data.get("includes_recording_files") is False, "전체 백업의 녹음 파일 포함 여부가 올바르지 않습니다")
     require(data.get("includes_deleted_notes") is True, "전체 백업의 삭제 표시 메모 포함 여부가 올바르지 않습니다")
     require(

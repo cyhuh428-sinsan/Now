@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.core.capabilities import API_VERSION
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
@@ -139,7 +140,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
     payload = {
         "name": "now_note_server_backup",
         "backup_schema_version": 1,
-        "api_version": "v1",
+        "api_version": API_VERSION,
         "server": settings.server_name,
         "exported_at": exported_at,
         "includes_recording_files": False,
@@ -498,7 +499,12 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
             "1",
             str(payload.get("backup_schema_version")),
         ),
-        _verify_check("API 버전", payload.get("api_version") == "v1", "v1", str(payload.get("api_version"))),
+        _verify_check(
+            "API 버전",
+            payload.get("api_version") == API_VERSION,
+            API_VERSION,
+            str(payload.get("api_version")),
+        ),
         _verify_check(
             "녹음 파일 포함 여부",
             payload.get("includes_recording_files") is False,
