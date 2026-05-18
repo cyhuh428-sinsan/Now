@@ -208,6 +208,9 @@ def main() -> None:
         args.token,
     )
     require(data.get("name") == "now_note_server_backup", "전체 백업 이름이 올바르지 않습니다")
+    require(data.get("backup_schema_version") == 1, "전체 백업 스키마 버전이 올바르지 않습니다")
+    require(data.get("api_version") == "v1", "전체 백업 API 버전이 올바르지 않습니다")
+    require(data.get("includes_recording_files") is False, "전체 백업의 녹음 파일 포함 여부가 올바르지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
     print(
         "GET /api/v1/admin/export/all:",
