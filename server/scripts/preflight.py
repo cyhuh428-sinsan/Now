@@ -158,6 +158,7 @@ def main() -> None:
                 ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
+                ("공용 서버 로그인 화면", "Smoke covers public ops help", "public ops help"),
                 ("backup_export", "Smoke covers backup export capability", "backup_export"),
                 ("backup_verify", "Smoke covers backup verify capability", "backup_verify"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),

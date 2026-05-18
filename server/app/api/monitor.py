@@ -3949,6 +3949,7 @@ def _admin_help_html() -> str:
           <li>오픈 전에는 사용자별 로그인 또는 사용자별 API 토큰 정책을 확정해야 합니다.</li>
           <li>운영자는 <code>/admin/users</code>에서 사용자 활성 상태와 최근 접속 시간을 확인합니다.</li>
           <li>오픈 전에는 API 토큰, DB 비밀번호, LLM 제공자 상태를 <code>/admin/ops</code>에서 점검합니다.</li>
+          <li><code>/admin/ops</code>는 공용 서버 로그인 화면, 실제 2단계 인증, 공개 운영 환경도 정보성 점검으로 보여줍니다.</li>
           <li>민감 메모 암호화는 로그인 사용자 기능으로 단계적으로 연결합니다.</li>
         </ul>
       </section>

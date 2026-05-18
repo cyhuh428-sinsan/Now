@@ -170,6 +170,9 @@ def main() -> None:
         if path == "/admin/deploy":
             require("NowNote 서버 배포 체크리스트" in text, "배포 체크리스트 화면에 DEPLOY.md 내용이 없습니다")
             require("git pull origin main" in text, "배포 체크리스트 화면에 소스 갱신 안내가 없습니다")
+        if path == "/admin/help":
+            require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
+            require("/admin/deploy" in text, "도움말 화면에 배포 체크리스트 링크가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, data = request(
