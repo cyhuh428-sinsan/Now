@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 22:25 KST
+
+### 다음 작업 시작
+
+- 배포 체크리스트에 백업 내보내기/검증 확인 절차 추가.
+
+### 구현 내용
+
+- `server/DEPLOY.md`에 배포 직후 `/admin/export` 화면 기준 백업 내보내기/검증 확인 절차 추가.
+- API 확인용 `GET /api/v1/admin/export/all`, `POST /api/v1/admin/export/verify` 예시 추가.
+- 운영자가 직접 파이썬 조각을 실행하지 않도록 화면/API 중심으로 문서화.
+- preflight가 배포 체크리스트의 백업 내보내기/검증 절차 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `DEPLOY.md`에 임시 Python heredoc 예시가 남아 있지 않은 것 확인.
+
 ## 2026-05-18 22:10 KST
 
 ### 다음 작업 시작
