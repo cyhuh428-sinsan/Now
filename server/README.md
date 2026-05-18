@@ -259,9 +259,29 @@ DB 연결까지 포함한 준비 상태 확인.
 
 서버 이름, API 버전, 인증 필요 여부를 확인합니다.
 앱은 이 응답의 `capabilities` 값으로 동기화, 녹음 업로드, 분석 작업, 사용자 계정, 사용자 프로필, 2단계 인증 상태 관리, 운영 점검 API, 백업 내보내기, 백업 검증 지원 여부와 계층 메모 최대 깊이를 확인할 수 있습니다.
+
+현재 capability 키:
+
+- `sync`
+- `recordings`
+- `analysis_jobs`
+- `admin_ops`
+- `backup_export`
+- `backup_verify`
+- `user_accounts`
+- `user_profile`
+- `user_timezone`
+- `two_factor_status`
+- `two_factor_auth`
+- `user_groups`
+- `user_access_tokens`
+- `max_tree_note_level`
+- `supported_note_types`
+
 `user_token_required`가 `true`이면 데이터 API 요청에 사용자별 접속 토큰 헤더 `X-Now-User-Token`이 필요합니다.
 `two_factor_status`는 관리자 화면에서 사용 여부를 관리할 수 있다는 뜻이고, `two_factor_auth`는 실제 로그인 2단계 인증 기능의 구현 상태를 나타냅니다.
 현재 `two_factor_auth` 값은 `planned`입니다.
+현재 `max_tree_note_level` 값은 `3`, `supported_note_types` 값은 `daily`, `tree`, `record`입니다.
 
 ### Users
 

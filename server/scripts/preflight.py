@@ -55,6 +55,7 @@ def main() -> None:
     server_dir = Path(__file__).resolve().parents[1]
     env_path = (server_dir / args.env_file).resolve()
     compose_path = server_dir / "docker-compose.yml"
+    readme_path = server_dir / "README.md"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
@@ -122,6 +123,18 @@ def main() -> None:
     check("NOW_API_TOKEN: ${NOW_API_TOKEN:-}" in compose, "Compose reads NOW_API_TOKEN", "API and worker", failures)
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
+    check(readme_path.exists(), "Server README exists", str(readme_path), failures)
+    if readme_path.exists():
+        readme = readme_path.read_text(encoding="utf-8")
+        check_text_contains(
+            readme,
+            [
+                ("supported_note_types", "README documents supported note types", "supported_note_types"),
+                ("max_tree_note_level", "README documents tree depth capability", "max_tree_note_level"),
+                ("user_access_tokens", "README documents user token capability", "user_access_tokens"),
+            ],
+            failures,
+        )
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
