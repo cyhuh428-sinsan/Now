@@ -290,6 +290,10 @@ def main() -> None:
     )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
+    ops_check_names = {item.get("name") for item in data.get("checks", [])}
+    require("공용 서버 로그인 화면" in ops_check_names, "운영 점검에 공용 서버 로그인 화면 항목이 없습니다")
+    require("공용 서버 2단계 인증" in ops_check_names, "운영 점검에 공용 서버 2단계 인증 항목이 없습니다")
+    require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
     print(
         "GET /api/v1/admin/ops:",
         status,

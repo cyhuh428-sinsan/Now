@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 17:55 KST
+
+### 다음 작업 시작
+
+- 운영 점검 화면/API에 공용 서버 오픈 전 남은 인증/운영 항목 표시.
+
+### 구현 내용
+
+- `/api/v1/admin/ops`에 공용 서버 로그인 화면, 공용 서버 2단계 인증, 공개 운영 환경 점검 항목 추가.
+- `/admin/ops` 화면에도 같은 정보성 점검 항목 표시.
+- smoke test가 운영 점검 API에 위 3개 항목이 있는지 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `admin.py`, `monitor.py`, `smoke_test.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/admin/ops`와 `/admin/ops`에 공용 서버 오픈 대기 항목 3개가 표시되는 것 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-18 17:40 KST
 
 ### 다음 작업 시작

@@ -393,6 +393,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             "message": _user_token_state(settings.user_token_required, users_without_token),
         }
     )
+    checks.extend(_public_server_readiness_checks())
     password_status, password_message = _database_password_state(settings.database_url)
     checks.append(
         {
@@ -665,6 +666,26 @@ def _user_token_state(required: bool, users_without_token: int) -> str:
     if users_without_token:
         return f"개인 서버 기본값, 사용자별 토큰 선택 사용 가능, 토큰 없는 사용자 {users_without_token}명"
     return "개인 서버 기본값, 사용자별 토큰 선택 사용 가능"
+
+
+def _public_server_readiness_checks() -> list[dict[str, str]]:
+    return [
+        {
+            "name": "공용 서버 로그인 화면",
+            "status": "info",
+            "message": "정식 오픈 전 사용자별 토큰 전달 UI 또는 로그인 화면 필요",
+        },
+        {
+            "name": "공용 서버 2단계 인증",
+            "status": "info",
+            "message": "현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 planned",
+        },
+        {
+            "name": "공개 운영 환경",
+            "status": "info",
+            "message": "정식 오픈 전 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인 필요",
+        },
+    ]
 
 
 def _llm_state(provider: str, api_key: str | None) -> str:
