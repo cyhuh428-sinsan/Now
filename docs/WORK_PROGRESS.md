@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 18:25 KST
+
+### 다음 작업 시작
+
+- WSL/Docker 서버 배포 체크리스트 문서 추가.
+
+### 구현 내용
+
+- `server/DEPLOY.md` 신규 작성.
+- WSL/Linux 기준 `git pull`, `.env` 확인, preflight, Docker Compose 시작, health 확인, smoke test, 운영 화면 확인 순서 정리.
+- `server/README.md`에서 `DEPLOY.md` 링크 추가.
+- preflight가 `DEPLOY.md` 존재 여부도 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- `Deploy checklist exists` 항목이 OK로 출력되는 것 확인.
+- 배포 체크리스트 핵심 명령과 README 링크 재검색 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-18 18:10 KST
 
 ### 다음 작업 시작
