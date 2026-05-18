@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-18 20:55 KST
+
+### 다음 작업 시작
+
+- 서버 capability 정의를 공통 상수로 분리.
+
+### 구현 내용
+
+- `server/app/core/capabilities.py` 신규 추가.
+- `API_VERSION`, `SERVER_CAPABILITIES`, `server_capabilities()`를 공통 정의로 분리.
+- `/api/v1/server` 응답이 공통 capability 정의를 사용하도록 변경.
+- `supported_note_types`는 응답마다 새 list로 복사해 외부 수정 영향이 없도록 처리.
+
+### 검증
+
+- `py_compile`로 `capabilities.py`, `server.py` 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과.
+- TestClient로 `/api/v1/server`의 `api_version`, capability 응답이 공통 상수와 일치하는 것 확인.
+- `server_capabilities()`가 `supported_note_types` list를 응답마다 복사하는 것 확인.
+
 ## 2026-05-18 20:40 KST
 
 ### 다음 작업 시작
