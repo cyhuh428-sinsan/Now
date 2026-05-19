@@ -379,6 +379,16 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
       color: #991b1b;
       font-size: 14px;
     }}
+    .notice {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 14px;
+      line-height: 1.6;
+    }}
     @media (max-width: 800px) {{
       header {{ display: block; }}
       .badge {{ margin-top: 14px; }}
@@ -1932,6 +1942,11 @@ def _admin_devices_html() -> str:
         <a href="/docs">API 문서</a>
       </nav>
     </header>
+
+    <div class="notice">
+      이 화면은 owner/device별 사용 흔적을 확인하는 읽기 전용 화면입니다.
+      공용 서버용 기기 등록/해제 기능은 아직 별도 구현 전이며, 정식 오픈 전 운영 점검에서 확인해야 합니다.
+    </div>
 
     <section>
       <div class="section-head">

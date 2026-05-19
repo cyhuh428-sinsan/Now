@@ -242,6 +242,9 @@ def main() -> None:
             require("백업/복구 절차" in text, "배포 체크리스트 화면에 운영 점검 백업/복구 항목 안내가 없습니다")
             require("status_counts.bad=0" in text, "배포 체크리스트 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("/admin/export" in text and "/admin/recovery" in text, "배포 체크리스트 화면에 백업/복구 화면 안내가 없습니다")
+        if path == "/admin/devices":
+            require("읽기 전용 화면" in text, "기기 관리 화면에 읽기 전용 안내가 없습니다")
+            require("기기 등록/해제 기능은 아직 별도 구현 전" in text, "기기 관리 화면에 등록/해제 미구현 안내가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
