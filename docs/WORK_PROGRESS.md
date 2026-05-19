@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 00:58 KST
+
+### 다음 작업 시작
+
+- 서버 인증 기준 문서 preflight 보강.
+
+### 구현 내용
+
+- preflight가 `docs/SERVER_AUTH_POLICY.md` 존재 여부를 확인하도록 추가.
+- 개인 Docker 서버/공용 NowNote 서버 인증 기준, 사용자별 토큰 필수 모드, 로그인/토큰 전달 UI, 실제 2단계 인증, 사용자별 데이터 격리, HTTPS/reverse proxy, `--public-server` 안내 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `rg`로 서버 인증 기준 문서와 preflight 확인 문구 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (130/130 checks)` 출력 확인.
+
 ## 2026-05-19 00:49 KST
 
 ### 다음 작업 시작
