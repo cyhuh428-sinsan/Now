@@ -227,6 +227,8 @@ def main() -> None:
                 ("status_counts.bad=0", "Admin ops covers backup status count target", "status_counts.bad=0"),
                 ("공용 서버 기기 등록", "Admin ops covers public device registration", "public device registration"),
                 ("공용 서버 데이터 격리", "Admin ops covers public data isolation", "public data isolation"),
+                ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
+                ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
             ],
             failures,
         )
@@ -272,6 +274,7 @@ def main() -> None:
                 ("백업/복구 절차", "Monitor ops covers backup recovery procedure", "backup recovery ops"),
                 ("공용 서버 기기 등록", "Monitor ops covers public device registration", "public device registration"),
                 ("공용 서버 데이터 격리", "Monitor ops covers public data isolation", "public data isolation"),
+                ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -373,6 +376,7 @@ def main() -> None:
                 ("운영 점검 화면에 공용 서버 로그인 화면 항목", "Smoke checks ops page public login guidance", "ops page public login"),
                 ("운영 점검 화면에 공용 서버 기기 등록 항목", "Smoke checks ops page public device guidance", "ops page public device"),
                 ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
+                ("운영 점검에 비활성 기기 항목", "Smoke checks ops inactive devices", "ops inactive devices"),
                 ("도움말 화면에 공용 서버 기기 등록 점검 안내", "Smoke checks help page public device guidance", "help page public device"),
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),

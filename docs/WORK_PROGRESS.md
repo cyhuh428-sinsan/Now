@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 02:40 KST
+
+### 다음 작업 시작
+
+- 운영 점검의 비활성 기기 집계 추가.
+
+### 구현 내용
+
+- `/api/v1/admin/ops` 요약에 전체 등록 기기 수와 비활성 기기 수 추가.
+- `/api/v1/admin/ops` 점검 항목에 `비활성 기기` 추가.
+- `/admin/ops` 화면에도 `비활성 기기` 점검 항목 추가.
+- smoke test가 운영 점검의 비활성 기기 항목과 summary 집계를 확인하도록 보강.
+- preflight가 admin/monitor/smoke의 비활성 기기 점검 연결을 확인하도록 보강.
+- README의 운영 점검 설명에 비활성 기기 항목 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 비활성 기기 집계 문구와 API/화면/smoke/preflight/README 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (155/155 checks)` 출력 확인.
+
 ## 2026-05-19 02:22 KST
 
 ### 다음 작업 시작

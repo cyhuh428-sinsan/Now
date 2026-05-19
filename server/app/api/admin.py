@@ -373,6 +373,8 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     inactive_users = 0
     users_without_seen = 0
     users_without_token = 0
+    device_total = 0
+    inactive_devices = 0
     failed_jobs = 0
     queued_jobs = 0
     running_jobs = 0
@@ -402,6 +404,13 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
                 select(func.count())
                 .select_from(UserAccount)
                 .where(UserAccount.access_token_hash.is_(None))
+            )
+            or 0
+        )
+        device_total = db.scalar(select(func.count()).select_from(UserDevice)) or 0
+        inactive_devices = (
+            db.scalar(
+                select(func.count()).select_from(UserDevice).where(UserDevice.is_active == 0)
             )
             or 0
         )
@@ -490,6 +499,13 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     )
     checks.append(
         {
+            "name": "비활성 기기",
+            "status": "info" if inactive_devices else "ok",
+            "message": f"등록 기기 {device_total}개, 비활성 기기 {inactive_devices}개",
+        }
+    )
+    checks.append(
+        {
             "name": "삭제 표시 메모",
             "status": "info" if deleted_notes else "ok",
             "message": f"삭제 표시 메모 {deleted_notes}건",
@@ -520,6 +536,8 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             "inactive_users": inactive_users,
             "users_without_seen": users_without_seen,
             "users_without_token": users_without_token,
+            "devices": device_total,
+            "inactive_devices": inactive_devices,
             "failed_analysis_jobs": failed_jobs,
             "queued_analysis_jobs": queued_jobs,
             "running_analysis_jobs": running_jobs,
