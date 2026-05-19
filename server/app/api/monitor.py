@@ -2171,6 +2171,10 @@ def _admin_users_html(request: Request) -> str:
     status_filter = query.get("status") or "all"
     group_filter = (query.get("group") or "").strip()
     token_filter = query.get("token") or "all"
+    export_query = _user_export_query(search, status_filter, group_filter, token_filter)
+    export_url = "/api/v1/admin/export/users"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -2428,7 +2432,7 @@ def _admin_users_html(request: Request) -> str:
     </div>
 
     <section>
-      <div class="section-head"><span>사용자 목록</span><a href="/admin/users/new">사용자 추가</a></div>
+      <div class="section-head"><span>사용자 목록</span><span><a href="{escape(export_url, quote=True)}">현재 조건 JSON</a> · <a href="/admin/users/new">사용자 추가</a></span></div>
       <form class="filter-form" method="get" action="/admin/users">
         <input type="search" name="q" value="{escape(search, quote=True)}" placeholder="Owner, 이메일, 표시 이름 검색">
         <select name="status">
@@ -2524,6 +2528,19 @@ def _user_token_options(selected: str) -> str:
         f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
         for value, label in options
     )
+
+
+def _user_export_query(search: str, status_filter: str, group_filter: str, token_filter: str) -> str:
+    params = {}
+    if search:
+        params["q"] = search
+    if status_filter in {"active", "inactive", "never_seen"}:
+        params["status"] = status_filter
+    if group_filter:
+        params["group_name"] = group_filter
+    if token_filter in {"issued", "missing"}:
+        params["token"] = token_filter
+    return urlencode(params)
 
 
 def _simple_badge(status: str, label: str) -> str:
