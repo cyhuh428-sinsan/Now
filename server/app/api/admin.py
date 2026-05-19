@@ -655,7 +655,7 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
     ]
 
     items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
-    required_sections = ["notes", "recordings", "users", "analysis_jobs", "sync_logs"]
+    required_sections = ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]
     missing_sections = [section for section in required_sections if not isinstance(items.get(section), list)]
     checks.append(
         _verify_check(

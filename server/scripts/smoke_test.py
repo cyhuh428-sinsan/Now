@@ -436,6 +436,32 @@ def main() -> None:
         },
     )
 
+    missing_devices_backup = json.loads(json.dumps(full_backup))
+    missing_devices_backup.get("items", {}).pop("devices", None)
+    missing_devices_backup.pop("content_sha256", None)
+    missing_devices_backup["content_sha256"] = hashlib.sha256(
+        json.dumps(
+            missing_devices_backup,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        ).encode("utf-8")
+    ).hexdigest()
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/export/verify",
+        args.token,
+        {"backup": missing_devices_backup},
+    )
+    item_check = next((item for item in data.get("checks", []) if item.get("name") == "백업 항목"), {})
+    require(data.get("status") == "bad", "기기 항목이 빠진 백업 검증이 실패 상태를 반환하지 않았습니다")
+    require("devices" in str(item_check.get("actual", "")), "기기 누락 백업 검증이 devices 누락을 표시하지 않습니다")
+    print(
+        "POST /api/v1/admin/export/verify(missing-devices):",
+        status,
+        {"status": data.get("status"), "item_check": item_check.get("actual")},
+    )
+
     status, data = request(
         "POST",
         f"{base_url}/api/v1/admin/export/verify",
