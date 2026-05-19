@@ -3,6 +3,23 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 00:49 KST
+
+### 다음 작업 시작
+
+- README smoke 옵션 문서화 preflight 보강.
+
+### 구현 내용
+
+- preflight가 README의 `--timeout`, `--ready-retries`, `--ready-delay` 안내 포함 여부를 확인하도록 보강.
+- DEPLOY뿐 아니라 README 기준 smoke 옵션 문서화도 회귀 방지.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `rg`로 README와 preflight의 smoke 옵션 안내 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (121/121 checks)` 출력 확인.
+
 ## 2026-05-19 00:36 KST
 
 ### 다음 작업 시작
