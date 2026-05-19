@@ -779,3 +779,6 @@ if __name__ == "__main__":
     except urllib.error.URLError as e:
         print(f"SMOKE TEST CONNECTION FAILED: {e.reason}")
         raise
+    except json.JSONDecodeError as e:
+        print(f"SMOKE TEST JSON FAILED: {e}")
+        raise
