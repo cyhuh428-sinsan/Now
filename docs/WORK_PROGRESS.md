@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 00:47 KST
+
+### 다음 작업 시작
+
+- 전체 백업 검증의 기기 섹션 필수 확인 보강.
+
+### 구현 내용
+
+- 전체 백업 검증 API의 필수 항목 목록에 `devices` 추가.
+- smoke test가 `devices` 섹션이 빠진 백업을 `bad`로 판정하고 누락 항목에 `devices`를 표시하는지 확인하도록 보강.
+- preflight가 백업 검증의 `devices` 필수 항목과 smoke test의 누락 검증을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/smoke/preflight 문법 확인 통과.
+- `rg`로 `devices` 필수 섹션, smoke 누락 검증, preflight 확인 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 `devices` 섹션이 빠진 백업이 `bad`가 되고 `백업 항목` check의 actual에 `devices`가 표시되는 것 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (174/174 checks)` 출력 확인.
+
 ## 2026-05-20 00:34 KST
 
 ### 다음 작업 시작
