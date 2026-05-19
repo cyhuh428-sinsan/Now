@@ -74,6 +74,8 @@ def main() -> None:
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
+    user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
+    user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -175,6 +177,8 @@ def main() -> None:
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
+    check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
+    check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -223,6 +227,25 @@ def main() -> None:
                 ("status_counts.bad=0", "Admin ops covers backup status count target", "status_counts.bad=0"),
                 ("공용 서버 기기 등록", "Admin ops covers public device registration", "public device registration"),
                 ("공용 서버 데이터 격리", "Admin ops covers public data isolation", "public data isolation"),
+            ],
+            failures,
+        )
+    if user_accounts_service_path.exists():
+        user_accounts_source = user_accounts_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            user_accounts_source,
+            [
+                ("is_active=1", "Auto-created users are active", "new users start active"),
+            ],
+            failures,
+        )
+    if user_devices_service_path.exists():
+        user_devices_source = user_devices_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            user_devices_source,
+            [
+                ("is_active=1", "Auto-created devices are active", "new devices start active"),
+                ("device inactive", "Inactive devices are rejected", "device inactive"),
             ],
             failures,
         )
@@ -352,8 +375,9 @@ def main() -> None:
                 ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
                 ("도움말 화면에 공용 서버 기기 등록 점검 안내", "Smoke checks help page public device guidance", "help page public device"),
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
-                ("기기 관리 화면에 읽기 전용 안내", "Smoke checks devices read-only guidance", "devices read-only guidance"),
-                ("기기 관리 화면에 등록/해제 미구현 안내", "Smoke checks devices registration gap guidance", "devices registration gap"),
+                ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
+                ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
+                ("비활성 기기 동기화 차단", "Smoke checks inactive device blocking", "inactive device blocking"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
                 ("NowNote server smoke test passed", "Smoke prints pass summary", "smoke passed summary"),

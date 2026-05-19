@@ -10,7 +10,7 @@ from app.models.note import Note
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
 from app.services.note_sync import list_changed_notes, upsert_note as save_note
 from app.services.user_accounts import require_user_api_access
-from app.services.user_devices import touch_user_device
+from app.services.user_devices import require_active_user_device
 
 router = APIRouter(
     prefix="/api/v1/notes",
@@ -43,7 +43,7 @@ def upsert_note(
     db: Session = Depends(get_db),
 ) -> Note:
     require_user_api_access(db, owner_id=payload.owner_id, access_token=user_token)
-    touch_user_device(db, owner_id=payload.owner_id, device_id=payload.device_id)
+    require_active_user_device(db, owner_id=payload.owner_id, device_id=payload.device_id)
     note = save_note(payload, db)
     db.commit()
     db.refresh(note)
@@ -104,7 +104,7 @@ def sync_notes(
     for owner_id in owner_ids:
         require_user_api_access(db, owner_id=owner_id, access_token=user_token)
     for item in payload.notes:
-        touch_user_device(db, owner_id=item.owner_id, device_id=item.device_id)
+        require_active_user_device(db, owner_id=item.owner_id, device_id=item.device_id)
         saved.append(save_note(item, db))
     db.commit()
     for note in saved:

@@ -25,7 +25,7 @@ def touch_user_activity(
     now = seen_at or datetime.utcnow()
     user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
     if user is None:
-        user = UserAccount(owner_id=owner_id, last_seen_at=now)
+        user = UserAccount(owner_id=owner_id, is_active=1, last_seen_at=now)
         db.add(user)
         return user
 

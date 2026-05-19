@@ -243,8 +243,9 @@ def main() -> None:
             require("status_counts.bad=0" in text, "배포 체크리스트 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("/admin/export" in text and "/admin/recovery" in text, "배포 체크리스트 화면에 백업/복구 화면 안내가 없습니다")
         if path == "/admin/devices":
-            require("읽기 전용 화면" in text, "기기 관리 화면에 읽기 전용 안내가 없습니다")
-            require("기기 등록/해제 기능은 아직 별도 구현 전" in text, "기기 관리 화면에 등록/해제 미구현 안내가 없습니다")
+            require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
+            require("비활성 기기는 동기화" in text, "기기 관리 화면에 비활성 기기 차단 안내가 없습니다")
+            require("/admin/devices/status" in text, "기기 관리 화면에 상태 변경 폼이 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
@@ -557,6 +558,37 @@ def main() -> None:
             "pulled": len(data.get("pulled_notes", [])),
             "server_time": data.get("server_time"),
         },
+    )
+
+    blocked_device_payload = {
+        "owner_id": "local_user",
+        "device_id": "smoke_blocked",
+        "updated_after": None,
+        "include_deleted": True,
+        "notes": [],
+    }
+    status, data = request("POST", f"{base_url}/api/v1/sync", args.token, blocked_device_payload)
+    require(status == 200, "차단 검증용 기기 등록 동기화가 실패했습니다")
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/admin/devices/local_user/smoke_blocked",
+        args.token,
+        {"is_active": False},
+    )
+    require(data.get("device", {}).get("is_active") == 0, "기기 비활성화 API가 상태를 반영하지 않았습니다")
+    status, data = request_error("POST", f"{base_url}/api/v1/sync", args.token, blocked_device_payload)
+    require(status == 403 and data.get("detail") == "device inactive", "비활성 기기 동기화 차단이 동작하지 않습니다")
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/admin/devices/local_user/smoke_blocked",
+        args.token,
+        {"is_active": True},
+    )
+    require(data.get("device", {}).get("is_active") == 1, "기기 재활성화 API가 상태를 반영하지 않았습니다")
+    print(
+        "PATCH /api/v1/admin/devices/{owner_id}/{device_id}:",
+        status,
+        {"device_id": "smoke_blocked", "reactivated": True},
     )
 
     if USER_TOKEN:
