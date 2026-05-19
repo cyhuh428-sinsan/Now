@@ -49,13 +49,26 @@ class UserDeviceUpdate(BaseModel):
 @router.get("/export/notes")
 def export_notes(
     owner_id: str | None = Query(default=None),
+    note_type: str | None = Query(default=None),
+    source: str | None = Query(default=None),
+    q: str | None = Query(default=None),
+    deleted: str | None = Query(default=None),
     include_deleted: bool = Query(default=True),
     db: Session = Depends(get_db),
 ) -> dict:
     stmt = select(Note).order_by(Note.updated_at.desc(), Note.id.desc())
     if owner_id:
         stmt = stmt.where(Note.owner_id == owner_id)
-    if not include_deleted:
+    if note_type:
+        stmt = stmt.where(Note.note_type == note_type)
+    if source:
+        stmt = stmt.where(Note.source == source)
+    if q and q.strip():
+        search = f"%{q.strip()}%"
+        stmt = stmt.where((Note.title.ilike(search)) | (Note.content.ilike(search)))
+    if deleted == "only":
+        stmt = stmt.where(Note.deleted_at.is_not(None))
+    elif not include_deleted:
         stmt = stmt.where(Note.deleted_at.is_(None))
     return _export_payload("notes", list(db.scalars(stmt).all()))
 
