@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 01:08 KST
+
+### 다음 작업 시작
+
+- 공용 서버 preflight 실패 항목 보강.
+
+### 구현 내용
+
+- README의 공용 서버 오픈 전 실패 항목에 사용자별 기기 등록/해제와 사용자별 데이터 접근 격리 검증 추가.
+- DEPLOY의 `--public-server` 의도적 실패 설명에 기기 등록/해제와 데이터 격리 항목 추가.
+- preflight가 README/DEPLOY의 공용 서버 기기 등록/데이터 격리 안내 포함 여부를 확인하도록 보강.
+- `--public-server` 실행 시 사용자별 기기 등록/해제, 사용자별 데이터 접근 격리 검증을 별도 실패 항목으로 표시하도록 추가.
+
+### 검증
+
+- `py_compile`로 `preflight.py` 확인 통과.
+- `rg`로 README/DEPLOY/preflight의 기기 등록/데이터 격리 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (134/134 checks)` 출력 확인.
+- 공용 서버 preflight 실행 결과 의도적으로 `Preflight failed (134/139 checks)` 출력 확인.
+- 공용 서버 실패 항목에 `Public server device registration`, `Public server data isolation` 포함 확인.
+
 ## 2026-05-19 00:58 KST
 
 ### 다음 작업 시작

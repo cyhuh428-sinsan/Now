@@ -160,6 +160,8 @@ def main() -> None:
                 ("--timeout 초", "README explains smoke timeout option", "smoke timeout"),
                 ("--ready-retries 횟수", "README explains smoke readiness retries", "smoke readiness retries"),
                 ("--ready-delay 초", "README explains smoke readiness delay", "smoke readiness delay"),
+                ("사용자별 기기 등록/해제", "README documents public device registration gap", "device registration"),
+                ("사용자별 데이터 접근 격리 검증", "README documents public data isolation gap", "data isolation"),
                 ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
                 ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
                 ("비활성 사용자 차단", "README explains smoke inactive user check", "smoke inactive user check"),
@@ -280,6 +282,8 @@ def main() -> None:
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("--timeout 30", "Deploy checklist covers smoke timeout option", "smoke timeout"),
                 ("--ready-retries 10", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
+                ("사용자별 기기 등록/해제", "Deploy checklist covers public device registration gap", "device registration"),
+                ("사용자별 데이터 접근 격리", "Deploy checklist covers public data isolation gap", "data isolation"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Deploy checklist explains smoke HTTP failure summary", "smoke HTTP failure summary"),
@@ -361,6 +365,18 @@ def main() -> None:
             False,
             "Public server login flow",
             "User-token validation exists, but login UI and real two-factor challenge are not implemented yet",
+            failures,
+        )
+        check(
+            False,
+            "Public server device registration",
+            "User-specific device registration and revocation flow must be confirmed before public opening",
+            failures,
+        )
+        check(
+            False,
+            "Public server data isolation",
+            "User-specific data access isolation must be verified before public opening",
             failures,
         )
         check(

@@ -81,7 +81,9 @@ python3 scripts/preflight.py --public-server
 
 - `NOW_USER_TOKEN_REQUIRED=true` 설정
 - 사용자별 토큰 전달 UI 또는 로그인 화면
+- 사용자별 기기 등록/해제
 - 실제 2단계 인증 절차
+- 사용자별 데이터 접근 격리 검증
 - 공개 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인
 
 `.env` 예시:
