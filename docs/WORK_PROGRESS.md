@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 00:00 KST
+
+### 다음 작업 시작
+
+- 분석 관리 조건별 내보내기 추가.
+
+### 구현 내용
+
+- `/api/v1/admin/export/analysis-jobs`가 owner/status/job_type 필터를 받도록 보강.
+- `/admin/analysis`에 Owner ID, 상태, 작업 유형 필터 추가.
+- `/admin/analysis`에 현재 조건 JSON 링크 추가.
+- smoke test가 분석 관리 필터 화면과 조건별 분석 작업 내보내기를 확인하도록 보강.
+- preflight가 smoke test의 분석 관리 내보내기/필터 확인 문구를 검사하도록 보강.
+- README에 분석 작업 조건별 JSON 내보내기 안내 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 분석 export 필터와 현재 조건 JSON 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (161/161 checks)` 출력 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 owner/status/job_type 분석 작업 export 필터와 `/admin/analysis` 화면 필터 확인.
+
 ## 2026-05-19 03:12 KST
 
 ### 다음 작업 시작

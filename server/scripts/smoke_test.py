@@ -203,6 +203,9 @@ def main() -> None:
         "/admin",
         "/admin/notes",
         "/admin/recordings",
+        "/admin/analysis",
+        "/admin/analysis?status=queued",
+        "/admin/analysis?owner_id=local_user&job_type=summary",
         "/admin/recordings?owner_id=local_user",
         "/admin/recordings?device_id=smoke_test&transcript=without",
         "/admin/devices",
@@ -254,6 +257,9 @@ def main() -> None:
         if path.startswith("/admin/users"):
             require("현재 조건 JSON" in text, "사용자 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner, 이메일, 표시 이름 검색" in text, "사용자 관리 화면에 검색 필터가 없습니다")
+        if path.startswith("/admin/analysis"):
+            require("현재 조건 JSON" in text, "분석 관리 화면에 현재 조건 JSON 링크가 없습니다")
+            require("Owner ID" in text and "작업 유형" in text, "분석 관리 화면에 필터가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
@@ -326,6 +332,18 @@ def main() -> None:
     require(data.get("name") == "users", "사용자 export 이름이 users가 아닙니다")
     print(
         "GET /api/v1/admin/export/users(filtered):",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/analysis-jobs?status=queued",
+        args.token,
+    )
+    require(data.get("name") == "analysis_jobs", "분석 작업 export 이름이 analysis_jobs가 아닙니다")
+    print(
+        "GET /api/v1/admin/export/analysis-jobs(filtered):",
         status,
         {"count": data.get("count"), "name": data.get("name")},
     )

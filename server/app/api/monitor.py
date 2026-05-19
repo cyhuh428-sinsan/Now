@@ -47,8 +47,11 @@ def admin(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/analysis", include_in_schema=False)
-def admin_analysis(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_analysis_html())
+def admin_analysis(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_analysis_html(request))
 
 
 @router.get("/admin/notes", include_in_schema=False)
@@ -377,6 +380,34 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
       padding: 16px 18px;
       border-bottom: 1px solid var(--line);
       font-weight: 700;
+    }}
+    .filter-form {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(150px, 1fr)) auto;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+    }}
+    .filter-form input,
+    .filter-form select {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 13px;
+    }}
+    .filter-form button {{
+      min-height: 36px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 750;
+      cursor: pointer;
     }}
     table {{
       width: 100%;
@@ -823,11 +854,19 @@ def _recent_job_rows(jobs: list[AnalysisJob]) -> str:
     )
 
 
-def _admin_analysis_html() -> str:
+def _admin_analysis_html(request: Request) -> str:
     error_message = ""
     status_counts: dict[str, int] = {}
     job_type_counts: dict[str, int] = {}
     recent_jobs: list[AnalysisJob] = []
+    query = request.query_params
+    owner_filter = (query.get("owner_id") or "").strip()
+    status_filter = query.get("status") or "all"
+    job_type_filter = (query.get("job_type") or "").strip()
+    export_query = _analysis_export_query(owner_filter, status_filter, job_type_filter)
+    export_url = "/api/v1/admin/export/analysis-jobs"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -844,11 +883,14 @@ def _admin_analysis_html() -> str:
             ).all()
             status_counts = {status_name: count for status_name, count in status_rows}
             job_type_counts = {job_type: count for job_type, count in type_rows}
-            recent_jobs = list(
-                db.scalars(
-                    select(AnalysisJob).order_by(AnalysisJob.created_at.desc()).limit(50)
-                ).all()
-            )
+            stmt = select(AnalysisJob)
+            if owner_filter:
+                stmt = stmt.where(AnalysisJob.owner_id == owner_filter)
+            if status_filter != "all":
+                stmt = stmt.where(AnalysisJob.status == status_filter)
+            if job_type_filter:
+                stmt = stmt.where(AnalysisJob.job_type == job_type_filter)
+            recent_jobs = list(db.scalars(stmt.order_by(AnalysisJob.created_at.desc()).limit(50)).all())
     except Exception as exc:
         error_message = str(exc)
 
@@ -1007,6 +1049,7 @@ def _admin_analysis_html() -> str:
     @media (max-width: 620px) {{
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
+      .filter-form {{ grid-template-columns: 1fr; }}
       th, td {{ padding: 12px; }}
     }}
   </style>
@@ -1060,8 +1103,16 @@ def _admin_analysis_html() -> str:
     <section>
       <div class="section-head">
         <span>최근 분석 작업 상세</span>
-        <span class="sub">최근 50건 · 원문은 앞부분만 표시</span>
+        <a href="{escape(export_url, quote=True)}">현재 조건 JSON</a>
       </div>
+      <form class="filter-form" method="get" action="/admin/analysis">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID">
+        <select name="status">
+          {_analysis_status_options(status_filter)}
+        </select>
+        <input type="text" name="job_type" value="{escape(job_type_filter, quote=True)}" placeholder="작업 유형">
+        <button type="submit">필터 적용</button>
+      </form>
       <table>
         <tr>
           <th>ID</th>
@@ -1089,6 +1140,31 @@ def _analysis_count_rows(counts: dict[str, int]) -> str:
         f"<tr><td>{escape(name)}</td><td>{count}</td></tr>"
         for name, count in counts.items()
     )
+
+
+def _analysis_status_options(selected: str) -> str:
+    options = [
+        ("all", "상태 전체"),
+        ("queued", "queued"),
+        ("running", "running"),
+        ("done", "done"),
+        ("failed", "failed"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
+
+
+def _analysis_export_query(owner_id: str, status_filter: str, job_type: str) -> str:
+    params = {}
+    if owner_id:
+        params["owner_id"] = owner_id
+    if status_filter != "all":
+        params["status"] = status_filter
+    if job_type:
+        params["job_type"] = job_type
+    return urlencode(params)
 
 
 def _analysis_job_detail_rows(jobs: list[AnalysisJob]) -> str:

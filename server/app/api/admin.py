@@ -82,11 +82,17 @@ def export_recordings(
 @router.get("/export/analysis-jobs")
 def export_analysis_jobs(
     owner_id: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    job_type: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ) -> dict:
     stmt = select(AnalysisJob).order_by(AnalysisJob.updated_at.desc(), AnalysisJob.id.desc())
     if owner_id:
         stmt = stmt.where(AnalysisJob.owner_id == owner_id)
+    if status_filter:
+        stmt = stmt.where(AnalysisJob.status == status_filter)
+    if job_type:
+        stmt = stmt.where(AnalysisJob.job_type == job_type)
     return _export_payload("analysis_jobs", list(db.scalars(stmt).all()))
 
 

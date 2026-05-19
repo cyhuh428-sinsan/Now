@@ -385,6 +385,8 @@ def main() -> None:
                 ("기기 관리 화면에 owner/device 필터", "Smoke checks devices filters", "devices filters"),
                 ("사용자 관리 화면에 현재 조건 JSON 링크", "Smoke checks users export link", "users export link"),
                 ("사용자 관리 화면에 검색 필터", "Smoke checks users search filter", "users search filter"),
+                ("분석 관리 화면에 현재 조건 JSON 링크", "Smoke checks analysis export link", "analysis export link"),
+                ("분석 관리 화면에 필터", "Smoke checks analysis filters", "analysis filters"),
                 ("비활성 기기 동기화 차단", "Smoke checks inactive device blocking", "inactive device blocking"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
