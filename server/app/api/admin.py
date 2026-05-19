@@ -118,12 +118,25 @@ def export_users(db: Session = Depends(get_db)) -> dict:
 
 
 @router.get("/export/devices")
-def export_devices(db: Session = Depends(get_db)) -> dict:
+def export_devices(
+    owner_id: str | None = Query(default=None),
+    device_id: str | None = Query(default=None),
+    status_filter: str | None = Query(default=None, alias="status"),
+    db: Session = Depends(get_db),
+) -> dict:
     stmt = select(UserDevice).order_by(
         UserDevice.last_seen_at.desc().nullslast(),
         UserDevice.updated_at.desc(),
         UserDevice.id.desc(),
     )
+    if owner_id:
+        stmt = stmt.where(UserDevice.owner_id == owner_id)
+    if device_id:
+        stmt = stmt.where(UserDevice.device_id == device_id)
+    if status_filter == "active":
+        stmt = stmt.where(UserDevice.is_active == 1)
+    elif status_filter == "inactive":
+        stmt = stmt.where(UserDevice.is_active == 0)
     return _export_payload("devices", list(db.scalars(stmt).all()))
 
 

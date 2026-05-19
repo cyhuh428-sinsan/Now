@@ -206,6 +206,9 @@ def main() -> None:
         "/admin/recordings?owner_id=local_user",
         "/admin/recordings?device_id=smoke_test&transcript=without",
         "/admin/devices",
+        "/admin/devices?owner_id=local_user",
+        "/admin/devices?device_id=smoke_test&status=active",
+        "/admin/devices?status=inactive",
         "/admin/sync",
         "/admin/sync?owner_id=local_user",
         "/admin/sync?device_id=smoke_test&include_deleted=yes",
@@ -242,10 +245,12 @@ def main() -> None:
             require("백업/복구 절차" in text, "배포 체크리스트 화면에 운영 점검 백업/복구 항목 안내가 없습니다")
             require("status_counts.bad=0" in text, "배포 체크리스트 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("/admin/export" in text and "/admin/recovery" in text, "배포 체크리스트 화면에 백업/복구 화면 안내가 없습니다")
-        if path == "/admin/devices":
+        if path.startswith("/admin/devices"):
             require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
             require("비활성 기기는 동기화" in text, "기기 관리 화면에 비활성 기기 차단 안내가 없습니다")
             require("/admin/devices/status" in text, "기기 관리 화면에 상태 변경 폼이 없습니다")
+            require("현재 조건 JSON" in text, "기기 관리 화면에 현재 조건 JSON 링크가 없습니다")
+            require("Owner ID" in text and "Device ID" in text, "기기 관리 화면에 owner/device 필터가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
@@ -300,7 +305,7 @@ def main() -> None:
 
     status, data = request(
         "GET",
-        f"{base_url}/api/v1/admin/export/devices",
+        f"{base_url}/api/v1/admin/export/devices?status=active",
         args.token,
     )
     require(data.get("name") == "devices", "기기 export 이름이 devices가 아닙니다")

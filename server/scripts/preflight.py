@@ -381,6 +381,8 @@ def main() -> None:
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
+                ("기기 관리 화면에 현재 조건 JSON 링크", "Smoke checks devices export link", "devices export link"),
+                ("기기 관리 화면에 owner/device 필터", "Smoke checks devices filters", "devices filters"),
                 ("비활성 기기 동기화 차단", "Smoke checks inactive device blocking", "inactive device blocking"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
