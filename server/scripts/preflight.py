@@ -154,6 +154,7 @@ def main() -> None:
                 ("SMOKE TEST FAILED", "README explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "README explains smoke HTTP failure summary", "smoke HTTP failure summary"),
                 ("SMOKE TEST CONNECTION FAILED", "README explains smoke connection failure summary", "smoke connection failure summary"),
+                ("SMOKE TEST JSON FAILED", "README explains smoke JSON failure summary", "smoke JSON failure summary"),
                 ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
                 ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
                 ("비활성 사용자 차단", "README explains smoke inactive user check", "smoke inactive user check"),
@@ -275,6 +276,7 @@ def main() -> None:
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Deploy checklist explains smoke HTTP failure summary", "smoke HTTP failure summary"),
                 ("SMOKE TEST CONNECTION FAILED", "Deploy checklist explains smoke connection failure summary", "smoke connection failure summary"),
+                ("SMOKE TEST JSON FAILED", "Deploy checklist explains smoke JSON failure summary", "smoke JSON failure summary"),
                 ("백업/복구 절차", "Deploy checklist covers backup recovery ops check", "backup recovery ops"),
                 ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
@@ -314,6 +316,7 @@ def main() -> None:
                 ("SMOKE TEST FAILED", "Smoke prints failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Smoke prints HTTP failure summary", "smoke HTTP failure summary"),
                 ("SMOKE TEST CONNECTION FAILED", "Smoke prints connection failure summary", "smoke connection failure summary"),
+                ("SMOKE TEST JSON FAILED", "Smoke prints JSON failure summary", "smoke JSON failure summary"),
             ],
             failures,
         )
