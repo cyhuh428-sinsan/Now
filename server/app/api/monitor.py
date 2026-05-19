@@ -3159,6 +3159,16 @@ def _public_server_readiness_checks() -> list[dict[str, str]]:
             "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
         },
         {
+            "name": "공용 서버 기기 등록",
+            "status": "info",
+            "message": "정식 오픈 전 사용자별 기기 등록/해제 흐름 확인 필요",
+        },
+        {
+            "name": "공용 서버 데이터 격리",
+            "status": "info",
+            "message": "정식 오픈 전 사용자별 데이터 접근 격리 검증 필요",
+        },
+        {
             "name": "공개 운영 환경",
             "status": "info",
             "message": "정식 오픈 전 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인 필요",
@@ -3969,7 +3979,7 @@ def _admin_help_html() -> str:
           <li>오픈 전에는 사용자별 로그인 또는 사용자별 API 토큰 정책을 확정해야 합니다.</li>
           <li>운영자는 <code>/admin/users</code>에서 사용자 활성 상태와 최근 접속 시간을 확인합니다.</li>
           <li>오픈 전에는 API 토큰, DB 비밀번호, LLM 제공자 상태를 <code>/admin/ops</code>에서 점검합니다.</li>
-          <li><code>/admin/ops</code>는 공용 서버 로그인 화면, 실제 2단계 인증, 공개 운영 환경도 정보성 점검으로 보여줍니다.</li>
+          <li><code>/admin/ops</code>는 공용 서버 로그인 화면, 실제 2단계 인증, 기기 등록, 데이터 격리, 공개 운영 환경도 정보성 점검으로 보여줍니다.</li>
           <li>민감 메모 암호화는 로그인 사용자 기능으로 단계적으로 연결합니다.</li>
         </ul>
       </section>

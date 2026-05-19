@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 01:20 KST
+
+### 다음 작업 시작
+
+- 운영 점검 화면의 공용 서버 미완성 항목 표시 보강.
+
+### 구현 내용
+
+- `/api/v1/admin/ops` 공용 서버 준비 점검에 `공용 서버 기기 등록`, `공용 서버 데이터 격리` 항목 추가.
+- `/admin/ops` HTML 운영 점검 화면에도 같은 항목이 표시되도록 추가.
+- smoke test가 운영 점검 화면/API에서 두 항목을 확인하도록 보강.
+- preflight가 admin/monitor/smoke 소스에 두 항목이 연결되어 있는지 확인하도록 보강.
+- README/DEPLOY의 운영 점검 설명에 기기 등록과 데이터 격리 항목 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 운영 점검/문서/smoke/preflight의 기기 등록/데이터 격리 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (140/140 checks)` 출력 확인.
+- 공용 서버 preflight 실행 결과 의도적으로 `Preflight failed (140/145 checks)` 출력 확인.
+
 ## 2026-05-19 01:08 KST
 
 ### 다음 작업 시작
