@@ -406,6 +406,7 @@ def main() -> None:
                 ("기기 관리 화면에 owner/device 필터", "Smoke checks devices filters", "devices filters"),
                 ("사용자 관리 화면에 현재 조건 JSON 링크", "Smoke checks users export link", "users export link"),
                 ("사용자 관리 화면에 검색 필터", "Smoke checks users search filter", "users search filter"),
+                ("user inactive로 차단", "Smoke checks inactive user detail", "inactive user detail"),
                 ("분석 관리 화면에 현재 조건 JSON 링크", "Smoke checks analysis export link", "analysis export link"),
                 ("분석 관리 화면에 필터", "Smoke checks analysis filters", "analysis filters"),
                 ("메모 관리 화면에 현재 조건 JSON 링크", "Smoke checks notes export link", "notes export link"),
