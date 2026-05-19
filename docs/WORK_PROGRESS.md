@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 01:36 KST
+
+### 다음 작업 시작
+
+- 사용자 토큰 필수 모드의 실패 사유 회귀 검증 보강.
+
+### 구현 내용
+
+- smoke test가 `/api/v1/server`의 `user_token_required` 값을 저장하도록 보강.
+- smoke test에 특정 요청에서 사용자 토큰 헤더를 명시적으로 넣거나 빼는 helper 추가.
+- `--issue-local-user-token`과 `NOW_USER_TOKEN_REQUIRED=true` 조합에서 토큰 없는 요청이 `user token required`로 차단되는지 확인.
+- 같은 조건에서 잘못된 사용자 토큰 요청이 `invalid user token`으로 차단되는지 확인.
+- preflight가 smoke test의 사용자 토큰 필수 모드 실패 사유 확인 문구를 검사하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `rg`로 요청별 사용자 토큰 helper, `user_token_required`, 실패 사유 확인 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient에서 `NOW_USER_TOKEN_REQUIRED=true` 기준:
+  - 토큰 없는 메모 조회가 401 `user token required`를 반환.
+  - 잘못된 토큰 메모 조회가 401 `invalid user token`을 반환.
+  - 정상 발급 토큰 메모 조회가 200을 반환.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (185/185 checks)` 출력 확인.
+
 ## 2026-05-20 01:24 KST
 
 ### 다음 작업 시작

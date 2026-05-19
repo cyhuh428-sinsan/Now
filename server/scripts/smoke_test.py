@@ -11,6 +11,7 @@ from uuid import uuid4
 
 
 USER_TOKEN: str | None = None
+USER_TOKEN_REQUIRED = False
 REQUEST_TIMEOUT = 10.0
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
@@ -24,6 +25,16 @@ def require(condition: bool, message: str) -> None:
 
 
 def request(method: str, url: str, token: str | None = None, data: dict | None = None):
+    return request_with_user_token(method, url, token, data, USER_TOKEN)
+
+
+def request_with_user_token(
+    method: str,
+    url: str,
+    token: str | None = None,
+    data: dict | None = None,
+    user_token: str | None = None,
+):
     body = None
     headers = {}
     if data is not None:
@@ -31,8 +42,8 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
         headers["Content-Type"] = "application/json"
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    if USER_TOKEN:
-        headers["X-Now-User-Token"] = USER_TOKEN
+    if user_token:
+        headers["X-Now-User-Token"] = user_token
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
@@ -42,6 +53,23 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
 def request_error(method: str, url: str, token: str | None = None, data: dict | None = None):
     try:
         return request(method, url, token, data)
+    except urllib.error.HTTPError as e:
+        text = e.read().decode("utf-8")
+        try:
+            return e.code, json.loads(text) if text else None
+        except json.JSONDecodeError:
+            return e.code, {"detail": text}
+
+
+def request_error_with_user_token(
+    method: str,
+    url: str,
+    token: str | None = None,
+    data: dict | None = None,
+    user_token: str | None = None,
+):
+    try:
+        return request_with_user_token(method, url, token, data, user_token)
     except urllib.error.HTTPError as e:
         text = e.read().decode("utf-8")
         try:
@@ -120,7 +148,7 @@ def wait_until_ready(base_url: str, token: str | None, retries: int, delay_secon
 
 
 def main() -> None:
-    global REQUEST_TIMEOUT, USER_TOKEN
+    global REQUEST_TIMEOUT, USER_TOKEN, USER_TOKEN_REQUIRED
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
     parser.add_argument("--token", default=None)
@@ -171,6 +199,7 @@ def main() -> None:
         status, data = request(method, f"{base_url}{path}", args.token, payload)
         if path == "/api/v1/server":
             require(data.get("api_version") == API_VERSION, "서버 API 버전이 올바르지 않습니다")
+            USER_TOKEN_REQUIRED = bool(data.get("user_token_required"))
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
             require(capabilities.get("recordings") is True, "서버 capability에 recordings가 없습니다")
@@ -559,6 +588,32 @@ def main() -> None:
             status,
             {"owner_id": data.get("owner_id"), "issued": bool(USER_TOKEN)},
         )
+        if USER_TOKEN_REQUIRED:
+            status, data = request_error_with_user_token(
+                "GET",
+                f"{base_url}/api/v1/notes?owner_id=local_user",
+                args.token,
+                user_token=None,
+            )
+            require(
+                status == 401 and data.get("detail") == "user token required",
+                "사용자 토큰 필수 모드에서 토큰 없는 요청이 user token required로 차단되지 않았습니다",
+            )
+            status, data = request_error_with_user_token(
+                "GET",
+                f"{base_url}/api/v1/notes?owner_id=local_user",
+                args.token,
+                user_token="invalid-smoke-user-token",
+            )
+            require(
+                status == 401 and data.get("detail") == "invalid user token",
+                "사용자 토큰 필수 모드에서 잘못된 토큰 요청이 invalid user token으로 차단되지 않았습니다",
+            )
+            print(
+                "GET /api/v1/notes(user_token_required_errors):",
+                status,
+                {"missing": "user token required", "invalid": data.get("detail")},
+            )
 
     status, data = request_error(
         "POST",
