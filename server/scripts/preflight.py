@@ -351,6 +351,8 @@ def main() -> None:
                 ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
                 ("도움말 화면에 공용 서버 기기 등록 점검 안내", "Smoke checks help page public device guidance", "help page public device"),
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
+                ("기기 관리 화면에 읽기 전용 안내", "Smoke checks devices read-only guidance", "devices read-only guidance"),
+                ("기기 관리 화면에 등록/해제 미구현 안내", "Smoke checks devices registration gap guidance", "devices registration gap"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
                 ("NowNote server smoke test passed", "Smoke prints pass summary", "smoke passed summary"),
