@@ -492,11 +492,21 @@ def main() -> None:
 
     status, data = request("GET", f"{base_url}/api/v1/admin/ops", args.token)
     ops_check_names = {item.get("name") for item in data.get("checks", [])}
+    public_auth_check = next(
+        (item for item in data.get("checks", []) if item.get("name") == "공용 서버 인증"),
+        {},
+    )
     require("공용 서버 로그인 화면" in ops_check_names, "운영 점검에 공용 서버 로그인 화면 항목이 없습니다")
     require("공용 서버 2단계 인증" in ops_check_names, "운영 점검에 공용 서버 2단계 인증 항목이 없습니다")
     require("공용 서버 기기 등록" in ops_check_names, "운영 점검에 공용 서버 기기 등록 항목이 없습니다")
     require("공용 서버 데이터 격리" in ops_check_names, "운영 점검에 공용 서버 데이터 격리 항목이 없습니다")
     require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
+    require("공용 서버 인증" in ops_check_names, "운영 점검에 공용 서버 인증 항목이 없습니다")
+    require("users_without_token" in data.get("summary", {}), "운영 점검 요약에 토큰 없는 사용자 집계가 없습니다")
+    require(
+        "사용자별 토큰" in str(public_auth_check.get("message", "")),
+        "운영 점검의 공용 서버 인증 메시지에 사용자별 토큰 기준이 없습니다",
+    )
     require("백업/복구 절차" in ops_check_names, "운영 점검에 백업/복구 절차 항목이 없습니다")
     require("비활성 기기" in ops_check_names, "운영 점검에 비활성 기기 항목이 없습니다")
     require("inactive_devices" in data.get("summary", {}), "운영 점검 요약에 비활성 기기 집계가 없습니다")
