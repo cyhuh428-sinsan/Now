@@ -322,6 +322,7 @@ def main() -> None:
             smoke,
             [
                 ("/api/v1/admin/export/all", "Smoke covers full backup export", "export/all"),
+                ("/api/v1/admin/export/devices", "Smoke covers device export", "export/devices"),
                 ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
                 ("--timeout", "Smoke supports request timeout option", "smoke timeout option"),
                 ("--ready-retries", "Smoke supports readiness retry option", "smoke readiness retries"),

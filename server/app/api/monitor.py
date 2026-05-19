@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from app.core.capabilities import TWO_FACTOR_AUTH_STATUS
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
+from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 
 router = APIRouter(tags=["monitor"])
@@ -1742,6 +1742,13 @@ def _admin_devices_html() -> str:
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
+            registered_rows = db.scalars(
+                select(UserDevice).order_by(
+                    UserDevice.last_seen_at.desc().nullslast(),
+                    UserDevice.updated_at.desc(),
+                    UserDevice.id.desc(),
+                )
+            ).all()
             note_rows = db.execute(
                 select(
                     Note.owner_id,
@@ -1763,24 +1770,48 @@ def _admin_devices_html() -> str:
                 )
                 .group_by(Recording.owner_id, Recording.device_id)
             ).all()
-            for owner_id, device_id, count, latest_at, client_latest_at in note_rows:
-                devices[(owner_id, device_id)] = {
-                    "owner_id": owner_id,
-                    "device_id": device_id,
-                    "note_count": count,
+            for device in registered_rows:
+                devices[(device.owner_id, device.device_id)] = {
+                    "owner_id": device.owner_id,
+                    "device_id": device.device_id,
+                    "device_status": "사용" if device.is_active else "비활성",
+                    "note_count": 0,
                     "recording_count": 0,
-                    "latest_note_at": latest_at,
-                    "latest_client_at": client_latest_at,
+                    "first_seen_at": device.first_seen_at,
+                    "last_seen_at": device.last_seen_at,
+                    "latest_note_at": None,
+                    "latest_client_at": None,
                     "latest_recording_at": None,
                 }
+            for owner_id, device_id, count, latest_at, client_latest_at in note_rows:
+                key = (owner_id, device_id)
+                if key not in devices:
+                    devices[key] = {
+                        "owner_id": owner_id,
+                        "device_id": device_id,
+                        "device_status": "흔적만 있음",
+                        "note_count": 0,
+                        "recording_count": 0,
+                        "first_seen_at": None,
+                        "last_seen_at": None,
+                        "latest_note_at": None,
+                        "latest_client_at": None,
+                        "latest_recording_at": None,
+                    }
+                devices[key]["note_count"] = count
+                devices[key]["latest_note_at"] = latest_at
+                devices[key]["latest_client_at"] = client_latest_at
             for owner_id, device_id, count, latest_at in recording_rows:
                 key = (owner_id, device_id)
                 if key not in devices:
                     devices[key] = {
                         "owner_id": owner_id,
                         "device_id": device_id,
+                        "device_status": "흔적만 있음",
                         "note_count": 0,
                         "recording_count": 0,
+                        "first_seen_at": None,
+                        "last_seen_at": None,
                         "latest_note_at": None,
                         "latest_client_at": None,
                         "latest_recording_at": None,
@@ -1793,7 +1824,7 @@ def _admin_devices_html() -> str:
     device_rows = sorted(
         devices.values(),
         key=lambda item: (
-            item["latest_note_at"] or item["latest_recording_at"] or datetime.min
+            item["last_seen_at"] or item["latest_note_at"] or item["latest_recording_at"] or datetime.min
         ),
         reverse=True,
     )
@@ -1957,8 +1988,11 @@ def _admin_devices_html() -> str:
         <tr>
           <th>Owner</th>
           <th>Device</th>
+          <th>상태</th>
           <th>메모</th>
           <th>녹음</th>
+          <th>처음 확인</th>
+          <th>마지막 확인</th>
           <th>마지막 메모 변경</th>
           <th>마지막 클라이언트 변경</th>
           <th>마지막 녹음 변경</th>
@@ -1975,13 +2009,16 @@ def _admin_devices_html() -> str:
 
 def _admin_device_rows(devices: list[dict[str, object]]) -> str:
     if not devices:
-        return '<tr><td colspan="7">연결된 기기 흔적이 없습니다.</td></tr>'
+        return '<tr><td colspan="10">연결된 기기 흔적이 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td class=\"mono\">{escape(str(device['owner_id']))}</td>"
         f"<td class=\"mono\">{escape(str(device['device_id']))}</td>"
+        f"<td>{escape(str(device['device_status']))}</td>"
         f"<td>{device['note_count']}</td>"
         f"<td>{device['recording_count']}</td>"
+        f"<td>{_format_datetime(device['first_seen_at'])}</td>"
+        f"<td>{_format_datetime(device['last_seen_at'])}</td>"
         f"<td>{_format_datetime(device['latest_note_at'])}</td>"
         f"<td>{_format_datetime(device['latest_client_at'])}</td>"
         f"<td>{_format_datetime(device['latest_recording_at'])}</td>"

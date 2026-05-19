@@ -14,7 +14,7 @@ from app.core.capabilities import API_VERSION, TWO_FACTOR_AUTH_STATUS
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
-from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount
+from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 
 router = APIRouter(
@@ -112,6 +112,16 @@ def export_users(db: Session = Depends(get_db)) -> dict:
     return _export_payload("users", list(db.scalars(stmt).all()))
 
 
+@router.get("/export/devices")
+def export_devices(db: Session = Depends(get_db)) -> dict:
+    stmt = select(UserDevice).order_by(
+        UserDevice.last_seen_at.desc().nullslast(),
+        UserDevice.updated_at.desc(),
+        UserDevice.id.desc(),
+    )
+    return _export_payload("devices", list(db.scalars(stmt).all()))
+
+
 @router.get("/export/all")
 def export_all(db: Session = Depends(get_db)) -> JSONResponse:
     settings = get_settings()
@@ -126,6 +136,15 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
                 UserAccount.last_seen_at.desc().nullslast(),
                 UserAccount.updated_at.desc(),
                 UserAccount.id.desc(),
+            )
+        ).all()
+    )
+    devices = list(
+        db.scalars(
+            select(UserDevice).order_by(
+                UserDevice.last_seen_at.desc().nullslast(),
+                UserDevice.updated_at.desc(),
+                UserDevice.id.desc(),
             )
         ).all()
     )
@@ -150,6 +169,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
             "notes": [_model_to_dict(row) for row in notes],
             "recordings": [_model_to_dict(row) for row in recordings],
             "users": [_model_to_dict(row) for row in users],
+            "devices": [_model_to_dict(row) for row in devices],
             "analysis_jobs": [_model_to_dict(row) for row in analysis_jobs],
             "sync_logs": [_model_to_dict(row) for row in sync_logs],
         },
@@ -573,7 +593,7 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
 def _backup_verify_summary(payload: dict) -> dict:
     items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
     summary = {}
-    for section in ["notes", "recordings", "users", "analysis_jobs", "sync_logs"]:
+    for section in ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]:
         value = items.get(section)
         summary[section] = len(value) if isinstance(value, list) else None
     summary["exported_at"] = payload.get("exported_at")
@@ -623,6 +643,7 @@ def _export_summary_counts(db: Session) -> dict:
         or 0
     )
     users = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+    devices = db.scalar(select(func.count()).select_from(UserDevice)) or 0
     users_with_token = (
         db.scalar(
             select(func.count())
@@ -641,9 +662,10 @@ def _export_summary_counts(db: Session) -> dict:
         "recordings_without_transcript": recordings_without_transcript,
         "users": users,
         "users_with_token": users_with_token,
+        "devices": devices,
         "analysis_jobs": analysis_jobs,
         "sync_logs": sync_logs,
-        "total_export_items": note_total + recordings + users + analysis_jobs + sync_logs,
+        "total_export_items": note_total + recordings + users + devices + analysis_jobs + sync_logs,
     }
 
 

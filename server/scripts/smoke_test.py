@@ -299,6 +299,18 @@ def main() -> None:
 
     status, data = request(
         "GET",
+        f"{base_url}/api/v1/admin/export/devices",
+        args.token,
+    )
+    require(data.get("name") == "devices", "기기 export 이름이 devices가 아닙니다")
+    print(
+        "GET /api/v1/admin/export/devices:",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
         f"{base_url}/api/v1/admin/export/summary",
         args.token,
     )
@@ -340,6 +352,7 @@ def main() -> None:
     ).hexdigest()
     require(checksum == recalculated_checksum, "전체 백업 체크섬이 본문 내용과 일치하지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
+    require("devices" in data.get("items", {}), "전체 백업에 기기 항목이 없습니다")
     full_backup = data
     print(
         "GET /api/v1/admin/export/all:",
@@ -348,6 +361,7 @@ def main() -> None:
             "notes": len(data.get("items", {}).get("notes", [])),
             "recordings": len(data.get("items", {}).get("recordings", [])),
             "users": len(data.get("items", {}).get("users", [])),
+            "devices": len(data.get("items", {}).get("devices", [])),
         },
     )
 
@@ -359,6 +373,7 @@ def main() -> None:
     )
     require(data.get("status") == "ok", "전체 백업 검증 API가 실패했습니다")
     require("notes" in data.get("summary", {}), "전체 백업 검증 요약에 메모 건수가 없습니다")
+    require("devices" in data.get("summary", {}), "전체 백업 검증 요약에 기기 건수가 없습니다")
     require(data.get("status_counts", {}).get("bad") == 0, "전체 백업 검증 결과에 bad가 있습니다")
     require(data.get("status_counts", {}).get("ok", 0) >= 1, "전체 백업 검증 결과의 ok 집계가 없습니다")
     print(

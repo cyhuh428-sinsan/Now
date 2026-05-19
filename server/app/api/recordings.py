@@ -8,6 +8,7 @@ from app.models.note import Recording
 from app.schemas.note import RecordingOut
 from app.services.recording_storage import save_recording_file
 from app.services.user_accounts import require_user_api_access
+from app.services.user_devices import touch_user_device
 
 router = APIRouter(
     prefix="/api/v1/recordings",
@@ -44,6 +45,7 @@ async def upload_recording(
     db: Session = Depends(get_db),
 ) -> Recording:
     require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    touch_user_device(db, owner_id=owner_id, device_id=device_id)
     file_name, storage_path = await save_recording_file(
         owner_id=owner_id,
         device_id=device_id,
