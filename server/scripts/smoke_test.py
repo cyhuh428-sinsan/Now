@@ -252,6 +252,8 @@ def main() -> None:
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
             require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
+            require("기기 등록" in text, "도움말 화면에 공용 서버 기기 등록 점검 안내가 없습니다")
+            require("데이터 격리" in text, "도움말 화면에 공용 서버 데이터 격리 점검 안내가 없습니다")
             require("/admin/deploy" in text, "도움말 화면에 배포 체크리스트 링크가 없습니다")
             require("배포 직후" in text and "/admin/export" in text, "도움말 화면에 배포 후 백업 확인 안내가 없습니다")
             require("bad" in text and "warn" in text and "/admin/ops" in text, "도움말 화면에 복구 검증 결과 대응 안내가 없습니다")
