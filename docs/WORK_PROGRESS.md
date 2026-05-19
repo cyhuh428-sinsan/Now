@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 01:24 KST
+
+### 다음 작업 시작
+
+- 비활성 사용자 차단 사유 회귀 검증 보강.
+
+### 구현 내용
+
+- smoke test가 비활성 사용자의 동기화 요청을 403뿐 아니라 `user inactive` 사유로 차단하는지 확인하도록 보강.
+- preflight가 smoke test의 비활성 사용자 차단 사유 확인 문구를 검사하도록 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `rg`로 smoke/preflight의 `user inactive` 차단 사유 확인 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 비활성 사용자 동기화 요청이 403과 `user inactive` detail을 반환하는 것 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (182/182 checks)` 출력 확인.
+
 ## 2026-05-20 01:12 KST
 
 ### 다음 작업 시작

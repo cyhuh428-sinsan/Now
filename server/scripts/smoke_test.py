@@ -935,7 +935,10 @@ def main() -> None:
     )
 
     status, data = request_error("POST", f"{base_url}/api/v1/sync", args.token, sync_payload)
-    require(status == 403, "비활성 사용자의 동기화 요청이 차단되지 않았습니다")
+    require(
+        status == 403 and data.get("detail") == "user inactive",
+        "비활성 사용자의 동기화 요청이 user inactive로 차단되지 않았습니다",
+    )
     print(
         "POST /api/v1/sync(inactive_user):",
         status,
