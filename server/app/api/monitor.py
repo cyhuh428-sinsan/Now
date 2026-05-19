@@ -65,8 +65,11 @@ def admin_recordings(
 
 
 @router.get("/admin/devices", include_in_schema=False)
-def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_devices_html())
+def admin_devices(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_devices_html(request))
 
 
 @router.post("/admin/devices/status", include_in_schema=False)
@@ -1792,9 +1795,17 @@ def _recording_export_query(owner_id: str, device_id: str, transcript_filter: st
     return urlencode(params)
 
 
-def _admin_devices_html() -> str:
+def _admin_devices_html(request: Request) -> str:
     error_message = ""
     devices: dict[tuple[str, str], dict[str, object]] = {}
+    query = request.query_params
+    owner_filter = (query.get("owner_id") or "").strip()
+    device_filter = (query.get("device_id") or "").strip()
+    status_filter = query.get("status") or "all"
+    export_query = _device_export_query(owner_filter, device_filter, status_filter)
+    export_url = "/api/v1/admin/export/devices"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -1885,6 +1896,7 @@ def _admin_devices_html() -> str:
         ),
         reverse=True,
     )
+    device_rows = _filter_device_rows(device_rows, owner_filter, device_filter, status_filter)
 
     return f"""<!doctype html>
 <html lang="ko">
@@ -2039,8 +2051,16 @@ def _admin_devices_html() -> str:
     <section>
       <div class="section-head">
         <span>기기별 동기화 현황</span>
-        <span class="sub">{len(device_rows)}개 device</span>
+        <a href="{escape(export_url, quote=True)}">현재 조건 JSON</a>
       </div>
+      <form method="get" action="/admin/devices" style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr)) auto;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fafafa;">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+        <select name="status" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+          {_device_status_options(status_filter)}
+        </select>
+        <button type="submit" style="min-height:36px;border:1px solid var(--blue);border-radius:8px;padding:0 12px;background:var(--blue);color:#fff;font-weight:750;">필터 적용</button>
+      </form>
       <table>
         <tr>
           <th>Owner</th>
@@ -2063,6 +2083,47 @@ def _admin_devices_html() -> str:
   </main>
 </body>
 </html>"""
+
+
+def _filter_device_rows(
+    devices: list[dict[str, object]],
+    owner_id: str,
+    device_id: str,
+    status_filter: str,
+) -> list[dict[str, object]]:
+    rows = devices
+    if owner_id:
+        rows = [device for device in rows if str(device["owner_id"]) == owner_id]
+    if device_id:
+        rows = [device for device in rows if str(device["device_id"]) == device_id]
+    if status_filter == "active":
+        rows = [device for device in rows if str(device["device_status"]) == "사용"]
+    elif status_filter == "inactive":
+        rows = [device for device in rows if str(device["device_status"]) == "비활성"]
+    return rows
+
+
+def _device_status_options(selected: str) -> str:
+    options = [
+        ("all", "상태 전체"),
+        ("active", "사용"),
+        ("inactive", "비활성"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
+
+
+def _device_export_query(owner_id: str, device_id: str, status_filter: str) -> str:
+    params = {}
+    if owner_id:
+        params["owner_id"] = owner_id
+    if device_id:
+        params["device_id"] = device_id
+    if status_filter in {"active", "inactive"}:
+        params["status"] = status_filter
+    return urlencode(params)
 
 
 def _admin_device_rows(devices: list[dict[str, object]]) -> str:

@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 02:56 KST
+
+### 다음 작업 시작
+
+- 기기 관리 필터와 조건별 내보내기 추가.
+
+### 구현 내용
+
+- `/admin/devices`에 Owner ID, Device ID, 활성 상태 필터 추가.
+- `/admin/devices`에 현재 조건 JSON 링크 추가.
+- `/api/v1/admin/export/devices`가 owner/device/status 필터를 받도록 보강.
+- smoke test가 기기 관리 필터 화면과 조건별 기기 내보내기를 확인하도록 보강.
+- preflight가 smoke test의 기기 필터/내보내기 확인 문구를 검사하도록 보강.
+- README에 기기 목록 필터와 현재 조건 JSON 내보내기 안내 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 기기 필터/조건별 내보내기 문구와 API/화면/smoke/preflight/README 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (157/157 checks)` 출력 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 active/inactive 기기 export 필터와 `/admin/devices` 화면 필터 확인.
+
 ## 2026-05-19 02:40 KST
 
 ### 다음 작업 시작
