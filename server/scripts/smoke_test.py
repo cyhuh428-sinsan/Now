@@ -251,6 +251,9 @@ def main() -> None:
             require("/admin/devices/status" in text, "기기 관리 화면에 상태 변경 폼이 없습니다")
             require("현재 조건 JSON" in text, "기기 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "Device ID" in text, "기기 관리 화면에 owner/device 필터가 없습니다")
+        if path.startswith("/admin/users"):
+            require("현재 조건 JSON" in text, "사용자 관리 화면에 현재 조건 JSON 링크가 없습니다")
+            require("Owner, 이메일, 표시 이름 검색" in text, "사용자 관리 화면에 검색 필터가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
@@ -311,6 +314,18 @@ def main() -> None:
     require(data.get("name") == "devices", "기기 export 이름이 devices가 아닙니다")
     print(
         "GET /api/v1/admin/export/devices:",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/users?token=missing",
+        args.token,
+    )
+    require(data.get("name") == "users", "사용자 export 이름이 users가 아닙니다")
+    print(
+        "GET /api/v1/admin/export/users(filtered):",
         status,
         {"count": data.get("count"), "name": data.get("name")},
     )
