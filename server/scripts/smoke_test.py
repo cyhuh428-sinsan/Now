@@ -411,6 +411,8 @@ def main() -> None:
     require("공용 서버 데이터 격리" in ops_check_names, "운영 점검에 공용 서버 데이터 격리 항목이 없습니다")
     require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
     require("백업/복구 절차" in ops_check_names, "운영 점검에 백업/복구 절차 항목이 없습니다")
+    require("비활성 기기" in ops_check_names, "운영 점검에 비활성 기기 항목이 없습니다")
+    require("inactive_devices" in data.get("summary", {}), "운영 점검 요약에 비활성 기기 집계가 없습니다")
     require(
         any("status_counts.bad=0" in str(item.get("message", "")) for item in data.get("checks", [])),
         "운영 점검에 백업 검증 status_counts 기준 안내가 없습니다",

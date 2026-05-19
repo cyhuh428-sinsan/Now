@@ -2867,6 +2867,8 @@ def _admin_ops_html() -> str:
     inactive_users = 0
     users_without_seen = 0
     users_without_token = 0
+    device_total = 0
+    inactive_devices = 0
 
     try:
         with SessionLocal() as db:
@@ -2895,6 +2897,15 @@ def _admin_ops_html() -> str:
                     select(func.count())
                     .select_from(UserAccount)
                     .where(UserAccount.access_token_hash.is_(None))
+                )
+                or 0
+            )
+            device_total = db.scalar(select(func.count()).select_from(UserDevice)) or 0
+            inactive_devices = (
+                db.scalar(
+                    select(func.count())
+                    .select_from(UserDevice)
+                    .where(UserDevice.is_active == 0)
                 )
                 or 0
             )
@@ -2981,6 +2992,13 @@ def _admin_ops_html() -> str:
             "name": "접속 기록 없는 사용자",
             "status": "info" if users_without_seen else "ok",
             "message": f"최근 접속 기록 없음 {users_without_seen}명",
+        }
+    )
+    checks.append(
+        {
+            "name": "비활성 기기",
+            "status": "info" if inactive_devices else "ok",
+            "message": f"등록 기기 {device_total}개, 비활성 기기 {inactive_devices}개",
         }
     )
     checks.append(
