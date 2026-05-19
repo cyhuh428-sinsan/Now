@@ -46,7 +46,7 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --public-server
 ```
 
-현재 1차 서버에서 `--public-server`는 로그인 화면, 실제 2단계 인증, 공개 운영 환경 항목 때문에 일부 실패하는 것이 정상입니다.
+현재 1차 서버에서 `--public-server`는 로그인 화면, 사용자별 기기 등록/해제, 실제 2단계 인증, 사용자별 데이터 접근 격리, 공개 운영 환경 항목 때문에 일부 실패하는 것이 정상입니다.
 
 ## 4. 컨테이너 시작
 
