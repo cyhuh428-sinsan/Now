@@ -63,6 +63,7 @@ def main() -> None:
     args = parser.parse_args()
 
     server_dir = Path(__file__).resolve().parents[1]
+    repo_root = server_dir.parent
     env_path = (server_dir / args.env_file).resolve()
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
@@ -70,6 +71,7 @@ def main() -> None:
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
+    auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
     failures: list[str] = []
@@ -167,6 +169,7 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
@@ -286,6 +289,22 @@ def main() -> None:
                 ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
                 ("/api/v1/admin/export/verify", "Deploy checklist covers backup verification", "export/verify"),
+            ],
+            failures,
+        )
+    if auth_policy_path.exists():
+        auth_policy = auth_policy_path.read_text(encoding="utf-8")
+        check_text_contains(
+            auth_policy,
+            [
+                ("개인 Docker 서버", "Auth policy covers private Docker server", "private server auth policy"),
+                ("공용 NowNote 서버", "Auth policy covers public NowNote server", "public server auth policy"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Auth policy covers user token required mode", "NOW_USER_TOKEN_REQUIRED=true"),
+                ("사용자별 로그인 화면 또는 토큰 전달 UI", "Auth policy covers login/token delivery gap", "login/token delivery"),
+                ("실제 2단계 인증 절차", "Auth policy covers real two-factor gap", "real two-factor"),
+                ("사용자별 데이터 접근 격리 검증", "Auth policy covers user data isolation check", "data isolation"),
+                ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
+                ("--public-server", "Auth policy covers public preflight command", "public preflight"),
             ],
             failures,
         )
