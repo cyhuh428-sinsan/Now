@@ -3935,6 +3935,12 @@ def _admin_export_html() -> str:
             summary["users"],
         ),
         (
+            "기기",
+            "/api/v1/admin/export/devices",
+            "사용자별 기기 등록 상태 export",
+            summary["devices"],
+        ),
+        (
             "분석 작업",
             "/api/v1/admin/export/analysis-jobs",
             "분석 작업 이력 export",
@@ -4160,7 +4166,7 @@ def _admin_export_html() -> str:
       <div class="card"><div class="label">전체 메모</div><div class="value">{summary["notes"]}</div></div>
       <div class="card"><div class="label">삭제 표시</div><div class="value">{summary["deleted_notes"]}</div></div>
       <div class="card"><div class="label">녹음 메타</div><div class="value">{summary["recordings"]}</div></div>
-      <div class="card"><div class="label">사용자</div><div class="value">{summary["users"]}</div></div>
+      <div class="card"><div class="label">등록 기기</div><div class="value">{summary["devices"]}</div></div>
     </div>
 
     <section>
@@ -4594,6 +4600,7 @@ def _export_summary_counts_for_page() -> dict[str, int]:
         )
         recordings = db.scalar(select(func.count()).select_from(Recording)) or 0
         users = db.scalar(select(func.count()).select_from(UserAccount)) or 0
+        devices = db.scalar(select(func.count()).select_from(UserDevice)) or 0
         analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
         sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
         return {
@@ -4602,7 +4609,8 @@ def _export_summary_counts_for_page() -> dict[str, int]:
             "deleted_notes": note_total - active_notes,
             "recordings": recordings,
             "users": users,
+            "devices": devices,
             "analysis_jobs": analysis_jobs,
             "sync_logs": sync_logs,
-            "total_export_items": note_total + recordings + users + analysis_jobs + sync_logs,
+            "total_export_items": note_total + recordings + users + devices + analysis_jobs + sync_logs,
         }

@@ -234,6 +234,8 @@ def main() -> None:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
         if path == "/admin/export":
             require("/api/v1/admin/export/verify" in text, "내보내기 화면에 백업 검증 API 안내가 없습니다")
+            require("/api/v1/admin/export/devices" in text, "내보내기 화면에 기기 export 링크가 없습니다")
+            require("등록 기기" in text, "내보내기 화면에 기기 집계가 없습니다")
             require("YOUR_ADMIN_TOKEN" in text, "내보내기 화면에 백업 검증 요청 예시가 없습니다")
             require("status=ok" in text, "내보내기 화면에 백업 검증 성공 기준 안내가 없습니다")
             require("status_counts.bad=0" in text, "내보내기 화면에 백업 검증 상태 집계 기준 안내가 없습니다")
