@@ -272,6 +272,7 @@ def main() -> None:
                 ("Preflight failed", "Deploy checklist explains preflight failure summary", "preflight failed summary"),
                 ("docker compose up --build -d", "Deploy checklist covers compose up", "docker compose up --build -d"),
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
+                ("--timeout 30", "Deploy checklist covers smoke timeout option", "smoke timeout"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Deploy checklist explains smoke HTTP failure summary", "smoke HTTP failure summary"),
@@ -291,6 +292,8 @@ def main() -> None:
             [
                 ("/api/v1/admin/export/all", "Smoke covers full backup export", "export/all"),
                 ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
+                ("--timeout", "Smoke supports request timeout option", "smoke timeout option"),
+                ("REQUEST_TIMEOUT", "Smoke uses shared request timeout", "REQUEST_TIMEOUT"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
                 ("/admin/help", "Smoke covers help admin page", "admin/help"),

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 
 USER_TOKEN: str | None = None
+REQUEST_TIMEOUT = 10.0
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
 MAX_TREE_NOTE_LEVEL = 3
@@ -32,7 +33,7 @@ def request(method: str, url: str, token: str | None = None, data: dict | None =
     if USER_TOKEN:
         headers["X-Now-User-Token"] = USER_TOKEN
     req = urllib.request.Request(url, data=body, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
 
@@ -87,7 +88,7 @@ def request_multipart(
     if USER_TOKEN:
         headers["X-Now-User-Token"] = USER_TOKEN
     req = urllib.request.Request(url, data=b"".join(chunks), headers=headers, method="POST")
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
 
@@ -98,16 +99,22 @@ def request_text(method: str, url: str, token: str | None = None):
         encoded = base64.b64encode(f"admin:{token}".encode("utf-8")).decode("ascii")
         headers["Authorization"] = f"Basic {encoded}"
     req = urllib.request.Request(url, headers=headers, method=method)
-    with urllib.request.urlopen(req, timeout=10) as res:
+    with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, text
 
 
 def main() -> None:
-    global USER_TOKEN
+    global REQUEST_TIMEOUT, USER_TOKEN
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8750")
     parser.add_argument("--token", default=None)
+    parser.add_argument(
+        "--timeout",
+        type=float,
+        default=10.0,
+        help="HTTP request timeout seconds",
+    )
     parser.add_argument(
         "--user-token",
         default=None,
@@ -119,6 +126,8 @@ def main() -> None:
         help="Issue a fresh local_user token through the admin API before data checks",
     )
     args = parser.parse_args()
+    require(args.timeout > 0, "--timeout은 0보다 커야 합니다")
+    REQUEST_TIMEOUT = args.timeout
     USER_TOKEN = args.user_token
 
     base_url = args.base_url.rstrip("/")

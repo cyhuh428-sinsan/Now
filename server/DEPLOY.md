@@ -82,6 +82,8 @@ docker-compose logs now-worker --tail=80
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+컨테이너가 느리게 응답하는 환경에서는 `--timeout 30`처럼 요청 대기 시간을 늘릴 수 있습니다.
+
 성공하면 마지막에 `NowNote server smoke test passed`가 표시됩니다.
 검증 조건이 실패하면 `SMOKE TEST FAILED: 원인` 형식으로 실패 이유가 먼저 표시됩니다.
 서버가 오류 응답을 반환하면 `SMOKE TEST HTTP FAILED: 상태코드 원인` 형식으로 HTTP 실패 이유가 먼저 표시됩니다.
