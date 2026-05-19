@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import re
+import time
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
@@ -104,6 +105,20 @@ def request_text(method: str, url: str, token: str | None = None):
         return res.status, text
 
 
+def wait_until_ready(base_url: str, token: str | None, retries: int, delay_seconds: float) -> None:
+    for attempt in range(1, retries + 1):
+        try:
+            request("GET", f"{base_url}/health/ready", token)
+            if retries > 1:
+                print(f"GET /health/ready: ready after {attempt}/{retries}")
+            return
+        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+            if attempt >= retries:
+                raise
+            print(f"GET /health/ready: waiting {attempt}/{retries} ({exc})")
+            time.sleep(delay_seconds)
+
+
 def main() -> None:
     global REQUEST_TIMEOUT, USER_TOKEN
     parser = argparse.ArgumentParser()
@@ -114,6 +129,18 @@ def main() -> None:
         type=float,
         default=10.0,
         help="HTTP request timeout seconds",
+    )
+    parser.add_argument(
+        "--ready-retries",
+        type=int,
+        default=1,
+        help="Number of readiness attempts before running full checks",
+    )
+    parser.add_argument(
+        "--ready-delay",
+        type=float,
+        default=2.0,
+        help="Seconds to wait between readiness attempts",
     )
     parser.add_argument(
         "--user-token",
@@ -127,10 +154,13 @@ def main() -> None:
     )
     args = parser.parse_args()
     require(args.timeout > 0, "--timeout은 0보다 커야 합니다")
+    require(args.ready_retries > 0, "--ready-retries는 0보다 커야 합니다")
+    require(args.ready_delay >= 0, "--ready-delay는 0 이상이어야 합니다")
     REQUEST_TIMEOUT = args.timeout
     USER_TOKEN = args.user_token
 
     base_url = args.base_url.rstrip("/")
+    wait_until_ready(base_url, args.token, args.ready_retries, args.ready_delay)
     checks = [
         ("GET", "/health", None),
         ("GET", "/health/ready", None),
