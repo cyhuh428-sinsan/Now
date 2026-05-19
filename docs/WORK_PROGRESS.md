@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 00:22 KST
+
+### 다음 작업 시작
+
+- smoke test 요청 timeout 옵션 추가.
+
+### 구현 내용
+
+- `server/scripts/smoke_test.py`에 `--timeout` 옵션 추가.
+- 기존 기본 대기 시간 10초는 유지하고, 모든 HTTP 요청이 공통 `REQUEST_TIMEOUT`을 사용하도록 변경.
+- README와 DEPLOY 문서에 느린 환경에서 `--timeout`을 늘릴 수 있다는 안내 추가.
+- preflight가 smoke test의 timeout 옵션과 DEPLOY 안내 포함 여부를 확인하도록 보강.
+
+### 검증
+
+- `py_compile`로 `smoke_test.py`, `preflight.py` 확인 통과.
+- `smoke_test.py --help`에서 `--timeout` 옵션 표시 확인.
+- `rg`로 smoke test, README, DEPLOY, preflight의 timeout 옵션 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (114/114 checks)` 출력 확인.
+
 ## 2026-05-19 00:13 KST
 
 ### 다음 작업 시작

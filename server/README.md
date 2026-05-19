@@ -229,6 +229,8 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/ops
 python .\scripts\smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+요청 대기 시간이 더 필요하면 `--timeout 초`를 추가합니다.
+
 `NOW_USER_TOKEN_REQUIRED=true`로 공용 서버 모드를 점검할 때는 사용자별 접속 토큰을 함께 넣습니다.
 관리자 토큰으로 테스트용 `local_user` 토큰을 새로 발급해 바로 점검하려면 아래처럼 실행합니다.
 
