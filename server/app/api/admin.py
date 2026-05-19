@@ -16,6 +16,7 @@ from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
+from app.services.user_devices import set_user_device_active
 
 router = APIRouter(
     prefix="/api/v1/admin",
@@ -39,6 +40,10 @@ class UserAccountCreate(UserAccountUpdate):
 
 class BackupVerifyRequest(BaseModel):
     backup: dict = Field(default_factory=dict)
+
+
+class UserDeviceUpdate(BaseModel):
+    is_active: bool = True
 
 
 @router.get("/export/notes")
@@ -330,6 +335,29 @@ def issue_user_token(
         "issued_at": user.access_token_issued_at,
         "message": "이 토큰은 다시 표시되지 않습니다.",
     }
+
+
+@router.patch("/devices/{owner_id}/{device_id}")
+def update_device(
+    owner_id: str,
+    device_id: str,
+    payload: UserDeviceUpdate,
+    db: Session = Depends(get_db),
+) -> dict:
+    device = set_user_device_active(
+        db,
+        owner_id=owner_id,
+        device_id=device_id,
+        is_active=payload.is_active,
+    )
+    if device is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="device not found",
+        )
+    db.commit()
+    db.refresh(device)
+    return {"status": "ok", "device": _model_to_dict(device)}
 
 
 @router.get("/ops")

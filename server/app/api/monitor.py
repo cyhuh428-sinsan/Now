@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
+from app.services.user_devices import set_user_device_active
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
@@ -66,6 +67,26 @@ def admin_recordings(
 @router.get("/admin/devices", include_in_schema=False)
 def admin_devices(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_devices_html())
+
+
+@router.post("/admin/devices/status", include_in_schema=False)
+def admin_device_status(
+    owner_id: str = Form(),
+    device_id: str = Form(),
+    action: str = Form(),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    if action not in {"activate", "deactivate"}:
+        return RedirectResponse(url="/admin/devices", status_code=status.HTTP_303_SEE_OTHER)
+    with SessionLocal() as db:
+        set_user_device_active(
+            db,
+            owner_id=owner_id,
+            device_id=device_id,
+            is_active=action == "activate",
+        )
+        db.commit()
+    return RedirectResponse(url="/admin/devices", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/users", include_in_schema=False)
@@ -939,6 +960,19 @@ def _admin_analysis_html() -> str:
       white-space: pre-wrap;
       word-break: break-word;
     }}
+    .actions form {{
+      margin: 0;
+      display: inline-flex;
+    }}
+    .actions button {{
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-weight: 650;
+      cursor: pointer;
+    }}
     .status {{
       display: inline-flex;
       align-items: center;
@@ -1581,6 +1615,29 @@ def _admin_recordings_html(request: Request) -> str:
       white-space: pre-wrap;
       word-break: break-word;
     }}
+    .notice {{
+      margin-top: 14px;
+      padding: 14px 16px;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      font-size: 14px;
+      line-height: 1.6;
+    }}
+    .actions form {{
+      margin: 0;
+      display: inline-flex;
+    }}
+    .actions button {{
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-weight: 650;
+      cursor: pointer;
+    }}
     .error {{
       margin-top: 14px;
       padding: 14px 16px;
@@ -1975,8 +2032,8 @@ def _admin_devices_html() -> str:
     </header>
 
     <div class="notice">
-      이 화면은 owner/device별 사용 흔적을 확인하는 읽기 전용 화면입니다.
-      공용 서버용 기기 등록/해제 기능은 아직 별도 구현 전이며, 정식 오픈 전 운영 점검에서 확인해야 합니다.
+      이 화면은 owner/device별 사용 흔적과 기기 활성 상태를 확인합니다.
+      비활성 기기는 동기화, 메모 저장, 녹음 업로드가 차단됩니다.
     </div>
 
     <section>
@@ -1996,6 +2053,7 @@ def _admin_devices_html() -> str:
           <th>마지막 메모 변경</th>
           <th>마지막 클라이언트 변경</th>
           <th>마지막 녹음 변경</th>
+          <th>관리</th>
         </tr>
         {_admin_device_rows(device_rows)}
       </table>
@@ -2009,7 +2067,7 @@ def _admin_devices_html() -> str:
 
 def _admin_device_rows(devices: list[dict[str, object]]) -> str:
     if not devices:
-        return '<tr><td colspan="10">연결된 기기 흔적이 없습니다.</td></tr>'
+        return '<tr><td colspan="11">연결된 기기 흔적이 없습니다.</td></tr>'
     return "\n".join(
         "<tr>"
         f"<td class=\"mono\">{escape(str(device['owner_id']))}</td>"
@@ -2022,9 +2080,24 @@ def _admin_device_rows(devices: list[dict[str, object]]) -> str:
         f"<td>{_format_datetime(device['latest_note_at'])}</td>"
         f"<td>{_format_datetime(device['latest_client_at'])}</td>"
         f"<td>{_format_datetime(device['latest_recording_at'])}</td>"
+        f"<td class=\"actions\">{_device_status_form(str(device['owner_id']), str(device['device_id']), str(device['device_status']))}</td>"
         "</tr>"
         for device in devices
     )
+
+
+def _device_status_form(owner_id: str, device_id: str, device_status: str) -> str:
+    is_inactive = device_status == "비활성"
+    action = "activate" if is_inactive else "deactivate"
+    label = "활성화" if is_inactive else "비활성"
+    return f"""
+      <form method="post" action="/admin/devices/status">
+        <input type="hidden" name="owner_id" value="{escape(owner_id, quote=True)}">
+        <input type="hidden" name="device_id" value="{escape(device_id, quote=True)}">
+        <input type="hidden" name="action" value="{action}">
+        <button type="submit">{label}</button>
+      </form>
+    """
 
 
 def _admin_users_html(request: Request) -> str:

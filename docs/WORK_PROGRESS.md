@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 02:22 KST
+
+### 다음 작업 시작
+
+- 기기 비활성 차단 연결.
+
+### 구현 내용
+
+- `require_active_user_device()`와 `set_user_device_active()` 서비스를 추가.
+- 동기화, 메모 저장, 메모 배치 저장, 녹음 업로드 API가 비활성 기기를 차단하도록 연결.
+- `/api/v1/admin/devices/{owner_id}/{device_id}` PATCH API로 기기 활성/비활성 상태를 바꿀 수 있도록 추가.
+- `/admin/devices` 화면에 기기 활성/비활성 변경 폼 추가.
+- smoke test가 기기 비활성화, 비활성 기기 동기화 403 차단, 재활성화를 확인하도록 추가.
+- 자동 생성 사용자/기기의 `is_active` 값을 명시해 DB flush 전 기본값 미반영으로 신규 요청이 비활성 처리되는 문제 수정.
+- preflight가 자동 생성 사용자/기기 활성 기본값과 비활성 기기 차단 문구를 확인하도록 보강.
+- README에 비활성 기기의 동기화/메모/녹음 차단 기준을 명시.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 사용자/기기 서비스, API, smoke/preflight 문법 확인 통과.
+- `rg`로 기기 비활성 차단 서비스/API/화면/smoke/preflight/README 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (151/151 checks)` 출력 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 기기 생성, 비활성화, 비활성 기기 동기화 403 차단, 재활성화 확인.
+
 ## 2026-05-19 02:03 KST
 
 ### 다음 작업 시작
