@@ -714,6 +714,16 @@ def _public_server_readiness_checks() -> list[dict[str, str]]:
             "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
         },
         {
+            "name": "공용 서버 기기 등록",
+            "status": "info",
+            "message": "정식 오픈 전 사용자별 기기 등록/해제 흐름 확인 필요",
+        },
+        {
+            "name": "공용 서버 데이터 격리",
+            "status": "info",
+            "message": "정식 오픈 전 사용자별 데이터 접근 격리 검증 필요",
+        },
+        {
             "name": "공개 운영 환경",
             "status": "info",
             "message": "정식 오픈 전 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인 필요",

@@ -221,6 +221,8 @@ def main() -> None:
                 ("_verification_status", "Backup verify derives overall status", "_verification_status"),
                 ("백업/복구 절차", "Admin ops covers backup recovery procedure", "backup recovery ops"),
                 ("status_counts.bad=0", "Admin ops covers backup status count target", "status_counts.bad=0"),
+                ("공용 서버 기기 등록", "Admin ops covers public device registration", "public device registration"),
+                ("공용 서버 데이터 격리", "Admin ops covers public data isolation", "public data isolation"),
             ],
             failures,
         )
@@ -245,6 +247,8 @@ def main() -> None:
                     "status_counts.bad=0",
                 ),
                 ("백업/복구 절차", "Monitor ops covers backup recovery procedure", "backup recovery ops"),
+                ("공용 서버 기기 등록", "Monitor ops covers public device registration", "public device registration"),
+                ("공용 서버 데이터 격리", "Monitor ops covers public data isolation", "public data isolation"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -343,6 +347,8 @@ def main() -> None:
                 ("status_counts", "Smoke checks backup verify status counts", "status_counts"),
                 ("운영 점검 화면에 백업/복구 절차 항목", "Smoke checks ops page backup recovery guidance", "ops page backup recovery"),
                 ("운영 점검 화면에 공용 서버 로그인 화면 항목", "Smoke checks ops page public login guidance", "ops page public login"),
+                ("운영 점검 화면에 공용 서버 기기 등록 항목", "Smoke checks ops page public device guidance", "ops page public device"),
+                ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
                 ("백업/복구 절차", "Smoke checks deploy backup recovery guidance", "backup recovery deploy guidance"),
                 ("API_VERSION", "Smoke checks API version", "API_VERSION"),
                 ("NowNote server smoke test passed", "Smoke prints pass summary", "smoke passed summary"),

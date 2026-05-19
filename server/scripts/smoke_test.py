@@ -247,6 +247,8 @@ def main() -> None:
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("공용 서버 로그인 화면" in text, "운영 점검 화면에 공용 서버 로그인 화면 항목이 없습니다")
             require("공용 서버 2단계 인증" in text, "운영 점검 화면에 공용 서버 2단계 인증 항목이 없습니다")
+            require("공용 서버 기기 등록" in text, "운영 점검 화면에 공용 서버 기기 등록 항목이 없습니다")
+            require("공용 서버 데이터 격리" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
             require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
@@ -384,6 +386,8 @@ def main() -> None:
     ops_check_names = {item.get("name") for item in data.get("checks", [])}
     require("공용 서버 로그인 화면" in ops_check_names, "운영 점검에 공용 서버 로그인 화면 항목이 없습니다")
     require("공용 서버 2단계 인증" in ops_check_names, "운영 점검에 공용 서버 2단계 인증 항목이 없습니다")
+    require("공용 서버 기기 등록" in ops_check_names, "운영 점검에 공용 서버 기기 등록 항목이 없습니다")
+    require("공용 서버 데이터 격리" in ops_check_names, "운영 점검에 공용 서버 데이터 격리 항목이 없습니다")
     require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
     require("백업/복구 절차" in ops_check_names, "운영 점검에 백업/복구 절차 항목이 없습니다")
     require(
