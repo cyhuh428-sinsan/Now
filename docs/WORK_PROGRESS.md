@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 00:34 KST
+
+### 다음 작업 시작
+
+- 내보내기 관리 화면의 기기 export 정합성 보강.
+
+### 구현 내용
+
+- `/admin/export` 화면의 집계에 등록 기기 수 추가.
+- `/admin/export` 화면의 내보내기 링크에 `/api/v1/admin/export/devices` 추가.
+- 화면의 전체 export 건수 계산이 API의 전체 백업 집계처럼 기기 수를 포함하도록 정정.
+- smoke test가 내보내기 화면의 기기 export 링크와 기기 집계를 확인하도록 보강.
+- preflight가 monitor/smoke의 기기 export 정합성 문구를 검사하도록 보강.
+- README의 `/admin/export` 설명에 기기 등록 상태 JSON 내보내기 포함.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 내보내기 화면, smoke, preflight, README의 기기 export 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 `/api/v1/admin/export/summary`의 `devices` 집계와 `/admin/export`의 기기 링크/집계 표시 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (171/171 checks)` 출력 확인.
+
 ## 2026-05-20 00:18 KST
 
 ### 다음 작업 시작
