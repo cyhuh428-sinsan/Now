@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 00:18 KST
+
+### 다음 작업 시작
+
+- 메모 관리 조건별 내보내기 추가.
+
+### 구현 내용
+
+- `/api/v1/admin/export/notes`에 owner/note_type/source/q/deleted 필터 추가.
+- `/admin/notes`에 Owner ID, 메모 타입, 소스, 제목/내용 검색, 삭제 표시 필터 추가.
+- `/admin/notes`에 현재 조건 JSON 링크 추가.
+- smoke test가 메모 관리 필터 화면과 조건별 메모 내보내기를 확인하도록 보강.
+- preflight가 메모 관리 필터/내보내기 확인 문구를 검사하도록 보강.
+- README에 메모 관리 조건별 JSON 내보내기 안내 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 메모 관리 필터, 현재 조건 JSON, 조건별 export 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (167/167 checks)` 출력 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 owner/note_type/source/q 조건 export와 `/admin/notes` 화면 필터 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-20 00:00 KST
 
 ### 다음 작업 시작

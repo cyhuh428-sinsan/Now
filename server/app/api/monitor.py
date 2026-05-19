@@ -55,8 +55,11 @@ def admin_analysis(
 
 
 @router.get("/admin/notes", include_in_schema=False)
-def admin_notes(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_notes_html())
+def admin_notes(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_notes_html(request))
 
 
 @router.get("/admin/recordings", include_in_schema=False)
@@ -1208,12 +1211,28 @@ def _short_text(value: str | None, limit: int = 180) -> str:
     return escape(f"{normalized[:limit]}...")
 
 
-def _admin_notes_html() -> str:
+def _admin_notes_html(request: Request) -> str:
     error_message = ""
     type_counts: dict[str, int] = {}
     source_counts: dict[str, int] = {}
     owner_counts: dict[str, int] = {}
     recent_notes: list[Note] = []
+    query = request.query_params
+    owner_filter = (query.get("owner_id") or "").strip()
+    note_type_filter = (query.get("note_type") or "").strip()
+    source_filter = (query.get("source") or "").strip()
+    search = (query.get("q") or "").strip()
+    include_deleted_filter = query.get("include_deleted") or "all"
+    export_query = _note_export_query(
+        owner_filter,
+        note_type_filter,
+        source_filter,
+        search,
+        include_deleted_filter,
+    )
+    export_url = "/api/v1/admin/export/notes"
+    if export_query:
+        export_url = f"{export_url}?{export_query}"
 
     try:
         with SessionLocal() as db:
@@ -1240,8 +1259,22 @@ def _admin_notes_html() -> str:
             type_counts = {_label_or_empty(name): count for name, count in type_rows}
             source_counts = {_label_or_empty(name): count for name, count in source_rows}
             owner_counts = {owner_id: count for owner_id, count in owner_rows}
+            stmt = select(Note)
+            if owner_filter:
+                stmt = stmt.where(Note.owner_id == owner_filter)
+            if note_type_filter:
+                stmt = stmt.where(Note.note_type == note_type_filter)
+            if source_filter:
+                stmt = stmt.where(Note.source == source_filter)
+            if search:
+                pattern = f"%{search}%"
+                stmt = stmt.where((Note.title.ilike(pattern)) | (Note.content.ilike(pattern)))
+            if include_deleted_filter == "no":
+                stmt = stmt.where(Note.deleted_at.is_(None))
+            elif include_deleted_filter == "only":
+                stmt = stmt.where(Note.deleted_at.is_not(None))
             recent_notes = list(
-                db.scalars(select(Note).order_by(Note.updated_at.desc()).limit(100)).all()
+                db.scalars(stmt.order_by(Note.updated_at.desc()).limit(100)).all()
             )
     except Exception as exc:
         error_message = str(exc)
@@ -1318,6 +1351,32 @@ def _admin_notes_html() -> str:
       grid-template-columns: repeat(3, minmax(0, 1fr));
       gap: 12px;
     }}
+    .filter-form {{
+      display: grid;
+      grid-template-columns: repeat(5, minmax(130px, 1fr)) auto;
+      gap: 8px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: #fafafa;
+    }}
+    .filter-form input,
+    .filter-form select {{
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: #fff;
+    }}
+    .filter-form button {{
+      min-height: 36px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 750;
+      cursor: pointer;
+    }}
     section {{
       margin-top: 14px;
       background: var(--panel);
@@ -1381,11 +1440,13 @@ def _admin_notes_html() -> str:
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
       .grid {{ grid-template-columns: 1fr; }}
+      .filter-form {{ grid-template-columns: 1fr 1fr; }}
     }}
     @media (max-width: 620px) {{
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
       th, td {{ padding: 12px; }}
+      .filter-form {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -1448,8 +1509,18 @@ def _admin_notes_html() -> str:
     <section>
       <div class="section-head">
         <span>최근 변경 메모</span>
-        <span class="sub">최근 100건 · 내용은 앞부분만 표시</span>
+        <span><a href="{escape(export_url, quote=True)}">현재 조건 JSON</a></span>
       </div>
+      <form class="filter-form" method="get" action="/admin/notes">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID">
+        <input type="text" name="note_type" value="{escape(note_type_filter, quote=True)}" placeholder="메모 타입">
+        <input type="text" name="source" value="{escape(source_filter, quote=True)}" placeholder="소스">
+        <input type="text" name="q" value="{escape(search, quote=True)}" placeholder="제목/내용 검색">
+        <select name="include_deleted">
+          {_note_include_deleted_options(include_deleted_filter)}
+        </select>
+        <button type="submit">필터 적용</button>
+      </form>
       <table>
         <tr>
           <th>ID</th>
@@ -1846,6 +1917,42 @@ def _admin_recording_rows(recordings: list[Recording]) -> str:
         "</tr>"
         for recording in recordings
     )
+
+
+def _note_include_deleted_options(selected: str) -> str:
+    options = [
+        ("all", "삭제 포함"),
+        ("no", "삭제 제외"),
+        ("only", "삭제만"),
+    ]
+    return "\n".join(
+        f'<option value="{escape(value, quote=True)}" {"selected" if selected == value else ""}>{escape(label)}</option>'
+        for value, label in options
+    )
+
+
+def _note_export_query(
+    owner_id: str,
+    note_type: str,
+    source: str,
+    search: str,
+    include_deleted_filter: str,
+) -> str:
+    params = {}
+    if owner_id:
+        params["owner_id"] = owner_id
+    if note_type:
+        params["note_type"] = note_type
+    if source:
+        params["source"] = source
+    if search:
+        params["q"] = search
+    if include_deleted_filter == "no":
+        params["include_deleted"] = "false"
+    elif include_deleted_filter == "only":
+        params["include_deleted"] = "true"
+        params["deleted"] = "only"
+    return urlencode(params)
 
 
 def _recording_transcript_options(selected: str) -> str:

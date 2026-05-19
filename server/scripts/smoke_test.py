@@ -202,6 +202,9 @@ def main() -> None:
         "/monitor",
         "/admin",
         "/admin/notes",
+        "/admin/notes?owner_id=local_user",
+        "/admin/notes?note_type=daily&source=smoke_test",
+        "/admin/notes?q=Smoke&include_deleted=no",
         "/admin/recordings",
         "/admin/analysis",
         "/admin/analysis?status=queued",
@@ -260,6 +263,10 @@ def main() -> None:
         if path.startswith("/admin/analysis"):
             require("현재 조건 JSON" in text, "분석 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "작업 유형" in text, "분석 관리 화면에 필터가 없습니다")
+        if path.startswith("/admin/notes"):
+            require("현재 조건 JSON" in text, "메모 관리 화면에 현재 조건 JSON 링크가 없습니다")
+            require("Owner ID" in text and "제목/내용 검색" in text, "메모 관리 화면에 검색 필터가 없습니다")
+            require("메모 타입" in text and "삭제 제외" in text, "메모 관리 화면에 타입/삭제 필터가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
@@ -279,11 +286,12 @@ def main() -> None:
 
     status, data = request(
         "GET",
-        f"{base_url}/api/v1/admin/export/notes?include_deleted=false",
+        f"{base_url}/api/v1/admin/export/notes?include_deleted=false&note_type=daily&source=smoke_test&q=Smoke",
         args.token,
     )
+    require(data.get("name") == "notes", "메모 export 이름이 notes가 아닙니다")
     print(
-        "GET /api/v1/admin/export/notes:",
+        "GET /api/v1/admin/export/notes(filtered):",
         status,
         {"count": data.get("count"), "name": data.get("name")},
     )
