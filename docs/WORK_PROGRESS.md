@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-19 02:03 KST
+
+### 다음 작업 시작
+
+- 서버 기기 레지스트리 기반 추가.
+
+### 구현 내용
+
+- `UserDevice` 모델과 `user_devices` 테이블 추가.
+- 동기화, 단일 메모 저장, 메모 배치 저장, 녹음 업로드 시 owner/device 조합을 자동 기록하도록 추가.
+- `/admin/devices`가 기기 레지스트리의 상태, 처음 확인, 마지막 확인 시각을 함께 표시하도록 보강.
+- 전체 백업과 백업 검증 요약에 `devices` 항목을 포함.
+- `/api/v1/admin/export/devices` 내보내기 API 추가.
+- smoke test와 preflight가 기기 export와 백업의 devices 항목을 확인하도록 보강.
+- README에 기기 레지스트리의 현재 범위와 공용 서버용 해제/차단 정책은 다음 단계임을 명시.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 모델/DB/API/서비스/smoke/preflight 문법 확인 통과.
+- `rg`로 `UserDevice`, `touch_user_device`, `export/devices`, README 기기 레지스트리 문구 연결 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (145/145 checks)` 출력 확인.
+- 임시 SQLite DB에서 `create_tables()` 실행 후 `user_devices` 테이블 생성 확인.
+
 ## 2026-05-19 01:45 KST
 
 ### 다음 작업 시작
