@@ -364,14 +364,27 @@ def main() -> None:
         args.token,
     )
     require(data.get("name") == "export_summary", "내보내기 요약 이름이 export_summary가 아닙니다")
-    require("notes" in data.get("items", {}), "내보내기 요약에 메모 건수가 없습니다")
+    summary_items = data.get("items", {})
+    require("notes" in summary_items, "내보내기 요약에 메모 건수가 없습니다")
+    require("devices" in summary_items, "내보내기 요약에 기기 건수가 없습니다")
+    require("total_export_items" in summary_items, "내보내기 요약에 전체 export 건수가 없습니다")
+    summed_items = sum(
+        int(summary_items.get(name, 0) or 0)
+        for name in ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]
+    )
+    require(
+        summary_items.get("total_export_items") == summed_items,
+        "내보내기 요약의 전체 export 건수가 항목 합계와 다릅니다",
+    )
     print(
         "GET /api/v1/admin/export/summary:",
         status,
         {
-            "notes": data.get("items", {}).get("notes"),
-            "recordings": data.get("items", {}).get("recordings"),
-            "users": data.get("items", {}).get("users"),
+            "notes": summary_items.get("notes"),
+            "recordings": summary_items.get("recordings"),
+            "users": summary_items.get("users"),
+            "devices": summary_items.get("devices"),
+            "total_export_items": summary_items.get("total_export_items"),
         },
     )
 

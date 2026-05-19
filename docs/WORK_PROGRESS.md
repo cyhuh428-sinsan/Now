@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 01:00 KST
+
+### 다음 작업 시작
+
+- 내보내기 요약 API 회귀 검증 보강.
+
+### 구현 내용
+
+- smoke test가 `/api/v1/admin/export/summary`의 `devices`와 `total_export_items` 존재 여부를 확인하도록 보강.
+- smoke test가 `total_export_items`가 메모/녹음/사용자/기기/분석/동기화 이력 합계와 일치하는지 확인하도록 추가.
+- preflight가 smoke test의 내보내기 요약 검증 문구와 README의 `total_export_items` 설명을 확인하도록 보강.
+- README에 `total_export_items` 합계 기준 설명 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `rg`로 README, smoke, preflight의 `total_export_items`와 요약 검증 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 `/api/v1/admin/export/summary`의 `devices` 존재와 `total_export_items` 합계 일치 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (178/178 checks)` 출력 확인.
+
 ## 2026-05-20 00:47 KST
 
 ### 다음 작업 시작
