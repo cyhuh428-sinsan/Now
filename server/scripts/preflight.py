@@ -204,6 +204,19 @@ def main() -> None:
                     "Capabilities defines supported note types",
                     "SUPPORTED_NOTE_TYPES",
                 ),
+                ("PUBLIC_SERVER_READINESS", "Capabilities defines public server readiness", "PUBLIC_SERVER_READINESS"),
+                ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
+            ],
+            failures,
+        )
+    server_info_path = server_dir / "app" / "api" / "server.py"
+    check(server_info_path.exists(), "Server info API source exists", str(server_info_path), failures)
+    if server_info_path.exists():
+        server_info_source = server_info_path.read_text(encoding="utf-8")
+        check_text_contains(
+            server_info_source,
+            [
+                ("public_server_readiness", "Server info returns public server readiness", "public_server_readiness"),
             ],
             failures,
         )
@@ -476,6 +489,8 @@ def main() -> None:
                 ("공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용", "Smoke checks public server page content", "public server page content"),
                 ("공용 서버 준비 화면에 사용자별 토큰 필수 기준", "Smoke checks public server token policy", "public server token policy"),
                 ("공용 서버 준비 화면에 데이터 격리 기준", "Smoke checks public server data isolation", "public server data isolation"),
+                ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
+                ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
                 ("기기 관리 화면에 현재 조건 JSON 링크", "Smoke checks devices export link", "devices export link"),

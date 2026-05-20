@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 15:22 KST
+
+### 다음 작업 시작
+
+- `/api/v1/server` 응답에 공용 서버 준비 상태 요약 추가.
+
+### 구현 내용
+
+- `server/app/core/capabilities.py`에 `PUBLIC_SERVER_READINESS`와 `public_server_readiness()` 추가.
+- `/api/v1/server` 응답에 `public_server_readiness` 추가.
+- smoke test가 서버 정보 응답의 공용 서버 준비 상태와 잔여 항목을 확인하도록 보강.
+- preflight가 capability/source/smoke의 공용 서버 준비 상태 연결을 확인하도록 보강.
+- README의 `/api/v1/server` 설명에 `public_server_readiness` 의미 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 capabilities/server/smoke/preflight 문법 확인 통과.
+- FastAPI `TestClient`로 `/api/v1/server`의 `public_server_readiness.status=planned`와 잔여 항목 확인.
+- `rg`로 `public_server_readiness`, `PUBLIC_SERVER_READINESS`, 공용 서버 준비 상태 문구 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (255/255 checks)` 출력 확인.
+
 ## 2026-05-20 15:12 KST
 
 ### 다음 작업 시작

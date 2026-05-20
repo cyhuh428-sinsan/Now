@@ -2,6 +2,16 @@ API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
+PUBLIC_SERVER_READINESS = {
+    "status": "planned",
+    "remaining": [
+        "login_or_token_delivery",
+        "real_two_factor_challenge",
+        "user_device_registration",
+        "user_data_isolation_verification",
+        "public_https_reverse_proxy",
+    ],
+}
 
 SERVER_CAPABILITIES = {
     "sync": True,
@@ -26,3 +36,10 @@ def server_capabilities() -> dict:
     capabilities = dict(SERVER_CAPABILITIES)
     capabilities["supported_note_types"] = list(SERVER_CAPABILITIES["supported_note_types"])
     return capabilities
+
+
+def public_server_readiness() -> dict:
+    return {
+        "status": PUBLIC_SERVER_READINESS["status"],
+        "remaining": list(PUBLIC_SERVER_READINESS["remaining"]),
+    }
