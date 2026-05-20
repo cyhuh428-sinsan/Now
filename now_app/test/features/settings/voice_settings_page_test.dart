@@ -17,6 +17,8 @@ void main() {
       expect(find.text('OpenAI Whisper API'), findsOneWidget);
       expect(find.text('Google STT API'), findsOneWidget);
       expect(find.text('준비 중'), findsNWidgets(2));
+      expect(find.textContaining('높은 정확도 · 유료'), findsOneWidget);
+      expect(find.textContaining('실시간 스트리밍 · 유료'), findsOneWidget);
     });
 
     testWidgets('keeps default tier when tapping an unavailable option', (tester) async {
