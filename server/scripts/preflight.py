@@ -72,6 +72,8 @@ def main() -> None:
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
+    help_ko_path = repo_root / "docs" / "HELP.md"
+    help_en_path = repo_root / "docs" / "HELP.en.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -200,6 +202,8 @@ def main() -> None:
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
+    check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
+    check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(auth_api_path.exists(), "Auth API source exists", str(auth_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
@@ -526,6 +530,26 @@ def main() -> None:
                 ("사용자별 데이터 격리 자동 검증", "Auth policy covers user data isolation check", "data isolation"),
                 ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
                 ("--public-server", "Auth policy covers public preflight command", "public preflight"),
+            ],
+            failures,
+        )
+    if help_ko_path.exists():
+        help_ko = help_ko_path.read_text(encoding="utf-8")
+        check_text_contains(
+            help_ko,
+            [
+                ("2단계 인증 코드", "Korean help documents two-factor code setup", "2FA code help ko"),
+                ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
+            ],
+            failures,
+        )
+    if help_en_path.exists():
+        help_en = help_en_path.read_text(encoding="utf-8")
+        check_text_contains(
+            help_en,
+            [
+                ("Two-factor code", "English help documents two-factor code setup", "2FA code help en"),
+                ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
             ],
             failures,
         )
