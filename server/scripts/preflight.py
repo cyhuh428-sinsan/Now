@@ -237,6 +237,8 @@ def main() -> None:
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
                 ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
                 ("orphan_recording_files", "Admin ops summary covers orphan recording files", "orphan recording files summary"),
+                ("recording_orphans", "Admin API exports orphan recording files", "recording orphan export"),
+                ("_recording_storage_orphan_files", "Admin API lists orphan recording files", "recording orphan file list"),
             ],
             failures,
         )
@@ -298,6 +300,8 @@ def main() -> None:
                 ("공용 서버 데이터 격리", "Monitor ops covers public data isolation", "public data isolation"),
                 ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
+                ("고아 녹음 파일 JSON", "Monitor recordings links orphan export", "recording orphan export link"),
+                ("/api/v1/admin/export/recording-orphans", "Monitor recordings uses orphan export API", "recording orphan export API"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -397,6 +401,8 @@ def main() -> None:
                 ("recordings(path_safety)", "Smoke checks recording upload path safety", "recording path safety"),
                 ("recordings(replace)", "Smoke checks recording replacement", "recording replacement"),
                 ("같은 local_id가 중복", "Smoke checks recording duplicate local_id", "recording duplicate local_id"),
+                ("recording-orphans", "Smoke checks recording orphan export", "recording orphan export"),
+                ("고아 녹음 export", "Smoke validates recording orphan export", "recording orphan export validation"),
                 ("user_accounts", "Smoke covers user accounts capability", "user_accounts"),
                 ("user_access_tokens", "Smoke covers user access tokens capability", "user_access_tokens"),
                 ("user_token_required", "Smoke checks user token required flag", "user_token_required"),

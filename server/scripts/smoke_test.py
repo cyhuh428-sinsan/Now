@@ -341,6 +341,20 @@ def main() -> None:
 
     status, data = request(
         "GET",
+        f"{base_url}/api/v1/admin/export/recording-orphans",
+        args.token,
+    )
+    require(data.get("name") == "recording_orphans", "고아 녹음 export 이름이 recording_orphans가 아닙니다")
+    require("storage_dir" in data, "고아 녹음 export에 storage_dir가 없습니다")
+    require(isinstance(data.get("items"), list), "고아 녹음 export items가 목록이 아닙니다")
+    print(
+        "GET /api/v1/admin/export/recording-orphans:",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
         f"{base_url}/api/v1/admin/export/sync-logs?device_id=smoke_test&include_deleted=true",
         args.token,
     )

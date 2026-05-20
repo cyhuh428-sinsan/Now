@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 03:37 KST
+
+### 다음 작업 시작
+
+- 고아 녹음 파일 감지 결과를 운영자가 확인할 수 있는 목록 API와 화면 링크 추가.
+
+### 구현 내용
+
+- `/api/v1/admin/export/recording-orphans`를 추가해 DB 메타데이터와 연결되지 않은 저장소 파일 목록을 JSON으로 확인할 수 있게 보강.
+- `/admin/recordings` 화면에 "고아 녹음 파일 JSON" 링크와 삭제 전 백업 확인 안내를 추가.
+- smoke test와 preflight가 고아 녹음 파일 export API와 화면 링크를 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- 임시 저장소에서 DB가 아는 파일 1개와 모르는 파일 1개를 만든 뒤 고아 파일 목록의 `relative_path`, `size_bytes`, `modified_at` 생성 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (209/209 checks)` 출력 확인.
+
 ## 2026-05-20 03:20 KST
 
 ### 다음 작업 시작

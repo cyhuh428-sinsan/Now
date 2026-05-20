@@ -1595,6 +1595,7 @@ def _admin_recordings_html(request: Request) -> str:
     export_url = "/api/v1/admin/export/recordings"
     if export_query:
         export_url = f"{export_url}?{export_query}"
+    orphan_export_url = "/api/v1/admin/export/recording-orphans"
 
     try:
         with SessionLocal() as db:
@@ -1843,6 +1844,12 @@ def _admin_recordings_html(request: Request) -> str:
         <div class="label">최근 변경</div>
         <div class="value">{_format_datetime(latest_recording_at)}</div>
       </div>
+    </div>
+
+    <div class="notice">
+      저장소에 파일은 있지만 DB 메타데이터와 연결되지 않은 항목은
+      <a href="{orphan_export_url}">고아 녹음 파일 JSON</a>에서 확인합니다.
+      실제 삭제는 백업 확인 후 수동으로 진행합니다.
     </div>
 
     <div class="grid">
