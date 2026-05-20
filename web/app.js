@@ -357,6 +357,8 @@ const I18N = {
     "settings.server.capabilities.twoFactorPlanned": "2단계 예정",
     "settings.server.capabilities.userTokenRequired": "사용자 토큰 필요",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
+    "settings.server.publicReadiness.ready": "공용 서버 준비 완료",
+    "settings.server.publicReadiness.planned": "공용 서버 준비 중 · 남은 항목 {count}개",
     "settings.server.analysis.title": "분석 작업",
     "settings.server.analysis.desc": "선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.",
     "settings.server.analysis.create": "선택 메모 분석",
@@ -829,6 +831,8 @@ const I18N = {
     "settings.server.capabilities.twoFactorPlanned": "2FA planned",
     "settings.server.capabilities.userTokenRequired": "User token required",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
+    "settings.server.publicReadiness.ready": "Public server ready",
+    "settings.server.publicReadiness.planned": "Public readiness planned · {count} remaining",
     "settings.server.analysis.title": "Analysis jobs",
     "settings.server.analysis.desc": "Queue the selected knowledge note for server analysis and check recent status.",
     "settings.server.analysis.create": "Analyze selected note",
@@ -1056,6 +1060,7 @@ function defaultServerSettings() {
     deviceId: "web-desktop",
     userProfile: defaultServerUserProfile(),
     capabilities: null,
+    publicServerReadiness: null,
     analysisJobs: [],
     lastCheckedAt: null,
     lastSyncedAt: null,
@@ -1766,7 +1771,7 @@ function renderServerSettings() {
   elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
-  renderServerCapabilities(server.capabilities);
+  renderServerCapabilities(server.capabilities, server.publicServerReadiness);
   renderServerAnalysisJobs(server.analysisJobs);
   renderServerProfileMeta(profile);
 }
@@ -1793,6 +1798,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
       timezone: elements.serverTimezoneInput.value.trim() || "Asia/Seoul",
     },
     capabilities: connectionChanged ? null : previous.capabilities,
+    publicServerReadiness: connectionChanged ? null : previous.publicServerReadiness,
     lastStatus: "saved",
     lastMessage: message,
   };
@@ -1832,9 +1838,12 @@ function renderServerMeta() {
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
 }
 
-function renderServerCapabilities(capabilities) {
+function renderServerCapabilities(capabilities, publicServerReadiness = null) {
   if (!elements.serverCapabilitiesText) return;
-  const chips = serverCapabilityLabels(capabilities).map((label) => {
+  const chips = [
+    ...serverCapabilityLabels(capabilities),
+    ...serverPublicReadinessLabels(publicServerReadiness),
+  ].map((label) => {
     const chip = document.createElement("span");
     chip.className = "server-capability-chip";
     chip.textContent = label;
@@ -1866,6 +1875,16 @@ function serverCapabilityLabels(capabilities) {
     labels.push(t("settings.server.capabilities.treeLevel", { level: capabilities.max_tree_note_level }));
   }
   return labels;
+}
+
+function serverPublicReadinessLabels(readiness) {
+  if (!readiness || typeof readiness !== "object") return [];
+  if (readiness.status === "ready") return [t("settings.server.publicReadiness.ready")];
+  if (readiness.status === "planned") {
+    const remaining = Array.isArray(readiness.remaining) ? readiness.remaining.length : 0;
+    return [t("settings.server.publicReadiness.planned", { count: remaining })];
+  }
+  return [];
 }
 
 function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
@@ -2069,11 +2088,13 @@ async function testServerConnection() {
     server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = payload.capabilities || null;
+    server.publicServerReadiness = payload.public_server_readiness || null;
     server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}`;
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = null;
+    server.publicServerReadiness = null;
     server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
   }
   persistSettings();
@@ -5574,6 +5595,15 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
   normalized.capabilities = normalized.capabilities && typeof normalized.capabilities === "object" ? normalized.capabilities : null;
+  normalized.publicServerReadiness =
+    normalized.publicServerReadiness && typeof normalized.publicServerReadiness === "object"
+      ? {
+          status: typeof normalized.publicServerReadiness.status === "string" ? normalized.publicServerReadiness.status : "",
+          remaining: Array.isArray(normalized.publicServerReadiness.remaining)
+            ? normalized.publicServerReadiness.remaining.filter((item) => typeof item === "string")
+            : [],
+        }
+      : null;
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
   normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
   normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
