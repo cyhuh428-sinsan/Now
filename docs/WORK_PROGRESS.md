@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 18:08 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 항목 중 2단계 인증 절차 구현.
+
+### 구현 내용
+
+- `POST /api/v1/auth/token-login`에 선택 필드 `two_factor_code` 추가.
+- 사용자 `two_factor_enabled=true`이면 토큰 로그인 때 6자리 2단계 코드를 필수로 검증.
+- 코드가 없으면 `two factor code required`, 틀리면 `invalid two factor code`로 차단.
+- 토큰 확인 화면 `/auth/token`에 2단계 인증 코드 입력란 추가.
+- `TWO_FACTOR_AUTH_STATUS`를 `token_code`로 변경하고 공용 서버 준비 상태에서 2단계 코드 검증 절차를 준비 완료로 이동.
+- smoke test에 2단계 사용자 생성, 코드 없는 로그인 차단, 잘못된 코드 차단, 정상 코드 로그인 검증 추가.
+- README, DEPLOY, 인증 정책, preflight 기준 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 auth/capabilities/smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (305/305 checks)` 출력 확인.
+- `app.api.server.server_info()` 직접 호출로 `real_two_factor_challenge` 준비 완료와 remaining 제거 확인. 현재 remaining은 HTTPS/reverse proxy 한 항목.
+
 ## 2026-05-20 17:48 KST
 
 ### 다음 작업 시작

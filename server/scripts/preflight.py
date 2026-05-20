@@ -209,7 +209,7 @@ def main() -> None:
             [
                 ('API_VERSION = "v1"', "Capabilities defines API version", "API_VERSION"),
                 (
-                    'TWO_FACTOR_AUTH_STATUS = "planned"',
+                    'TWO_FACTOR_AUTH_STATUS = "token_code"',
                     "Capabilities defines two-factor auth status",
                     "TWO_FACTOR_AUTH_STATUS",
                 ),
@@ -237,6 +237,9 @@ def main() -> None:
                 ('@api_router.post("/token-login")', "Auth API exposes token login", "token login API"),
                 ('@page_router.get("/auth/token"', "Auth page exposes token check screen", "token check screen"),
                 ("last_login_at", "Auth login updates last login time", "last_login_at"),
+                ("two factor code required", "Auth login requires two-factor code", "two factor code required"),
+                ("invalid two factor code", "Auth login rejects invalid two-factor code", "invalid two factor code"),
+                ("_two_factor_code", "Auth API computes two-factor code", "_two_factor_code"),
                 ("invalid user token", "Auth login rejects invalid user token", "invalid user token"),
                 ("NowNote 토큰 확인", "Auth page is Korean", "Korean auth page"),
             ],
@@ -496,7 +499,7 @@ def main() -> None:
                 ("공용 NowNote 서버", "Auth policy covers public NowNote server", "public server auth policy"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Auth policy covers user token required mode", "NOW_USER_TOKEN_REQUIRED=true"),
                 ("사용자 토큰 확인 화면/API", "Auth policy covers token login readiness", "token login readiness"),
-                ("실제 2단계 인증 절차", "Auth policy covers real two-factor gap", "real two-factor"),
+                ("2단계 코드 검증", "Auth policy covers two-factor code flow", "two-factor code flow"),
                 ("사용자별 데이터 격리 자동 검증", "Auth policy covers user data isolation check", "data isolation"),
                 ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
                 ("--public-server", "Auth policy covers public preflight command", "public preflight"),
@@ -544,6 +547,9 @@ def main() -> None:
                 ("GET /auth/token", "Smoke checks token login page", "token login page"),
                 ("POST /api/v1/auth/token-login", "Smoke checks token login API", "token login API"),
                 ("잘못된 사용자 토큰 로그인이 invalid user token", "Smoke checks invalid token login", "invalid token login"),
+                ("2단계 인증 사용자의 코드 없는 로그인", "Smoke checks missing two-factor code", "missing two factor code"),
+                ("2단계 인증 사용자의 잘못된 코드 로그인", "Smoke checks invalid two-factor code", "invalid two factor code"),
+                ("POST /api/v1/auth/token-login(two_factor)", "Smoke checks two-factor token login", "two factor token login"),
                 ("local_user 메모 목록에 다른 사용자 메모", "Smoke checks note list user data isolation", "note list user data isolation"),
                 ("local_user 검색 결과에 다른 사용자 메모", "Smoke checks note search user data isolation", "note search user data isolation"),
                 ("smoke_admin_user 메모 목록에서 자기 메모", "Smoke checks other user can read own data", "other user own data"),
@@ -559,6 +565,7 @@ def main() -> None:
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
                 ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
                 ("TWO_FACTOR_AUTH_STATUS", "Smoke checks two-factor auth status", "TWO_FACTOR_AUTH_STATUS"),
+                ("token_code", "Smoke checks two-factor token code status", "two factor token code status"),
                 ("MAX_TREE_NOTE_LEVEL", "Smoke checks tree depth constant", "MAX_TREE_NOTE_LEVEL"),
                 ("SUPPORTED_NOTE_TYPES", "Smoke checks supported note type constant", "SUPPORTED_NOTE_TYPES"),
                 ("status_counts", "Smoke checks backup verify status counts", "status_counts"),
@@ -633,9 +640,10 @@ def main() -> None:
             failures,
         )
         check(
-            False,
+            'TWO_FACTOR_AUTH_STATUS = "token_code"' in capabilities_source
+            and "real_two_factor_challenge" in capabilities_source,
             "Public server real two-factor challenge",
-            "Real two-factor challenge is not implemented yet",
+            "Two-factor code challenge is exposed",
             failures,
         )
         check(
