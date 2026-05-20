@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 18:24 KST
+
+### 다음 작업 시작
+
+- 공용 서버 HTTPS/reverse proxy 준비 상태를 운영 설정 기반으로 동적 판정.
+
+### 구현 내용
+
+- 설정값 `NOW_PUBLIC_BASE_URL`, `NOW_BEHIND_REVERSE_PROXY` 추가.
+- `.env.example`에 공용 서버 공개 URL/reverse proxy 설정 항목 추가.
+- 공용 서버 준비 상태에서 공개 HTTPS/reverse proxy 항목을 동적 판정하도록 변경.
+- `NOW_PUBLIC_BASE_URL`이 `https://`로 시작하고 `NOW_BEHIND_REVERSE_PROXY=true`이면 준비 완료, 아니면 remaining에 유지.
+- `--public-server` preflight가 공개 URL과 reverse proxy 설정을 실제로 확인하도록 변경.
+- README, DEPLOY, 인증 정책 문서의 공개 운영 설정 안내 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 config/capabilities/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (310/310 checks)` 출력 확인.
+- 기본 설정에서는 `public_https_reverse_proxy`가 remaining에 남는 것 확인.
+- `NOW_PUBLIC_BASE_URL=https://now.example.com`, `NOW_BEHIND_REVERSE_PROXY=true` 환경에서는 공용 서버 준비 상태가 `ready`, remaining 빈 목록으로 바뀌는 것 확인.
+
 ## 2026-05-20 18:08 KST
 
 ### 다음 작업 시작

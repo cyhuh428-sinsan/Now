@@ -100,6 +100,8 @@ def main() -> None:
         "NOW_WORKER_POLL_SECONDS",
         "NOW_WORKER_BATCH_SIZE",
         "NOW_LLM_PROVIDER",
+        "NOW_PUBLIC_BASE_URL",
+        "NOW_BEHIND_REVERSE_PROXY",
     ]
     for key in required_keys:
         check(key in values, f"{key} set", env_path.name, failures)
@@ -110,6 +112,8 @@ def main() -> None:
     poll_seconds = values.get("NOW_WORKER_POLL_SECONDS", "")
     batch_size = values.get("NOW_WORKER_BATCH_SIZE", "")
     user_token_required = values.get("NOW_USER_TOKEN_REQUIRED", "").lower()
+    public_base_url = values.get("NOW_PUBLIC_BASE_URL", "")
+    behind_reverse_proxy = values.get("NOW_BEHIND_REVERSE_PROXY", "").lower()
 
     if args.allow_example:
         check(
@@ -140,6 +144,12 @@ def main() -> None:
 
     check(storage_dir.startswith("/"), "Storage dir is container absolute path", storage_dir, failures)
     check(user_token_required in {"true", "false"}, "User token required flag valid", "NOW_USER_TOKEN_REQUIRED true/false", failures)
+    check(
+        behind_reverse_proxy in {"true", "false"},
+        "Reverse proxy flag valid",
+        "NOW_BEHIND_REVERSE_PROXY true/false",
+        failures,
+    )
     check(poll_seconds.isdigit() and int(poll_seconds) > 0, "Worker poll seconds valid", poll_seconds, failures)
     check(batch_size.isdigit() and int(batch_size) > 0, "Worker batch size valid", batch_size, failures)
 
@@ -220,7 +230,9 @@ def main() -> None:
                     "SUPPORTED_NOTE_TYPES",
                 ),
                 ("PUBLIC_SERVER_READY_ITEMS", "Capabilities defines public server ready items", "PUBLIC_SERVER_READY_ITEMS"),
-                ("PUBLIC_SERVER_REMAINING_ITEMS", "Capabilities defines public server remaining items", "PUBLIC_SERVER_REMAINING_ITEMS"),
+                ("PUBLIC_SERVER_HTTPS_ITEM", "Capabilities defines public HTTPS readiness item", "PUBLIC_SERVER_HTTPS_ITEM"),
+                ("public_https_ready", "Capabilities checks public HTTPS readiness dynamically", "public_https_ready"),
+                ("public_https_message", "Capabilities explains public HTTPS readiness", "public_https_message"),
                 ("login_or_token_delivery", "Capabilities marks token login ready item", "login_or_token_delivery"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
@@ -659,9 +671,9 @@ def main() -> None:
             failures,
         )
         check(
-            False,
+            public_base_url.startswith("https://") and behind_reverse_proxy == "true",
             "Public server HTTPS/reverse proxy",
-            "Confirm domain, HTTPS, reverse proxy, and recovery procedure before opening",
+            "NOW_PUBLIC_BASE_URL must be https:// and NOW_BEHIND_REVERSE_PROXY must be true before opening",
             failures,
         )
 
