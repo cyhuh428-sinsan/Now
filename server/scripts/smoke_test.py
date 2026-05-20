@@ -654,10 +654,39 @@ def main() -> None:
 
     status, data = request("GET", f"{base_url}/api/v1/admin/users?token=issued", args.token)
     require(data.get("token_issued", 0) >= 1, "사용자 토큰 발급 집계가 증가하지 않았습니다")
+    issued_users = data.get("items", [])
+    require(
+        all("access_token_hash" not in user for user in issued_users),
+        "사용자 목록 API에 사용자 토큰 해시가 포함되었습니다",
+    )
+    require(
+        issued_smoke_token not in json.dumps(issued_users, ensure_ascii=False),
+        "사용자 목록 API에 사용자 토큰 원문이 포함되었습니다",
+    )
     print(
         "GET /api/v1/admin/users(token=issued):",
         status,
         {"count": data.get("count"), "token_issued": data.get("token_issued")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/users?token=issued",
+        args.token,
+    )
+    exported_token_users = data.get("items", [])
+    require(
+        all("access_token_hash" not in user for user in exported_token_users),
+        "사용자 export에 사용자 토큰 해시가 포함되었습니다",
+    )
+    require(
+        issued_smoke_token not in json.dumps(exported_token_users, ensure_ascii=False),
+        "사용자 export에 사용자 토큰 원문이 포함되었습니다",
+    )
+    print(
+        "GET /api/v1/admin/export/users(token_safety):",
+        status,
+        {"users": len(exported_token_users), "token_hash_hidden": True},
     )
 
     status, data = request(

@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 01:49 KST
+
+### 다음 작업 시작
+
+- 사용자 API/export의 토큰 민감정보 노출 회귀 검증 보강.
+
+### 구현 내용
+
+- smoke test가 `/api/v1/admin/users?token=issued` 응답에 `access_token_hash`와 토큰 원문이 없는지 확인하도록 보강.
+- smoke test가 `/api/v1/admin/export/users?token=issued` 응답에 `access_token_hash`와 토큰 원문이 없는지 확인하도록 추가.
+- preflight가 사용자 목록/API export의 토큰 해시 노출 방지 확인 문구를 검사하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `rg`로 사용자 목록/API export 토큰 해시 노출 방지 확인 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient로 토큰 발급 후 `/api/v1/admin/users?token=issued`와 `/api/v1/admin/export/users?token=issued`에 `access_token_hash`와 토큰 원문이 없는 것 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (187/187 checks)` 출력 확인.
+
 ## 2026-05-20 01:36 KST
 
 ### 다음 작업 시작
