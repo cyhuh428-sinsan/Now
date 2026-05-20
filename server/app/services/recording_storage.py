@@ -39,5 +39,8 @@ def delete_recording_file(storage_path: str | None) -> None:
         target.relative_to(storage_root)
     except ValueError:
         return
-    if target.is_file():
-        target.unlink()
+    try:
+        if target.is_file():
+            target.unlink()
+    except OSError:
+        return
