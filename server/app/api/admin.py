@@ -92,6 +92,23 @@ def export_recordings(
     return _export_payload("recordings", list(db.scalars(stmt).all()))
 
 
+@router.get("/export/recording-orphans")
+def export_recording_orphans(db: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
+    orphan_files = _recording_storage_orphan_files(
+        settings.storage_dir,
+        recording_storage_paths,
+    )
+    return {
+        "name": "recording_orphans",
+        "exported_at": datetime.utcnow(),
+        "count": len(orphan_files),
+        "storage_dir": settings.storage_dir,
+        "items": orphan_files,
+    }
+
+
 @router.get("/export/analysis-jobs")
 def export_analysis_jobs(
     owner_id: str | None = Query(default=None),
@@ -818,9 +835,13 @@ def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
 
 
 def _recording_storage_orphan_count(storage_dir: str, recording_paths: list[str | None]) -> int:
+    return len(_recording_storage_orphan_files(storage_dir, recording_paths))
+
+
+def _recording_storage_orphan_files(storage_dir: str, recording_paths: list[str | None]) -> list[dict[str, object]]:
     storage_path = Path(storage_dir)
     if not storage_path.exists() or not storage_path.is_dir():
-        return 0
+        return []
 
     storage_root = storage_path.resolve(strict=False)
     known_paths: set[Path] = set()
@@ -834,11 +855,23 @@ def _recording_storage_orphan_count(storage_dir: str, recording_paths: list[str 
             continue
         known_paths.add(resolved_path)
 
-    orphan_count = 0
+    orphan_files: list[dict[str, object]] = []
     for path in storage_root.rglob("*"):
-        if path.is_file() and path.resolve(strict=False) not in known_paths:
-            orphan_count += 1
-    return orphan_count
+        if not path.is_file():
+            continue
+        resolved_path = path.resolve(strict=False)
+        if resolved_path in known_paths:
+            continue
+        stat = path.stat()
+        orphan_files.append(
+            {
+                "path": str(resolved_path),
+                "relative_path": str(resolved_path.relative_to(storage_root)),
+                "size_bytes": stat.st_size,
+                "modified_at": datetime.utcfromtimestamp(stat.st_mtime),
+            }
+        )
+    return sorted(orphan_files, key=lambda item: str(item["relative_path"]))
 
 
 def _api_token_state(api_token: str | None) -> tuple[str, str]:
