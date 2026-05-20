@@ -46,13 +46,11 @@ PUBLIC_SERVER_READY_ITEMS = [
     },
 ]
 
-PUBLIC_SERVER_REMAINING_ITEMS = [
-    {
-        "id": "public_https_reverse_proxy",
-        "label": "공개 HTTPS/reverse proxy",
-        "message": "정식 오픈 전 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인 필요",
-    },
-]
+PUBLIC_SERVER_HTTPS_ITEM = {
+    "id": "public_https_reverse_proxy",
+    "label": "공개 HTTPS/reverse proxy",
+    "message": "공개 URL이 https://이고 reverse proxy 사용 설정이 켜져 있는지 확인",
+}
 
 SERVER_CAPABILITIES = {
     "sync": True,
@@ -80,27 +78,22 @@ def server_capabilities() -> dict:
 
 
 def public_server_readiness() -> dict:
-    ready = [item["id"] for item in PUBLIC_SERVER_READY_ITEMS]
-    remaining = [item["id"] for item in PUBLIC_SERVER_REMAINING_ITEMS]
+    https_item = dict(PUBLIC_SERVER_HTTPS_ITEM)
+    https_item["status"] = "ready" if public_https_ready() else "planned"
+    https_item["message"] = public_https_message()
+    dynamic_items = [*PUBLIC_SERVER_READY_ITEMS, https_item]
+    ready = [item["id"] for item in dynamic_items if item.get("status", "ready") == "ready"]
+    remaining = [item["id"] for item in dynamic_items if item.get("status") == "planned"]
     return {
         "status": "ready" if not remaining else "planned",
         "ready": ready,
         "remaining": remaining,
         "items": [
-            *[
-                {
-                    **item,
-                    "status": "ready",
-                }
-                for item in PUBLIC_SERVER_READY_ITEMS
-            ],
-            *[
-                {
-                    **item,
-                    "status": "planned",
-                }
-                for item in PUBLIC_SERVER_REMAINING_ITEMS
-            ],
+            {
+                **item,
+                "status": item.get("status", "ready"),
+            }
+            for item in dynamic_items
         ],
     }
 
@@ -115,3 +108,25 @@ def public_server_readiness_checks() -> list[dict[str, str]]:
         }
         for item in readiness["items"]
     ]
+
+
+def public_https_ready() -> bool:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    public_base_url = (settings.public_base_url or "").strip().lower()
+    return public_base_url.startswith("https://") and bool(settings.behind_reverse_proxy)
+
+
+def public_https_message() -> str:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    public_base_url = (settings.public_base_url or "").strip()
+    if public_https_ready():
+        return f"공개 URL 확인됨: {public_base_url}"
+    if not public_base_url:
+        return "공용 오픈 전 NOW_PUBLIC_BASE_URL=https://도메인 설정 필요"
+    if not public_base_url.lower().startswith("https://"):
+        return "공용 오픈 전 NOW_PUBLIC_BASE_URL은 https:// 주소여야 함"
+    return "공용 오픈 전 NOW_BEHIND_REVERSE_PROXY=true 설정 필요"

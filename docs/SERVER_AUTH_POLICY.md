@@ -33,7 +33,7 @@
 
 현재의 단일 `NOW_API_TOKEN`만으로는 공용 서버를 정식 오픈하기에 부족합니다. 사용자별 접속 토큰은 발급, 토큰 확인 화면/API, 2단계 코드 검증, 데이터 API 검증 단계까지 준비되어 있으며, 공용 서버 오픈 전에는 아래 기능을 추가로 확정해야 합니다.
 
-- HTTPS, reverse proxy, 백업/복구, 운영 알림
+- HTTPS, reverse proxy, 운영 알림
 
 관리 화면의 사용자 그룹, 활성 상태, 2단계 인증 사용 여부, 사용자 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 기기 조회/해제 API, 사용자별 데이터 격리 자동 검증은 공용 서버 운영을 위한 준비 기능입니다. 공개 운영 절차가 완성되기 전까지는 제한된 테스트 서버로만 사용합니다.
 
@@ -57,4 +57,4 @@ python3 scripts/preflight.py --public-server
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --issue-local-user-token
 ```
 
-`--public-server`는 현재 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 공개 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.
+`--public-server`는 `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true`가 설정되지 않으면 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 공개 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.
