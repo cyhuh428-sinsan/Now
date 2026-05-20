@@ -73,6 +73,7 @@ def main() -> None:
     deploy_path = server_dir / "DEPLOY.md"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
+    auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
     users_api_path = server_dir / "app" / "api" / "users.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
@@ -190,6 +191,7 @@ def main() -> None:
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
+    check(auth_api_path.exists(), "Auth API source exists", str(auth_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
     check(users_api_path.exists(), "User API source exists", str(users_api_path), failures)
@@ -219,10 +221,24 @@ def main() -> None:
                 ),
                 ("PUBLIC_SERVER_READY_ITEMS", "Capabilities defines public server ready items", "PUBLIC_SERVER_READY_ITEMS"),
                 ("PUBLIC_SERVER_REMAINING_ITEMS", "Capabilities defines public server remaining items", "PUBLIC_SERVER_REMAINING_ITEMS"),
+                ("login_or_token_delivery", "Capabilities marks token login ready item", "login_or_token_delivery"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
                 ('"ready": ready', "Capabilities returns public server ready list", "public readiness ready list"),
                 ('"items": [', "Capabilities returns public server readiness details", "public readiness details"),
+            ],
+            failures,
+        )
+    if auth_api_path.exists():
+        auth_api_source = auth_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            auth_api_source,
+            [
+                ('@api_router.post("/token-login")', "Auth API exposes token login", "token login API"),
+                ('@page_router.get("/auth/token"', "Auth page exposes token check screen", "token check screen"),
+                ("last_login_at", "Auth login updates last login time", "last_login_at"),
+                ("invalid user token", "Auth login rejects invalid user token", "invalid user token"),
+                ("NowNote 토큰 확인", "Auth page is Korean", "Korean auth page"),
             ],
             failures,
         )
@@ -479,7 +495,7 @@ def main() -> None:
                 ("개인 Docker 서버", "Auth policy covers private Docker server", "private server auth policy"),
                 ("공용 NowNote 서버", "Auth policy covers public NowNote server", "public server auth policy"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Auth policy covers user token required mode", "NOW_USER_TOKEN_REQUIRED=true"),
-                ("사용자별 로그인 화면 또는 토큰 전달 UI", "Auth policy covers login/token delivery gap", "login/token delivery"),
+                ("사용자 토큰 확인 화면/API", "Auth policy covers token login readiness", "token login readiness"),
                 ("실제 2단계 인증 절차", "Auth policy covers real two-factor gap", "real two-factor"),
                 ("사용자별 데이터 격리 자동 검증", "Auth policy covers user data isolation check", "data isolation"),
                 ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
@@ -525,6 +541,9 @@ def main() -> None:
                 ("invalid user token으로 차단", "Smoke checks invalid user token detail", "invalid user token detail"),
                 ("실패한 사용자 토큰 요청이 마지막 사용 시각", "Smoke checks failed token does not update last used", "failed token last used"),
                 ("다른 사용자 토큰으로 local_user 데이터 API", "Smoke checks cross-user token isolation", "cross user token isolation"),
+                ("GET /auth/token", "Smoke checks token login page", "token login page"),
+                ("POST /api/v1/auth/token-login", "Smoke checks token login API", "token login API"),
+                ("잘못된 사용자 토큰 로그인이 invalid user token", "Smoke checks invalid token login", "invalid token login"),
                 ("local_user 메모 목록에 다른 사용자 메모", "Smoke checks note list user data isolation", "note list user data isolation"),
                 ("local_user 검색 결과에 다른 사용자 메모", "Smoke checks note search user data isolation", "note search user data isolation"),
                 ("smoke_admin_user 메모 목록에서 자기 메모", "Smoke checks other user can read own data", "other user own data"),
@@ -553,7 +572,7 @@ def main() -> None:
                 ("기기 누락 백업 검증", "Smoke checks devices missing message", "missing devices message"),
                 ("운영 점검 화면에 백업/복구 절차 항목", "Smoke checks ops page backup recovery guidance", "ops page backup recovery"),
                 ("운영 점검 화면에 준비된 사용자별 접속 토큰 항목", "Smoke checks ops ready token guidance", "ops ready token"),
-                ("운영 점검 화면에 공용 서버 로그인/토큰 전달 항목", "Smoke checks ops page public login guidance", "ops page public login"),
+                ("운영 점검 화면에 사용자 토큰 확인 준비 항목", "Smoke checks ops page public login guidance", "ops page public login"),
                 ("운영 점검에 공용 서버 인증 항목", "Smoke checks ops public auth item", "ops public auth item"),
                 ("운영 점검 요약에 토큰 없는 사용자 집계", "Smoke checks ops users without token summary", "ops users without token"),
                 ("사용자별 토큰 기준", "Smoke checks ops public auth token message", "ops public auth token message"),
@@ -575,6 +594,7 @@ def main() -> None:
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),
+                ("서버 정보의 공용 서버 준비 상태에 사용자 토큰 확인 화면/API", "Smoke checks server public readiness token login", "server public readiness token login"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
                 ("기기 관리 화면에 현재 조건 JSON 링크", "Smoke checks devices export link", "devices export link"),
@@ -607,9 +627,15 @@ def main() -> None:
             failures,
         )
         check(
+            "login_or_token_delivery" in capabilities_source,
+            "Public server token login flow",
+            "User token check page and token-login API are exposed",
+            failures,
+        )
+        check(
             False,
-            "Public server login flow",
-            "User-token validation exists, but login UI and real two-factor challenge are not implemented yet",
+            "Public server real two-factor challenge",
+            "Real two-factor challenge is not implemented yet",
             failures,
         )
         check(

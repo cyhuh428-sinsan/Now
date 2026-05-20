@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 17:48 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 항목 중 로그인/토큰 전달의 1차 구현.
+
+### 구현 내용
+
+- 공개 사용자 토큰 확인 화면 `GET /auth/token` 추가.
+- 사용자 토큰 확인 API `POST /api/v1/auth/token-login` 추가.
+- 토큰 확인 성공 시 `last_login_at`, `last_seen_at`, `access_token_last_used_at`을 갱신.
+- 잘못된 토큰, 미발급 토큰, 비활성 사용자를 명확한 오류로 차단.
+- main 앱에 auth 화면/API 라우터 연결.
+- 공용 서버 준비 상태에서 `login_or_token_delivery`를 사용자 토큰 확인 화면/API 준비 완료 항목으로 이동.
+- smoke/preflight/README/DEPLOY/인증 정책 문서 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 auth/main/capabilities/smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (298/298 checks)` 출력 확인.
+- `app.api.server.server_info()` 직접 호출로 `login_or_token_delivery` 준비 완료와 remaining 제거 확인. 현재 remaining은 실제 2단계 인증/HTTPS 두 항목.
+
 ## 2026-05-20 17:32 KST
 
 ### 다음 작업 시작

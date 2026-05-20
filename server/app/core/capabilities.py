@@ -34,14 +34,14 @@ PUBLIC_SERVER_READY_ITEMS = [
         "label": "사용자별 데이터 격리 자동 검증",
         "message": "메모, 검색, 동기화, 녹음, 분석 작업의 사용자별 데이터 격리 smoke 검증 지원",
     },
+    {
+        "id": "login_or_token_delivery",
+        "label": "사용자 토큰 확인 화면/API",
+        "message": "사용자별 접속 토큰을 확인하는 공개 화면과 token-login API 지원",
+    },
 ]
 
 PUBLIC_SERVER_REMAINING_ITEMS = [
-    {
-        "id": "login_or_token_delivery",
-        "label": "로그인 또는 토큰 전달 화면",
-        "message": "정식 오픈 전 사용자별 토큰 전달 UI 또는 로그인 화면 필요",
-    },
     {
         "id": "real_two_factor_challenge",
         "label": "실제 2단계 인증 절차",

@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin import router as admin_router
 from app.api.analysis import router as analysis_router
+from app.api.auth import api_router as auth_api_router
+from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
@@ -29,8 +31,10 @@ def create_app() -> FastAPI:
         create_tables()
 
     app.include_router(health_router)
+    app.include_router(auth_page_router)
     app.include_router(monitor_router)
     app.include_router(server_router)
+    app.include_router(auth_api_router)
     app.include_router(notes_router)
     app.include_router(recordings_router)
     app.include_router(sync_router)
