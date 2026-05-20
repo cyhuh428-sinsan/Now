@@ -817,14 +817,40 @@ def main() -> None:
             "content_type": data.get("content_type"),
         },
     )
+    first_recording_file_name = data.get("file_name")
+
+    status, data = request_multipart(
+        f"{base_url}/api/v1/recordings",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "device_id": "smoke_test",
+            "local_id": recording_local_id,
+            "note_local_id": "smoke_note_001",
+            "transcript": "Smoke recording transcript replaced",
+        },
+        "file",
+        "smoke-recording-replaced.webm",
+        "audio/webm",
+        b"NowNote smoke recording replacement bytes",
+    )
+    require(data.get("local_id") == recording_local_id, "녹음 재업로드 local_id가 일치하지 않습니다")
+    require(data.get("file_name") != first_recording_file_name, "녹음 재업로드 파일명이 갱신되지 않았습니다")
+    print(
+        "POST /api/v1/recordings(replace):",
+        status,
+        {"local_id": data.get("local_id"), "file_replaced": True},
+    )
 
     status, data = request(
         "GET",
         f"{base_url}/api/v1/recordings?owner_id=local_user",
         args.token,
     )
-    has_recording = any(item.get("local_id") == recording_local_id for item in data)
+    matching_recordings = [item for item in data if item.get("local_id") == recording_local_id]
+    has_recording = bool(matching_recordings)
     require(has_recording, "업로드한 녹음이 목록에서 확인되지 않았습니다")
+    require(len(matching_recordings) == 1, "녹음 재업로드 후 같은 local_id가 중복 노출됩니다")
     print(
         "GET /api/v1/recordings:",
         status,

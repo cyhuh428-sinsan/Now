@@ -257,6 +257,18 @@ def main() -> None:
             ],
             failures,
         )
+    recording_storage_path = server_dir / "app" / "services" / "recording_storage.py"
+    check(recording_storage_path.exists(), "Recording storage service exists", str(recording_storage_path), failures)
+    if recording_storage_path.exists():
+        recording_storage_source = recording_storage_path.read_text(encoding="utf-8")
+        check_text_contains(
+            recording_storage_source,
+            [
+                ("delete_recording_file", "Recording storage can delete replaced files", "delete_recording_file"),
+                ("relative_to(storage_root)", "Recording storage deletion is limited to storage root", "storage root guard"),
+            ],
+            failures,
+        )
     if monitor_api_path.exists():
         monitor_source = monitor_api_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -378,6 +390,8 @@ def main() -> None:
                 ("녹음 저장 파일명에 경로 문자", "Smoke checks recording filename path safety", "recording filename path safety"),
                 ("owner/device 디렉터리", "Smoke checks recording owner device directory", "recording owner device directory"),
                 ("recordings(path_safety)", "Smoke checks recording upload path safety", "recording path safety"),
+                ("recordings(replace)", "Smoke checks recording replacement", "recording replacement"),
+                ("같은 local_id가 중복", "Smoke checks recording duplicate local_id", "recording duplicate local_id"),
                 ("user_accounts", "Smoke covers user accounts capability", "user_accounts"),
                 ("user_access_tokens", "Smoke covers user access tokens capability", "user_access_tokens"),
                 ("user_token_required", "Smoke checks user token required flag", "user_token_required"),

@@ -6,7 +6,7 @@ from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import Recording
 from app.schemas.note import RecordingOut
-from app.services.recording_storage import save_recording_file
+from app.services.recording_storage import delete_recording_file, save_recording_file
 from app.services.user_accounts import require_user_api_access
 from app.services.user_devices import require_active_user_device
 
@@ -60,6 +60,7 @@ async def upload_recording(
             Recording.local_id == local_id,
         )
     )
+    old_storage_path = recording.storage_path if recording is not None else None
     if recording is None:
         recording = Recording(
             owner_id=owner_id,
@@ -80,5 +81,7 @@ async def upload_recording(
         recording.transcript = transcript
 
     db.commit()
+    if old_storage_path and old_storage_path != storage_path:
+        delete_recording_file(old_storage_path)
     db.refresh(recording)
     return recording
