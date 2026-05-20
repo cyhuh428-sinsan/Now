@@ -239,6 +239,8 @@ def main() -> None:
                 ("orphan_recording_files", "Admin ops summary covers orphan recording files", "orphan recording files summary"),
                 ("recording_orphans", "Admin API exports orphan recording files", "recording orphan export"),
                 ("_recording_storage_orphan_files", "Admin API lists orphan recording files", "recording orphan file list"),
+                ("recording_orphan_files", "Admin export summary includes orphan recording count", "recording orphan summary count"),
+                ("recording_orphan_bytes", "Admin export summary includes orphan recording bytes", "recording orphan summary bytes"),
             ],
             failures,
         )
@@ -302,6 +304,7 @@ def main() -> None:
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 ("고아 녹음 파일 JSON", "Monitor recordings links orphan export", "recording orphan export link"),
                 ("/api/v1/admin/export/recording-orphans", "Monitor recordings uses orphan export API", "recording orphan export API"),
+                ('summary["recording_orphan_files"]', "Monitor export page shows orphan recording count", "recording orphan export count"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -421,6 +424,8 @@ def main() -> None:
                 ("status_counts", "Smoke checks backup verify status counts", "status_counts"),
                 ("내보내기 요약에 기기 건수", "Smoke checks export summary devices count", "summary devices count"),
                 ("내보내기 요약에 전체 export 건수", "Smoke checks export summary total count", "summary total count"),
+                ("내보내기 요약에 고아 녹음 파일 건수", "Smoke checks export summary orphan recordings", "summary orphan recordings"),
+                ("내보내기 요약에 고아 녹음 파일 크기", "Smoke checks export summary orphan bytes", "summary orphan bytes"),
                 ("항목 합계와 다릅니다", "Smoke checks export summary total consistency", "summary total consistency"),
                 ("verify(missing-devices)", "Smoke checks missing devices backup verification", "missing devices verify"),
                 ("기기 누락 백업 검증", "Smoke checks devices missing message", "missing devices message"),

@@ -411,6 +411,8 @@ def main() -> None:
     require("notes" in summary_items, "내보내기 요약에 메모 건수가 없습니다")
     require("devices" in summary_items, "내보내기 요약에 기기 건수가 없습니다")
     require("total_export_items" in summary_items, "내보내기 요약에 전체 export 건수가 없습니다")
+    require("recording_orphan_files" in summary_items, "내보내기 요약에 고아 녹음 파일 건수가 없습니다")
+    require("recording_orphan_bytes" in summary_items, "내보내기 요약에 고아 녹음 파일 크기가 없습니다")
     summed_items = sum(
         int(summary_items.get(name, 0) or 0)
         for name in ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]
@@ -427,6 +429,7 @@ def main() -> None:
             "recordings": summary_items.get("recordings"),
             "users": summary_items.get("users"),
             "devices": summary_items.get("devices"),
+            "recording_orphan_files": summary_items.get("recording_orphan_files"),
             "total_export_items": summary_items.get("total_export_items"),
         },
     )
