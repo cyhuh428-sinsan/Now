@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 16:36 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 항목 중 사용자별 기기 조회/해제 API 보강.
+
+### 구현 내용
+
+- `GET /api/v1/users/{owner_id}/devices` 추가.
+- `PATCH /api/v1/users/{owner_id}/devices/{device_id}` 추가.
+- 사용자별 접속 토큰 검증 후 자기 기기 목록 조회와 활성/비활성 변경을 수행하도록 연결.
+- 기기 상태 변경 API는 기존에 등록된 기기만 변경하고, 없는 기기는 `404 device not found`로 차단하도록 보강.
+- 공용 서버 준비 상태에서 `user_device_self_management`를 준비 완료 항목으로 추가.
+- 공용 서버 남은 항목에서 사용자별 기기 등록/해제 흐름 제거.
+- README, DEPLOY, 인증 정책 문서, smoke/preflight 검증 기준 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 users/capabilities/smoke/preflight 문법 확인 통과.
+- `rg`로 사용자 기기 자기관리 API와 공용 서버 준비 항목 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (280/280 checks)` 출력 확인.
+- `app.api.server.server_info()` 직접 호출로 `user_device_self_management` 준비 완료와 `user_device_registration` 남은 항목 제거 확인.
+- Windows 로컬에서는 서버 컨테이너를 띄우지 않아 live smoke test는 실행하지 않음. WSL 배포 환경에서 `scripts/smoke_test.py --base-url http://localhost:8750`로 확인 가능.
+
 ## 2026-05-20 16:20 KST
 
 ### 다음 작업 시작

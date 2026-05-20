@@ -221,12 +221,12 @@ def main() -> None:
             require(
                 isinstance(public_readiness_items, list)
                 and any(
-                    item.get("id") == "user_device_registry"
+                    item.get("id") == "user_device_self_management"
                     and item.get("status") == "ready"
                     for item in public_readiness_items
                     if isinstance(item, dict)
                 ),
-                "서버 정보의 공용 서버 준비 상태 상세에 기기 레지스트리 준비 항목이 없습니다",
+                "서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목이 없습니다",
             )
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
@@ -343,7 +343,7 @@ def main() -> None:
             require("사용자별 접속 토큰" in text, "운영 점검 화면에 준비된 사용자별 접속 토큰 항목이 없습니다")
             require("로그인 또는 토큰 전달 화면" in text, "운영 점검 화면에 공용 서버 로그인/토큰 전달 항목이 없습니다")
             require("실제 2단계 인증 절차" in text, "운영 점검 화면에 실제 2단계 인증 항목이 없습니다")
-            require("사용자별 기기 등록/해제 흐름" in text, "운영 점검 화면에 공용 서버 기기 등록/해제 항목이 없습니다")
+            require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
             require("사용자별 데이터 격리 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
@@ -1150,6 +1150,41 @@ def main() -> None:
             "status": data.get("status"),
             "timezone": data.get("user", {}).get("timezone"),
         },
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/users/local_user/devices",
+        args.token,
+    )
+    devices = data.get("devices", [])
+    require(data.get("status") == "ok", "사용자 기기 목록 조회 응답 상태가 ok가 아닙니다")
+    require(
+        any(device.get("device_id") == "smoke_test" for device in devices),
+        "사용자 기기 목록에 smoke_test 기기가 없습니다",
+    )
+    print(
+        "GET /api/v1/users/local_user/devices:",
+        status,
+        {"count": len(devices)},
+    )
+
+    status, data = request(
+        "PATCH",
+        f"{base_url}/api/v1/users/local_user/devices/smoke_test",
+        args.token,
+        {"is_active": True},
+    )
+    require(data.get("status") == "ok", "사용자 기기 상태 변경 응답 상태가 ok가 아닙니다")
+    require(
+        data.get("device", {}).get("device_id") == "smoke_test"
+        and data.get("device", {}).get("is_active") is True,
+        "사용자 기기 상태 변경 결과가 예상과 다릅니다",
+    )
+    print(
+        "PATCH /api/v1/users/local_user/devices/smoke_test:",
+        status,
+        {"is_active": data.get("device", {}).get("is_active")},
     )
 
     status, data = request(
