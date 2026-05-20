@@ -821,6 +821,8 @@ def _export_summary_counts(db: Session) -> dict:
         recording_storage_paths,
     )
     recording_orphan_bytes = sum(int(item["size_bytes"]) for item in recording_orphan_files)
+    recording_rows = list(db.scalars(select(Recording)).all())
+    recording_missing_files = _recording_missing_files(recording_rows)
     return {
         "notes": note_total,
         "active_notes": active_notes,
@@ -829,6 +831,7 @@ def _export_summary_counts(db: Session) -> dict:
         "recordings_without_transcript": recordings_without_transcript,
         "recording_orphan_files": len(recording_orphan_files),
         "recording_orphan_bytes": recording_orphan_bytes,
+        "recording_missing_files": len(recording_missing_files),
         "users": users,
         "users_with_token": users_with_token,
         "devices": devices,
