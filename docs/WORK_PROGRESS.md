@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 17:07 KST
+
+### 다음 작업 시작
+
+- 사용자별 데이터 격리 smoke test를 실제 데이터 응답 기준으로 추가 보강.
+
+### 구현 내용
+
+- smoke test에서 `smoke_admin_user`의 메모를 생성한 뒤 `local_user` 메모 목록에 섞이지 않는지 확인.
+- `local_user` 검색 결과에 다른 사용자 메모가 노출되지 않는지 확인.
+- `smoke_admin_user`는 자기 메모를 정상 조회할 수 있는지 확인.
+- preflight가 위 데이터 격리 smoke 검증 코드 존재를 확인하도록 보강.
+- README의 smoke test 설명에 메모 목록/검색의 사용자별 데이터 격리 검증을 추가.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (284/284 checks)` 출력 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-20 16:52 KST
 
 ### 다음 작업 시작

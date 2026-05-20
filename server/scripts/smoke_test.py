@@ -842,6 +842,83 @@ def main() -> None:
         },
     )
 
+    other_user_note = {
+        "owner_id": "smoke_admin_user",
+        "device_id": "smoke_other_device",
+        "local_id": "smoke_other_user_note",
+        "note_type": "daily",
+        "title": "Other user smoke memo",
+        "content": "This memo must not appear in local_user data responses",
+        "parent_local_id": None,
+        "level": 1,
+        "tags": "test=other-user",
+        "source": "smoke_test",
+        "client_updated_at": now,
+        "deleted_at": None,
+    }
+    status, data = request_with_user_token(
+        "POST",
+        f"{base_url}/api/v1/notes",
+        args.token,
+        other_user_note,
+        issued_smoke_token,
+    )
+    require(data.get("owner_id") == "smoke_admin_user", "다른 사용자 검증용 메모 owner_id가 일치하지 않습니다")
+    print(
+        "POST /api/v1/notes(other_user):",
+        status,
+        {"owner_id": data.get("owner_id"), "local_id": data.get("local_id")},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/notes?owner_id=local_user", args.token)
+    local_note_ids = {item.get("local_id") for item in data}
+    require("smoke_note_001" in local_note_ids, "local_user 메모 목록에 기준 메모가 없습니다")
+    require(
+        "smoke_other_user_note" not in local_note_ids,
+        "local_user 메모 목록에 다른 사용자 메모가 섞였습니다",
+    )
+    print(
+        "GET /api/v1/notes(user_data_isolation):",
+        status,
+        {"other_user_note_hidden": True, "count": len(data)},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/notes/search?q=Other%20user&owner_id=local_user",
+        args.token,
+    )
+    require(
+        all(item.get("owner_id") == "local_user" for item in data),
+        "local_user 검색 결과에 다른 사용자 메모가 섞였습니다",
+    )
+    require(
+        all(item.get("local_id") != "smoke_other_user_note" for item in data),
+        "local_user 검색 결과에 다른 사용자 메모가 노출됩니다",
+    )
+    print(
+        "GET /api/v1/notes/search(user_data_isolation):",
+        status,
+        {"other_user_note_hidden": True, "count": len(data)},
+    )
+
+    status, data = request_with_user_token(
+        "GET",
+        f"{base_url}/api/v1/notes?owner_id=smoke_admin_user",
+        args.token,
+        user_token=issued_smoke_token,
+    )
+    other_note_ids = {item.get("local_id") for item in data}
+    require(
+        "smoke_other_user_note" in other_note_ids,
+        "smoke_admin_user 메모 목록에서 자기 메모를 확인하지 못했습니다",
+    )
+    print(
+        "GET /api/v1/notes(other_user_visible):",
+        status,
+        {"has_other_user_note": True, "count": len(data)},
+    )
+
     blocked_device_payload = {
         "owner_id": "local_user",
         "device_id": "smoke_blocked",
