@@ -3130,6 +3130,7 @@ def _admin_ops_html() -> str:
     users_without_token = 0
     device_total = 0
     inactive_devices = 0
+    orphan_recording_files = 0
 
     try:
         with SessionLocal() as db:
@@ -3188,6 +3189,11 @@ def _admin_ops_html() -> str:
                     .where(Recording.transcript.is_(None))
                 )
                 or 0
+            )
+            recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
+            orphan_recording_files = _recording_storage_orphan_count(
+                settings.storage_dir,
+                recording_storage_paths,
             )
     except Exception as exc:
         db_status = "bad"
@@ -3274,6 +3280,13 @@ def _admin_ops_html() -> str:
             "name": "텍스트 없는 녹음",
             "status": "info" if recordings_without_transcript else "ok",
             "message": f"transcript 없는 녹음 {recordings_without_transcript}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "고아 녹음 파일",
+            "status": "warn" if orphan_recording_files else "ok",
+            "message": f"DB 메타데이터 없이 저장소에 남은 파일 {orphan_recording_files}건",
         }
     )
     checks.append(
@@ -3522,6 +3535,30 @@ def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
     if not storage_path.is_dir():
         return "bad", f"녹음 저장소가 디렉터리가 아님: {storage_dir}"
     return "ok", f"녹음 저장소 경로 확인됨: {storage_dir}"
+
+
+def _recording_storage_orphan_count(storage_dir: str, recording_paths: list[str | None]) -> int:
+    storage_path = Path(storage_dir)
+    if not storage_path.exists() or not storage_path.is_dir():
+        return 0
+
+    storage_root = storage_path.resolve(strict=False)
+    known_paths: set[Path] = set()
+    for raw_path in recording_paths:
+        if not raw_path:
+            continue
+        resolved_path = Path(raw_path).resolve(strict=False)
+        try:
+            resolved_path.relative_to(storage_root)
+        except ValueError:
+            continue
+        known_paths.add(resolved_path)
+
+    orphan_count = 0
+    for path in storage_root.rglob("*"):
+        if path.is_file() and path.resolve(strict=False) not in known_paths:
+            orphan_count += 1
+    return orphan_count
 
 
 def _api_token_state(api_token: str | None) -> tuple[str, str]:
