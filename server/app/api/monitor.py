@@ -3973,6 +3973,12 @@ def _admin_export_html() -> str:
             summary["recordings"],
         ),
         (
+            "고아 녹음 파일",
+            "/api/v1/admin/export/recording-orphans",
+            "DB 메타데이터 없이 저장소에 남은 파일 목록",
+            summary["recording_orphan_files"],
+        ),
+        (
             "Users",
             "/api/v1/admin/export/users",
             "사용자 계정과 운영 메타데이터 export",
@@ -4637,6 +4643,7 @@ def _backup_verify_example() -> str:
 
 def _export_summary_counts_for_page() -> dict[str, int]:
     with SessionLocal() as db:
+        settings = get_settings()
         note_total = db.scalar(select(func.count()).select_from(Note)) or 0
         active_notes = (
             db.scalar(select(func.count()).select_from(Note).where(Note.deleted_at.is_(None)))
@@ -4647,11 +4654,17 @@ def _export_summary_counts_for_page() -> dict[str, int]:
         devices = db.scalar(select(func.count()).select_from(UserDevice)) or 0
         analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
         sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
+        recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
+        recording_orphan_files = _recording_storage_orphan_count(
+            settings.storage_dir,
+            recording_storage_paths,
+        )
         return {
             "notes": note_total,
             "active_notes": active_notes,
             "deleted_notes": note_total - active_notes,
             "recordings": recordings,
+            "recording_orphan_files": recording_orphan_files,
             "users": users,
             "devices": devices,
             "analysis_jobs": analysis_jobs,

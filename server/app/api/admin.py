@@ -766,6 +766,7 @@ def _verification_status(status_counts: dict[str, int]) -> str:
 
 
 def _export_summary_counts(db: Session) -> dict:
+    settings = get_settings()
     note_total = db.scalar(select(func.count()).select_from(Note)) or 0
     active_notes = (
         db.scalar(select(func.count()).select_from(Note).where(Note.deleted_at.is_(None)))
@@ -791,12 +792,20 @@ def _export_summary_counts(db: Session) -> dict:
     )
     analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
     sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
+    recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
+    recording_orphan_files = _recording_storage_orphan_files(
+        settings.storage_dir,
+        recording_storage_paths,
+    )
+    recording_orphan_bytes = sum(int(item["size_bytes"]) for item in recording_orphan_files)
     return {
         "notes": note_total,
         "active_notes": active_notes,
         "deleted_notes": deleted_notes,
         "recordings": recordings,
         "recordings_without_transcript": recordings_without_transcript,
+        "recording_orphan_files": len(recording_orphan_files),
+        "recording_orphan_bytes": recording_orphan_bytes,
         "users": users,
         "users_with_token": users_with_token,
         "devices": devices,
