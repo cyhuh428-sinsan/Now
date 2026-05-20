@@ -190,7 +190,7 @@ In the mobile app and the Web/installed program, open server settings, enter the
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
 Public server operators can create a user ID in the admin screen before the user connects.
 Inactive users are blocked from server sync and data APIs except profile lookup.
-Two-factor authentication is currently a managed status value. The actual two-factor login challenge will be connected later with the public-server authentication work.
+Users with two-factor authentication enabled must enter the six-digit verification code during token login checks.
 
 ## Backup And Import
 

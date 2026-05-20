@@ -3,6 +3,36 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 23:11 KST
+
+### 다음 작업 시작
+
+- Web/설치형과 모바일 서버 연결 화면을 새 사용자 토큰 로그인/2단계 인증 API와 맞춤.
+
+### 구현 방침
+
+- 서버 연결 테스트가 `/api/v1/server` 확인 후 사용자별 접속 토큰이 있으면 `/api/v1/auth/token-login`까지 검증하도록 연결.
+- 2단계 인증 사용자는 화면에서 6자리 코드를 입력해 연결 테스트를 완료할 수 있게 한다.
+- 기존 동기화/프로필/분석/녹음 요청의 사용자 토큰 헤더 흐름은 유지한다.
+- 서버 capability의 `two_factor_auth=token_code`를 준비된 2단계 인증으로 표시하도록 Web/모바일 문구를 맞춘다.
+
+### 구현 내용
+
+- Web/설치형 서버 설정에 `2단계 인증 코드` 입력란 추가.
+- Web/설치형 연결 테스트가 사용자별 접속 토큰 입력 시 `/api/v1/auth/token-login`을 호출하도록 연결.
+- Web/설치형 capability 표시에서 `two_factor_auth=token_code`를 `2단계 인증`으로 표시하도록 보강.
+- 모바일 서버 설정 화면에 `2단계 인증 코드` 입력란 추가.
+- 모바일 연결 테스트가 사용자별 접속 토큰 입력 시 `/api/v1/auth/token-login`을 호출하도록 연결.
+- 모바일 서버 연결 성공 문구에서 `two_factor_auth=token_code`를 `2단계 인증`으로 표시하도록 보강.
+- 도움말과 Web README의 2단계 인증 안내를 실제 코드 입력 흐름 기준으로 갱신.
+
+### 검증
+
+- `node --check web/app.js` 통과.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (310/310 checks)` 출력 확인.
+- `dart --version`, `flutter --version`은 Windows 셸에서 20초 안에 응답하지 않아 모바일 도구 검증은 보류.
+
 ## 2026-05-20 18:24 KST
 
 ### 다음 작업 시작

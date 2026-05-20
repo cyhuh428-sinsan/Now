@@ -14,6 +14,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _baseUrlCtrl = TextEditingController();
   final _tokenCtrl = TextEditingController();
   final _userTokenCtrl = TextEditingController();
+  final _twoFactorCodeCtrl = TextEditingController();
   final _ownerIdCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
   final _displayNameCtrl = TextEditingController();
@@ -34,6 +35,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _baseUrlCtrl.dispose();
     _tokenCtrl.dispose();
     _userTokenCtrl.dispose();
+    _twoFactorCodeCtrl.dispose();
     _ownerIdCtrl.dispose();
     _deviceIdCtrl.dispose();
     _displayNameCtrl.dispose();
@@ -87,7 +89,10 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       await settings.save();
       final result = await ref
           .read(serverSyncServiceProvider)
-          .testConnection(settings);
+          .testConnection(
+            settings,
+            twoFactorCode: _twoFactorCodeCtrl.text,
+          );
       ServerOpsResult? opsResult;
       if (result.ok) {
         opsResult = await ref
@@ -491,6 +496,19 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                       hintText: '공용 서버에서 발급한 사용자 토큰',
                       helperText: '공용 서버가 요구할 때 입력합니다. 기기 보안 저장소에 저장합니다',
                       border: OutlineInputBorder(),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _twoFactorCodeCtrl,
+                    keyboardType: TextInputType.number,
+                    maxLength: 6,
+                    decoration: const InputDecoration(
+                      labelText: '2단계 인증 코드',
+                      hintText: '필요한 경우 6자리 코드',
+                      helperText: '2단계 인증 사용자는 연결 테스트 때 입력합니다',
+                      border: OutlineInputBorder(),
+                      counterText: '',
                     ),
                   ),
                   const SizedBox(height: 12),

@@ -375,7 +375,10 @@ class ServerSyncService {
 
   const ServerSyncService(this._db);
 
-  Future<ServerConnectionResult> testConnection(ServerSettings settings) async {
+  Future<ServerConnectionResult> testConnection(
+    ServerSettings settings, {
+    String twoFactorCode = '',
+  }) async {
     if (!settings.isConfigured) {
       return const ServerConnectionResult(ok: false, message: '서버 주소가 없습니다');
     }
@@ -388,6 +391,9 @@ class ServerSyncService {
         (res.data?['capabilities'] as Map?) ?? const {},
       );
       final publicReadiness = _publicReadinessFromResponse(res.data);
+      if (settings.userToken.trim().isNotEmpty) {
+        await _verifyUserToken(settings, twoFactorCode: twoFactorCode);
+      }
       return ServerConnectionResult(
         ok: true,
         message: _serverConnectionMessage(
@@ -412,6 +418,24 @@ class ServerSyncService {
 
   Future<ServerSyncResult> uploadNotes(ServerSettings settings) async {
     return syncNotes(settings);
+  }
+
+  Future<void> _verifyUserToken(
+    ServerSettings settings, {
+    required String twoFactorCode,
+  }) async {
+    final data = <String, dynamic>{
+      'owner_id': _normalizeOwnerId(settings.ownerId),
+      'access_token': settings.userToken.trim(),
+    };
+    final code = twoFactorCode.trim();
+    if (code.isNotEmpty) {
+      data['two_factor_code'] = code;
+    }
+    await _dioWithoutUserToken(settings).post<Map<String, dynamic>>(
+      '/api/v1/auth/token-login',
+      data: data,
+    );
   }
 
   Future<ServerSyncResult> syncNotes(
@@ -879,6 +903,14 @@ class ServerSyncService {
     }
     return dio;
   }
+
+  Dio _dioWithoutUserToken(ServerSettings settings) {
+    final dio = DioClient.create(baseUrl: _normalizeBaseUrl(settings.baseUrl));
+    if (settings.token.trim().isNotEmpty) {
+      dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
+    }
+    return dio;
+  }
 }
 
 Map<String, String> _parseTags(String? raw) {
@@ -974,9 +1006,10 @@ String _serverConnectionMessage(
   final twoFactorText = capabilities['two_factor_status'] == true
       ? '2단계 상태'
       : '2단계 미확인';
-  final twoFactorAuthText = capabilities['two_factor_auth'] == 'planned'
-      ? '2단계 예정'
-      : '2단계 인증 미확인';
+  final twoFactorAuth = capabilities['two_factor_auth'];
+  final twoFactorAuthText = twoFactorAuth == 'token_code'
+      ? '2단계 인증'
+      : (twoFactorAuth == 'planned' ? '2단계 예정' : '2단계 인증 미확인');
   final backupText = capabilities['backup_export'] == true ? '백업' : '백업 미확인';
   final backupVerifyText = capabilities['backup_verify'] == true
       ? '백업 검증'

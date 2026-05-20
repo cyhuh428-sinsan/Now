@@ -302,6 +302,7 @@ const I18N = {
     "settings.server.url": "서버 주소",
     "settings.server.token": "API 토큰",
     "settings.server.userToken": "사용자별 접속 토큰",
+    "settings.server.twoFactorCode": "2단계 인증 코드",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
     "settings.server.profile.title": "사용자 프로필",
@@ -331,6 +332,7 @@ const I18N = {
     "settings.server.local": "서버 연결을 사용하지 않습니다.",
     "settings.server.saved": "연결 설정을 저장했습니다.",
     "settings.server.testing": "서버 연결을 확인하는 중입니다.",
+    "settings.server.userTokenOk": "사용자 토큰 확인됨",
     "settings.server.fullSyncing": "서버와 전체 동기화를 진행합니다.",
     "settings.server.ok": "서버 연결 확인됨",
     "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
@@ -355,6 +357,7 @@ const I18N = {
     "settings.server.capabilities.userGroups": "사용자 그룹",
     "settings.server.capabilities.twoFactorStatus": "2단계 상태",
     "settings.server.capabilities.twoFactorPlanned": "2단계 예정",
+    "settings.server.capabilities.twoFactorReady": "2단계 인증",
     "settings.server.capabilities.userTokenRequired": "사용자 토큰 필요",
     "settings.server.capabilities.treeLevel": "계층 {level}단계",
     "settings.server.publicReadiness.ready": "공용 서버 준비 완료",
@@ -776,6 +779,7 @@ const I18N = {
     "settings.server.url": "Server URL",
     "settings.server.token": "API token",
     "settings.server.userToken": "Per-user access token",
+    "settings.server.twoFactorCode": "2FA code",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
     "settings.server.profile.title": "User profile",
@@ -805,6 +809,7 @@ const I18N = {
     "settings.server.local": "Server connection is disabled.",
     "settings.server.saved": "Connection settings saved.",
     "settings.server.testing": "Checking server connection.",
+    "settings.server.userTokenOk": "User token verified",
     "settings.server.fullSyncing": "Forcing full sync with server.",
     "settings.server.ok": "Server connection verified",
     "settings.server.noUrl": "Enter a server URL first.",
@@ -829,6 +834,7 @@ const I18N = {
     "settings.server.capabilities.userGroups": "User groups",
     "settings.server.capabilities.twoFactorStatus": "2FA status",
     "settings.server.capabilities.twoFactorPlanned": "2FA planned",
+    "settings.server.capabilities.twoFactorReady": "2FA challenge",
     "settings.server.capabilities.userTokenRequired": "User token required",
     "settings.server.capabilities.treeLevel": "{level}-level tree",
     "settings.server.publicReadiness.ready": "Public server ready",
@@ -1263,6 +1269,7 @@ const elements = {
   serverUrlInput: $("#serverUrlInput"),
   serverTokenInput: $("#serverTokenInput"),
   serverUserTokenInput: $("#serverUserTokenInput"),
+  serverTwoFactorCodeInput: $("#serverTwoFactorCodeInput"),
   ownerIdInput: $("#ownerIdInput"),
   deviceIdInput: $("#deviceIdInput"),
   serverDisplayNameInput: $("#serverDisplayNameInput"),
@@ -1782,7 +1789,10 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   const nextToken = elements.serverTokenInput.value.trim();
   const nextUserToken = elements.serverUserTokenInput.value.trim();
   const nextMode = elements.serverModeSelect.value === "server" ? "server" : "local";
-  const connectionChanged = previous.mode !== nextMode || previous.url !== nextUrl || previous.token !== nextToken;
+  const connectionChanged = previous.mode !== nextMode
+    || previous.url !== nextUrl
+    || previous.token !== nextToken
+    || previous.userToken !== nextUserToken;
   state.settings.server = {
     ...previous,
     mode: nextMode,
@@ -1869,6 +1879,7 @@ function serverCapabilityLabels(capabilities) {
   if (capabilities.user_timezone) labels.push(t("settings.server.capabilities.userTimezone"));
   if (capabilities.user_groups) labels.push(t("settings.server.capabilities.userGroups"));
   if (capabilities.two_factor_status) labels.push(t("settings.server.capabilities.twoFactorStatus"));
+  if (capabilities.two_factor_auth === "token_code") labels.push(t("settings.server.capabilities.twoFactorReady"));
   if (capabilities.two_factor_auth === "planned") labels.push(t("settings.server.capabilities.twoFactorPlanned"));
   if (capabilities.user_access_tokens || capabilities.user_token_required) labels.push(t("settings.server.capabilities.userTokenRequired"));
   if (capabilities.max_tree_note_level) {
@@ -2089,7 +2100,13 @@ async function testServerConnection() {
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = payload.capabilities || null;
     server.publicServerReadiness = payload.public_server_readiness || null;
-    server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}`;
+    let tokenMessage = "";
+    if ((server.userToken || "").trim()) {
+      const tokenPayload = await verifyServerUserToken(server);
+      applyServerUserProfile(tokenPayload.user);
+      tokenMessage = ` · ${t("settings.server.userTokenOk")}`;
+    }
+    server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}${tokenMessage}`;
   } catch (error) {
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
@@ -2099,6 +2116,25 @@ async function testServerConnection() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+async function verifyServerUserToken(server) {
+  const twoFactorCode = elements.serverTwoFactorCodeInput?.value.trim() || "";
+  const body = {
+    owner_id: normalizeOwnerId(server.ownerId),
+    access_token: server.userToken,
+    ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+  };
+  const response = await fetch(`${server.url}/api/v1/auth/token-login`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) throw new Error(await serverResponseError(response));
+  return response.json();
 }
 
 async function loadServerUserProfile() {
@@ -3017,6 +3053,7 @@ function applyLanguage() {
   setText("#serverUrlLabel", t("settings.server.url"));
   setText("#serverTokenLabel", t("settings.server.token"));
   setText("#serverUserTokenLabel", t("settings.server.userToken"));
+  setText("#serverTwoFactorCodeLabel", t("settings.server.twoFactorCode"));
   setText("#ownerIdLabel", t("settings.server.owner"));
   setText("#deviceIdLabel", t("settings.server.device"));
   setText("#serverProfileTitle", t("settings.server.profile.title"));
@@ -3036,6 +3073,7 @@ function applyLanguage() {
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
   setPlaceholder(elements.serverTokenInput, t("settings.server.token"));
   setPlaceholder(elements.serverUserTokenInput, t("settings.server.userToken"));
+  setPlaceholder(elements.serverTwoFactorCodeInput, t("settings.server.twoFactorCode"));
   setText("#sidebarAssistSettingTitle", t("settings.sidebarAssist.title"));
   setText("#sidebarAssistSettingDesc", t("settings.sidebarAssist.desc"));
   setText("#backupSettingTitle", t("settings.backup.title"));
