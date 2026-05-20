@@ -1,3 +1,5 @@
+import hmac
+import time
 from datetime import datetime
 from html import escape
 from secrets import compare_digest
@@ -19,11 +21,17 @@ page_router = APIRouter(tags=["auth"])
 class TokenLoginRequest(BaseModel):
     owner_id: str = Field(max_length=80)
     access_token: str = Field(min_length=1)
+    two_factor_code: str | None = Field(default=None, max_length=20)
 
 
 @api_router.post("/token-login")
 def token_login(payload: TokenLoginRequest, db: Session = Depends(get_db)) -> dict:
-    user = _authenticate_user_token(db, payload.owner_id, payload.access_token)
+    user = _authenticate_user_token(
+        db,
+        payload.owner_id,
+        payload.access_token,
+        two_factor_code=payload.two_factor_code,
+    )
     return {"status": "ok", "user": _user_payload(user)}
 
 
@@ -36,10 +44,16 @@ def token_login_page() -> HTMLResponse:
 def submit_token_login(
     owner_id: str = Form(...),
     access_token: str = Form(...),
+    two_factor_code: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ) -> HTMLResponse:
     try:
-        user = _authenticate_user_token(db, owner_id, access_token)
+        user = _authenticate_user_token(
+            db,
+            owner_id,
+            access_token,
+            two_factor_code=two_factor_code,
+        )
     except HTTPException as exc:
         return HTMLResponse(
             _token_login_html(error_message=str(exc.detail)),
@@ -48,7 +62,13 @@ def submit_token_login(
     return HTMLResponse(_token_login_html(user=_user_payload(user)))
 
 
-def _authenticate_user_token(db: Session, owner_id: str, access_token: str) -> UserAccount:
+def _authenticate_user_token(
+    db: Session,
+    owner_id: str,
+    access_token: str,
+    *,
+    two_factor_code: str | None = None,
+) -> UserAccount:
     user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id.strip()))
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
@@ -58,6 +78,8 @@ def _authenticate_user_token(db: Session, owner_id: str, access_token: str) -> U
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user token not issued")
     if not compare_digest(hash_access_token(access_token.strip()), user.access_token_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid user token")
+    if bool(user.two_factor_enabled):
+        _require_two_factor_code(user.owner_id, access_token, two_factor_code)
 
     now = datetime.utcnow()
     user.access_token_last_used_at = now
@@ -66,6 +88,32 @@ def _authenticate_user_token(db: Session, owner_id: str, access_token: str) -> U
     db.commit()
     db.refresh(user)
     return user
+
+
+def _require_two_factor_code(owner_id: str, access_token: str, supplied_code: str | None) -> None:
+    cleaned = (supplied_code or "").strip()
+    if not cleaned:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="two factor code required",
+        )
+    current_step = int(time.time() // 30)
+    valid_codes = {
+        _two_factor_code(owner_id, access_token, current_step + offset)
+        for offset in (-1, 0, 1)
+    }
+    if cleaned not in valid_codes:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid two factor code",
+        )
+
+
+def _two_factor_code(owner_id: str, access_token: str, step: int) -> str:
+    secret = hash_access_token(access_token.strip()).encode("utf-8")
+    message = f"{owner_id.strip()}:{step}".encode("utf-8")
+    digest = hmac.new(secret, message, "sha256").hexdigest()
+    return str(int(digest[:12], 16) % 1_000_000).zfill(6)
 
 
 def _user_payload(user: UserAccount) -> dict:
@@ -186,6 +234,8 @@ def _token_login_html(user: dict | None = None, error_message: str = "") -> str:
       <input id="owner_id" name="owner_id" autocomplete="username" required>
       <label for="access_token">사용자별 접속 토큰</label>
       <input id="access_token" name="access_token" type="password" autocomplete="current-password" required>
+      <label for="two_factor_code">2단계 인증 코드</label>
+      <input id="two_factor_code" name="two_factor_code" inputmode="numeric" autocomplete="one-time-code" placeholder="사용 중일 때만 입력">
       <button type="submit">토큰 확인</button>
     </form>
     {status_block}

@@ -1,5 +1,5 @@
 API_VERSION = "v1"
-TWO_FACTOR_AUTH_STATUS = "planned"
+TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 
@@ -39,14 +39,14 @@ PUBLIC_SERVER_READY_ITEMS = [
         "label": "사용자 토큰 확인 화면/API",
         "message": "사용자별 접속 토큰을 확인하는 공개 화면과 token-login API 지원",
     },
+    {
+        "id": "real_two_factor_challenge",
+        "label": "2단계 코드 검증 절차",
+        "message": "2단계 인증 사용자는 토큰 로그인 때 6자리 추가 코드를 검증",
+    },
 ]
 
 PUBLIC_SERVER_REMAINING_ITEMS = [
-    {
-        "id": "real_two_factor_challenge",
-        "label": "실제 2단계 인증 절차",
-        "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
-    },
     {
         "id": "public_https_reverse_proxy",
         "label": "공개 HTTPS/reverse proxy",

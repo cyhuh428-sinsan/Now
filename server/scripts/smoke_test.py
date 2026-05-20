@@ -1,6 +1,7 @@
 import argparse
 import base64
 import hashlib
+import hmac
 import json
 import re
 import time
@@ -14,7 +15,7 @@ USER_TOKEN: str | None = None
 USER_TOKEN_REQUIRED = False
 REQUEST_TIMEOUT = 10.0
 API_VERSION = "v1"
-TWO_FACTOR_AUTH_STATUS = "planned"
+TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 
@@ -135,6 +136,17 @@ def request_text(method: str, url: str, token: str | None = None):
         return res.status, text
 
 
+def two_factor_code(owner_id: str, access_token: str) -> str:
+    token_hash = hashlib.sha256(access_token.strip().encode("utf-8")).hexdigest()
+    step = int(time.time() // 30)
+    digest = hmac.new(
+        token_hash.encode("utf-8"),
+        f"{owner_id.strip()}:{step}".encode("utf-8"),
+        "sha256",
+    ).hexdigest()
+    return str(int(digest[:12], 16) % 1_000_000).zfill(6)
+
+
 def wait_until_ready(base_url: str, token: str | None, retries: int, delay_seconds: float) -> None:
     for attempt in range(1, retries + 1):
         try:
@@ -208,8 +220,8 @@ def main() -> None:
                 "서버 정보에 공용 서버 준비 상태 planned가 없습니다",
             )
             require(
-                "real_two_factor_challenge" in public_readiness.get("remaining", []),
-                "서버 정보의 공용 서버 준비 상태에 실제 2단계 인증 잔여 항목이 없습니다",
+                "real_two_factor_challenge" in public_readiness.get("ready", []),
+                "서버 정보의 공용 서버 준비 상태에 2단계 인증 준비 항목이 없습니다",
             )
             require(
                 "user_data_isolation_verification" in public_readiness.get("ready", []),
@@ -249,7 +261,7 @@ def main() -> None:
             require(capabilities.get("two_factor_status") is True, "서버 capability에 two_factor_status가 없습니다")
             require(
                 capabilities.get("two_factor_auth") == TWO_FACTOR_AUTH_STATUS,
-                "서버 capability의 two_factor_auth 상태가 planned가 아닙니다",
+                "서버 capability의 two_factor_auth 상태가 token_code가 아닙니다",
             )
             require(
                 capabilities.get("max_tree_note_level") == MAX_TREE_NOTE_LEVEL,
@@ -325,7 +337,7 @@ def main() -> None:
         if path == "/admin/public":
             require("NowNote 서버 인증 기준" in text, "공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용이 없습니다")
             require("NOW_USER_TOKEN_REQUIRED=true" in text, "공용 서버 준비 화면에 사용자별 토큰 필수 기준이 없습니다")
-            require("실제 2단계 인증 절차" in text, "공용 서버 준비 화면에 실제 2단계 인증 기준이 없습니다")
+            require("2단계 코드 검증 절차" in text, "공용 서버 준비 화면에 2단계 인증 기준이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
             require("/admin/users" in text and "/admin/devices" in text, "공용 서버 준비 화면에 사용자/기기 관리 링크가 없습니다")
         if path.startswith("/admin/devices"):
@@ -353,7 +365,7 @@ def main() -> None:
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("사용자별 접속 토큰" in text, "운영 점검 화면에 준비된 사용자별 접속 토큰 항목이 없습니다")
             require("사용자 토큰 확인 화면/API" in text, "운영 점검 화면에 사용자 토큰 확인 준비 항목이 없습니다")
-            require("실제 2단계 인증 절차" in text, "운영 점검 화면에 실제 2단계 인증 항목이 없습니다")
+            require("2단계 코드 검증 절차" in text, "운영 점검 화면에 2단계 인증 항목이 없습니다")
             require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
@@ -776,6 +788,73 @@ def main() -> None:
         "POST /api/v1/auth/token-login(invalid):",
         status,
         {"detail": data.get("detail")},
+    )
+
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/admin/users",
+        args.token,
+        {
+            "owner_id": "smoke_2fa_user",
+            "email": "smoke_2fa_user@example.com",
+            "display_name": "Smoke 2FA User",
+            "timezone": "Asia/Seoul",
+            "group_name": "테스트",
+            "two_factor_enabled": True,
+            "is_active": True,
+        },
+    )
+    require(status in (200, 409), "2단계 인증 검증용 사용자 생성 API 응답이 예상과 다릅니다")
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/users/smoke_2fa_user/token",
+        args.token,
+    )
+    two_factor_token = data.get("token", "")
+    require(len(two_factor_token) >= 32, "2단계 인증 검증용 사용자 토큰 발급에 실패했습니다")
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/auth/token-login",
+        None,
+        {"owner_id": "smoke_2fa_user", "access_token": two_factor_token},
+    )
+    require(
+        status == 401 and data.get("detail") == "two factor code required",
+        "2단계 인증 사용자의 코드 없는 로그인이 차단되지 않았습니다",
+    )
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/auth/token-login",
+        None,
+        {
+            "owner_id": "smoke_2fa_user",
+            "access_token": two_factor_token,
+            "two_factor_code": "000000",
+        },
+    )
+    require(
+        status == 401 and data.get("detail") == "invalid two factor code",
+        "2단계 인증 사용자의 잘못된 코드 로그인이 차단되지 않았습니다",
+    )
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/auth/token-login",
+        None,
+        {
+            "owner_id": "smoke_2fa_user",
+            "access_token": two_factor_token,
+            "two_factor_code": two_factor_code("smoke_2fa_user", two_factor_token),
+        },
+    )
+    require(data.get("status") == "ok", "2단계 인증 코드 로그인 응답 상태가 ok가 아닙니다")
+    require(
+        data.get("user", {}).get("two_factor_enabled") is True,
+        "2단계 인증 코드 로그인 응답에 사용 상태가 반영되지 않았습니다",
+    )
+    print(
+        "POST /api/v1/auth/token-login(two_factor):",
+        status,
+        {"owner_id": data.get("user", {}).get("owner_id"), "two_factor": True},
     )
 
     if USER_TOKEN_REQUIRED:
