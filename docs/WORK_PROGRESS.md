@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 02:01 KST
+
+### 다음 작업 시작
+
+- 실패한 사용자 토큰 요청의 마지막 사용 시각 회귀 검증 보강.
+
+### 구현 내용
+
+- smoke test가 토큰 필수 모드에서 토큰 누락/잘못된 토큰 요청 후 `access_token_last_used_at`이 갱신되지 않는지 확인하도록 보강.
+- preflight가 smoke test의 실패 토큰 마지막 사용 시각 확인 문구를 검사하도록 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `rg`로 실패 토큰 마지막 사용 시각 확인 문구 연결 확인.
+- 임시 SQLite DB와 FastAPI TestClient에서 토큰 누락/잘못된 토큰 요청 후 `access_token_last_used_at`이 `None`으로 유지되고, 정상 토큰 요청 후 값이 갱신되는 것 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (188/188 checks)` 출력 확인.
+
 ## 2026-05-20 01:49 KST
 
 ### 다음 작업 시작
