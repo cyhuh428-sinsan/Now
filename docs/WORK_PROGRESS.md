@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 03:46 KST
+
+### 다음 작업 시작
+
+- 도움말의 2단계 인증 코드 안내가 회귀하지 않도록 preflight 점검 보강.
+
+### 구현 방침
+
+- `docs/HELP.md`, `docs/HELP.en.md` 존재와 2단계 코드 안내 문구를 preflight에서 확인.
+
+### 구현 내용
+
+- preflight에 한국어/영어 도움말 파일 존재 확인 추가.
+- preflight에 한국어/영어 도움말의 2단계 코드 입력 안내 확인 추가.
+
+### 검증
+
+- `uv run python -m py_compile scripts/preflight.py` 통과.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (323/323 checks)` 출력 확인.
+
 ## 2026-05-21 03:39 KST
 
 ### 다음 작업 시작
