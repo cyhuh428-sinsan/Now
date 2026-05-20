@@ -276,7 +276,7 @@ class _SttOptionTile extends StatelessWidget {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    description,
+                    isAvailable ? description : '$subtitle\n$description',
                     style: TextStyle(
                       fontSize: 12,
                       color: isAvailable
