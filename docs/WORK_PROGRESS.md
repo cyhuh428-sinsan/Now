@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 15:12 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 기준을 관리자 화면에서 바로 확인하는 `/admin/public` 화면 추가.
+
+### 구현 내용
+
+- `/admin/public` 화면을 추가해 `docs/SERVER_AUTH_POLICY.md`를 관리자 화면에서 바로 확인하도록 연결.
+- 관리자 홈과 도움말의 공용 서버 설명에서 `/admin/public`으로 이동할 수 있게 보강.
+- smoke test가 `/admin/public` 화면의 사용자별 토큰, 실제 2단계 인증, 데이터 격리 기준과 사용자/기기 관리 링크를 확인하도록 보강.
+- preflight가 README, monitor 라우트, smoke test의 공용 서버 준비 화면 연결을 확인하도록 보강.
+- README 운영 화면 목록과 설명에 `/admin/public` 추가.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 `/admin/public`, `_admin_public_html`, `SERVER_AUTH_POLICY` 연결 확인.
+- FastAPI `TestClient`로 `/admin/public` 200 응답과 핵심 문구/링크 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (249/249 checks)` 출력 확인.
+
 ## 2026-05-20 05:07 KST
 
 ### 다음 작업 시작

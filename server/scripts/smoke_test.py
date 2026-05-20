@@ -251,6 +251,7 @@ def main() -> None:
         "/admin/export",
         "/admin/recovery",
         "/admin/deploy",
+        "/admin/public",
         "/admin/help",
         "/admin/users",
         "/admin/users/new",
@@ -282,6 +283,12 @@ def main() -> None:
             require("백업/복구 절차" in text, "배포 체크리스트 화면에 운영 점검 백업/복구 항목 안내가 없습니다")
             require("status_counts.bad=0" in text, "배포 체크리스트 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("/admin/export" in text and "/admin/recovery" in text, "배포 체크리스트 화면에 백업/복구 화면 안내가 없습니다")
+        if path == "/admin/public":
+            require("NowNote 서버 인증 기준" in text, "공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용이 없습니다")
+            require("NOW_USER_TOKEN_REQUIRED=true" in text, "공용 서버 준비 화면에 사용자별 토큰 필수 기준이 없습니다")
+            require("실제 2단계 인증 절차" in text, "공용 서버 준비 화면에 실제 2단계 인증 기준이 없습니다")
+            require("사용자별 데이터 접근 격리 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
+            require("/admin/users" in text and "/admin/devices" in text, "공용 서버 준비 화면에 사용자/기기 관리 링크가 없습니다")
         if path.startswith("/admin/devices"):
             require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
             require("비활성 기기는 동기화" in text, "기기 관리 화면에 비활성 기기 차단 안내가 없습니다")
