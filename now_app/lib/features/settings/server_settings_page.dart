@@ -1093,6 +1093,17 @@ class _ServerStatusCard extends StatelessWidget {
               color: color,
             ),
           ),
+          if (connection?.publicReadiness?.summary.isNotEmpty == true) ...[
+            const SizedBox(height: 8),
+            Text(
+              connection!.publicReadiness!.summary,
+              style: const TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF6B7280),
+              ),
+            ),
+          ],
           const SizedBox(height: 8),
           ...ops.checks.take(4).map((check) {
             final status = check['status']?.toString() ?? 'info';
