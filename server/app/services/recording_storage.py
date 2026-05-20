@@ -27,3 +27,17 @@ async def save_recording_file(
             output.write(chunk)
 
     return file_name, str(target)
+
+
+def delete_recording_file(storage_path: str | None) -> None:
+    if not storage_path:
+        return
+    settings = get_settings()
+    storage_root = Path(settings.storage_dir).resolve(strict=False)
+    target = Path(storage_path).resolve(strict=False)
+    try:
+        target.relative_to(storage_root)
+    except ValueError:
+        return
+    if target.is_file():
+        target.unlink()
