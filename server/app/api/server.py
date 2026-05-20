@@ -1,6 +1,6 @@
 from fastapi import APIRouter
 
-from app.core.capabilities import API_VERSION, server_capabilities
+from app.core.capabilities import API_VERSION, public_server_readiness, server_capabilities
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/api/v1/server", tags=["server"])
@@ -16,4 +16,5 @@ def server_info() -> dict:
         "user_token_required": bool(settings.user_token_required),
         "api_version": API_VERSION,
         "capabilities": server_capabilities(),
+        "public_server_readiness": public_server_readiness(),
     }

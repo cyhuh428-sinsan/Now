@@ -200,6 +200,19 @@ def main() -> None:
         if path == "/api/v1/server":
             require(data.get("api_version") == API_VERSION, "서버 API 버전이 올바르지 않습니다")
             USER_TOKEN_REQUIRED = bool(data.get("user_token_required"))
+            public_readiness = data.get("public_server_readiness", {})
+            require(
+                public_readiness.get("status") == "planned",
+                "서버 정보에 공용 서버 준비 상태 planned가 없습니다",
+            )
+            require(
+                "real_two_factor_challenge" in public_readiness.get("remaining", []),
+                "서버 정보의 공용 서버 준비 상태에 실제 2단계 인증 잔여 항목이 없습니다",
+            )
+            require(
+                "user_data_isolation_verification" in public_readiness.get("remaining", []),
+                "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증 항목이 없습니다",
+            )
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
             require(capabilities.get("recordings") is True, "서버 capability에 recordings가 없습니다")
