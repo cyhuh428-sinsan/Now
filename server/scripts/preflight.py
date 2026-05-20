@@ -74,6 +74,7 @@ def main() -> None:
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
+    users_api_path = server_dir / "app" / "api" / "users.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
     web_app_path = repo_root / "web" / "app.js"
@@ -176,7 +177,7 @@ def main() -> None:
                 ("--timeout 초", "README explains smoke timeout option", "smoke timeout"),
                 ("--ready-retries 횟수", "README explains smoke readiness retries", "smoke readiness retries"),
                 ("--ready-delay 초", "README explains smoke readiness delay", "smoke readiness delay"),
-                ("사용자별 기기 등록/해제", "README documents public device registration gap", "device registration"),
+                ("사용자별 기기 조회/해제 API", "README documents user device self-management API", "device self-management"),
                 ("사용자별 데이터 접근 격리 검증", "README documents public data isolation gap", "data isolation"),
                 ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
                 ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
@@ -191,12 +192,14 @@ def main() -> None:
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
+    check(users_api_path.exists(), "User API source exists", str(users_api_path), failures)
     check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
     check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
+    capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -335,6 +338,18 @@ def main() -> None:
             ],
             failures,
         )
+    if users_api_path.exists():
+        users_api_source = users_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            users_api_source,
+            [
+                ('@router.get("/{owner_id}/devices")', "User API lists user devices", "user devices list API"),
+                ('@router.patch("/{owner_id}/devices/{device_id}")', "User API updates user device status", "user device update API"),
+                ("set_user_device_active", "User API changes device active state", "set_user_device_active"),
+                ("_device_payload", "User API serializes device payload", "_device_payload"),
+            ],
+            failures,
+        )
     if user_devices_service_path.exists():
         user_devices_source = user_devices_service_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -438,7 +453,7 @@ def main() -> None:
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("--timeout 30", "Deploy checklist covers smoke timeout option", "smoke timeout"),
                 ("--ready-retries 10", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
-                ("사용자별 기기 등록/해제", "Deploy checklist covers public device registration gap", "device registration"),
+                ("사용자별 기기 조회/해제 API", "Deploy checklist covers public device self-management", "device self-management"),
                 ("사용자별 데이터 접근 격리", "Deploy checklist covers public data isolation gap", "data isolation"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
@@ -509,6 +524,8 @@ def main() -> None:
                 ("user token required로 차단", "Smoke checks missing user token detail", "missing user token detail"),
                 ("invalid user token으로 차단", "Smoke checks invalid user token detail", "invalid user token detail"),
                 ("실패한 사용자 토큰 요청이 마지막 사용 시각", "Smoke checks failed token does not update last used", "failed token last used"),
+                ("사용자 기기 목록 조회 응답", "Smoke checks user device list API", "user device list API"),
+                ("사용자 기기 상태 변경 응답", "Smoke checks user device update API", "user device update API"),
                 ("사용자 목록 API에 사용자 토큰 해시", "Smoke checks user list token hash safety", "user list token hash safety"),
                 ("사용자 export에 사용자 토큰 해시", "Smoke checks user export token hash safety", "user export token hash safety"),
                 ("max_tree_note_level", "Smoke covers tree depth capability", "max_tree_note_level"),
@@ -533,7 +550,7 @@ def main() -> None:
                 ("운영 점검에 공용 서버 인증 항목", "Smoke checks ops public auth item", "ops public auth item"),
                 ("운영 점검 요약에 토큰 없는 사용자 집계", "Smoke checks ops users without token summary", "ops users without token"),
                 ("사용자별 토큰 기준", "Smoke checks ops public auth token message", "ops public auth token message"),
-                ("운영 점검 화면에 공용 서버 기기 등록/해제 항목", "Smoke checks ops page public device guidance", "ops page public device"),
+                ("운영 점검 화면에 사용자별 기기 조회/해제 준비 항목", "Smoke checks ops page public device guidance", "ops page public device"),
                 ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
                 ("운영 점검에 비활성 기기 항목", "Smoke checks ops inactive devices", "ops inactive devices"),
                 ("운영 점검에 고아 녹음 파일 항목", "Smoke checks ops orphan recordings", "ops orphan recording files"),
@@ -549,7 +566,7 @@ def main() -> None:
                 ("공용 서버 준비 화면에 데이터 격리 기준", "Smoke checks public server data isolation", "public server data isolation"),
                 ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
-                ("서버 정보의 공용 서버 준비 상태 상세에 기기 레지스트리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
+                ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
@@ -589,9 +606,9 @@ def main() -> None:
             failures,
         )
         check(
-            False,
-            "Public server device registration",
-            "User-specific device registration and revocation flow must be confirmed before public opening",
+            "user_device_self_management" in capabilities_source,
+            "Public server device self-management",
+            "User device list and activation API is exposed",
             failures,
         )
         check(

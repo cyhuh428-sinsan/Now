@@ -20,6 +20,11 @@ PUBLIC_SERVER_READY_ITEMS = [
         "message": "기기별 등록 흔적, 활성/비활성 차단, 최근 접속 시각 추적 지원",
     },
     {
+        "id": "user_device_self_management",
+        "label": "사용자별 기기 조회/해제 API",
+        "message": "사용자가 자기 기기 목록을 확인하고 기기 활성 상태를 변경하는 API 지원",
+    },
+    {
         "id": "backup_recovery_checks",
         "label": "백업/복구 점검",
         "message": "백업 내보내기, 백업 검증, 운영 점검 화면 지원",
@@ -36,11 +41,6 @@ PUBLIC_SERVER_REMAINING_ITEMS = [
         "id": "real_two_factor_challenge",
         "label": "실제 2단계 인증 절차",
         "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
-    },
-    {
-        "id": "user_device_registration",
-        "label": "사용자별 기기 등록/해제 흐름",
-        "message": "정식 오픈 전 사용자가 직접 기기를 등록/해제하는 흐름 확인 필요",
     },
     {
         "id": "user_data_isolation_verification",
