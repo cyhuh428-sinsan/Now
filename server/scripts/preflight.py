@@ -76,6 +76,12 @@ def main() -> None:
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
+    web_app_path = repo_root / "web" / "app.js"
+    web_readme_path = repo_root / "web" / "README.md"
+    mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
+    mobile_server_settings_path = (
+        repo_root / "now_app" / "lib" / "features" / "settings" / "server_settings_page.dart"
+    )
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -187,6 +193,10 @@ def main() -> None:
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
     check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
     check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
+    check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
+    check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
+    check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
+    check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -217,6 +227,52 @@ def main() -> None:
             server_info_source,
             [
                 ("public_server_readiness", "Server info returns public server readiness", "public_server_readiness"),
+            ],
+            failures,
+        )
+    if web_app_path.exists():
+        web_app_source = web_app_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_app_source,
+            [
+                ("public_server_readiness", "Web reads public server readiness response", "web public readiness response"),
+                ("publicServerReadiness", "Web stores public server readiness", "web public readiness state"),
+                ("serverPublicReadinessLabels", "Web renders public server readiness label", "web public readiness label"),
+                (
+                    "settings.server.publicReadiness.planned",
+                    "Web localizes public server readiness",
+                    "web public readiness i18n",
+                ),
+            ],
+            failures,
+        )
+    if web_readme_path.exists():
+        web_readme = web_readme_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_readme,
+            [
+                ("공용 서버 준비 상태", "Web README documents public readiness display", "web public readiness docs"),
+            ],
+            failures,
+        )
+    if mobile_server_sync_path.exists():
+        mobile_server_sync = mobile_server_sync_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_server_sync,
+            [
+                ("ServerPublicReadiness", "Mobile models public server readiness", "mobile public readiness model"),
+                ("public_server_readiness", "Mobile reads public server readiness response", "mobile public readiness response"),
+                ("_publicReadinessFromResponse", "Mobile parses public server readiness", "mobile public readiness parser"),
+                ("공용 서버 준비 중", "Mobile summarizes public server readiness", "mobile public readiness summary"),
+            ],
+            failures,
+        )
+    if mobile_server_settings_path.exists():
+        mobile_server_settings = mobile_server_settings_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_server_settings,
+            [
+                ("publicReadiness?.summary", "Mobile displays public server readiness", "mobile public readiness display"),
             ],
             failures,
         )

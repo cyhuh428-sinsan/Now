@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 15:46 KST
+
+### 다음 작업 시작
+
+- preflight가 Web/모바일의 공용 서버 준비 상태 연동도 확인하도록 보강.
+
+### 구현 내용
+
+- preflight에 Web 앱 소스와 Web README 존재 확인 추가.
+- preflight가 Web의 `public_server_readiness` 응답 파싱, `publicServerReadiness` 상태 저장, 표시 라벨, i18n 문구를 확인하도록 보강.
+- preflight가 Web README의 공용 서버 준비 상태 표시 설명을 확인하도록 보강.
+- preflight에 모바일 서버 동기화 서비스와 서버 설정 화면 존재 확인 추가.
+- preflight가 모바일의 `ServerPublicReadiness` 모델, 응답 파싱, 요약 문구, 화면 표시 연결을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 preflight 문법 확인 통과.
+- `rg`로 Web/모바일 공용 서버 준비 상태 회귀 방지 문구 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (269/269 checks)` 출력 확인.
+
 ## 2026-05-20 15:37 KST
 
 ### 다음 작업 시작
