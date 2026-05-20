@@ -183,7 +183,7 @@ class MeetingsPage extends ConsumerWidget {
                     onImportantToggle: (m) => _toggleImportant(ref, m),
                     onDelete: (m) => _confirmDelete(context, ref, m),
                   ),
-            // ── 대화2 탭 (면담 → 대화로 통합 예정) ──
+            // ── 대화 탭 ──
             interviewList.isEmpty
                 ? const _EmptyMeetings(type: 'conversation')
                 : _RecordList(
