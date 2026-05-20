@@ -539,6 +539,8 @@ def main() -> None:
     require("백업/복구 절차" in ops_check_names, "운영 점검에 백업/복구 절차 항목이 없습니다")
     require("비활성 기기" in ops_check_names, "운영 점검에 비활성 기기 항목이 없습니다")
     require("inactive_devices" in data.get("summary", {}), "운영 점검 요약에 비활성 기기 집계가 없습니다")
+    require("고아 녹음 파일" in ops_check_names, "운영 점검에 고아 녹음 파일 항목이 없습니다")
+    require("orphan_recording_files" in data.get("summary", {}), "운영 점검 요약에 고아 녹음 파일 집계가 없습니다")
     require(
         any("status_counts.bad=0" in str(item.get("message", "")) for item in data.get("checks", [])),
         "운영 점검에 백업 검증 status_counts 기준 안내가 없습니다",

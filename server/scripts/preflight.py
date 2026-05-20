@@ -235,6 +235,8 @@ def main() -> None:
                 ("공용 서버 데이터 격리", "Admin ops covers public data isolation", "public data isolation"),
                 ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
+                ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
+                ("orphan_recording_files", "Admin ops summary covers orphan recording files", "orphan recording files summary"),
             ],
             failures,
         )
@@ -295,6 +297,7 @@ def main() -> None:
                 ("공용 서버 기기 등록", "Monitor ops covers public device registration", "public device registration"),
                 ("공용 서버 데이터 격리", "Monitor ops covers public data isolation", "public data isolation"),
                 ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
+                ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -423,6 +426,8 @@ def main() -> None:
                 ("운영 점검 화면에 공용 서버 기기 등록 항목", "Smoke checks ops page public device guidance", "ops page public device"),
                 ("운영 점검 화면에 공용 서버 데이터 격리 항목", "Smoke checks ops page public data isolation guidance", "ops page public data isolation"),
                 ("운영 점검에 비활성 기기 항목", "Smoke checks ops inactive devices", "ops inactive devices"),
+                ("운영 점검에 고아 녹음 파일 항목", "Smoke checks ops orphan recordings", "ops orphan recording files"),
+                ("운영 점검 요약에 고아 녹음 파일 집계", "Smoke checks ops orphan summary", "ops orphan recording files summary"),
                 ("도움말 화면에 공용 서버 기기 등록 점검 안내", "Smoke checks help page public device guidance", "help page public device"),
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),

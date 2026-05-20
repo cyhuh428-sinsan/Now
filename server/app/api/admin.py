@@ -440,6 +440,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     running_jobs = 0
     deleted_notes = 0
     recordings_without_transcript = 0
+    orphan_recording_files = 0
     try:
         db.execute(text("select 1"))
         note_total = db.scalar(select(func.count()).select_from(Note)) or 0
@@ -490,6 +491,11 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
                 .where(Recording.transcript.is_(None))
             )
             or 0
+        )
+        recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
+        orphan_recording_files = _recording_storage_orphan_count(
+            settings.storage_dir,
+            recording_storage_paths,
         )
     except Exception as exc:
         db_status = "bad"
@@ -580,6 +586,13 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     )
     checks.append(
         {
+            "name": "고아 녹음 파일",
+            "status": "warn" if orphan_recording_files else "ok",
+            "message": f"DB 메타데이터 없이 저장소에 남은 파일 {orphan_recording_files}건",
+        }
+    )
+    checks.append(
+        {
             "name": "백업/복구 절차",
             "status": "info",
             "message": "/admin/export에서 전체 백업과 status_counts.bad=0 검증, /admin/recovery에서 복구 기준 확인",
@@ -601,6 +614,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             "failed_analysis_jobs": failed_jobs,
             "queued_analysis_jobs": queued_jobs,
             "running_analysis_jobs": running_jobs,
+            "orphan_recording_files": orphan_recording_files,
         },
         "checks": checks,
     }
@@ -801,6 +815,30 @@ def _recording_storage_state(storage_dir: str) -> tuple[str, str]:
     if not storage_path.is_dir():
         return "bad", f"녹음 저장소가 디렉터리가 아님: {storage_dir}"
     return "ok", f"녹음 저장소 경로 확인됨: {storage_dir}"
+
+
+def _recording_storage_orphan_count(storage_dir: str, recording_paths: list[str | None]) -> int:
+    storage_path = Path(storage_dir)
+    if not storage_path.exists() or not storage_path.is_dir():
+        return 0
+
+    storage_root = storage_path.resolve(strict=False)
+    known_paths: set[Path] = set()
+    for raw_path in recording_paths:
+        if not raw_path:
+            continue
+        resolved_path = Path(raw_path).resolve(strict=False)
+        try:
+            resolved_path.relative_to(storage_root)
+        except ValueError:
+            continue
+        known_paths.add(resolved_path)
+
+    orphan_count = 0
+    for path in storage_root.rglob("*"):
+        if path.is_file() and path.resolve(strict=False) not in known_paths:
+            orphan_count += 1
+    return orphan_count
 
 
 def _api_token_state(api_token: str | None) -> tuple[str, str]:
