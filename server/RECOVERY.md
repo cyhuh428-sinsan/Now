@@ -14,7 +14,7 @@
 6. `checks`에 `warn`이 있으면 `/admin/ops`에서 DB, 저장소, 토큰, 분석 작업 상태를 먼저 확인합니다.
 7. `summary`의 메모, 녹음 메타데이터, 사용자, 분석 작업, 동기화 이력 건수를 기록합니다.
 8. `summary.recording_orphan_files`와 `summary.recording_orphan_bytes`가 0보다 크면 `/api/v1/admin/export/recording-orphans` 또는 `/admin/recordings`의 고아 녹음 파일 JSON을 별도로 저장합니다.
-9. `/admin/ops`의 `누락 녹음 파일` 항목이 `bad`이면 `/api/v1/admin/export/recording-missing-files`를 내려받고, 저장소 백업에서 해당 원본 파일을 먼저 찾습니다.
+9. `summary.recording_missing_files`가 0보다 크거나 `/admin/ops`의 `누락 녹음 파일` 항목이 `bad`이면 `/api/v1/admin/export/recording-missing-files`를 내려받고, 저장소 백업에서 해당 원본 파일을 먼저 찾습니다.
 
 ## 백업 파일 기준
 
