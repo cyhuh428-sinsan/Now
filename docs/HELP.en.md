@@ -142,6 +142,7 @@ Required values:
 - Server URL
 - API token
 - Per-user access token: Used by public servers or servers that require it
+- Two-factor code: Enter only for users with two-factor authentication enabled
 - User ID
 - Device ID
 
@@ -151,6 +152,7 @@ Personal Docker server example:
 Server URL: http://server-address:8750
 API token: NOW_API_TOKEN in server .env
 Per-user access token: Token issued per user in the admin screen
+Two-factor code: Six-digit code when required
 User ID: local_user or the user ID issued by the operator
 Device ID: Generated automatically by the app or installed program
 ```
