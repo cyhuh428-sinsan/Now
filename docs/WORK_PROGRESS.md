@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 02:52 KST
+
+### 다음 작업 시작
+
+- 녹음 교체 파일 정리 실패 격리 보강.
+
+### 구현 내용
+
+- `delete_recording_file()`이 저장소 내부 파일 삭제 중 `OSError`가 발생해도 업로드 응답을 실패시키지 않도록 보강.
+- preflight가 녹음 파일 정리 helper의 OS 오류 격리 처리를 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 recording_storage/preflight 문법 확인 통과.
+- `rg`로 `except OSError`, `delete_recording_file`, preflight 확인 문구 연결 확인.
+- 임시 파일 테스트로 저장소 밖 파일은 삭제하지 않고, 저장소 안 파일은 삭제하며, 이미 없는 파일 호출은 조용히 통과하는 것 확인.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (197/197 checks)` 출력 확인.
+
 ## 2026-05-20 02:39 KST
 
 ### 다음 작업 시작

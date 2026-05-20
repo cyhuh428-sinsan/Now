@@ -266,6 +266,7 @@ def main() -> None:
             [
                 ("delete_recording_file", "Recording storage can delete replaced files", "delete_recording_file"),
                 ("relative_to(storage_root)", "Recording storage deletion is limited to storage root", "storage root guard"),
+                ("except OSError", "Recording storage ignores cleanup OS errors", "cleanup os errors"),
             ],
             failures,
         )
