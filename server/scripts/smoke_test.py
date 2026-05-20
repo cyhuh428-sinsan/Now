@@ -213,6 +213,21 @@ def main() -> None:
                 "user_data_isolation_verification" in public_readiness.get("remaining", []),
                 "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증 항목이 없습니다",
             )
+            require(
+                "user_access_tokens" in public_readiness.get("ready", []),
+                "서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목이 없습니다",
+            )
+            public_readiness_items = public_readiness.get("items", [])
+            require(
+                isinstance(public_readiness_items, list)
+                and any(
+                    item.get("id") == "user_device_registry"
+                    and item.get("status") == "ready"
+                    for item in public_readiness_items
+                    if isinstance(item, dict)
+                ),
+                "서버 정보의 공용 서버 준비 상태 상세에 기기 레지스트리 준비 항목이 없습니다",
+            )
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
             require(capabilities.get("recordings") is True, "서버 capability에 recordings가 없습니다")
@@ -325,10 +340,11 @@ def main() -> None:
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
-            require("공용 서버 로그인 화면" in text, "운영 점검 화면에 공용 서버 로그인 화면 항목이 없습니다")
-            require("공용 서버 2단계 인증" in text, "운영 점검 화면에 공용 서버 2단계 인증 항목이 없습니다")
-            require("공용 서버 기기 등록" in text, "운영 점검 화면에 공용 서버 기기 등록 항목이 없습니다")
-            require("공용 서버 데이터 격리" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
+            require("사용자별 접속 토큰" in text, "운영 점검 화면에 준비된 사용자별 접속 토큰 항목이 없습니다")
+            require("로그인 또는 토큰 전달 화면" in text, "운영 점검 화면에 공용 서버 로그인/토큰 전달 항목이 없습니다")
+            require("실제 2단계 인증 절차" in text, "운영 점검 화면에 실제 2단계 인증 항목이 없습니다")
+            require("사용자별 기기 등록/해제 흐름" in text, "운영 점검 화면에 공용 서버 기기 등록/해제 항목이 없습니다")
+            require("사용자별 데이터 격리 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
             require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
