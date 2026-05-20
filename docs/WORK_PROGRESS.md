@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 16:20 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 상태 API/운영 점검 기준을 더 구체화.
+
+### 구현 내용
+
+- `/api/v1/server`의 `public_server_readiness`가 기존 `remaining` 외에 준비 완료 항목 `ready`와 상세 `items`를 함께 반환하도록 보강.
+- 사용자별 접속 토큰, 사용자 프로필 관리, 기기 레지스트리, 백업/복구 점검을 준비 완료 항목으로 명시.
+- 로그인/토큰 전달 화면, 실제 2단계 인증 절차, 사용자별 기기 등록/해제 흐름, 데이터 격리 검증, 공개 HTTPS/reverse proxy는 남은 항목으로 유지.
+- Admin API와 monitor 운영 화면이 공통 `public_server_readiness_checks()` 기준을 사용하도록 중복 점검 목록 제거.
+- smoke/preflight/README가 준비 완료 항목과 상세 항목을 확인하도록 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 capabilities/admin/monitor/server/smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (273/273 checks)` 출력 확인.
+- `app.api.server.server_info()` 직접 호출로 `public_server_readiness.ready`, `remaining`, `items` 응답 구조 확인.
+- FastAPI `TestClient` 기반 앱 전체 라우팅 검증은 현재 Windows 로컬 uv 환경에서 `python-multipart` import가 잡히지 않아 직접 수행하지 못함. requirements에는 `python-multipart==0.0.20`이 포함되어 있음.
+
 ## 2026-05-20 15:46 KST
 
 ### 다음 작업 시작

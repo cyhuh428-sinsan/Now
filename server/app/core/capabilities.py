@@ -2,16 +2,57 @@ API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "planned"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
-PUBLIC_SERVER_READINESS = {
-    "status": "planned",
-    "remaining": [
-        "login_or_token_delivery",
-        "real_two_factor_challenge",
-        "user_device_registration",
-        "user_data_isolation_verification",
-        "public_https_reverse_proxy",
-    ],
-}
+
+PUBLIC_SERVER_READY_ITEMS = [
+    {
+        "id": "user_access_tokens",
+        "label": "사용자별 접속 토큰",
+        "message": "사용자별 토큰 발급, 필수 모드, 마지막 사용 시각 추적 지원",
+    },
+    {
+        "id": "user_profile_admin",
+        "label": "사용자 프로필 관리",
+        "message": "시간대, 그룹, 활성 상태, 2단계 사용 여부 관리 지원",
+    },
+    {
+        "id": "user_device_registry",
+        "label": "사용자별 기기 레지스트리",
+        "message": "기기별 등록 흔적, 활성/비활성 차단, 최근 접속 시각 추적 지원",
+    },
+    {
+        "id": "backup_recovery_checks",
+        "label": "백업/복구 점검",
+        "message": "백업 내보내기, 백업 검증, 운영 점검 화면 지원",
+    },
+]
+
+PUBLIC_SERVER_REMAINING_ITEMS = [
+    {
+        "id": "login_or_token_delivery",
+        "label": "로그인 또는 토큰 전달 화면",
+        "message": "정식 오픈 전 사용자별 토큰 전달 UI 또는 로그인 화면 필요",
+    },
+    {
+        "id": "real_two_factor_challenge",
+        "label": "실제 2단계 인증 절차",
+        "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
+    },
+    {
+        "id": "user_device_registration",
+        "label": "사용자별 기기 등록/해제 흐름",
+        "message": "정식 오픈 전 사용자가 직접 기기를 등록/해제하는 흐름 확인 필요",
+    },
+    {
+        "id": "user_data_isolation_verification",
+        "label": "사용자별 데이터 격리 검증",
+        "message": "정식 오픈 전 사용자별 데이터 접근 격리 검증 필요",
+    },
+    {
+        "id": "public_https_reverse_proxy",
+        "label": "공개 HTTPS/reverse proxy",
+        "message": "정식 오픈 전 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인 필요",
+    },
+]
 
 SERVER_CAPABILITIES = {
     "sync": True,
@@ -39,7 +80,38 @@ def server_capabilities() -> dict:
 
 
 def public_server_readiness() -> dict:
+    ready = [item["id"] for item in PUBLIC_SERVER_READY_ITEMS]
+    remaining = [item["id"] for item in PUBLIC_SERVER_REMAINING_ITEMS]
     return {
-        "status": PUBLIC_SERVER_READINESS["status"],
-        "remaining": list(PUBLIC_SERVER_READINESS["remaining"]),
+        "status": "ready" if not remaining else "planned",
+        "ready": ready,
+        "remaining": remaining,
+        "items": [
+            *[
+                {
+                    **item,
+                    "status": "ready",
+                }
+                for item in PUBLIC_SERVER_READY_ITEMS
+            ],
+            *[
+                {
+                    **item,
+                    "status": "planned",
+                }
+                for item in PUBLIC_SERVER_REMAINING_ITEMS
+            ],
+        ],
     }
+
+
+def public_server_readiness_checks() -> list[dict[str, str]]:
+    readiness = public_server_readiness()
+    return [
+        {
+            "name": item["label"],
+            "status": "ok" if item["status"] == "ready" else "info",
+            "message": item["message"],
+        }
+        for item in readiness["items"]
+    ]
