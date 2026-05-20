@@ -266,7 +266,7 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
 
     <section>
       <h2 data-i18n="encryption.title">암호화 저장</h2>
-      <p data-i18n="encryption.desc">암호화 저장은 서버 로그인 사용자 전용 선택 기능으로 설계합니다. 기본값은 꺼짐입니다.</p>
+      <p data-i18n="encryption.desc">암호화 저장은 현재 1차 범위에서는 켜지지 않습니다. 향후 서버 로그인 사용자 전용 선택 기능으로 제공하고 기본값은 꺼짐으로 둡니다.</p>
       <ul>
         <li data-i18n="encryption.login">로그인은 사용 권한 확인에 사용합니다.</li>
         <li data-i18n="encryption.key">실제 암호화 키는 사용자 비밀번호 또는 복구키 기반으로 분리합니다.</li>
@@ -352,7 +352,7 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "backup.markdownExport.title": "Markdown export",
         "backup.markdownExport.desc": "Markdown exported from NowNote is generated in the current language. Both Korean and English exports can be imported back into NowNote.",
         "encryption.title": "Encrypted Storage",
-        "encryption.desc": "Encrypted storage is designed as an optional feature for server-login users. It is off by default.",
+        "encryption.desc": "Encrypted storage is not enabled in the current first-phase scope. Later, it will be offered as an optional feature for server-login users and will stay off by default.",
         "encryption.login": "Login is used to verify access permission.",
         "encryption.key": "The actual encryption key is separated based on the user password or recovery key.",
         "encryption.operator": "Even the server operator should not be able to read encrypted note contents.",

@@ -97,9 +97,9 @@ class HelpPage extends StatelessWidget {
           _HelpSection(
             icon: Icons.lock_outline,
             title: '암호화 저장',
-            description: '암호화 저장은 서버 로그인 사용자 전용 선택 기능으로 설계합니다.',
+            description: '암호화 저장은 현재 1차 범위에서는 켜지지 않습니다.',
             points: [
-              '기본값은 꺼짐입니다.',
+              '향후 서버 로그인 사용자 전용 선택 기능으로 제공하고 기본값은 꺼짐으로 둡니다.',
               '암호화된 메모는 서버 운영자도 원문을 읽을 수 없어야 합니다.',
               '암호화 메모는 기본적으로 LLM 분석에서 제외합니다.',
             ],
