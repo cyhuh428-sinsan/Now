@@ -3,6 +3,33 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 04:08 KST
+
+### 다음 작업 시작
+
+- 공통/Web/관리자 도움말의 공용 서버 남은 항목 설명을 현재 구현 상태와 맞춤.
+
+### 구현 방침
+
+- 사용자 토큰 확인 화면/API와 2단계 코드 검증은 준비 완료로 설명.
+- 공용 서버 정식 오픈 전 남은 핵심 항목은 HTTPS/reverse proxy 공개 운영 환경으로 좁혀 설명.
+- smoke/preflight가 오래된 "로그인 화면/실제 2단계 인증 미완료" 문구에 묶이지 않도록 함께 갱신.
+
+### 구현 내용
+
+- `docs/HELP.md`, `docs/HELP.en.md`의 공용 서버 주의 문구를 현재 구현 상태 기준으로 갱신.
+- `web/help.html`의 공용 서버 설명을 사용자별 접속 토큰/2단계 코드 검증 제공, HTTPS/reverse proxy 확인 필요로 수정.
+- `/admin/help` 안내 문구를 사용자 토큰 확인 화면/API, 2단계 코드 검증, 공개 운영 환경 점검 기준으로 수정.
+- smoke/preflight의 도움말 점검 기준을 오래된 로그인 화면 문구에서 사용자 토큰 확인 화면/API와 2단계 코드 검증으로 변경.
+
+### 검증
+
+- 오래된 "로그인 화면/실제 2단계 인증 미완료" 문구가 문서/도움말/점검 코드에서 제거됐는지 `rg`로 확인.
+- `uv run python -m py_compile app/api/monitor.py scripts/smoke_test.py scripts/preflight.py` 통과.
+- `node --check web/app.js` 통과.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (326/326 checks)` 출력 확인.
+
 ## 2026-05-21 03:47 KST
 
 ### 다음 작업 시작

@@ -80,8 +80,8 @@ Notes:
 - API tokens entered in the app and installed programs are stored in the device secure storage.
 - Personal server users must change the token and database password in `.env`.
 - Public server users use connection information issued by the operator.
-- The current first-phase server uses a single API token model for personal Docker servers. A per-user login or per-user token policy is still required before a public server can be officially opened.
-- Before opening a public server, all `scripts/preflight.py --public-server` failures must be resolved. Current failures are a safety signal that the login screen, real two-factor authentication, and public operations environment are still unfinished.
+- The current first-phase server can start with a single API token for personal Docker servers, and also provides per-user access tokens plus two-factor code verification for public-server use.
+- Before opening a public server, all `scripts/preflight.py --public-server` failures must be resolved. Current failures are a safety signal that the public operations environment such as HTTPS/reverse proxy is still unfinished.
 - Server backup verification checks backup schema, checksum, required sections, and token-sensitive data exposure.
 - Archived daily notes are not deleted after server connection. They stay as inactive backup records.
 

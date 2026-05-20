@@ -370,7 +370,8 @@ def main() -> None:
             require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
-            require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")
+            require("사용자 토큰 확인 화면/API" in text, "도움말 화면에 사용자 토큰 확인 화면/API 점검 안내가 없습니다")
+            require("2단계 코드 검증" in text, "도움말 화면에 2단계 코드 검증 점검 안내가 없습니다")
             require("기기 등록" in text, "도움말 화면에 공용 서버 기기 등록 점검 안내가 없습니다")
             require("데이터 격리" in text, "도움말 화면에 공용 서버 데이터 격리 점검 안내가 없습니다")
             require("/admin/deploy" in text, "도움말 화면에 배포 체크리스트 링크가 없습니다")
@@ -620,7 +621,7 @@ def main() -> None:
         (item for item in data.get("checks", []) if item.get("name") == "공용 서버 인증"),
         {},
     )
-    require("공용 서버 로그인 화면" in ops_check_names, "운영 점검에 공용 서버 로그인 화면 항목이 없습니다")
+    require("사용자 토큰 확인 화면/API" in ops_check_names, "운영 점검에 사용자 토큰 확인 화면/API 항목이 없습니다")
     require("공용 서버 2단계 인증" in ops_check_names, "운영 점검에 공용 서버 2단계 인증 항목이 없습니다")
     require("공용 서버 기기 등록" in ops_check_names, "운영 점검에 공용 서버 기기 등록 항목이 없습니다")
     require("공용 서버 데이터 격리" in ops_check_names, "운영 점검에 공용 서버 데이터 격리 항목이 없습니다")
