@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 04:55 KST
+
+### 다음 작업 시작
+
+- 누락 녹음 파일 summary 필드 문서화.
+
+### 구현 내용
+
+- README에 `recording_missing_files`가 백업 JSON 메타데이터와 실제 저장소 원본 파일 불일치 지표라는 설명 추가.
+- RECOVERY 문서의 복구 전 확인 순서에 `summary.recording_missing_files` 기준 추가.
+- preflight가 README/RECOVERY의 누락 녹음 파일 summary 문서화 여부를 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 preflight 문법 확인 통과.
+- `rg`로 README/RECOVERY/preflight의 `recording_missing_files`, `summary.recording_missing_files` 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (239/239 checks)` 출력 확인.
+
 ## 2026-05-20 04:43 KST
 
 ### 다음 작업 시작
