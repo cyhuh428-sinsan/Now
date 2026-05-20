@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 03:08 KST
+
+### 다음 작업 시작
+
+- 녹음 저장 안전 이름의 빈 값/점 경로 경계값 보강.
+
+### 구현 내용
+
+- `_safe_name()`이 빈 문자열, `.`, `..` 값을 실제 경로 의미로 쓰지 않고 `_`로 대체하도록 보강.
+- smoke test가 `local_id=".."`, 파일명 `"."` 업로드 후 저장 파일명이 안전한 대체 이름으로 시작하는지 확인하도록 보강.
+- preflight가 빈 값/점 경로 대체 처리를 정적 검사하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 recording_storage/smoke/preflight 문법 확인 통과.
+- 임시 `NOW_STORAGE_DIR`에서 `owner_id=".."`, `device_id="."`, `local_id=".."`, 파일명 `"."` 조합 저장 시 저장소 내부에만 파일이 생성되고 파일명이 `_` 대체 이름으로 시작하는 것 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (198/198 checks)` 출력 확인.
+
 ## 2026-05-20 02:52 KST
 
 ### 다음 작업 시작

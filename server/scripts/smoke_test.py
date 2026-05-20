@@ -906,6 +906,51 @@ def main() -> None:
         {"file_name": unsafe_file_name, "path_safe": True},
     )
 
+    dot_recording_local_id = ".."
+    status, data = request_multipart(
+        f"{base_url}/api/v1/recordings",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "device_id": "smoke_test",
+            "local_id": dot_recording_local_id,
+            "note_local_id": "smoke_note_001",
+            "transcript": "Smoke dot path transcript",
+        },
+        "file",
+        ".",
+        "audio/webm",
+        b"NowNote dot path smoke recording bytes",
+    )
+    require(data.get("local_id") == dot_recording_local_id, "점 local_id가 메타데이터에서 보존되지 않았습니다")
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/recordings?device_id=smoke_test",
+        args.token,
+    )
+    dot_recording = next(
+        (
+            item
+            for item in data.get("items", [])
+            if item.get("local_id") == dot_recording_local_id
+        ),
+        {},
+    )
+    dot_file_name = str(dot_recording.get("file_name", ""))
+    dot_storage_path = str(dot_recording.get("storage_path", ""))
+    normalized_dot_path = dot_storage_path.replace("\\", "/")
+    require(dot_recording, "점 local_id 녹음 export 항목을 찾지 못했습니다")
+    require(
+        "/" not in dot_file_name and "\\" not in dot_file_name and dot_file_name.startswith("_"),
+        "점 local_id 녹음 저장 파일명이 안전한 대체 이름으로 시작하지 않습니다",
+    )
+    require("/../" not in normalized_dot_path, "점 local_id 녹음 저장 경로에 상위 경로 이동이 남아 있습니다")
+    print(
+        "POST /api/v1/recordings(dot_path_safety):",
+        status,
+        {"file_name": dot_file_name, "path_safe": True},
+    )
+
     deleted_local_id = f"smoke_deleted_{now.replace(':', '').replace('-', '').replace('T', '_')}"
     deleted_note = {
         "owner_id": "local_user",

@@ -7,7 +7,10 @@ from app.core.config import get_settings
 
 
 def _safe_name(name: str) -> str:
-    return Path(name).name.replace("\\", "_").replace("/", "_")
+    cleaned = Path(name or "").name.replace("\\", "_").replace("/", "_").strip()
+    if cleaned in {"", ".", ".."}:
+        return "_"
+    return cleaned
 
 
 async def save_recording_file(
