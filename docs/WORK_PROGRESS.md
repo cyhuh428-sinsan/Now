@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 23:28 KST
+
+### 다음 작업 시작
+
+- Web/모바일 클라이언트의 사용자 토큰 로그인/2단계 코드 연결이 회귀하지 않도록 preflight 점검 보강.
+
+### 구현 방침
+
+- preflight가 Web 연결 테스트의 `/api/v1/auth/token-login`, 2단계 코드 입력, `token_code` capability 표시를 확인하도록 추가.
+- preflight가 모바일 연결 테스트의 `/api/v1/auth/token-login`, 2단계 코드 입력, `token_code` capability 표시를 확인하도록 추가.
+
+### 구현 내용
+
+- Web 소스 점검에 사용자 토큰 로그인 API, 2단계 코드 입력, `token_code` capability 표시 확인 추가.
+- 모바일 서버 동기화/설정 소스 점검에 사용자 토큰 로그인 API, 2단계 코드 전송, 2단계 입력 필드, `token_code` capability 표시 확인 추가.
+
+### 검증
+
+- `uv run python -m py_compile scripts/preflight.py` 통과.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (317/317 checks)` 출력 확인.
+
 ## 2026-05-20 23:11 KST
 
 ### 다음 작업 시작

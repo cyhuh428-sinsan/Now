@@ -281,6 +281,13 @@ def main() -> None:
                     "Web localizes public server readiness",
                     "web public readiness i18n",
                 ),
+                ("/api/v1/auth/token-login", "Web verifies per-user token login", "web token login API"),
+                ("serverTwoFactorCodeInput", "Web exposes two-factor code input", "web two factor input"),
+                (
+                    'capabilities.two_factor_auth === "token_code"',
+                    "Web displays token-code two-factor auth readiness",
+                    "web two factor token code",
+                ),
             ],
             failures,
         )
@@ -302,6 +309,9 @@ def main() -> None:
                 ("public_server_readiness", "Mobile reads public server readiness response", "mobile public readiness response"),
                 ("_publicReadinessFromResponse", "Mobile parses public server readiness", "mobile public readiness parser"),
                 ("공용 서버 준비 중", "Mobile summarizes public server readiness", "mobile public readiness summary"),
+                ("/api/v1/auth/token-login", "Mobile verifies per-user token login", "mobile token login API"),
+                ("two_factor_code", "Mobile sends two-factor code", "mobile two factor code"),
+                ("twoFactorAuth == 'token_code'", "Mobile displays token-code two-factor auth readiness", "mobile two factor token code"),
             ],
             failures,
         )
@@ -311,6 +321,7 @@ def main() -> None:
             mobile_server_settings,
             [
                 ("publicReadiness?.summary", "Mobile displays public server readiness", "mobile public readiness display"),
+                ("_twoFactorCodeCtrl", "Mobile exposes two-factor code input", "mobile two factor input"),
             ],
             failures,
         )
