@@ -313,7 +313,9 @@ def main() -> None:
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 ("누락 녹음 파일", "Monitor ops covers missing recording files", "missing recording files"),
                 ("고아 녹음 파일 JSON", "Monitor recordings links orphan export", "recording orphan export link"),
+                ("누락 녹음 파일 JSON", "Monitor recordings links missing export", "recording missing export link"),
                 ("/api/v1/admin/export/recording-orphans", "Monitor recordings uses orphan export API", "recording orphan export API"),
+                ("/api/v1/admin/export/recording-missing-files", "Monitor recordings uses missing export API", "recording missing export API"),
                 ('summary["recording_orphan_files"]', "Monitor export page shows orphan recording count", "recording orphan export count"),
                 ('summary["recording_missing_files"]', "Monitor export page shows missing recording count", "recording missing export count"),
                 (
@@ -464,6 +466,8 @@ def main() -> None:
                 ("운영 점검 요약에 고아 녹음 파일 집계", "Smoke checks ops orphan summary", "ops orphan recording files summary"),
                 ("운영 점검에 누락 녹음 파일 항목", "Smoke checks ops missing recordings", "ops missing recording files"),
                 ("운영 점검 요약에 누락 녹음 파일 집계", "Smoke checks ops missing summary", "ops missing recording files summary"),
+                ("녹음 관리 화면에 누락 녹음 파일 JSON 링크", "Smoke checks recordings missing link", "recordings missing link"),
+                ("녹음 관리 화면에 누락 녹음 파일 export 링크", "Smoke checks recordings missing export link", "recordings missing export link"),
                 ("도움말 화면에 공용 서버 기기 등록 점검 안내", "Smoke checks help page public device guidance", "help page public device"),
                 ("도움말 화면에 공용 서버 데이터 격리 점검 안내", "Smoke checks help page public data isolation guidance", "help page public data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
