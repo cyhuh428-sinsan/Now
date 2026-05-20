@@ -734,6 +734,22 @@ def main() -> None:
         status,
         {"owner_id": data.get("owner_id"), "issued": bool(data.get("token"))},
     )
+    if USER_TOKEN_REQUIRED:
+        status, data = request_error_with_user_token(
+            "GET",
+            f"{base_url}/api/v1/notes?owner_id=local_user",
+            args.token,
+            user_token=issued_smoke_token,
+        )
+        require(
+            status == 401 and data.get("detail") == "invalid user token",
+            "다른 사용자 토큰으로 local_user 데이터 API가 차단되지 않았습니다",
+        )
+        print(
+            "GET /api/v1/notes(cross_user_token_blocked):",
+            status,
+            {"detail": data.get("detail")},
+        )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/users?token=issued", args.token)
     require(data.get("token_issued", 0) >= 1, "사용자 토큰 발급 집계가 증가하지 않았습니다")

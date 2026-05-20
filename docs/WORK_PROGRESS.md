@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 16:52 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 항목 중 사용자별 데이터 격리 검증 보강.
+
+### 구현 내용
+
+- smoke test에 다른 사용자 토큰으로 `local_user` 데이터 API 접근 시 `invalid user token`으로 차단되는지 확인하는 검증 추가.
+- preflight가 위 cross-user token isolation 검증 코드 존재를 확인하도록 보강.
+- README의 smoke test 설명에 다른 사용자 토큰 차단 검증을 추가.
+- 데이터 격리 항목은 아직 공용 서버 준비 완료로 넘기지 않음. 현재는 토큰 기준 접근 차단 검증을 강화한 단계.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (281/281 checks)` 출력 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-20 16:36 KST
 
 ### 다음 작업 시작
