@@ -298,6 +298,10 @@ def main() -> None:
             require("현재 조건 JSON" in text, "메모 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "제목/내용 검색" in text, "메모 관리 화면에 검색 필터가 없습니다")
             require("메모 타입" in text and "삭제 제외" in text, "메모 관리 화면에 타입/삭제 필터가 없습니다")
+        if path.startswith("/admin/recordings"):
+            require("고아 녹음 파일 JSON" in text, "녹음 관리 화면에 고아 녹음 파일 JSON 링크가 없습니다")
+            require("누락 녹음 파일 JSON" in text, "녹음 관리 화면에 누락 녹음 파일 JSON 링크가 없습니다")
+            require("/api/v1/admin/export/recording-missing-files" in text, "녹음 관리 화면에 누락 녹음 파일 export 링크가 없습니다")
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")

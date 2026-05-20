@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 05:07 KST
+
+### 다음 작업 시작
+
+- 녹음 관리 화면에 누락 녹음 파일 목록 링크 추가.
+
+### 구현 내용
+
+- `/admin/recordings` 안내 영역에 `누락 녹음 파일 JSON` 링크 추가.
+- smoke test가 녹음 관리 화면의 고아/누락 녹음 파일 JSON 링크를 확인하도록 보강.
+- preflight가 monitor 화면과 smoke test의 누락 녹음 파일 링크 검증을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 monitor/smoke/preflight 문법 확인 통과.
+- `rg`로 녹음 관리 화면, smoke test, preflight의 `누락 녹음 파일 JSON`/`recording-missing-files` 연결 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (243/243 checks)` 출력 확인.
+
 ## 2026-05-20 04:55 KST
 
 ### 다음 작업 시작
