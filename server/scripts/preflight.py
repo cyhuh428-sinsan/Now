@@ -380,6 +380,7 @@ def main() -> None:
                 ("user_token_required", "Smoke checks user token required flag", "user_token_required"),
                 ("user token required로 차단", "Smoke checks missing user token detail", "missing user token detail"),
                 ("invalid user token으로 차단", "Smoke checks invalid user token detail", "invalid user token detail"),
+                ("실패한 사용자 토큰 요청이 마지막 사용 시각", "Smoke checks failed token does not update last used", "failed token last used"),
                 ("사용자 목록 API에 사용자 토큰 해시", "Smoke checks user list token hash safety", "user list token hash safety"),
                 ("사용자 export에 사용자 토큰 해시", "Smoke checks user export token hash safety", "user export token hash safety"),
                 ("max_tree_note_level", "Smoke covers tree depth capability", "max_tree_note_level"),

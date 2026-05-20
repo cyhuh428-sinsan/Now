@@ -609,10 +609,17 @@ def main() -> None:
                 status == 401 and data.get("detail") == "invalid user token",
                 "사용자 토큰 필수 모드에서 잘못된 토큰 요청이 invalid user token으로 차단되지 않았습니다",
             )
+            status, data = request("GET", f"{base_url}/api/v1/admin/users?owner_id=local_user", args.token)
+            items = data.get("items", []) if isinstance(data, dict) else []
+            last_used_at = items[0].get("access_token_last_used_at") if items else None
+            require(
+                last_used_at is None,
+                "실패한 사용자 토큰 요청이 마지막 사용 시각을 갱신했습니다",
+            )
             print(
                 "GET /api/v1/notes(user_token_required_errors):",
                 status,
-                {"missing": "user token required", "invalid": data.get("detail")},
+                {"missing": "user token required", "invalid": "invalid user token"},
             )
 
     status, data = request_error(
