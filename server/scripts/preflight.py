@@ -380,6 +380,8 @@ def main() -> None:
                 ("user_token_required", "Smoke checks user token required flag", "user_token_required"),
                 ("user token required로 차단", "Smoke checks missing user token detail", "missing user token detail"),
                 ("invalid user token으로 차단", "Smoke checks invalid user token detail", "invalid user token detail"),
+                ("사용자 목록 API에 사용자 토큰 해시", "Smoke checks user list token hash safety", "user list token hash safety"),
+                ("사용자 export에 사용자 토큰 해시", "Smoke checks user export token hash safety", "user export token hash safety"),
                 ("max_tree_note_level", "Smoke covers tree depth capability", "max_tree_note_level"),
                 ("supported_note_types", "Smoke covers supported note types", "supported_note_types"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
