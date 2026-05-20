@@ -216,6 +216,10 @@ def main() -> None:
                 "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증 준비 항목이 없습니다",
             )
             require(
+                "login_or_token_delivery" in public_readiness.get("ready", []),
+                "서버 정보의 공용 서버 준비 상태에 사용자 토큰 확인 화면/API 준비 항목이 없습니다",
+            )
+            require(
                 "user_access_tokens" in public_readiness.get("ready", []),
                 "서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목이 없습니다",
             )
@@ -290,6 +294,11 @@ def main() -> None:
         "/admin/users?group=테스트",
         "/admin/users?token=missing",
     ]
+    status, text = request_text("GET", f"{base_url}/auth/token")
+    require("NowNote 토큰 확인" in text, "사용자 토큰 확인 화면 제목이 없습니다")
+    require("사용자별 접속 토큰" in text, "사용자 토큰 확인 화면에 토큰 입력 안내가 없습니다")
+    print(f"GET /auth/token: {status} html={len(text)} bytes")
+
     for path in admin_pages:
         status, text = request_text("GET", f"{base_url}{path}", args.token)
         if path == "/admin/export":
@@ -343,7 +352,7 @@ def main() -> None:
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("사용자별 접속 토큰" in text, "운영 점검 화면에 준비된 사용자별 접속 토큰 항목이 없습니다")
-            require("로그인 또는 토큰 전달 화면" in text, "운영 점검 화면에 공용 서버 로그인/토큰 전달 항목이 없습니다")
+            require("사용자 토큰 확인 화면/API" in text, "운영 점검 화면에 사용자 토큰 확인 준비 항목이 없습니다")
             require("실제 2단계 인증 절차" in text, "운영 점검 화면에 실제 2단계 인증 항목이 없습니다")
             require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
@@ -736,6 +745,39 @@ def main() -> None:
         status,
         {"owner_id": data.get("owner_id"), "issued": bool(data.get("token"))},
     )
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/auth/token-login",
+        None,
+        {"owner_id": "smoke_admin_user", "access_token": issued_smoke_token},
+    )
+    require(data.get("status") == "ok", "사용자 토큰 로그인 API 응답 상태가 ok가 아닙니다")
+    require(
+        data.get("user", {}).get("owner_id") == "smoke_admin_user",
+        "사용자 토큰 로그인 API owner_id가 일치하지 않습니다",
+    )
+    print(
+        "POST /api/v1/auth/token-login:",
+        status,
+        {"owner_id": data.get("user", {}).get("owner_id")},
+    )
+
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/auth/token-login",
+        None,
+        {"owner_id": "smoke_admin_user", "access_token": "invalid-smoke-user-token"},
+    )
+    require(
+        status == 401 and data.get("detail") == "invalid user token",
+        "잘못된 사용자 토큰 로그인이 invalid user token으로 차단되지 않았습니다",
+    )
+    print(
+        "POST /api/v1/auth/token-login(invalid):",
+        status,
+        {"detail": data.get("detail")},
+    )
+
     if USER_TOKEN_REQUIRED:
         status, data = request_error_with_user_token(
             "GET",
