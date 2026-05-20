@@ -20,7 +20,7 @@ async def save_recording_file(
     base = Path(settings.storage_dir) / owner_id / device_id
     base.mkdir(parents=True, exist_ok=True)
 
-    file_name = f"{local_id}_{uuid4().hex}_{_safe_name(upload.filename or 'audio.aac')}"
+    file_name = f"{_safe_name(local_id)}_{uuid4().hex}_{_safe_name(upload.filename or 'audio.aac')}"
     target = base / file_name
     with target.open("wb") as output:
         while chunk := await upload.read(1024 * 1024):

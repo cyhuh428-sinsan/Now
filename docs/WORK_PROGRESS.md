@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 02:14 KST
+
+### 다음 작업 시작
+
+- 녹음 저장 파일명 경로 안전성 보강.
+
+### 구현 내용
+
+- 녹음 파일 저장 시 업로드 파일명뿐 아니라 `local_id`도 파일명 용도로 안전하게 정리하도록 수정.
+- DB 메타데이터의 `local_id`는 원본 값을 그대로 보존.
+- smoke test가 경로 문자가 포함된 `local_id`와 파일명을 업로드해도 저장 파일명에 `/`, `\`, `..` 경로 이동이 남지 않는지 확인하도록 추가.
+- preflight가 녹음 경로 안전성 smoke 기준을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 recording_storage/smoke/preflight 문법 확인 통과.
+- `rg`로 `local_id` 파일명 안전 처리, 녹음 경로 안전성 smoke, preflight 확인 문구 연결 확인.
+- 임시 SQLite DB와 별도 `NOW_STORAGE_DIR`에서 경로 문자가 포함된 `local_id`/파일명을 업로드해도:
+  - 메타데이터 `local_id`는 원본 유지.
+  - 저장 `file_name`에는 `/`, `\`, 시작 `..`이 남지 않음.
+  - `storage_path`에 `/../` 이동이 남지 않음.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (190/190 checks)` 출력 확인.
+
 ## 2026-05-20 02:01 KST
 
 ### 다음 작업 시작

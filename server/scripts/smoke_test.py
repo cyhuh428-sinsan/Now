@@ -831,6 +831,50 @@ def main() -> None:
         {"has_recording": has_recording, "count": len(data)},
     )
 
+    unsafe_recording_local_id = f"../smoke_escape_{now.replace(':', '').replace('-', '').replace('T', '_')}"
+    status, data = request_multipart(
+        f"{base_url}/api/v1/recordings",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "device_id": "smoke_test",
+            "local_id": unsafe_recording_local_id,
+            "note_local_id": "smoke_note_001",
+            "transcript": "Smoke unsafe path transcript",
+        },
+        "file",
+        "../unsafe-recording.webm",
+        "audio/webm",
+        b"NowNote unsafe path smoke recording bytes",
+    )
+    require(data.get("local_id") == unsafe_recording_local_id, "위험 문자 local_id가 메타데이터에서 보존되지 않았습니다")
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/export/recordings?device_id=smoke_test",
+        args.token,
+    )
+    unsafe_recording = next(
+        (
+            item
+            for item in data.get("items", [])
+            if item.get("local_id") == unsafe_recording_local_id
+        ),
+        {},
+    )
+    unsafe_file_name = str(unsafe_recording.get("file_name", ""))
+    unsafe_storage_path = str(unsafe_recording.get("storage_path", ""))
+    require(unsafe_recording, "위험 문자 local_id 녹음 export 항목을 찾지 못했습니다")
+    require(
+        "/" not in unsafe_file_name and "\\" not in unsafe_file_name and not unsafe_file_name.startswith(".."),
+        "녹음 저장 파일명에 경로 문자가 남아 있습니다",
+    )
+    require("/../" not in unsafe_storage_path.replace("\\", "/"), "녹음 저장 경로에 상위 경로 이동이 남아 있습니다")
+    print(
+        "POST /api/v1/recordings(path_safety):",
+        status,
+        {"file_name": unsafe_file_name, "path_safe": True},
+    )
+
     deleted_local_id = f"smoke_deleted_{now.replace(':', '').replace('-', '').replace('T', '_')}"
     deleted_note = {
         "owner_id": "local_user",
