@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 03:47 KST
+
+### 다음 작업 시작
+
+- 서버 인증 기준 문서를 최신 클라이언트 인증 흐름과 맞춤.
+
+### 구현 방침
+
+- 앱/Web/설치형 프로그램이 저장/입력하는 값에 사용자별 접속 토큰과 2단계 인증 코드를 명시.
+- 인증 정책 문서의 해당 문구를 preflight에서 확인해 회귀를 막음.
+
+### 구현 내용
+
+- `docs/SERVER_AUTH_POLICY.md`에 클라이언트가 저장하는 사용자별 접속 토큰을 명시.
+- 2단계 인증 코드는 저장하지 않고 확인 요청에만 사용한다는 정책 추가.
+- preflight가 인증 정책 문서의 사용자 토큰 입력값과 2단계 코드 비저장 정책을 확인하도록 보강.
+
+### 검증
+
+- `uv run python -m py_compile scripts/preflight.py` 통과.
+- `git diff --check` 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (325/325 checks)` 출력 확인.
+
 ## 2026-05-21 03:46 KST
 
 ### 다음 작업 시작
