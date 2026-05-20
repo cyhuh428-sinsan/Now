@@ -4015,6 +4015,12 @@ def _admin_export_html() -> str:
             summary["recording_orphan_files"],
         ),
         (
+            "누락 녹음 파일",
+            "/api/v1/admin/export/recording-missing-files",
+            "DB 메타데이터는 있지만 저장소에서 찾을 수 없는 파일 목록",
+            summary["recording_missing_files"],
+        ),
+        (
             "Users",
             "/api/v1/admin/export/users",
             "사용자 계정과 운영 메타데이터 export",
@@ -4695,12 +4701,15 @@ def _export_summary_counts_for_page() -> dict[str, int]:
             settings.storage_dir,
             recording_storage_paths,
         )
+        recording_rows = list(db.scalars(select(Recording)).all())
+        recording_missing_files = len(_recording_missing_files(recording_rows))
         return {
             "notes": note_total,
             "active_notes": active_notes,
             "deleted_notes": note_total - active_notes,
             "recordings": recordings,
             "recording_orphan_files": recording_orphan_files,
+            "recording_missing_files": recording_missing_files,
             "users": users,
             "devices": devices,
             "analysis_jobs": analysis_jobs,

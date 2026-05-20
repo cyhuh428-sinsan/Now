@@ -248,6 +248,7 @@ def main() -> None:
                 ("_recording_missing_files", "Admin API lists missing recording files", "recording missing file list"),
                 ("recording_orphan_files", "Admin export summary includes orphan recording count", "recording orphan summary count"),
                 ("recording_orphan_bytes", "Admin export summary includes orphan recording bytes", "recording orphan summary bytes"),
+                ("recording_missing_files", "Admin export summary includes missing recording count", "recording missing summary count"),
             ],
             failures,
         )
@@ -313,6 +314,7 @@ def main() -> None:
                 ("고아 녹음 파일 JSON", "Monitor recordings links orphan export", "recording orphan export link"),
                 ("/api/v1/admin/export/recording-orphans", "Monitor recordings uses orphan export API", "recording orphan export API"),
                 ('summary["recording_orphan_files"]', "Monitor export page shows orphan recording count", "recording orphan export count"),
+                ('summary["recording_missing_files"]', "Monitor export page shows missing recording count", "recording missing export count"),
                 (
                     "NOW_STORAGE_DIR",
                     "Monitor export page explains recording storage backup",
@@ -444,6 +446,7 @@ def main() -> None:
                 ("내보내기 요약에 전체 export 건수", "Smoke checks export summary total count", "summary total count"),
                 ("내보내기 요약에 고아 녹음 파일 건수", "Smoke checks export summary orphan recordings", "summary orphan recordings"),
                 ("내보내기 요약에 고아 녹음 파일 크기", "Smoke checks export summary orphan bytes", "summary orphan bytes"),
+                ("내보내기 요약에 누락 녹음 파일 건수", "Smoke checks export summary missing recordings", "summary missing recordings"),
                 ("항목 합계와 다릅니다", "Smoke checks export summary total consistency", "summary total consistency"),
                 ("verify(missing-devices)", "Smoke checks missing devices backup verification", "missing devices verify"),
                 ("기기 누락 백업 검증", "Smoke checks devices missing message", "missing devices message"),
