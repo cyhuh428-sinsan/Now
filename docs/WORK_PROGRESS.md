@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 02:26 KST
+
+### 다음 작업 시작
+
+- 녹음 저장 디렉터리 owner/device 경로 안전성 보강.
+
+### 구현 내용
+
+- 녹음 저장 디렉터리 생성 시 `owner_id`, `device_id`도 파일 시스템 경로 용도로 안전하게 정리하도록 수정.
+- DB 메타데이터의 `owner_id`, `device_id`는 원본 값을 그대로 보존.
+- smoke test가 저장 경로에 상위 경로 이동이 남지 않고 owner/device 디렉터리 아래에 저장되는지 확인하도록 보강.
+- preflight가 녹음 owner/device 경로 안전성 smoke 기준을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 recording_storage/smoke/preflight 문법 확인 통과.
+- `rg`로 owner/device 경로 안전 처리와 smoke/preflight 확인 문구 연결 확인.
+- 임시 SQLite DB와 별도 `NOW_STORAGE_DIR`에서 경로 문자가 포함된 `owner_id`, `device_id`, `local_id`를 업로드해도:
+  - 메타데이터 owner/device/local_id는 원본 유지.
+  - 저장 경로에 `/../` 이동이 남지 않음.
+  - 저장 경로가 정리된 owner/device 디렉터리 아래에 생성됨.
+- 일반 preflight 실행 결과 `NowNote server preflight passed (191/191 checks)` 출력 확인.
+
 ## 2026-05-20 02:14 KST
 
 ### 다음 작업 시작
