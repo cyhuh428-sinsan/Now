@@ -524,6 +524,7 @@ def main() -> None:
                 ("user token required로 차단", "Smoke checks missing user token detail", "missing user token detail"),
                 ("invalid user token으로 차단", "Smoke checks invalid user token detail", "invalid user token detail"),
                 ("실패한 사용자 토큰 요청이 마지막 사용 시각", "Smoke checks failed token does not update last used", "failed token last used"),
+                ("다른 사용자 토큰으로 local_user 데이터 API", "Smoke checks cross-user token isolation", "cross user token isolation"),
                 ("사용자 기기 목록 조회 응답", "Smoke checks user device list API", "user device list API"),
                 ("사용자 기기 상태 변경 응답", "Smoke checks user device update API", "user device update API"),
                 ("사용자 목록 API에 사용자 토큰 해시", "Smoke checks user list token hash safety", "user list token hash safety"),
