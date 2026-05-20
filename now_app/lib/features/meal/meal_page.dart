@@ -22,6 +22,7 @@ const _mealTypes = [
   _MealTypeInfo('dinner', '저녁', '🌙', '18:00 - 20:00'),
   _MealTypeInfo('snack', '간식', '☕', '언제든지'),
 ];
+const _localUserId = 'local_user';
 
 class _MealTypeInfo {
   final String value;
@@ -37,22 +38,19 @@ class _MealTypeInfo {
 
 final todayMealsProvider =
     FutureProvider.autoDispose<List<MealRecord>>((ref) async {
-  // TODO: 실제 userId는 인증 후 교체
-  const userId = 'local_user';
   final repo = ref.watch(mealRepositoryProvider);
-  return repo.getMealsByDate(userId, DateTime.now());
+  return repo.getMealsByDate(_localUserId, DateTime.now());
 });
 
 
 final recentMealsProvider =
     FutureProvider.autoDispose<Map<String, List<MealRecord>>>((ref) async {
-  const userId = 'local_user';
   final repo = ref.watch(mealRepositoryProvider);
   final today = DateTime.now();
   final Map<String, List<MealRecord>> result = {};
   for (int i = 1; i <= 7; i++) {
     final date = today.subtract(Duration(days: i));
-    final meals = await repo.getMealsByDate(userId, date);
+    final meals = await repo.getMealsByDate(_localUserId, date);
     if (meals.isNotEmpty) {
       final key = DateFormat('M월 d일 EEEE', 'ko').format(date);
       result[key] = meals;
@@ -726,13 +724,12 @@ ${location.isNotEmpty ? '장소: $location' : ''}
     setState(() => _isSaving = true);
 
     try {
-      const userId = 'local_user';
       final rawAmount = _amountController.text.trim().replaceAll(',', '');
       final parsedAmount = rawAmount.isEmpty ? null : int.tryParse(rawAmount);
 
       final meal = MealRecordsCompanion(
         mealId: Value(const Uuid().v4()),
-        userId: const Value(userId),
+        userId: const Value(_localUserId),
         eatenAt: Value(DateTime.now()),
         mealType: Value(_selectedType),
         photoPath: Value(_pickedImage?.path),
