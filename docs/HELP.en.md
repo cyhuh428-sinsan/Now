@@ -243,9 +243,9 @@ Export rules:
 
 ## Encrypted Storage
 
-Encrypted storage is designed as an optional feature for server-login users.
+Encrypted storage is not enabled in the current first-phase scope.
 
-It is off by default.
+Later, it will be offered as an optional feature for server-login users and will stay off by default.
 
 Principles:
 

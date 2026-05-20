@@ -74,6 +74,7 @@ def main() -> None:
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
+    web_help_path = repo_root / "web" / "help.html"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -86,6 +87,7 @@ def main() -> None:
     mobile_server_settings_path = (
         repo_root / "now_app" / "lib" / "features" / "settings" / "server_settings_page.dart"
     )
+    mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -204,6 +206,7 @@ def main() -> None:
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
+    check(web_help_path.exists(), "Web help exists", str(web_help_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(auth_api_path.exists(), "Auth API source exists", str(auth_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
@@ -215,6 +218,7 @@ def main() -> None:
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
+    check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
     capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
@@ -542,6 +546,7 @@ def main() -> None:
             [
                 ("2단계 인증 코드", "Korean help documents two-factor code setup", "2FA code help ko"),
                 ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
+                ("암호화 저장은 현재 1차 범위에서는 켜지지 않는 기능입니다", "Korean help marks encryption disabled in phase one", "encryption phase one help ko"),
             ],
             failures,
         )
@@ -552,6 +557,26 @@ def main() -> None:
             [
                 ("Two-factor code", "English help documents two-factor code setup", "2FA code help en"),
                 ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
+                ("Encrypted storage is not enabled in the current first-phase scope", "English help marks encryption disabled in phase one", "encryption phase one help en"),
+            ],
+            failures,
+        )
+    if web_help_path.exists():
+        web_help = web_help_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_help,
+            [
+                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Web help marks encryption disabled in phase one", "web encryption phase one"),
+                ("Encrypted storage is not enabled in the current first-phase scope", "Web English help marks encryption disabled in phase one", "web encryption phase one en"),
+            ],
+            failures,
+        )
+    if mobile_help_path.exists():
+        mobile_help = mobile_help_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_help,
+            [
+                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile help marks encryption disabled in phase one", "mobile encryption phase one"),
             ],
             failures,
         )
