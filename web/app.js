@@ -1312,7 +1312,26 @@ const elements = {
   graphView: $("#graphView"),
   graphList: $("#graphList"),
   graphCloseBtn: $("#graphCloseBtn"),
+  toastRegion: $("#toastRegion"),
 };
+
+function showNotice(message, type = "info") {
+  if (!message) return;
+  if (!elements.toastRegion) {
+    console.warn(message);
+    return;
+  }
+  const item = document.createElement("div");
+  item.className = `toast ${type}`;
+  item.setAttribute("role", type === "error" ? "alert" : "status");
+  item.textContent = message;
+  elements.toastRegion.append(item);
+  requestAnimationFrame(() => item.classList.add("visible"));
+  window.setTimeout(() => {
+    item.classList.remove("visible");
+    window.setTimeout(() => item.remove(), 220);
+  }, type === "error" ? 5200 : 3600);
+}
 
 load();
 loadSettings();
@@ -1630,7 +1649,7 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     if (selected.children.length > 0) {
-      alert(t("note.nodeDelete.childrenBlocked"));
+      showNotice(t("note.nodeDelete.childrenBlocked"), "error");
       return;
     }
     if (!confirm(t("note.nodeDelete.toTrashConfirm", { title: noteTitle(selected.title) }))) return;
@@ -4143,7 +4162,7 @@ function saveDailyFromEditor() {
 function archiveSelectedDailyNote() {
   const note = state.data.daily[state.selectedDate];
   if (!note?.content?.trim()) {
-    alert(t("note.noArchive"));
+    showNotice(t("note.noArchive"), "error");
     return;
   }
   if (!confirm(t("note.archiveConfirm", { date: longDateLabel(state.selectedDate) }))) return;
@@ -4264,7 +4283,7 @@ function addChildToSelectedTreeNode() {
     return;
   }
   if (selected.level >= 3) {
-    alert(t("note.treeDepthLimit"));
+    showNotice(t("note.treeDepthLimit"), "error");
     return;
   }
   const node = createNode(defaultTitleForLevel(selected.level + 1), "", selected.id, selected.level + 1);
@@ -5826,7 +5845,7 @@ function writeStorage(key, value) {
   } catch {
     if (!storageWarningShown) {
       storageWarningShown = true;
-      alert(t("note.storageFail"));
+      showNotice(t("note.storageFail"), "error");
     }
     return false;
   }
@@ -5934,7 +5953,7 @@ function downloadText(filename, content, type) {
     link.download = filename;
     link.click();
   } catch {
-    alert(t("note.exportDenied"));
+    showNotice(t("note.exportDenied"), "error");
   } finally {
     if (url) URL.revokeObjectURL(url);
   }
@@ -5949,7 +5968,7 @@ function importData(event) {
       const parsed = JSON.parse(String(reader.result));
       const imported = parseBackupData(parsed);
       if (!imported.data) {
-        alert(t("note.backupImportError"));
+        showNotice(t("note.backupImportError"), "error");
         return;
       }
       const summary = backupSummary(imported.data);
@@ -5976,21 +5995,21 @@ function importData(event) {
       state.selectedTreeId = null;
       persist();
       render();
-      alert(t("note.importDone"));
+      showNotice(t("note.importDone"), "success");
     } catch {
-      alert(t("note.importReadError"));
+      showNotice(t("note.importReadError"), "error");
     } finally {
       event.target.value = "";
     }
   };
   reader.onerror = () => {
-    alert(t("note.backupFileParseError"));
+    showNotice(t("note.backupFileParseError"), "error");
     event.target.value = "";
   };
   try {
     reader.readAsText(file);
   } catch {
-    alert(t("note.backupFileOpenError"));
+    showNotice(t("note.backupFileOpenError"), "error");
     event.target.value = "";
   }
 }
@@ -6022,7 +6041,7 @@ async function importMarkdownData(event) {
       };
     }))).filter(Boolean);
     if (imports.length === 0) {
-      alert(t("note.markdownNoContent"));
+      showNotice(t("note.markdownNoContent"), "error");
       return;
     }
     const summary = markdownImportSummary(imports);
@@ -6047,9 +6066,9 @@ async function importMarkdownData(event) {
     state.data.archivedDaily.unshift(...archivedDailyNotes);
     persist();
     showMarkdownImportResult(nodes, dailyNotes);
-    alert(t("note.markdownImportDone", { nodes: nodes.length, daily: dailyNotes.length, archivedDaily: archivedDailyNotes.length }));
+    showNotice(t("note.markdownImportDone", { nodes: nodes.length, daily: dailyNotes.length, archivedDaily: archivedDailyNotes.length }), "success");
   } catch {
-    alert(t("note.markdownImportError"));
+    showNotice(t("note.markdownImportError"), "error");
   } finally {
     event.target.value = "";
   }
