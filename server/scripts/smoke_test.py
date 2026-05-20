@@ -86,6 +86,7 @@ def request_multipart(
     file_name: str,
     content_type: str,
     file_bytes: bytes,
+    user_token: str | None = None,
 ):
     boundary = f"----nownote-smoke-{uuid4().hex}"
     chunks: list[bytes] = []
@@ -114,8 +115,9 @@ def request_multipart(
     headers = {"Content-Type": f"multipart/form-data; boundary={boundary}"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
-    if USER_TOKEN:
-        headers["X-Now-User-Token"] = USER_TOKEN
+    effective_user_token = USER_TOKEN if user_token is None else user_token
+    if effective_user_token:
+        headers["X-Now-User-Token"] = effective_user_token
     req = urllib.request.Request(url, data=b"".join(chunks), headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
@@ -919,6 +921,26 @@ def main() -> None:
         {"has_other_user_note": True, "count": len(data)},
     )
 
+    isolation_sync_payload = {
+        "owner_id": "local_user",
+        "device_id": "smoke_test",
+        "updated_after": None,
+        "include_deleted": True,
+        "notes": [],
+    }
+    status, data = request("POST", f"{base_url}/api/v1/sync", args.token, isolation_sync_payload)
+    pulled_note_ids = {item.get("local_id") for item in data.get("pulled_notes", [])}
+    require("smoke_note_001" in pulled_note_ids, "local_user 동기화 응답에 기준 메모가 없습니다")
+    require(
+        "smoke_other_user_note" not in pulled_note_ids,
+        "local_user 동기화 응답에 다른 사용자 메모가 섞였습니다",
+    )
+    print(
+        "POST /api/v1/sync(user_data_isolation):",
+        status,
+        {"other_user_note_hidden": True, "pulled": len(data.get("pulled_notes", []))},
+    )
+
     blocked_device_payload = {
         "owner_id": "local_user",
         "device_id": "smoke_blocked",
@@ -1024,6 +1046,57 @@ def main() -> None:
         "GET /api/v1/recordings:",
         status,
         {"has_recording": has_recording, "count": len(data)},
+    )
+
+    other_recording_local_id = f"smoke_other_recording_{now.replace(':', '').replace('-', '').replace('T', '_')}"
+    status, data = request_multipart(
+        f"{base_url}/api/v1/recordings",
+        args.token,
+        {
+            "owner_id": "smoke_admin_user",
+            "device_id": "smoke_other_device",
+            "local_id": other_recording_local_id,
+            "note_local_id": "smoke_other_user_note",
+            "transcript": "Other user recording transcript",
+        },
+        "file",
+        "other-smoke-recording.webm",
+        "audio/webm",
+        b"NowNote other user smoke recording bytes",
+        user_token=issued_smoke_token,
+    )
+    require(data.get("owner_id") == "smoke_admin_user", "다른 사용자 녹음 owner_id가 일치하지 않습니다")
+    print(
+        "POST /api/v1/recordings(other_user):",
+        status,
+        {"owner_id": data.get("owner_id"), "local_id": data.get("local_id")},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/recordings?owner_id=local_user", args.token)
+    require(
+        all(item.get("local_id") != other_recording_local_id for item in data),
+        "local_user 녹음 목록에 다른 사용자 녹음이 섞였습니다",
+    )
+    print(
+        "GET /api/v1/recordings(user_data_isolation):",
+        status,
+        {"other_user_recording_hidden": True, "count": len(data)},
+    )
+
+    status, data = request_with_user_token(
+        "GET",
+        f"{base_url}/api/v1/recordings?owner_id=smoke_admin_user",
+        args.token,
+        user_token=issued_smoke_token,
+    )
+    require(
+        any(item.get("local_id") == other_recording_local_id for item in data),
+        "smoke_admin_user 녹음 목록에서 자기 녹음을 확인하지 못했습니다",
+    )
+    print(
+        "GET /api/v1/recordings(other_user_visible):",
+        status,
+        {"has_other_user_recording": True, "count": len(data)},
     )
 
     unsafe_recording_local_id = f"../smoke_escape_{now.replace(':', '').replace('-', '').replace('T', '_')}"
@@ -1314,6 +1387,57 @@ def main() -> None:
         "GET /api/v1/analysis/jobs:",
         status,
         {"has_analysis_job": has_analysis_job, "count": len(data)},
+    )
+
+    status, data = request_with_user_token(
+        "POST",
+        f"{base_url}/api/v1/analysis/jobs",
+        args.token,
+        {
+            "owner_id": "smoke_admin_user",
+            "job_type": "memo_summary",
+            "note_local_id": "smoke_other_user_note",
+            "input_text": "Other user analysis input",
+        },
+        issued_smoke_token,
+    )
+    other_analysis_job_id = data.get("id")
+    require(other_analysis_job_id is not None, "다른 사용자 분석 작업 ID가 반환되지 않았습니다")
+    print(
+        "POST /api/v1/analysis/jobs(other_user):",
+        status,
+        {"id": other_analysis_job_id, "owner_id": data.get("owner_id")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/analysis/jobs?owner_id=local_user",
+        args.token,
+    )
+    require(
+        all(item.get("id") != other_analysis_job_id for item in data),
+        "local_user 분석 작업 목록에 다른 사용자 작업이 섞였습니다",
+    )
+    print(
+        "GET /api/v1/analysis/jobs(user_data_isolation):",
+        status,
+        {"other_user_job_hidden": True, "count": len(data)},
+    )
+
+    status, data = request_with_user_token(
+        "GET",
+        f"{base_url}/api/v1/analysis/jobs?owner_id=smoke_admin_user",
+        args.token,
+        user_token=issued_smoke_token,
+    )
+    require(
+        any(item.get("id") == other_analysis_job_id for item in data),
+        "smoke_admin_user 분석 작업 목록에서 자기 작업을 확인하지 못했습니다",
+    )
+    print(
+        "GET /api/v1/analysis/jobs(other_user_visible):",
+        status,
+        {"has_other_user_job": True, "count": len(data)},
     )
 
     status, data = request(

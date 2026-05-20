@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 17:19 KST
+
+### 다음 작업 시작
+
+- 사용자별 데이터 격리 smoke test 범위를 동기화, 녹음, 분석 작업까지 확대.
+
+### 구현 내용
+
+- smoke test의 multipart 요청 함수가 검증 대상 사용자 토큰을 명시적으로 받을 수 있도록 보강.
+- `local_user` 동기화 pull 응답에 `smoke_admin_user` 메모가 섞이지 않는지 확인.
+- `local_user` 녹음 목록에 `smoke_admin_user` 녹음이 섞이지 않는지 확인하고, `smoke_admin_user`는 자기 녹음을 확인할 수 있는지 검증.
+- `local_user` 분석 작업 목록에 `smoke_admin_user` 분석 작업이 섞이지 않는지 확인하고, `smoke_admin_user`는 자기 작업을 확인할 수 있는지 검증.
+- preflight와 README의 데이터 격리 smoke test 설명 갱신.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (287/287 checks)` 출력 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-20 17:07 KST
 
 ### 다음 작업 시작
