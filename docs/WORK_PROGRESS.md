@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 04:20 KST
+
+### 다음 작업 시작
+
+- DB 녹음 메타데이터는 있지만 실제 저장 파일이 없는 누락 녹음 파일 감지.
+
+### 구현 내용
+
+- `/api/v1/admin/export/recording-missing-files`를 추가해 저장소 파일이 없는 녹음 메타데이터 목록을 JSON으로 확인할 수 있게 보강.
+- `/api/v1/admin/ops`와 `/admin/ops`에 "누락 녹음 파일" 점검 항목 추가.
+- smoke test와 preflight가 누락 녹음 파일 export/API/화면 점검 항목을 확인하도록 보강.
+
+### 검증
+
+- `uv run ... python -m py_compile`로 admin/monitor/smoke/preflight 문법 확인 통과.
+- 임시 SQLite DB에서 실제 파일이 있는 녹음 1건과 없는 녹음 1건을 구성해 `_recording_missing_files()`가 누락 1건만 반환하는 것 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (228/228 checks)` 출력 확인.
+
 ## 2026-05-20 04:06 KST
 
 ### 다음 작업 시작
