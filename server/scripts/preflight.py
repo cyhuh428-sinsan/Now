@@ -178,7 +178,7 @@ def main() -> None:
                 ("--ready-retries 횟수", "README explains smoke readiness retries", "smoke readiness retries"),
                 ("--ready-delay 초", "README explains smoke readiness delay", "smoke readiness delay"),
                 ("사용자별 기기 조회/해제 API", "README documents user device self-management API", "device self-management"),
-                ("사용자별 데이터 접근 격리 검증", "README documents public data isolation gap", "data isolation"),
+                ("사용자별 데이터 격리 자동 검증", "README documents public data isolation checks", "data isolation"),
                 ("백업 내보내기/검증", "README explains smoke backup checks", "smoke backup checks"),
                 ("녹음 업로드", "README explains smoke recording upload check", "smoke recording check"),
                 ("비활성 사용자 차단", "README explains smoke inactive user check", "smoke inactive user check"),
@@ -454,7 +454,7 @@ def main() -> None:
                 ("--timeout 30", "Deploy checklist covers smoke timeout option", "smoke timeout"),
                 ("--ready-retries 10", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
                 ("사용자별 기기 조회/해제 API", "Deploy checklist covers public device self-management", "device self-management"),
-                ("사용자별 데이터 접근 격리", "Deploy checklist covers public data isolation gap", "data isolation"),
+                ("사용자별 데이터 격리 자동 검증", "Deploy checklist covers public data isolation checks", "data isolation"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Deploy checklist explains smoke HTTP failure summary", "smoke HTTP failure summary"),
@@ -481,7 +481,7 @@ def main() -> None:
                 ("NOW_USER_TOKEN_REQUIRED=true", "Auth policy covers user token required mode", "NOW_USER_TOKEN_REQUIRED=true"),
                 ("사용자별 로그인 화면 또는 토큰 전달 UI", "Auth policy covers login/token delivery gap", "login/token delivery"),
                 ("실제 2단계 인증 절차", "Auth policy covers real two-factor gap", "real two-factor"),
-                ("사용자별 데이터 접근 격리 검증", "Auth policy covers user data isolation check", "data isolation"),
+                ("사용자별 데이터 격리 자동 검증", "Auth policy covers user data isolation check", "data isolation"),
                 ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
                 ("--public-server", "Auth policy covers public preflight command", "public preflight"),
             ],
@@ -574,7 +574,7 @@ def main() -> None:
                 ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
-                ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),
+                ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),
                 ("기기 관리 화면에 활성 상태 안내", "Smoke checks devices status guidance", "devices status guidance"),
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
                 ("기기 관리 화면에 현재 조건 JSON 링크", "Smoke checks devices export link", "devices export link"),
@@ -619,9 +619,9 @@ def main() -> None:
             failures,
         )
         check(
-            False,
+            "user_data_isolation_verification" in capabilities_source,
             "Public server data isolation",
-            "User-specific data access isolation must be verified before public opening",
+            "User-specific data access isolation smoke checks are exposed",
             failures,
         )
         check(

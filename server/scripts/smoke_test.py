@@ -212,8 +212,8 @@ def main() -> None:
                 "서버 정보의 공용 서버 준비 상태에 실제 2단계 인증 잔여 항목이 없습니다",
             )
             require(
-                "user_data_isolation_verification" in public_readiness.get("remaining", []),
-                "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 검증 항목이 없습니다",
+                "user_data_isolation_verification" in public_readiness.get("ready", []),
+                "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증 준비 항목이 없습니다",
             )
             require(
                 "user_access_tokens" in public_readiness.get("ready", []),
@@ -317,7 +317,7 @@ def main() -> None:
             require("NowNote 서버 인증 기준" in text, "공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용이 없습니다")
             require("NOW_USER_TOKEN_REQUIRED=true" in text, "공용 서버 준비 화면에 사용자별 토큰 필수 기준이 없습니다")
             require("실제 2단계 인증 절차" in text, "공용 서버 준비 화면에 실제 2단계 인증 기준이 없습니다")
-            require("사용자별 데이터 접근 격리 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
+            require("사용자별 데이터 격리 자동 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
             require("/admin/users" in text and "/admin/devices" in text, "공용 서버 준비 화면에 사용자/기기 관리 링크가 없습니다")
         if path.startswith("/admin/devices"):
             require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
@@ -346,7 +346,7 @@ def main() -> None:
             require("로그인 또는 토큰 전달 화면" in text, "운영 점검 화면에 공용 서버 로그인/토큰 전달 항목이 없습니다")
             require("실제 2단계 인증 절차" in text, "운영 점검 화면에 실제 2단계 인증 항목이 없습니다")
             require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
-            require("사용자별 데이터 격리 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
+            require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
         if path == "/admin/help":
             require("공용 서버 로그인 화면" in text, "도움말 화면에 공용 서버 로그인 화면 점검 안내가 없습니다")

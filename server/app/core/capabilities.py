@@ -29,6 +29,11 @@ PUBLIC_SERVER_READY_ITEMS = [
         "label": "백업/복구 점검",
         "message": "백업 내보내기, 백업 검증, 운영 점검 화면 지원",
     },
+    {
+        "id": "user_data_isolation_verification",
+        "label": "사용자별 데이터 격리 자동 검증",
+        "message": "메모, 검색, 동기화, 녹음, 분석 작업의 사용자별 데이터 격리 smoke 검증 지원",
+    },
 ]
 
 PUBLIC_SERVER_REMAINING_ITEMS = [
@@ -41,11 +46,6 @@ PUBLIC_SERVER_REMAINING_ITEMS = [
         "id": "real_two_factor_challenge",
         "label": "실제 2단계 인증 절차",
         "message": f"현재는 사용 여부 관리 상태, 실제 로그인 2단계 인증 절차는 {TWO_FACTOR_AUTH_STATUS}",
-    },
-    {
-        "id": "user_data_isolation_verification",
-        "label": "사용자별 데이터 격리 검증",
-        "message": "정식 오픈 전 사용자별 데이터 접근 격리 검증 필요",
     },
     {
         "id": "public_https_reverse_proxy",

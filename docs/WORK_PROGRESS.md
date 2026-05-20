@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 17:32 KST
+
+### 다음 작업 시작
+
+- 공용 서버 준비 상태에서 사용자별 데이터 격리 자동 검증 항목을 준비 완료로 전환.
+
+### 구현 내용
+
+- `user_data_isolation_verification`을 남은 항목에서 준비 완료 항목으로 이동.
+- 준비 완료 메시지를 메모, 검색, 동기화, 녹음, 분석 작업 smoke 검증 기준으로 명확화.
+- smoke test가 서버 정보, 공용 서버 준비 화면, 운영 점검 화면에서 데이터 격리 자동 검증을 준비 완료 항목으로 확인하도록 수정.
+- preflight의 공용 서버 점검에서 데이터 격리 항목을 실패가 아닌 준비 완료 확인으로 변경.
+- README, DEPLOY, 인증 정책 문서의 남은 공용 서버 항목에서 데이터 격리 검증을 제거하고 준비 완료 항목으로 설명.
+
+### 검증
+
+- `uv run --project server python -m py_compile`로 capabilities/smoke/preflight 문법 확인 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 실행 결과 `NowNote server preflight passed (287/287 checks)` 출력 확인.
+- `app.api.server.server_info()` 직접 호출로 `user_data_isolation_verification` 준비 완료와 remaining 제거 확인. 현재 remaining은 로그인/2단계 인증/HTTPS 세 항목.
+- `git diff --check` 통과.
+
 ## 2026-05-20 17:19 KST
 
 ### 다음 작업 시작
