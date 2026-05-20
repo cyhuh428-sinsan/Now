@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-20 15:30 KST
+
+### 다음 작업 시작
+
+- Web/설치형 서버 연결 화면에 공용 서버 준비 상태 표시.
+
+### 구현 내용
+
+- 서버 연결 테스트 응답의 `public_server_readiness`를 Web 설정에 저장하도록 추가.
+- 서버 capability 칩 영역에 공용 서버 준비 상태와 남은 항목 수를 함께 표시하도록 보강.
+- 한국어/영어 언어팩에 공용 서버 준비 상태 표시 문구 추가.
+- 저장된 설정 정규화에 `publicServerReadiness` 필드 보정 추가.
+- Web README에 서버 연결 테스트 후 공용 서버 준비 상태도 표시한다고 반영.
+
+### 검증
+
+- `node --check web/app.js` 문법 확인 통과.
+- `rg`로 `publicServerReadiness`, `public_server_readiness`, `publicReadiness` 연결 확인.
+- 브라우저 직접 검증은 in-app browser의 `file:///D:/Project/Now/web/index.html` 접근 정책 차단으로 수행하지 못함.
+
 ## 2026-05-20 15:22 KST
 
 ### 다음 작업 시작
