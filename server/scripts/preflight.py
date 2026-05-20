@@ -376,6 +376,7 @@ def main() -> None:
                 ("backup_export", "Smoke covers backup export capability", "backup_export"),
                 ("backup_verify", "Smoke covers backup verify capability", "backup_verify"),
                 ("녹음 저장 파일명에 경로 문자", "Smoke checks recording filename path safety", "recording filename path safety"),
+                ("owner/device 디렉터리", "Smoke checks recording owner device directory", "recording owner device directory"),
                 ("recordings(path_safety)", "Smoke checks recording upload path safety", "recording path safety"),
                 ("user_accounts", "Smoke covers user accounts capability", "user_accounts"),
                 ("user_access_tokens", "Smoke covers user access tokens capability", "user_access_tokens"),

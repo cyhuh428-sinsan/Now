@@ -868,7 +868,12 @@ def main() -> None:
         "/" not in unsafe_file_name and "\\" not in unsafe_file_name and not unsafe_file_name.startswith(".."),
         "녹음 저장 파일명에 경로 문자가 남아 있습니다",
     )
-    require("/../" not in unsafe_storage_path.replace("\\", "/"), "녹음 저장 경로에 상위 경로 이동이 남아 있습니다")
+    normalized_unsafe_path = unsafe_storage_path.replace("\\", "/")
+    require("/../" not in normalized_unsafe_path, "녹음 저장 경로에 상위 경로 이동이 남아 있습니다")
+    require(
+        "/local_user/smoke_test/" in normalized_unsafe_path,
+        "녹음 저장 경로가 owner/device 디렉터리 아래에 있지 않습니다",
+    )
     print(
         "POST /api/v1/recordings(path_safety):",
         status,

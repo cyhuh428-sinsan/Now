@@ -17,7 +17,7 @@ async def save_recording_file(
     upload: UploadFile,
 ) -> tuple[str, str]:
     settings = get_settings()
-    base = Path(settings.storage_dir) / owner_id / device_id
+    base = Path(settings.storage_dir) / _safe_name(owner_id) / _safe_name(device_id)
     base.mkdir(parents=True, exist_ok=True)
 
     file_name = f"{_safe_name(local_id)}_{uuid4().hex}_{_safe_name(upload.filename or 'audio.aac')}"
