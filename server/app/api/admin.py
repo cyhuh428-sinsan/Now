@@ -109,6 +109,18 @@ def export_recording_orphans(db: Session = Depends(get_db)) -> dict:
     }
 
 
+@router.get("/export/recording-missing-files")
+def export_recording_missing_files(db: Session = Depends(get_db)) -> dict:
+    recordings = list(db.scalars(select(Recording).order_by(Recording.updated_at.desc(), Recording.id.desc())).all())
+    missing_files = _recording_missing_files(recordings)
+    return {
+        "name": "recording_missing_files",
+        "exported_at": datetime.utcnow(),
+        "count": len(missing_files),
+        "items": missing_files,
+    }
+
+
 @router.get("/export/analysis-jobs")
 def export_analysis_jobs(
     owner_id: str | None = Query(default=None),
@@ -458,6 +470,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     deleted_notes = 0
     recordings_without_transcript = 0
     orphan_recording_files = 0
+    missing_recording_files = 0
     try:
         db.execute(text("select 1"))
         note_total = db.scalar(select(func.count()).select_from(Note)) or 0
@@ -514,6 +527,8 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             settings.storage_dir,
             recording_storage_paths,
         )
+        recording_rows = list(db.scalars(select(Recording)).all())
+        missing_recording_files = len(_recording_missing_files(recording_rows))
     except Exception as exc:
         db_status = "bad"
         db_message = f"DB 연결 오류: {exc}"
@@ -610,6 +625,13 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
     )
     checks.append(
         {
+            "name": "누락 녹음 파일",
+            "status": "bad" if missing_recording_files else "ok",
+            "message": f"DB 메타데이터는 있지만 저장소에서 찾을 수 없는 파일 {missing_recording_files}건",
+        }
+    )
+    checks.append(
+        {
             "name": "백업/복구 절차",
             "status": "info",
             "message": "/admin/export에서 전체 백업과 status_counts.bad=0 검증, /admin/recovery에서 복구 기준 확인",
@@ -632,6 +654,7 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
             "queued_analysis_jobs": queued_jobs,
             "running_analysis_jobs": running_jobs,
             "orphan_recording_files": orphan_recording_files,
+            "missing_recording_files": missing_recording_files,
         },
         "checks": checks,
     }
@@ -881,6 +904,32 @@ def _recording_storage_orphan_files(storage_dir: str, recording_paths: list[str 
             }
         )
     return sorted(orphan_files, key=lambda item: str(item["relative_path"]))
+
+
+def _recording_missing_files(recordings: list[Recording]) -> list[dict[str, object]]:
+    missing_files: list[dict[str, object]] = []
+    for recording in recordings:
+        if not recording.storage_path:
+            missing_files.append(_recording_missing_file_item(recording, "storage_path empty"))
+            continue
+        path = Path(recording.storage_path)
+        if not path.is_file():
+            missing_files.append(_recording_missing_file_item(recording, "file not found"))
+    return missing_files
+
+
+def _recording_missing_file_item(recording: Recording, reason: str) -> dict[str, object]:
+    return {
+        "id": recording.id,
+        "owner_id": recording.owner_id,
+        "device_id": recording.device_id,
+        "local_id": recording.local_id,
+        "note_local_id": recording.note_local_id,
+        "file_name": recording.file_name,
+        "storage_path": recording.storage_path,
+        "reason": reason,
+        "updated_at": recording.updated_at,
+    }
 
 
 def _api_token_state(api_token: str | None) -> tuple[str, str]:

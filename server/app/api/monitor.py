@@ -3138,6 +3138,7 @@ def _admin_ops_html() -> str:
     device_total = 0
     inactive_devices = 0
     orphan_recording_files = 0
+    missing_recording_files = 0
 
     try:
         with SessionLocal() as db:
@@ -3202,6 +3203,8 @@ def _admin_ops_html() -> str:
                 settings.storage_dir,
                 recording_storage_paths,
             )
+            recording_rows = list(db.scalars(select(Recording)).all())
+            missing_recording_files = len(_recording_missing_files(recording_rows))
     except Exception as exc:
         db_status = "bad"
         db_message = f"DB 연결 오류: {exc}"
@@ -3294,6 +3297,13 @@ def _admin_ops_html() -> str:
             "name": "고아 녹음 파일",
             "status": "warn" if orphan_recording_files else "ok",
             "message": f"DB 메타데이터 없이 저장소에 남은 파일 {orphan_recording_files}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "누락 녹음 파일",
+            "status": "bad" if missing_recording_files else "ok",
+            "message": f"DB 메타데이터는 있지만 저장소에서 찾을 수 없는 파일 {missing_recording_files}건",
         }
     )
     checks.append(
@@ -3566,6 +3576,32 @@ def _recording_storage_orphan_count(storage_dir: str, recording_paths: list[str 
         if path.is_file() and path.resolve(strict=False) not in known_paths:
             orphan_count += 1
     return orphan_count
+
+
+def _recording_missing_files(recordings: list[Recording]) -> list[dict[str, object]]:
+    missing_files: list[dict[str, object]] = []
+    for recording in recordings:
+        if not recording.storage_path:
+            missing_files.append(_recording_missing_file_item(recording, "storage_path empty"))
+            continue
+        path = Path(recording.storage_path)
+        if not path.is_file():
+            missing_files.append(_recording_missing_file_item(recording, "file not found"))
+    return missing_files
+
+
+def _recording_missing_file_item(recording: Recording, reason: str) -> dict[str, object]:
+    return {
+        "id": recording.id,
+        "owner_id": recording.owner_id,
+        "device_id": recording.device_id,
+        "local_id": recording.local_id,
+        "note_local_id": recording.note_local_id,
+        "file_name": recording.file_name,
+        "storage_path": recording.storage_path,
+        "reason": reason,
+        "updated_at": recording.updated_at,
+    }
 
 
 def _api_token_state(api_token: str | None) -> tuple[str, str]:

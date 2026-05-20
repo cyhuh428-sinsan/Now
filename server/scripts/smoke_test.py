@@ -355,6 +355,19 @@ def main() -> None:
 
     status, data = request(
         "GET",
+        f"{base_url}/api/v1/admin/export/recording-missing-files",
+        args.token,
+    )
+    require(data.get("name") == "recording_missing_files", "누락 녹음 export 이름이 recording_missing_files가 아닙니다")
+    require(isinstance(data.get("items"), list), "누락 녹음 export items가 목록이 아닙니다")
+    print(
+        "GET /api/v1/admin/export/recording-missing-files:",
+        status,
+        {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request(
+        "GET",
         f"{base_url}/api/v1/admin/export/sync-logs?device_id=smoke_test&include_deleted=true",
         args.token,
     )
@@ -558,6 +571,8 @@ def main() -> None:
     require("inactive_devices" in data.get("summary", {}), "운영 점검 요약에 비활성 기기 집계가 없습니다")
     require("고아 녹음 파일" in ops_check_names, "운영 점검에 고아 녹음 파일 항목이 없습니다")
     require("orphan_recording_files" in data.get("summary", {}), "운영 점검 요약에 고아 녹음 파일 집계가 없습니다")
+    require("누락 녹음 파일" in ops_check_names, "운영 점검에 누락 녹음 파일 항목이 없습니다")
+    require("missing_recording_files" in data.get("summary", {}), "운영 점검 요약에 누락 녹음 파일 집계가 없습니다")
     require(
         any("status_counts.bad=0" in str(item.get("message", "")) for item in data.get("checks", [])),
         "운영 점검에 백업 검증 status_counts 기준 안내가 없습니다",
