@@ -134,13 +134,43 @@ class ServerConnectionResult {
   final String message;
   final String serverName;
   final Map<String, dynamic> capabilities;
+  final ServerPublicReadiness? publicReadiness;
 
   const ServerConnectionResult({
     required this.ok,
     required this.message,
     this.serverName = '',
     this.capabilities = const {},
+    this.publicReadiness,
   });
+}
+
+class ServerPublicReadiness {
+  final String status;
+  final List<String> remaining;
+
+  const ServerPublicReadiness({
+    required this.status,
+    required this.remaining,
+  });
+
+  factory ServerPublicReadiness.fromJson(Map<String, dynamic> json) {
+    return ServerPublicReadiness(
+      status: json['status']?.toString() ?? '',
+      remaining: ((json['remaining'] as List?) ?? const [])
+          .map((item) => item.toString())
+          .where((item) => item.trim().isNotEmpty)
+          .toList(),
+    );
+  }
+
+  String get summary {
+    if (status == 'ready') return '공용 서버 준비 완료';
+    if (status == 'planned') {
+      return '공용 서버 준비 중 · 남은 항목 ${remaining.length}개';
+    }
+    return '';
+  }
 }
 
 class ServerSyncResult {
@@ -357,11 +387,18 @@ class ServerSyncService {
       final capabilities = Map<String, dynamic>.from(
         (res.data?['capabilities'] as Map?) ?? const {},
       );
+      final publicReadiness = _publicReadinessFromResponse(res.data);
       return ServerConnectionResult(
         ok: true,
-        message: _serverConnectionMessage(name, authRequired, capabilities),
+        message: _serverConnectionMessage(
+          name,
+          authRequired,
+          capabilities,
+          publicReadiness,
+        ),
         serverName: name,
         capabilities: capabilities,
+        publicReadiness: publicReadiness,
       );
     } on DioException catch (e) {
       return ServerConnectionResult(
@@ -912,10 +949,19 @@ ServerUserProfile _profileFromResponse(Map<String, dynamic>? data) {
   return ServerUserProfile.fromJson(user);
 }
 
+ServerPublicReadiness? _publicReadinessFromResponse(
+  Map<String, dynamic>? data,
+) {
+  final raw = data?['public_server_readiness'];
+  if (raw is! Map) return null;
+  return ServerPublicReadiness.fromJson(Map<String, dynamic>.from(raw));
+}
+
 String _serverConnectionMessage(
   String name,
   bool authRequired,
   Map<String, dynamic> capabilities,
+  ServerPublicReadiness? publicReadiness,
 ) {
   final sync = capabilities['sync'] == true ? '동기화 지원' : '동기화 미확인';
   final maxLevel = capabilities['max_tree_note_level'];
@@ -935,6 +981,7 @@ String _serverConnectionMessage(
   final backupVerifyText = capabilities['backup_verify'] == true
       ? '백업 검증'
       : '검증 미확인';
+  final publicReadinessText = publicReadiness?.summary ?? '';
   final authText = authRequired ? '토큰 필요' : '토큰 선택';
   return [
     '$name 연결됨',
@@ -948,7 +995,8 @@ String _serverConnectionMessage(
     twoFactorAuthText,
     backupText,
     backupVerifyText,
-  ].join(' · ');
+    publicReadinessText,
+  ].where((item) => item.isNotEmpty).join(' · ');
 }
 
 DateTime? _parseSyncTime(String? value) {
