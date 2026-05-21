@@ -512,6 +512,7 @@ def main() -> None:
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("--timeout 30", "Deploy checklist covers smoke timeout option", "smoke timeout"),
                 ("--ready-retries 10", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Deploy checklist documents public token enforcement setting", "deploy public token enforcement"),
                 ("사용자별 기기 조회/해제 API", "Deploy checklist covers public device self-management", "device self-management"),
                 ("사용자별 데이터 격리 자동 검증", "Deploy checklist covers public data isolation checks", "data isolation"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
@@ -539,6 +540,7 @@ def main() -> None:
                 ("공용 NowNote 서버", "Auth policy covers public NowNote server", "public server auth policy"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Auth policy covers user token required mode", "NOW_USER_TOKEN_REQUIRED=true"),
                 ("사용자별 접속 토큰, 사용자 ID, 기기 ID", "Auth policy covers client token setup values", "client token setup values"),
+                ("사용자별 접속 토큰 강제", "Auth policy explains public user token enforcement", "public user token enforcement"),
                 ("사용자 토큰 확인 화면/API", "Auth policy covers token login readiness", "token login readiness"),
                 ("2단계 코드는 저장 대상이 아니라", "Auth policy says two-factor code is not stored", "two factor code storage policy"),
                 ("2단계 코드 검증", "Auth policy covers two-factor code flow", "two-factor code flow"),
@@ -557,6 +559,7 @@ def main() -> None:
                 ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않는 기능입니다", "Korean help marks encryption disabled in phase one", "encryption phase one help ko"),
                 ("로그인 기반 암호화 저장이 필요한 운영 구조", "Korean help describes encryption as operating readiness", "encryption readiness help ko"),
+                ("사용자별 접속 토큰 강제 설정", "Korean help documents public token enforcement", "public token enforcement help ko"),
             ],
             failures,
         )
@@ -577,6 +580,7 @@ def main() -> None:
                 ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
                 ("Encrypted storage is not enabled in the current first-phase scope", "English help marks encryption disabled in phase one", "encryption phase one help en"),
                 ("operating model that can support login-based encrypted storage", "English help describes encryption as operating readiness", "encryption readiness help en"),
+                ("per-user token enforcement", "English help documents public token enforcement", "public token enforcement help en"),
             ],
             failures,
         )
@@ -594,6 +598,8 @@ def main() -> None:
             [
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Web help marks encryption disabled in phase one", "web encryption phase one"),
                 ("Encrypted storage is not enabled in the current first-phase scope", "Web English help marks encryption disabled in phase one", "web encryption phase one en"),
+                ("사용자별 접속 토큰 강제 설정", "Web help documents public token enforcement", "web public token enforcement"),
+                ("per-user token enforcement", "Web English help documents public token enforcement", "web public token enforcement en"),
             ],
             failures,
         )
@@ -610,7 +616,8 @@ def main() -> None:
             mobile_help,
             [
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile help marks encryption disabled in phase one", "mobile encryption phase one"),
-                ("공개 HTTPS와 reverse proxy 환경", "Mobile help documents current public server blocker", "mobile public server HTTPS reverse proxy"),
+                ("사용자별 접속 토큰 강제 설정", "Mobile help documents public token enforcement", "mobile public token enforcement"),
+                ("공개 HTTPS, reverse proxy 환경", "Mobile help documents current public server blocker", "mobile public server HTTPS reverse proxy"),
             ],
             failures,
         )

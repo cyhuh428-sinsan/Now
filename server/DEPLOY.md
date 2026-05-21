@@ -46,7 +46,7 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --public-server
 ```
 
-현재 1차 서버에서 `--public-server`는 `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true` 설정이 없으면 공개 운영 환경 항목 때문에 실패하는 것이 정상입니다. 사용자 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 기기 조회/해제 API, 사용자별 데이터 격리 자동 검증은 준비 완료 항목으로 확인합니다.
+현재 1차 서버에서 `--public-server`는 `NOW_USER_TOKEN_REQUIRED=true`, `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true` 설정이 없으면 공용 서버 오픈 전 항목 때문에 실패하는 것이 정상입니다. 사용자 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 기기 조회/해제 API, 사용자별 데이터 격리 자동 검증은 준비 완료 항목으로 확인합니다.
 
 ## 4. 컨테이너 시작
 
