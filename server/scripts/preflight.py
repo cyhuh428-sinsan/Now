@@ -573,10 +573,26 @@ def main() -> None:
                 ("openTabs", "Web surface check covers tabs", "tabs"),
                 ("serverSyncBtn", "Web surface check covers server sync", "server sync"),
                 ("shortcutEditor", "Web surface check covers shortcut editor", "shortcut editor"),
+                ("confirmDialog", "Web surface check covers internal confirm dialog", "internal confirm dialog"),
+                ("function confirmAction", "Web surface check covers confirm action", "confirm action"),
                 ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
                 ("service worker", "Web surface check covers service worker", "service worker"),
                 ("NowNote web surface verification passed", "Web surface check prints pass summary", "web check pass summary"),
             ],
+            failures,
+        )
+        check(
+            "confirm(" not in web_surface_check,
+            "Web surface check blocks native confirm",
+            "native confirm guard",
+            failures,
+        )
+    if web_app_path.exists():
+        web_app = web_app_path.read_text(encoding="utf-8")
+        check(
+            "confirm(" not in web_app,
+            "Web app avoids native browser confirm",
+            "internal confirm dialog only",
             failures,
         )
     if web_manifest_path.exists():

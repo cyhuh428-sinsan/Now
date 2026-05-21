@@ -606,6 +606,17 @@
     </section>
   </div>
 
+  <section id="confirmDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="confirm-card">
+      <h2 id="confirmTitle">확인</h2>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="confirmOkBtn" class="danger-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
   <script src="./app.js"></script>
   <script>
