@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 16:03 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 항목을 실제 확인용 체크리스트로 분리.
+
+### 확인 내용
+
+- 남은 항목에는 실제 Android 기기, 실제 WSL/Docker 서버, 실제 도메인, 실제 서명 키, Play Console 값, 라이선스 선택처럼 임의로 완료 처리하면 안 되는 항목이 포함됨.
+- 누락을 막으려면 현재 상태 문서보다 더 구체적인 완료 체크리스트가 필요함.
+
+### 구현 내용
+
+- `docs/PHASE1_RELEASE_CHECKLIST.md` 추가.
+- 루트 README와 `docs/PROJECT_STATUS.md`에서 1차 마무리 체크리스트를 연결.
+- preflight가 체크리스트의 모바일, Web/설치형, 서버 재배포, 공용 서버, Google Play, 공개 저장소, 라이선스, 서명 키, smoke test 항목을 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 514/514 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 15:47 KST
 
 ### 다음 작업 시작
