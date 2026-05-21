@@ -77,6 +77,7 @@ def main() -> None:
     gitignore_path = repo_root / ".gitignore"
     root_readme_path = repo_root / "README.md"
     security_path = repo_root / "SECURITY.md"
+    contributing_path = repo_root / "CONTRIBUTING.md"
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
@@ -209,6 +210,7 @@ def main() -> None:
                 ("server", "Root README links server", "server path"),
                 ("docs/HELP.md", "Root README links user help", "user help path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
+                ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("개인 Docker 서버", "Root README documents private server mode", "private server mode"),
                 ("공용 서버", "Root README documents public server mode", "public server mode"),
                 ("2단계 인증 코드는 저장하지 않고", "Root README documents request-only 2FA code", "2FA storage policy"),
@@ -222,6 +224,26 @@ def main() -> None:
             [
                 ("A new Flutter project", "Root README is not Flutter template", "remove Flutter template"),
                 ("Getting Started", "Root README avoids generic starter guide", "remove generic starter guide"),
+            ],
+            failures,
+        )
+
+    check(contributing_path.exists(), "Contributing guide exists", str(contributing_path), failures)
+    if contributing_path.exists():
+        contributing = contributing_path.read_text(encoding="utf-8")
+        check_text_contains(
+            contributing,
+            [
+                ("한국어 사용 흐름", "Contributing guide keeps Korean-first direction", "Korean-first contributing"),
+                ("메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다", "Contributing guide keeps photo scope", "photo scope"),
+                ("주제 / 분류 / 메모 3단계", "Contributing guide keeps tree depth naming", "tree depth naming"),
+                ("암호화 저장은 1차 범위에서는 켜지지 않습니다", "Contributing guide keeps encryption phase one policy", "encryption policy"),
+                ("server/.env", "Contributing guide blocks server env commits", "server env secret"),
+                ("now_app/android/upload-keystore.jks", "Contributing guide blocks Android keystore commits", "Android keystore secret"),
+                ("python3 scripts/preflight.py", "Contributing guide documents preflight", "preflight command"),
+                ("python3 scripts/smoke_test.py --base-url http://localhost:8750", "Contributing guide documents smoke test", "smoke command"),
+                ("docs/WORK_PROGRESS.md", "Contributing guide documents work progress log", "work progress log"),
+                ("preflight 또는 smoke test에 회귀 방지 점검", "Contributing guide asks for regression checks", "regression checks"),
             ],
             failures,
         )
