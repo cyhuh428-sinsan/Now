@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 15:21 KST
+
+### 다음 작업 시작
+
+- GitHub Actions preflight 워크플로 추가.
+
+### 확인 내용
+
+- 공개 저장소 기준으로 push/PR 때 자동으로 도는 GitHub Actions 워크플로가 없었음.
+- 서버 `preflight.py`와 `smoke_test.py` 문법 확인, `.env.example` 기준 preflight는 외부 의존성 없이 실행 가능함.
+
+### 구현 내용
+
+- `.github/workflows/preflight.yml` 추가.
+- `main` 브랜치 push와 PR에서 Python 3.12로 `py_compile`과 `preflight --env-file .env.example --allow-example`를 실행하도록 구성.
+- preflight가 GitHub Actions 워크플로의 trigger, Python 버전, 문법 확인, preflight 명령을 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 492/492 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 15:05 KST
 
 ### 다음 작업 시작
