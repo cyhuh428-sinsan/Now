@@ -2091,6 +2091,10 @@ kbd {
   background: rgba(38, 52, 70, 0.38);
 }
 
+.confirm-backdrop.hidden {
+  display: none;
+}
+
 .confirm-card {
   width: min(440px, 100%);
   border: 1px solid var(--line);

@@ -101,6 +101,7 @@ def main() -> None:
         ("function renderOpenTreeTabs", "tab rendering function"),
         ("function normalizeShortcutSettings", "shortcut normalization"),
         ("state.data.daily", "daily note state"),
+        ("function renderTodayMemoState", "daily chip refresh function"),
         ("archivedDaily", "daily archive state"),
         ("selected.level >= 3", "tree depth guard"),
         ("serverUserTokenInput", "public server user token input"),
@@ -120,6 +121,7 @@ def main() -> None:
         (".shortcut-groups", "shortcut settings styling"),
         (".deleted-toolbar", "deleted bin toolbar styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
+        (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
     for needle, label in style_requirements:
         check(needle in styles, f"Web style has {label}", needle, failures)
