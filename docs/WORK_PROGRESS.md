@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 11:05 KST
+
+### 다음 작업 시작
+
+- 도움말 정합성 회귀 방지를 preflight에 추가.
+
+### 확인 내용
+
+- preflight는 2단계 인증 코드와 암호화 1차 비활성 안내가 존재하는지는 확인하고 있었음.
+- 하지만 오래된 `로그인 화면, 실제 2단계 인증` 미완료 문구나 `나중에 로그인 기반 암호화 저장` 표현이 다시 들어오는지는 막지 못했음.
+
+### 구현 내용
+
+- `check_text_not_contains()`를 추가해 문서에 남으면 안 되는 오래된 표현을 점검.
+- 한국어/영어 공통 도움말의 암호화 저장 운영 준비 표현을 확인.
+- Web/모바일 도움말에서 오래된 공용 서버 미완료 표현이 없는지 확인.
+- 모바일 도움말이 현재 남은 공용 서버 항목인 `공개 HTTPS와 reverse proxy 환경`을 설명하는지 확인.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 341/341 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+- 일반 `python -m py_compile`은 이 Windows 셸에 `python` 명령이 없어 실패했으나, 프로젝트에서 사용하는 `uv run python`으로 동일 파일 검증 완료.
+
 ## 2026-05-21 10:43 KST
 
 ### 다음 작업 시작
