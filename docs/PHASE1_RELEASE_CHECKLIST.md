@@ -75,7 +75,7 @@
 
 - [x] 실제 비밀값이 Git에 포함되지 않았는지 확인: `scripts/verify_public_repo_safety.py`.
 - [ ] GitHub Actions preflight 통과 확인.
-- [ ] README, SECURITY, CONTRIBUTING, 이슈/PR 템플릿 확인.
+- [x] README, SECURITY, CONTRIBUTING, 이슈/PR 템플릿 확인: `server/scripts/preflight.py` 기준.
 - [ ] 오픈소스 라이선스 선택.
 - [ ] 선택한 라이선스 파일 추가.
 

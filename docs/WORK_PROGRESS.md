@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 12:10 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 오픈 전 문서/템플릿 확인 항목 마무리.
+
+### 확인 내용
+
+- 실제 GitHub Actions 실행 결과, 라이선스 선택, 실제 서명 키, 실제 도메인은 외부 환경 또는 신산님 결정이 필요해 임의 완료 처리하지 않음.
+- README, SECURITY, CONTRIBUTING, 이슈/PR 템플릿은 현재 preflight가 존재와 핵심 문구를 확인하고 있어 완료 처리 가능함.
+
+### 구현 내용
+
+- `docs/OPEN_SOURCE_RELEASE.md` 추가.
+- 루트 README 시작 위치에 공개 저장소 오픈 점검 문서 링크 추가.
+- 1차 마무리 체크리스트에서 README/SECURITY/CONTRIBUTING/이슈/PR 템플릿 확인 항목을 완료 표시.
+- 서버 preflight가 공개 저장소 오픈 점검 문서와 GitHub Actions의 공개 안전 검사 실행 여부를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 573/573.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python -m py_compile ...` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 11:45 KST
 
 ### 다음 작업 시작

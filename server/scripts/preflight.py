@@ -91,6 +91,7 @@ def main() -> None:
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
     phase1_checklist_path = repo_root / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
+    open_source_release_path = repo_root / "docs" / "OPEN_SOURCE_RELEASE.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
@@ -225,6 +226,7 @@ def main() -> None:
                 ("docs/HELP.md", "Root README links user help", "user help path"),
                 ("docs/PROJECT_STATUS.md", "Root README links project status", "project status path"),
                 ("docs/PHASE1_RELEASE_CHECKLIST.md", "Root README links phase one checklist", "phase one checklist path"),
+                ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -275,9 +277,29 @@ def main() -> None:
                 ("Google Play 등록 전 점검", "Phase one checklist covers Google Play release", "Google Play release"),
                 ("공개 저장소 오픈 전 점검", "Phase one checklist covers public repo opening", "public repo opening"),
                 ("오픈소스 라이선스 선택", "Phase one checklist tracks license decision", "license decision"),
+                ("README, SECURITY, CONTRIBUTING, 이슈/PR 템플릿 확인: `server/scripts/preflight.py` 기준", "Phase one checklist marks public docs reviewed", "public docs reviewed"),
                 ("실제 서명 키", "Phase one checklist tracks signing key", "signing key"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Phase one checklist tracks public user token setting", "public user token setting"),
                 ("smoke_test.py --base-url", "Phase one checklist tracks smoke test", "smoke test"),
+            ],
+            failures,
+        )
+
+    check(open_source_release_path.exists(), "Open source release guide exists", str(open_source_release_path), failures)
+    if open_source_release_path.exists():
+        open_source_release = open_source_release_path.read_text(encoding="utf-8")
+        check_text_contains(
+            open_source_release,
+            [
+                ("verify_public_repo_safety.py", "Open source guide documents secret verification", "secret verification"),
+                ("server/.env", "Open source guide blocks server env", "server env"),
+                ("now_app/android/key.properties", "Open source guide blocks Android key properties", "Android key properties"),
+                ("now_app/android/upload-keystore.jks", "Open source guide blocks Android upload key", "Android upload key"),
+                ("README.md", "Open source guide lists README review", "README review"),
+                ("SECURITY.md", "Open source guide lists security review", "security review"),
+                ("CONTRIBUTING.md", "Open source guide lists contributing review", "contributing review"),
+                ("LICENSE", "Open source guide keeps license decision explicit", "license decision"),
+                ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
             ],
             failures,
         )
@@ -358,6 +380,7 @@ def main() -> None:
                 ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
+                ("python scripts/verify_public_repo_safety.py", "GitHub preflight runs public repository safety verification", "workflow public repo safety"),
             ],
             failures,
         )
