@@ -90,6 +90,7 @@ def main() -> None:
     deploy_path = server_dir / "DEPLOY.md"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
+    phase1_checklist_path = repo_root / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
@@ -215,6 +216,7 @@ def main() -> None:
                 ("server", "Root README links server", "server path"),
                 ("docs/HELP.md", "Root README links user help", "user help path"),
                 ("docs/PROJECT_STATUS.md", "Root README links project status", "project status path"),
+                ("docs/PHASE1_RELEASE_CHECKLIST.md", "Root README links phase one checklist", "phase one checklist path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -244,9 +246,30 @@ def main() -> None:
                 ("설계 대비 현재 상태", "Project status names design status", "design status title"),
                 ("완료된 축", "Project status lists completed areas", "completed areas"),
                 ("남은 1차 마무리", "Project status lists remaining phase one work", "remaining phase one"),
+                ("PHASE1_RELEASE_CHECKLIST.md", "Project status links phase one checklist", "phase one checklist"),
                 ("공개 저장소 준비", "Project status covers public repository readiness", "public repo readiness"),
                 ("라이선스 선택", "Project status tracks license decision", "license decision"),
                 ("WORK_PROGRESS.md", "Project status links work progress", "work progress link"),
+            ],
+            failures,
+        )
+
+    check(phase1_checklist_path.exists(), "Phase one release checklist exists", str(phase1_checklist_path), failures)
+    if phase1_checklist_path.exists():
+        phase1_checklist = phase1_checklist_path.read_text(encoding="utf-8")
+        check_text_contains(
+            phase1_checklist,
+            [
+                ("모바일 앱 실제 점검", "Phase one checklist covers mobile testing", "mobile testing"),
+                ("Web / 설치형 점검", "Phase one checklist covers web desktop testing", "web desktop testing"),
+                ("서버 재배포 점검", "Phase one checklist covers server redeploy", "server redeploy"),
+                ("공용 서버 오픈 전 점검", "Phase one checklist covers public server opening", "public server opening"),
+                ("Google Play 등록 전 점검", "Phase one checklist covers Google Play release", "Google Play release"),
+                ("공개 저장소 오픈 전 점검", "Phase one checklist covers public repo opening", "public repo opening"),
+                ("오픈소스 라이선스 선택", "Phase one checklist tracks license decision", "license decision"),
+                ("실제 서명 키", "Phase one checklist tracks signing key", "signing key"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Phase one checklist tracks public user token setting", "public user token setting"),
+                ("smoke_test.py --base-url", "Phase one checklist tracks smoke test", "smoke test"),
             ],
             failures,
         )
