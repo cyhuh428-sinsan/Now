@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 13:02 KST
+
+### 다음 작업 시작
+
+- 모바일 서버 연결 설정에서 2단계 인증 코드 저장 여부 확인과 회귀 방지 점검 추가.
+
+### 확인 내용
+
+- 모바일 `ServerSettings` 저장 대상은 서버 사용 여부, 서버 주소, API 토큰, 사용자별 접속 토큰, 사용자 ID, 기기 ID, 마지막 동기화 시각임.
+- 2단계 인증 코드는 `ServerSettings` 모델에 저장 필드가 없고, 연결 테스트 때 `/api/v1/auth/token-login` 요청에만 전달됨.
+
+### 구현 내용
+
+- preflight가 모바일 2단계 인증 코드 입력란과 연결 테스트 전달 경로를 확인하도록 보강.
+- preflight가 모바일 코드에 `now_server_two_factor` 저장 키나 `ServerSettings`의 2단계 코드 저장 필드가 생기지 않도록 확인.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 355/355 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 12:30 KST
 
 ### 다음 작업 시작
