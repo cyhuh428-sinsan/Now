@@ -94,6 +94,7 @@ def main() -> None:
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
+    web_surface_check_path = repo_root / "web" / "scripts" / "verify_web_surface.py"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -434,6 +435,7 @@ def main() -> None:
     check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
+    check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
@@ -542,7 +544,25 @@ def main() -> None:
         check_text_contains(
             web_readme,
             [
+                ("verify_web_surface.py", "Web README documents surface verification", "web surface verification"),
                 ("공용 서버 준비 상태", "Web README documents public readiness display", "web public readiness docs"),
+            ],
+            failures,
+        )
+    if web_surface_check_path.exists():
+        web_surface_check = web_surface_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_surface_check,
+            [
+                ("dailyView", "Web surface check covers daily popover", "daily popover"),
+                ("treeContent", "Web surface check covers tree editor", "tree editor"),
+                ("importMarkdownInput", "Web surface check covers Markdown import", "Markdown import"),
+                ("exportData", "Web surface check covers JSON export", "JSON export"),
+                ("noteFindInput", "Web surface check covers in-note search", "in-note search"),
+                ("openTabs", "Web surface check covers tabs", "tabs"),
+                ("serverSyncBtn", "Web surface check covers server sync", "server sync"),
+                ("shortcutEditor", "Web surface check covers shortcut editor", "shortcut editor"),
+                ("NowNote web surface verification passed", "Web surface check prints pass summary", "web check pass summary"),
             ],
             failures,
         )

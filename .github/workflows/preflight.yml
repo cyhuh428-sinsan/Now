@@ -24,8 +24,12 @@ jobs:
 
       - name: Check Python syntax
         working-directory: server
-        run: python -m py_compile scripts/preflight.py scripts/smoke_test.py
+        run: python -m py_compile scripts/preflight.py scripts/smoke_test.py ../web/scripts/verify_web_surface.py
 
       - name: Run repository preflight
         working-directory: server
         run: python scripts/preflight.py --env-file .env.example --allow-example
+
+      - name: Run web surface verification
+        working-directory: web
+        run: python scripts/verify_web_surface.py
