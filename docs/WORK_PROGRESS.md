@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 14:18 KST
+
+### 다음 작업 시작
+
+- WSL 배포 로그 확인 안내 회귀 방지 점검 보강.
+
+### 확인 내용
+
+- `DEPLOY.md`에는 WSL 환경에서 `docker compose` 옵션 호환 문제가 있으면 `docker-compose` 명령을 쓰는 안내가 있음.
+- 사용자 환경에서 실제로 `docker compose logs now-api --tail=80`이 실패하고 `docker-compose logs now-api --tail=80`이 동작했던 사례가 있었음.
+- 기존 preflight/smoke는 배포 화면의 WSL 로그 확인 명령까지는 고정하지 않았음.
+
+### 구현 내용
+
+- preflight가 `DEPLOY.md`의 `docker-compose up --build -d`, `docker-compose logs now-api --tail=80`, `docker-compose logs now-worker --tail=80`, 8750 health/server 확인 명령을 확인하도록 보강.
+- smoke test가 `/admin/deploy` 화면에 WSL `docker-compose` 로그 확인 안내가 표시되는지 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 440/440 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 14:03 KST
 
 ### 다음 작업 시작
