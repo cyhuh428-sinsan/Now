@@ -81,6 +81,7 @@ def main() -> None:
     issue_bug_template_path = repo_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.md"
     issue_feature_template_path = repo_root / ".github" / "ISSUE_TEMPLATE" / "feature_request.md"
     pull_request_template_path = repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md"
+    github_preflight_workflow_path = repo_root / ".github" / "workflows" / "preflight.yml"
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
@@ -293,6 +294,20 @@ def main() -> None:
                 ("preflight 또는 smoke test에 회귀 방지 점검", "PR template checks regression tests", "PR regression checks"),
                 ("python3 scripts/preflight.py", "PR template lists preflight", "PR preflight"),
                 ("python3 scripts/smoke_test.py --base-url http://localhost:8750", "PR template lists smoke test", "PR smoke test"),
+            ],
+            failures,
+        )
+    check(github_preflight_workflow_path.exists(), "GitHub preflight workflow exists", str(github_preflight_workflow_path), failures)
+    if github_preflight_workflow_path.exists():
+        github_preflight_workflow = github_preflight_workflow_path.read_text(encoding="utf-8")
+        check_text_contains(
+            github_preflight_workflow,
+            [
+                ("pull_request:", "GitHub preflight runs on pull requests", "workflow pull request"),
+                ("push:", "GitHub preflight runs on push", "workflow push"),
+                ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
+                ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
+                ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
             ],
             failures,
         )

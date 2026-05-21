@@ -1,0 +1,31 @@
+name: NowNote Preflight
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  preflight:
+    name: Server preflight
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check Python syntax
+        working-directory: server
+        run: python -m py_compile scripts/preflight.py scripts/smoke_test.py
+
+      - name: Run repository preflight
+        working-directory: server
+        run: python scripts/preflight.py --env-file .env.example --allow-example
