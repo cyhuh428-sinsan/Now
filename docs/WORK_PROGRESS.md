@@ -3,6 +3,33 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 16:43 KST
+
+### 다음 작업 시작
+
+- 모바일 1차 마무리 항목 중 자동 점검 가능한 화면/서비스/권한 검증 추가.
+
+### 확인 내용
+
+- 실제 Android 에뮬레이터와 기기 테스트 전에 모바일 앱의 핵심 진입점, 일자별 메모, 계층 메모, 음성 입력, 서버 연결, 권한/패키지명 누락을 정적으로 확인할 수 있음.
+- 실제 기기 실행과 권한 허용 흐름은 사람이 확인해야 하지만, 기본 소스 누락은 CI에서 먼저 잡는 것이 안전함.
+
+### 구현 내용
+
+- `now_app/scripts/verify_mobile_surface.py` 추가.
+- GitHub Actions preflight에서 mobile surface verification을 실행하도록 추가.
+- `now_app/README.md`에 모바일 정적 점검 명령 추가.
+- `.gitignore`에 모바일 Python cache 산출물 무시 규칙 추가.
+- 1차 마무리 체크리스트에서 모바일 핵심 화면/서비스/권한 정적 점검 스크립트 준비 항목을 완료 표시.
+
+### 검증
+
+- `now_app/scripts/verify_mobile_surface.py` 통과: 83/83.
+- `web/scripts/verify_web_surface.py` 통과: 61/61.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 536/536.
+- `py_compile` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 16:22 KST
 
 ### 다음 작업 시작

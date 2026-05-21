@@ -57,3 +57,9 @@ flutter run
 ```
 
 Android 에뮬레이터에서 Windows/WSL 서버에 연결할 때는 보통 `http://10.0.2.2:8750` 주소를 사용합니다.
+
+모바일 앱의 핵심 화면과 서버 연결 요소가 빠지지 않았는지는 아래 명령으로 정적 점검합니다.
+
+```bash
+python scripts/verify_mobile_surface.py
+```

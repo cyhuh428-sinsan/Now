@@ -109,6 +109,7 @@ def main() -> None:
     )
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     mobile_readme_path = repo_root / "now_app" / "README.md"
+    mobile_surface_check_path = repo_root / "now_app" / "scripts" / "verify_mobile_surface.py"
     mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
     mobile_manifest_path = repo_root / "now_app" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
     mobile_backup_rules_path = (
@@ -201,6 +202,7 @@ def main() -> None:
                 ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
                 ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
                 ("web/**/__pycache__/", "Gitignore excludes web Python cache", "web Python cache"),
+                ("now_app/**/__pycache__/", "Gitignore excludes mobile Python cache", "mobile Python cache"),
             ],
             failures,
         )
@@ -441,6 +443,7 @@ def main() -> None:
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
     check(mobile_readme_path.exists(), "Mobile README exists", str(mobile_readme_path), failures)
+    check(mobile_surface_check_path.exists(), "Mobile surface verification script exists", str(mobile_surface_check_path), failures)
     check(
         mobile_key_properties_example_path.exists(),
         "Android key properties example exists",
@@ -911,8 +914,24 @@ def main() -> None:
                 ("음성 메모", "Mobile README documents voice memo focus", "mobile README voice memo"),
                 ("서버 연결", "Mobile README documents server connection", "mobile README server connection"),
                 ("Markdown 가져오기", "Mobile README documents markdown import", "mobile README markdown import"),
+                ("verify_mobile_surface.py", "Mobile README documents surface verification", "mobile surface verification"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
+            ],
+            failures,
+        )
+    if mobile_surface_check_path.exists():
+        mobile_surface_check = mobile_surface_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_surface_check,
+            [
+                ("MemoStartPage", "Mobile surface check covers daily memo start", "daily memo start"),
+                ("MemoTreePage", "Mobile surface check covers tree memo page", "tree memo page"),
+                ("record_then_transcribe", "Mobile surface check covers record-then-transcribe", "record then transcribe"),
+                ("FlutterSecureStorage", "Mobile surface check covers secure token storage", "secure token storage"),
+                ("twoFactorCode.trim()", "Mobile surface check covers request-only 2FA", "request-only 2FA"),
+                ('applicationId = "com.sinsan.nownote"', "Mobile surface check covers package id", "package id"),
+                ("NowNote mobile surface verification passed", "Mobile surface check prints pass summary", "mobile check pass summary"),
             ],
             failures,
         )
