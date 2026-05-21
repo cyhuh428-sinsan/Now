@@ -616,6 +616,8 @@ def main() -> None:
             mobile_help,
             [
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile help marks encryption disabled in phase one", "mobile encryption phase one"),
+                ("서버 주소, API 토큰, 사용자 ID, 기기 ID", "Mobile help documents server connection values", "mobile server connection values"),
+                ("사용자별 접속 토큰과 2단계 인증 코드", "Mobile help documents public token and two-factor code", "mobile public token and 2FA help"),
                 ("사용자별 접속 토큰 강제 설정", "Mobile help documents public token enforcement", "mobile public token enforcement"),
                 ("공개 HTTPS, reverse proxy 환경", "Mobile help documents current public server blocker", "mobile public server HTTPS reverse proxy"),
             ],
