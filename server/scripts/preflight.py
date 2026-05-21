@@ -89,6 +89,7 @@ def main() -> None:
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
+    project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
@@ -213,6 +214,7 @@ def main() -> None:
                 ("web", "Root README links web client", "web path"),
                 ("server", "Root README links server", "server path"),
                 ("docs/HELP.md", "Root README links user help", "user help path"),
+                ("docs/PROJECT_STATUS.md", "Root README links project status", "project status path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -229,6 +231,22 @@ def main() -> None:
             [
                 ("A new Flutter project", "Root README is not Flutter template", "remove Flutter template"),
                 ("Getting Started", "Root README avoids generic starter guide", "remove generic starter guide"),
+            ],
+            failures,
+        )
+
+    check(project_status_path.exists(), "Project status document exists", str(project_status_path), failures)
+    if project_status_path.exists():
+        project_status = project_status_path.read_text(encoding="utf-8")
+        check_text_contains(
+            project_status,
+            [
+                ("설계 대비 현재 상태", "Project status names design status", "design status title"),
+                ("완료된 축", "Project status lists completed areas", "completed areas"),
+                ("남은 1차 마무리", "Project status lists remaining phase one work", "remaining phase one"),
+                ("공개 저장소 준비", "Project status covers public repository readiness", "public repo readiness"),
+                ("라이선스 선택", "Project status tracks license decision", "license decision"),
+                ("WORK_PROGRESS.md", "Project status links work progress", "work progress link"),
             ],
             failures,
         )
