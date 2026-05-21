@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 16:22 KST
+
+### 다음 작업 시작
+
+- Web/설치형 1차 마무리 항목 중 자동 점검 가능한 화면 요소 검증 추가.
+
+### 확인 내용
+
+- Web/설치형 체크리스트에는 실제 브라우저 실행과 설치형 포장처럼 사람이 확인해야 하는 항목이 있음.
+- 그 전에 핵심 HTML 요소, JS 기능, CSS 스타일, README 설명이 빠졌는지 자동으로 확인하는 정적 점검은 바로 추가 가능함.
+
+### 구현 내용
+
+- `web/scripts/verify_web_surface.py` 추가.
+- GitHub Actions preflight에서 Web surface verification을 실행하도록 추가.
+- `web/README.md`에 Web/설치형 화면 정적 점검 명령 추가.
+- 1차 마무리 체크리스트에서 Web/설치형 핵심 화면 요소 정적 점검 스크립트 준비 항목을 완료 표시.
+
+### 검증
+
+- `uv run python scripts\verify_web_surface.py` 통과. 61/61 checks.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 525/525 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py ..\web\scripts\verify_web_surface.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 16:03 KST
 
 ### 다음 작업 시작
