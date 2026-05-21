@@ -645,6 +645,7 @@ def main() -> None:
                 ("내보내기 화면에 기기 집계", "Smoke checks export page device count", "export device count"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
+                ("배포 체크리스트 화면에 공용 서버 사용자 토큰 강제 설정 안내", "Smoke checks deploy public token enforcement", "deploy public token enforcement"),
                 ("/admin/help", "Smoke covers help admin page", "admin/help"),
                 ("사용자 토큰 확인 화면/API", "Smoke covers public token check help", "public token help"),
                 ("2단계 코드 검증", "Smoke covers public two-factor help", "public two-factor help"),
