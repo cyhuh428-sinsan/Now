@@ -4,6 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NowNote Web</title>
+  <meta name="theme-color" content="#315f73">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/nownote-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
@@ -605,5 +608,12 @@
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
   <script src="./app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>

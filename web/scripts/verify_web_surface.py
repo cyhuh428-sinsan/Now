@@ -7,6 +7,9 @@ INDEX = ROOT / "index.html"
 APP = ROOT / "app.js"
 STYLES = ROOT / "styles.css"
 README = ROOT / "README.md"
+MANIFEST = ROOT / "manifest.webmanifest"
+SERVICE_WORKER = ROOT / "sw.js"
+ICON = ROOT / "icons" / "nownote-icon.svg"
 
 CHECK_TOTAL = 0
 CHECK_PASSED = 0
@@ -30,7 +33,7 @@ def has_id(html: str, element_id: str) -> bool:
 def main() -> None:
     failures: list[str] = []
 
-    for path in [INDEX, APP, STYLES, README]:
+    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON]:
         check(path.exists(), f"{path.name} exists", str(path), failures)
 
     if failures:
@@ -40,6 +43,17 @@ def main() -> None:
     app = APP.read_text(encoding="utf-8")
     styles = STYLES.read_text(encoding="utf-8")
     readme = README.read_text(encoding="utf-8")
+    manifest = MANIFEST.read_text(encoding="utf-8")
+    service_worker = SERVICE_WORKER.read_text(encoding="utf-8")
+    icon = ICON.read_text(encoding="utf-8")
+
+    html_requirements = [
+        ('rel="manifest"', "PWA manifest link"),
+        ('rel="icon"', "PWA icon link"),
+        ("navigator.serviceWorker.register", "service worker registration"),
+    ]
+    for needle, label in html_requirements:
+        check(needle in html, f"Web shell has {label}", needle, failures)
 
     required_ids = [
         ("treeList", "knowledge tree list"),
@@ -114,9 +128,40 @@ def main() -> None:
         ("단축키", "shortcuts documented"),
         ("서버 연결", "server connection documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
+        ("PWA 설치", "PWA install direction documented"),
     ]
     for needle, label in readme_requirements:
         check(needle in readme, f"Web README has {label}", needle, failures)
+
+    manifest_requirements = [
+        ('"name": "NowNote"', "manifest app name"),
+        ('"display": "standalone"', "manifest standalone display"),
+        ('"start_url": "./index.html"', "manifest start URL"),
+        ('"theme_color"', "manifest theme color"),
+        ('"icons"', "manifest icon list"),
+    ]
+    for needle, label in manifest_requirements:
+        check(needle in manifest, f"Web manifest has {label}", needle, failures)
+
+    service_worker_requirements = [
+        ("CACHE_NAME", "cache version"),
+        ("APP_SHELL", "app shell list"),
+        ("self.addEventListener(\"install\"", "install handler"),
+        ("self.addEventListener(\"activate\"", "activate handler"),
+        ("self.addEventListener(\"fetch\"", "fetch handler"),
+        ("caches.match", "cache-first response"),
+    ]
+    for needle, label in service_worker_requirements:
+        check(needle in service_worker, f"Web service worker has {label}", needle, failures)
+
+    icon_requirements = [
+        ("<svg", "SVG icon root"),
+        ("NowNote", "icon title"),
+        ("<circle", "clock mark"),
+        ("<path", "note mark"),
+    ]
+    for needle, label in icon_requirements:
+        check(needle in icon, f"Web install icon has {label}", needle, failures)
 
     if failures:
         print(f"\nWeb surface verification failed ({CHECK_PASSED}/{CHECK_TOTAL} checks):")

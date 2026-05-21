@@ -1,0 +1,21 @@
+{
+  "name": "NowNote",
+  "short_name": "NowNote",
+  "description": "로컬 우선 지식 메모와 일자별 메모",
+  "lang": "ko",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3ec",
+  "theme_color": "#315f73",
+  "orientation": "any",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "./icons/nownote-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
