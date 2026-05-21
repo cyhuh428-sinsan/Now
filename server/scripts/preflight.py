@@ -97,6 +97,7 @@ def main() -> None:
         repo_root / "now_app" / "lib" / "features" / "settings" / "server_settings_page.dart"
     )
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
+    mobile_readme_path = repo_root / "now_app" / "README.md"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -228,6 +229,7 @@ def main() -> None:
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
+    check(mobile_readme_path.exists(), "Mobile README exists", str(mobile_readme_path), failures)
     capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
@@ -643,6 +645,28 @@ def main() -> None:
             mobile_help,
             [
                 ("로그인 화면, 실제 2단계 인증", "Mobile help avoids stale public server blockers", "stale public server help mobile"),
+            ],
+            failures,
+        )
+    if mobile_readme_path.exists():
+        mobile_readme = mobile_readme_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_readme,
+            [
+                ("NowNote 모바일 앱", "Mobile README describes NowNote app", "mobile README title"),
+                ("음성 메모", "Mobile README documents voice memo focus", "mobile README voice memo"),
+                ("서버 연결", "Mobile README documents server connection", "mobile README server connection"),
+                ("Markdown 가져오기", "Mobile README documents markdown import", "mobile README markdown import"),
+                ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
+                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            mobile_readme,
+            [
+                ("A new Flutter project", "Mobile README is not Flutter template", "remove Flutter template README"),
+                ("Write your first Flutter app", "Mobile README avoids starter guide", "remove starter guide"),
             ],
             failures,
         )

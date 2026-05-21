@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 13:18 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 README가 Flutter 기본 템플릿으로 남아 있는 문제 정리.
+
+### 확인 내용
+
+- `now_app/README.md`가 `A new Flutter project` 기본 문서 그대로 남아 있었음.
+- 공개 저장소 기준으로 모바일 앱의 실제 1차 범위, 서버 연결, Markdown 가져오기, 암호화 저장 상태를 설명하지 못했음.
+
+### 구현 내용
+
+- 모바일 README를 NowNote 모바일 앱 설명으로 교체.
+- 빠른 입력, 음성 메모, 일자별 메모, 계층 메모, 서버 연결, 백업/가져오기, 암호화 1차 비활성 상태를 문서화.
+- preflight가 모바일 README의 핵심 문구와 Flutter 기본 템플릿 제거 여부를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 364/364 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 13:02 KST
 
 ### 다음 작업 시작
