@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 15:47 KST
+
+### 다음 작업 시작
+
+- 설계 대비 현재 상태를 빠르게 확인할 수 있는 현황 문서 추가.
+
+### 확인 내용
+
+- `docs/WORK_PROGRESS.md`는 전체 작업 이력을 담고 있어 현재 상태만 빠르게 보기에는 길어졌음.
+- 공개 저장소 첫 방문자와 작업 재개 시점에는 1차 목표 대비 완료/남은 항목을 짧게 보는 문서가 필요함.
+
+### 구현 내용
+
+- `docs/PROJECT_STATUS.md` 추가.
+- 루트 README의 시작 위치 목록에 현재 진행 상태 문서 링크 추가.
+- preflight가 프로젝트 현황 문서의 핵심 항목과 README 연결을 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 501/501 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 15:34 KST
 
 ### 다음 작업 시작
