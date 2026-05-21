@@ -43,6 +43,15 @@ def check_text_contains(
         check(needle in text, name, message, failures)
 
 
+def check_text_not_contains(
+    text: str,
+    forbidden: list[tuple[str, str, str]],
+    failures: list[str],
+) -> None:
+    for needle, name, message in forbidden:
+        check(needle not in text, name, message, failures)
+
+
 def check_summary() -> str:
     return f"{CHECK_PASSED}/{CHECK_TOTAL} checks"
 
@@ -547,6 +556,15 @@ def main() -> None:
                 ("2단계 인증 코드", "Korean help documents two-factor code setup", "2FA code help ko"),
                 ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않는 기능입니다", "Korean help marks encryption disabled in phase one", "encryption phase one help ko"),
+                ("로그인 기반 암호화 저장이 필요한 운영 구조", "Korean help describes encryption as operating readiness", "encryption readiness help ko"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            help_ko,
+            [
+                ("나중에 로그인 기반 암호화 저장을 사용", "Korean help avoids outdated encryption wording", "stale encryption help ko"),
+                ("로그인 화면, 실제 2단계 인증", "Korean help avoids stale public server blockers", "stale public server help ko"),
             ],
             failures,
         )
@@ -558,6 +576,14 @@ def main() -> None:
                 ("Two-factor code", "English help documents two-factor code setup", "2FA code help en"),
                 ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
                 ("Encrypted storage is not enabled in the current first-phase scope", "English help marks encryption disabled in phase one", "encryption phase one help en"),
+                ("operating model that can support login-based encrypted storage", "English help describes encryption as operating readiness", "encryption readiness help en"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            help_en,
+            [
+                ("may later use login-based encrypted storage", "English help avoids outdated encryption wording", "stale encryption help en"),
             ],
             failures,
         )
@@ -571,12 +597,27 @@ def main() -> None:
             ],
             failures,
         )
+        check_text_not_contains(
+            web_help,
+            [
+                ("로그인 화면, 실제 2단계 인증", "Web help avoids stale public server blockers", "stale public server help web"),
+            ],
+            failures,
+        )
     if mobile_help_path.exists():
         mobile_help = mobile_help_path.read_text(encoding="utf-8")
         check_text_contains(
             mobile_help,
             [
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile help marks encryption disabled in phase one", "mobile encryption phase one"),
+                ("공개 HTTPS와 reverse proxy 환경", "Mobile help documents current public server blocker", "mobile public server HTTPS reverse proxy"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            mobile_help,
+            [
+                ("로그인 화면, 실제 2단계 인증", "Mobile help avoids stale public server blockers", "stale public server help mobile"),
             ],
             failures,
         )
