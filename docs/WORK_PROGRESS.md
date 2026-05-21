@@ -3,6 +3,35 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 10:15 KST
+
+### 다음 작업 시작
+
+- Web/설치형 1차 마무리 중 설치형 포장 방식 확정.
+
+### 확인 내용
+
+- 실제 Windows/macOS/Linux 설치 파일 생성은 별도 빌드 도구 선택과 검증이 필요하므로 임의 완료 처리하지 않음.
+- 1차 기준에서는 현재 Web 화면을 유지하면서 브라우저 설치가 가능한 PWA 구조를 먼저 확정하는 것이 안전함.
+
+### 구현 내용
+
+- `web/manifest.webmanifest` 추가.
+- `web/sw.js` 추가.
+- `web/icons/nownote-icon.svg` 추가.
+- `web/index.html`에 manifest, icon, service worker 등록 추가.
+- `web/README.md`에 1차 설치형 포장 기준을 PWA 설치로 명시.
+- Web 정적 점검과 서버 preflight가 PWA 설치 골격을 확인하도록 보강.
+- 1차 마무리 체크리스트에서 설치형 포장 방식 확정 항목을 완료 표시.
+
+### 검증
+
+- `web/scripts/verify_web_surface.py` 통과: 83/83.
+- `now_app/scripts/verify_mobile_surface.py` 통과: 83/83.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 548/548.
+- `py_compile` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 16:43 KST
 
 ### 다음 작업 시작

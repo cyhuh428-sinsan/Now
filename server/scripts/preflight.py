@@ -95,6 +95,9 @@ def main() -> None:
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
     web_surface_check_path = repo_root / "web" / "scripts" / "verify_web_surface.py"
+    web_manifest_path = repo_root / "web" / "manifest.webmanifest"
+    web_service_worker_path = repo_root / "web" / "sw.js"
+    web_install_icon_path = repo_root / "web" / "icons" / "nownote-icon.svg"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -439,6 +442,9 @@ def main() -> None:
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
+    check(web_manifest_path.exists(), "Web PWA manifest exists", str(web_manifest_path), failures)
+    check(web_service_worker_path.exists(), "Web service worker exists", str(web_service_worker_path), failures)
+    check(web_install_icon_path.exists(), "Web install icon exists", str(web_install_icon_path), failures)
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
@@ -550,6 +556,7 @@ def main() -> None:
             [
                 ("verify_web_surface.py", "Web README documents surface verification", "web surface verification"),
                 ("공용 서버 준비 상태", "Web README documents public readiness display", "web public readiness docs"),
+                ("PWA 설치", "Web README documents PWA install packaging", "web PWA packaging"),
             ],
             failures,
         )
@@ -566,7 +573,31 @@ def main() -> None:
                 ("openTabs", "Web surface check covers tabs", "tabs"),
                 ("serverSyncBtn", "Web surface check covers server sync", "server sync"),
                 ("shortcutEditor", "Web surface check covers shortcut editor", "shortcut editor"),
+                ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
+                ("service worker", "Web surface check covers service worker", "service worker"),
                 ("NowNote web surface verification passed", "Web surface check prints pass summary", "web check pass summary"),
+            ],
+            failures,
+        )
+    if web_manifest_path.exists():
+        web_manifest = web_manifest_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_manifest,
+            [
+                ('"name": "NowNote"', "Web manifest names NowNote", "manifest name"),
+                ('"display": "standalone"', "Web manifest uses standalone display", "standalone display"),
+                ('"start_url": "./index.html"', "Web manifest starts at index", "start URL"),
+            ],
+            failures,
+        )
+    if web_service_worker_path.exists():
+        web_service_worker = web_service_worker_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_service_worker,
+            [
+                ("CACHE_NAME", "Web service worker has cache version", "cache version"),
+                ("APP_SHELL", "Web service worker caches app shell", "app shell cache"),
+                ("self.addEventListener(\"fetch\"", "Web service worker handles fetch", "fetch handler"),
             ],
             failures,
         )
