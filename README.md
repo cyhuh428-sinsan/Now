@@ -1,5 +1,7 @@
 # NowNote
 
+![NowNote Preflight](https://github.com/cyhuh428-sinsan/Now/actions/workflows/preflight.yml/badge.svg)
+
 NowNote는 한국어 사용 흐름을 먼저 기준으로 만든 로컬 우선 메모 시스템입니다.
 
 모바일 앱은 빠른 기록과 음성 메모를 중심으로 사용하고, Web/설치형 화면은 계층형 지식 메모를 중심으로 사용합니다. 서버는 Docker 기반으로 직접 운영하거나 공용 서버에 연결할 수 있도록 준비합니다.
