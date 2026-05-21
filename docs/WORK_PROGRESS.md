@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 11:19 KST
+
+### 다음 작업 시작
+
+- `/admin/deploy` 배포 체크리스트 화면의 공용 서버 토큰 강제 설정 안내 smoke 검증 추가.
+
+### 확인 내용
+
+- DEPLOY 문서에는 `NOW_USER_TOKEN_REQUIRED=true` 공용 서버 조건이 반영됨.
+- 하지만 smoke test의 `/admin/deploy` 화면 검증은 아직 해당 문구 노출을 확인하지 않았음.
+
+### 구현 내용
+
+- smoke test가 `/admin/deploy` 화면에서 `NOW_USER_TOKEN_REQUIRED=true` 문구를 확인하도록 추가.
+- preflight가 smoke test의 해당 검증 문구를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 349/349 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 11:14 KST
 
 ### 다음 작업 시작
