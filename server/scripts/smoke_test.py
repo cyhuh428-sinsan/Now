@@ -335,6 +335,11 @@ def main() -> None:
             require("백업/복구 절차" in text, "배포 체크리스트 화면에 운영 점검 백업/복구 항목 안내가 없습니다")
             require("status_counts.bad=0" in text, "배포 체크리스트 화면에 백업 검증 집계 기준 안내가 없습니다")
             require("/admin/export" in text and "/admin/recovery" in text, "배포 체크리스트 화면에 백업/복구 화면 안내가 없습니다")
+            require(
+                "docker-compose logs now-api --tail=80" in text
+                and "docker-compose logs now-worker --tail=80" in text,
+                "배포 체크리스트 화면에 WSL docker-compose 로그 확인 안내가 없습니다",
+            )
         if path == "/admin/public":
             require("NowNote 서버 인증 기준" in text, "공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용이 없습니다")
             require("NOW_USER_TOKEN_REQUIRED=true" in text, "공용 서버 준비 화면에 사용자별 토큰 필수 기준이 없습니다")
