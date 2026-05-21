@@ -4074,11 +4074,15 @@ function renderDaily() {
   elements.monthLabel.textContent = monthLabel(state.visibleMonth);
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
   elements.dailyContent.value = state.data.daily[state.selectedDate]?.content || "";
+  renderTodayMemoState();
+  renderCalendar();
+  renderArchiveList();
+}
+
+function renderTodayMemoState() {
   elements.todayMemoState.textContent = state.data.daily[toDateKey(new Date())]?.content?.trim()
     ? t("note.dailyHasContent")
     : t("note.dailyEmpty");
-  renderCalendar();
-  renderArchiveList();
 }
 
 function renderSidebarKnowledge() {
@@ -4201,6 +4205,7 @@ function saveDailyFromEditor() {
   }
   persist();
   renderCalendar();
+  renderTodayMemoState();
   showSaved(elements.dailySavedLabel);
 }
 

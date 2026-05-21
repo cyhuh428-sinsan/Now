@@ -591,6 +591,7 @@ def main() -> None:
             web_surface_check,
             [
                 ("dailyView", "Web surface check covers daily popover", "daily popover"),
+                ("renderTodayMemoState", "Web surface check covers daily chip refresh", "daily chip refresh"),
                 ("treeContent", "Web surface check covers tree editor", "tree editor"),
                 ("importMarkdownInput", "Web surface check covers Markdown import", "Markdown import"),
                 ("exportData", "Web surface check covers JSON export", "JSON export"),
@@ -602,6 +603,7 @@ def main() -> None:
                 ("function confirmAction", "Web surface check covers confirm action", "confirm action"),
                 ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
                 ("service worker", "Web surface check covers service worker", "service worker"),
+                ("internal confirm dialog hidden state", "Web surface check covers confirm hidden state", "confirm hidden state"),
                 ("NowNote web surface verification passed", "Web surface check prints pass summary", "web check pass summary"),
             ],
             failures,
@@ -629,10 +631,17 @@ def main() -> None:
         )
     if web_app_path.exists():
         web_app = web_app_path.read_text(encoding="utf-8")
+        web_styles = (repo_root / "web" / "styles.css").read_text(encoding="utf-8")
         check(
             "confirm(" not in web_app,
             "Web app avoids native browser confirm",
             "internal confirm dialog only",
+            failures,
+        )
+        check(
+            ".confirm-backdrop.hidden" in web_styles,
+            "Web confirm dialog is hidden by default",
+            ".confirm-backdrop.hidden",
             failures,
         )
     if web_manifest_path.exists():
