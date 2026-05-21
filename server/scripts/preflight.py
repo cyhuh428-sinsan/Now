@@ -101,6 +101,18 @@ def main() -> None:
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     mobile_readme_path = repo_root / "now_app" / "README.md"
     mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
+    mobile_manifest_path = repo_root / "now_app" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
+    mobile_backup_rules_path = (
+        repo_root / "now_app" / "android" / "app" / "src" / "main" / "res" / "xml" / "backup_rules.xml"
+    )
+    mobile_data_extraction_rules_path = (
+        repo_root / "now_app" / "android" / "app" / "src" / "main" / "res" / "xml" / "data_extraction_rules.xml"
+    )
+    play_release_checklist_path = repo_root / "now_app" / "docs" / "google_play_release_checklist.md"
+    play_paste_ready_path = repo_root / "now_app" / "docs" / "google_play_paste_ready_ko.md"
+    play_step_by_step_path = repo_root / "now_app" / "docs" / "google_play_step_by_step_ko.md"
+    privacy_policy_path = repo_root / "now_app" / "docs" / "privacy_policy_draft_ko.md"
+    privacy_site_path = repo_root / "now_app" / "docs" / "nownote_site" / "index.html"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -281,6 +293,19 @@ def main() -> None:
         str(mobile_key_properties_example_path),
         failures,
     )
+    check(mobile_manifest_path.exists(), "Android manifest exists", str(mobile_manifest_path), failures)
+    check(mobile_backup_rules_path.exists(), "Android backup rules exist", str(mobile_backup_rules_path), failures)
+    check(
+        mobile_data_extraction_rules_path.exists(),
+        "Android data extraction rules exist",
+        str(mobile_data_extraction_rules_path),
+        failures,
+    )
+    check(play_release_checklist_path.exists(), "Google Play release checklist exists", str(play_release_checklist_path), failures)
+    check(play_paste_ready_path.exists(), "Google Play paste-ready doc exists", str(play_paste_ready_path), failures)
+    check(play_step_by_step_path.exists(), "Google Play step-by-step doc exists", str(play_step_by_step_path), failures)
+    check(privacy_policy_path.exists(), "Privacy policy draft exists", str(privacy_policy_path), failures)
+    check(privacy_site_path.exists(), "Privacy site page exists", str(privacy_site_path), failures)
     capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
@@ -730,6 +755,119 @@ def main() -> None:
                 ("keyPassword=CHANGE_ME", "Android signing example uses placeholder key password", "no real key password"),
                 ("keyAlias=nownote_upload", "Android signing example sets upload alias", "upload alias"),
                 ("storeFile=../upload-keystore.jks", "Android signing example points to ignored keystore", "ignored keystore path"),
+            ],
+            failures,
+        )
+    if mobile_manifest_path.exists():
+        mobile_manifest = mobile_manifest_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_manifest,
+            [
+                ("android.permission.RECORD_AUDIO", "Android manifest declares microphone permission", "microphone permission"),
+                ("android.permission.CAMERA", "Android manifest declares camera permission", "camera permission"),
+                ("android.permission.READ_MEDIA_IMAGES", "Android manifest declares image media permission", "image permission"),
+                ("android.permission.POST_NOTIFICATIONS", "Android manifest declares notification permission", "notification permission"),
+                ("android.permission.health.READ_STEPS", "Android manifest declares Health Connect steps", "Health Connect steps"),
+                ("android.permission.CAPTURE_AUDIO_OUTPUT", "Android manifest removes capture audio output", "remove capture audio output"),
+                ('tools:node="remove"', "Android manifest removes risky merged permission", "tools remove"),
+                ('android:fullBackupContent="@xml/backup_rules"', "Android manifest links full backup rules", "backup rules link"),
+                ('android:dataExtractionRules="@xml/data_extraction_rules"', "Android manifest links data extraction rules", "data extraction link"),
+            ],
+            failures,
+        )
+    if mobile_backup_rules_path.exists():
+        mobile_backup_rules = mobile_backup_rules_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_backup_rules,
+            [
+                ('<exclude domain="database" path="." />', "Android full backup excludes databases", "backup database exclude"),
+                ('<exclude domain="sharedpref" path="." />', "Android full backup excludes shared preferences", "backup sharedpref exclude"),
+                ('<exclude domain="file" path="." />', "Android full backup excludes files", "backup file exclude"),
+            ],
+            failures,
+        )
+    if mobile_data_extraction_rules_path.exists():
+        mobile_data_extraction_rules = mobile_data_extraction_rules_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_data_extraction_rules,
+            [
+                ("<cloud-backup>", "Android data extraction defines cloud backup", "cloud backup"),
+                ('<exclude domain="database" path="." />', "Android cloud backup excludes databases", "cloud database exclude"),
+                ('<exclude domain="sharedpref" path="." />', "Android cloud backup excludes shared preferences", "cloud sharedpref exclude"),
+                ('<exclude domain="file" path="." />', "Android cloud backup excludes files", "cloud file exclude"),
+                ("<device-transfer>", "Android data extraction keeps device transfer", "device transfer"),
+            ],
+            failures,
+        )
+    if play_release_checklist_path.exists():
+        play_release_checklist = play_release_checklist_path.read_text(encoding="utf-8")
+        check_text_contains(
+            play_release_checklist,
+            [
+                ("POST_NOTIFICATIONS", "Play checklist covers notification permission", "notification permission docs"),
+                ("Health Connect 권한", "Play checklist covers Health Connect", "Health Connect docs"),
+                ("선택형 서버 기능까지 포함해 신고", "Play checklist covers optional server Data safety", "optional server data safety"),
+                ("최신 릴리스 빌드 산출물에서 다시 확인", "Play checklist keeps final release artifact check", "final release artifact check"),
+            ],
+            failures,
+        )
+    if play_paste_ready_path.exists():
+        play_paste_ready = play_paste_ready_path.read_text(encoding="utf-8")
+        check_text_contains(
+            play_paste_ready,
+            [
+                ("캡처, 식사, 패션, 여행 등 생활 기록", "Play paste doc explains camera/image purpose", "camera purpose"),
+                ("일정, 할 일, 루틴과 관련된 알림", "Play paste doc explains notification purpose", "notification purpose"),
+                ("광고, 신용평가, 데이터 판매 목적으로 사용되지 않습니다", "Play paste doc explains Health Connect restriction", "Health Connect restriction"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            play_paste_ready,
+            [
+                ("메모에 사진", "Play paste doc avoids photo-in-note wording", "no photo-in-note wording"),
+            ],
+            failures,
+        )
+    if play_step_by_step_path.exists():
+        play_step_by_step = play_step_by_step_path.read_text(encoding="utf-8")
+        check_text_contains(
+            play_step_by_step,
+            [
+                ("캡처, 식사, 패션, 여행 등 생활 기록", "Play step doc explains camera/image purpose", "camera purpose step"),
+                ("일정, 할 일, 루틴과 관련된 알림", "Play step doc explains notification purpose", "notification purpose step"),
+                ("광고, 신용평가, 데이터 판매 목적으로 사용되지 않습니다", "Play step doc explains Health Connect restriction", "Health Connect restriction step"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            play_step_by_step,
+            [
+                ("메모에 사진", "Play step doc avoids photo-in-note wording", "no photo-in-note wording step"),
+            ],
+            failures,
+        )
+    if privacy_policy_path.exists():
+        privacy_policy = privacy_policy_path.read_text(encoding="utf-8")
+        check_text_contains(
+            privacy_policy,
+            [
+                ("사용자가 NowNote 서버 연결을 켠 경우", "Privacy policy covers optional server transfer", "optional server transfer"),
+                ("Android 자동 클라우드 백업에 개인 기록 데이터와 서버 접속 정보를 포함하지 않도록", "Privacy policy covers Android cloud backup exclusion", "privacy backup exclusion"),
+                ("서버 API 토큰과 LLM API 키는 기기의 보안 저장소에 저장", "Privacy policy covers secure token storage", "secure token storage"),
+                ("캡처, 식사, 패션, 여행 등 생활 기록", "Privacy policy explains camera/image purpose", "privacy camera purpose"),
+            ],
+            failures,
+        )
+    if privacy_site_path.exists():
+        privacy_site = privacy_site_path.read_text(encoding="utf-8")
+        check_text_contains(
+            privacy_site,
+            [
+                ("사용자가 NowNote 서버 연결을 켠 경우", "Privacy site covers optional server transfer", "site optional server transfer"),
+                ("Android 자동 클라우드 백업에 개인 기록 데이터와 서버 접속 정보를 포함하지 않도록", "Privacy site covers Android cloud backup exclusion", "site backup exclusion"),
+                ("서버 API 토큰과 LLM API 키는 기기의 보안 저장소에 저장", "Privacy site covers secure token storage", "site secure token storage"),
+                ("캡처, 식사, 패션, 여행 등 생활 기록", "Privacy site explains camera/image purpose", "site camera purpose"),
             ],
             failures,
         )

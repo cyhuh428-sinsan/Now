@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 14:03 KST
+
+### 다음 작업 시작
+
+- Google Play 출시 문서와 Android 권한/백업 규칙 정합성 점검 보강.
+
+### 확인 내용
+
+- Play 문서의 카메라/사진 목적은 `메모에 사진 첨부`가 아니라 캡처, 식사, 패션, 여행 등 생활 기록 기준으로 정리되어 있음.
+- Android Manifest는 마이크, 카메라, 이미지, 알림, Health Connect 권한과 `CAPTURE_AUDIO_OUTPUT` 제거 규칙을 포함함.
+- Android 자동 클라우드 백업 규칙은 database/sharedpref/file을 제외하고 있음.
+
+### 구현 내용
+
+- preflight가 Android Manifest의 주요 권한, 위험 권한 제거 규칙, 백업 규칙 연결을 확인하도록 보강.
+- preflight가 backup/data extraction 규칙의 클라우드 백업 제외 기준을 확인하도록 보강.
+- preflight가 Google Play 등록 문서, 개인정보처리방침 초안, 공개 개인정보 페이지의 서버 전송/권한/백업/보안 저장소 문구를 확인하도록 보강.
+- Play 제출 문서에 `메모에 사진` 표현이 다시 들어오지 않도록 회귀 점검 추가.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 432/432 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 13:48 KST
 
 ### 다음 작업 시작
