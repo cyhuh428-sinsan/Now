@@ -200,6 +200,7 @@ def main() -> None:
                 ("server/.env", "Gitignore excludes server env", "server .env must stay local"),
                 ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
                 ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
+                ("web/**/__pycache__/", "Gitignore excludes web Python cache", "web Python cache"),
             ],
             failures,
         )

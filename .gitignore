@@ -22,6 +22,10 @@ server/.pytest_cache/
 server/**/__pycache__/
 server/**/*.pyc
 
+# Web local/runtime artifacts
+web/**/__pycache__/
+web/**/*.pyc
+
 # Editor/system
 .idea/
 .vscode/
