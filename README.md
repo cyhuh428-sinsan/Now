@@ -77,6 +77,12 @@ python3 scripts/preflight.py
 python3 scripts/smoke_test.py --base-url http://localhost:8750
 ```
 
+공개 저장소에 올리기 전에는 루트 디렉터리에서 비밀값 포함 여부를 확인합니다.
+
+```bash
+python3 scripts/verify_public_repo_safety.py
+```
+
 ## 현재 정책
 
 - 메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다.

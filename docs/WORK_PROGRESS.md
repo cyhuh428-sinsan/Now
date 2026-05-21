@@ -3,6 +3,34 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 11:45 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 오픈 전 비밀값 포함 여부 자동 점검.
+
+### 확인 내용
+
+- Git 추적 목록 기준으로 `server/.env`, `now_app/android/key.properties`, `now_app/android/upload-keystore.jks` 같은 로컬 비밀 파일이 포함됐는지 확인할 수 있음.
+- 텍스트 파일의 주요 토큰/비밀번호 할당값과 개인 키/API 키 패턴을 검사해 placeholder가 아닌 값이 들어오는 것을 막는 것이 안전함.
+
+### 구현 내용
+
+- `scripts/verify_public_repo_safety.py` 추가.
+- GitHub Actions preflight에서 공개 저장소 안전 점검을 실행하도록 추가.
+- 서버 preflight가 공개 저장소 안전 점검 스크립트와 핵심 검사 기준을 확인하도록 보강.
+- 루트 README에 공개 전 비밀값 점검 명령 추가.
+- 1차 마무리 체크리스트에서 실제 비밀값 Git 포함 여부 확인 항목을 완료 표시.
+
+### 검증
+
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python scripts\verify_web_surface.py` 통과: 87/87.
+- `uv run python scripts\verify_mobile_surface.py` 통과: 83/83.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 560/560.
+- `uv run python -m py_compile ...` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 11:18 KST
 
 ### 다음 작업 시작
