@@ -76,6 +76,7 @@ def main() -> None:
     env_path = (server_dir / args.env_file).resolve()
     gitignore_path = repo_root / ".gitignore"
     root_readme_path = repo_root / "README.md"
+    security_path = repo_root / "SECURITY.md"
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
@@ -207,6 +208,7 @@ def main() -> None:
                 ("web", "Root README links web client", "web path"),
                 ("server", "Root README links server", "server path"),
                 ("docs/HELP.md", "Root README links user help", "user help path"),
+                ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("개인 Docker 서버", "Root README documents private server mode", "private server mode"),
                 ("공용 서버", "Root README documents public server mode", "public server mode"),
                 ("2단계 인증 코드는 저장하지 않고", "Root README documents request-only 2FA code", "2FA storage policy"),
@@ -220,6 +222,27 @@ def main() -> None:
             [
                 ("A new Flutter project", "Root README is not Flutter template", "remove Flutter template"),
                 ("Getting Started", "Root README avoids generic starter guide", "remove generic starter guide"),
+            ],
+            failures,
+        )
+
+    check(security_path.exists(), "Security policy exists", str(security_path), failures)
+    if security_path.exists():
+        security = security_path.read_text(encoding="utf-8")
+        check_text_contains(
+            security,
+            [
+                ("cyhuh428@gmail.com", "Security policy provides contact email", "security contact"),
+                ("공개 이슈에 민감정보", "Security policy avoids public secret reports", "no public secrets"),
+                ("server/.env", "Security policy lists server env secret", "server env secret"),
+                ("now_app/android/key.properties", "Security policy lists Android key properties", "Android key properties secret"),
+                ("now_app/android/upload-keystore.jks", "Security policy lists Android upload keystore", "Android upload keystore secret"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Security policy covers public user token requirement", "public user token requirement"),
+                ("NOW_PUBLIC_BASE_URL=https://도메인", "Security policy covers public HTTPS base URL", "public HTTPS"),
+                ("2단계 인증 코드는 저장하지 않고", "Security policy covers request-only 2FA code", "request-only 2FA code"),
+                ("사용자별 접속 토큰은 원문을 저장하지 않고", "Security policy covers hashed user token storage", "hashed user token"),
+                ("Android 자동 클라우드 백업", "Security policy covers Android cloud backup exclusion", "Android backup exclusion"),
+                ("python3 scripts/preflight.py --public-server", "Security policy documents public preflight", "public preflight"),
             ],
             failures,
         )
