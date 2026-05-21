@@ -78,6 +78,9 @@ def main() -> None:
     root_readme_path = repo_root / "README.md"
     security_path = repo_root / "SECURITY.md"
     contributing_path = repo_root / "CONTRIBUTING.md"
+    issue_bug_template_path = repo_root / ".github" / "ISSUE_TEMPLATE" / "bug_report.md"
+    issue_feature_template_path = repo_root / ".github" / "ISSUE_TEMPLATE" / "feature_request.md"
+    pull_request_template_path = repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md"
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
@@ -244,6 +247,52 @@ def main() -> None:
                 ("python3 scripts/smoke_test.py --base-url http://localhost:8750", "Contributing guide documents smoke test", "smoke command"),
                 ("docs/WORK_PROGRESS.md", "Contributing guide documents work progress log", "work progress log"),
                 ("preflight 또는 smoke test에 회귀 방지 점검", "Contributing guide asks for regression checks", "regression checks"),
+            ],
+            failures,
+        )
+
+    check(issue_bug_template_path.exists(), "Bug issue template exists", str(issue_bug_template_path), failures)
+    if issue_bug_template_path.exists():
+        issue_bug_template = issue_bug_template_path.read_text(encoding="utf-8")
+        check_text_contains(
+            issue_bug_template,
+            [
+                ("모바일 앱", "Bug template covers mobile app scope", "bug mobile scope"),
+                ("Web/설치형 화면", "Bug template covers web scope", "bug web scope"),
+                ("서버", "Bug template covers server scope", "bug server scope"),
+                ("Docker 배포", "Bug template covers deploy scope", "bug deploy scope"),
+                ("API 토큰", "Bug template blocks API token disclosure", "bug API token warning"),
+                ("실제 개인정보", "Bug template blocks personal data disclosure", "bug personal data warning"),
+            ],
+            failures,
+        )
+    check(issue_feature_template_path.exists(), "Feature issue template exists", str(issue_feature_template_path), failures)
+    if issue_feature_template_path.exists():
+        issue_feature_template = issue_feature_template_path.read_text(encoding="utf-8")
+        check_text_contains(
+            issue_feature_template,
+            [
+                ("사용 흐름", "Feature template asks for user flow", "feature user flow"),
+                ("일자별 메모", "Feature template covers daily notes", "feature daily notes"),
+                ("계층 메모", "Feature template covers tree notes", "feature tree notes"),
+                ("음성 메모", "Feature template covers voice memo", "feature voice memo"),
+                ("서버 동기화", "Feature template covers server sync", "feature server sync"),
+                ("민감정보", "Feature template blocks sensitive data", "feature sensitive data"),
+            ],
+            failures,
+        )
+    check(pull_request_template_path.exists(), "Pull request template exists", str(pull_request_template_path), failures)
+    if pull_request_template_path.exists():
+        pull_request_template = pull_request_template_path.read_text(encoding="utf-8")
+        check_text_contains(
+            pull_request_template,
+            [
+                ("한국어 우선", "PR template checks Korean-first direction", "PR Korean-first"),
+                ("민감정보를 커밋하지 않았습니다", "PR template checks secret safety", "PR secret safety"),
+                ("기존 동작이 암묵적으로 바뀌지 않았는지", "PR template checks existing behavior", "PR behavior safety"),
+                ("preflight 또는 smoke test에 회귀 방지 점검", "PR template checks regression tests", "PR regression checks"),
+                ("python3 scripts/preflight.py", "PR template lists preflight", "PR preflight"),
+                ("python3 scripts/smoke_test.py --base-url http://localhost:8750", "PR template lists smoke test", "PR smoke test"),
             ],
             failures,
         )

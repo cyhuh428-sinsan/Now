@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 15:05 KST
+
+### 다음 작업 시작
+
+- GitHub 이슈/PR 템플릿 추가.
+
+### 확인 내용
+
+- 공개 저장소 기준으로 bug/feature issue template과 PR template이 없었음.
+- 버그 신고나 기능 제안에 민감정보가 포함되거나, PR에서 preflight/smoke 확인이 빠질 가능성이 있었음.
+
+### 구현 내용
+
+- `.github/ISSUE_TEMPLATE/bug_report.md` 추가.
+- `.github/ISSUE_TEMPLATE/feature_request.md` 추가.
+- `.github/PULL_REQUEST_TEMPLATE.md` 추가.
+- preflight가 이슈/PR 템플릿의 영향 범위, 민감정보 금지, 1차 범위, 검증 명령, 회귀 방지 점검 문구를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 486/486 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 14:49 KST
 
 ### 다음 작업 시작
