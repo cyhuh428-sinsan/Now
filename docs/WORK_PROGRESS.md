@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 14:33 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 보안 정책 문서 추가.
+
+### 확인 내용
+
+- 공개 저장소 루트에 별도 `SECURITY.md`가 없었음.
+- NowNote는 서버 토큰, 사용자별 접속 토큰, Android 서명 키, 서버 `.env` 등 공개 이슈에 올리면 안 되는 민감정보가 있음.
+
+### 구현 내용
+
+- `SECURITY.md`를 추가해 보안 신고 방법, 민감정보 기준, 개인/공용 서버 운영 보안 조건, 데이터 보호 기준, 배포 전 점검 명령을 정리.
+- 루트 README에 보안 정책 링크를 추가.
+- preflight가 보안 정책의 연락처, 민감정보 제외, 공용 서버 조건, 2단계 코드/사용자 토큰 저장 정책, Android 백업 제외, 공용 서버 preflight 안내를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 453/453 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 14:18 KST
 
 ### 다음 작업 시작
