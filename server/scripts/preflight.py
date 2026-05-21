@@ -74,6 +74,7 @@ def main() -> None:
     server_dir = Path(__file__).resolve().parents[1]
     repo_root = server_dir.parent
     env_path = (server_dir / args.env_file).resolve()
+    gitignore_path = repo_root / ".gitignore"
     root_readme_path = repo_root / "README.md"
     compose_path = server_dir / "docker-compose.yml"
     readme_path = server_dir / "README.md"
@@ -99,6 +100,7 @@ def main() -> None:
     )
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     mobile_readme_path = repo_root / "now_app" / "README.md"
+    mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
     failures: list[str] = []
 
     check(env_path.exists(), "Env file exists", str(env_path), failures)
@@ -168,6 +170,19 @@ def main() -> None:
     check(poll_seconds.isdigit() and int(poll_seconds) > 0, "Worker poll seconds valid", poll_seconds, failures)
     check(batch_size.isdigit() and int(batch_size) > 0, "Worker batch size valid", batch_size, failures)
 
+    check(gitignore_path.exists(), "Gitignore exists", str(gitignore_path), failures)
+    if gitignore_path.exists():
+        gitignore = gitignore_path.read_text(encoding="utf-8")
+        check_text_contains(
+            gitignore,
+            [
+                ("server/.env", "Gitignore excludes server env", "server .env must stay local"),
+                ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
+                ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
+            ],
+            failures,
+        )
+
     check(root_readme_path.exists(), "Root README exists", str(root_readme_path), failures)
     if root_readme_path.exists():
         root_readme = root_readme_path.read_text(encoding="utf-8")
@@ -184,6 +199,7 @@ def main() -> None:
                 ("공용 서버", "Root README documents public server mode", "public server mode"),
                 ("2단계 인증 코드는 저장하지 않고", "Root README documents request-only 2FA code", "2FA storage policy"),
                 ("암호화 저장은 1차 범위에서는 켜지지 않으며", "Root README marks encryption disabled", "encryption phase one"),
+                ("upload-keystore.jks`는 Git에 올리지 않습니다", "Root README documents signing secret policy", "signing secret policy"),
             ],
             failures,
         )
@@ -259,6 +275,12 @@ def main() -> None:
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
     check(mobile_readme_path.exists(), "Mobile README exists", str(mobile_readme_path), failures)
+    check(
+        mobile_key_properties_example_path.exists(),
+        "Android key properties example exists",
+        str(mobile_key_properties_example_path),
+        failures,
+    )
     capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")
@@ -696,6 +718,18 @@ def main() -> None:
             [
                 ("A new Flutter project", "Mobile README is not Flutter template", "remove Flutter template README"),
                 ("Write your first Flutter app", "Mobile README avoids starter guide", "remove starter guide"),
+            ],
+            failures,
+        )
+    if mobile_key_properties_example_path.exists():
+        mobile_key_properties_example = mobile_key_properties_example_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_key_properties_example,
+            [
+                ("storePassword=CHANGE_ME", "Android signing example uses placeholder store password", "no real store password"),
+                ("keyPassword=CHANGE_ME", "Android signing example uses placeholder key password", "no real key password"),
+                ("keyAlias=nownote_upload", "Android signing example sets upload alias", "upload alias"),
+                ("storeFile=../upload-keystore.jks", "Android signing example points to ignored keystore", "ignored keystore path"),
             ],
             failures,
         )

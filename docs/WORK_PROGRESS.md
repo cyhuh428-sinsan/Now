@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 13:48 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 기준 민감정보 제외 규칙 점검 보강.
+
+### 확인 내용
+
+- 실제 `server/.env`, `now_app/android/key.properties`, `now_app/android/upload-keystore.jks`는 git 추적 목록에 없었음.
+- `.gitignore`에는 해당 파일 제외 규칙이 이미 있었음.
+- Android 서명 예시 파일은 `CHANGE_ME` placeholder를 사용하고 있었음.
+
+### 구현 내용
+
+- preflight가 `.gitignore`의 서버 `.env`, Android key properties, upload keystore 제외 규칙을 확인하도록 보강.
+- preflight가 `key.properties.example`의 placeholder와 ignored keystore 경로를 확인하도록 보강.
+- 루트 README에 실제 `.env`, Android `key.properties`, `upload-keystore.jks`를 Git에 올리지 않는다는 정책을 추가.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 387/387 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 13:33 KST
 
 ### 다음 작업 시작
