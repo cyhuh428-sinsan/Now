@@ -91,6 +91,7 @@ def main() -> None:
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
     phase1_checklist_path = repo_root / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
+    public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
@@ -429,6 +430,7 @@ def main() -> None:
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
+    check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
     check(web_help_path.exists(), "Web help exists", str(web_help_path), failures)
@@ -585,6 +587,21 @@ def main() -> None:
             "confirm(" not in web_surface_check,
             "Web surface check blocks native confirm",
             "native confirm guard",
+            failures,
+        )
+    if public_repo_safety_check_path.exists():
+        public_repo_safety_check = public_repo_safety_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            public_repo_safety_check,
+            [
+                ("FORBIDDEN_TRACKED_PATHS", "Public repo safety checks forbidden tracked paths", "forbidden tracked paths"),
+                ("server/.env", "Public repo safety blocks server env", "server env"),
+                ("now_app/android/key.properties", "Public repo safety blocks Android key properties", "Android key properties"),
+                ("now_app/android/upload-keystore.jks", "Public repo safety blocks Android upload keystore", "Android upload keystore"),
+                ("SECRET_ASSIGNMENTS", "Public repo safety scans secret assignments", "secret assignments"),
+                ("SENSITIVE_PATTERNS", "Public repo safety scans raw secret patterns", "raw secret patterns"),
+                ("NowNote public repo safety verification passed", "Public repo safety prints pass summary", "public safety pass summary"),
+            ],
             failures,
         )
     if web_app_path.exists():
