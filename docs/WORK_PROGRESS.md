@@ -3,6 +3,32 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 11:14 KST
+
+### 다음 작업 시작
+
+- 공용 서버 preflight 실패 기준과 사용자 문서의 설명을 일치시킴.
+
+### 확인 내용
+
+- `.env.example --allow-example --public-server` 기준 현재 실패 항목은 2개임.
+- `NOW_USER_TOKEN_REQUIRED=true` 설정과 공개 HTTPS/reverse proxy 설정이 공용 서버 오픈 전 필수 조건임.
+- 일부 도움말과 DEPLOY 문서는 HTTPS/reverse proxy만 남은 것처럼 읽힐 수 있었음.
+
+### 구현 내용
+
+- 한국어/영어 공통 도움말에 사용자별 접속 토큰 강제 설정과 HTTPS/reverse proxy가 모두 공용 서버 오픈 전 조건임을 명시.
+- Web 도움말과 모바일 도움말도 같은 기준으로 수정.
+- 인증 정책 문서와 DEPLOY 문서의 `--public-server` 설명에 `NOW_USER_TOKEN_REQUIRED=true`를 포함.
+- preflight가 도움말/DEPLOY/인증 정책 문서의 사용자별 접속 토큰 강제 설정 안내를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 348/348 checks.
+- `uv run python -m py_compile scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example --public-server`는 의도적으로 실패. 실패 항목은 `NOW_USER_TOKEN_REQUIRED=true`와 `HTTPS/reverse proxy` 2개로 확인.
+
 ## 2026-05-21 11:05 KST
 
 ### 다음 작업 시작

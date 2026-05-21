@@ -58,4 +58,4 @@ python3 scripts/preflight.py --public-server
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --issue-local-user-token
 ```
 
-`--public-server`는 `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true`가 설정되지 않으면 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 공개 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.
+`--public-server`는 `NOW_USER_TOKEN_REQUIRED=true`, `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true`가 설정되지 않으면 의도적으로 실패합니다. 이 실패는 공용 서버에 필요한 사용자별 접속 토큰 강제와 공개 운영 절차가 아직 남아 있음을 알려주는 안전장치입니다.

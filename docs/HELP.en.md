@@ -81,7 +81,7 @@ Notes:
 - Personal server users must change the token and database password in `.env`.
 - Public server users use connection information issued by the operator.
 - The current first-phase server can start with a single API token for personal Docker servers, and also provides per-user access tokens plus two-factor code verification for public-server use.
-- Before opening a public server, all `scripts/preflight.py --public-server` failures must be resolved. Current failures are a safety signal that the public operations environment such as HTTPS/reverse proxy is still unfinished.
+- Before opening a public server, all `scripts/preflight.py --public-server` failures must be resolved. Current failures are a safety signal that per-user token enforcement and the public operations environment such as HTTPS/reverse proxy are still unfinished.
 - Server backup verification checks backup schema, checksum, required sections, and token-sensitive data exposure.
 - Archived daily notes are not deleted after server connection. They stay as inactive backup records.
 
