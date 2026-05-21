@@ -332,6 +332,14 @@ def main() -> None:
             ],
             failures,
         )
+        check_text_not_contains(
+            mobile_server_sync,
+            [
+                ("now_server_two_factor", "Mobile does not persist two-factor code", "2FA code is request-only"),
+                ("final String twoFactorCode;", "Mobile settings model excludes two-factor code", "2FA code is not stored in settings"),
+            ],
+            failures,
+        )
     if mobile_server_settings_path.exists():
         mobile_server_settings = mobile_server_settings_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -339,6 +347,14 @@ def main() -> None:
             [
                 ("publicReadiness?.summary", "Mobile displays public server readiness", "mobile public readiness display"),
                 ("_twoFactorCodeCtrl", "Mobile exposes two-factor code input", "mobile two factor input"),
+                ("twoFactorCode: _twoFactorCodeCtrl.text", "Mobile passes two-factor code only to connection test", "mobile 2FA request-only flow"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            mobile_server_settings,
+            [
+                ("now_server_two_factor", "Mobile settings page does not store two-factor code", "2FA code is not a saved preference"),
             ],
             failures,
         )
