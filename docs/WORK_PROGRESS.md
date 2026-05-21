@@ -19,6 +19,7 @@
 - `web/scripts/verify_web_surface.py` 추가.
 - GitHub Actions preflight에서 Web surface verification을 실행하도록 추가.
 - `web/README.md`에 Web/설치형 화면 정적 점검 명령 추가.
+- Web 정적 점검 실행 중 생기는 Python cache 산출물이 Git에 잡히지 않도록 `.gitignore` 보강.
 - 1차 마무리 체크리스트에서 Web/설치형 핵심 화면 요소 정적 점검 스크립트 준비 항목을 완료 표시.
 
 ### 검증
