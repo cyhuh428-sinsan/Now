@@ -56,7 +56,7 @@ This mode fits when:
 - You want a server-side backup copy.
 - You need to manage accounts, devices, and access status.
 - You want to use server-based analysis features.
-- You may later use login-based encrypted storage.
+- You want to prepare an operating model that can support login-based encrypted storage.
 
 Available features:
 
