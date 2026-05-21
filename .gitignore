@@ -26,6 +26,10 @@ server/**/*.pyc
 web/**/__pycache__/
 web/**/*.pyc
 
+# Mobile local/runtime artifacts
+now_app/**/__pycache__/
+now_app/**/*.pyc
+
 # Editor/system
 .idea/
 .vscode/
