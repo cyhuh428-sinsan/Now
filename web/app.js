@@ -10,6 +10,9 @@ const ACCENTS = [
 
 const I18N = {
   ko: {
+    "dialog.confirmTitle": "확인",
+    "dialog.ok": "확인",
+    "dialog.cancel": "취소",
     "note.untitled": "제목 없음",
     "note.emptyTitle": "주제가 없습니다",
     "note.emptyDescription": "먼저 주제를 추가하세요.",
@@ -487,6 +490,9 @@ const I18N = {
     "markdownExport.restoredAt": "복원 시각",
   },
   en: {
+    "dialog.confirmTitle": "Confirm",
+    "dialog.ok": "OK",
+    "dialog.cancel": "Cancel",
     "note.untitled": "Untitled",
     "note.emptyTitle": "No topics yet",
     "note.emptyDescription": "Please add a topic first.",
@@ -1312,8 +1318,47 @@ const elements = {
   graphView: $("#graphView"),
   graphList: $("#graphList"),
   graphCloseBtn: $("#graphCloseBtn"),
+  confirmDialog: $("#confirmDialog"),
+  confirmTitle: $("#confirmTitle"),
+  confirmMessage: $("#confirmMessage"),
+  confirmCancelBtn: $("#confirmCancelBtn"),
+  confirmOkBtn: $("#confirmOkBtn"),
   toastRegion: $("#toastRegion"),
 };
+
+function confirmAction(message) {
+  if (!elements.confirmDialog) return Promise.resolve(false);
+  elements.confirmTitle.textContent = t("dialog.confirmTitle");
+  elements.confirmMessage.textContent = message;
+  elements.confirmCancelBtn.textContent = t("dialog.cancel");
+  elements.confirmOkBtn.textContent = t("dialog.ok");
+  elements.confirmDialog.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const close = (result) => {
+      elements.confirmDialog.classList.add("hidden");
+      elements.confirmOkBtn.removeEventListener("click", onOk);
+      elements.confirmCancelBtn.removeEventListener("click", onCancel);
+      elements.confirmDialog.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKeyDown);
+      resolve(result);
+    };
+    const onOk = () => close(true);
+    const onCancel = () => close(false);
+    const onBackdrop = (event) => {
+      if (event.target === elements.confirmDialog) close(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") close(false);
+      if (event.key === "Enter") close(true);
+    };
+    elements.confirmOkBtn.addEventListener("click", onOk);
+    elements.confirmCancelBtn.addEventListener("click", onCancel);
+    elements.confirmDialog.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => elements.confirmOkBtn.focus(), 0);
+  });
+}
 
 function showNotice(message, type = "info") {
   if (!message) return;
@@ -1645,14 +1690,14 @@ function bindEvents() {
 
   elements.addChildBtn.addEventListener("click", addChildToSelectedTreeNode);
 
-  elements.deleteTreeBtn.addEventListener("click", () => {
+  elements.deleteTreeBtn.addEventListener("click", async () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     if (selected.children.length > 0) {
       showNotice(t("note.nodeDelete.childrenBlocked"), "error");
       return;
     }
-    if (!confirm(t("note.nodeDelete.toTrashConfirm", { title: noteTitle(selected.title) }))) return;
+    if (!(await confirmAction(t("note.nodeDelete.toTrashConfirm", { title: noteTitle(selected.title) })))) return;
     if (!archiveDeletedTreeNode(selected.id)) return;
     state.selectedTreeId = null;
     persist();
@@ -1763,8 +1808,8 @@ function renderSettings() {
   );
 }
 
-function resetViewSettings() {
-  if (!confirm(t("settings.resetConfirm"))) {
+async function resetViewSettings() {
+  if (!(await confirmAction(t("settings.resetConfirm")))) {
     return;
   }
   state.settings = defaultSettings();
@@ -1835,8 +1880,8 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   renderServerSettings();
 }
 
-function syncAllWebNotesToServer() {
-  if (!confirm(t("settings.server.fullSyncConfirm"))) {
+async function syncAllWebNotesToServer() {
+  if (!(await confirmAction(t("settings.server.fullSyncConfirm")))) {
     return;
   }
   const server = state.settings.server || defaultServerSettings();
@@ -3900,11 +3945,11 @@ function toggleDeletedTreeSelection() {
   renderDeletedTreeList();
 }
 
-function deleteSelectedTreeNodes() {
+async function deleteSelectedTreeNodes() {
   pruneDeletedTreeSelection();
   const selectedIds = [...state.selectedDeletedTreeIds];
   if (selectedIds.length === 0) return;
-  if (!confirm(t("note.nodeDelete.permanentSelected", { count: selectedIds.length }))) {
+  if (!(await confirmAction(t("note.nodeDelete.permanentSelected", { count: selectedIds.length })))) {
     return;
   }
   const selectedSet = new Set(selectedIds);
@@ -3915,10 +3960,10 @@ function deleteSelectedTreeNodes() {
   renderDeletedTreeButton();
 }
 
-function deleteAllArchivedTreeNodes() {
+async function deleteAllArchivedTreeNodes() {
   const deleted = state.data.deletedTree || [];
   if (deleted.length === 0) return;
-  if (!confirm(t("note.nodeDelete.permanentAll", { count: deleted.length }))) {
+  if (!(await confirmAction(t("note.nodeDelete.permanentAll", { count: deleted.length })))) {
     return;
   }
   state.data.deletedTree = [];
@@ -4159,13 +4204,13 @@ function saveDailyFromEditor() {
   showSaved(elements.dailySavedLabel);
 }
 
-function archiveSelectedDailyNote() {
+async function archiveSelectedDailyNote() {
   const note = state.data.daily[state.selectedDate];
   if (!note?.content?.trim()) {
     showNotice(t("note.noArchive"), "error");
     return;
   }
-  if (!confirm(t("note.archiveConfirm", { date: longDateLabel(state.selectedDate) }))) return;
+  if (!(await confirmAction(t("note.archiveConfirm", { date: longDateLabel(state.selectedDate) })))) return;
 
   state.data.archivedDaily.unshift({
     id: crypto.randomUUID(),
@@ -4230,13 +4275,13 @@ function setDailyArchivePreviewMode(isPreview) {
   elements.archiveSelectedBtn.disabled = isPreview;
 }
 
-function restoreArchivedDailyNote(id) {
+async function restoreArchivedDailyNote(id) {
   const note = state.data.archivedDaily.find((item) => item.id === id);
   if (!note || note.restoredAt) return;
   const active = state.data.daily[note.date];
   const restoredAt = new Date().toISOString();
   if (active?.content?.trim()) {
-    const ok = confirm(t("note.archiveRestoreConfirm"));
+    const ok = await confirmAction(t("note.archiveRestoreConfirm"));
     if (!ok) return;
     state.data.daily[note.date].content = `${active.content.trimEnd()}\n\n--- ${t("note.archiveRestoreMarker")} ---\n${note.content}`;
     state.data.daily[note.date].syncState = "pending";
@@ -5053,7 +5098,7 @@ function renderExternalLink(label, url) {
   return `<a href="${escapeHtml(trimmedUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
 }
 
-function openWikiLink(title) {
+async function openWikiLink(title) {
   const normalized = title.trim();
   if (!normalized) return;
   const existing = findTreeNodeByTitle(normalized);
@@ -5061,7 +5106,7 @@ function openWikiLink(title) {
     selectTreeNode(existing.id);
     return;
   }
-  if (!confirm(t("note.linkCreateConfirm", { title: normalized }))) return;
+  if (!(await confirmAction(t("note.linkCreateConfirm", { title: normalized })))) return;
   const node = createLinkedNote(normalized);
   selectTreeNode(node.id);
 }
@@ -5527,11 +5572,11 @@ function restoreDeletedTreeNode(id) {
   renderDeletedTreeList();
 }
 
-function permanentlyDeleteTreeNode(id) {
+async function permanentlyDeleteTreeNode(id) {
   const index = state.data.deletedTree.findIndex((node) => node.id === id);
   if (index < 0) return;
   const node = state.data.deletedTree[index];
-  if (!confirm(t("note.nodeDelete.permanentConfirm", { title: noteTitle(node.title) }))) {
+  if (!(await confirmAction(t("note.nodeDelete.permanentConfirm", { title: noteTitle(node.title) })))) {
     return;
   }
   state.data.deletedTree.splice(index, 1);
@@ -5963,7 +6008,7 @@ function importData(event) {
   const file = event.target.files?.[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const parsed = JSON.parse(String(reader.result));
       const imported = parseBackupData(parsed);
@@ -5972,7 +6017,7 @@ function importData(event) {
         return;
       }
       const summary = backupSummary(imported.data);
-      if (!confirm(t("note.backupReplaceConfirm", {
+      if (!(await confirmAction(t("note.backupReplaceConfirm", {
         file: file.name,
         time: imported.exportedAt ? formatBackupTime(imported.exportedAt) : t("note.unknownDate"),
         daily: summary.daily,
@@ -5980,7 +6025,7 @@ function importData(event) {
         restoredArchivedDaily: summary.restoredArchivedDaily ? t("note.restoredArchivedDailyCount", { count: summary.restoredArchivedDaily }) : "",
         tree: summary.tree,
         deletedTree: summary.deletedTree,
-      }))) {
+      })))) {
         return;
       }
       downloadCurrentBackup("nownote-before-import");
@@ -6047,11 +6092,11 @@ async function importMarkdownData(event) {
     const summary = markdownImportSummary(imports);
     const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
     const moreText = imports.length > 5 ? `\n- ${t("note.markdownImportedMore", { count: imports.length - 5 })}` : "";
-    if (!confirm([
+    if (!(await confirmAction([
       t("note.markdownImportConfirm", { count: imports.length, nodes: summary.nodes, daily: summary.daily, archivedDaily: summary.archivedDaily }),
       "",
       previewNames + moreText,
-    ].join("\n"))) {
+    ].join("\n")))) {
       return;
     }
     const nodes = imports.flatMap((item) => item.nodes);

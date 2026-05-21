@@ -83,6 +83,7 @@ def main() -> None:
         ("serverFullSyncBtn", "full server sync button"),
         ("serverAnalysisCreateBtn", "server analysis create button"),
         ("languageSelect", "language selector"),
+        ("confirmDialog", "internal confirm dialog"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -103,9 +104,12 @@ def main() -> None:
         ("archivedDaily", "daily archive state"),
         ("selected.level >= 3", "tree depth guard"),
         ("serverUserTokenInput", "public server user token input"),
+        ("function confirmAction", "internal confirm dialog function"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
+    native_confirm_call = "confirm" + "("
+    check(native_confirm_call not in app, "Web app avoids native browser confirm", native_confirm_call, failures)
 
     style_requirements = [
         (".daily-popover", "daily popover styling"),
@@ -115,6 +119,7 @@ def main() -> None:
         (".server-settings-form", "server settings styling"),
         (".shortcut-groups", "shortcut settings styling"),
         (".deleted-toolbar", "deleted bin toolbar styling"),
+        (".confirm-backdrop", "internal confirm dialog styling"),
     ]
     for needle, label in style_requirements:
         check(needle in styles, f"Web style has {label}", needle, failures)
