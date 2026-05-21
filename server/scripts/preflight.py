@@ -215,6 +215,7 @@ def main() -> None:
                 ("docs/HELP.md", "Root README links user help", "user help path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
+                ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
                 ("개인 Docker 서버", "Root README documents private server mode", "private server mode"),
                 ("공용 서버", "Root README documents public server mode", "public server mode"),
                 ("2단계 인증 코드는 저장하지 않고", "Root README documents request-only 2FA code", "2FA storage policy"),

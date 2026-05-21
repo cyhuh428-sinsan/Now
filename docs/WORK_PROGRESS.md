@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-21 15:34 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 첫 화면에서 GitHub Actions preflight 상태를 바로 확인할 수 있게 보강.
+
+### 확인 내용
+
+- GitHub Actions preflight 워크플로는 추가되어 있었지만 루트 README에는 상태 배지가 없었음.
+- 공개 저장소를 보는 사람이 현재 기본 점검 통과 여부를 첫 화면에서 바로 확인하기 어려웠음.
+
+### 구현 내용
+
+- 루트 `README.md` 제목 아래에 NowNote Preflight GitHub Actions 배지를 추가.
+- preflight가 루트 README의 preflight 상태 배지 존재 여부를 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과. 493/493 checks.
+- `uv run python -m py_compile scripts\preflight.py scripts\smoke_test.py` 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-21 15:21 KST
 
 ### 다음 작업 시작
