@@ -85,6 +85,12 @@ python3 scripts/smoke_test.py --base-url http://localhost:8750
 python3 scripts/verify_public_repo_safety.py
 ```
 
+1차 마무리 상태는 루트 디렉터리에서 요약 확인할 수 있습니다.
+
+```bash
+python3 scripts/release_readiness.py
+```
+
 ## 현재 정책
 
 - 메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다.

@@ -3,6 +3,33 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 12:51 KST
+
+### 다음 작업 시작
+
+- 1차 마무리 남은 항목을 명령 하나로 확인하는 상태 요약 보강.
+
+### 확인 내용
+
+- 남은 1차 항목 대부분은 실제 Android 기기, WSL/Docker 재배포, 도메인/HTTPS, Play Console, 라이선스처럼 사람이 직접 확인해야 하는 항목.
+- 자동으로 완료 처리하지 않고, 체크리스트의 현재 상태를 요약 출력하는 방식이 안전함.
+
+### 구현 내용
+
+- `scripts/release_readiness.py` 추가.
+- `README.md`에 1차 마무리 상태 요약 명령 추가.
+- `server/scripts/preflight.py`가 release readiness 스크립트 존재와 README 안내를 확인하도록 보강.
+- 루트 자동점검 스크립트 실행 시 생기는 `scripts/**/__pycache__/`도 Git 추적에서 제외하도록 `.gitignore`와 preflight 확인 항목 보강.
+
+### 검증
+
+- `scripts/release_readiness.py` 실행으로 1차 마무리 체크리스트 57개 중 13개 완료, 44개 남음 확인.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 616/616 통과.
+- `scripts/verify_public_repo_safety.py` 8/8 통과.
+- `web/scripts/verify_web_surface.py` 124/124 통과.
+- `now_app/scripts/verify_mobile_surface.py` 95/95 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 15:10 KST
 
 ### 다음 작업 시작
