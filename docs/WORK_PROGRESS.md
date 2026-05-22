@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 13:10 KST
+
+### 다음 작업 시작
+
+- Web/설치형 서버 연결 테스트 확인 시도.
+
+### 확인 내용
+
+- 로컬 `http://localhost:8750/health`와 `/api/v1/server`는 PowerShell에서 정상 응답.
+- Web 화면에서 `http://localhost:8750`, `http://127.0.0.1:8750` 모두 `Failed to fetch`로 실패.
+- 현재 실행 중인 서버는 브라우저 fetch 기준 연결이 막혀 있어 체크리스트의 Web 서버 연결 테스트 항목은 완료 처리하지 않음.
+
+### 구현 내용
+
+- `web/README.md`에 `curl`은 성공하지만 Web 연결 테스트가 `Failed to fetch`인 경우의 점검 기준 추가.
+
+### 검증
+
+- `web/scripts/verify_web_surface.py` 89/89 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 576/576 통과.
+- `git diff --check` 통과.
+- 단, 브라우저 기준 서버 연결 테스트는 현재 실행 중인 8750 서버 배포 상태에서 `Failed to fetch`가 재현되어 완료 처리하지 않음.
+
 ## 2026-05-22 12:32 KST
 
 ### 다음 작업 시작
