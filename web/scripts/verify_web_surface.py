@@ -112,6 +112,36 @@ def main() -> None:
     native_confirm_call = "confirm" + "("
     check(native_confirm_call not in app, "Web app avoids native browser confirm", native_confirm_call, failures)
 
+    markdown_flow_requirements = [
+        ('downloadText(`nownote-${fileTimestamp(new Date())}.md`, markdown, "text/markdown")', "Markdown export downloads .md file"),
+        ("treeToMarkdown(state.data.tree)", "Markdown export includes tree notes"),
+        ("dailyToMarkdown()", "Markdown export includes daily notes"),
+        ("archivedDailyToMarkdown()", "Markdown export includes archived daily notes"),
+        ("parseNowNoteMarkdownTree(content)", "Markdown import parses NowNote tree export"),
+        ("parseNowNoteMarkdownDaily(content)", "Markdown import parses NowNote daily export"),
+        ("parseNowNoteMarkdownArchivedDaily(content)", "Markdown import parses archived daily export"),
+        ("titleFromMarkdownFile(file.name, content)", "Markdown import creates a topic from plain Markdown"),
+        ("state.data.tree.push(...nodes)", "Markdown import adds tree nodes"),
+        ("mergeImportedDailyNote(note)", "Markdown import merges daily notes"),
+        ("showMarkdownImportResult(nodes, dailyNotes)", "Markdown import opens the imported result"),
+    ]
+    for needle, label in markdown_flow_requirements:
+        check(needle in app, f"Web app supports {label}", needle, failures)
+
+    backup_flow_requirements = [
+        ("downloadCurrentBackup();", "JSON export delegates to backup download"),
+        ('downloadText(`${prefix}-${fileTimestamp(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json")', "JSON export downloads readable backup"),
+        ("parseBackupData(parsed)", "JSON import parses backup shape"),
+        ("backupSummary(imported.data)", "JSON import summarizes replacement data"),
+        ('downloadCurrentBackup("nownote-before-import")', "JSON import saves pre-import backup"),
+        ("state.data = backupDataShape(imported.data)", "JSON import replaces local data with normalized backup"),
+        ("state.settings = normalizeSettings(imported.settings)", "JSON import restores settings when present"),
+        ("persist();", "JSON import persists restored data"),
+        ("showNotice(t(\"note.importDone\"), \"success\")", "JSON import reports success"),
+    ]
+    for needle, label in backup_flow_requirements:
+        check(needle in app, f"Web app supports {label}", needle, failures)
+
     style_requirements = [
         (".daily-popover", "daily popover styling"),
         (".open-tabs-bar", "open tabs styling"),

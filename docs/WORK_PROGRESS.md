@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 13:40 KST
+
+### 다음 작업 시작
+
+- Web Markdown 가져오기/내보내기와 JSON 백업/복원 점검 항목 보강.
+
+### 확인 내용
+
+- 내장 브라우저 자동 조작은 파일 선택/입력 단계에서 현재 환경 제약이 있어 실제 완료 체크로 처리하지 않음.
+- 대신 Web 표면 검증 스크립트가 Markdown/JSON 흐름의 핵심 코드 경로를 더 촘촘히 확인하도록 보강.
+
+### 구현 내용
+
+- `web/scripts/verify_web_surface.py`에 Markdown 내보내기, NowNote Markdown 가져오기, 일반 Markdown 주제 생성, 일자별 메모 병합, JSON 백업 다운로드, JSON 복원 전 사전 백업, 설정 복원, 성공 알림 확인 항목 추가.
+
+### 검증
+
+- `web/scripts/verify_web_surface.py` 109/109 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 576/576 통과.
+- `scripts/verify_public_repo_safety.py` 8/8 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 13:10 KST
 
 ### 다음 작업 시작
