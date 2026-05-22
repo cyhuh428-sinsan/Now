@@ -10,6 +10,7 @@ README = ROOT / "README.md"
 MANIFEST = ROOT / "manifest.webmanifest"
 SERVICE_WORKER = ROOT / "sw.js"
 ICON = ROOT / "icons" / "nownote-icon.svg"
+RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
 
 CHECK_TOTAL = 0
 CHECK_PASSED = 0
@@ -33,7 +34,7 @@ def has_id(html: str, element_id: str) -> bool:
 def main() -> None:
     failures: list[str] = []
 
-    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON]:
+    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST]:
         check(path.exists(), f"{path.name} exists", str(path), failures)
 
     if failures:
@@ -46,6 +47,7 @@ def main() -> None:
     manifest = MANIFEST.read_text(encoding="utf-8")
     service_worker = SERVICE_WORKER.read_text(encoding="utf-8")
     icon = ICON.read_text(encoding="utf-8")
+    runtime_checklist = RUNTIME_CHECKLIST.read_text(encoding="utf-8")
 
     html_requirements = [
         ('rel="manifest"', "PWA manifest link"),
@@ -166,9 +168,28 @@ def main() -> None:
         ("서버 연결", "server connection documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
         ("PWA 설치", "PWA install direction documented"),
+        ("runtime_checklist_ko.md", "runtime checklist documented"),
     ]
     for needle, label in readme_requirements:
         check(needle in readme, f"Web README has {label}", needle, failures)
+
+    runtime_checklist_requirements = [
+        ("python -m http.server 8761 --bind 127.0.0.1", "runtime checklist local server command"),
+        ("http://127.0.0.1:8761/index.html", "runtime checklist local browser URL"),
+        ("주제를 추가", "runtime checklist tree topic flow"),
+        ("3단계 메모 아래에는 더 이상 하위 메모", "runtime checklist tree depth guard"),
+        ("같은 메모장에 이어서 저장", "runtime checklist daily append model"),
+        ("Markdown 내보내기", "runtime checklist Markdown export"),
+        ("Markdown 가져오기", "runtime checklist Markdown import"),
+        ("JSON 내보내기", "runtime checklist JSON export"),
+        ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "runtime checklist JSON restore safeguard"),
+        ("PWA 설치형 점검", "runtime checklist PWA install section"),
+        ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
+        ("서버 capability", "runtime checklist server capability display"),
+        ("Failed to fetch", "runtime checklist fetch troubleshooting"),
+    ]
+    for needle, label in runtime_checklist_requirements:
+        check(needle in runtime_checklist, f"Web runtime checklist has {label}", needle, failures)
 
     manifest_requirements = [
         ('"name": "NowNote"', "manifest app name"),

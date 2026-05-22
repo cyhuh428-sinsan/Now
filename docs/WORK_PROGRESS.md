@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 14:25 KST
+
+### 다음 작업 시작
+
+- Web/설치형 실제 실행 점검 준비 항목 보강.
+
+### 확인 내용
+
+- 실제 PWA 설치와 독립 창 실행은 브라우저 설치 상태가 필요하므로 자동 완료 처리하지 않음.
+- 대신 1차 설치형 기준인 PWA 실행 점검 순서를 문서화하고, README와 자동 점검 스크립트에서 해당 문서가 빠지지 않도록 연결.
+
+### 구현 내용
+
+- `web/runtime_checklist_ko.md` 추가.
+- `web/README.md`에 실제 실행 점검서 링크 추가.
+- `web/scripts/verify_web_surface.py`에 Web/설치형 실제 실행 점검서 존재와 핵심 항목 확인 추가.
+- `server/scripts/preflight.py`에 Web/설치형 실제 실행 점검서 확인 추가.
+- `docs/PHASE1_RELEASE_CHECKLIST.md`에 Web/설치형 실제 실행 점검서 준비 항목 완료 표시.
+
+### 검증
+
+- `web/scripts/verify_web_surface.py` 124/124 통과.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 602/602 통과.
+- `scripts/verify_public_repo_safety.py` 8/8 통과.
+
 ## 2026-05-22 14:05 KST
 
 ### 다음 작업 시작
