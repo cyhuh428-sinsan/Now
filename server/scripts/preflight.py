@@ -398,6 +398,7 @@ def main() -> None:
             [
                 ("pull_request:", "GitHub preflight runs on pull requests", "workflow pull request"),
                 ("push:", "GitHub preflight runs on push", "workflow push"),
+                ("workflow_dispatch:", "GitHub preflight supports manual run", "workflow manual run"),
                 ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
