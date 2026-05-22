@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 14:50 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 오픈 전 라이선스 선택 준비 보강.
+
+### 확인 내용
+
+- GitHub 최신 커밋 `c74986e3d31aeb57622c6ba82fcaf393c8082d3e` 기준 status와 workflow run이 아직 조회되지 않아 GitHub Actions 통과 항목은 완료 처리하지 않음.
+- 라이선스 자체는 법적 선택이므로 임의 선택하지 않고, 판단 기준만 문서화.
+
+### 구현 내용
+
+- `docs/LICENSE_DECISION.md` 추가.
+- `README.md`와 `docs/OPEN_SOURCE_RELEASE.md`에 라이선스 선택 가이드 링크 추가.
+- `server/scripts/preflight.py`에 라이선스 선택 가이드 존재와 핵심 판단 항목 확인 추가.
+- `docs/PHASE1_RELEASE_CHECKLIST.md`에 라이선스 선택 가이드 준비 항목 완료 표시.
+
+### 검증
+
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 612/612 통과.
+- `scripts/verify_public_repo_safety.py` 8/8 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 14:25 KST
 
 ### 다음 작업 시작

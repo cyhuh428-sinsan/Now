@@ -64,6 +64,7 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 
 라이선스는 법적 선택이므로 자동으로 정하지 않습니다.
 오픈소스 공개 전 신산님이 라이선스를 확정한 뒤 루트에 `LICENSE` 파일을 추가합니다.
+선택 기준은 `docs/LICENSE_DECISION.md`에 따로 정리합니다.
 
 후보 예시:
 
