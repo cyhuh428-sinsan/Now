@@ -100,6 +100,7 @@ def main() -> None:
     web_manifest_path = repo_root / "web" / "manifest.webmanifest"
     web_service_worker_path = repo_root / "web" / "sw.js"
     web_install_icon_path = repo_root / "web" / "icons" / "nownote-icon.svg"
+    web_runtime_checklist_path = repo_root / "web" / "runtime_checklist_ko.md"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -471,6 +472,7 @@ def main() -> None:
     check(web_manifest_path.exists(), "Web PWA manifest exists", str(web_manifest_path), failures)
     check(web_service_worker_path.exists(), "Web service worker exists", str(web_service_worker_path), failures)
     check(web_install_icon_path.exists(), "Web install icon exists", str(web_install_icon_path), failures)
+    check(web_runtime_checklist_path.exists(), "Web runtime checklist exists", str(web_runtime_checklist_path), failures)
     check(mobile_server_sync_path.exists(), "Mobile server sync source exists", str(mobile_server_sync_path), failures)
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
@@ -582,8 +584,27 @@ def main() -> None:
             web_readme,
             [
                 ("verify_web_surface.py", "Web README documents surface verification", "web surface verification"),
+                ("runtime_checklist_ko.md", "Web README links runtime checklist", "web runtime checklist"),
                 ("공용 서버 준비 상태", "Web README documents public readiness display", "web public readiness docs"),
                 ("PWA 설치", "Web README documents PWA install packaging", "web PWA packaging"),
+            ],
+            failures,
+        )
+    if web_runtime_checklist_path.exists():
+        web_runtime_checklist = web_runtime_checklist_path.read_text(encoding="utf-8")
+        check_text_contains(
+            web_runtime_checklist,
+            [
+                ("python -m http.server 8761 --bind 127.0.0.1", "Web runtime checklist covers local server command", "web local server"),
+                ("http://127.0.0.1:8761/index.html", "Web runtime checklist covers local URL", "web local URL"),
+                ("주제를 추가", "Web runtime checklist covers tree topic flow", "web tree topic"),
+                ("같은 메모장에 이어서 저장", "Web runtime checklist covers daily append model", "web daily append"),
+                ("Markdown 내보내기", "Web runtime checklist covers Markdown export", "web Markdown export"),
+                ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "Web runtime checklist covers JSON restore safeguard", "web JSON restore"),
+                ("PWA 설치형 점검", "Web runtime checklist covers PWA install", "web PWA install"),
+                ("독립 창으로 NowNote가 열린다", "Web runtime checklist covers standalone window", "web standalone"),
+                ("서버 capability", "Web runtime checklist covers server capabilities", "web server capabilities"),
+                ("Failed to fetch", "Web runtime checklist covers fetch troubleshooting", "web fetch troubleshooting"),
             ],
             failures,
         )
@@ -605,6 +626,7 @@ def main() -> None:
                 ("function confirmAction", "Web surface check covers confirm action", "confirm action"),
                 ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
                 ("service worker", "Web surface check covers service worker", "service worker"),
+                ("RUNTIME_CHECKLIST", "Web surface check covers runtime checklist", "web runtime checklist"),
                 ("internal confirm dialog hidden state", "Web surface check covers confirm hidden state", "confirm hidden state"),
                 ("NowNote web surface verification passed", "Web surface check prints pass summary", "web check pass summary"),
             ],
