@@ -115,6 +115,7 @@ def main() -> None:
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     mobile_readme_path = repo_root / "now_app" / "README.md"
     mobile_surface_check_path = repo_root / "now_app" / "scripts" / "verify_mobile_surface.py"
+    mobile_runtime_checklist_path = repo_root / "now_app" / "docs" / "mobile_runtime_checklist_ko.md"
     mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
     mobile_manifest_path = repo_root / "now_app" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
     mobile_backup_rules_path = (
@@ -474,6 +475,7 @@ def main() -> None:
     check(mobile_server_settings_path.exists(), "Mobile server settings page exists", str(mobile_server_settings_path), failures)
     check(mobile_help_path.exists(), "Mobile help page exists", str(mobile_help_path), failures)
     check(mobile_readme_path.exists(), "Mobile README exists", str(mobile_readme_path), failures)
+    check(mobile_runtime_checklist_path.exists(), "Mobile runtime checklist exists", str(mobile_runtime_checklist_path), failures)
     check(mobile_surface_check_path.exists(), "Mobile surface verification script exists", str(mobile_surface_check_path), failures)
     check(
         mobile_key_properties_example_path.exists(),
@@ -1011,8 +1013,27 @@ def main() -> None:
                 ("서버 연결", "Mobile README documents server connection", "mobile README server connection"),
                 ("Markdown 가져오기", "Mobile README documents markdown import", "mobile README markdown import"),
                 ("verify_mobile_surface.py", "Mobile README documents surface verification", "mobile surface verification"),
+                ("mobile_runtime_checklist_ko.md", "Mobile README links runtime checklist", "mobile runtime checklist link"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
+            ],
+            failures,
+        )
+    if mobile_runtime_checklist_path.exists():
+        mobile_runtime_checklist = mobile_runtime_checklist_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_runtime_checklist,
+            [
+                ("Android 에뮬레이터", "Mobile runtime checklist covers emulator", "emulator check"),
+                ("실제 Android 기기", "Mobile runtime checklist covers physical device", "physical device check"),
+                ("홈의 오늘 메모", "Mobile runtime checklist covers home daily memo", "home daily memo check"),
+                ("같은 메모장에 이어서 저장", "Mobile runtime checklist covers daily append model", "daily append check"),
+                ("3단계 메모 아래에는 더 이상 하위 메모", "Mobile runtime checklist covers tree depth guard", "tree depth check"),
+                ("실시간 변환", "Mobile runtime checklist covers realtime voice", "realtime voice check"),
+                ("녹음 후 변환", "Mobile runtime checklist covers record-then-transcribe", "record then transcribe check"),
+                ("새 지식 메모로 추가", "Mobile runtime checklist covers Markdown import model", "Markdown import check"),
+                ("10.0.2.2", "Mobile runtime checklist covers emulator server URL", "emulator server URL"),
+                ("2단계 인증 코드는 저장되지 않고", "Mobile runtime checklist covers request-only 2FA", "request-only 2FA check"),
             ],
             failures,
         )
@@ -1027,6 +1048,7 @@ def main() -> None:
                 ("FlutterSecureStorage", "Mobile surface check covers secure token storage", "secure token storage"),
                 ("twoFactorCode.trim()", "Mobile surface check covers request-only 2FA", "request-only 2FA"),
                 ('applicationId = "com.sinsan.nownote"', "Mobile surface check covers package id", "package id"),
+                ("mobile_runtime_checklist_ko.md", "Mobile surface check covers runtime checklist", "runtime checklist"),
                 ("NowNote mobile surface verification passed", "Mobile surface check prints pass summary", "mobile check pass summary"),
             ],
             failures,
