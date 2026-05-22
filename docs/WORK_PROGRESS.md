@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-22 15:10 KST
+
+### 다음 작업 시작
+
+- GitHub Actions preflight 확인 가능성 보강.
+
+### 확인 내용
+
+- 최신 커밋 기준 GitHub status와 workflow run이 조회되지 않아 Actions 통과 항목은 완료 처리하지 않음.
+- 자동 push/pull_request 실행은 유지하고, GitHub 화면에서 직접 실행할 수 있도록 수동 실행 트리거를 추가.
+
+### 구현 내용
+
+- `.github/workflows/preflight.yml`에 `workflow_dispatch` 추가.
+- `docs/OPEN_SOURCE_RELEASE.md`에 자동 실행 결과가 보이지 않을 때 수동 실행하는 기준 추가.
+- `server/scripts/preflight.py`가 GitHub Actions 수동 실행 트리거도 확인하도록 보강.
+
+### 검증
+
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 613/613 통과.
+- `scripts/verify_public_repo_safety.py` 8/8 통과.
+- `git diff --check` 통과.
+
 ## 2026-05-22 14:50 KST
 
 ### 다음 작업 시작
