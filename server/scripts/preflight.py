@@ -92,6 +92,7 @@ def main() -> None:
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
     phase1_checklist_path = repo_root / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
     open_source_release_path = repo_root / "docs" / "OPEN_SOURCE_RELEASE.md"
+    license_decision_path = repo_root / "docs" / "LICENSE_DECISION.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
@@ -229,6 +230,7 @@ def main() -> None:
                 ("docs/PROJECT_STATUS.md", "Root README links project status", "project status path"),
                 ("docs/PHASE1_RELEASE_CHECKLIST.md", "Root README links phase one checklist", "phase one checklist path"),
                 ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
+                ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -288,6 +290,7 @@ def main() -> None:
         )
 
     check(open_source_release_path.exists(), "Open source release guide exists", str(open_source_release_path), failures)
+    check(license_decision_path.exists(), "License decision guide exists", str(license_decision_path), failures)
     if open_source_release_path.exists():
         open_source_release = open_source_release_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -301,7 +304,23 @@ def main() -> None:
                 ("SECURITY.md", "Open source guide lists security review", "security review"),
                 ("CONTRIBUTING.md", "Open source guide lists contributing review", "contributing review"),
                 ("LICENSE", "Open source guide keeps license decision explicit", "license decision"),
+                ("docs/LICENSE_DECISION.md", "Open source guide links license decision guide", "license decision guide"),
                 ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
+            ],
+            failures,
+        )
+    if license_decision_path.exists():
+        license_decision = license_decision_path.read_text(encoding="utf-8")
+        check_text_contains(
+            license_decision,
+            [
+                ("라이선스는 법적 선택이므로 자동으로 정하지 않고", "License decision guide keeps human decision", "human license decision"),
+                ("MIT License", "License decision guide covers MIT", "MIT"),
+                ("Apache License 2.0", "License decision guide covers Apache 2.0", "Apache 2.0"),
+                ("AGPLv3", "License decision guide covers AGPLv3", "AGPLv3"),
+                ("서버 수정본 공개 의무", "License decision guide covers server disclosure choice", "server disclosure"),
+                ("루트에 `LICENSE` 파일 추가", "License decision guide covers license file follow-up", "LICENSE follow-up"),
+                ("CONTRIBUTING.md", "License decision guide covers contribution policy follow-up", "contribution policy"),
             ],
             failures,
         )
