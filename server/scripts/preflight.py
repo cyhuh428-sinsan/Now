@@ -94,6 +94,7 @@ def main() -> None:
     open_source_release_path = repo_root / "docs" / "OPEN_SOURCE_RELEASE.md"
     license_decision_path = repo_root / "docs" / "LICENSE_DECISION.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
+    release_readiness_check_path = repo_root / "scripts" / "release_readiness.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
@@ -210,6 +211,7 @@ def main() -> None:
                 ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
                 ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
                 ("web/**/__pycache__/", "Gitignore excludes web Python cache", "web Python cache"),
+                ("scripts/**/__pycache__/", "Gitignore excludes root script Python cache", "root script Python cache"),
                 ("now_app/**/__pycache__/", "Gitignore excludes mobile Python cache", "mobile Python cache"),
             ],
             failures,
@@ -231,6 +233,7 @@ def main() -> None:
                 ("docs/PHASE1_RELEASE_CHECKLIST.md", "Root README links phase one checklist", "phase one checklist path"),
                 ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
                 ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
+                ("scripts/release_readiness.py", "Root README documents release readiness summary", "release readiness summary"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -476,6 +479,7 @@ def main() -> None:
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
+    check(release_readiness_check_path.exists(), "Release readiness summary script exists", str(release_readiness_check_path), failures)
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
     check(web_help_path.exists(), "Web help exists", str(web_help_path), failures)
