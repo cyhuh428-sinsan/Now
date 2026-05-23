@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-23 21:40 KST
+
+### 다음 작업 시작
+
+- Web/설치형 점검 중 Markdown 가져오기/내보내기와 JSON 백업/복원 실제 확인.
+
+### 구현 내용
+
+- `web/scripts/check_import_export.mjs` 추가.
+- Chrome 또는 Edge를 headless로 실행해 실제 Web 화면에서 Markdown 파일 입력, Markdown 다운로드, JSON 다운로드, JSON 복원을 확인하도록 구성.
+- `web/README.md`와 `web/runtime_checklist_ko.md`에 실행 명령 추가.
+- `web/scripts/verify_web_surface.py`와 `server/scripts/preflight.py`가 import/export 실제 점검 스크립트 존재와 핵심 검증 기준을 확인하도록 보강.
+
+### 검증
+
+- `NOWNOTE_BROWSER_PATH`로 Edge를 지정한 `node scripts/check_import_export.mjs` 흐름으로 Markdown 가져오기/내보내기, JSON 내보내기, JSON 가져오기 전 자동 백업, JSON 복원 결과 확인.
+
+### 완료 처리
+
+- Web/설치형 점검의 Markdown 가져오기와 내보내기 확인 완료.
+- Web/설치형 점검의 JSON 백업과 복원 확인 완료.
+
 ## 2026-05-23 18:55 KST
 
 ### 다음 작업 시작

@@ -100,6 +100,7 @@ def main() -> None:
     web_help_path = repo_root / "web" / "help.html"
     web_surface_check_path = repo_root / "web" / "scripts" / "verify_web_surface.py"
     web_package_script_path = repo_root / "web" / "scripts" / "package_web.py"
+    web_import_export_check_path = repo_root / "web" / "scripts" / "check_import_export.mjs"
     web_manifest_path = repo_root / "web" / "manifest.webmanifest"
     web_service_worker_path = repo_root / "web" / "sw.js"
     web_install_icon_path = repo_root / "web" / "icons" / "nownote-icon.svg"
@@ -496,6 +497,7 @@ def main() -> None:
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
     check(web_package_script_path.exists(), "Web PWA package script exists", str(web_package_script_path), failures)
+    check(web_import_export_check_path.exists(), "Web import/export runtime check exists", str(web_import_export_check_path), failures)
     check(web_manifest_path.exists(), "Web PWA manifest exists", str(web_manifest_path), failures)
     check(web_service_worker_path.exists(), "Web service worker exists", str(web_service_worker_path), failures)
     check(web_install_icon_path.exists(), "Web install icon exists", str(web_install_icon_path), failures)
@@ -653,6 +655,7 @@ def main() -> None:
                 ("function confirmAction", "Web surface check covers confirm action", "confirm action"),
                 ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
                 ("package_web.py", "Web surface check covers PWA packaging", "PWA packaging"),
+                ("check_import_export.mjs", "Web surface check covers import/export runtime check", "import/export runtime check"),
                 ("service worker", "Web surface check covers service worker", "service worker"),
                 ("RUNTIME_CHECKLIST", "Web surface check covers runtime checklist", "web runtime checklist"),
                 ("internal confirm dialog hidden state", "Web surface check covers confirm hidden state", "confirm hidden state"),

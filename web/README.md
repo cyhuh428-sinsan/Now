@@ -71,6 +71,14 @@ Web/설치형 화면의 핵심 요소가 빠지지 않았는지는 아래 명령
 python scripts/verify_web_surface.py
 ```
 
+Markdown 가져오기/내보내기와 JSON 백업/복원은 Chrome 또는 Edge가 설치된 환경에서 아래 명령으로 실제 브라우저 흐름을 확인합니다.
+
+```bash
+node scripts/check_import_export.mjs
+```
+
+브라우저 실행 파일을 자동으로 찾지 못하거나 headless 브라우저가 불안정하면 `NOWNOTE_BROWSER_PATH`에 Chrome 또는 Edge 실행 파일 경로를 지정합니다.
+
 PWA 설치형 배포 묶음은 아래 명령으로 생성합니다.
 
 ```bash
