@@ -23,6 +23,7 @@ server/**/__pycache__/
 server/**/*.pyc
 
 # Web local/runtime artifacts
+web/dist/
 web/**/__pycache__/
 web/**/*.pyc
 

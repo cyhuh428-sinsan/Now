@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-23 18:55 KST
+
+### 다음 작업 시작
+
+- Web/설치형 점검 중 PWA 배포 파일 생성과 실행 확인.
+
+### 구현 내용
+
+- `web/scripts/package_web.py` 추가.
+- `web/README.md`에 PWA 배포 묶음 생성 명령과 산출물 위치 추가.
+- `web/scripts/verify_web_surface.py`가 PWA 패키징 스크립트와 포함 파일 기준을 확인하도록 보강.
+- `web/dist/`를 Git 추적 제외에 추가.
+- `server/scripts/preflight.py`가 Web PWA 패키징 스크립트와 Git 추적 제외 기준을 확인하도록 보강.
+
+### 검증
+
+- `web/scripts/package_web.py` 실행으로 `web/dist/nownote-web-pwa/`와 `web/dist/nownote-web-pwa.zip` 생성 확인.
+- `web/dist/nownote-web-pwa/`를 `http://127.0.0.1:8762/index.html`로 실행해 NowNote Web 화면 표시 확인.
+- `manifest.webmanifest`와 `sw.js`가 배포 폴더에서 HTTP 200으로 응답하는지 확인.
+- `web/scripts/verify_web_surface.py` 130/130 통과.
+
+### 완료 처리
+
+- Web/설치형 점검의 설치형 배포 파일 생성과 실행 확인 완료.
+
 ## 2026-05-23 18:35 KST
 
 ### 다음 작업 시작

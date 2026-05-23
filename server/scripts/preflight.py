@@ -99,6 +99,7 @@ def main() -> None:
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
     web_surface_check_path = repo_root / "web" / "scripts" / "verify_web_surface.py"
+    web_package_script_path = repo_root / "web" / "scripts" / "package_web.py"
     web_manifest_path = repo_root / "web" / "manifest.webmanifest"
     web_service_worker_path = repo_root / "web" / "sw.js"
     web_install_icon_path = repo_root / "web" / "icons" / "nownote-icon.svg"
@@ -210,6 +211,7 @@ def main() -> None:
                 ("server/.env", "Gitignore excludes server env", "server .env must stay local"),
                 ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
                 ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
+                ("web/dist/", "Gitignore excludes web package artifacts", "web package artifacts"),
                 ("web/**/__pycache__/", "Gitignore excludes web Python cache", "web Python cache"),
                 ("scripts/**/__pycache__/", "Gitignore excludes root script Python cache", "root script Python cache"),
                 ("now_app/**/__pycache__/", "Gitignore excludes mobile Python cache", "mobile Python cache"),
@@ -493,6 +495,7 @@ def main() -> None:
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
+    check(web_package_script_path.exists(), "Web PWA package script exists", str(web_package_script_path), failures)
     check(web_manifest_path.exists(), "Web PWA manifest exists", str(web_manifest_path), failures)
     check(web_service_worker_path.exists(), "Web service worker exists", str(web_service_worker_path), failures)
     check(web_install_icon_path.exists(), "Web install icon exists", str(web_install_icon_path), failures)
@@ -649,6 +652,7 @@ def main() -> None:
                 ("confirmDialog", "Web surface check covers internal confirm dialog", "internal confirm dialog"),
                 ("function confirmAction", "Web surface check covers confirm action", "confirm action"),
                 ("manifest.webmanifest", "Web surface check covers PWA manifest", "PWA manifest"),
+                ("package_web.py", "Web surface check covers PWA packaging", "PWA packaging"),
                 ("service worker", "Web surface check covers service worker", "service worker"),
                 ("RUNTIME_CHECKLIST", "Web surface check covers runtime checklist", "web runtime checklist"),
                 ("internal confirm dialog hidden state", "Web surface check covers confirm hidden state", "confirm hidden state"),
