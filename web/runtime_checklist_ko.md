@@ -39,6 +39,8 @@
 
 ## 4. Markdown / JSON
 
+자동 점검 가능 명령: `node scripts/check_import_export.mjs`
+
 - [ ] Markdown 내보내기를 실행해 `.md` 파일이 내려받아진다.
 - [ ] `.md`, `.markdown`, `.txt` 파일을 Markdown 가져오기로 가져온다.
 - [ ] 일반 Markdown 파일은 새 주제로 추가된다.

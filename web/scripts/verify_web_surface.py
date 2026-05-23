@@ -12,6 +12,7 @@ SERVICE_WORKER = ROOT / "sw.js"
 ICON = ROOT / "icons" / "nownote-icon.svg"
 RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
 PACKAGE_SCRIPT = ROOT / "scripts" / "package_web.py"
+IMPORT_EXPORT_CHECK = ROOT / "scripts" / "check_import_export.mjs"
 
 CHECK_TOTAL = 0
 CHECK_PASSED = 0
@@ -35,7 +36,7 @@ def has_id(html: str, element_id: str) -> bool:
 def main() -> None:
     failures: list[str] = []
 
-    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST, PACKAGE_SCRIPT]:
+    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST, PACKAGE_SCRIPT, IMPORT_EXPORT_CHECK]:
         check(path.exists(), f"{path.name} exists", str(path), failures)
 
     if failures:
@@ -50,6 +51,7 @@ def main() -> None:
     icon = ICON.read_text(encoding="utf-8")
     runtime_checklist = RUNTIME_CHECKLIST.read_text(encoding="utf-8")
     package_script = PACKAGE_SCRIPT.read_text(encoding="utf-8")
+    import_export_check = IMPORT_EXPORT_CHECK.read_text(encoding="utf-8")
 
     html_requirements = [
         ('rel="manifest"', "PWA manifest link"),
@@ -223,6 +225,18 @@ def main() -> None:
     ]
     for needle, label in package_script_requirements:
         check(needle in package_script, f"Web package script has {label}", needle, failures)
+
+    import_export_requirements = [
+        ("DOM.setFileInputFiles", "file input upload through browser"),
+        ("exportMarkdownBtn", "Markdown export click"),
+        ("importMarkdownInput", "Markdown import input"),
+        ("exportBtn", "JSON export click"),
+        ("importInput", "JSON import input"),
+        ("nownote-before-import", "pre-import JSON backup"),
+        ("JSON 복원 주제", "JSON restore assertion"),
+    ]
+    for needle, label in import_export_requirements:
+        check(needle in import_export_check, f"Web import/export check has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
