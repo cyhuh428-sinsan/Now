@@ -16,7 +16,7 @@
 - [x] 버전: `1.0.0+1`
 - [x] 릴리스 AAB 산출물 존재: `build/app/outputs/bundle/release/app-release.aab`
 - [x] 릴리스 Manifest targetSdkVersion 36 확인
-- [ ] 현재 AAB가 최신 수정 사항으로 다시 빌드되었는지 확인
+- [x] 현재 AAB가 최신 수정 사항으로 다시 빌드되었는지 확인
 - [x] 마지막 생성된 릴리스 병합 Manifest에서 `android.permission.CAPTURE_AUDIO_OUTPUT` 제거 반영 확인
 
 ## 현재 의심되는 부분
@@ -37,7 +37,7 @@
 - [x] 키 생성/릴리스 빌드 스크립트의 Flutter/JDK 경로 환경변수 지원
 - [x] 로컬 업로드 키 파일 존재 확인: `android/upload-keystore.jks` (Git 제외)
 - [x] 로컬 `android/key.properties` 존재 확인 (Git 제외)
-- [ ] 서명된 AAB 빌드
+- [x] 서명된 AAB 빌드
 
 ## 업로드 키 생성 예시
 PowerShell에서 프로젝트의 `android` 폴더 기준으로 실행합니다.
@@ -76,7 +76,7 @@ powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1
 
 등록 가능이라고 말하려면 최소한 아래가 모두 확인되어야 합니다.
 
-- [ ] 릴리스 AAB 빌드 성공
+- [x] 릴리스 AAB 빌드 성공
 - [ ] 릴리스 APK 또는 AAB 기반 테스트 빌드를 실제 에뮬레이터/기기에 설치
 - [ ] 홈 화면 정상 표시
 - [ ] 메모 생성/조회 정상
@@ -86,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File .\check_play_release_inputs.ps1
 - [ ] LLM 브리핑이 데이터 없음/생성 실패 상태에서도 화면을 깨뜨리지 않음
 - [ ] 앱 실행 중 주요 오류 로그 없음
 - [x] Play Console 심사 위험 권한의 사용 목적 문구 준비
-- [ ] Android 자동 클라우드 백업 제외 규칙이 최신 릴리스 패키징 리소스에 반영됐는지 확인
+- [x] Android 자동 클라우드 백업 제외 규칙이 최신 릴리스 패키징 리소스에 반영됐는지 확인
 
 검증 중 핵심 기능 실패가 발견되면, 그 상태는 "등록용 파일 생성 완료"일 뿐 "등록 가능"이 아닙니다.
 
