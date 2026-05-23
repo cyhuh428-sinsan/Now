@@ -62,9 +62,9 @@
 
 ## 5. Google Play 등록 전 점검
 
-- [ ] 실제 Android 서명 키 준비.
-- [ ] `now_app/android/key.properties` 로컬 파일 준비.
-- [ ] 서명된 AAB 빌드.
+- [x] 실제 Android 서명 키 준비.
+- [x] `now_app/android/key.properties` 로컬 파일 준비.
+- [x] 서명된 AAB 빌드.
 - [ ] 개인정보처리방침 URL 확정.
 - [ ] Play Console 앱 설명 문구 최종 확인.
 - [ ] 권한 사용 설명 최종 확인.

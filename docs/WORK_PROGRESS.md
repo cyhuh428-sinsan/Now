@@ -3,6 +3,37 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-23 18:22 KST
+
+### 다음 작업 시작
+
+- Google Play 등록 전 점검 중 로컬에서 확인 가능한 릴리스 빌드 항목 재점검.
+
+### 확인 내용
+
+- `adb.exe`는 `C:\Users\cyhuh\AppData\Local\Android\Sdk\platform-tools\adb.exe`에 있으나 연결된 에뮬레이터/기기는 없음.
+- `android/upload-keystore.jks`와 `android/key.properties`는 로컬에 존재하며 Git 제외 상태.
+- 기존 Play 사전 점검은 오래된 packaged release backup/data extraction 리소스 때문에 2개 실패.
+- `android/hs_err_pid51984.log`에서 Gradle JVM `-Xmx8G`, `MaxMetaspaceSize=4G` 설정으로 네이티브 메모리 할당 실패 기록 확인.
+
+### 구현 내용
+
+- `now_app/android/gradle.properties`의 Gradle JVM 메모리를 `-Xmx2G`, `MaxMetaspaceSize=1G`, `ReservedCodeCacheSize=256m`로 낮춤.
+- `org.gradle.workers.max=2`를 추가해 릴리스 빌드 중 동시 작업 수를 제한.
+- `now_app/scripts/verify_mobile_surface.py`가 Gradle JVM 힙과 worker 제한 설정을 확인하도록 보강.
+
+### 검증
+
+- `NOWNOTE_SKIP_PUB=1` 상태에서 `android/build_release_aab.ps1` 실행 성공.
+- 최신 `build/app/outputs/bundle/release/app-release.aab` 생성 성공.
+- `android/check_play_release_inputs.ps1` 자동 실행 결과 Play release preflight 통과.
+- 최신 릴리스 패키징 리소스에서 Android 자동 클라우드 백업 제외 규칙 반영 확인.
+
+### 완료 처리
+
+- Google Play 등록 전 점검의 실제 Android 서명 키 준비, 로컬 `key.properties` 준비, 서명된 AAB 빌드 완료.
+- Google Play 세부 체크리스트의 최신 AAB 재빌드, 릴리스 AAB 빌드 성공, 최신 릴리스 패키징 리소스 백업 제외 반영 완료.
+
 ## 2026-05-23 18:03 KST
 
 ### 다음 작업 시작

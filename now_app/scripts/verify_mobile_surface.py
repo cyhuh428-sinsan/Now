@@ -18,6 +18,7 @@ FILES = {
     "server sync service": LIB / "services" / "server_sync_service.dart",
     "backup service": LIB / "services" / "backup_service.dart",
     "android build": ANDROID / "app" / "build.gradle.kts",
+    "android gradle properties": ANDROID / "gradle.properties",
     "android manifest": ANDROID / "app" / "src" / "main" / "AndroidManifest.xml",
     "android backup rules": ANDROID / "app" / "src" / "main" / "res" / "xml" / "backup_rules.xml",
     "android data extraction": ANDROID / "app" / "src" / "main" / "res" / "xml" / "data_extraction_rules.xml",
@@ -65,6 +66,7 @@ def main() -> None:
     help_page = FILES["help page"].read_text(encoding="utf-8")
     backup_service = FILES["backup service"].read_text(encoding="utf-8")
     android_build = FILES["android build"].read_text(encoding="utf-8")
+    android_gradle_properties = FILES["android gradle properties"].read_text(encoding="utf-8")
     manifest = FILES["android manifest"].read_text(encoding="utf-8")
     backup_rules = FILES["android backup rules"].read_text(encoding="utf-8")
     data_extraction = FILES["android data extraction"].read_text(encoding="utf-8")
@@ -82,6 +84,7 @@ def main() -> None:
     require_text(help_page, [("일자별 메모는 하루 한 개의 메모장", "daily memo help"), ("Markdown 가져오기는 외부 .md/.txt 파일", "Markdown import help"), ("공용 서버 오픈 전", "public server help")], "help_page", failures)
     require_text(backup_service, [("NowNote 백업", "mobile backup subject"), ("FilePicker.platform.pickFiles", "mobile backup import")], "backup_service", failures)
     require_text(android_build, [('namespace = "com.sinsan.nownote"', "NowNote Android namespace"), ('applicationId = "com.sinsan.nownote"', "NowNote Android applicationId")], "android_build", failures)
+    require_text(android_gradle_properties, [("-Xmx2G", "bounded Gradle JVM heap"), ("org.gradle.workers.max=2", "bounded Gradle workers")], "android_gradle_properties", failures)
     require_text(manifest, [('android:label="NowNote"', "NowNote Android label"), ("android.permission.RECORD_AUDIO", "microphone permission"), ("android.permission.CAMERA", "camera permission"), ("android.permission.POST_NOTIFICATIONS", "notification permission"), ("android:dataExtractionRules", "Android data extraction rules link"), ("android:fullBackupContent", "Android backup rules link")], "manifest", failures)
     require_text(backup_rules, [('domain="database"', "backup excludes database"), ('domain="sharedpref"', "backup excludes shared preferences"), ('domain="file"', "backup excludes files")], "backup_rules", failures)
     require_text(data_extraction, [("<cloud-backup>", "cloud backup policy"), ("<device-transfer>", "device transfer policy"), ('domain="database"', "cloud backup excludes database")], "data_extraction", failures)
