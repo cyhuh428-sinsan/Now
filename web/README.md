@@ -71,6 +71,15 @@ Web/설치형 화면의 핵심 요소가 빠지지 않았는지는 아래 명령
 python scripts/verify_web_surface.py
 ```
 
+PWA 설치형 배포 묶음은 아래 명령으로 생성합니다.
+
+```bash
+python scripts/package_web.py
+```
+
+생성 결과는 `web/dist/nownote-web-pwa/`와 `web/dist/nownote-web-pwa.zip`입니다.
+배포 묶음은 정적 파일이므로 압축을 푼 뒤 `index.html`을 `127.0.0.1` 또는 HTTPS에서 서비스하면 PWA 설치형 점검을 진행할 수 있습니다.
+
 브라우저 실행, PWA 설치, Markdown/JSON 가져오기와 내보내기, 서버 연결까지 포함한 실제 점검은
 `runtime_checklist_ko.md`를 기준으로 진행합니다.
 

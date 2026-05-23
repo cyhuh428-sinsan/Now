@@ -11,6 +11,7 @@ MANIFEST = ROOT / "manifest.webmanifest"
 SERVICE_WORKER = ROOT / "sw.js"
 ICON = ROOT / "icons" / "nownote-icon.svg"
 RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
+PACKAGE_SCRIPT = ROOT / "scripts" / "package_web.py"
 
 CHECK_TOTAL = 0
 CHECK_PASSED = 0
@@ -34,7 +35,7 @@ def has_id(html: str, element_id: str) -> bool:
 def main() -> None:
     failures: list[str] = []
 
-    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST]:
+    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST, PACKAGE_SCRIPT]:
         check(path.exists(), f"{path.name} exists", str(path), failures)
 
     if failures:
@@ -48,6 +49,7 @@ def main() -> None:
     service_worker = SERVICE_WORKER.read_text(encoding="utf-8")
     icon = ICON.read_text(encoding="utf-8")
     runtime_checklist = RUNTIME_CHECKLIST.read_text(encoding="utf-8")
+    package_script = PACKAGE_SCRIPT.read_text(encoding="utf-8")
 
     html_requirements = [
         ('rel="manifest"', "PWA manifest link"),
@@ -211,6 +213,16 @@ def main() -> None:
     ]
     for needle, label in service_worker_requirements:
         check(needle in service_worker, f"Web service worker has {label}", needle, failures)
+
+    package_script_requirements = [
+        ("nownote-web-pwa.zip", "PWA zip output"),
+        ("index.html", "PWA index included"),
+        ("manifest.webmanifest", "PWA manifest included"),
+        ("sw.js", "PWA service worker included"),
+        ("icons", "PWA icons included"),
+    ]
+    for needle, label in package_script_requirements:
+        check(needle in package_script, f"Web package script has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
