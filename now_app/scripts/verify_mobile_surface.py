@@ -24,6 +24,7 @@ FILES = {
     "android data extraction": ANDROID / "app" / "src" / "main" / "res" / "xml" / "data_extraction_rules.xml",
     "mobile README": README,
     "mobile runtime checklist": ROOT / "docs" / "mobile_runtime_checklist_ko.md",
+    "mobile Android runtime check": ROOT / "scripts" / "check_android_runtime.py",
 }
 
 CHECK_TOTAL = 0
@@ -72,6 +73,7 @@ def main() -> None:
     data_extraction = FILES["android data extraction"].read_text(encoding="utf-8")
     readme = README.read_text(encoding="utf-8")
     runtime_checklist = FILES["mobile runtime checklist"].read_text(encoding="utf-8")
+    android_runtime_check = FILES["mobile Android runtime check"].read_text(encoding="utf-8")
 
     require_text(router, [("MemoStartPage", "daily memo route"), ("MemoTreePage", "tree memo route"), ("ServerSettingsPage", "server settings route"), ("voiceInputMode", "voice input mode routing")], "router", failures)
     require_text(home, [("오늘 메모", "home daily memo card"), ("context.push('/memo/start'", "home memo start entry")], "home", failures)
@@ -88,8 +90,9 @@ def main() -> None:
     require_text(manifest, [('android:label="NowNote"', "NowNote Android label"), ("android.permission.RECORD_AUDIO", "microphone permission"), ("android.permission.CAMERA", "camera permission"), ("android.permission.POST_NOTIFICATIONS", "notification permission"), ("android:dataExtractionRules", "Android data extraction rules link"), ("android:fullBackupContent", "Android backup rules link")], "manifest", failures)
     require_text(backup_rules, [('domain="database"', "backup excludes database"), ('domain="sharedpref"', "backup excludes shared preferences"), ('domain="file"', "backup excludes files")], "backup_rules", failures)
     require_text(data_extraction, [("<cloud-backup>", "cloud backup policy"), ("<device-transfer>", "device transfer policy"), ('domain="database"', "cloud backup excludes database")], "data_extraction", failures)
-    require_text(readme, [("NowNote 모바일 앱", "mobile README title"), ("음성 메모", "mobile README voice memo"), ("일자별 메모", "mobile README daily memo"), ("계층 메모", "mobile README tree memo"), ("서버 연결", "mobile README server connection"), ("2단계 인증 코드는 저장하지 않고", "mobile README request-only 2FA"), ("Markdown 가져오기는 외부 파일", "mobile README Markdown import"), ("mobile_runtime_checklist_ko.md", "mobile README runtime checklist link")], "README", failures)
-    require_text(runtime_checklist, [("Android 에뮬레이터", "runtime checklist emulator scope"), ("실제 Android 기기", "runtime checklist physical device scope"), ("홈의 오늘 메모", "runtime checklist home daily memo"), ("같은 메모장에 이어서 저장", "runtime checklist daily append model"), ("3단계 메모 아래에는 더 이상 하위 메모", "runtime checklist tree depth guard"), ("실시간 변환", "runtime checklist realtime voice"), ("녹음 후 변환", "runtime checklist record-then-transcribe"), ("새 지식 메모로 추가", "runtime checklist Markdown import copy model"), ("10.0.2.2", "runtime checklist emulator server URL"), ("2단계 인증 코드는 저장되지 않고", "runtime checklist request-only 2FA")], "runtime checklist", failures)
+    require_text(readme, [("NowNote 모바일 앱", "mobile README title"), ("음성 메모", "mobile README voice memo"), ("일자별 메모", "mobile README daily memo"), ("계층 메모", "mobile README tree memo"), ("서버 연결", "mobile README server connection"), ("2단계 인증 코드는 저장하지 않고", "mobile README request-only 2FA"), ("Markdown 가져오기는 외부 파일", "mobile README Markdown import"), ("check_android_runtime.py", "mobile README Android runtime check link"), ("mobile_runtime_checklist_ko.md", "mobile README runtime checklist link")], "README", failures)
+    require_text(runtime_checklist, [("check_android_runtime.py", "runtime checklist Android runtime check command"), ("Android 에뮬레이터", "runtime checklist emulator scope"), ("실제 Android 기기", "runtime checklist physical device scope"), ("홈의 오늘 메모", "runtime checklist home daily memo"), ("같은 메모장에 이어서 저장", "runtime checklist daily append model"), ("3단계 메모 아래에는 더 이상 하위 메모", "runtime checklist tree depth guard"), ("실시간 변환", "runtime checklist realtime voice"), ("녹음 후 변환", "runtime checklist record-then-transcribe"), ("새 지식 메모로 추가", "runtime checklist Markdown import copy model"), ("10.0.2.2", "runtime checklist emulator server URL"), ("2단계 인증 코드는 저장되지 않고", "runtime checklist request-only 2FA")], "runtime checklist", failures)
+    require_text(android_runtime_check, [("NowNote Android runtime check", "Android runtime check summary"), ("adb devices -l", "Android runtime check ADB devices"), ("emulator", "Android runtime check emulator discovery"), ("flutter run -d", "Android runtime check flutter run command"), ("10.0.2.2", "Android runtime check emulator server URL"), ("--require-server", "Android runtime check server strict option"), ("--require-physical", "Android runtime check physical device strict option")], "Android runtime check", failures)
 
     if failures:
         print(f"\nMobile surface verification failed ({CHECK_PASSED}/{CHECK_TOTAL} checks):")

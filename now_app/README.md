@@ -65,4 +65,10 @@ Android 에뮬레이터에서 Windows/WSL 서버에 연결할 때는 보통 `htt
 python scripts/verify_mobile_surface.py
 ```
 
+실제 실행 전에는 Flutter, ADB, 에뮬레이터/실기기 연결, 로컬 서버 응답 상태를 먼저 확인합니다.
+
+```bash
+python scripts/check_android_runtime.py
+```
+
 에뮬레이터와 실제 기기에서 확인해야 하는 흐름은 `docs/mobile_runtime_checklist_ko.md`를 기준으로 점검합니다.

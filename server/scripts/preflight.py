@@ -120,6 +120,7 @@ def main() -> None:
     mobile_help_path = repo_root / "now_app" / "lib" / "features" / "settings" / "help_page.dart"
     mobile_readme_path = repo_root / "now_app" / "README.md"
     mobile_surface_check_path = repo_root / "now_app" / "scripts" / "verify_mobile_surface.py"
+    mobile_android_runtime_check_path = repo_root / "now_app" / "scripts" / "check_android_runtime.py"
     mobile_runtime_checklist_path = repo_root / "now_app" / "docs" / "mobile_runtime_checklist_ko.md"
     mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
     mobile_manifest_path = repo_root / "now_app" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
@@ -510,6 +511,7 @@ def main() -> None:
     check(mobile_readme_path.exists(), "Mobile README exists", str(mobile_readme_path), failures)
     check(mobile_runtime_checklist_path.exists(), "Mobile runtime checklist exists", str(mobile_runtime_checklist_path), failures)
     check(mobile_surface_check_path.exists(), "Mobile surface verification script exists", str(mobile_surface_check_path), failures)
+    check(mobile_android_runtime_check_path.exists(), "Mobile Android runtime check script exists", str(mobile_android_runtime_check_path), failures)
     check(
         mobile_key_properties_example_path.exists(),
         "Android key properties example exists",
@@ -1068,6 +1070,7 @@ def main() -> None:
                 ("서버 연결", "Mobile README documents server connection", "mobile README server connection"),
                 ("Markdown 가져오기", "Mobile README documents markdown import", "mobile README markdown import"),
                 ("verify_mobile_surface.py", "Mobile README documents surface verification", "mobile surface verification"),
+                ("check_android_runtime.py", "Mobile README documents Android runtime verification", "mobile Android runtime verification"),
                 ("mobile_runtime_checklist_ko.md", "Mobile README links runtime checklist", "mobile runtime checklist link"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
@@ -1079,6 +1082,7 @@ def main() -> None:
         check_text_contains(
             mobile_runtime_checklist,
             [
+                ("check_android_runtime.py", "Mobile runtime checklist covers Android runtime check", "Android runtime check"),
                 ("Android 에뮬레이터", "Mobile runtime checklist covers emulator", "emulator check"),
                 ("실제 Android 기기", "Mobile runtime checklist covers physical device", "physical device check"),
                 ("홈의 오늘 메모", "Mobile runtime checklist covers home daily memo", "home daily memo check"),
@@ -1104,6 +1108,7 @@ def main() -> None:
                 ("twoFactorCode.trim()", "Mobile surface check covers request-only 2FA", "request-only 2FA"),
                 ('applicationId = "com.sinsan.nownote"', "Mobile surface check covers package id", "package id"),
                 ("mobile_runtime_checklist_ko.md", "Mobile surface check covers runtime checklist", "runtime checklist"),
+                ("check_android_runtime.py", "Mobile surface check covers Android runtime check", "Android runtime check"),
                 ("NowNote mobile surface verification passed", "Mobile surface check prints pass summary", "mobile check pass summary"),
             ],
             failures,
@@ -1113,6 +1118,21 @@ def main() -> None:
             [
                 ("A new Flutter project", "Mobile README is not Flutter template", "remove Flutter template README"),
                 ("Write your first Flutter app", "Mobile README avoids starter guide", "remove starter guide"),
+            ],
+            failures,
+        )
+    if mobile_android_runtime_check_path.exists():
+        mobile_android_runtime_check = mobile_android_runtime_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_android_runtime_check,
+            [
+                ("NowNote Android runtime check", "Mobile Android runtime check prints summary", "runtime summary"),
+                ("adb devices -l", "Mobile Android runtime check uses ADB devices", "ADB devices"),
+                ("emulator", "Mobile Android runtime check discovers emulator", "emulator discovery"),
+                ("flutter run -d", "Mobile Android runtime check prints Flutter run command", "Flutter run command"),
+                ("10.0.2.2", "Mobile Android runtime check documents emulator server URL", "emulator server URL"),
+                ("--require-server", "Mobile Android runtime check supports strict server option", "strict server option"),
+                ("--require-physical", "Mobile Android runtime check supports physical device option", "physical device option"),
             ],
             failures,
         )
