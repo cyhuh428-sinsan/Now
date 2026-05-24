@@ -330,6 +330,7 @@ def main() -> None:
             require("/admin/ops" in text, "복구 절차 화면에 운영 점검 화면 안내가 없습니다")
         if path == "/admin/deploy":
             require("NowNote 서버 배포 체크리스트" in text, "배포 체크리스트 화면에 DEPLOY.md 내용이 없습니다")
+            require("서버 이름" in text and "서버 정보 API" in text, "배포 체크리스트 화면에 현재 서버 요약과 확인 링크가 없습니다")
             require("git pull origin main" in text, "배포 체크리스트 화면에 소스 갱신 안내가 없습니다")
             require("NOW_USER_TOKEN_REQUIRED=true" in text, "배포 체크리스트 화면에 공용 서버 사용자 토큰 강제 설정 안내가 없습니다")
             require("백업/복구 절차" in text, "배포 체크리스트 화면에 운영 점검 백업/복구 항목 안내가 없습니다")

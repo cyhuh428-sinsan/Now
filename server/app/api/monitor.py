@@ -4532,6 +4532,7 @@ def _admin_deploy_html() -> str:
         title="NowNote 배포 체크리스트",
         subtitle="WSL/Docker 서버 갱신과 확인 순서를 봅니다",
         missing_message="DEPLOY.md 파일을 찾을 수 없습니다.",
+        lead_html=_deploy_runtime_summary_html(),
         nav_links=[
             ("/admin", "관리"),
             ("/admin/ops", "점검"),
@@ -4548,6 +4549,7 @@ def _admin_markdown_doc_html(
     subtitle: str,
     missing_message: str,
     nav_links: list[tuple[str, str]],
+    lead_html: str = "",
 ) -> str:
     doc_path = Path(__file__).resolve().parents[2] / filename
     if doc_path.exists():
@@ -4623,6 +4625,44 @@ def _admin_markdown_doc_html(
       background: var(--panel);
       font-size: 13px;
     }}
+    .runtime-grid {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .runtime-card {{
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px 16px;
+      min-height: 90px;
+    }}
+    .runtime-card .label {{
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 8px;
+    }}
+    .runtime-card .value {{
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }}
+    .runtime-links {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin: 0 0 14px;
+    }}
+    .runtime-links a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 32px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
     pre {{
       margin: 0;
       padding: 22px;
@@ -4639,6 +4679,7 @@ def _admin_markdown_doc_html(
     @media (max-width: 760px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
+      .runtime-grid {{ grid-template-columns: 1fr; }}
       main {{ padding: 22px 12px 36px; }}
       h1 {{ font-size: 24px; }}
     }}
@@ -4655,10 +4696,54 @@ def _admin_markdown_doc_html(
 {nav_html}
       </nav>
     </header>
+    {lead_html}
     <pre>{escape(content)}</pre>
   </main>
 </body>
 </html>"""
+
+
+def _deploy_runtime_summary_html() -> str:
+    settings = get_settings()
+    public_base_url = (settings.public_base_url or "").strip() or "미설정"
+    user_token_state = "필수" if settings.user_token_required else "선택"
+    reverse_proxy_state = "사용" if settings.behind_reverse_proxy else "미사용"
+    api_token_state = "설정됨" if settings.api_token and not settings.api_token.startswith("change-this") else "미설정 또는 예시값"
+    cards = [
+        ("서버 이름", settings.server_name),
+        ("API 토큰", api_token_state),
+        ("사용자별 접속 토큰", user_token_state),
+        ("공개 URL", public_base_url),
+        ("Reverse proxy", reverse_proxy_state),
+        ("녹음 저장소", settings.storage_dir),
+    ]
+    card_html = "\n".join(
+        '<div class="runtime-card">'
+        f'<div class="label">{escape(label)}</div>'
+        f'<div class="value">{escape(value)}</div>'
+        "</div>"
+        for label, value in cards
+    )
+    links = [
+        ("/health", "Health"),
+        ("/health/ready", "Ready"),
+        ("/api/v1/server", "서버 정보 API"),
+        ("/admin/ops", "운영 점검"),
+        ("/admin/export", "백업 내보내기"),
+        ("/admin/recovery", "복구 절차"),
+    ]
+    link_html = "\n".join(
+        f'<a href="{escape(href)}">{escape(label)}</a>'
+        for href, label in links
+    )
+    return (
+        '<div class="runtime-grid">'
+        f"{card_html}"
+        "</div>"
+        '<div class="runtime-links">'
+        f"{link_html}"
+        "</div>"
+    )
 
 
 def _export_link_rows(links: list[tuple[str, str, str, int]]) -> str:
