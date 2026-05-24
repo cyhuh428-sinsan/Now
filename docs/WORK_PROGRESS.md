@@ -4876,3 +4876,22 @@
 - `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 636/636.
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `uv run python now_app\scripts\check_android_runtime.py --timeout 5` 실행 결과, Flutter/ADB/AVD/로컬 서버는 확인됐고 연결된 Android device 상태 기기가 없어 실제 모바일 점검 완료 처리는 보류.
+
+## 2026-05-25 00:20 KST
+
+### 다음 작업 시작
+
+- 공개 저장소 체크리스트의 GitHub Actions preflight 통과 확인을 실제 결과 기준으로 분리.
+
+### 확인 내용
+
+- GitHub 커넥터 기준 최신 커밋 `911fae8`에는 status와 workflow run이 아직 조회되지 않음.
+- 따라서 `GitHub Actions preflight 통과 확인` 항목은 완료 처리하지 않음.
+
+### 구현 내용
+
+- `scripts/check_github_actions_status.py` 추가.
+- 공개 저장소 또는 `GITHUB_TOKEN`이 설정된 비공개 저장소에서 `preflight.yml` 최신 실행 상태와 성공 결론을 확인하도록 구성.
+- 공개 저장소 오픈 점검 문서에 GitHub Actions 상태 확인 명령을 추가.
+- GitHub Actions preflight가 새 상태 확인 스크립트의 문법도 확인하도록 보강.
+- 서버 preflight가 새 스크립트와 문서 연결을 확인하도록 확장.

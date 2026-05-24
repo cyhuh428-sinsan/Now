@@ -94,6 +94,7 @@ def main() -> None:
     open_source_release_path = repo_root / "docs" / "OPEN_SOURCE_RELEASE.md"
     license_decision_path = repo_root / "docs" / "LICENSE_DECISION.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
+    github_actions_status_check_path = repo_root / "scripts" / "check_github_actions_status.py"
     release_readiness_check_path = repo_root / "scripts" / "release_readiness.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
@@ -313,6 +314,7 @@ def main() -> None:
                 ("LICENSE", "Open source guide keeps license decision explicit", "license decision"),
                 ("docs/LICENSE_DECISION.md", "Open source guide links license decision guide", "license decision guide"),
                 ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
+                ("check_github_actions_status.py", "Open source guide documents Actions status check script", "Actions status check script"),
             ],
             failures,
         )
@@ -409,6 +411,7 @@ def main() -> None:
                 ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
                 ('node-version: "22"', "GitHub preflight pins Node version", "workflow node version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
+                ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
                 ("node --check web/scripts/check_import_export.mjs", "GitHub preflight checks web runtime script syntax", "workflow node check"),
                 ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
                 ("python scripts/verify_public_repo_safety.py", "GitHub preflight runs public repository safety verification", "workflow public repo safety"),
@@ -485,6 +488,7 @@ def main() -> None:
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
+    check(github_actions_status_check_path.exists(), "GitHub Actions status check script exists", str(github_actions_status_check_path), failures)
     check(release_readiness_check_path.exists(), "Release readiness summary script exists", str(release_readiness_check_path), failures)
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
@@ -685,6 +689,18 @@ def main() -> None:
                 ("SECRET_ASSIGNMENTS", "Public repo safety scans secret assignments", "secret assignments"),
                 ("SENSITIVE_PATTERNS", "Public repo safety scans raw secret patterns", "raw secret patterns"),
                 ("NowNote public repo safety verification passed", "Public repo safety prints pass summary", "public safety pass summary"),
+            ],
+            failures,
+        )
+    if github_actions_status_check_path.exists():
+        github_actions_status_check = github_actions_status_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            github_actions_status_check,
+            [
+                ("NowNote GitHub Actions status check", "GitHub Actions status script prints summary", "Actions status summary"),
+                ("actions/workflows", "GitHub Actions status script calls workflow runs API", "workflow runs API"),
+                ("GITHUB_TOKEN", "GitHub Actions status script supports token env", "GITHUB_TOKEN"),
+                ('conclusion") == "success"', "GitHub Actions status script checks success conclusion", "success conclusion"),
             ],
             failures,
         )
