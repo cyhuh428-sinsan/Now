@@ -7,6 +7,7 @@
 
 - 최신 소스 반영: 저장소 루트에서 `git pull origin main`
 - Flutter 의존성 준비: `now_app` 폴더에서 `flutter pub get`
+- 실제 실행 환경 확인: `now_app` 폴더에서 `python scripts/check_android_runtime.py`
 - 로컬 단독 사용 점검: 서버 연결을 끈 상태로 시작
 - 서버 연결 점검: 개인 Docker 서버 또는 테스트 서버를 먼저 실행
 - Android 에뮬레이터에서 Windows/WSL 서버에 연결할 때 서버 주소는 보통 `http://10.0.2.2:8750`

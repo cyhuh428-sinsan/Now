@@ -4850,3 +4850,29 @@
 
 - 실행 흐름을 `.env` 복사/수정 → 배포 전 점검 → `docker compose up --build` 순서로 변경.
 - PowerShell/WSL 준비 명령에서는 서버 시작 명령을 분리해 예시값 변경 전 실행하지 않도록 안내.
+
+## 2026-05-25 00:00 KST
+
+### 다음 작업 시작
+
+- 모바일 실제 점검 항목을 완료 처리하기 전에 에뮬레이터/실기기/서버 준비 상태를 자동으로 확인하는 보조 도구 추가.
+
+### 구현 내용
+
+- `now_app/scripts/check_android_runtime.py` 추가.
+- Flutter CLI, ADB, 연결된 Android 기기, 에뮬레이터/AVD, 로컬 서버 health/ready 응답을 한 번에 확인하도록 구성.
+- 에뮬레이터 서버 주소 `http://10.0.2.2:8750`, 실제 기기 서버 주소 기준, `flutter run -d` 실행 대상을 출력하도록 구성.
+- 모바일 README와 실제 실행 점검서에 실행 전 환경 점검 명령을 추가.
+- 모바일 정적 점검과 서버 preflight가 새 런타임 점검 스크립트 존재와 문구를 확인하도록 확장.
+
+### 보류
+
+- 현재 연결된 Android 에뮬레이터/실기기가 없으면 실제 실행 완료 처리는 하지 않는다.
+
+### 검증
+
+- `uv run python -m py_compile now_app\scripts\check_android_runtime.py now_app\scripts\verify_mobile_surface.py server\scripts\preflight.py` 통과.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 108/108.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 636/636.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python now_app\scripts\check_android_runtime.py --timeout 5` 실행 결과, Flutter/ADB/AVD/로컬 서버는 확인됐고 연결된 Android device 상태 기기가 없어 실제 모바일 점검 완료 처리는 보류.
