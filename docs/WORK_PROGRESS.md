@@ -3,6 +3,21 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-24 00:10 KST
+
+### 다음 작업 시작
+
+- GitHub Actions preflight가 Web import/export 런타임 점검 스크립트의 문법도 확인하도록 보강.
+
+### 구현 내용
+
+- `.github/workflows/preflight.yml`에 Node 22 설정과 `node --check web/scripts/check_import_export.mjs` 단계 추가.
+- `server/scripts/preflight.py`가 GitHub Actions의 Node 버전 고정과 Web 런타임 스크립트 문법 점검 단계를 확인하도록 보강.
+
+### 확인 내용
+
+- GitHub 커넥터 기준 현재 최신 커밋 `5f2712c`에는 연결된 workflow run이 조회되지 않아 `GitHub Actions preflight 통과 확인` 항목은 완료 처리하지 않음.
+
 ## 2026-05-23 21:40 KST
 
 ### 다음 작업 시작

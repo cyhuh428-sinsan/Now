@@ -23,9 +23,17 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - name: Check Python syntax
         working-directory: server
         run: python -m py_compile scripts/preflight.py scripts/smoke_test.py ../web/scripts/verify_web_surface.py ../now_app/scripts/verify_mobile_surface.py ../scripts/verify_public_repo_safety.py
+
+      - name: Check web runtime script syntax
+        run: node --check web/scripts/check_import_export.mjs
 
       - name: Run repository preflight
         working-directory: server
