@@ -87,7 +87,6 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   String _partialBuffer = '';       // 실시간 미리보기 텍스트
   String _lastFlushedSnapshot = ''; // 마지막 저장된 텍스트 스냅샷 (Delta 계산용)
   String _currentSpeaker = 'user';  // 현재 화자
-  DateTime _lastSpeechTime = DateTime.now();
   DateTime? _lastCommitTime;        // 마지막 저장 시각 (병합 판단용)
   
   // 타이머
@@ -158,7 +157,6 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     try {
       await _speech.listen(
         onResult: (result) {
-          _lastSpeechTime = DateTime.now();
           final fullText = result.recognizedWords.trim();
 
           if (fullText.isNotEmpty) {
@@ -175,9 +173,11 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
         localeId: 'ko_KR',
         listenFor: const Duration(seconds: 300),
         pauseFor: const Duration(seconds: 60),
-        partialResults: true,
-        cancelOnError: false,
-        listenMode: ListenMode.dictation,
+        listenOptions: SpeechListenOptions(
+          partialResults: true,
+          cancelOnError: false,
+          listenMode: ListenMode.dictation,
+        ),
       );
     } catch (e) {
       debugPrint('[STT] startListening error: $e');
@@ -248,7 +248,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     if (canMerge) {
       // 마지막 세그먼트에 병합
       final last = list.last;
-      final mergedText = (last.text.trimRight() + ' ' + delta.trimLeft()).trim();
+      final mergedText = '${last.text.trimRight()} ${delta.trimLeft()}'.trim();
       list[list.length - 1] = TranscriptSegmentItem(
         id: last.id,
         text: mergedText,
@@ -256,7 +256,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
         timestamp: last.timestamp,
         source: last.source,
       );
-      debugPrint('[MERGE] → "${mergedText}"');
+      debugPrint('[MERGE] → "$mergedText"');
     } else {
       // 새 세그먼트 생성
       final segment = TranscriptSegmentItem(
@@ -350,7 +350,6 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     _partialBuffer = '';
     _lastFlushedSnapshot = '';
     _currentSpeaker = 'user';
-    _lastSpeechTime = DateTime.now();
     ref.read(isListeningProvider.notifier).state = true;
     if (_recordThenTranscribe) {
       await _startFullRecording();
@@ -493,7 +492,9 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     } catch (e) {
       debugPrint('[WHISPER] 전송 오류: $e');
     } finally {
-      await file.delete().catchError((_) {});
+      try {
+        await file.delete();
+      } catch (_) {}
       if (ref.read(isListeningProvider)) {
         await _restartWhisperChunk();
       }
@@ -639,10 +640,12 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
                 IconButton(
                   icon: const Icon(Icons.share, size: 22, color: Color(0xFF4B5563)),
                   tooltip: '텍스트 공유',
-                  onPressed: () {
+                  onPressed: () async {
                     // 현재 입력창에 있는 내용 그대로 공유
                     if (editController.text.trim().isNotEmpty) {
-                      Share.share(editController.text);
+                      await SharePlus.instance.share(
+                        ShareParams(text: editController.text),
+                      );
                     }
                   },
                 ),
@@ -822,19 +825,19 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   }) {
     final name = widget.participantName;
     final rType = widget.recordType;
-    final _dt = widget.memoDate ?? DateTime.now();
-    final _mm = _dt.month.toString().padLeft(2, '0');
-    final _dd = _dt.day.toString().padLeft(2, '0');
-    final _hh = _dt.hour.toString().padLeft(2, '0');
-    final _mi = _dt.minute.toString().padLeft(2, '0');
-    final _stamp = '${_mm}${_dd}_${_hh}${_mi}';
+    final dt = widget.memoDate ?? DateTime.now();
+    final mm = dt.month.toString().padLeft(2, '0');
+    final dd = dt.day.toString().padLeft(2, '0');
+    final hh = dt.hour.toString().padLeft(2, '0');
+    final mi = dt.minute.toString().padLeft(2, '0');
+    final stamp = '$mm${dd}_$hh$mi';
     final defaultTitle = rType == 'interview'
-        ? (name.isNotEmpty ? '면담_$name' : '면담_$_stamp')
+        ? (name.isNotEmpty ? '면담_$name' : '면담_$stamp')
         : rType == 'conversation'
-            ? (name.isNotEmpty ? '대화_$name' : '대화_$_stamp')
+            ? (name.isNotEmpty ? '대화_$name' : '대화_$stamp')
             : rType == 'memo'
-                ? '메모_$_stamp'
-            : '회의_$_stamp';
+                ? '메모_$stamp'
+            : '회의_$stamp';
 
     ref.read(pendingMeetingMetaProvider.notifier).state = {
       'title': widget.event?.title ?? defaultTitle,
@@ -944,20 +947,20 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     final isListening = ref.watch(isListeningProvider);
     final isExtracting = ref.watch(isExtractingProvider);
     final isMemo = widget.recordType == 'memo';
-    final _n = DateTime.now();
-    final _nm = _n.month.toString().padLeft(2, '0');
-    final _nd = _n.day.toString().padLeft(2, '0');
-    final _nh = _n.hour.toString().padLeft(2, '0');
-    final _nmi = _n.minute.toString().padLeft(2, '0');
-    final _s = '${_nm}${_nd}_${_nh}${_nmi}';
+    final now = DateTime.now();
+    final month = now.month.toString().padLeft(2, '0');
+    final day = now.day.toString().padLeft(2, '0');
+    final hour = now.hour.toString().padLeft(2, '0');
+    final minute = now.minute.toString().padLeft(2, '0');
+    final stamp = '$month${day}_$hour$minute';
     final title = widget.event?.title ??
         (widget.recordType == 'interview'
-            ? '면담_$_s'
+            ? '면담_$stamp'
             : widget.recordType == 'conversation'
-                ? '대화_$_s'
+                ? '대화_$stamp'
                 : widget.recordType == 'memo'
-                    ? '메모_$_s'
-                    : '회의_$_s');
+                    ? '메모_$stamp'
+                    : '회의_$stamp');
     final analysisStatusText =
         isMemo ? '메모 분석 중...' : 'Action/Decision 추출 중...';
     final analysisCountText =
@@ -1080,7 +1083,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
-              color: const Color(0xFF2563EB).withOpacity(0.08),
+              color: const Color(0xFF2563EB).withValues(alpha: 0.08),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [

@@ -5103,3 +5103,29 @@
 
 - GitHub Actions 자체가 아직 실행되지 않았거나 저장소 Actions 설정/권한 문제로 run이 생성되지 않은 상태로 판단.
 - `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
+
+## 2026-05-25 22:35 KST
+
+### 다음 작업 시작
+
+- 최근 확인된 메모 음성 기록 화면의 Dart analyzer 경고/정보 정리.
+
+### 구현 내용
+
+- `now_app\lib\features\meeting\meeting_progress_page.dart`의 사용되지 않는 `_lastSpeechTime` 필드와 대입 제거.
+- Whisper 임시 파일 삭제 실패 무시 처리를 `catchError`에서 `try/catch`로 변경.
+- 문자열 결합, 지역 변수명, 색상 alpha 표현을 analyzer 권장 형태로 정리.
+- `speech_to_text` 호출을 `SpeechListenOptions` 기반으로 변경.
+- 공유 호출을 `Share.share`에서 `SharePlus.instance.share(ShareParams(...))`로 변경.
+
+### 검증
+
+- `dart analyze lib\features\meeting\meeting_progress_page.dart` 통과: No issues found.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 영향 범위
+
+- 메모/회의 기록 화면 내부의 정적 경고 정리이며, 녹음 저장 구조나 서버 동기화 API는 변경하지 않음.
