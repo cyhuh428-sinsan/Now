@@ -5055,3 +5055,33 @@
 - 새 앱 빌드/실행 명령은 5분 제한에 걸려 중단됐고, 남은 Dart development-service 프로세스는 정리함.
 - 앱을 force-stop 후 재시작해 에뮬레이터 UI 자동화가 다시 정상 덤프되는 것까지 확인.
 - 실제 음성 인식 결과와 녹음 후 변환, 녹음 업로드 상태는 실제 음성/STT 조건이 필요해 완료 처리하지 않음.
+
+## 2026-05-25 22:17 KST
+
+### 다음 작업 시작
+
+- 로컬에서 접근 가능한 8750 서버의 최신 배포 여부와 smoke 실패 원인 확인.
+
+### 확인 내용
+
+- Windows 현재 환경에서 `docker`와 `docker-compose` 명령은 찾지 못함.
+- `wsl.exe`는 존재하지만 배포판 목록이 정상적으로 확인되지 않아 WSL 배포 경로에서 재배포 명령을 직접 완료하지 못함.
+- `curl http://localhost:8750/health`, `/health/ready`, `/api/v1/server`, `/admin` 응답은 확인됨.
+- 현재 떠 있는 8750 서버의 `/api/v1/server` 응답에는 최신 소스의 `public_server_readiness`, `backup_export`, `backup_verify`, `user_accounts` 등 capability가 없어 오래된 배포본으로 판단.
+
+### 구현 내용
+
+- `server\scripts\smoke_test.py`에서 `/api/v1/server` 응답에 `public_server_readiness`가 없을 때 오래된 배포본 가능성과 재배포 명령을 함께 안내하도록 보강.
+- `server\README.md`와 `server\DEPLOY.md`에 최신 capability 누락 시 `git pull origin main`과 compose 재기동을 확인하라는 안내 추가.
+
+### 검증
+
+- `uv run python -m py_compile server\scripts\smoke_test.py` 통과.
+- `uv run python server\scripts\smoke_test.py --base-url http://localhost:8750` 실행 시 오래된 서버 배포본 가능성과 현재 capability 목록을 명확히 표시하는 실패 메시지 확인.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- 실제 WSL/Linux 배포 경로에서 `git pull origin main`, compose 재기동, smoke 통과는 이 세션에서 WSL 배포판이 정상 인식되지 않아 완료 처리하지 않음.
