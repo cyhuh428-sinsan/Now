@@ -4895,3 +4895,37 @@
 - 공개 저장소 오픈 점검 문서에 GitHub Actions 상태 확인 명령을 추가.
 - GitHub Actions preflight가 새 상태 확인 스크립트의 문법도 확인하도록 보강.
 - 서버 preflight가 새 스크립트와 문서 연결을 확인하도록 확장.
+
+## 2026-05-25 00:55 KST
+
+### 다음 작업 시작
+
+- Android 에뮬레이터에서 모바일 1차 주요 흐름을 실제 화면 기준으로 확인.
+
+### 확인 내용
+
+- 에뮬레이터 `Medium_Phone_API_36.1`에서 `com.sinsan.nownote` 실행 확인.
+- 홈 화면의 `오늘 메모 남기기`로 일자별 메모를 작성하고, 홈 `오늘 메모` 카드에 반영되는 흐름 확인.
+- 같은 날짜 메모에 추가 작성 시 하나의 일자별 메모장에 이어서 저장되는 흐름 확인.
+- 계층 메모 화면에서 부모메모, 자식메모, 손자메모 3단계 작성 확인.
+- 하위 메모가 있는 부모/자식 메모는 삭제 버튼이 `하위 메모가 있어 삭제 불가` 상태로 비활성화됨을 확인.
+- 기존 구현에서 3단계 손자메모에도 추가 버튼이 보이는 것을 확인하고, 3단계에서는 추가 버튼을 숨기도록 수정.
+- 수정 후 에뮬레이터에 재설치하여 손자메모에는 `서버 분석`과 `삭제`만 보이는 것을 확인.
+
+### 구현 내용
+
+- `now_app/lib/features/meeting/memo_tree_page.dart`: 계층 메모 추가 버튼을 1, 2단계에서만 렌더링하도록 제한.
+- `now_app/scripts/verify_mobile_surface.py`: 계층 메모 3단계 제한 검사를 새 기준에 맞게 조정.
+- `now_app/test/llm/base_llm_repository_test.dart`: 기존 테스트 더미의 `extractItems` 시그니처를 현재 인터페이스와 일치시킴.
+
+### 검증
+
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 108/108.
+- `dart analyze lib\features\meeting\memo_tree_page.dart test\llm\base_llm_repository_test.dart` 통과. 기존 `use_build_context_synchronously` info 1건은 남아 있음.
+- `flutter test test\llm\base_llm_repository_test.dart` 통과.
+- 수정 앱을 에뮬레이터에 재설치하고 계층 메모 3단계 버튼 미노출 확인.
+
+### 보류
+
+- 에뮬레이터 `/data`가 92% 사용 중이라 Flutter 설치 마지막 단계에서 저장공간 부족 경고가 다시 표시됨. 앱 설치와 실행은 확인됐지만, 에뮬레이터 정리는 별도 작업으로 남김.
+- 실제 Android 기기, 음성 실시간 변환, 녹음 후 변환, 서버 동기화, 녹음 업로드는 아직 완료 처리하지 않음.

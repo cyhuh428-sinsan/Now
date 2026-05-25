@@ -19,6 +19,8 @@ class _FakeBaseLlmRepository extends BaseLlmRepository {
     List<String> segments, {
     String recordType = 'meeting',
     String participantName = '',
+    bool includeSpeakerSeparation = false,
+    bool includeVoiceEmotion = false,
   }) async {
     return [];
   }
