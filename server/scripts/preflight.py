@@ -95,6 +95,7 @@ def main() -> None:
     license_decision_path = repo_root / "docs" / "LICENSE_DECISION.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
     github_actions_status_check_path = repo_root / "scripts" / "check_github_actions_status.py"
+    local_environment_status_check_path = repo_root / "scripts" / "local_environment_status.py"
     release_readiness_check_path = repo_root / "scripts" / "release_readiness.py"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
@@ -239,6 +240,7 @@ def main() -> None:
                 ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
                 ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
                 ("scripts/release_readiness.py", "Root README documents release readiness summary", "release readiness summary"),
+                ("scripts/local_environment_status.py", "Root README documents local environment status", "local environment status"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -271,6 +273,7 @@ def main() -> None:
                 ("PHASE1_RELEASE_CHECKLIST.md", "Project status links phase one checklist", "phase one checklist"),
                 ("공개 저장소 준비", "Project status covers public repository readiness", "public repo readiness"),
                 ("라이선스 선택", "Project status tracks license decision", "license decision"),
+                ("scripts/local_environment_status.py", "Project status documents local environment status", "local environment status"),
                 ("WORK_PROGRESS.md", "Project status links work progress", "work progress link"),
             ],
             failures,
@@ -412,6 +415,7 @@ def main() -> None:
                 ('node-version: "22"', "GitHub preflight pins Node version", "workflow node version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
+                ("local_environment_status.py", "GitHub preflight checks local environment status script syntax", "workflow local environment status script"),
                 ("node --check web/scripts/check_import_export.mjs", "GitHub preflight checks web runtime script syntax", "workflow node check"),
                 ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
                 ("python scripts/verify_public_repo_safety.py", "GitHub preflight runs public repository safety verification", "workflow public repo safety"),
@@ -489,6 +493,7 @@ def main() -> None:
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
     check(github_actions_status_check_path.exists(), "GitHub Actions status check script exists", str(github_actions_status_check_path), failures)
+    check(local_environment_status_check_path.exists(), "Local environment status script exists", str(local_environment_status_check_path), failures)
     check(release_readiness_check_path.exists(), "Release readiness summary script exists", str(release_readiness_check_path), failures)
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)

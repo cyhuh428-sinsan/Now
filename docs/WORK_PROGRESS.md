@@ -5281,3 +5281,31 @@
 ### 보류
 
 - 실제 WSL 배포 경로에서 `git pull origin main`, compose 재기동, smoke test 통과 여부는 사용자의 WSL/Docker 환경에서 직접 확인되어야 하므로 체크리스트 완료 처리하지 않음.
+
+## 2026-05-26 00:14 KST
+
+### 다음 작업 시작
+
+- 로컬 환경 점검 스크립트를 CI와 서버 프리플라이트 범위에 연결.
+
+### 범위
+
+- 새 기능 동작은 변경하지 않고, 공개/배포 전 누락을 잡는 검증 경로만 보강.
+- 실제 WSL/Docker 재배포 완료 처리는 하지 않음.
+
+### 구현 내용
+
+- GitHub Actions preflight의 Python syntax check 대상에 `scripts\local_environment_status.py` 추가.
+- `server\scripts\preflight.py`에서 로컬 환경 점검 스크립트 존재 여부, README/PROJECT_STATUS 문서화, workflow 연결 여부를 확인하도록 추가.
+
+### 검증
+
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 647/647.
+- `uv run python -m py_compile server\scripts\preflight.py scripts\local_environment_status.py` 통과.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- GitHub Actions 실제 통과 여부는 GitHub 쪽 workflow run이 잡힌 뒤 확인해야 함.
+- WSL/Docker 서버 재배포는 사용자 환경에서 최신 코드를 받은 뒤 별도 확인 필요.
