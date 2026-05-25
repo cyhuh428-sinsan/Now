@@ -4976,3 +4976,21 @@
 
 - 실제 Android 기기, 음성 실시간 변환, 음성 녹음 후 변환, 녹음 업로드 상태 확인은 실제 입력/기기 조건이 필요해 완료 처리하지 않음.
 - 공용 서버 도메인/HTTPS/reverse proxy, Play Console 최종값, 오픈소스 라이선스 선택은 신산님 결정 또는 외부 운영 환경 확정이 필요함.
+
+## 2026-05-25 11:15 KST
+
+### 다음 작업 시작
+
+- Google Play 등록용 이미지 자산과 릴리스 입력 점검 상태 재확인.
+
+### 확인 내용
+
+- `now_app\android\check_play_release_inputs.ps1` 실행 결과 Play release preflight 통과.
+- 업로드 키/`key.properties` Git 제외, 알림 권한, `CAPTURE_AUDIO_OUTPUT` 제거, 백업 제외 규칙, Play 이미지 파일 존재 확인이 모두 통과.
+- `now_app\docs\play_assets`에는 앱 아이콘, 기능 그래픽, 휴대전화 스크린샷 4장이 존재함.
+- 이미지 README에는 현재 파일을 임시 등록용 초안으로 보고 최종 제출 전 실기기 캡처 이미지로 교체하는 것을 권장한다고 명시되어 있음.
+
+### 보류
+
+- `스크린샷과 기능 그래픽 최종 확인`은 파일 존재 확인만으로 닫지 않음.
+- 실제 Play Console 제출 이미지로 사용할지, 실기기 캡처로 교체할지는 최종 판단이 필요함.
