@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 import subprocess
 import sys
@@ -56,6 +57,15 @@ def run_command(command: list[str], cwd: Path | None = None, timeout: int = 15) 
     return result.returncode, output
 
 
+def windows_path_to_wsl(path: Path) -> str | None:
+    resolved = str(path.resolve())
+    if len(resolved) < 3 or resolved[1:3] != ":\\":
+        return None
+    drive = resolved[0].lower()
+    rest = resolved[3:].replace("\\", "/")
+    return f"/mnt/{drive}/{rest}"
+
+
 def check_git() -> CheckResult:
     code, output = run_command(["git", "status", "--short"], ROOT)
     if code != 0:
@@ -79,17 +89,43 @@ def check_wsl() -> CheckResult:
             "warn",
             f"배포판 목록은 보이지만 실행 확인 실패: {', '.join(lines)}",
         )
+    wsl_root = windows_path_to_wsl(ROOT)
+    if wsl_root:
+        path_code, _ = run_command(["wsl.exe", "-e", "sh", "-lc", f"test -d {shlex.quote(wsl_root)}"], timeout=15)
+        if path_code != 0:
+            return CheckResult(
+                "WSL",
+                "warn",
+                f"shell 실행 가능, 다만 현재 작업 경로를 WSL에서 확인하지 못함: {wsl_root}",
+            )
     return CheckResult("WSL", "ok", ", ".join(lines))
 
 
 def check_docker() -> CheckResult:
     docker = shutil.which("docker")
-    if not docker:
-        return CheckResult("Docker", "warn", "docker 명령을 찾을 수 없습니다")
-    code, output = run_command([docker, "version", "--format", "{{.Server.Version}}"], timeout=20)
-    if code != 0:
-        return CheckResult("Docker", "warn", output or "Docker 서버에 연결하지 못했습니다")
-    return CheckResult("Docker", "ok", f"Server {output.strip()}")
+    if docker:
+        code, output = run_command([docker, "version", "--format", "{{.Server.Version}}"], timeout=20)
+        if code == 0:
+            return CheckResult("Docker", "ok", f"Windows Docker Server {output.strip()}")
+        windows_message = output or "Windows Docker 서버에 연결하지 못했습니다"
+    else:
+        windows_message = "Windows docker 명령을 찾을 수 없습니다"
+
+    if shutil.which("wsl.exe"):
+        code, output = run_command(
+            [
+                "wsl.exe",
+                "-e",
+                "sh",
+                "-lc",
+                "docker version --format '{{.Server.Version}}' 2>/dev/null || docker-compose --version 2>/dev/null",
+            ],
+            timeout=20,
+        )
+        if code == 0 and output.strip():
+            return CheckResult("Docker", "ok", f"WSL Docker 확인: {output.strip()}")
+
+    return CheckResult("Docker", "warn", windows_message)
 
 
 def request_json(url: str, timeout: float) -> tuple[int, dict | None, str | None]:
