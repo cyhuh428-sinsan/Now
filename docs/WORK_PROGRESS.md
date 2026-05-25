@@ -5199,3 +5199,31 @@
 ### 보류
 
 - 남은 info는 async context, RadioGroup API 전환, print 로깅 정리처럼 동작 영향 검토가 필요한 항목이라 별도 단위로 처리 예정.
+
+## 2026-05-25 23:03 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 Dart analyzer info 중 `avoid_print` 항목 정리.
+
+### 범위
+
+- 디버그 출력만 로깅 호출로 교체하고, 동기화/LLM 처리 흐름은 변경하지 않음.
+
+### 구현 내용
+
+- LLM 설정 화면의 모델 목록 로드 실패 출력은 `debugPrint`로 변경.
+- Ollama 연결/모델 조회 실패 출력은 Dart 표준 `developer.log`로 변경.
+- 로컬 캘린더 동기화 진행 출력은 `developer.log`로 변경.
+
+### 검증
+
+- `dart analyze` 실행 결과 warning/error는 없고, info 16건만 남음.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- 남은 info는 async context와 Flutter RadioGroup/FormField deprecation 항목이라 별도 검토 후 처리 예정.
