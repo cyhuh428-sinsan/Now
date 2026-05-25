@@ -5258,3 +5258,26 @@
 ### 보류
 
 - release readiness 남은 항목은 실기기 테스트, WSL/Docker 실제 재배포, 공용 도메인/HTTPS, Play Console, 라이선스 선택처럼 외부 실행 또는 사용자 결정이 필요한 항목임.
+
+## 2026-05-25 23:52 KST
+
+### 다음 작업 시작
+
+- 1차 마무리 잔여 항목 중 WSL/Docker/실행 서버 상태 확인 보조 도구 추가.
+
+### 구현 내용
+
+- `scripts\local_environment_status.py` 추가.
+- Git 작업트리, WSL 실행 가능 여부, Docker CLI, `/health`, `/health/ready`, `/api/v1/server` capability를 한 번에 점검하도록 구성.
+- 현재 실행 중인 서버가 최신 capability를 갖추지 못한 경우 오래된 배포본 가능성과 누락 capability를 표시하도록 구성.
+- 루트 `README.md`, `docs\PROJECT_STATUS.md`, `server\DEPLOY.md`에 환경 점검 도구 사용 위치를 기록.
+
+### 확인 내용
+
+- 현재 Codex 세션 기준 `docker` 명령은 찾을 수 없음.
+- `http://localhost:8750`의 health/ready는 정상이지만 `backup_export`, `backup_verify`, `user_accounts`, `public_server_readiness` 등 최신 capability가 없어 오래된 배포본으로 판단.
+- `uv run python -m py_compile scripts\local_environment_status.py` 통과.
+
+### 보류
+
+- 실제 WSL 배포 경로에서 `git pull origin main`, compose 재기동, smoke test 통과 여부는 사용자의 WSL/Docker 환경에서 직접 확인되어야 하므로 체크리스트 완료 처리하지 않음.

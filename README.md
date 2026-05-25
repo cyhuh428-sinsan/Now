@@ -91,6 +91,12 @@ python3 scripts/verify_public_repo_safety.py
 python3 scripts/release_readiness.py
 ```
 
+현재 로컬 개발/배포 환경 상태는 루트 디렉터리에서 확인할 수 있습니다.
+
+```bash
+python3 scripts/local_environment_status.py --base-url http://localhost:8750
+```
+
 ## 현재 정책
 
 - 메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다.

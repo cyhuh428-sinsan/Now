@@ -1,6 +1,6 @@
 # NowNote 설계 대비 현재 상태
 
-기준일: 2026-05-23
+기준일: 2026-05-25
 
 이 문서는 긴 작업 기록을 다시 읽지 않아도 1차 목표 대비 현재 위치를 빠르게 확인하기 위한 현황판입니다.
 세부 변경 이력은 `docs/WORK_PROGRESS.md`를 기준으로 남깁니다.
@@ -15,6 +15,13 @@
 - 공용 서버 오픈 전 점검: 0/8 완료.
 - Google Play 등록 전 점검: 3/10 완료.
 - 공개 저장소 오픈 전 점검: 3/6 완료.
+
+## 최신 코드 품질 상태
+
+- 모바일 앱 전체 `dart analyze`는 `No issues found!` 상태입니다.
+- 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 110/110 통과 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 643/643 통과 상태입니다.
+- 현재 실행 중인 `http://localhost:8750` 서버는 health/ready는 정상이지만 최신 capability가 빠진 오래된 배포본일 수 있습니다.
 
 ## 1차 목표 기준
 
@@ -69,5 +76,6 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 - 사용자는 가능하면 Python/DB/CLI를 직접 실행하지 않고 화면과 API로 상태를 확인합니다.
 - 배포 전 점검은 `server/scripts/preflight.py`, 실행 중 검증은 `server/scripts/smoke_test.py`가 담당합니다.
+- 로컬 개발/배포 환경 상태는 `scripts/local_environment_status.py`로 WSL/Docker/서버 capability를 한 번에 확인합니다.
 - 오류나 대화 중단에 대비해 새 작업 단위는 `docs/WORK_PROGRESS.md`에 기록합니다.
 - 실제 비밀값은 저장소에 올리지 않습니다.
