@@ -670,6 +670,7 @@ class _AddMealSheetState extends ConsumerState<_AddMealSheet> {
     setState(() => _isEstimating = true);
     try {
       final repo = await ref.read(llmRepositoryProvider.future);
+      if (!mounted) return;
       if (repo == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('LLM 설정을 먼저 완료해주세요')),

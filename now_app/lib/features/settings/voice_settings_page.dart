@@ -226,12 +226,15 @@ class _SttOptionTile extends StatelessWidget {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Radio<String>(
-              value: value,
+            RadioGroup<String>(
               groupValue: groupValue,
-              onChanged: isAvailable ? onChanged : null,
-              activeColor: const Color(0xFF2563EB),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              onChanged: isAvailable ? onChanged : (_) {},
+              child: Radio<String>(
+                value: value,
+                enabled: isAvailable,
+                activeColor: const Color(0xFF2563EB),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(

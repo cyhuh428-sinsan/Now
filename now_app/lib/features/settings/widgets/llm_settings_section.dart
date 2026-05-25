@@ -262,12 +262,14 @@ class _LlmOptionTile extends StatelessWidget {
             SizedBox(
               width: 24,
               height: 24,
-              child: Radio<LlmProvider>(
-                value: provider,
+              child: RadioGroup<LlmProvider>(
                 groupValue: isSelected ? provider : null,
                 onChanged: (_) => onTap(),
-                activeColor: const Color(0xFF2563EB),
-                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                child: Radio<LlmProvider>(
+                  value: provider,
+                  activeColor: const Color(0xFF2563EB),
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
               ),
             ),
             const SizedBox(width: 10),

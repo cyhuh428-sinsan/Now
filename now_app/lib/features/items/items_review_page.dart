@@ -251,6 +251,7 @@ class ItemsReviewPage extends ConsumerWidget {
             }
 
             if (audioFilePath != null) {
+              if (!context.mounted) return;
               await _uploadRecordingIfConfigured(
                 context,
                 ref,
@@ -302,6 +303,7 @@ class ItemsReviewPage extends ConsumerWidget {
 
           ref.read(extractedItemsProvider.notifier).state = [];
           ref.read(selectedTabProvider.notifier).state = ItemType.action;
+          if (!context.mounted) return;
           context.go('/meetings');
         },
       ),
@@ -823,7 +825,7 @@ class _BottomBarState extends State<_BottomBar> {
                     await widget.onDone();
                   } catch (e) {
                     debugPrint('[완료 버튼 ERROR] $e');
-                    if (mounted) {
+                    if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(content: Text('저장 중 오류: $e')),
                       );

@@ -361,12 +361,14 @@ class _LlmOptionTile extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         child: Row(
           children: [
-            Radio<LlmProvider>(
-              value: provider,
+            RadioGroup<LlmProvider>(
               groupValue: isSelected ? provider : null,
               onChanged: (_) => onTap(),
-              activeColor: const Color(0xFF2563EB),
-              materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              child: Radio<LlmProvider>(
+                value: provider,
+                activeColor: const Color(0xFF2563EB),
+                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
             ),
             const SizedBox(width: 10),
             Text(_emoji, style: const TextStyle(fontSize: 16)),
@@ -521,7 +523,7 @@ class _OllamaFields extends StatelessWidget {
                   ),
                 ),
                 // 현재 컨트롤러 값이 목록에 있으면 선택, 없으면 null
-                value: models.contains(modelCtrl.text)
+                initialValue: models.contains(modelCtrl.text)
                     ? modelCtrl.text
                     : null,
                 // 목록이 비었을 때 보여줄 임시 아이템
