@@ -2,7 +2,6 @@ import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../models/llm_config.dart';
 import '../interfaces/llm_repository.dart';
 import '../services/llm_settings_service.dart';
-import '../base_llm_repository.dart';
 import '../cloud_llm_repositories.dart';
 import '../ollama_llm_repository.dart';
 

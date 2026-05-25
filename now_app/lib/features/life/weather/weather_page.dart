@@ -9,7 +9,6 @@ import 'package:drift/drift.dart' hide Column;
 import '../../../core/database/app_database.dart';
 import '../../../repositories/repository_providers.dart';
 import '../../../llm/providers/llm_providers.dart';
-import '../../../widgets/app_bottom_nav.dart';
 import '../../settings/weather_settings_page.dart';
 
 // ============================================================

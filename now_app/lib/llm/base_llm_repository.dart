@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'interfaces/llm_repository.dart';
-import 'models/llm_config.dart';
 
 abstract class BaseLlmRepository implements LlmRepository {
   final Dio _dio;

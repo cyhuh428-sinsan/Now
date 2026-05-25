@@ -5146,3 +5146,28 @@
 ### 보류
 
 - 현재 8750 서버는 실행 중이지만 최신 capability가 빠진 오래된 배포본이므로 서버 재배포 체크리스트는 완료 처리하지 않음.
+
+## 2026-05-25 22:44 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 전체 Dart analyzer warning 정리.
+
+### 구현 내용
+
+- 사용되지 않는 import, 중복 import, 사용되지 않는 지역 변수/필드/메서드를 제거.
+- capture STT 호출을 `SpeechListenOptions` 기반으로 변경.
+- null이 아닌 값에 붙은 불필요한 `!` 제거.
+- 일부 문자열 결합과 `withOpacity` 사용을 analyzer 권장 형태로 정리.
+
+### 검증
+
+- `dart analyze` 실행 결과 warning/error는 모두 제거됐고, info 92건만 남음.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- 남은 info는 deprecation, `withOpacity`, async context, print, const 권장 등 넓은 코드 정리 항목이므로 기능별로 나누어 계속 처리 예정.

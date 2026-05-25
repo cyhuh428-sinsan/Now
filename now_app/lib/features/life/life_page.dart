@@ -91,7 +91,6 @@ class _LifeCard extends StatelessWidget {
   final String title;
   final String subtitle;
   final Color color;
-  final String? badge;
   final VoidCallback? onTap;
 
   const _LifeCard({
@@ -99,7 +98,6 @@ class _LifeCard extends StatelessWidget {
     required this.title,
     required this.subtitle,
     required this.color,
-    this.badge,
     this.onTap,
   });
 
@@ -126,7 +124,7 @@ class _LifeCard extends StatelessWidget {
                 width: 52,
                 height: 52,
                 decoration: BoxDecoration(
-                  color: color.withOpacity(0.1),
+                  color: color.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(13),
                 ),
                 child: Center(
@@ -148,25 +146,6 @@ class _LifeCard extends StatelessWidget {
                             color: Color(0xFF111827),
                           ),
                         ),
-                        if (badge != null) ...[
-                          const SizedBox(width: 7),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6B7280).withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(
-                              badge!,
-                              style: const TextStyle(
-                                fontSize: 10,
-                                fontWeight: FontWeight.w600,
-                                color: Color(0xFF6B7280),
-                              ),
-                            ),
-                          ),
-                        ],
                       ],
                     ),
                     const SizedBox(height: 3),

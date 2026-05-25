@@ -5,10 +5,9 @@ import '../repositories/local/trip_repository.dart';
 import '../llm/providers/llm_providers.dart';
 
 class TripService {
-  final TripRepository _repo;
   final dynamic _llm;
 
-  TripService(this._repo, this._llm);
+  TripService(TripRepository _, this._llm);
 
   // ── LLM 일정 추천 ──
   Future<Map<String, dynamic>> suggestItinerary({
@@ -21,7 +20,7 @@ class TripService {
     final nights = days > 0 ? days - 1 : 0;
     final prompt = '''
 여행지: $destination
-기간: ${nights}박 ${days}일 (${startDate.month}/${startDate.day} ~ ${endDate.month}/${endDate.day})
+기간: $nights박 $days일 (${startDate.month}/${startDate.day} ~ ${endDate.month}/${endDate.day})
 
 위 여행에 맞는 일정과 준비물을 추천해주세요.
 
@@ -64,7 +63,7 @@ class TripService {
 여행명: ${trip.name}
 목적지: ${trip.destination}
 기간: $days일
-예산: ${trip.budgetTotal}원 / 실지출: ${totalExpense}원
+예산: ${trip.budgetTotal}원 / 실지출: $totalExpense원
 일정 완료율: $donePlans/${dayPlans.length}
 
 감성적이고 따뜻한 여행 후기 요약을 3~5문장으로 작성해주세요. JSON 없이 텍스트만 응답하세요.

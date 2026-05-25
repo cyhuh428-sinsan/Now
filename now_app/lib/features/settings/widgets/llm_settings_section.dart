@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../llm/models/llm_config.dart';
-import '../../../llm/services/llm_settings_service.dart';
 import '../../../llm/providers/llm_providers.dart';
 
 /// settings_page.dart 에서 import 후 ListView children에 삽입
