@@ -5129,3 +5129,20 @@
 ### 영향 범위
 
 - 메모/회의 기록 화면 내부의 정적 경고 정리이며, 녹음 저장 구조나 서버 동기화 API는 변경하지 않음.
+
+## 2026-05-25 22:43 KST
+
+### 다음 작업 시작
+
+- Android 런타임 점검 가능 상태 재확인.
+
+### 확인 내용
+
+- `uv run python now_app\scripts\check_android_runtime.py --timeout 5 --require-server` 통과.
+- ADB에서 `emulator-5554`가 `device` 상태로 확인됨.
+- 로컬 서버 `http://127.0.0.1:8750`의 health/ready는 HTTP 200.
+- 실제 Android 기기는 연결되지 않아 실기기 항목은 여전히 보류.
+
+### 보류
+
+- 현재 8750 서버는 실행 중이지만 최신 capability가 빠진 오래된 배포본이므로 서버 재배포 체크리스트는 완료 처리하지 않음.
