@@ -4994,3 +4994,24 @@
 
 - `스크린샷과 기능 그래픽 최종 확인`은 파일 존재 확인만으로 닫지 않음.
 - 실제 Play Console 제출 이미지로 사용할지, 실기기 캡처로 교체할지는 최종 판단이 필요함.
+
+## 2026-05-25 11:25 KST
+
+### 다음 작업 시작
+
+- GitHub Actions 통과 확인이 보류되는 상황의 안내 메시지와 공개 저장소 문서 보완.
+
+### 구현 내용
+
+- `scripts\check_github_actions_status.py`에서 GitHub API 404 응답을 원문 JSON 대신 운영자가 이해하기 쉬운 안내로 표시하도록 수정.
+- `docs\OPEN_SOURCE_RELEASE.md`에 404가 발생할 때 확인할 항목과 수동 실행 기준을 추가.
+
+### 검증
+
+- `uv run python -m py_compile scripts\check_github_actions_status.py` 통과.
+- `uv run python scripts\check_github_actions_status.py --repo cyhuh428-sinsan/Now --branch main` 실행 시 Actions 미확인 상태를 친절한 404 안내로 표시.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+
+### 보류
+
+- 최신 커밋 기준 GitHub status와 workflow run은 여전히 조회되지 않아 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.

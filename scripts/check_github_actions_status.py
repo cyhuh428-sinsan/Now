@@ -37,6 +37,14 @@ def request_json(url: str, token: str | None, timeout: int) -> dict:
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
+        if exc.code == 404:
+            raise SystemExit(
+                "GitHub API HTTP 404: workflow run을 조회할 수 없습니다.\n"
+                "- 저장소에서 GitHub Actions가 아직 활성화되지 않았거나,\n"
+                "- workflow 파일명이 다르거나 아직 한 번도 실행되지 않았거나,\n"
+                "- 비공개 저장소인데 GITHUB_TOKEN 권한이 부족할 수 있습니다.\n"
+                "GitHub Actions 화면에서 `NowNote Preflight`를 수동 실행한 뒤 다시 확인하세요."
+            ) from exc
         raise SystemExit(f"GitHub API HTTP {exc.code}: {detail}") from exc
     except urllib.error.URLError as exc:
         raise SystemExit(f"GitHub API 연결 실패: {exc.reason}") from exc
