@@ -5361,3 +5361,23 @@
 ### 보류
 
 - 실제 `sh scripts/deploy_local.sh` 실행은 Docker가 있는 WSL/Linux 배포 환경에서 확인해야 하므로 체크리스트 완료 처리는 하지 않음.
+
+## 2026-05-26 01:03 KST
+
+### 다음 작업 시작
+
+- 로컬 환경 점검 스크립트가 WSL/Docker 상태를 더 정확히 구분하도록 보강.
+
+### 구현 내용
+
+- `scripts\local_environment_status.py`가 WSL shell 실행 여부와 현재 Windows 작업 경로의 `/mnt/...` 접근 가능 여부를 따로 확인하도록 수정.
+- Windows Docker가 없어도 WSL 내부 `docker` 또는 `docker-compose`를 확인하도록 수정.
+
+### 검증
+
+- `uv run python scripts\local_environment_status.py --base-url http://localhost:8750` 실행 결과 WSL shell은 가능하지만 `/mnt/d/Project/Now` 경로 확인 경고가 표시됨.
+- 같은 실행에서 WSL Docker `29.1.3` 확인.
+- 실행 중인 `http://localhost:8750` 서버는 health/ready 정상이지만 최신 capability 누락으로 오래된 배포본 가능성 경고 유지.
+- `uv run python -m py_compile scripts\local_environment_status.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 664/664.
+- `git diff --check` 통과.

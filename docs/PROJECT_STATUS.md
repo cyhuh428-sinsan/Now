@@ -62,7 +62,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 ### 도구 한계로 보류
 
-- 현재 Windows 작업 환경에서는 WSL Ubuntu shell 실행은 가능하지만 `D:\Project\Now` 경로 변환 경고와 `docker` 명령 부재가 있어 WSL/Docker 재배포 완료 처리는 보류.
+- 현재 Windows 작업 환경에서는 WSL Ubuntu shell과 WSL Docker는 확인되지만 `D:\Project\Now` 경로 변환 경고가 있어 WSL/Docker 재배포 완료 처리는 보류.
 - Android 에뮬레이터에서는 앱 실행, 홈 오늘 메모, 일자별 메모 추가, 계층 메모 3단계와 삭제 제한, 서버 연결 테스트, 메모 동기화를 확인했다.
 - 실제 Android 기기는 아직 연결하지 않아 완료 처리를 보류한다.
 
