@@ -354,12 +354,12 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                       // DB 모델 생성
                       final entry = CalendarEventsCompanion(
                         calendarEventId: drift.Value(
-                            isEditing ? event!.calendarEventId : const Uuid().v4()),
+                            isEditing ? event.calendarEventId : const Uuid().v4()),
                         userId: const drift.Value('local_user'),
                         title: drift.Value(titleCtrl.text),
                         startTime: drift.Value(start),
                         endTime: drift.Value(end),
-                        source: drift.Value(isEditing ? event!.source : 'manual'),
+                        source: drift.Value(isEditing ? event.source : 'manual'),
                       );
 
                       final repo = ref.read(localCalendarEventRepositoryProvider);

@@ -5,7 +5,6 @@ import 'package:uuid/uuid.dart';
 import 'package:drift/drift.dart' hide Column;
 import '../../core/database/app_database.dart';
 import '../../repositories/repository_providers.dart';
-import 'package:go_router/go_router.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../../llm/providers/llm_providers.dart';
 import '../../services/health_sync_service.dart';

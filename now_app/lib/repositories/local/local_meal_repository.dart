@@ -9,7 +9,7 @@ class LocalMealRepository implements MealRepository {
 
   @override
   Future<MealRecord> saveMeal(MealRecordsCompanion meal) async {
-    final id = await _db.into(_db.mealRecords).insert(meal);
+    await _db.into(_db.mealRecords).insert(meal);
     return await (_db.select(_db.mealRecords)
           ..where((t) => t.mealId.equals(meal.mealId.value)))
         .getSingle();

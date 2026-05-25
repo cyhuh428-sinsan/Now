@@ -129,8 +129,9 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                   groupValue: sttTier,
                   isAvailable: true,
                   onChanged: (v) {
-                    ref.read(sttTierProvider.notifier).state = v!;
-                    LlmSettingsService().saveSttTier(v!);
+                    if (v == null) return;
+                    ref.read(sttTierProvider.notifier).state = v;
+                    LlmSettingsService().saveSttTier(v);
                   },
                 ),
                 if (sttTier == 'tier2_local')
@@ -218,8 +219,6 @@ class _SttOptionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isSelected = value == groupValue;
-
     return InkWell(
       onTap: isAvailable ? () => onChanged(value) : null,
       child: Padding(

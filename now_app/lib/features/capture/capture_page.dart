@@ -34,7 +34,6 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   // 입력 상태
   _CaptureMode _mode = _CaptureMode.none;
   final _textController = TextEditingController();
-  final _chatController = TextEditingController();
   File? _selectedImage;
 
   // 처리 상태
@@ -50,9 +49,6 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   String _sttFinal = '';
   Timer? _silenceTimer;
 
-  // 채팅
-  bool _chatLoading = false;
-
   @override
   void initState() {
     super.initState();
@@ -62,7 +58,6 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   @override
   void dispose() {
     _textController.dispose();
-    _chatController.dispose();
     _silenceTimer?.cancel();
     _speech.stop();
     super.dispose();
@@ -106,7 +101,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
         }
         if (result.finalResult && text.isNotEmpty) {
           setState(() {
-            _sttFinal = (_sttFinal + ' ' + text).trim();
+            _sttFinal = '$_sttFinal $text'.trim();
             _sttPartial = '';
           });
           _silenceTimer?.cancel();
@@ -115,9 +110,11 @@ class _CapturePageState extends ConsumerState<CapturePage> {
       localeId: 'ko_KR',
       listenFor: const Duration(seconds: 300),
       pauseFor: const Duration(seconds: 10),
-      partialResults: true,
-      cancelOnError: false,
-      listenMode: ListenMode.dictation,
+      listenOptions: SpeechListenOptions(
+        partialResults: true,
+        cancelOnError: false,
+        listenMode: ListenMode.dictation,
+      ),
     );
   }
 
@@ -127,7 +124,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
       if (!mounted) return;
       if (_sttPartial.isNotEmpty) {
         setState(() {
-          _sttFinal = (_sttFinal + ' ' + _sttPartial).trim();
+          _sttFinal = '$_sttFinal $_sttPartial'.trim();
           _sttPartial = '';
         });
       }
@@ -142,7 +139,7 @@ class _CapturePageState extends ConsumerState<CapturePage> {
       setState(() {
         _isListening = false;
         if (_sttPartial.isNotEmpty) {
-          _sttFinal = (_sttFinal + ' ' + _sttPartial).trim();
+          _sttFinal = '$_sttFinal $_sttPartial'.trim();
           _sttPartial = '';
         }
       });
@@ -237,39 +234,6 @@ class _CapturePageState extends ConsumerState<CapturePage> {
         _status = _ProcessStatus.error;
         _errorMessage = '처리 중 오류가 발생했습니다.\n$e';
       });
-    }
-  }
-
-  // ── LLM 채팅 ──
-  Future<void> _sendChat() async {
-    final question = _chatController.text.trim();
-    if (question.isEmpty || _chatLoading) return;
-
-    _chatController.clear();
-    final messages = [...ref.read(_chatMessagesProvider)];
-    messages.add(_ChatMessage(text: question, isUser: true));
-    ref.read(_chatMessagesProvider.notifier).state = messages;
-
-    setState(() => _chatLoading = true);
-
-    try {
-      final llm = await ref.read(llmRepositoryProvider.future);
-      if (llm == null) {
-        final m = [...ref.read(_chatMessagesProvider)];
-        m.add(_ChatMessage(text: 'LLM 설정을 먼저 완료해주세요', isUser: false));
-        ref.read(_chatMessagesProvider.notifier).state = m;
-      } else {
-        final response = await llm.chat(question);
-        final m = [...ref.read(_chatMessagesProvider)];
-        m.add(_ChatMessage(text: response, isUser: false));
-        ref.read(_chatMessagesProvider.notifier).state = m;
-      }
-    } catch (e) {
-      final m = [...ref.read(_chatMessagesProvider)];
-      m.add(_ChatMessage(text: '오류: $e', isUser: false));
-      ref.read(_chatMessagesProvider.notifier).state = m;
-    } finally {
-      if (mounted) setState(() => _chatLoading = false);
     }
   }
 
@@ -650,13 +614,7 @@ class _InputViewState extends State<_InputView> {
   Widget build(BuildContext context) {
     final mode = widget.mode;
     final status = widget.status;
-    final isListening = widget.isListening;
-    final sttPartial = widget.sttPartial;
-    final sttFinal = widget.sttFinal;
-    final speechAvailable = widget.speechAvailable;
     final errorMessage = widget.errorMessage;
-    final selectedImage = widget.selectedImage;
-    final textController = widget.textController;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
       child: Column(
@@ -708,7 +666,7 @@ class _InputViewState extends State<_InputView> {
 
           if (errorMessage != null) ...[
             const SizedBox(height: 8),
-            Text(errorMessage!,
+            Text(errorMessage,
                 style: const TextStyle(fontSize: 13, color: Color(0xFFEF4444))),
           ],
 
@@ -782,7 +740,7 @@ class _InputViewState extends State<_InputView> {
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: Image.file(selectedImage!, fit: BoxFit.cover),
+          child: Image.file(selectedImage, fit: BoxFit.cover),
         ),
       );
     }
@@ -1445,7 +1403,7 @@ class _LlmChatPageState extends ConsumerState<LlmChatPage> {
       final llm = await ref.read(llmRepositoryProvider.future);
       if (llm == null) {
         final m = [...ref.read(_chatMessagesProvider)];
-        m.add(_ChatMessage(text: 'LLM 설정을 먼저 완료해주세요', isUser: false));
+        m.add(const _ChatMessage(text: 'LLM 설정을 먼저 완료해주세요', isUser: false));
         ref.read(_chatMessagesProvider.notifier).state = m;
       } else {
         final response = await llm.chat(question);
