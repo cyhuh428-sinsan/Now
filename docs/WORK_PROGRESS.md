@@ -5085,3 +5085,21 @@
 ### 보류
 
 - 실제 WSL/Linux 배포 경로에서 `git pull origin main`, compose 재기동, smoke 통과는 이 세션에서 WSL 배포판이 정상 인식되지 않아 완료 처리하지 않음.
+
+## 2026-05-25 22:25 KST
+
+### 다음 작업 시작
+
+- 최신 push 후 GitHub Actions preflight 상태 재확인.
+
+### 확인 내용
+
+- 최신 커밋: `ad6e30d fix: clarify stale server smoke failure`.
+- `.github\workflows\preflight.yml`에는 `NowNote Preflight` workflow와 `push`, `pull_request`, `workflow_dispatch` 트리거가 존재함.
+- `uv run python scripts\check_github_actions_status.py --repo cyhuh428-sinsan/Now --branch main`은 여전히 GitHub API 404 안내를 반환.
+- GitHub 연결 도구로 최신 커밋 workflow run과 combined status를 확인했지만 둘 다 비어 있음.
+
+### 보류
+
+- GitHub Actions 자체가 아직 실행되지 않았거나 저장소 Actions 설정/권한 문제로 run이 생성되지 않은 상태로 판단.
+- `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
