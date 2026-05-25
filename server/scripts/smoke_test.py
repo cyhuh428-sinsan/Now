@@ -25,6 +25,22 @@ def require(condition: bool, message: str) -> None:
         raise AssertionError(message)
 
 
+def stale_server_message(field_name: str, data: dict) -> str:
+    capabilities = data.get("capabilities")
+    capability_keys = (
+        ", ".join(sorted(capabilities.keys()))
+        if isinstance(capabilities, dict)
+        else "확인 불가"
+    )
+    return (
+        f"서버 정보에 {field_name} 항목이 없습니다. "
+        "현재 실행 중인 서버가 최신 소스보다 오래된 배포본일 수 있습니다. "
+        "WSL/Linux 배포 경로에서 git pull origin main 후 docker compose up --build -d "
+        "또는 docker-compose up --build -d를 다시 실행하세요. "
+        f"현재 capability: {capability_keys}"
+    )
+
+
 def request(method: str, url: str, token: str | None = None, data: dict | None = None):
     return request_with_user_token(method, url, token, data, USER_TOKEN)
 
@@ -214,7 +230,11 @@ def main() -> None:
         if path == "/api/v1/server":
             require(data.get("api_version") == API_VERSION, "서버 API 버전이 올바르지 않습니다")
             USER_TOKEN_REQUIRED = bool(data.get("user_token_required"))
-            public_readiness = data.get("public_server_readiness", {})
+            public_readiness = data.get("public_server_readiness")
+            require(
+                isinstance(public_readiness, dict),
+                stale_server_message("public_server_readiness", data),
+            )
             require(
                 public_readiness.get("status") == "planned",
                 "서버 정보에 공용 서버 준비 상태 planned가 없습니다",
