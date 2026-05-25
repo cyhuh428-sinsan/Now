@@ -1,6 +1,6 @@
 # NowNote 설계 대비 현재 상태
 
-기준일: 2026-05-25
+기준일: 2026-05-26
 
 이 문서는 긴 작업 기록을 다시 읽지 않아도 1차 목표 대비 현재 위치를 빠르게 확인하기 위한 현황판입니다.
 세부 변경 이력은 `docs/WORK_PROGRESS.md`를 기준으로 남깁니다.
@@ -20,8 +20,9 @@
 
 - 모바일 앱 전체 `dart analyze`는 `No issues found!` 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 110/110 통과 상태입니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 643/643 통과 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 647/647 통과 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 health/ready는 정상이지만 최신 capability가 빠진 오래된 배포본일 수 있습니다.
+- GitHub Actions는 workflow 파일은 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
 
 ## 1차 목표 기준
 
@@ -61,7 +62,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 ### 도구 한계로 보류
 
-- 현재 Windows 작업 환경에서는 `docker` 명령이 없고 WSL 배포판도 인식되지 않아 WSL/Docker 재배포 완료 처리는 보류.
+- 현재 Windows 작업 환경에서는 WSL Ubuntu 실행은 가능하지만 `docker` 명령이 없어 WSL/Docker 재배포 완료 처리는 보류.
 - Android 에뮬레이터에서는 앱 실행, 홈 오늘 메모, 일자별 메모 추가, 계층 메모 3단계와 삭제 제한, 서버 연결 테스트, 메모 동기화를 확인했다.
 - 실제 Android 기기는 아직 연결하지 않아 완료 처리를 보류한다.
 
