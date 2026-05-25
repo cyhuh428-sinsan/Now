@@ -993,7 +993,7 @@ ${location.isNotEmpty ? '장소: $location' : ''}
                     padding: const EdgeInsets.symmetric(
                         horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF7C3AED).withOpacity(0.1),
+                      color: const Color(0xFF7C3AED).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(6),
                     ),
                     child: _isEstimating

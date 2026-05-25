@@ -87,7 +87,7 @@ class _MeetingStartPageState extends ConsumerState<MeetingStartPage> {
                   : widget.initialType == 'meeting'
                       ? '회의 기록'
                       : '기록 시작',
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
             color: Color(0xFF111827),
@@ -442,7 +442,7 @@ class _EventSelectCard extends StatelessWidget {
           boxShadow: isSelected
               ? [
                   BoxShadow(
-                    color: const Color(0xFF2563EB).withOpacity(0.1),
+                    color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                     blurRadius: 8,
                     offset: const Offset(0, 2),
                   )
@@ -510,7 +510,7 @@ class _EventSelectCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  color: const Color(0xFF10B981).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
                 ),
                 child: const Text(
@@ -610,7 +610,7 @@ class _TypeChip extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF2563EB).withOpacity(0.1)
+              ? const Color(0xFF2563EB).withValues(alpha: 0.1)
               : const Color(0xFFF3F4F6),
           borderRadius: BorderRadius.circular(10),
           border: Border.all(

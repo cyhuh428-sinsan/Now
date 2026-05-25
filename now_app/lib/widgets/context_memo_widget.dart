@@ -116,11 +116,11 @@ class _EmptyContextCard extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: const Color(0xFFE5E7EB)),
         ),
-        child: Row(
+        child: const Row(
           children: [
-            const Text('📝', style: TextStyle(fontSize: 16)),
-            const SizedBox(width: 10),
-            const Expanded(
+            Text('📝', style: TextStyle(fontSize: 16)),
+            SizedBox(width: 10),
+            Expanded(
               child: Text(
                 '오늘 컨디션을 기록해보세요',
                 style: TextStyle(
@@ -129,7 +129,7 @@ class _EmptyContextCard extends StatelessWidget {
                 ),
               ),
             ),
-            const Icon(Icons.add,
+            Icon(Icons.add,
                 size: 16, color: Color(0xFF9CA3AF)),
           ],
         ),
@@ -161,7 +161,7 @@ class _ContextCard extends StatelessWidget {
         ? s.wokeAt!.add(const Duration(days: 1))
         : s.wokeAt!;
     final hours = woke.difference(s.bedAt).inHours;
-    return '수면 ${hours}시간';
+    return '수면 $hours시간';
   }
 
   @override
@@ -254,7 +254,7 @@ class _SleepSummaryCard extends StatelessWidget {
         : s.wokeAt!;
     final wokeStr = DateFormat('HH:mm').format(woke);
     final hours = woke.difference(s.bedAt).inHours;
-    return '$bedStr → $wokeStr · ${hours}시간';
+    return '$bedStr → $wokeStr · $hours시간';
   }
 
   @override
@@ -303,7 +303,7 @@ class _SleepSummaryCard extends StatelessWidget {
               padding:
                   const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
-                color: const Color(0xFF2563EB).withOpacity(0.1),
+                color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: const Text(
@@ -869,7 +869,7 @@ class _ConditionButton extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF2563EB).withOpacity(0.1)
+              ? const Color(0xFF2563EB).withValues(alpha: 0.1)
               : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
           border: Border.all(

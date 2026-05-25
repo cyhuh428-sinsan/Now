@@ -198,7 +198,7 @@ class _FashionCard extends StatelessWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEC4899).withOpacity(0.06),
+                  color: const Color(0xFFEC4899).withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Row(
@@ -489,7 +489,7 @@ ${_memoCtrl.text.trim().isNotEmpty ? '착장 메모: ${_memoCtrl.text.trim()}' :
                 width: double.infinity,
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFEC4899).withOpacity(0.06),
+                  color: const Color(0xFFEC4899).withValues(alpha: 0.06),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(

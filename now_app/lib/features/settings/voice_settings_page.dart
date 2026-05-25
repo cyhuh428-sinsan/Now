@@ -256,8 +256,8 @@ class _SttOptionTile extends StatelessWidget {
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isAvailable
-                              ? const Color(0xFF10B981).withOpacity(0.1)
-                              : const Color(0xFF6B7280).withOpacity(0.1),
+                              ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                              : const Color(0xFF6B7280).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: Text(

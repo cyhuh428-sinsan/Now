@@ -68,8 +68,8 @@ class MoneyPage extends ConsumerWidget {
           summaryAsync.when(
             data: (s) => _MonthlySummaryCard(
                 income: s.income, expense: s.expense),
-            loading: () => _MonthlySummaryCard(income: 0, expense: 0),
-            error: (_, __) => _MonthlySummaryCard(income: 0, expense: 0),
+            loading: () => const _MonthlySummaryCard(income: 0, expense: 0),
+            error: (_, __) => const _MonthlySummaryCard(income: 0, expense: 0),
           ),
           // 구독-지출 교차 브리핑 카드
           const _SubscriptionBriefingCard(),
@@ -133,7 +133,7 @@ class _MonthlySummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
+              color: Colors.white.withValues(alpha: 0.15),
               borderRadius: BorderRadius.circular(8),
             ),
             child: const Row(

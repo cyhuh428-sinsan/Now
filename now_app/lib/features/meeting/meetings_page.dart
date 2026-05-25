@@ -841,7 +841,7 @@ class _MeetingCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: meeting.isImportant
-              ? const Color(0xFFF59E0B).withOpacity(0.5)
+              ? const Color(0xFFF59E0B).withValues(alpha: 0.5)
               : const Color(0xFFE5E7EB),
         ),
       ),
@@ -857,7 +857,7 @@ class _MeetingCard extends StatelessWidget {
                 width: 40,
                 height: 40,
                 decoration: BoxDecoration(
-                  color: const Color(0xFF2563EB).withOpacity(0.1),
+                  color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Icon(
@@ -982,7 +982,7 @@ class _Chip extends StatelessWidget {
       padding:
           const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(4),
       ),
       child: Text(

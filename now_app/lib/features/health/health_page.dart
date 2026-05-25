@@ -335,7 +335,7 @@ class _HealthPageState extends ConsumerState<HealthPage> {
                                   horizontal: 10, vertical: 5),
                               decoration: BoxDecoration(
                                 color: const Color(0xFF10B981)
-                                    .withOpacity(0.1),
+                                    .withValues(alpha: 0.1),
                                 borderRadius: BorderRadius.circular(6),
                               ),
                               child: _isAnalyzing
@@ -799,7 +799,7 @@ class _SleepCard extends StatelessWidget {
     final diff = woke.difference(item.bedAt);
     final h = diff.inHours;
     final m = diff.inMinutes % 60;
-    return '$h시간 ${m > 0 ? '${m}분' : ''}';
+    return '$h시간 ${m > 0 ? '$m분' : ''}';
   }
 
   @override
@@ -957,7 +957,7 @@ class _MedicationCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 5, vertical: 1),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF2563EB).withOpacity(0.1),
+                          color: const Color(0xFF2563EB).withValues(alpha: 0.1),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('처방',
@@ -1430,7 +1430,7 @@ class _AddHealthSheetState extends ConsumerState<_AddHealthSheet> {
                           height: 48,
                           decoration: BoxDecoration(
                             color: isSelected
-                                ? const Color(0xFF2563EB).withOpacity(0.1)
+                                ? const Color(0xFF2563EB).withValues(alpha: 0.1)
                                 : const Color(0xFFF3F4F6),
                             borderRadius: BorderRadius.circular(12),
                             border: isSelected
@@ -1481,7 +1481,7 @@ class _AddHealthSheetState extends ConsumerState<_AddHealthSheet> {
                     value: _isPrescription,
                     onChanged: (v) =>
                         setState(() => _isPrescription = v),
-                    activeColor: const Color(0xFF2563EB),
+                    activeThumbColor: const Color(0xFF2563EB),
                   ),
                 ],
               ),
@@ -1556,7 +1556,7 @@ class _AddHealthSheetState extends ConsumerState<_AddHealthSheet> {
                             const EdgeInsets.symmetric(vertical: 8),
                         decoration: BoxDecoration(
                           color: isSelected
-                              ? i.$3.withOpacity(0.15)
+                              ? i.$3.withValues(alpha: 0.15)
                               : const Color(0xFFF3F4F6),
                           borderRadius: BorderRadius.circular(8),
                           border: isSelected

@@ -453,7 +453,7 @@ class _SubCard extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 7, vertical: 2),
                 decoration: BoxDecoration(
-                  color: _ddayColor.withOpacity(0.12),
+                  color: _ddayColor.withValues(alpha: 0.12),
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(_dday,
@@ -470,7 +470,7 @@ class _SubCard extends StatelessWidget {
               Switch(
                 value: sub.isActive,
                 onChanged: (_) => onToggle(),
-                activeColor: const Color(0xFF8B5CF6),
+                activeThumbColor: const Color(0xFF8B5CF6),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
               ),
               Row(
@@ -697,7 +697,7 @@ class _SubEditSheetState extends ConsumerState<_SubEditSheet> {
                           onSelected: (_) => setState(() =>
                               _category = _category == c ? null : c),
                           selectedColor: const Color(0xFF8B5CF6)
-                              .withOpacity(0.15),
+                              .withValues(alpha: 0.15),
                           labelStyle: TextStyle(
                             fontSize: 12,
                             color: _category == c
@@ -795,7 +795,7 @@ class _CycleChip extends StatelessWidget {
             const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
           color: selected
-              ? const Color(0xFF8B5CF6).withOpacity(0.15)
+              ? const Color(0xFF8B5CF6).withValues(alpha: 0.15)
               : const Color(0xFFF3F4F6),
           borderRadius: BorderRadius.circular(8),
           border: Border.all(

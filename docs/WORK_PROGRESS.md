@@ -5171,3 +5171,31 @@
 ### 보류
 
 - 남은 info는 deprecation, `withOpacity`, async context, print, const 권장 등 넓은 코드 정리 항목이므로 기능별로 나누어 계속 처리 예정.
+
+## 2026-05-25 22:48 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 전체 Dart analyzer info 중 동작 변경 위험이 낮은 정적 정리 항목 추가 처리.
+
+### 범위
+
+- 색상 alpha 표현, 문자열 interpolation, `const` 권장, 한 줄 제어문 중괄호처럼 화면 동작과 저장 구조를 바꾸지 않는 항목만 우선 처리.
+
+### 구현 내용
+
+- 모바일 앱 전체의 `withOpacity` 사용을 `withValues(alpha: ...)`로 정리.
+- 단순 문자열 interpolation, `const` 생성자, 한 줄 제어문 중괄호를 analyzer 권장 형태로 정리.
+- `Switch` 계열에서만 안전한 `activeThumbColor` 변경을 적용하고, `RadioListTile` 계열은 현재 Flutter API와 맞지 않아 기존 `activeColor` 유지.
+
+### 검증
+
+- `dart analyze` 실행 결과 warning/error는 없고, info 33건만 남음.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- 남은 info는 async context, RadioGroup API 전환, print 로깅 정리처럼 동작 영향 검토가 필요한 항목이라 별도 단위로 처리 예정.
