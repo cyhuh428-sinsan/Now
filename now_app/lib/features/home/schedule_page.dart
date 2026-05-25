@@ -370,6 +370,7 @@ class _SchedulePageState extends ConsumerState<SchedulePage> {
                         await repo.createEvent(entry);
                       }
 
+                      if (!ctx.mounted || !mounted) return;
                       Navigator.pop(ctx);
                       setState(() {}); // 리스트 갱신
                     },

@@ -1226,6 +1226,7 @@ Future<void> _showTreeMemoDialog(
                                 ),
                               );
                         }
+                        if (!context.mounted) return;
                         await _uploadTreeRecordingIfConfigured(
                           context,
                           ref,

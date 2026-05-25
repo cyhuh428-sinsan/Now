@@ -5227,3 +5227,34 @@
 ### 보류
 
 - 남은 info는 async context와 Flutter RadioGroup/FormField deprecation 항목이라 별도 검토 후 처리 예정.
+
+## 2026-05-25 23:09 KST
+
+### 다음 작업 시작
+
+- 모바일 앱 Dart analyzer info 중 `use_build_context_synchronously` 항목 정리.
+
+### 범위
+
+- `await` 이후 `BuildContext`를 사용하는 위치에 `mounted`/`context.mounted` 가드를 추가.
+- 저장 순서, 동기화 API, 화면 이동 경로 자체는 변경하지 않음.
+
+### 구현 내용
+
+- 건강/패션/날씨/식사 LLM 분석 화면에서 LLM repository 로드 이후 `mounted` 가드 추가.
+- 일정 편집 저장 후 dialog context와 State mounted 상태를 확인한 뒤 닫기/갱신하도록 보강.
+- 회의 추출 저장과 계층 메모 저장 흐름에서 업로드/화면 이동 전 context mounted 가드 추가.
+- Flutter 신규 RadioGroup API로 LLM/STT 라디오 선택 UI를 전환.
+- Dropdown 초기값 deprecation 항목을 `initialValue`로 전환.
+
+### 검증
+
+- `dart analyze` 실행 결과 `No issues found!`.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- release readiness 남은 항목은 실기기 테스트, WSL/Docker 실제 재배포, 공용 도메인/HTTPS, Play Console, 라이선스 선택처럼 외부 실행 또는 사용자 결정이 필요한 항목임.

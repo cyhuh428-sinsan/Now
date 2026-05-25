@@ -185,6 +185,7 @@ class _HealthPageState extends ConsumerState<HealthPage> {
     setState(() => _isAnalyzing = true);
     try {
       final repo = await ref.read(llmRepositoryProvider.future);
+      if (!mounted) return;
       if (repo == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('LLM 설정을 먼저 완료해주세요')),
