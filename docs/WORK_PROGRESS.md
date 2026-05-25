@@ -4952,3 +4952,27 @@
 ### 보류
 
 - 실제 Android 기기, 음성 실시간 변환, 음성 녹음 후 변환, 녹음 업로드 상태 확인은 아직 완료 처리하지 않음.
+
+## 2026-05-25 11:05 KST
+
+### 다음 작업 시작
+
+- 남은 1차 항목 중 자동으로 더 닫을 수 있는 항목과 실제 환경이 필요한 항목을 재확인.
+
+### 확인 내용
+
+- `uv run python scripts\release_readiness.py` 기준 현재 57개 중 26개 완료, 31개 남음.
+- 최신 커밋 기준 GitHub status와 workflow run은 GitHub 커넥터에서 아직 조회되지 않음.
+- `scripts\check_github_actions_status.py --repo cyhuh428-sinsan/Now --branch main`은 GitHub API workflow run 조회에서 404를 반환해 완료 처리하지 않음.
+- Windows 현재 환경에서는 WSL 배포판이 인식되지 않고 `docker` 명령도 없어 서버 재배포 점검 완료 처리는 보류.
+
+### 검증
+
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 108/108.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 643/643.
+
+### 보류
+
+- 실제 Android 기기, 음성 실시간 변환, 음성 녹음 후 변환, 녹음 업로드 상태 확인은 실제 입력/기기 조건이 필요해 완료 처리하지 않음.
+- 공용 서버 도메인/HTTPS/reverse proxy, Play Console 최종값, 오픈소스 라이선스 선택은 신산님 결정 또는 외부 운영 환경 확정이 필요함.
