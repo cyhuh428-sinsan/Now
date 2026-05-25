@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:drift/drift.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -87,27 +89,27 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
   // =========================================================
 
   Future<int> syncEventsByMonth(DateTime targetMonth) async { 
-    print('=========== [동기화 시작] ===========');
-    print('대상 월: ${targetMonth.year}년 ${targetMonth.month}월');
+    developer.log('=========== [동기화 시작] ===========');
+    developer.log('대상 월: ${targetMonth.year}년 ${targetMonth.month}월');
 
     // 1. 권한 체크
     var status = await Permission.calendarFullAccess.status;
     if (!status.isGranted) {
-      print('⚠️ 권한이 없습니다. 권한을 요청합니다.');
+      developer.log('⚠️ 권한이 없습니다. 권한을 요청합니다.');
       status = await Permission.calendarFullAccess.request();
       if (!status.isGranted) {
-        print('❌ 권한이 거부되었습니다.');
+        developer.log('❌ 권한이 거부되었습니다.');
         return 0;
       }
     }
-    print('✅ 캘린더 권한 확인됨');
+    developer.log('✅ 캘린더 권한 확인됨');
 
     // 2. 날짜 범위
     final startRange = DateTime(targetMonth.year, targetMonth.month, 1);
     final endRange = DateTime(targetMonth.year, targetMonth.month + 1, 1)
         .subtract(const Duration(milliseconds: 1));
     
-    print('조회 기간: $startRange ~ $endRange');
+    developer.log('조회 기간: $startRange ~ $endRange');
 
     // 3. 기존 데이터 삭제
     final deleted = await (_db.delete(_db.calendarEvents)
@@ -115,20 +117,20 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
           ..where((tbl) => tbl.startTime.isSmallerThanValue(endRange))
           ..where((tbl) => tbl.source.equals('device'))) 
         .go();
-    print('🗑️ 기존 연동 데이터 삭제: $deleted건');
+    developer.log('🗑️ 기존 연동 데이터 삭제: $deleted건');
 
     // 4. 기기 캘린더 목록 가져오기
     final calendarsResult = await _deviceCalendarPlugin.retrieveCalendars();
     if (calendarsResult.data == null || calendarsResult.data!.isEmpty) {
-      print('❌ 기기에서 캘린더를 찾을 수 없습니다. (목록 비어있음)');
+      developer.log('❌ 기기에서 캘린더를 찾을 수 없습니다. (목록 비어있음)');
       return 0;
     }
 
-    print('📅 발견된 캘린더 개수: ${calendarsResult.data!.length}개');
+    developer.log('📅 발견된 캘린더 개수: ${calendarsResult.data!.length}개');
 
     int syncCount = 0;
     for (var calendar in calendarsResult.data!) {
-      print('   > 캘린더 스캔 중: [${calendar.name}] (ID: ${calendar.id}, Account: ${calendar.accountName})');
+      developer.log('   > 캘린더 스캔 중: [${calendar.name}] (ID: ${calendar.id}, Account: ${calendar.accountName})');
       
       final eventsResult = await _deviceCalendarPlugin.retrieveEvents(
         calendar.id,
@@ -136,11 +138,11 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
       );
 
       if (eventsResult.data != null && eventsResult.data!.isNotEmpty) {
-        print('     🔹 이벤트 ${eventsResult.data!.length}개 발견됨');
+        developer.log('     🔹 이벤트 ${eventsResult.data!.length}개 발견됨');
         for (var event in eventsResult.data!) {
           if (event.eventId == null) continue;
           
-          print('       - 저장 시도: ${event.title} (${event.start})');
+          developer.log('       - 저장 시도: ${event.title} (${event.start})');
           
           await _db.into(_db.calendarEvents).insertOnConflictUpdate(
                 CalendarEventsCompanion.insert(
@@ -157,11 +159,11 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
           syncCount++;
         }
       } else {
-        print('     - 이벤트 없음');
+        developer.log('     - 이벤트 없음');
       }
     }
     
-    print('=========== [동기화 완료] 총 $syncCount건 ===========');
+    developer.log('=========== [동기화 완료] 총 $syncCount건 ===========');
     return syncCount;
   }
 }

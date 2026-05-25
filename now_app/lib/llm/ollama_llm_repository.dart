@@ -1,3 +1,5 @@
+import 'dart:developer' as developer;
+
 import 'package:dio/dio.dart';
 import 'interfaces/llm_repository.dart';
 import 'models/llm_config.dart';
@@ -89,7 +91,7 @@ class OllamaLlmRepository extends BaseLlmRepository {
       );
       return r.statusCode == 200;
     } catch (e) {
-      print("Ollama 연결 실패: $e");
+      developer.log('Ollama 연결 실패: $e');
       return false;
     }
   }
@@ -108,7 +110,7 @@ class OllamaLlmRepository extends BaseLlmRepository {
         return data.map((e) => e['id'].toString()).toList();
       }
     } catch (e) {
-      print("모델 목록 가져오기 실패: $e");
+      developer.log('모델 목록 가져오기 실패: $e');
     }
     // 실패 시 기본값 반환
     return ['llama3', 'mistral', 'qwen2.5', 'gemma2'];

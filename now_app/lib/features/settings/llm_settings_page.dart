@@ -56,7 +56,7 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
         });
       }
     } catch (e) {
-      print('모델 로드 실패: $e');
+      debugPrint('모델 로드 실패: $e');
     } finally {
       if (mounted) setState(() => _isLoadingModels = false);
     }
