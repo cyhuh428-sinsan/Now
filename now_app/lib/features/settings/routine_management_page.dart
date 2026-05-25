@@ -325,7 +325,7 @@ class _RoutineCard extends StatelessWidget {
               height: 40,
               decoration: BoxDecoration(
                 color: routine.isEnabled
-                    ? const Color(0xFF2563EB).withOpacity(0.1)
+                    ? const Color(0xFF2563EB).withValues(alpha: 0.1)
                     : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(10),
               ),
@@ -371,7 +371,7 @@ class _RoutineCard extends StatelessWidget {
                 Switch(
                   value: routine.isEnabled,
                   onChanged: (_) => onToggle(),
-                  activeColor: const Color(0xFF2563EB),
+                  activeThumbColor: const Color(0xFF2563EB),
                   materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                 ),
                 Row(
@@ -530,7 +530,7 @@ class _RoutineEditSheetState extends ConsumerState<_RoutineEditSheet> {
                   _repeat = r;
                   if (r != RoutineRepeat.weekly) _weekdays.clear();
                 }),
-                selectedColor: const Color(0xFF2563EB).withOpacity(0.15),
+                selectedColor: const Color(0xFF2563EB).withValues(alpha: 0.15),
                 labelStyle: TextStyle(
                   color: _repeat == r
                       ? const Color(0xFF2563EB)

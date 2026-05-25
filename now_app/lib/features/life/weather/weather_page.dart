@@ -428,7 +428,7 @@ class _AiSuggestCard extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(
                       horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF06B6D4).withOpacity(0.1),
+                    color: const Color(0xFF06B6D4).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: isAnalyzing
@@ -485,7 +485,7 @@ class _PrepareCard extends StatelessWidget {
     final items = (jsonDecode(prepare.itemsJson) as List<dynamic>)
         .map((e) => e.toString())
         .toList();
-    final date = DateTime.parse(prepare.targetDate + 'T00:00:00');
+    final date = DateTime.parse('${prepare.targetDate}T00:00:00');
     final dateStr = DateFormat('M월 d일 EEEE', 'ko').format(date);
     final isToday = prepare.targetDate ==
         DateFormat('yyyy-MM-dd').format(DateTime.now());
@@ -510,7 +510,7 @@ class _PrepareCard extends StatelessWidget {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF06B6D4).withOpacity(0.1),
+              color: const Color(0xFF06B6D4).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
             child: const Center(
@@ -537,7 +537,7 @@ class _PrepareCard extends StatelessWidget {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF06B6D4).withOpacity(0.15),
+                          color: const Color(0xFF06B6D4).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(4),
                         ),
                         child: const Text('오늘',
@@ -853,7 +853,7 @@ class _AddPrepareSheetState extends ConsumerState<_AddPrepareSheet> {
                                 horizontal: 10, vertical: 5),
                             decoration: BoxDecoration(
                               color: const Color(0xFF06B6D4)
-                                  .withOpacity(0.1),
+                                  .withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Row(
@@ -920,10 +920,10 @@ class _NoApiKeyCard extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: const Color(0xFF06B6D4).withOpacity(0.08),
+          color: const Color(0xFF06B6D4).withValues(alpha: 0.08),
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-              color: const Color(0xFF06B6D4).withOpacity(0.3)),
+              color: const Color(0xFF06B6D4).withValues(alpha: 0.3)),
         ),
         child: const Row(
           children: [
@@ -962,7 +962,7 @@ class _WeatherLoadingCard extends StatelessWidget {
     return Container(
       height: 120,
       decoration: BoxDecoration(
-        color: const Color(0xFF06B6D4).withOpacity(0.1),
+        color: const Color(0xFF06B6D4).withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(16),
       ),
       child: const Center(
@@ -980,7 +980,7 @@ class _WeatherErrorCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: const Color(0xFFEF4444).withOpacity(0.08),
+        color: const Color(0xFFEF4444).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(16),
       ),
       child: const Row(

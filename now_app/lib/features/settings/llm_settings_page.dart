@@ -73,7 +73,9 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
 
   @override
   void dispose() {
-    for (final c in _apiKeyControllers.values) c.dispose();
+    for (final c in _apiKeyControllers.values) {
+      c.dispose();
+    }
     _ollamaUrlCtrl.dispose();
     _ollamaModelCtrl.dispose();
     super.dispose();
@@ -304,8 +306,8 @@ class _LlmSettingsPageState extends ConsumerState<LlmSettingsPage> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: _testResult!.startsWith('✅')
-                          ? const Color(0xFF10B981).withOpacity(0.1)
-                          : const Color(0xFFEF4444).withOpacity(0.1),
+                          ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                          : const Color(0xFFEF4444).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Text(

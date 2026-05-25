@@ -70,7 +70,7 @@ class NotificationService {
       '✨ 오늘의 브리핑',
       '오늘 일정과 할 일을 확인해보세요',
       scheduled,
-      NotificationDetails(
+      const NotificationDetails(
         android: AndroidNotificationDetails(
           _briefingChannelId,
           _briefingChannelName,
@@ -79,7 +79,7 @@ class NotificationService {
           priority: Priority.high,
           icon: '@mipmap/ic_launcher',
         ),
-        iOS: const DarwinNotificationDetails(),
+        iOS: DarwinNotificationDetails(),
       ),
       androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
       uiLocalNotificationDateInterpretation:

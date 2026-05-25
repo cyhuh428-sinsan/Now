@@ -160,7 +160,7 @@ class _WeatherSettingsPageState extends ConsumerState<WeatherSettingsPage> {
           Container(
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(
-              color: const Color(0xFF06B6D4).withOpacity(0.08),
+              color: const Color(0xFF06B6D4).withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
             ),
             child: const Row(
@@ -315,8 +315,8 @@ class _WeatherSettingsPageState extends ConsumerState<WeatherSettingsPage> {
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
                 color: _testResult!.startsWith('✅')
-                    ? const Color(0xFF10B981).withOpacity(0.1)
-                    : const Color(0xFFEF4444).withOpacity(0.1),
+                    ? const Color(0xFF10B981).withValues(alpha: 0.1)
+                    : const Color(0xFFEF4444).withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Text(

@@ -123,7 +123,7 @@ class _TripCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withOpacity(0.1),
+                    color: statusColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(statusLabel,
@@ -235,12 +235,14 @@ class _AddTripSheetState extends State<_AddTripSheet> {
                       firstDate: DateTime.now().subtract(const Duration(days: 365)),
                       lastDate: DateTime.now().add(const Duration(days: 730)),
                     );
-                    if (d != null) setState(() {
-                      _startDate = d;
-                      if (_endDate.isBefore(_startDate)) {
-                        _endDate = _startDate.add(const Duration(days: 1));
-                      }
-                    });
+                    if (d != null) {
+                      setState(() {
+                        _startDate = d;
+                        if (_endDate.isBefore(_startDate)) {
+                          _endDate = _startDate.add(const Duration(days: 1));
+                        }
+                      });
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -262,7 +264,9 @@ class _AddTripSheetState extends State<_AddTripSheet> {
                       firstDate: _startDate,
                       lastDate: DateTime.now().add(const Duration(days: 730)),
                     );
-                    if (d != null) setState(() => _endDate = d);
+                    if (d != null) {
+                      setState(() => _endDate = d);
+                    }
                   },
                   child: Container(
                     padding: const EdgeInsets.all(12),
@@ -672,7 +676,7 @@ class _PlanTileState extends ConsumerState<_PlanTile> {
                       child: Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                         decoration: BoxDecoration(
-                          color: _statusColor.withOpacity(0.15),
+                          color: _statusColor.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(_statusLabel,
