@@ -561,7 +561,11 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     if (ref.read(isListeningProvider)) {
       await _toggleListening();
     }
+    if (!mounted) return;
     final segments = ref.read(transcriptSegmentsProvider);
+    final endSummary = widget.recordType == 'memo'
+        ? '총 ${segments.length}개의 메모 내용이 기록되었습니다.\n종료 후 내용을 수정하고 저장 방식을 선택합니다.'
+        : '총 ${segments.length}개의 발언이 기록되었습니다.\n종료 후 내용을 수정하고 저장 방식을 선택합니다.';
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
@@ -578,7 +582,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
           style: const TextStyle(fontSize: 17, fontWeight: FontWeight.bold),
         ),
         content: Text(
-          '총 ${segments.length}개의 발언이 기록되었습니다.\n종료 후 내용을 수정하고 저장 방식을 선택합니다.',
+          endSummary,
           style: const TextStyle(fontSize: 14, color: Color(0xFF6B7280)),
         ),
         actions: [
@@ -939,6 +943,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     final elapsed = ref.watch(meetingElapsedProvider);
     final isListening = ref.watch(isListeningProvider);
     final isExtracting = ref.watch(isExtractingProvider);
+    final isMemo = widget.recordType == 'memo';
     final _n = DateTime.now();
     final _nm = _n.month.toString().padLeft(2, '0');
     final _nd = _n.day.toString().padLeft(2, '0');
@@ -953,6 +958,10 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
                 : widget.recordType == 'memo'
                     ? '메모_$_s'
                     : '회의_$_s');
+    final analysisStatusText =
+        isMemo ? '메모 분석 중...' : 'Action/Decision 추출 중...';
+    final analysisCountText =
+        isMemo ? '${segments.length}개 메모 내용 분석 중' : '${segments.length}개 발언 분석 중';
 
     // 추출 중 로딩
     if (isExtracting) {
@@ -964,10 +973,10 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
             children: [
               const CircularProgressIndicator(color: Color(0xFF2563EB)),
               const SizedBox(height: 20),
-              const Text('Action/Decision 추출 중...',
-                  style: TextStyle(fontSize: 15, color: Color(0xFF6B7280))),
+              Text(analysisStatusText,
+                  style: const TextStyle(fontSize: 15, color: Color(0xFF6B7280))),
               const SizedBox(height: 8),
-              Text('${segments.length}개 발언 분석 중',
+              Text(analysisCountText,
                   style: const TextStyle(
                       fontSize: 13, color: Color(0xFF9CA3AF))),
             ],
@@ -994,7 +1003,9 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
                     ? '면담을 나가시겠습니까?'
                     : widget.recordType == 'conversation'
                         ? '대화를 나가시겠습니까?'
-                        : '회의를 나가시겠습니까?',
+                        : widget.recordType == 'memo'
+                            ? '메모를 나가시겠습니까?'
+                            : '회의를 나가시겠습니까?',
                 style: const TextStyle(
                     fontSize: 17, fontWeight: FontWeight.bold),
               ),
@@ -1161,6 +1172,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
           _InputArea(
             controller: _textController,
             isListening: isListening,
+            hintText: isMemo ? '메모 내용을 입력하세요' : '발언 내용을 입력하세요',
             onSend: _addTextSegment,
             onMic: () {
               _toggleListening();
@@ -1277,6 +1289,7 @@ class _PulsingDotState extends State<_PulsingDot>
 class _InputArea extends StatelessWidget {
   final TextEditingController controller;
   final bool isListening;
+  final String hintText;
   final VoidCallback onSend;
   final VoidCallback onMic;
   final VoidCallback onUpload;
@@ -1284,6 +1297,7 @@ class _InputArea extends StatelessWidget {
   const _InputArea({
     required this.controller,
     required this.isListening,
+    required this.hintText,
     required this.onSend,
     required this.onMic,
     required this.onUpload,
@@ -1340,7 +1354,7 @@ class _InputArea extends StatelessWidget {
             textInputAction: TextInputAction.send,
             onSubmitted: (_) => onSend(),
             decoration: InputDecoration(
-              hintText: '발언 내용을 입력하세요',
+              hintText: hintText,
               hintStyle: const TextStyle(
                   color: Color(0xFF9CA3AF), fontSize: 14),
               filled: true,
