@@ -645,8 +645,8 @@ class _TreeMemoTile extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final children = allNodes.where((n) => n.parentId == node.id).toList();
     final indent = (node.level - 1) * 16.0;
-    final addParent = _resolveAddParent(node, allNodes);
-    final addLevel = _resolveNextLevel(addParent);
+    final addParent = _resolveAddParent(node);
+    final addLevel = addParent == null ? null : _resolveNextLevel(addParent);
 
     return Padding(
       padding: EdgeInsets.only(left: indent, bottom: 8),
@@ -703,19 +703,18 @@ class _TreeMemoTile extends ConsumerWidget {
                 padding: EdgeInsets.zero,
                 onPressed: () => _requestTreeMemoAnalysis(context, ref, node),
               ),
-              IconButton(
-                tooltip: '${_treeMemoKind(addLevel)} 추가',
-                icon: const Icon(Icons.add, size: 18),
-                constraints: const BoxConstraints.tightFor(
-                  width: 36,
-                  height: 36,
+              if (addParent != null && addLevel != null)
+                IconButton(
+                  tooltip: '${_treeMemoKind(addLevel)} 추가',
+                  icon: const Icon(Icons.add, size: 18),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () =>
+                      _showTreeMemoDialog(context, ref, parent: addParent),
                 ),
-                padding: EdgeInsets.zero,
-                onPressed: addParent == null && node.level >= 3
-                    ? null
-                    : () =>
-                          _showTreeMemoDialog(context, ref, parent: addParent),
-              ),
               IconButton(
                 tooltip: children.isEmpty ? '삭제' : '하위 메모가 있어 삭제 불가',
                 icon: Icon(
@@ -790,14 +789,8 @@ Future<void> _requestTreeMemoAnalysis(
   }
 }
 
-TreeMemoNode? _resolveAddParent(
-  TreeMemoNode node,
-  List<TreeMemoNode> allNodes,
-) {
-  if (node.level <= 2) return node;
-  for (final candidate in allNodes) {
-    if (candidate.id == node.parentId) return candidate;
-  }
+TreeMemoNode? _resolveAddParent(TreeMemoNode node) {
+  if (node.level < 3) return node;
   return null;
 }
 
