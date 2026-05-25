@@ -84,3 +84,11 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 ```bash
 python3 scripts/check_github_actions_status.py --repo cyhuh428-sinsan/Now --workflow preflight.yml --branch main
 ```
+
+이 명령이 `GitHub API HTTP 404`를 반환하면 보통 아래 상태 중 하나입니다.
+
+- 저장소에서 GitHub Actions가 아직 활성화되지 않았습니다.
+- `NowNote Preflight` 워크플로우가 아직 한 번도 실행되지 않았습니다.
+- 비공개 저장소에서 Actions 읽기 권한이 있는 `GITHUB_TOKEN`이 없습니다.
+
+이 경우 GitHub Actions 화면에서 `NowNote Preflight`를 수동 실행한 뒤 다시 확인합니다.
