@@ -5015,3 +5015,43 @@
 ### 보류
 
 - 최신 커밋 기준 GitHub status와 workflow run은 여전히 조회되지 않아 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
+
+## 2026-05-25 12:55 KST
+
+### 다음 작업 시작
+
+- Android 에뮬레이터에서 메모 음성 입력 화면의 진입/종료 흐름을 점검.
+
+### 확인 내용
+
+- 홈의 `오늘 메모 남기기`에서 메모 입력 화면 진입 확인.
+- 메모 입력 화면에서 `실시간 변환`, `녹음 후 변환`, `음성으로 간단 메모 시작` 노출 확인.
+- 실시간 변환으로 메모 기록 세션에 진입하고 타이머가 올라가는 흐름 확인.
+- 실제 음성 입력이 없어 텍스트 변환 결과는 확인하지 못했으므로 `음성 메모 실시간 변환 확인`은 완료 처리하지 않음.
+- 종료 확인 창에서 메모인데 `총 0개의 발언이 기록되었습니다`라고 표시되는 회의 용어 잔여 문제 발견.
+
+### 구현 내용
+
+- 메모 기록 종료 확인 창의 요약 문구를 `메모 내용` 기준으로 변경.
+- 메모 분석 중 로딩 문구를 `메모 분석 중`, `메모 내용 분석 중`으로 변경.
+- 메모 기록 화면 나가기 확인 문구를 `메모를 나가시겠습니까?`로 변경.
+- 메모 기록 입력창 hint를 `메모 내용을 입력하세요`로 변경.
+- 모바일 표면 검증에 메모 종료 문구와 메모 입력 hint 회귀 방지 체크 추가.
+
+### 검증
+
+- `dart format lib\features\meeting\meeting_progress_page.dart` 실행 후 포맷 변경이 과도하게 섞인 것을 확인.
+- 앱 파일은 원복 후 메모 용어 수정만 최소 범위로 재적용.
+- `uv run python -m py_compile now_app\scripts\verify_mobile_surface.py` 통과.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 110/110.
+- 최소 diff 재적용 후 `uv run python now_app\scripts\verify_mobile_surface.py` 재통과: 110/110.
+- 최소 diff 재적용 후 `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 재통과: 643/643.
+- 최소 diff 재적용 후 `git diff --check` 통과.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `dart analyze lib\features\meeting\meeting_progress_page.dart`는 기존 경고/정보 28건으로 종료코드 1. 이번 변경의 `use_build_context_synchronously` 정보는 `mounted` 확인 추가로 제거.
+
+### 보류
+
+- 새 앱 빌드/실행 명령은 5분 제한에 걸려 중단됐고, 남은 Dart development-service 프로세스는 정리함.
+- 앱을 force-stop 후 재시작해 에뮬레이터 UI 자동화가 다시 정상 덤프되는 것까지 확인.
+- 실제 음성 인식 결과와 녹음 후 변환, 녹음 업로드 상태는 실제 음성/STT 조건이 필요해 완료 처리하지 않음.
