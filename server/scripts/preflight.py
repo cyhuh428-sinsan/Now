@@ -88,6 +88,7 @@ def main() -> None:
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
+    server_deploy_script_path = server_dir / "scripts" / "deploy_local.sh"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
     phase1_checklist_path = repo_root / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
@@ -241,6 +242,7 @@ def main() -> None:
                 ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
                 ("scripts/release_readiness.py", "Root README documents release readiness summary", "release readiness summary"),
                 ("scripts/local_environment_status.py", "Root README documents local environment status", "local environment status"),
+                ("server/scripts/deploy_local.sh", "Root README documents server deploy helper", "server deploy helper"),
                 ("SECURITY.md", "Root README links security policy", "security policy path"),
                 ("CONTRIBUTING.md", "Root README links contributing guide", "contributing guide path"),
                 ("actions/workflows/preflight.yml/badge.svg", "Root README shows preflight badge", "preflight badge"),
@@ -416,6 +418,7 @@ def main() -> None:
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
                 ("local_environment_status.py", "GitHub preflight checks local environment status script syntax", "workflow local environment status script"),
+                ("sh -n server/scripts/deploy_local.sh", "GitHub preflight checks deploy helper syntax", "workflow deploy helper syntax"),
                 ("node --check web/scripts/check_import_export.mjs", "GitHub preflight checks web runtime script syntax", "workflow node check"),
                 ("python scripts/preflight.py --env-file .env.example --allow-example", "GitHub preflight runs repository preflight", "workflow preflight"),
                 ("python scripts/verify_public_repo_safety.py", "GitHub preflight runs public repository safety verification", "workflow public repo safety"),
@@ -476,6 +479,7 @@ def main() -> None:
                 ("SMOKE TEST HTTP FAILED", "README explains smoke HTTP failure summary", "smoke HTTP failure summary"),
                 ("SMOKE TEST CONNECTION FAILED", "README explains smoke connection failure summary", "smoke connection failure summary"),
                 ("SMOKE TEST JSON FAILED", "README explains smoke JSON failure summary", "smoke JSON failure summary"),
+                ("scripts/deploy_local.sh", "README documents one-command deploy helper", "deploy helper"),
                 ("--timeout 초", "README explains smoke timeout option", "smoke timeout"),
                 ("--ready-retries 횟수", "README explains smoke readiness retries", "smoke readiness retries"),
                 ("--ready-delay 초", "README explains smoke readiness delay", "smoke readiness delay"),
@@ -490,6 +494,7 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    check(server_deploy_script_path.exists(), "Server deploy helper script exists", str(server_deploy_script_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
     check(github_actions_status_check_path.exists(), "GitHub Actions status check script exists", str(github_actions_status_check_path), failures)
@@ -949,6 +954,10 @@ def main() -> None:
         check_text_contains(
             deploy,
             [
+                ("scripts/deploy_local.sh", "Deploy checklist covers one-command deploy helper", "deploy helper"),
+                ("--base-url", "Deploy checklist covers deploy helper base URL option", "deploy helper base URL"),
+                ("--public-server", "Deploy checklist covers deploy helper public server option", "deploy helper public server"),
+                ("--skip-pull", "Deploy checklist covers deploy helper skip pull option", "deploy helper skip pull"),
                 ("git pull origin main", "Deploy checklist covers source update", "git pull origin main"),
                 ("python3 scripts/preflight.py", "Deploy checklist covers preflight", "preflight"),
                 ("NowNote server preflight passed", "Deploy checklist explains preflight pass summary", "preflight passed summary"),
@@ -979,6 +988,23 @@ def main() -> None:
                 ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
                 ("/api/v1/admin/export/verify", "Deploy checklist covers backup verification", "export/verify"),
+            ],
+            failures,
+        )
+    if server_deploy_script_path.exists():
+        server_deploy_script = server_deploy_script_path.read_text(encoding="utf-8")
+        check_text_contains(
+            server_deploy_script,
+            [
+                ("git pull origin main", "Deploy helper updates source", "git pull origin main"),
+                ("scripts/preflight.py", "Deploy helper runs preflight", "preflight"),
+                ("--public-server", "Deploy helper supports public server preflight", "public server preflight"),
+                ("docker compose up --build -d", "Deploy helper supports docker compose", "docker compose"),
+                ("docker-compose up --build -d", "Deploy helper supports docker-compose fallback", "docker-compose"),
+                ("/health/ready", "Deploy helper waits for ready endpoint", "ready endpoint"),
+                ("scripts/smoke_test.py", "Deploy helper runs smoke test", "smoke test"),
+                ("NOW_API_TOKEN", "Deploy helper reads API token from env file", "API token"),
+                ("--skip-pull", "Deploy helper supports skip pull option", "skip pull"),
             ],
             failures,
         )

@@ -5327,3 +5327,37 @@
 
 - GitHub 커넥터 기준 최신 커밋의 workflow run 목록은 비어 있음.
 - GitHub commit status 목록도 비어 있음.
+
+## 2026-05-26 00:42 KST
+
+### 다음 작업 시작
+
+- WSL/Linux 서버 재배포 점검을 사람이 여러 명령으로 나누어 실행하지 않아도 되도록 배포 도우미 추가.
+
+### 범위
+
+- 기존 API, DB, 동기화, 모바일/Web 동작은 변경하지 않음.
+- 서버 갱신 절차를 보조하는 shell script와 문서/프리플라이트 점검 기준만 추가.
+
+### 구현 내용
+
+- `server\scripts\deploy_local.sh` 추가.
+- 소스 갱신, `.env` 존재 확인, preflight, 선택형 public preflight, Docker Compose 재기동, `/health/ready` 대기, smoke test를 순서대로 실행하도록 구성.
+- `.env`의 `NOW_API_TOKEN`을 읽어 smoke test에 자동 전달하도록 구성.
+- `--base-url`, `--public-server`, `--skip-pull`, `--timeout`, `--ready-retries`, `--ready-delay` 옵션 추가.
+- 루트 `README.md`, `server\README.md`, `server\DEPLOY.md`에 빠른 갱신 명령 추가.
+- `server\scripts\preflight.py`가 배포 도우미 존재와 핵심 동작 문구를 확인하도록 보강.
+- GitHub Actions preflight에 `sh -n server/scripts/deploy_local.sh` 문법 점검 단계 추가.
+
+### 검증
+
+- WSL `sh -n` 문법 점검 통과. 단, 현재 WSL은 작업 디렉터리 `D:\Project\Now` 변환 경고가 있어 파일 경로 직접 실행 대신 stdin 방식으로 점검함.
+- WSL `sh` 도움말 실행 통과.
+- `uv run python -m py_compile server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 664/664.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `git diff --check` 통과.
+
+### 보류
+
+- 실제 `sh scripts/deploy_local.sh` 실행은 Docker가 있는 WSL/Linux 배포 환경에서 확인해야 하므로 체크리스트 완료 처리는 하지 않음.

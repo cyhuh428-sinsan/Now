@@ -79,6 +79,14 @@ python3 scripts/preflight.py
 python3 scripts/smoke_test.py --base-url http://localhost:8750
 ```
 
+WSL/Linux 서버에서는 갱신, 점검, 컨테이너 재시작, smoke test를 한 번에 실행할 수 있습니다.
+도우미 위치는 `server/scripts/deploy_local.sh`입니다.
+
+```bash
+cd server
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
 공개 저장소에 올리기 전에는 루트 디렉터리에서 비밀값 포함 여부를 확인합니다.
 
 ```bash

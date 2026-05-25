@@ -64,6 +64,13 @@ python3 scripts/preflight.py
 docker compose up --build
 ```
 
+WSL/Linux 서버에서 소스 갱신부터 smoke test까지 한 번에 확인하려면 아래 도우미를 사용할 수 있습니다.
+도우미는 `.env`의 `NOW_API_TOKEN`을 읽어 smoke test에 전달하므로 토큰을 화면에 다시 입력하지 않아도 됩니다.
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
 저장소의 예시 파일 구조만 확인할 때는 아래처럼 실행합니다.
 
 ```bash
