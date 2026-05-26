@@ -21,6 +21,21 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(errors="replace")
 
 
+class GitHubApiError(Exception):
+    def __init__(self, code: int, detail: str):
+        self.code = code
+        self.detail = detail
+        super().__init__(f"GitHub API HTTP {code}: {detail}")
+
+
+def read_token(primary_env: str) -> tuple[str | None, str | None]:
+    for env_name in dict.fromkeys([primary_env, "GITHUB_TOKEN", "GH_TOKEN"]):
+        token = os.environ.get(env_name)
+        if token:
+            return token, env_name
+    return None, None
+
+
 def request_json(url: str, token: str | None, timeout: int) -> dict:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -37,17 +52,18 @@ def request_json(url: str, token: str | None, timeout: int) -> dict:
             return json.loads(raw)
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace")
-        if exc.code == 404:
-            raise SystemExit(
-                "GitHub API HTTP 404: workflow run을 조회할 수 없습니다.\n"
-                "- 저장소에서 GitHub Actions가 아직 활성화되지 않았거나,\n"
-                "- workflow 파일명이 다르거나 아직 한 번도 실행되지 않았거나,\n"
-                "- 비공개 저장소인데 GITHUB_TOKEN 권한이 부족할 수 있습니다.\n"
-                "GitHub Actions 화면에서 `NowNote Preflight`를 수동 실행한 뒤 다시 확인하세요."
-            ) from exc
-        raise SystemExit(f"GitHub API HTTP {exc.code}: {detail}") from exc
+        raise GitHubApiError(exc.code, detail) from exc
     except urllib.error.URLError as exc:
         raise SystemExit(f"GitHub API 연결 실패: {exc.reason}") from exc
+
+
+def github_actions_url(repository: str) -> str:
+    return f"https://github.com/{repository}/actions"
+
+
+def github_workflow_url(repository: str, workflow: str) -> str:
+    workflow_part = urllib.parse.quote(workflow, safe="")
+    return f"https://github.com/{repository}/actions/workflows/{workflow_part}"
 
 
 def workflow_runs_url(repository: str, workflow: str, branch: str, per_page: int) -> str:
@@ -65,6 +81,36 @@ def run_label(run: dict) -> str:
     return f"#{number} {status}/{conclusion} {head_sha} {html_url}"
 
 
+def print_header(repository: str, workflow: str, branch: str, commit: str | None, token_source: str | None) -> None:
+    print("NowNote GitHub Actions status check")
+    print(f"- repository: {repository}")
+    print(f"- workflow: {workflow}")
+    print(f"- branch: {branch}")
+    if commit:
+        print(f"- commit: {commit}")
+    print(f"- token: {token_source or '없음'}")
+    print(f"- actions: {github_actions_url(repository)}")
+    print(f"- workflow page: {github_workflow_url(repository, workflow)}")
+
+
+def print_api_error_guidance(exc: GitHubApiError, repository: str, workflow: str) -> None:
+    if exc.code == 404:
+        print("GitHub API HTTP 404: workflow run을 조회할 수 없습니다.")
+        print("- 저장소에서 GitHub Actions가 아직 활성화되지 않았을 수 있습니다.")
+        print("- `NowNote Preflight` 워크플로우가 아직 한 번도 실행되지 않았을 수 있습니다.")
+        print("- 비공개 저장소라면 Actions 읽기 권한이 있는 `GITHUB_TOKEN` 또는 `GH_TOKEN`이 필요합니다.")
+        print(f"- Actions 화면: {github_actions_url(repository)}")
+        print(f"- 워크플로우 화면: {github_workflow_url(repository, workflow)}")
+        print("GitHub Actions 화면에서 `NowNote Preflight`를 수동 실행한 뒤 다시 확인하세요.")
+        return
+    if exc.code in {401, 403}:
+        print(f"GitHub API HTTP {exc.code}: GitHub 토큰 권한을 확인해야 합니다.")
+        print("- `GITHUB_TOKEN` 또는 `GH_TOKEN`에 저장소 Actions 읽기 권한이 있는지 확인하세요.")
+        print("- 조직/개인 저장소 정책에서 Actions API 접근이 막혀 있지 않은지 확인하세요.")
+        return
+    print(f"GitHub API HTTP {exc.code}: {exc.detail}")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Check NowNote GitHub Actions preflight status")
     parser.add_argument("--repo", default=DEFAULT_REPOSITORY, help="GitHub repository in owner/name form")
@@ -76,23 +122,23 @@ def main() -> None:
     parser.add_argument("--timeout", type=int, default=10, help="HTTP timeout seconds")
     args = parser.parse_args()
 
-    token = os.environ.get(args.token_env) or None
-    data = request_json(workflow_runs_url(args.repo, args.workflow, args.branch, args.per_page), token, args.timeout)
+    token, token_source = read_token(args.token_env)
+    print_header(args.repo, args.workflow, args.branch, args.commit, token_source)
+
+    try:
+        data = request_json(workflow_runs_url(args.repo, args.workflow, args.branch, args.per_page), token, args.timeout)
+    except GitHubApiError as exc:
+        print_api_error_guidance(exc, args.repo, args.workflow)
+        raise SystemExit(1) from exc
+
     runs = data.get("workflow_runs") or []
 
     if args.commit:
         runs = [run for run in runs if str(run.get("head_sha") or "").lower() == args.commit.lower()]
 
-    print("NowNote GitHub Actions status check")
-    print(f"- repository: {args.repo}")
-    print(f"- workflow: {args.workflow}")
-    print(f"- branch: {args.branch}")
-    if args.commit:
-        print(f"- commit: {args.commit}")
-
     if not runs:
         print("확인 가능한 workflow run이 없습니다.")
-        print("저장소가 비공개이면 GITHUB_TOKEN 환경변수를 설정하거나 GitHub Actions 화면에서 수동 실행하세요.")
+        print("저장소가 비공개이면 `GITHUB_TOKEN` 또는 `GH_TOKEN`을 설정하거나 GitHub Actions 화면에서 수동 실행하세요.")
         raise SystemExit(1)
 
     latest = runs[0]

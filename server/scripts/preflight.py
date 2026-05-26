@@ -324,6 +324,7 @@ def main() -> None:
                 ("docs/LICENSE_DECISION.md", "Open source guide links license decision guide", "license decision guide"),
                 ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
                 ("check_github_actions_status.py", "Open source guide documents Actions status check script", "Actions status check script"),
+                ("GH_TOKEN", "Open source guide documents gh token fallback", "GH_TOKEN fallback"),
             ],
             failures,
         )
@@ -750,6 +751,8 @@ def main() -> None:
                 ("NowNote GitHub Actions status check", "GitHub Actions status script prints summary", "Actions status summary"),
                 ("actions/workflows", "GitHub Actions status script calls workflow runs API", "workflow runs API"),
                 ("GITHUB_TOKEN", "GitHub Actions status script supports token env", "GITHUB_TOKEN"),
+                ("GH_TOKEN", "GitHub Actions status script supports gh token env", "GH_TOKEN"),
+                ("workflow page", "GitHub Actions status script prints workflow page", "workflow page"),
                 ('conclusion") == "success"', "GitHub Actions status script checks success conclusion", "success conclusion"),
             ],
             failures,

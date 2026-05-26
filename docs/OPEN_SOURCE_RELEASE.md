@@ -79,7 +79,7 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 실패하면 Actions 로그의 실패 항목을 기준으로 수정하고, 로컬에서 같은 검증을 다시 실행합니다.
 
 터미널에서 상태를 확인할 때는 아래 명령을 사용할 수 있습니다.
-비공개 저장소에서는 `GITHUB_TOKEN` 환경변수에 저장소 Actions를 읽을 수 있는 토큰이 필요할 수 있습니다.
+비공개 저장소에서는 `GITHUB_TOKEN` 또는 `GH_TOKEN` 환경변수에 저장소 Actions를 읽을 수 있는 토큰이 필요할 수 있습니다.
 
 ```bash
 python3 scripts/check_github_actions_status.py --repo cyhuh428-sinsan/Now --workflow preflight.yml --branch main
@@ -89,6 +89,6 @@ python3 scripts/check_github_actions_status.py --repo cyhuh428-sinsan/Now --work
 
 - 저장소에서 GitHub Actions가 아직 활성화되지 않았습니다.
 - `NowNote Preflight` 워크플로우가 아직 한 번도 실행되지 않았습니다.
-- 비공개 저장소에서 Actions 읽기 권한이 있는 `GITHUB_TOKEN`이 없습니다.
+- 비공개 저장소에서 Actions 읽기 권한이 있는 `GITHUB_TOKEN` 또는 `GH_TOKEN`이 없습니다.
 
 이 경우 GitHub Actions 화면에서 `NowNote Preflight`를 수동 실행한 뒤 다시 확인합니다.
