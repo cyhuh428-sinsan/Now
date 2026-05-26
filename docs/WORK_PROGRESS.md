@@ -5381,3 +5381,36 @@
 - `uv run python -m py_compile scripts\local_environment_status.py` 통과.
 - `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 664/664.
 - `git diff --check` 통과.
+
+## 2026-05-26 01:20 KST
+
+### 다음 작업 시작
+
+- Google Play 등록 전 남은 항목을 자동 확인과 Play Console 수동 확인으로 분리해 볼 수 있는 상태 요약 도구 추가.
+
+### 범위
+
+- 앱 코드와 Play Console 값 자체는 변경하지 않음.
+- 등록 자료, 이미지, 로컬 릴리스 파일, 민감 파일 Git 제외 여부를 읽기 전용으로 확인.
+
+### 구현 내용
+
+- `scripts\play_release_status.py` 추가.
+- Play 등록 문서, 개인정보처리방침 초안/공개 페이지, Play 이미지, 로컬 릴리스 파일, `key.properties`/업로드 키 Git 제외 여부를 점검.
+- `docs\PHASE1_RELEASE_CHECKLIST.md`의 Google Play 섹션을 읽어 수동으로 남은 항목을 표시.
+- 루트 `README.md`에 실행 명령 추가.
+- GitHub Actions Python 문법 검사 대상에 `play_release_status.py` 추가.
+- 서버 preflight가 Play 상태 요약 스크립트와 핵심 점검 기준을 확인하도록 보강.
+
+### 검증
+
+- `uv run python scripts\play_release_status.py --show-manual` 통과: 자동 확인 21/21 OK, 경고 0, 수동 확인 9개.
+- `uv run python -m py_compile scripts\play_release_status.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 675/675.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.
+
+### 보류
+
+- Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
