@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import re
+import struct
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -33,6 +34,15 @@ REQUIRED_ASSETS = [
     PLAY_ASSETS / "screenshot_04_voice.png",
 ]
 
+EXPECTED_ASSET_DIMENSIONS = {
+    PLAY_ASSETS / "app_icon_512.png": (512, 512),
+    PLAY_ASSETS / "feature_graphic_1024x500.png": (1024, 500),
+    PLAY_ASSETS / "screenshot_01_home.png": (1080, 1920),
+    PLAY_ASSETS / "screenshot_02_daily_notes.png": (1080, 1920),
+    PLAY_ASSETS / "screenshot_03_tree_notes.png": (1080, 1920),
+    PLAY_ASSETS / "screenshot_04_voice.png": (1080, 1920),
+}
+
 LOCAL_RELEASE_FILES = [
     ANDROID / "key.properties",
     ANDROID / "upload-keystore.jks",
@@ -56,6 +66,34 @@ def add_file_check(checks: list[Check], path: Path, label: str) -> None:
         checks.append(Check(label, "warn", f"빈 파일: {path.relative_to(ROOT)}"))
     else:
         checks.append(Check(label, "warn", f"파일 없음: {path.relative_to(ROOT)}"))
+
+
+def read_png_dimensions(path: Path) -> tuple[int, int] | None:
+    if not path.exists():
+        return None
+    with path.open("rb") as file:
+        header = file.read(24)
+    if len(header) < 24 or header[:8] != b"\x89PNG\r\n\x1a\n" or header[12:16] != b"IHDR":
+        return None
+    return struct.unpack(">II", header[16:24])
+
+
+def add_png_dimension_check(checks: list[Check], path: Path, expected: tuple[int, int]) -> None:
+    dimensions = read_png_dimensions(path)
+    if dimensions is None:
+        checks.append(Check(f"Play 이미지 크기: {path.name}", "warn", "PNG 크기 확인 실패"))
+        return
+
+    width, height = dimensions
+    expected_width, expected_height = expected
+    status = "ok" if dimensions == expected else "warn"
+    checks.append(
+        Check(
+            f"Play 이미지 크기: {path.name}",
+            status,
+            f"{width}x{height}, 기준 {expected_width}x{expected_height}",
+        )
+    )
 
 
 def git_check_ignore(path: Path) -> bool:
@@ -169,6 +207,8 @@ def build_checks() -> list[Check]:
         add_file_check(checks, doc, f"Play 문서: {doc.name}")
     for asset in REQUIRED_ASSETS:
         add_file_check(checks, asset, f"Play 이미지: {asset.name}")
+    for asset, expected in EXPECTED_ASSET_DIMENSIONS.items():
+        add_png_dimension_check(checks, asset, expected)
 
     for path in LOCAL_RELEASE_FILES:
         add_file_check(checks, path, f"로컬 릴리스 파일: {path.name}")
