@@ -5492,6 +5492,32 @@
 
 - 분류 결과상 남은 항목은 외부 기기, 실제 서버, Play Console, GitHub Actions, 라이선스 결정이 필요하므로 완료 처리하지 않음.
 
+## 2026-05-26 20:52 KST
+
+### 다음 작업 시작
+
+- GitHub Actions 확인이 404로 실패할 때 다음 행동을 더 명확하게 알 수 있도록 상태 확인 스크립트 보강.
+
+### 구현 내용
+
+- `scripts\check_github_actions_status.py`가 `GITHUB_TOKEN`뿐 아니라 `GH_TOKEN`도 자동 후보로 읽도록 수정.
+- 확인 결과 헤더에 토큰 사용 여부, Actions 화면 URL, 워크플로우 화면 URL을 출력하도록 보강.
+- 404, 401, 403 응답별로 운영자가 확인할 내용을 분리해 표시.
+- `docs\OPEN_SOURCE_RELEASE.md`의 토큰 안내를 `GITHUB_TOKEN`/`GH_TOKEN` 기준으로 갱신.
+- `server\scripts\preflight.py`가 GH_TOKEN 안내와 workflow page 출력 기준을 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`의 preflight 통과 수치를 691/691로 갱신.
+
+### 검증
+
+- `uv run python -m py_compile scripts\check_github_actions_status.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\check_github_actions_status.py --repo cyhuh428-sinsan/Now --branch main` 실행: 현재는 GitHub API 404가 맞으며, 토큰 없음과 확인 URL을 포함해 안내됨.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 691/691.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+
+### 보류
+
+- GitHub Actions workflow run 자체는 아직 확인되지 않아 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
