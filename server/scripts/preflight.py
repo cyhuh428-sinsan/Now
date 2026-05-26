@@ -242,6 +242,7 @@ def main() -> None:
                 ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
                 ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
                 ("scripts/release_readiness.py", "Root README documents release readiness summary", "release readiness summary"),
+                ("--show-blockers", "Root README documents release blocker summary", "release blocker summary"),
                 ("scripts/play_release_status.py", "Root README documents Play release status", "Play release status"),
                 ("scripts/local_environment_status.py", "Root README documents local environment status", "local environment status"),
                 ("server/scripts/deploy_local.sh", "Root README documents server deploy helper", "server deploy helper"),
@@ -521,6 +522,21 @@ def main() -> None:
                 ("app-release.aab", "Play status checks release AAB", "release AAB"),
                 ("--show-manual", "Play status supports manual item display", "show manual"),
                 ("--strict", "Play status supports strict mode", "strict mode"),
+            ],
+            failures,
+        )
+    if release_readiness_check_path.exists():
+        release_readiness_check = release_readiness_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            release_readiness_check,
+            [
+                ("--show-blockers", "Release readiness supports blocker summary", "show blockers"),
+                ("classify_remaining_item", "Release readiness classifies remaining items", "classify remaining"),
+                ("실제 Android 기기/모바일 화면", "Release readiness groups mobile blockers", "mobile blockers"),
+                ("WSL/Docker 서버 재배포", "Release readiness groups server deploy blockers", "server deploy blockers"),
+                ("공용 서버 운영 결정", "Release readiness groups public server blockers", "public server blockers"),
+                ("Google Play Console", "Release readiness groups Play Console blockers", "Play blockers"),
+                ("오픈소스 라이선스 결정", "Release readiness groups license blockers", "license blockers"),
             ],
             failures,
         )

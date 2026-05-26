@@ -97,6 +97,7 @@ python3 scripts/verify_public_repo_safety.py
 
 ```bash
 python3 scripts/release_readiness.py
+python3 scripts/release_readiness.py --show-blockers
 ```
 
 Google Play 등록 준비 상태는 루트 디렉터리에서 자동 확인과 수동 확인 항목을 나눠 볼 수 있습니다.
