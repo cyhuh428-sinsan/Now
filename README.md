@@ -99,6 +99,12 @@ python3 scripts/verify_public_repo_safety.py
 python3 scripts/release_readiness.py
 ```
 
+Google Play 등록 준비 상태는 루트 디렉터리에서 자동 확인과 수동 확인 항목을 나눠 볼 수 있습니다.
+
+```bash
+python3 scripts/play_release_status.py --show-manual
+```
+
 현재 로컬 개발/배포 환경 상태는 루트 디렉터리에서 확인할 수 있습니다.
 
 ```bash
