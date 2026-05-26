@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import shutil
 import subprocess
@@ -27,6 +28,8 @@ EXPECTED_CAPABILITIES = {
     "user_access_tokens",
     "two_factor_status",
 }
+
+DOCKER_VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?\b")
 
 
 @dataclass
@@ -122,8 +125,12 @@ def check_docker() -> CheckResult:
             ],
             timeout=20,
         )
-        if code == 0 and output.strip():
+        docker_seen = DOCKER_VERSION_RE.search(output) or "Docker Compose version" in output
+        wsl_warning = "wsl:" in output.lower() or "failed to translate" in output.lower()
+        if code == 0 and output.strip() and docker_seen and not wsl_warning:
             return CheckResult("Docker", "ok", f"WSL Docker 확인: {output.strip()}")
+        if code == 0 and output.strip() and docker_seen:
+            return CheckResult("Docker", "warn", f"WSL Docker는 보이지만 WSL 경고가 있습니다: {output.strip()}")
 
     return CheckResult("Docker", "warn", windows_message)
 

@@ -5411,6 +5411,36 @@
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `git diff --check` 통과.
 
+## 2026-05-26 11:29 KST
+
+### 다음 작업 시작
+
+- 남은 31개 항목 중 현재 환경에서 실제로 닫을 수 있는 항목을 재점검.
+
+### 확인 내용
+
+- `uv run python scripts\release_readiness.py` 기준 26/57 완료, 31개 남음 유지.
+- `uv run python now_app\scripts\check_android_runtime.py` 기준 에뮬레이터는 보이나 실제 USB Android 기기는 연결되지 않음.
+- `wsl.exe -l -v` 기준 사용할 수 있는 WSL 배포판을 정상 확인하지 못함.
+- Windows `docker`, `docker-compose`, `gh` 명령은 현재 PATH에서 확인되지 않음.
+- `http://localhost:8750` 서버는 health/ready는 정상이지만 최신 capability가 빠진 오래된 배포본 가능성 유지.
+
+### 구현 내용
+
+- `scripts\local_environment_status.py`가 WSL 경고가 섞인 Docker 출력은 정상 OK가 아니라 경고로 표시하도록 보강.
+
+### 검증
+
+- `uv run python scripts\local_environment_status.py --base-url http://localhost:8750` 실행: WSL 경로 경고, Docker WSL 경고, 오래된 서버 capability 경고 확인.
+- `uv run python -m py_compile scripts\local_environment_status.py` 통과.
+
+### 보류
+
+- 실제 Android 기기 실행/음성/녹음 업로드 점검은 물리 기기 연결이 필요함.
+- WSL/Linux Docker 재배포 점검은 정상 WSL 배포판 또는 Docker CLI 접근이 필요함.
+- GitHub Actions 통과 확인은 Actions 실행 기록 또는 `gh`/토큰 기반 접근이 필요함.
+- 공용 서버/Play Console/라이선스 항목은 운영 결정 또는 외부 화면 확인이 필요하므로 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
