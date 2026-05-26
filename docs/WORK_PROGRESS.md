@@ -5465,6 +5465,33 @@
 
 - 실제 Android 기기 실행, 음성 메모 실시간 변환, 녹음 후 변환, 녹음 업로드 상태 확인은 물리 기기 또는 실제 앱 화면 점검이 필요하므로 완료 처리하지 않음.
 
+## 2026-05-26 20:18 KST
+
+### 다음 작업 시작
+
+- 남은 31개 항목을 단순 목록이 아니라 외부 조건별로 분류해 다음 행동을 더 명확히 볼 수 있도록 보강.
+
+### 구현 내용
+
+- `scripts\release_readiness.py`에 `--show-blockers` 옵션 추가.
+- 남은 항목을 실제 Android 기기/모바일 화면, WSL/Docker 서버 재배포, 공용 서버 운영 결정, Google Play Console, GitHub Actions, 오픈소스 라이선스 결정으로 분류.
+- 루트 `README.md`에 `python3 scripts/release_readiness.py --show-blockers` 명령 추가.
+- `server\scripts\preflight.py`가 release readiness 분류 기능과 README 안내를 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`에 남은 항목 외부 조건별 확인 원칙 추가.
+
+### 검증
+
+- `uv run python scripts\release_readiness.py --show-blockers` 통과: 26/57 완료, 31개 남음.
+- 남은 31개 분류: 실제 Android 기기/모바일 화면 5개, WSL/Docker 서버 재배포 9개, 공용 서버 운영 결정 8개, Google Play Console 6개, GitHub Actions 1개, 오픈소스 라이선스 결정 2개.
+- `uv run python -m py_compile scripts\release_readiness.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 688/688.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.
+
+### 보류
+
+- 분류 결과상 남은 항목은 외부 기기, 실제 서버, Play Console, GitHub Actions, 라이선스 결정이 필요하므로 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.

@@ -20,6 +20,17 @@ class ChecklistItem:
     checked: bool
 
 
+BLOCKER_GUIDANCE = {
+    "실제 Android 기기/모바일 화면": "USB 디버깅 실기기 또는 실제 앱 화면에서 확인해야 합니다.",
+    "WSL/Docker 서버 재배포": "정상 WSL/Linux 배포 환경과 Docker Compose 실행 권한이 필요합니다.",
+    "공용 서버 운영 결정": "실제 도메인, HTTPS, reverse proxy, 사용자 토큰 운영값을 확정해야 합니다.",
+    "Google Play Console": "Play Console 화면에서 문구, Data safety, 내부 테스트 업로드를 확인해야 합니다.",
+    "GitHub Actions": "GitHub Actions workflow 실행 기록 또는 Actions 읽기 권한이 필요합니다.",
+    "오픈소스 라이선스 결정": "라이선스는 법적 선택이므로 사람이 최종 결정해야 합니다.",
+    "기타": "개별 항목의 실제 조건을 확인해야 합니다.",
+}
+
+
 def parse_checklist(path: Path) -> list[ChecklistItem]:
     section = "기타"
     items: list[ChecklistItem] = []
@@ -51,6 +62,52 @@ def section_order(items: list[ChecklistItem]) -> list[str]:
         if item.section not in ordered:
             ordered.append(item.section)
     return ordered
+
+
+def classify_remaining_item(item: ChecklistItem) -> str:
+    if "서버 재배포 점검" in item.section:
+        return "WSL/Docker 서버 재배포"
+    if "공용 서버 오픈 전 점검" in item.section:
+        return "공용 서버 운영 결정"
+    if "Google Play 등록 전 점검" in item.section:
+        if "실제 기기" in item.label:
+            return "실제 Android 기기/모바일 화면"
+        return "Google Play Console"
+    if "실제 Android 기기" in item.label or "음성" in item.label or "녹음" in item.label:
+        return "실제 Android 기기/모바일 화면"
+    if "GitHub Actions" in item.label:
+        return "GitHub Actions"
+    if "라이선스" in item.label:
+        return "오픈소스 라이선스 결정"
+    return "기타"
+
+
+def remaining_by_blocker(items: list[ChecklistItem]) -> dict[str, list[ChecklistItem]]:
+    groups: dict[str, list[ChecklistItem]] = {}
+    for item in items:
+        if item.checked:
+            continue
+        group = classify_remaining_item(item)
+        groups.setdefault(group, []).append(item)
+    return groups
+
+
+def print_blockers(items: list[ChecklistItem]) -> None:
+    groups = remaining_by_blocker(items)
+    if not groups:
+        print("## 남은 항목 유형")
+        print("- 없음")
+        print()
+        return
+
+    print("## 남은 항목 유형")
+    for group_name, group_items in groups.items():
+        guidance = BLOCKER_GUIDANCE.get(group_name, BLOCKER_GUIDANCE["기타"])
+        print(f"### {group_name} ({len(group_items)}개)")
+        print(f"- 기준: {guidance}")
+        for item in group_items:
+            print(f"- [{item.section}] {item.label}")
+        print()
 
 
 def print_summary(items: list[ChecklistItem], show_done: bool) -> None:
@@ -88,6 +145,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Summarize NowNote phase-one release readiness")
     parser.add_argument("--checklist", default=str(CHECKLIST), help="Checklist markdown path")
     parser.add_argument("--show-done", action="store_true", help="Also print completed items")
+    parser.add_argument("--show-blockers", action="store_true", help="Group remaining items by required external condition")
     parser.add_argument("--strict", action="store_true", help="Exit with failure when any item remains")
     args = parser.parse_args()
 
@@ -100,6 +158,8 @@ def main() -> None:
         raise SystemExit(f"No checklist items found: {checklist_path}")
 
     print_summary(items, args.show_done)
+    if args.show_blockers:
+        print_blockers(items)
 
     if args.strict and any(not item.checked for item in items):
         raise SystemExit(1)
