@@ -1198,6 +1198,7 @@ def main() -> None:
             mobile_android_runtime_check,
             [
                 ("NowNote Android runtime check", "Mobile Android runtime check prints summary", "runtime summary"),
+                ("reconfigure(encoding=\"utf-8\"", "Mobile Android runtime check uses UTF-8 console output", "UTF-8 console output"),
                 ("adb devices -l", "Mobile Android runtime check uses ADB devices", "ADB devices"),
                 ("emulator", "Mobile Android runtime check discovers emulator", "emulator discovery"),
                 ("flutter run -d", "Mobile Android runtime check prints Flutter run command", "Flutter run command"),

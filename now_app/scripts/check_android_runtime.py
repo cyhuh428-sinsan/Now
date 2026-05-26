@@ -17,9 +17,9 @@ DEFAULT_EMULATOR_SERVER_URL = "http://10.0.2.2:8750"
 
 
 if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(errors="replace")
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 if hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
 @dataclass

@@ -5441,6 +5441,30 @@
 - GitHub Actions 통과 확인은 Actions 실행 기록 또는 `gh`/토큰 기반 접근이 필요함.
 - 공용 서버/Play Console/라이선스 항목은 운영 결정 또는 외부 화면 확인이 필요하므로 완료 처리하지 않음.
 
+## 2026-05-26 11:45 KST
+
+### 다음 작업 시작
+
+- 실제 Android 기기 점검 전 실행되는 모바일 런타임 점검 출력이 Windows에서 깨지지 않도록 보강.
+
+### 구현 내용
+
+- `now_app\scripts\check_android_runtime.py`의 표준 출력/오류 출력을 UTF-8로 고정.
+- `server\scripts\preflight.py`가 모바일 런타임 점검 스크립트의 UTF-8 출력 설정을 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`의 preflight 최신 통과 수치를 갱신.
+
+### 검증
+
+- `uv run python now_app\scripts\check_android_runtime.py` 실행 결과 한글 출력 정상.
+- 같은 실행에서 에뮬레이터 `emulator-5554`, 서버 `http://127.0.0.1:8750` health/ready 정상 확인.
+- 실제 Android 기기는 연결되지 않아 경고 유지.
+- `uv run python -m py_compile now_app\scripts\check_android_runtime.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 680/680.
+
+### 보류
+
+- 실제 Android 기기 실행, 음성 메모 실시간 변환, 녹음 후 변환, 녹음 업로드 상태 확인은 물리 기기 또는 실제 앱 화면 점검이 필요하므로 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
