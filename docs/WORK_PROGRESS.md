@@ -5414,3 +5414,30 @@
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
+
+## 2026-05-26 11:20 KST
+
+### 다음 작업 시작
+
+- Play 등록 이미지가 존재하는지만 보지 않고 실제 PNG 크기까지 자동 확인하도록 보강.
+
+### 범위
+
+- 앱 코드, 이미지 파일, Play Console 입력값은 변경하지 않음.
+- `scripts\play_release_status.py`의 읽기 전용 검증 기준과 서버 preflight의 정적 확인 기준만 확장.
+
+### 구현 내용
+
+- `scripts\play_release_status.py`에 PNG 헤더 기반 크기 판독 추가.
+- 앱 아이콘 `512x512`, 기능 그래픽 `1024x500`, 스크린샷 4장 `1080x1920` 기준 확인 추가.
+- `server\scripts\preflight.py`가 Play 이미지 크기 확인 로직 존재를 점검하도록 보강.
+- `docs\PROJECT_STATUS.md`의 최신 자동 점검 수치를 갱신.
+
+### 검증
+
+- `uv run python scripts\play_release_status.py --show-manual` 통과: 자동 확인 27/27 OK, 경고 0, 수동 확인 9개.
+- `uv run python -m py_compile scripts\play_release_status.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 679/679.
+- `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.
