@@ -30,6 +30,10 @@ EXPECTED_CAPABILITIES = {
 }
 
 DOCKER_VERSION_RE = re.compile(r"\b\d+\.\d+\.\d+(?:[-+][A-Za-z0-9_.-]+)?\b")
+SERVER_REDEPLOY_GUIDANCE = (
+    "재배포 필요: WSL/Linux 배포 경로에서 `git pull origin main` 후 "
+    "`server/scripts/deploy_local.sh` 또는 `server/DEPLOY.md` 기준으로 확인하세요."
+)
 
 
 @dataclass
@@ -202,7 +206,10 @@ def check_server(base_url: str, timeout: float) -> list[CheckResult]:
             CheckResult(
                 "서버 capability",
                 "warn",
-                "현재 실행 중인 서버가 오래된 배포본일 수 있습니다. 누락: " + ", ".join(missing),
+                "현재 실행 중인 서버가 오래된 배포본일 수 있습니다. 누락: "
+                + ", ".join(missing)
+                + ". "
+                + SERVER_REDEPLOY_GUIDANCE,
             )
         )
     else:

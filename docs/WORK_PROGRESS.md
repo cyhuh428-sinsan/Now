@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 01:42 KST
+
+### 다음 작업 시작
+
+- 로컬 환경 점검에서 현재 실행 중인 서버가 오래된 배포본일 때 다음 조치를 더 명확히 보이도록 보강.
+
+### 구현 내용
+
+- `scripts\local_environment_status.py`의 서버 capability 경고에 WSL/Linux 배포 경로에서 `git pull origin main` 후 `server/scripts/deploy_local.sh` 또는 `server/DEPLOY.md` 기준으로 재배포하라는 안내를 추가.
+- `server\scripts\preflight.py`가 로컬 환경 점검 스크립트의 재배포 안내와 배포 도우미 연결 문구를 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`의 preflight 통과 수치를 699/699로 갱신.
+
+### 검증
+
+- `uv run python -m py_compile scripts\local_environment_status.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\local_environment_status.py --base-url http://localhost:8750` 실행: WSL/Docker 경고와 서버 capability 경고는 남지만, 재배포 안내가 함께 표시됨.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 699/699.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python scripts\release_readiness.py --show-blockers` 통과: 26/57 완료, 31개 남음.
+- `git diff --check` 통과.
+
+### 보류
+
+- 실제 WSL/Docker 서버 재배포는 WSL/Linux 배포 경로에서 pull, compose 재기동, smoke test까지 확인해야 하므로 완료 처리하지 않음.
+
 ## 2026-05-24 00:30 KST
 
 ### 다음 작업 시작

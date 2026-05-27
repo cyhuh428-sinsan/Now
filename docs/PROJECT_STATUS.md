@@ -20,7 +20,7 @@
 
 - 모바일 앱 전체 `dart analyze`는 `No issues found!` 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 110/110 통과 상태입니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 697/697 통과 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 699/699 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 9개 남음 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 health/ready는 정상이지만 최신 capability가 빠진 오래된 배포본일 수 있습니다.
 - GitHub Actions는 workflow 파일은 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
@@ -80,7 +80,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 - 배포 전 점검은 `server/scripts/preflight.py`, 실행 중 검증은 `server/scripts/smoke_test.py`가 담당합니다.
 - 1차 마무리 남은 항목은 `scripts/release_readiness.py --show-blockers`로 외부 조건별로 분리해 봅니다.
 - WSL/Linux 서버 갱신은 `server/scripts/deploy_local.sh`로 소스 갱신, preflight, compose 재기동, ready 확인, smoke test를 한 번에 실행할 수 있습니다.
-- 로컬 개발/배포 환경 상태는 `scripts/local_environment_status.py`로 WSL/Docker/서버 capability를 한 번에 확인합니다.
+- 로컬 개발/배포 환경 상태는 `scripts/local_environment_status.py`로 WSL/Docker/서버 capability를 한 번에 확인하고, 오래된 서버 배포본이 감지되면 재배포 기준을 함께 안내합니다.
 - Google Play 등록 준비 상태는 `scripts/play_release_status.py`로 자동 확인 항목과 Play Console 수동 확인 항목을 분리해 봅니다.
 - 오류나 대화 중단에 대비해 새 작업 단위는 `docs/WORK_PROGRESS.md`에 기록합니다.
 - 실제 비밀값은 저장소에 올리지 않습니다.

@@ -515,6 +515,8 @@ def main() -> None:
                 ("decode_command_output", "Local environment status decodes command output", "decode command output"),
                 ("utf-16", "Local environment status handles UTF-16 output", "UTF-16 output"),
                 ("cp949", "Local environment status handles Korean codepage output", "Korean codepage output"),
+                ("SERVER_REDEPLOY_GUIDANCE", "Local environment status explains server redeploy guidance", "server redeploy guidance"),
+                ("server/scripts/deploy_local.sh", "Local environment status links deploy helper", "deploy helper guidance"),
             ],
             failures,
         )
