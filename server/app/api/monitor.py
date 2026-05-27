@@ -4505,7 +4505,7 @@ def _admin_help_html() -> str:
 def _admin_recovery_html() -> str:
     return _admin_markdown_doc_html(
         filename="RECOVERY.md",
-        title="NowNote 복구 절차",
+        title="NowNote 서버 복구 절차",
         subtitle="백업 검증, 서버 점검, 복구 판단 기준을 확인합니다",
         missing_message="RECOVERY.md 파일을 찾을 수 없습니다.",
         nav_links=[
