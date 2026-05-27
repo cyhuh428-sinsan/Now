@@ -1,17 +1,17 @@
 # NowNote 설계 대비 현재 상태
 
-기준일: 2026-05-26
+기준일: 2026-05-28
 
 이 문서는 긴 작업 기록을 다시 읽지 않아도 1차 목표 대비 현재 위치를 빠르게 확인하기 위한 현황판입니다.
 세부 변경 이력은 `docs/WORK_PROGRESS.md`를 기준으로 남깁니다.
 
 ## 현재 마무리 수치
 
-`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 26개 완료, 31개 남음입니다.
+`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 35개 완료, 22개 남음입니다.
 
 - 모바일 앱 실제 점검: 8/12 완료.
 - Web/설치형 점검: 12/12 완료.
-- 서버 재배포 점검: 0/9 완료.
+- 서버 재배포 점검: 9/9 완료.
 - 공용 서버 오픈 전 점검: 0/8 완료.
 - Google Play 등록 전 점검: 3/10 완료.
 - 공개 저장소 오픈 전 점검: 3/6 완료.
@@ -20,9 +20,9 @@
 
 - 모바일 앱 전체 `dart analyze`는 `No issues found!` 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 110/110 통과 상태입니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 699/699 통과 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 720/720 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 9개 남음 상태입니다.
-- 현재 실행 중인 `http://localhost:8750` 서버는 health/ready는 정상이지만 최신 capability가 빠진 오래된 배포본일 수 있습니다.
+- 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
 - GitHub Actions는 workflow 파일은 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
 
 ## 1차 목표 기준
@@ -49,7 +49,6 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 ### 실제 실행 환경 필요
 
 - 실제 Android 기기에서 모바일 주요 흐름 점검.
-- 실제 WSL/Docker 환경에서 서버 재배포 절차 반복 검증.
 ### 운영 결정 필요
 
 - 공용 서버를 열 경우 실제 도메인, HTTPS, reverse proxy, `NOW_USER_TOKEN_REQUIRED=true` 운영값 적용.
@@ -63,7 +62,6 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 ### 도구 한계로 보류
 
-- 현재 Windows 작업 환경에서는 `D:\Project\Now` 경로 변환 경고와 WSL/Docker 접근 경고가 있어 WSL/Docker 재배포 완료 처리는 보류.
 - Android 에뮬레이터에서는 앱 실행, 홈 오늘 메모, 일자별 메모 추가, 계층 메모 3단계와 삭제 제한, 서버 연결 테스트, 메모 동기화를 확인했다.
 - 실제 Android 기기는 아직 연결하지 않아 완료 처리를 보류한다.
 

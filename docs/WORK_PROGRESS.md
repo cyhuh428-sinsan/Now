@@ -3,6 +3,32 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 03:40 KST
+
+### 다음 작업 시작
+
+- 1차 마무리 남은 항목 중 WSL/Docker 서버 재배포 점검 9개를 실제 환경에서 완료 처리.
+
+### 구현 내용
+
+- WSL 배포 저장소의 HTTPS remote가 인증 대기로 멈추는 문제를 확인하고, 이미 인증된 SSH remote(`git@github.com:cyhuh428-sinsan/Now.git`)로 전환.
+- WSL `server/.env`를 로컬 비밀 파일로 생성하고, API 토큰과 PostgreSQL 비밀번호를 난수로 설정. 실제 비밀값은 출력하거나 커밋하지 않음.
+- PostgreSQL 사용자 비밀번호를 `.env`의 새 비밀번호와 맞게 갱신.
+- Docker 이미지가 `/admin/recovery`, `/admin/deploy`, `/admin/public`에서 필요한 운영 문서를 포함하도록 루트 build context와 `.dockerignore`, `server/Dockerfile`, `server/docker-compose.yml`을 정리.
+- smoke test가 사용자 관리 추가 화면, 한글 URL 쿼리, 운영 점검 readiness 라벨, 반복 실행 시 `local_user` 활성 상태 복구를 안전하게 처리하도록 보강.
+- admin API가 사용자/기기의 활성 상태와 2단계 사용 여부를 `true/false`로 반환하도록 정규화.
+
+### 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `server/scripts/deploy_local.sh --base-url http://localhost:8750 --timeout 30 --ready-retries 20 --ready-delay 3` 최종 통과.
+- 최종 deploy helper 실행 결과: preflight 720/720 통과, Docker Compose 재빌드/기동, `/health`, `/health/ready`, `/api/v1/server`, `/monitor`, `/admin` 확인, 전체 smoke test 통과.
+- smoke test에서 백업 검증, 사용자별 토큰, 2단계 코드 검증, 사용자별 데이터 격리, 녹음 업로드/교체, 비활성 사용자 차단과 복구 확인.
+
+### 완료 처리
+
+- `docs/PHASE1_RELEASE_CHECKLIST.md`의 서버 재배포 점검 9개 항목을 완료 처리.
+- `docs/PROJECT_STATUS.md`를 35/57 완료, 22개 남음으로 갱신.
+
 ## 2026-05-28 01:42 KST
 
 ### 다음 작업 시작

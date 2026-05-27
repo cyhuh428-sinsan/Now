@@ -1,6 +1,6 @@
 # NowNote 1차 마무리 체크리스트
 
-기준일: 2026-05-21
+기준일: 2026-05-28
 
 이 문서는 NowNote 1차 개발을 닫기 전에 실제로 확인해야 하는 항목을 모은 체크리스트입니다.
 자동 점검은 `server/scripts/preflight.py`와 `server/scripts/smoke_test.py`가 담당하고, 실제 기기/실제 서버/실제 Play Console 값이 필요한 항목은 사람이 최종 확인합니다.
@@ -37,15 +37,15 @@
 
 ## 3. 서버 재배포 점검
 
-- [ ] WSL/Linux 배포 경로에서 `git pull origin main` 실행.
-- [ ] `server/.env` 존재와 비밀값 변경 확인.
-- [ ] `python3 scripts/preflight.py` 통과.
-- [ ] `docker compose up --build -d` 또는 `docker-compose up --build -d` 실행.
-- [ ] `curl http://localhost:8750/health` 확인.
-- [ ] `curl http://localhost:8750/health/ready` 확인.
-- [ ] `curl http://localhost:8750/api/v1/server` 확인.
-- [ ] `python3 scripts/smoke_test.py --base-url http://localhost:8750` 통과.
-- [ ] `/monitor`와 `/admin` 화면 확인.
+- [x] WSL/Linux 배포 경로에서 `git pull origin main` 실행.
+- [x] `server/.env` 존재와 비밀값 변경 확인.
+- [x] `python3 scripts/preflight.py` 통과.
+- [x] `docker compose up --build -d` 또는 `docker-compose up --build -d` 실행.
+- [x] `curl http://localhost:8750/health` 확인.
+- [x] `curl http://localhost:8750/health/ready` 확인.
+- [x] `curl http://localhost:8750/api/v1/server` 확인.
+- [x] `python3 scripts/smoke_test.py --base-url http://localhost:8750` 통과.
+- [x] `/monitor`와 `/admin` 화면 확인.
 
 ## 4. 공용 서버 오픈 전 점검
 
