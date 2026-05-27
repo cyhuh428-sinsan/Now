@@ -5,10 +5,12 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY requirements.txt .
+COPY server/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY app ./app
+COPY server/app ./app
+COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./
+COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md
 
 EXPOSE 8080
 
