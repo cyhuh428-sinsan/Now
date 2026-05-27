@@ -845,7 +845,11 @@ def _model_to_dict(row) -> dict:
     data = {column.name: getattr(row, column.name) for column in row.__table__.columns}
     if isinstance(row, UserAccount):
         data.pop("access_token_hash", None)
+        data["is_active"] = bool(row.is_active)
+        data["two_factor_enabled"] = bool(row.two_factor_enabled)
         data["access_token_configured"] = bool(row.access_token_hash)
+    if isinstance(row, UserDevice):
+        data["is_active"] = bool(row.is_active)
     return data
 
 
