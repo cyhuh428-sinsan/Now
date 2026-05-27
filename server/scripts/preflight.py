@@ -1173,6 +1173,7 @@ def main() -> None:
             mobile_runtime_checklist,
             [
                 ("check_android_runtime.py", "Mobile runtime checklist covers Android runtime check", "Android runtime check"),
+                ("Flutter CLI", "Mobile runtime checklist covers Flutter CLI warning", "Flutter CLI warning"),
                 ("Android 에뮬레이터", "Mobile runtime checklist covers emulator", "emulator check"),
                 ("실제 Android 기기", "Mobile runtime checklist covers physical device", "physical device check"),
                 ("홈의 오늘 메모", "Mobile runtime checklist covers home daily memo", "home daily memo check"),
@@ -1218,6 +1219,8 @@ def main() -> None:
             [
                 ("NowNote Android runtime check", "Mobile Android runtime check prints summary", "runtime summary"),
                 ("reconfigure(encoding=\"utf-8\"", "Mobile Android runtime check uses UTF-8 console output", "UTF-8 console output"),
+                ("flutter_status", "Mobile Android runtime check separates slow Flutter version", "slow Flutter version"),
+                ("명령 종료가 지연되었습니다", "Mobile Android runtime check warns on slow Flutter version", "Flutter version warning"),
                 ("adb devices -l", "Mobile Android runtime check uses ADB devices", "ADB devices"),
                 ("emulator", "Mobile Android runtime check discovers emulator", "emulator discovery"),
                 ("flutter run -d", "Mobile Android runtime check prints Flutter run command", "Flutter run command"),
