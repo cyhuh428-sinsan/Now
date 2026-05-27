@@ -507,6 +507,17 @@ def main() -> None:
     check(local_environment_status_check_path.exists(), "Local environment status script exists", str(local_environment_status_check_path), failures)
     check(play_release_status_check_path.exists(), "Play release status script exists", str(play_release_status_check_path), failures)
     check(release_readiness_check_path.exists(), "Release readiness summary script exists", str(release_readiness_check_path), failures)
+    if local_environment_status_check_path.exists():
+        local_environment_status_check = local_environment_status_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            local_environment_status_check,
+            [
+                ("decode_command_output", "Local environment status decodes command output", "decode command output"),
+                ("utf-16", "Local environment status handles UTF-16 output", "UTF-16 output"),
+                ("cp949", "Local environment status handles Korean codepage output", "Korean codepage output"),
+            ],
+            failures,
+        )
     if play_release_status_check_path.exists():
         play_release_status_check = play_release_status_check_path.read_text(encoding="utf-8")
         check_text_contains(
