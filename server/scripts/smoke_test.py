@@ -373,7 +373,10 @@ def main() -> None:
             require("/admin/devices/status" in text, "기기 관리 화면에 상태 변경 폼이 없습니다")
             require("현재 조건 JSON" in text, "기기 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "Device ID" in text, "기기 관리 화면에 owner/device 필터가 없습니다")
-        if path.startswith("/admin/users"):
+        if path == "/admin/users/new":
+            require("사용자 추가" in text, "사용자 추가 화면 제목이 없습니다")
+            require("/admin/users/new" in text, "사용자 추가 화면에 생성 폼이 없습니다")
+        if path == "/admin/users" or path.startswith("/admin/users?"):
             require("현재 조건 JSON" in text, "사용자 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner, 이메일, 표시 이름 검색" in text, "사용자 관리 화면에 검색 필터가 없습니다")
         if path.startswith("/admin/analysis"):

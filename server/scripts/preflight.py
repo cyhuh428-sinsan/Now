@@ -1500,6 +1500,8 @@ def main() -> None:
                 ("기기 관리 화면에 비활성 기기 차단 안내", "Smoke checks devices inactive guidance", "devices inactive guidance"),
                 ("기기 관리 화면에 현재 조건 JSON 링크", "Smoke checks devices export link", "devices export link"),
                 ("기기 관리 화면에 owner/device 필터", "Smoke checks devices filters", "devices filters"),
+                ("사용자 추가 화면 제목", "Smoke checks user create page title", "user create page title"),
+                ("사용자 추가 화면에 생성 폼", "Smoke checks user create form", "user create form"),
                 ("사용자 관리 화면에 현재 조건 JSON 링크", "Smoke checks users export link", "users export link"),
                 ("사용자 관리 화면에 검색 필터", "Smoke checks users search filter", "users search filter"),
                 ("user inactive로 차단", "Smoke checks inactive user detail", "inactive user detail"),
