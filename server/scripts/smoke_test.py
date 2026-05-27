@@ -6,6 +6,7 @@ import json
 import re
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from uuid import uuid4
@@ -23,6 +24,19 @@ SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def ascii_url(url: str) -> str:
+    parts = urllib.parse.urlsplit(url)
+    return urllib.parse.urlunsplit(
+        (
+            parts.scheme,
+            parts.netloc,
+            urllib.parse.quote(parts.path, safe="/"),
+            urllib.parse.quote(parts.query, safe="=&%"),
+            urllib.parse.quote(parts.fragment, safe=""),
+        )
+    )
 
 
 def stale_server_message(field_name: str, data: dict) -> str:
@@ -61,7 +75,7 @@ def request_with_user_token(
         headers["Authorization"] = f"Bearer {token}"
     if user_token:
         headers["X-Now-User-Token"] = user_token
-    req = urllib.request.Request(url, data=body, headers=headers, method=method)
+    req = urllib.request.Request(ascii_url(url), data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
@@ -135,7 +149,7 @@ def request_multipart(
     effective_user_token = USER_TOKEN if user_token is None else user_token
     if effective_user_token:
         headers["X-Now-User-Token"] = effective_user_token
-    req = urllib.request.Request(url, data=b"".join(chunks), headers=headers, method="POST")
+    req = urllib.request.Request(ascii_url(url), data=b"".join(chunks), headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
@@ -146,7 +160,7 @@ def request_text(method: str, url: str, token: str | None = None):
     if token:
         encoded = base64.b64encode(f"admin:{token}".encode("utf-8")).decode("ascii")
         headers["Authorization"] = f"Basic {encoded}"
-    req = urllib.request.Request(url, headers=headers, method=method)
+    req = urllib.request.Request(ascii_url(url), headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, text
