@@ -2260,6 +2260,15 @@ def _admin_devices_html(request: Request) -> str:
         </select>
         <button type="submit" style="min-height:36px;border:1px solid var(--blue);border-radius:8px;padding:0 12px;background:var(--blue);color:#fff;font-weight:750;">필터 적용</button>
       </form>
+      <form method="post" action="/admin/devices/status" style="display:grid;grid-template-columns:repeat(3,minmax(150px,1fr)) auto;gap:8px;padding:14px 18px;border-bottom:1px solid var(--line);background:#fff;">
+        <input type="text" name="owner_id" value="{escape(owner_filter, quote=True)}" placeholder="Owner ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;" required>
+        <input type="text" name="device_id" value="{escape(device_filter, quote=True)}" placeholder="Device ID" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;" required>
+        <select name="action" style="min-height:36px;border:1px solid var(--line);border-radius:8px;padding:0 10px;">
+          <option value="activate">활성화</option>
+          <option value="deactivate">비활성화</option>
+        </select>
+        <button type="submit" style="min-height:36px;border:1px solid var(--blue);border-radius:8px;padding:0 12px;background:#fff;color:var(--blue);font-weight:750;">상태 변경</button>
+      </form>
       <table>
         <tr>
           <th>Owner</th>
