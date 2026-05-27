@@ -45,9 +45,6 @@ def run_command(command: list[str], cwd: Path | None = None, timeout: int = 15) 
             command,
             cwd=str(cwd) if cwd else None,
             capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
             timeout=timeout,
             check=False,
         )
@@ -55,9 +52,31 @@ def run_command(command: list[str], cwd: Path | None = None, timeout: int = 15) 
         return 127, "command not found"
     except subprocess.TimeoutExpired:
         return 124, "timeout"
-    output = "\n".join(part for part in [result.stdout.strip(), result.stderr.strip()] if part)
+    stdout = decode_command_output(result.stdout).strip()
+    stderr = decode_command_output(result.stderr).strip()
+    output = "\n".join(part for part in [stdout, stderr] if part)
     output = output.replace("\x00", "")
     return result.returncode, output
+
+
+def decode_command_output(data: bytes | str | None) -> str:
+    if data is None:
+        return ""
+    if isinstance(data, str):
+        return data
+    if not data:
+        return ""
+
+    candidates = ["utf-8", sys.getfilesystemencoding(), "cp949"]
+    if b"\x00" in data[:80]:
+        candidates = ["utf-16", "utf-16-le", *candidates]
+
+    for encoding in dict.fromkeys(candidates):
+        try:
+            return data.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return data.decode("utf-8", errors="replace")
 
 
 def windows_path_to_wsl(path: Path) -> str | None:

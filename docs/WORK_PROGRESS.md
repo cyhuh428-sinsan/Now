@@ -5550,6 +5550,35 @@
 
 - 실제 Android 기기와 에뮬레이터가 현재 연결되어 있지 않아 모바일 실제 점검 항목은 완료 처리하지 않음.
 
+## 2026-05-27 22:37 KST
+
+### 다음 작업 시작
+
+- 로컬 환경 점검에서 WSL/Windows 명령 출력이 UTF-16 또는 한국어 코드페이지로 깨져 보일 수 있는 문제를 보강.
+
+### 확인 내용
+
+- 직접 WSL 호출은 현재 환경에서 안정적으로 실행되지 않으며, 일부 오류 출력은 NUL 문자가 섞인 UTF-16 계열로 표시됨.
+- `scripts\local_environment_status.py`는 WSL/Docker 재배포 완료를 대신 판단하지 않고, 현재 경고 상태를 보여주는 보조 도구로 유지.
+
+### 구현 내용
+
+- `scripts\local_environment_status.py`에 `decode_command_output` 추가.
+- 명령 출력 디코딩을 `utf-8`, 시스템 파일 인코딩, `cp949`뿐 아니라 NUL 포함 출력의 `utf-16`/`utf-16-le` 후보까지 시도하도록 수정.
+- `server\scripts\preflight.py`가 로컬 환경 점검 스크립트의 UTF-16/한국어 코드페이지 처리 기준을 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`의 preflight 통과 수치를 697/697로 갱신.
+
+### 검증
+
+- `uv run python -m py_compile scripts\local_environment_status.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\local_environment_status.py --base-url http://localhost:8750` 실행: WSL/Docker/서버 capability 경고는 남지만 출력 확인 가능.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 697/697.
+- `git diff --check` 통과.
+
+### 보류
+
+- WSL/Docker 재배포 체크리스트는 실제 WSL/Linux 배포 경로에서 최신 코드 pull, compose 재기동, smoke test까지 확인해야 하므로 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.
