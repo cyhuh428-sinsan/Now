@@ -920,6 +920,12 @@ def main() -> None:
                 ("recording_orphan_files", "Admin export summary includes orphan recording count", "recording orphan summary count"),
                 ("recording_orphan_bytes", "Admin export summary includes orphan recording bytes", "recording orphan summary bytes"),
                 ("recording_missing_files", "Admin export summary includes missing recording count", "recording missing summary count"),
+                ('data["is_active"] = bool(row.is_active)', "Admin API normalizes active flags", "active flag bool"),
+                (
+                    'data["two_factor_enabled"] = bool(row.two_factor_enabled)',
+                    "Admin API normalizes two-factor flag",
+                    "two factor bool",
+                ),
             ],
             failures,
         )
