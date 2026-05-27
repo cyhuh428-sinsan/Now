@@ -976,6 +976,29 @@ def main() -> None:
         {"users": len(exported_users), "token_hash_hidden": True},
     )
 
+    local_user_active_payload = {
+        "email": "local_user@example.com",
+        "display_name": "Local User",
+        "timezone": "Asia/Seoul",
+        "group_name": "사용자",
+        "two_factor_enabled": False,
+        "is_active": True,
+    }
+    status, data = request_error(
+        "PATCH",
+        f"{base_url}/api/v1/admin/users/local_user",
+        args.token,
+        local_user_active_payload,
+    )
+    require(status in (200, 404), "local_user 활성 상태 초기화 API 응답이 예상과 다릅니다")
+    if status == 200:
+        require(data.get("user", {}).get("is_active") is True, "local_user 활성 상태 초기화에 실패했습니다")
+    print(
+        "PATCH /api/v1/admin/users/local_user(active baseline):",
+        status,
+        {"is_active": data.get("user", {}).get("is_active") if isinstance(data, dict) else None},
+    )
+
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     sync_payload = {
         "owner_id": "local_user",
