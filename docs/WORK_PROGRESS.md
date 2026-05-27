@@ -5518,6 +5518,38 @@
 
 - GitHub Actions workflow run 자체는 아직 확인되지 않아 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
 
+## 2026-05-27 00:20 KST
+
+### 다음 작업 시작
+
+- 모바일 실제 실행 점검 전 도구가 Flutter CLI의 느린 종료를 실제 미설치 오류처럼 표시하지 않도록 보정.
+
+### 확인 내용
+
+- `uv run python now_app\scripts\check_android_runtime.py --timeout 5` 실행 초기에 `Flutter CLI`가 버전 첫 줄은 출력했지만 제한 시간 안에 종료되지 않아 `FAIL`로 표시되는 상태를 확인.
+- 직접 `flutter --version`은 120초 안에 종료되지 않는 경우가 있어, 설치 확인과 명령 종료 지연을 구분할 필요가 있음.
+- 현재 연결된 Android device 상태 기기는 없어 실제 모바일 점검 항목은 여전히 닫을 수 없음.
+
+### 구현 내용
+
+- `now_app\scripts\check_android_runtime.py`에 `flutter_status`를 추가해 Flutter 버전 출력이 확인되면 종료 지연은 `WARN`으로 분리.
+- 모바일 실제 실행 점검서에 Flutter CLI가 버전은 출력하지만 종료가 늦는 경우의 판단 기준 추가.
+- `server\scripts\preflight.py`가 Flutter CLI 지연 판단 기준과 점검서 안내를 확인하도록 보강.
+- `docs\PROJECT_STATUS.md`의 preflight 통과 수치를 694/694로 갱신.
+
+### 검증
+
+- `uv run python now_app\scripts\check_android_runtime.py --timeout 5` 실행 결과 Flutter CLI, ADB, AVD, 서버는 OK이고, 연결된 Android 기기 없음 1개만 FAIL.
+- `uv run python -m py_compile now_app\scripts\check_android_runtime.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 694/694.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python scripts\release_readiness.py --show-blockers` 통과: 26/57 완료, 31개 남음.
+- `git diff --check` 통과.
+
+### 보류
+
+- 실제 Android 기기와 에뮬레이터가 현재 연결되어 있지 않아 모바일 실제 점검 항목은 완료 처리하지 않음.
+
 ### 보류
 
 - Play Console 최종 입력, 개인정보처리방침 URL 확정, 내부 테스트 트랙 업로드, 실제 기기 설치 테스트는 화면/외부 환경 확인이 필요하므로 완료 처리하지 않음.

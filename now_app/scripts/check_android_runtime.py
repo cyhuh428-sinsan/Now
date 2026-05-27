@@ -146,6 +146,16 @@ def add(results: list[Result], status: str, name: str, message: str) -> None:
     results.append(Result(status, name, message))
 
 
+def flutter_status(result: CommandResult) -> tuple[str, str]:
+    first_line = result.stdout.splitlines()[0] if result.stdout else ""
+    if result.ok:
+        return "OK", first_line or "flutter 확인됨"
+    if first_line.startswith("Flutter "):
+        detail = result.error or result.stderr or "명령 종료가 지연되었습니다"
+        return "WARN", f"{first_line} ({detail})"
+    return "FAIL", result.error or result.stderr or first_line or "flutter --version 실패"
+
+
 def print_results(results: list[Result]) -> None:
     for result in results:
         print(f"[{result.status}] {result.name} - {result.message}")
@@ -177,8 +187,8 @@ def main() -> None:
     flutter = shutil.which("flutter")
     if flutter:
         flutter_result = run_command([flutter, "--version"], args.timeout)
-        first_line = flutter_result.stdout.splitlines()[0] if flutter_result.stdout else "flutter 확인됨"
-        add(results, "OK" if flutter_result.ok else "FAIL", "Flutter CLI", first_line)
+        status, message = flutter_status(flutter_result)
+        add(results, status, "Flutter CLI", message)
     else:
         add(results, "FAIL", "Flutter CLI", "PATH에서 flutter를 찾지 못했습니다")
 
