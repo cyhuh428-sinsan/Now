@@ -1,0 +1,11 @@
+**
+!server/
+!server/Dockerfile
+!server/requirements.txt
+!server/README.md
+!server/DEPLOY.md
+!server/RECOVERY.md
+!server/app/
+!server/app/**
+!docs/
+!docs/SERVER_AUTH_POLICY.md

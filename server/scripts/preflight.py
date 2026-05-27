@@ -83,6 +83,8 @@ def main() -> None:
     pull_request_template_path = repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md"
     github_preflight_workflow_path = repo_root / ".github" / "workflows" / "preflight.yml"
     compose_path = server_dir / "docker-compose.yml"
+    dockerfile_path = server_dir / "Dockerfile"
+    root_dockerignore_path = repo_root / ".dockerignore"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
@@ -455,9 +457,36 @@ def main() -> None:
 
     compose = compose_path.read_text(encoding="utf-8")
     check('"8750:8080"' in compose, "Compose exposes port 8750", "host 8750 -> container 8080", failures)
+    check("context: .." in compose, "Compose builds from repository root", "root context for shared docs", failures)
+    check("dockerfile: server/Dockerfile" in compose, "Compose uses server Dockerfile", "server Dockerfile path", failures)
     check("NOW_API_TOKEN: ${NOW_API_TOKEN:-}" in compose, "Compose reads NOW_API_TOKEN", "API and worker", failures)
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
+    check(dockerfile_path.exists(), "Server Dockerfile exists", str(dockerfile_path), failures)
+    if dockerfile_path.exists():
+        dockerfile = dockerfile_path.read_text(encoding="utf-8")
+        check_text_contains(
+            dockerfile,
+            [
+                ("COPY server/app ./app", "Dockerfile copies server app", "server app copy"),
+                ("COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./", "Dockerfile copies admin docs", "admin docs copy"),
+                ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
+            ],
+            failures,
+        )
+    check(root_dockerignore_path.exists(), "Root Dockerignore exists", str(root_dockerignore_path), failures)
+    if root_dockerignore_path.exists():
+        root_dockerignore = root_dockerignore_path.read_text(encoding="utf-8")
+        check_text_contains(
+            root_dockerignore,
+            [
+                ("**", "Root Dockerignore starts closed", "closed build context"),
+                ("!server/app/**", "Root Dockerignore allows server app", "server app context"),
+                ("!server/RECOVERY.md", "Root Dockerignore allows recovery doc", "recovery doc context"),
+                ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
+            ],
+            failures,
+        )
     check(readme_path.exists(), "Server README exists", str(readme_path), failures)
     if readme_path.exists():
         readme = readme_path.read_text(encoding="utf-8")
