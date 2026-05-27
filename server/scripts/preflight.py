@@ -1410,6 +1410,8 @@ def main() -> None:
                 ("--ready-delay", "Smoke supports readiness retry delay option", "smoke readiness delay"),
                 ("wait_until_ready", "Smoke waits for readiness before full checks", "wait_until_ready"),
                 ("REQUEST_TIMEOUT", "Smoke uses shared request timeout", "REQUEST_TIMEOUT"),
+                ("ascii_url", "Smoke encodes non-ASCII URLs", "non-ASCII URL encoding"),
+                ("urllib.parse.quote", "Smoke quotes Korean query strings", "Korean query URL encoding"),
                 ("내보내기 화면에 기기 export 링크", "Smoke checks export page device link", "export device link"),
                 ("내보내기 화면에 기기 집계", "Smoke checks export page device count", "export device count"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
