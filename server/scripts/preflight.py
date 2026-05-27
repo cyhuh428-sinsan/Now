@@ -1462,6 +1462,7 @@ def main() -> None:
                 ("사용자 기기 상태 변경 응답", "Smoke checks user device update API", "user device update API"),
                 ("사용자 목록 API에 사용자 토큰 해시", "Smoke checks user list token hash safety", "user list token hash safety"),
                 ("사용자 export에 사용자 토큰 해시", "Smoke checks user export token hash safety", "user export token hash safety"),
+                ("active baseline", "Smoke restores local user active baseline", "active baseline"),
                 ("max_tree_note_level", "Smoke covers tree depth capability", "max_tree_note_level"),
                 ("supported_note_types", "Smoke covers supported note types", "supported_note_types"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
