@@ -48,7 +48,7 @@ PUBLIC_SERVER_READY_ITEMS = [
 
 PUBLIC_SERVER_HTTPS_ITEM = {
     "id": "public_https_reverse_proxy",
-    "label": "공개 HTTPS/reverse proxy",
+    "label": "공개 운영 환경",
     "message": "공개 URL이 https://이고 reverse proxy 사용 설정이 켜져 있는지 확인",
 }
 
