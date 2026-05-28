@@ -250,6 +250,11 @@ def admin_open_source(_: None = Depends(_require_monitor_access)) -> HTMLRespons
     return HTMLResponse(_admin_open_source_html())
 
 
+@router.get("/admin/mobile", include_in_schema=False)
+def admin_mobile(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_mobile_html())
+
+
 @router.get("/admin/recovery", include_in_schema=False)
 def admin_recovery(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_recovery_html())
@@ -786,6 +791,7 @@ def _admin_html() -> str:
         <a href="/admin/analysis">분석</a>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/open-source">공개 준비</a>
         <a href="/admin/help">도움말</a>
@@ -4435,6 +4441,7 @@ def _admin_help_html() -> str:
         <a href="/admin/users">사용자</a>
         <a href="/admin/ops">점검</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/open-source">공개 준비</a>
         <a href="/admin/export">내보내기</a>
@@ -4687,6 +4694,7 @@ def _admin_release_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/ops">점검</a>
+        <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/deploy">배포</a>
         <a href="/admin/help">도움말</a>
@@ -4938,6 +4946,7 @@ def _admin_play_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/open-source">공개 준비</a>
         <a href="/admin/deploy">배포</a>
         <a href="/admin/help">도움말</a>
@@ -5161,6 +5170,7 @@ def _admin_open_source_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/help">도움말</a>
       </nav>
@@ -5233,6 +5243,22 @@ def _open_source_manual_rows(items: list[str]) -> str:
     if not items:
         return '<tr><td>남은 수동 확인 항목이 없습니다.</td></tr>'
     return "\n".join(f"<tr><td>{escape(item)}</td></tr>" for item in items)
+
+
+def _admin_mobile_html() -> str:
+    return _admin_markdown_doc_html(
+        filename="../now_app/docs/mobile_runtime_checklist_ko.md",
+        title="NowNote 모바일 실제 실행 점검",
+        subtitle="실제 Android 기기, 음성 메모, 녹음 업로드 확인 순서를 봅니다",
+        missing_message="now_app/docs/mobile_runtime_checklist_ko.md 파일을 찾을 수 없습니다.",
+        nav_links=[
+            ("/admin", "관리"),
+            ("/admin/release", "1차 준비"),
+            ("/admin/play", "Play 등록"),
+            ("/admin/deploy", "배포"),
+            ("/admin/help", "도움말"),
+        ],
+    )
 
 
 def _admin_recovery_html() -> str:
