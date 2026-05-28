@@ -26,6 +26,12 @@
 - `now_app/scripts/verify_mobile_surface.py`와 `server/scripts/preflight.py`가 새 Android 설치/실행 점검 도구를 확인하도록 보강.
 - 새 기준 검증 결과: 모바일 표면 점검 119/119 통과, 서버 preflight 730/730 통과.
 - 현재 연결된 Android device 상태 기기가 없어 `check_android_launch.py`는 ADB와 APK 파일은 확인하고, 설치/실행 대상 없음으로 정상적으로 실패 사유를 출력.
+- `now_app/scripts/check_android_emulator.py` 추가. ADB, emulator CLI, AVD 목록을 확인하고, 필요하면 `--start`로 에뮬레이터를 시작한 뒤 부팅 완료(`sys.boot_completed`)까지 대기할 수 있게 함.
+- `--launch-app` 옵션으로 에뮬레이터 부팅 후 `check_android_launch.py`까지 이어 실행할 수 있게 구성.
+- `check_android_runtime.py`가 연결된 기기가 없을 때 `check_android_emulator.py` 실행 명령을 안내하도록 보강.
+- 새 기준 검증 결과: 모바일 표면 점검 128/128 통과, 서버 preflight 740/740 통과.
+- `check_android_emulator.py --timeout 20` 실행 결과 ADB, emulator CLI, AVD `Medium_Phone_API_36.1`을 확인했고, 현재 실행 중인 에뮬레이터가 없어 `--start` 안내를 표시.
+- `check_android_runtime.py --require-server --timeout 15` 실행 결과 Flutter CLI, ADB, AVD, 서버 health/ready는 확인됐고, 연결된 Android device 상태 기기 없음 1개만 실패.
 
 ### 보류
 

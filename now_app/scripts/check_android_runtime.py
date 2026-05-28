@@ -260,6 +260,11 @@ def main() -> None:
         if emulator_devices:
             print(f"- 에뮬레이터 앱 서버 주소: {args.emulator_server_url}")
         print(f"- 실제 기기 서버 주소: 같은 네트워크의 PC IP 또는 실제 서버 도메인")
+    else:
+        print()
+        print("다음 실행 명령")
+        print("- python scripts/check_android_emulator.py")
+        print("- python scripts/check_android_emulator.py --start --launch-app")
 
     failures = [result for result in results if result.is_failure]
     if failures:
