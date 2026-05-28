@@ -127,6 +127,7 @@ def main() -> None:
     mobile_readme_path = repo_root / "now_app" / "README.md"
     mobile_surface_check_path = repo_root / "now_app" / "scripts" / "verify_mobile_surface.py"
     mobile_android_runtime_check_path = repo_root / "now_app" / "scripts" / "check_android_runtime.py"
+    mobile_android_launch_check_path = repo_root / "now_app" / "scripts" / "check_android_launch.py"
     mobile_runtime_checklist_path = repo_root / "now_app" / "docs" / "mobile_runtime_checklist_ko.md"
     mobile_key_properties_example_path = repo_root / "now_app" / "android" / "key.properties.example"
     mobile_manifest_path = repo_root / "now_app" / "android" / "app" / "src" / "main" / "AndroidManifest.xml"
@@ -609,6 +610,7 @@ def main() -> None:
     check(mobile_runtime_checklist_path.exists(), "Mobile runtime checklist exists", str(mobile_runtime_checklist_path), failures)
     check(mobile_surface_check_path.exists(), "Mobile surface verification script exists", str(mobile_surface_check_path), failures)
     check(mobile_android_runtime_check_path.exists(), "Mobile Android runtime check script exists", str(mobile_android_runtime_check_path), failures)
+    check(mobile_android_launch_check_path.exists(), "Mobile Android launch check script exists", str(mobile_android_launch_check_path), failures)
     check(
         mobile_key_properties_example_path.exists(),
         "Android key properties example exists",
@@ -1209,6 +1211,7 @@ def main() -> None:
                 ("Markdown 가져오기", "Mobile README documents markdown import", "mobile README markdown import"),
                 ("verify_mobile_surface.py", "Mobile README documents surface verification", "mobile surface verification"),
                 ("check_android_runtime.py", "Mobile README documents Android runtime verification", "mobile Android runtime verification"),
+                ("check_android_launch.py", "Mobile README documents Android launch verification", "mobile Android launch verification"),
                 ("mobile_runtime_checklist_ko.md", "Mobile README links runtime checklist", "mobile runtime checklist link"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
                 ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
@@ -1221,6 +1224,7 @@ def main() -> None:
             mobile_runtime_checklist,
             [
                 ("check_android_runtime.py", "Mobile runtime checklist covers Android runtime check", "Android runtime check"),
+                ("check_android_launch.py", "Mobile runtime checklist covers Android launch check", "Android launch check"),
                 ("Flutter CLI", "Mobile runtime checklist covers Flutter CLI warning", "Flutter CLI warning"),
                 ("Android 에뮬레이터", "Mobile runtime checklist covers emulator", "emulator check"),
                 ("실제 Android 기기", "Mobile runtime checklist covers physical device", "physical device check"),
@@ -1248,6 +1252,7 @@ def main() -> None:
                 ('applicationId = "com.sinsan.nownote"', "Mobile surface check covers package id", "package id"),
                 ("mobile_runtime_checklist_ko.md", "Mobile surface check covers runtime checklist", "runtime checklist"),
                 ("check_android_runtime.py", "Mobile surface check covers Android runtime check", "Android runtime check"),
+                ("check_android_launch.py", "Mobile surface check covers Android launch check", "Android launch check"),
                 ("NowNote mobile surface verification passed", "Mobile surface check prints pass summary", "mobile check pass summary"),
             ],
             failures,
@@ -1275,6 +1280,20 @@ def main() -> None:
                 ("10.0.2.2", "Mobile Android runtime check documents emulator server URL", "emulator server URL"),
                 ("--require-server", "Mobile Android runtime check supports strict server option", "strict server option"),
                 ("--require-physical", "Mobile Android runtime check supports physical device option", "physical device option"),
+            ],
+            failures,
+        )
+    if mobile_android_launch_check_path.exists():
+        mobile_android_launch_check = mobile_android_launch_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mobile_android_launch_check,
+            [
+                ("NowNote Android install/launch check", "Mobile Android launch check prints summary", "launch summary"),
+                ("adb devices -l", "Mobile Android launch check uses ADB devices", "launch ADB devices"),
+                ("install", "Mobile Android launch check installs APK", "launch APK install"),
+                ("monkey", "Mobile Android launch check uses launcher intent", "launcher intent"),
+                ("pidof", "Mobile Android launch check verifies process", "process verify"),
+                ("--require-physical", "Mobile Android launch check supports physical option", "physical option"),
             ],
             failures,
         )
