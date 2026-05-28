@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 17:58 KST
+
+### 다음 작업 시작
+
+- 남은 1차 항목 중 공개 저장소 오픈 전 점검은 `/admin/release`에 묶여 있지만, 라이선스와 GitHub Actions를 따로 보기에는 운영 화면이 부족함.
+- 실제 라이선스 선택이나 Actions 통과 확인은 사람이 해야 하므로 완료 처리하지 않고, 화면/API에서 확인 부담을 줄이는 방향으로 진행.
+
+### 구현 내용
+
+- `server/app/services/open_source_release.py` 추가. 공개 문서, README/SECURITY/CONTRIBUTING, 이슈/PR 템플릿, GitHub Actions preflight, 라이선스 보류 상태를 요약.
+- `GET /api/v1/admin/open-source-release` 추가.
+- `/admin/open-source` 화면 추가. 자동 확인 항목과 공개 전 수동 확인 항목을 분리해서 표시.
+- Docker 이미지에 공개 저장소 준비 화면이 필요한 문서와 GitHub 템플릿을 포함하도록 `server/Dockerfile`, `.dockerignore` 갱신.
+- `server/README.md`, `server/scripts/smoke_test.py`, `server/scripts/preflight.py`, `docs/PROJECT_STATUS.md`에 새 화면/API 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\services\open_source_release.py server\app\api\admin.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 857/857.
+- FastAPI TestClient로 `/admin/open-source` 200 응답과 `/api/v1/admin/open-source-release` 200 응답 확인. API 요약은 자동 확인 16/16, 경고 0, 수동 확인 3.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지.
+
 ## 2026-05-28 17:46 KST
 
 ### 다음 작업 시작

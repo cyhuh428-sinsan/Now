@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
@@ -670,6 +671,11 @@ def release_readiness() -> dict:
 @router.get("/play-release")
 def play_release() -> dict:
     return play_release_summary()
+
+
+@router.get("/open-source-release")
+def open_source_release() -> dict:
+    return open_source_release_summary()
 
 
 def _export_payload(name: str, rows: list) -> dict:
