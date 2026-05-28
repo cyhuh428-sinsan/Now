@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 22:22 KST
+
+### 다음 작업 시작
+
+- 최신 커밋 기준 GitHub Actions 상태를 다시 확인했지만 workflow run/status는 아직 조회되지 않음.
+- 공개 저장소 안전 점검, Play 등록 자동 점검, 로컬/WSL/서버 환경 점검처럼 지금 자동으로 확인 가능한 항목을 재점검.
+- `local_environment_status.py`가 실제 WSL/Docker/서버는 정상인데 PowerShell 현재 경로를 WSL이 직접 번역하지 못한다는 이유로 경고를 띄우는 것을 확인.
+
+### 구현 내용
+
+- WSL 명령 실행 시 PowerShell의 현재 작업 경로를 그대로 물려주지 않고, WSL이 번역 가능한 안전한 Windows 경로에서 실행하도록 보정.
+- 현재 Windows 작업 경로가 WSL에서 직접 보이지 않아도 WSL shell 자체가 정상 실행되면 경고가 아니라 안내가 붙은 OK 상태로 표시하도록 변경.
+
+### 검증
+
+- `uv run python -m py_compile scripts\local_environment_status.py` 통과.
+- `uv run python scripts\local_environment_status.py --base-url http://localhost:8750`에서 WSL, Docker, 서버 health/ready/capability 확인. 커밋 전 작업트리 변경만 WARN으로 표시됨.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `uv run python scripts\play_release_status.py --show-manual` 기준 자동 확인 27/27 OK, 수동 확인 9개 유지.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 867/867.
+
 ## 2026-05-28 18:15 KST
 
 ### 다음 작업 시작
