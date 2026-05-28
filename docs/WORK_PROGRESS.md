@@ -24,6 +24,11 @@
 - FastAPI TestClient로 `/admin/evidence` 200 응답과 `/api/v1/admin/release-evidence` 200 응답 확인. API 요약은 남은 증빙 22개, 유형 5개.
 - `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 896/896.
 
+### 추가 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `sh scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull --timeout 30 --ready-retries 20 --ready-delay 3` 실행 통과.
+- 실제 Docker 재빌드/재기동 후 smoke test 통과. `/admin/evidence` 200 응답, `/api/v1/admin/release-evidence` 요약 `remaining: 22`, `groups: 5` 확인.
+
 ## 2026-05-29 07:39 KST
 
 ### 다음 작업 시작
