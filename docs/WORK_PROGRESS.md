@@ -26,6 +26,12 @@
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - FastAPI TestClient로 `/admin/play` 200 응답과 `/api/v1/admin/play-release` 200 응답 확인. API 요약은 자동 확인 22/22, 경고 0, 수동 확인 7.
 
+### 추가 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `sh scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull --timeout 30 --ready-retries 20 --ready-delay 3` 실행 통과.
+- 실제 Docker 재빌드 중 `COPY now_app/docs/...`와 `COPY now_app/docs/play_assets/*.png` 단계가 실행되는 것 확인.
+- 실제 Docker 재기동 후 smoke test 통과. `/admin/play` 200 응답, `/api/v1/admin/play-release` 200 응답, API 요약 자동 확인 22/22, 경고 0, 수동 확인 7 확인.
+
 ## 2026-05-28 05:15 KST
 
 ### 다음 작업 시작
