@@ -333,6 +333,7 @@ def main() -> None:
         "/admin/deploy",
         "/admin/public",
         "/admin/release",
+        "/admin/play",
         "/admin/help",
         "/admin/users",
         "/admin/users/new",
@@ -387,6 +388,11 @@ def main() -> None:
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
             require("남은 항목 유형" in text, "1차 릴리스 준비 화면에 남은 항목 유형이 없습니다")
             require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")
+        if path == "/admin/play":
+            require("NowNote Google Play 등록 준비" in text, "Google Play 등록 준비 화면 제목이 없습니다")
+            require("자동 확인 항목" in text, "Google Play 등록 준비 화면에 자동 확인 항목이 없습니다")
+            require("Play Console 수동 확인" in text, "Google Play 등록 준비 화면에 수동 확인 항목이 없습니다")
+            require("/api/v1/admin/play-release" in text, "Google Play 등록 준비 화면에 JSON API 링크가 없습니다")
         if path.startswith("/admin/devices"):
             require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
             require("비활성 기기는 동기화" in text, "기기 관리 화면에 비활성 기기 차단 안내가 없습니다")
@@ -448,6 +454,17 @@ def main() -> None:
     require(data.get("blockers") is not None, "릴리스 준비 API에 남은 항목 유형이 없습니다")
     print(
         "GET /api/v1/admin/release-readiness:",
+        status,
+        data.get("summary"),
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/play-release", args.token)
+    require(data.get("name") == "google_play_release_readiness", "Play 등록 준비 API 이름이 예상과 다릅니다")
+    require(data.get("summary", {}).get("auto_total", 0) >= 20, "Play 등록 준비 API의 자동 확인 항목이 부족합니다")
+    require(data.get("summary", {}).get("manual", 0) >= 1, "Play 등록 준비 API의 수동 확인 항목이 없습니다")
+    require(data.get("manual_items") is not None, "Play 등록 준비 API에 수동 확인 목록이 없습니다")
+    print(
+        "GET /api/v1/admin/play-release:",
         status,
         data.get("summary"),
     )

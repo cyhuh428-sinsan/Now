@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 05:55 KST
+
+### 다음 작업 시작
+
+- Google Play 등록 준비 상태를 CLI뿐 아니라 서버 관리자 화면과 API에서 확인할 수 있도록 운영 표면 보강.
+- 서명 키와 AAB 같은 로컬 비밀/빌드 산출물은 서버 이미지에 포함하지 않고, 문서/이미지 초안과 수동 확인 항목만 서버 화면에서 확인하는 방향으로 진행.
+
+### 구현 내용
+
+- `server/app/services/play_release.py` 추가. Play 등록 문서, 이미지 초안 크기, 개인정보처리방침/권한 설명 문구, 1차 체크리스트의 Play Console 수동 확인 항목을 요약.
+- `GET /api/v1/admin/play-release` 추가. 관리자 API로 Google Play 등록 준비 상태를 JSON 반환.
+- `/admin/play` 화면 추가. 자동 확인 항목과 Play Console 수동 확인 항목을 읽기 전용으로 표시.
+- 서버 Docker 이미지가 Play 등록 문서와 이미지 초안을 포함하도록 `server/Dockerfile`과 `.dockerignore` 보강.
+- `server/README.md`, `docs/PROJECT_STATUS.md`, `server/scripts/smoke_test.py`, `server/scripts/preflight.py`에 새 화면/API 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\api\admin.py server\app\api\monitor.py server\app\services\play_release.py server\app\services\release_readiness.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 809/809.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- FastAPI TestClient로 `/admin/play` 200 응답과 `/api/v1/admin/play-release` 200 응답 확인. API 요약은 자동 확인 22/22, 경고 0, 수동 확인 7.
+
 ## 2026-05-28 05:15 KST
 
 ### 다음 작업 시작

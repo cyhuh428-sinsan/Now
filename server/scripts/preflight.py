@@ -121,6 +121,7 @@ def main() -> None:
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
     release_readiness_service_path = server_dir / "app" / "services" / "release_readiness.py"
+    play_release_service_path = server_dir / "app" / "services" / "play_release.py"
     web_app_path = repo_root / "web" / "app.js"
     web_readme_path = repo_root / "web" / "README.md"
     mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
@@ -478,6 +479,8 @@ def main() -> None:
                 ("COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./", "Dockerfile copies admin docs", "admin docs copy"),
                 ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
                 ("COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile copies phase one checklist", "phase one checklist copy"),
+                ("COPY now_app/docs/google_play_release_checklist.md", "Dockerfile copies Play checklist doc", "Play checklist doc copy"),
+                ("COPY now_app/docs/play_assets/*.png", "Dockerfile copies Play image assets", "Play image asset copy"),
             ],
             failures,
         )
@@ -492,6 +495,8 @@ def main() -> None:
                 ("!server/RECOVERY.md", "Root Dockerignore allows recovery doc", "recovery doc context"),
                 ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
                 ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Root Dockerignore allows phase one checklist", "phase one checklist context"),
+                ("!now_app/docs/google_play_release_checklist.md", "Root Dockerignore allows Play checklist", "Play checklist context"),
+                ("!now_app/docs/play_assets/*.png", "Root Dockerignore allows Play image assets", "Play image asset context"),
             ],
             failures,
         )
@@ -516,7 +521,9 @@ def main() -> None:
                 ("누락 녹음 파일", "README documents missing recording ops check", "recording missing ops"),
                 ("/admin/public", "README documents public server admin page", "public server admin page"),
                 ("/admin/release", "README documents release readiness admin page", "release readiness admin page"),
+                ("/admin/play", "README documents Play release admin page", "Play release admin page"),
                 ("/api/v1/admin/release-readiness", "README documents release readiness API", "release readiness API"),
+                ("/api/v1/admin/play-release", "README documents Play release API", "Play release API"),
                 ("PUBLIC_SERVER.md", "README links public server checklist", "public server checklist"),
                 ("reverse_proxy", "README links reverse proxy examples", "reverse proxy examples"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
@@ -929,6 +936,8 @@ def main() -> None:
                 ("checks.extend(public_server_readiness_checks())", "Admin ops uses shared public readiness checks", "public readiness checks"),
                 ("release_readiness_summary", "Admin API exposes release readiness service", "release readiness service"),
                 ('@router.get("/release-readiness")', "Admin API exposes release readiness endpoint", "release readiness endpoint"),
+                ("play_release_summary", "Admin API exposes Play release service", "Play release service"),
+                ('@router.get("/play-release")', "Admin API exposes Play release endpoint", "Play release endpoint"),
                 ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
                 ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
@@ -994,6 +1003,20 @@ def main() -> None:
             ],
             failures,
         )
+    check(play_release_service_path.exists(), "Play release service exists", str(play_release_service_path), failures)
+    if play_release_service_path.exists():
+        play_release_source = play_release_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            play_release_source,
+            [
+                ("play_release_summary", "Play release service exports summary", "Play release summary"),
+                ("google_play_release_readiness", "Play release service names readiness payload", "Play readiness payload name"),
+                ("EXPECTED_ASSET_DIMENSIONS", "Play release service checks asset dimensions", "Play asset dimensions"),
+                ("PHASE1_RELEASE_CHECKLIST.md", "Play release service reads phase one checklist", "phase one checklist"),
+                ("scripts/play_release_status.py", "Play release service points to local release script", "local release script"),
+            ],
+            failures,
+        )
     recording_storage_path = server_dir / "app" / "services" / "recording_storage.py"
     check(recording_storage_path.exists(), "Recording storage service exists", str(recording_storage_path), failures)
     if recording_storage_path.exists():
@@ -1035,6 +1058,10 @@ def main() -> None:
                 ("_admin_release_html", "Monitor renders release readiness page", "release readiness page renderer"),
                 ("release_readiness_summary", "Monitor uses release readiness summary", "release readiness summary"),
                 ("NowNote 1차 릴리스 준비", "Monitor release page title", "release page title"),
+                ('@router.get("/admin/play"', "Monitor exposes Play release page", "Play release page route"),
+                ("_admin_play_html", "Monitor renders Play release page", "Play release page renderer"),
+                ("play_release_summary", "Monitor uses Play release summary", "Play release summary"),
+                ("NowNote Google Play 등록 준비", "Monitor Play page title", "Play page title"),
                 ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 ("누락 녹음 파일", "Monitor ops covers missing recording files", "missing recording files"),
@@ -1541,6 +1568,7 @@ def main() -> None:
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
                 ("/admin/release", "Smoke covers release readiness admin page", "admin/release"),
+                ("/admin/play", "Smoke covers Play release admin page", "admin/play"),
                 ("배포 체크리스트 화면에 현재 서버 요약과 확인 링크", "Smoke checks deploy runtime summary", "deploy runtime summary"),
                 ("배포 체크리스트 화면에 공용 서버 사용자 토큰 강제 설정 안내", "Smoke checks deploy public token enforcement", "deploy public token enforcement"),
                 ("/admin/help", "Smoke covers help admin page", "admin/help"),
@@ -1625,6 +1653,8 @@ def main() -> None:
                 ("1차 릴리스 준비 화면 제목", "Smoke checks release readiness page title", "release readiness page title"),
                 ("1차 릴리스 준비 화면에 남은 항목 유형", "Smoke checks release readiness blocker section", "release readiness blockers"),
                 ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),
+                ("Google Play 등록 준비 화면 제목", "Smoke checks Play release page title", "Play release page title"),
+                ("GET /api/v1/admin/play-release", "Smoke checks Play release API", "Play release API"),
                 ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),

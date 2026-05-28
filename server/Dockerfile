@@ -12,6 +12,13 @@ COPY server/app ./app
 COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./
 COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md
 COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md
+COPY now_app/docs/google_play_release_checklist.md /play_docs/google_play_release_checklist.md
+COPY now_app/docs/google_play_console_values_ko.md /play_docs/google_play_console_values_ko.md
+COPY now_app/docs/google_play_paste_ready_ko.md /play_docs/google_play_paste_ready_ko.md
+COPY now_app/docs/google_play_step_by_step_ko.md /play_docs/google_play_step_by_step_ko.md
+COPY now_app/docs/privacy_policy_draft_ko.md /play_docs/privacy_policy_draft_ko.md
+COPY now_app/docs/nownote_site/index.html /play_docs/nownote_site/index.html
+COPY now_app/docs/play_assets/*.png /play_docs/play_assets/
 
 EXPOSE 8080
 
