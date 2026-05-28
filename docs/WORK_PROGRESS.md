@@ -31,6 +31,11 @@
 - 관리자 Basic 인증 실패 시 한글 realm 헤더 때문에 401 대신 500이 날 수 있는 문제를 피하려고 realm 값을 ASCII로 변경.
 - FastAPI TestClient로 API 토큰이 설정된 상태의 `/monitor` 미인증 접근이 401로 응답하는지 확인.
 
+### 추가 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `sh scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull --timeout 30 --ready-retries 20 --ready-delay 3` 실행 통과.
+- 실제 Docker 재빌드/재기동 후 smoke test 통과. `/admin/mobile` 200 응답, `/api/v1/admin/play-release` 자동 확인 22/22, `/api/v1/admin/open-source-release` 자동 확인 16/16 확인.
+
 ## 2026-05-28 17:58 KST
 
 ### 다음 작업 시작
