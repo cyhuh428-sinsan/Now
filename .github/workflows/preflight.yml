@@ -30,7 +30,7 @@ jobs:
 
       - name: Check Python syntax
         working-directory: server
-        run: python -m py_compile scripts/preflight.py scripts/smoke_test.py ../web/scripts/verify_web_surface.py ../now_app/scripts/verify_mobile_surface.py ../scripts/verify_public_repo_safety.py ../scripts/check_github_actions_status.py ../scripts/local_environment_status.py ../scripts/play_release_status.py
+        run: python -m py_compile scripts/preflight.py scripts/smoke_test.py ../web/scripts/verify_web_surface.py ../now_app/scripts/verify_mobile_surface.py ../now_app/scripts/check_android_runtime.py ../now_app/scripts/check_android_emulator.py ../now_app/scripts/check_android_launch.py ../scripts/verify_public_repo_safety.py ../scripts/check_github_actions_status.py ../scripts/local_environment_status.py ../scripts/play_release_status.py ../scripts/release_readiness.py
 
       - name: Check deploy helper syntax
         run: sh -n server/scripts/deploy_local.sh
