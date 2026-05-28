@@ -110,6 +110,54 @@ ITEM_GUIDES = {
         action="릴리스 AAB/APK를 실제 기기에 설치하고 앱 실행, 권한 요청, 기본 메모 진입을 확인합니다.",
         reference=("/admin/mobile", "/admin/play"),
     ),
+    "실제 공개 도메인 확정.": EvidenceGuide(
+        evidence=(
+            "운영에 사용할 최종 도메인 이름",
+            "DNS가 실제 서버 공인 IP 또는 reverse proxy 진입점으로 연결된 확인 결과",
+        ),
+        action="공용 서버로 사용할 도메인을 확정하고 DNS 전파 상태를 확인합니다.",
+        reference=("server/PUBLIC_SERVER.md", "/admin/public"),
+    ),
+    "`NOW_PUBLIC_BASE_URL=https://도메인` 설정.": EvidenceGuide(
+        evidence=(
+            "server/.env의 NOW_PUBLIC_BASE_URL 값이 https:// 실제 도메인인 상태",
+            "/api/v1/server의 public_server_readiness에서 공개 URL 항목이 해소된 결과",
+        ),
+        action="공용 서버 .env에 HTTPS 공개 주소를 반영하고 서버를 재기동합니다.",
+        reference=("server/.env", "server/PUBLIC_SERVER.md", "/api/v1/server"),
+    ),
+    "reverse proxy 적용.": EvidenceGuide(
+        evidence=(
+            "Nginx 또는 Caddy 설정 파일의 실제 도메인 반영 결과",
+            "외부 브라우저에서 https://도메인/admin 접속 성공 화면",
+        ),
+        action="reverse proxy 예시 파일을 실제 도메인과 인증서 경로에 맞춰 적용합니다.",
+        reference=("server/reverse_proxy/nginx.nownote.conf.example", "server/reverse_proxy/Caddyfile.example"),
+    ),
+    "`NOW_BEHIND_REVERSE_PROXY=true` 설정.": EvidenceGuide(
+        evidence=(
+            "server/.env의 NOW_BEHIND_REVERSE_PROXY=true 설정",
+            "HTTPS reverse proxy 뒤에서 /health/ready와 /api/v1/server가 정상 응답한 결과",
+        ),
+        action="reverse proxy 적용 후 서버 환경값을 true로 바꾸고 public-server preflight를 다시 실행합니다.",
+        reference=("server/.env", "server/scripts/preflight.py"),
+    ),
+    "사용자별 접속 토큰 발급.": EvidenceGuide(
+        evidence=(
+            "/admin/users에서 공용 서버 사용자 계정 생성 또는 확인",
+            "사용자별 접속 토큰 발급 완료 화면 또는 token_issued 집계",
+        ),
+        action="/admin/users에서 사용자별 접속 토큰을 발급하고 토큰 원문을 사용자에게 안전하게 전달합니다.",
+        reference=("/admin/users", "/auth/token", "docs/SERVER_AUTH_POLICY.md"),
+    ),
+    "`NOW_USER_TOKEN_REQUIRED=true` 설정.": EvidenceGuide(
+        evidence=(
+            "server/.env의 NOW_USER_TOKEN_REQUIRED=true 설정",
+            "사용자 토큰 없는 데이터 API 요청이 차단되는 smoke test 결과",
+        ),
+        action="공용 서버 오픈 전 사용자별 접속 토큰 필수 모드를 켜고 smoke test를 실행합니다.",
+        reference=("server/.env", "server/scripts/smoke_test.py", "/admin/public"),
+    ),
     "공용 서버 기준 `python3 scripts/preflight.py --public-server` 통과.": EvidenceGuide(
         evidence=(
             "python3 scripts/preflight.py --public-server 통과 출력",
@@ -125,6 +173,54 @@ ITEM_GUIDES = {
         ),
         action="사용자별 토큰 필수 모드에서 smoke test를 실행합니다.",
         reference=("server/scripts/smoke_test.py", "/admin/public"),
+    ),
+    "개인정보처리방침 URL 확정.": EvidenceGuide(
+        evidence=(
+            "공개 접근 가능한 개인정보처리방침 URL",
+            "Play Console 앱 콘텐츠 또는 스토어 설정에 URL 저장 완료 화면",
+        ),
+        action="개인정보처리방침 초안을 실제 공개 URL에 올리고 Play Console 값과 대조합니다.",
+        reference=("now_app/docs/privacy_policy_draft_ko.md", "now_app/docs/nownote_site/index.html", "/admin/play"),
+    ),
+    "Play Console 앱 설명 문구 최종 확인.": EvidenceGuide(
+        evidence=(
+            "Play Console 기본 스토어 등록정보의 최종 앱 설명 저장 화면",
+            "now_app/docs/google_play_paste_ready_ko.md 문구와의 대조 결과",
+        ),
+        action="/admin/play 문서 초안을 기준으로 Play Console 설명 문구를 최종 저장합니다.",
+        reference=("/admin/play", "now_app/docs/google_play_paste_ready_ko.md"),
+    ),
+    "권한 사용 설명 최종 확인.": EvidenceGuide(
+        evidence=(
+            "마이크, 알림, 이미지/카메라, Health Connect 권한 설명 입력 완료 화면",
+            "권한 설명이 현재 1차 기능 범위와 맞는지 확인한 결과",
+        ),
+        action="Play Console 권한 설명을 현재 앱 기능과 대조하고 오래된 사진 첨부 표현이 없는지 확인합니다.",
+        reference=("now_app/docs/google_play_step_by_step_ko.md", "now_app/android/app/src/main/AndroidManifest.xml"),
+    ),
+    "Data safety 답변 최종 확인.": EvidenceGuide(
+        evidence=(
+            "Play Console Data safety 저장 완료 화면",
+            "선택 서버 동기화, 음성/텍스트 저장, Android 백업 제외 정책 반영 확인",
+        ),
+        action="Data safety 답변을 개인정보처리방침과 권한 설명 문서 기준으로 최종 확정합니다.",
+        reference=("/admin/play", "now_app/docs/google_play_release_checklist.md"),
+    ),
+    "스크린샷과 기능 그래픽 최종 확인.": EvidenceGuide(
+        evidence=(
+            "Play Console에 업로드한 스크린샷과 기능 그래픽 화면",
+            "scripts/play_release_status.py의 이미지 크기 자동 확인 통과 결과",
+        ),
+        action="자동 확인된 이미지 초안을 Play Console에 업로드하고 실제 노출 순서를 확인합니다.",
+        reference=("now_app/docs/play_assets", "scripts/play_release_status.py", "/admin/play"),
+    ),
+    "내부 테스트 트랙 업로드.": EvidenceGuide(
+        evidence=(
+            "Play Console 내부 테스트 트랙에 AAB 업로드 완료 화면",
+            "테스터 배포 또는 검토 가능 상태",
+        ),
+        action="서명된 AAB를 내부 테스트 트랙에 업로드하고 출시 노트를 저장합니다.",
+        reference=("now_app/build/app/outputs/bundle/release", "now_app/docs/google_play_release_checklist.md"),
     ),
     "GitHub Actions preflight 통과 확인.": EvidenceGuide(
         evidence=(
