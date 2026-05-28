@@ -13,6 +13,7 @@ from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.services.play_release import play_release_summary
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
@@ -236,6 +237,11 @@ def admin_public(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.get("/admin/release", include_in_schema=False)
 def admin_release(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_release_html())
+
+
+@router.get("/admin/play", include_in_schema=False)
+def admin_play(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_play_html())
 
 
 @router.get("/admin/recovery", include_in_schema=False)
@@ -774,6 +780,7 @@ def _admin_html() -> str:
         <a href="/admin/analysis">분석</a>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/play">Play 등록</a>
         <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
         <a href="/health/ready">준비 상태</a>
@@ -4421,6 +4428,7 @@ def _admin_help_html() -> str:
         <a href="/admin/users">사용자</a>
         <a href="/admin/ops">점검</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/play">Play 등록</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
         <a href="/admin/help">도움말</a>
@@ -4765,6 +4773,234 @@ def _release_blocker_rows(blockers: list[dict]) -> str:
             "</tr>"
         )
     return "\n".join(rows)
+
+
+def _admin_play_html() -> str:
+    readiness = play_release_summary()
+    summary = readiness["summary"]
+    status = readiness["status"]
+    status_label = "등록 준비 확인 필요" if status == "manual" else "등록 준비 완료"
+    status_class = "warn" if status == "manual" else "ok"
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote Google Play 등록 준비</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --amber: #d97706;
+      --red: #dc2626;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .cards {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .card, section {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }}
+    .card {{
+      padding: 18px;
+      min-height: 112px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .ok {{ color: var(--green); }}
+    .warn {{ color: var(--amber); }}
+    .bad {{ color: var(--red); }}
+    section {{
+      margin-top: 14px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    ul {{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }}
+    @media (max-width: 800px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .cards {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>NowNote Google Play 등록 준비</h1>
+        <div class="sub">등록 문서, 이미지 초안, 수동 확인 항목을 확인합니다</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/release">1차 준비</a>
+        <a href="/admin/deploy">배포</a>
+        <a href="/admin/help">도움말</a>
+      </nav>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">상태</div>
+        <div class="value {status_class}">{status_label}</div>
+      </div>
+      <div class="card">
+        <div class="label">자동 확인</div>
+        <div class="value">{summary["auto_ok"]}/{summary["auto_total"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">경고</div>
+        <div class="value {'bad' if summary['warnings'] else 'ok'}">{summary["warnings"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">수동 확인</div>
+        <div class="value warn">{summary["manual"]}</div>
+        <div class="sub"><a href="/api/v1/admin/play-release">JSON API</a></div>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>자동 확인 항목</span>
+        <span class="sub">문서와 이미지 초안 기준</span>
+      </div>
+      <table>
+        <tr><th>항목</th><th>상태</th><th>내용</th></tr>
+        {_play_check_rows(readiness["checks"])}
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>Play Console 수동 확인</span>
+        <span class="sub">사람이 화면에서 최종 확정</span>
+      </div>
+      <table>
+        <tr><th>남은 항목</th></tr>
+        {_play_manual_rows(readiness["manual_items"])}
+      </table>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _play_check_rows(checks: list[dict]) -> str:
+    if not checks:
+        return '<tr><td colspan="3">확인 항목이 없습니다.</td></tr>'
+    rows = []
+    labels = {"ok": "정상", "warn": "확인 필요", "manual": "수동"}
+    for check in checks:
+        status = check["status"]
+        rows.append(
+            "<tr>"
+            f"<td>{escape(check['name'])}</td>"
+            f'<td class="{escape(status)}">{escape(labels.get(status, status))}</td>'
+            f"<td>{escape(check['message'])}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def _play_manual_rows(items: list[str]) -> str:
+    if not items:
+        return '<tr><td>남은 수동 확인 항목이 없습니다.</td></tr>'
+    return "\n".join(f"<tr><td>{escape(item)}</td></tr>" for item in items)
 
 
 def _admin_recovery_html() -> str:
