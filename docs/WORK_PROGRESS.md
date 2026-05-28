@@ -3,6 +3,33 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 07:15 KST
+
+### 다음 작업 시작
+
+- 남은 1차 항목 중 실제로 확인 가능한 GitHub Actions 상태와 Android 에뮬레이터 실행 상태를 재점검.
+- 실제 기기, 음성 입력, Play Console, 공용 도메인, 라이선스처럼 사람이 최종 확인해야 하는 항목은 완료 처리하지 않음.
+
+### 확인 내용
+
+- `scripts/check_github_actions_status.py --commit e912596` 실행 결과 토큰 없는 GitHub API는 404를 반환. 연결된 GitHub 도구에서도 최신 커밋 `e912596639d5288081a47b32210293a0f39043a3`의 workflow run/status가 아직 없음.
+- `now_app/scripts/check_android_runtime.py --server-url http://127.0.0.1:8750 --timeout 12` 실행 결과 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready는 정상. 실행 중인 Android 기기는 없어서 실패 1건.
+- `now_app/scripts/check_android_emulator.py --start --launch-app --timeout 300 --interval 5`로 `Medium_Phone_API_36.1` 에뮬레이터 부팅 확인. APK 재설치는 저장공간 부족으로 실패했지만 기존 설치 앱은 현재 화면 패키지 `com.sinsan.nownote`로 확인.
+- `now_app/scripts/check_android_launch.py --serial emulator-5554 --skip-install --timeout 90` 실행 통과. 설치된 앱 실행, 프로세스, 현재 화면 패키지 확인.
+- ADB UI 덤프로 홈 화면의 `좋은 아침이에요`, `LLM 브리핑`, `오늘 일정`, `오늘 메모`, 하단 탭 `홈/일상/살림/여행/기록` 표시 확인.
+
+### 구현 내용
+
+- `now_app/scripts/check_android_emulator.py`에 `--skip-install` 옵션 추가. 이미 설치된 앱을 기준으로 실행 상태만 확인할 수 있게 함.
+- `now_app/README.md`, `now_app/docs/mobile_runtime_checklist_ko.md`, `server/scripts/preflight.py`에 새 옵션 안내와 점검 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile now_app\scripts\check_android_emulator.py server\scripts\preflight.py` 통과.
+- `uv run python now_app\scripts\check_android_emulator.py --launch-app --skip-install --timeout 120` 통과.
+- `git diff --check` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 812/812.
+
 ## 2026-05-28 05:55 KST
 
 ### 다음 작업 시작

@@ -83,6 +83,12 @@ python scripts/check_android_emulator.py
 python scripts/check_android_emulator.py --start --launch-app
 ```
 
+이미 앱이 설치된 에뮬레이터에서 설치 없이 실행 상태만 확인하려면 아래처럼 실행합니다.
+
+```bash
+python scripts/check_android_emulator.py --launch-app --skip-install
+```
+
 연결된 에뮬레이터나 실기기에 현재 APK를 설치하고 앱 실행까지 확인할 때는 아래 명령을 사용합니다.
 
 ```bash
