@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 08:58 KST
+
+### 다음 작업 시작
+
+- `/admin/evidence`의 수동 증빙 기준은 준비됐지만 공용 서버/Play Console 일부 항목은 유형별 기본 안내로 묶여 있어 실제 완료 판단에 필요한 증빙이 덜 구체적이었음.
+- 남은 22개를 임의 완료 처리하지 않고, 공용 서버와 Play Console 항목별 증빙 기준을 더 세분화.
+
+### 구현 내용
+
+- `server/app/services/release_evidence.py`의 항목별 증빙 기준을 확장.
+- 공용 서버 항목은 도메인, `NOW_PUBLIC_BASE_URL`, reverse proxy, `NOW_BEHIND_REVERSE_PROXY`, 사용자별 접속 토큰, `NOW_USER_TOKEN_REQUIRED` 각각의 필요 증빙과 참고 경로를 분리.
+- Google Play 항목은 개인정보처리방침 URL, 앱 설명, 권한 설명, Data safety, 스크린샷/기능 그래픽, 내부 테스트 트랙 업로드 기준을 분리.
+
+### 검증
+
+- `uv run python -m py_compile server\app\services\release_evidence.py server\app\api\admin.py server\app\api\monitor.py server\scripts\preflight.py` 통과.
+- FastAPI TestClient로 `/api/v1/admin/release-evidence` 200 응답, 요약 `remaining: 22`, `groups: 5` 유지, 공용 서버/Play Console 항목별 증빙 문구 반영 확인.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 896/896.
+
 ## 2026-05-29 08:47 KST
 
 ### 다음 작업 시작
