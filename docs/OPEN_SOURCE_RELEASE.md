@@ -85,6 +85,18 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 python3 scripts/check_github_actions_status.py --repo cyhuh428-sinsan/Now --workflow preflight.yml --branch main
 ```
 
+토큰에 workflow/actions 쓰기 권한이 있으면 화면 대신 API로 수동 실행을 요청할 수도 있습니다.
+
+```bash
+python3 scripts/dispatch_github_actions.py --repo cyhuh428-sinsan/Now --workflow preflight.yml --ref main
+```
+
+요청 대상만 확인하려면 아래처럼 dry-run으로 실행합니다.
+
+```bash
+python3 scripts/dispatch_github_actions.py --dry-run
+```
+
 이 명령이 `GitHub API HTTP 404`를 반환하면 보통 아래 상태 중 하나입니다.
 
 - 저장소에서 GitHub Actions가 아직 활성화되지 않았습니다.

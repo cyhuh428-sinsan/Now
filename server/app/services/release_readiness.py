@@ -37,7 +37,8 @@ NEXT_ACTIONS = {
         "스크린샷, 내부 테스트 업로드를 사람이 최종 확인합니다."
     ),
     "GitHub Actions": (
-        "GitHub Actions 화면에서 NowNote Preflight를 실행한 뒤 scripts/check_github_actions_status.py로 통과 상태를 확인합니다."
+        "GitHub Actions 화면에서 NowNote Preflight를 실행하거나, 토큰이 있으면 scripts/dispatch_github_actions.py로 실행 요청 후 "
+        "scripts/check_github_actions_status.py로 통과 상태를 확인합니다."
     ),
     "오픈소스 라이선스 결정": (
         "docs/LICENSE_DECISION.md를 기준으로 라이선스를 선택하고 LICENSE 파일을 추가한 뒤 체크리스트를 갱신합니다."
