@@ -26,6 +26,11 @@
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지.
 
+### 추가 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `sh scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull --timeout 30 --ready-retries 20 --ready-delay 3` 실행 통과.
+- 실제 Docker 재빌드/재기동 후 smoke test 통과. `/admin/open-source` 200 응답, `/api/v1/admin/open-source-release` 200 응답, API 요약 자동 확인 16/16, 경고 0, 수동 확인 3 확인.
+
 ## 2026-05-28 17:46 KST
 
 ### 다음 작업 시작
