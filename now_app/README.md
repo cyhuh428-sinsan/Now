@@ -71,6 +71,18 @@ python scripts/verify_mobile_surface.py
 python scripts/check_android_runtime.py
 ```
 
+에뮬레이터가 꺼져 있다면 AVD 목록과 부팅 상태를 아래 명령으로 확인합니다.
+
+```bash
+python scripts/check_android_emulator.py
+```
+
+필요할 때는 등록된 첫 AVD를 시작하고 부팅 완료 후 앱 설치/실행 점검까지 이어갈 수 있습니다.
+
+```bash
+python scripts/check_android_emulator.py --start --launch-app
+```
+
 연결된 에뮬레이터나 실기기에 현재 APK를 설치하고 앱 실행까지 확인할 때는 아래 명령을 사용합니다.
 
 ```bash
