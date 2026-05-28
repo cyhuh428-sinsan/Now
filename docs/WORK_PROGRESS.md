@@ -26,6 +26,12 @@
 - `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 876/876.
 - `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지. GitHub Actions 다음 행동 문구 갱신 확인.
 
+### 추가 검증
+
+- WSL 배포 경로 `/home/daon/deploy/Now/server`에서 `sh scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull --timeout 30 --ready-retries 20 --ready-delay 3` 실행 통과.
+- 실제 Docker 재빌드/재기동 후 smoke test 통과. `/admin/release`의 GitHub Actions 다음 행동 갱신이 서버 화면에 반영됨.
+- 최신 커밋 `60b516c` 기준 GitHub Actions workflow run/status는 아직 없음. 이 항목은 토큰 또는 GitHub Actions 화면 실행 후 다시 확인 필요.
+
 ## 2026-05-28 22:22 KST
 
 ### 다음 작업 시작
