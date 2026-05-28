@@ -11,6 +11,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY server/app ./app
 COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./
 COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md
+COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md
 
 EXPOSE 8080
 

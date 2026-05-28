@@ -15,6 +15,7 @@ from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
 
@@ -658,6 +659,11 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
         },
         "checks": checks,
     }
+
+
+@router.get("/release-readiness")
+def release_readiness() -> dict:
+    return release_readiness_summary()
 
 
 def _export_payload(name: str, rows: list) -> dict:

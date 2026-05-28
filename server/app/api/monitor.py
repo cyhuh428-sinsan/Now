@@ -13,6 +13,7 @@ from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
 
@@ -230,6 +231,11 @@ def admin_help(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.get("/admin/public", include_in_schema=False)
 def admin_public(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_public_html())
+
+
+@router.get("/admin/release", include_in_schema=False)
+def admin_release(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_release_html())
 
 
 @router.get("/admin/recovery", include_in_schema=False)
@@ -767,6 +773,7 @@ def _admin_html() -> str:
         <a href="/admin/export">내보내기</a>
         <a href="/admin/analysis">분석</a>
         <a href="/admin/public">공용 서버</a>
+        <a href="/admin/release">1차 준비</a>
         <a href="/admin/help">도움말</a>
         <a href="/docs">API 문서</a>
         <a href="/health/ready">준비 상태</a>
@@ -4413,6 +4420,7 @@ def _admin_help_html() -> str:
         <a href="/admin">관리</a>
         <a href="/admin/users">사용자</a>
         <a href="/admin/ops">점검</a>
+        <a href="/admin/release">1차 준비</a>
         <a href="/admin/export">내보내기</a>
         <a href="/monitor">모니터</a>
         <a href="/admin/help">도움말</a>
@@ -4500,6 +4508,263 @@ def _admin_help_html() -> str:
   </main>
 </body>
 </html>"""
+
+
+def _admin_release_html() -> str:
+    readiness = release_readiness_summary()
+    summary = readiness["summary"]
+    status = readiness["status"]
+    status_label = "마무리 완료" if status == "ready" else "마무리 진행 중"
+    status_class = "ok" if status == "ready" else "warn"
+    source = "docs/PHASE1_RELEASE_CHECKLIST.md" if readiness.get("source") else "체크리스트 파일 없음"
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 1차 릴리스 준비</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .cards {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .card, section {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }}
+    .card {{
+      padding: 18px;
+      min-height: 112px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .ok {{ color: var(--green); }}
+    .warn {{ color: var(--amber); }}
+    section {{
+      margin-top: 14px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    ul {{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }}
+    code {{
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 13px;
+    }}
+    @media (max-width: 800px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .cards {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>NowNote 1차 릴리스 준비</h1>
+        <div class="sub">체크리스트 기준으로 완료 항목과 외부 확인이 필요한 항목을 봅니다</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/ops">점검</a>
+        <a href="/admin/public">공용 서버</a>
+        <a href="/admin/deploy">배포</a>
+        <a href="/admin/help">도움말</a>
+      </nav>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">상태</div>
+        <div class="value {status_class}">{status_label}</div>
+      </div>
+      <div class="card">
+        <div class="label">완료</div>
+        <div class="value">{summary["done"]}/{summary["total"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">남은 항목</div>
+        <div class="value {status_class}">{summary["remaining"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">기준</div>
+        <div class="value" style="font-size:16px;">{escape(source)}</div>
+        <div class="sub"><a href="/api/v1/admin/release-readiness">JSON API</a></div>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>영역별 진행</span>
+        <span class="sub">체크리스트 기준</span>
+      </div>
+      <table>
+        <tr><th>영역</th><th>진행</th><th>상태</th><th>남은 항목</th></tr>
+        {_release_section_rows(readiness["sections"])}
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>남은 항목 유형</span>
+        <span class="sub">외부 조건별 분류</span>
+      </div>
+      <table>
+        <tr><th>유형</th><th>개수</th><th>기준</th><th>항목</th></tr>
+        {_release_blocker_rows(readiness["blockers"])}
+      </table>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _release_section_rows(sections: list[dict]) -> str:
+    if not sections:
+        return '<tr><td colspan="4">체크리스트 항목을 찾을 수 없습니다.</td></tr>'
+    rows = []
+    for section in sections:
+        remaining = section["remaining"]
+        status_class = "ok" if remaining == 0 else "warn"
+        status_label = "완료" if remaining == 0 else f"남음 {remaining}개"
+        remaining_items = [
+            f"<li>{escape(item['label'])}</li>"
+            for item in section["items"]
+            if not item["checked"]
+        ]
+        rows.append(
+            "<tr>"
+            f"<td>{escape(section['name'])}</td>"
+            f"<td>{section['done']}/{section['total']}</td>"
+            f'<td class="{status_class}">{escape(status_label)}</td>'
+            f"<td>{'<ul>' + ''.join(remaining_items) + '</ul>' if remaining_items else '-'}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def _release_blocker_rows(blockers: list[dict]) -> str:
+    if not blockers:
+        return '<tr><td colspan="4">남은 항목이 없습니다.</td></tr>'
+    rows = []
+    for blocker in blockers:
+        items = "".join(
+            f"<li>[{escape(item['section'])}] {escape(item['label'])}</li>"
+            for item in blocker["items"]
+        )
+        rows.append(
+            "<tr>"
+            f"<td>{escape(blocker['name'])}</td>"
+            f"<td>{blocker['count']}</td>"
+            f"<td>{escape(blocker['guidance'])}</td>"
+            f"<td>{'<ul>' + items + '</ul>' if items else '-'}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
 
 
 def _admin_recovery_html() -> str:
