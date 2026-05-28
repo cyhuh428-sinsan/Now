@@ -333,6 +333,7 @@ def main() -> None:
         "/admin/deploy",
         "/admin/public",
         "/admin/release",
+        "/admin/evidence",
         "/admin/mobile",
         "/admin/play",
         "/admin/open-source",
@@ -390,8 +391,14 @@ def main() -> None:
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
             require("남은 항목 유형" in text, "1차 릴리스 준비 화면에 남은 항목 유형이 없습니다")
             require("다음 행동" in text, "1차 릴리스 준비 화면에 다음 행동 안내가 없습니다")
+            require("/admin/evidence" in text, "1차 릴리스 준비 화면에 수동 증빙 화면 링크가 없습니다")
             require("/admin/mobile" in text, "1차 릴리스 준비 화면에 모바일 점검 화면 링크가 없습니다")
             require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")
+        if path == "/admin/evidence":
+            require("NowNote 수동 증빙" in text, "수동 증빙 화면 제목이 없습니다")
+            require("수동 증빙 기준" in text, "수동 증빙 화면에 증빙 기준 표가 없습니다")
+            require("필요 증빙" in text, "수동 증빙 화면에 필요 증빙 열이 없습니다")
+            require("/api/v1/admin/release-evidence" in text, "수동 증빙 화면에 JSON API 링크가 없습니다")
         if path == "/admin/mobile":
             require("NowNote 모바일 실제 실행 점검" in text, "모바일 실제 실행 점검 화면 제목이 없습니다")
             require("음성 메모" in text, "모바일 실제 실행 점검 화면에 음성 메모 절차가 없습니다")
@@ -472,6 +479,20 @@ def main() -> None:
     )
     print(
         "GET /api/v1/admin/release-readiness:",
+        status,
+        data.get("summary"),
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/release-evidence", args.token)
+    require(data.get("name") == "phase_one_manual_evidence", "수동 증빙 API 이름이 예상과 다릅니다")
+    require(data.get("summary", {}).get("remaining", 0) >= 0, "수동 증빙 API의 남은 항목 수가 없습니다")
+    require(data.get("items") is not None, "수동 증빙 API에 항목 목록이 없습니다")
+    require(
+        all("evidence" in item and "action" in item for item in data.get("items", [])),
+        "수동 증빙 API 항목에 증빙 기준 또는 다음 행동이 없습니다",
+    )
+    print(
+        "GET /api/v1/admin/release-evidence:",
         status,
         data.get("summary"),
     )

@@ -121,6 +121,7 @@ def main() -> None:
     users_api_path = server_dir / "app" / "api" / "users.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
+    release_evidence_service_path = server_dir / "app" / "services" / "release_evidence.py"
     release_readiness_service_path = server_dir / "app" / "services" / "release_readiness.py"
     play_release_service_path = server_dir / "app" / "services" / "play_release.py"
     open_source_release_service_path = server_dir / "app" / "services" / "open_source_release.py"
@@ -434,6 +435,7 @@ def main() -> None:
                 ('node-version: "22"', "GitHub preflight pins Node version", "workflow node version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
+                ("app/services/release_evidence.py", "GitHub preflight checks release evidence service syntax", "workflow release evidence service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
                 ("dispatch_github_actions.py", "GitHub preflight checks Actions dispatch script syntax", "workflow Actions dispatch script"),
                 ("local_environment_status.py", "GitHub preflight checks local environment status script syntax", "workflow local environment status script"),
@@ -978,6 +980,8 @@ def main() -> None:
                 ("checks.extend(public_server_readiness_checks())", "Admin ops uses shared public readiness checks", "public readiness checks"),
                 ("release_readiness_summary", "Admin API exposes release readiness service", "release readiness service"),
                 ('@router.get("/release-readiness")', "Admin API exposes release readiness endpoint", "release readiness endpoint"),
+                ("release_evidence_summary", "Admin API exposes release evidence service", "release evidence service"),
+                ('@router.get("/release-evidence")', "Admin API exposes release evidence endpoint", "release evidence endpoint"),
                 ("play_release_summary", "Admin API exposes Play release service", "Play release service"),
                 ('@router.get("/play-release")', "Admin API exposes Play release endpoint", "Play release endpoint"),
                 ("open_source_release_summary", "Admin API exposes open source release service", "open source service"),
@@ -999,6 +1003,23 @@ def main() -> None:
                     "Admin API normalizes two-factor flag",
                     "two factor bool",
                 ),
+            ],
+            failures,
+        )
+    check(release_evidence_service_path.exists(), "Release evidence service exists", str(release_evidence_service_path), failures)
+    if release_evidence_service_path.exists():
+        release_evidence_source = release_evidence_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            release_evidence_source,
+            [
+                ("release_evidence_summary", "Release evidence service exports summary", "release evidence summary"),
+                ("phase_one_manual_evidence", "Release evidence service names evidence payload", "evidence payload name"),
+                ('"evidence"', "Release evidence service defines evidence guidance", "evidence guidance"),
+                ("실제 Android 기기/모바일 화면", "Release evidence service covers mobile evidence", "mobile evidence"),
+                ("공용 서버 운영 결정", "Release evidence service covers public server evidence", "public server evidence"),
+                ("Google Play Console", "Release evidence service covers Play evidence", "Play evidence"),
+                ("GitHub Actions", "Release evidence service covers Actions evidence", "Actions evidence"),
+                ("오픈소스 라이선스 결정", "Release evidence service covers license evidence", "license evidence"),
             ],
             failures,
         )
@@ -1119,9 +1140,14 @@ def main() -> None:
                 ('@router.get("/admin/release"', "Monitor exposes release readiness page", "release readiness page route"),
                 ("_admin_release_html", "Monitor renders release readiness page", "release readiness page renderer"),
                 ("release_readiness_summary", "Monitor uses release readiness summary", "release readiness summary"),
+                ('@router.get("/admin/evidence"', "Monitor exposes release evidence page", "release evidence page route"),
+                ("_admin_evidence_html", "Monitor renders release evidence page", "release evidence page renderer"),
+                ("release_evidence_summary", "Monitor uses release evidence summary", "release evidence summary"),
                 ('Basic realm="NowNote Admin"', "Monitor uses ASCII Basic auth realm", "admin auth ASCII realm"),
                 ("NowNote 1차 릴리스 준비", "Monitor release page title", "release page title"),
                 ("다음 행동", "Monitor release page shows next action column", "release next action"),
+                ("NowNote 수동 증빙", "Monitor evidence page title", "evidence page title"),
+                ("필요 증빙", "Monitor evidence page shows evidence column", "evidence column"),
                 ('@router.get("/admin/mobile"', "Monitor exposes mobile runtime page", "mobile runtime page route"),
                 ("_admin_mobile_html", "Monitor renders mobile runtime page", "mobile runtime page renderer"),
                 ("NowNote 모바일 실제 실행 점검", "Monitor mobile page title", "mobile page title"),
@@ -1646,6 +1672,7 @@ def main() -> None:
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
                 ("/admin/release", "Smoke covers release readiness admin page", "admin/release"),
+                ("/admin/evidence", "Smoke covers release evidence admin page", "admin/evidence"),
                 ("/admin/mobile", "Smoke covers mobile runtime admin page", "admin/mobile"),
                 ("/admin/play", "Smoke covers Play release admin page", "admin/play"),
                 ("/admin/open-source", "Smoke covers open source release admin page", "admin/open-source"),
@@ -1733,6 +1760,8 @@ def main() -> None:
                 ("1차 릴리스 준비 화면 제목", "Smoke checks release readiness page title", "release readiness page title"),
                 ("1차 릴리스 준비 화면에 남은 항목 유형", "Smoke checks release readiness blocker section", "release readiness blockers"),
                 ("1차 릴리스 준비 화면에 다음 행동 안내", "Smoke checks release next action guidance", "release next action"),
+                ("수동 증빙 화면 제목", "Smoke checks release evidence page title", "evidence page title"),
+                ("수동 증빙 API 이름", "Smoke checks release evidence API", "release evidence API"),
                 ("모바일 실제 실행 점검 화면 제목", "Smoke checks mobile runtime page title", "mobile runtime page title"),
                 ("릴리스 준비 API의 남은 항목 유형에 다음 행동 안내", "Smoke checks release next action API", "release next action API"),
                 ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),
