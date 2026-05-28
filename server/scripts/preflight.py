@@ -122,6 +122,7 @@ def main() -> None:
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
     release_readiness_service_path = server_dir / "app" / "services" / "release_readiness.py"
     play_release_service_path = server_dir / "app" / "services" / "play_release.py"
+    open_source_release_service_path = server_dir / "app" / "services" / "open_source_release.py"
     web_app_path = repo_root / "web" / "app.js"
     web_readme_path = repo_root / "web" / "README.md"
     mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
@@ -430,6 +431,7 @@ def main() -> None:
                 ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
                 ('node-version: "22"', "GitHub preflight pins Node version", "workflow node version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
+                ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
                 ("local_environment_status.py", "GitHub preflight checks local environment status script syntax", "workflow local environment status script"),
                 ("play_release_status.py", "GitHub preflight checks Play release status script syntax", "workflow Play status script"),
@@ -481,8 +483,12 @@ def main() -> None:
             [
                 ("COPY server/app ./app", "Dockerfile copies server app", "server app copy"),
                 ("COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./", "Dockerfile copies admin docs", "admin docs copy"),
+                ("COPY README.md SECURITY.md CONTRIBUTING.md /repo_docs/", "Dockerfile copies public repo docs", "public repo docs copy"),
+                ("COPY .github /repo_docs/.github", "Dockerfile copies GitHub templates", "GitHub templates copy"),
                 ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
                 ("COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile copies phase one checklist", "phase one checklist copy"),
+                ("COPY docs/OPEN_SOURCE_RELEASE.md /docs/OPEN_SOURCE_RELEASE.md", "Dockerfile copies open source release doc", "open source doc copy"),
+                ("COPY docs/LICENSE_DECISION.md /docs/LICENSE_DECISION.md", "Dockerfile copies license decision doc", "license decision doc copy"),
                 ("COPY now_app/docs/google_play_release_checklist.md", "Dockerfile copies Play checklist doc", "Play checklist doc copy"),
                 ("COPY now_app/docs/play_assets/*.png", "Dockerfile copies Play image assets", "Play image asset copy"),
             ],
@@ -497,8 +503,14 @@ def main() -> None:
                 ("**", "Root Dockerignore starts closed", "closed build context"),
                 ("!server/app/**", "Root Dockerignore allows server app", "server app context"),
                 ("!server/RECOVERY.md", "Root Dockerignore allows recovery doc", "recovery doc context"),
+                ("!README.md", "Root Dockerignore allows root README", "root README context"),
+                ("!SECURITY.md", "Root Dockerignore allows security policy", "security policy context"),
+                ("!CONTRIBUTING.md", "Root Dockerignore allows contributing guide", "contributing context"),
+                ("!.github/workflows/preflight.yml", "Root Dockerignore allows preflight workflow", "preflight workflow context"),
                 ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
                 ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Root Dockerignore allows phase one checklist", "phase one checklist context"),
+                ("!docs/OPEN_SOURCE_RELEASE.md", "Root Dockerignore allows open source release doc", "open source doc context"),
+                ("!docs/LICENSE_DECISION.md", "Root Dockerignore allows license decision doc", "license decision doc context"),
                 ("!now_app/docs/google_play_release_checklist.md", "Root Dockerignore allows Play checklist", "Play checklist context"),
                 ("!now_app/docs/play_assets/*.png", "Root Dockerignore allows Play image assets", "Play image asset context"),
             ],
@@ -526,8 +538,10 @@ def main() -> None:
                 ("/admin/public", "README documents public server admin page", "public server admin page"),
                 ("/admin/release", "README documents release readiness admin page", "release readiness admin page"),
                 ("/admin/play", "README documents Play release admin page", "Play release admin page"),
+                ("/admin/open-source", "README documents open source release admin page", "open source admin page"),
                 ("/api/v1/admin/release-readiness", "README documents release readiness API", "release readiness API"),
                 ("/api/v1/admin/play-release", "README documents Play release API", "Play release API"),
+                ("/api/v1/admin/open-source-release", "README documents open source release API", "open source API"),
                 ("PUBLIC_SERVER.md", "README links public server checklist", "public server checklist"),
                 ("reverse_proxy", "README links reverse proxy examples", "reverse proxy examples"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
@@ -622,6 +636,7 @@ def main() -> None:
     check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
     check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
     check(release_readiness_service_path.exists(), "Release readiness service exists", str(release_readiness_service_path), failures)
+    check(open_source_release_service_path.exists(), "Open source release service exists", str(open_source_release_service_path), failures)
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
@@ -944,6 +959,8 @@ def main() -> None:
                 ('@router.get("/release-readiness")', "Admin API exposes release readiness endpoint", "release readiness endpoint"),
                 ("play_release_summary", "Admin API exposes Play release service", "Play release service"),
                 ('@router.get("/play-release")', "Admin API exposes Play release endpoint", "Play release endpoint"),
+                ("open_source_release_summary", "Admin API exposes open source release service", "open source service"),
+                ('@router.get("/open-source-release")', "Admin API exposes open source release endpoint", "open source endpoint"),
                 ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
                 ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
@@ -1025,6 +1042,21 @@ def main() -> None:
             ],
             failures,
         )
+    if open_source_release_service_path.exists():
+        open_source_release_source = open_source_release_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            open_source_release_source,
+            [
+                ("open_source_release_summary", "Open source release service exports summary", "open source summary"),
+                ("open_source_release_readiness", "Open source release service names readiness payload", "open source readiness payload"),
+                ("OPEN_SOURCE_RELEASE.md", "Open source release service checks public release guide", "open source guide"),
+                ("LICENSE_DECISION.md", "Open source release service checks license decision guide", "license decision guide"),
+                ("preflight.yml", "Open source release service checks GitHub Actions workflow", "preflight workflow"),
+                ("LICENSE 파일", "Open source release service keeps license file manual", "license manual"),
+                ("PHASE1_RELEASE_CHECKLIST.md", "Open source release service reads phase one checklist", "phase one checklist"),
+            ],
+            failures,
+        )
     recording_storage_path = server_dir / "app" / "services" / "recording_storage.py"
     check(recording_storage_path.exists(), "Recording storage service exists", str(recording_storage_path), failures)
     if recording_storage_path.exists():
@@ -1071,6 +1103,10 @@ def main() -> None:
                 ("_admin_play_html", "Monitor renders Play release page", "Play release page renderer"),
                 ("play_release_summary", "Monitor uses Play release summary", "Play release summary"),
                 ("NowNote Google Play 등록 준비", "Monitor Play page title", "Play page title"),
+                ('@router.get("/admin/open-source"', "Monitor exposes open source release page", "open source page route"),
+                ("_admin_open_source_html", "Monitor renders open source release page", "open source page renderer"),
+                ("open_source_release_summary", "Monitor uses open source release summary", "open source summary"),
+                ("NowNote 공개 저장소 준비", "Monitor open source page title", "open source page title"),
                 ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 ("누락 녹음 파일", "Monitor ops covers missing recording files", "missing recording files"),
@@ -1585,6 +1621,7 @@ def main() -> None:
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
                 ("/admin/release", "Smoke covers release readiness admin page", "admin/release"),
                 ("/admin/play", "Smoke covers Play release admin page", "admin/play"),
+                ("/admin/open-source", "Smoke covers open source release admin page", "admin/open-source"),
                 ("배포 체크리스트 화면에 현재 서버 요약과 확인 링크", "Smoke checks deploy runtime summary", "deploy runtime summary"),
                 ("배포 체크리스트 화면에 공용 서버 사용자 토큰 강제 설정 안내", "Smoke checks deploy public token enforcement", "deploy public token enforcement"),
                 ("/admin/help", "Smoke covers help admin page", "admin/help"),
@@ -1673,6 +1710,8 @@ def main() -> None:
                 ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),
                 ("Google Play 등록 준비 화면 제목", "Smoke checks Play release page title", "Play release page title"),
                 ("GET /api/v1/admin/play-release", "Smoke checks Play release API", "Play release API"),
+                ("공개 저장소 준비 화면 제목", "Smoke checks open source release page title", "open source page title"),
+                ("GET /api/v1/admin/open-source-release", "Smoke checks open source release API", "open source API"),
                 ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
