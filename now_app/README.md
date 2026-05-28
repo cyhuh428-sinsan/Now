@@ -71,4 +71,10 @@ python scripts/verify_mobile_surface.py
 python scripts/check_android_runtime.py
 ```
 
+연결된 에뮬레이터나 실기기에 현재 APK를 설치하고 앱 실행까지 확인할 때는 아래 명령을 사용합니다.
+
+```bash
+python scripts/check_android_launch.py
+```
+
 에뮬레이터와 실제 기기에서 확인해야 하는 흐름은 `docs/mobile_runtime_checklist_ko.md`를 기준으로 점검합니다.

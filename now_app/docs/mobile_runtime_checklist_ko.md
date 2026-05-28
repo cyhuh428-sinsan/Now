@@ -8,6 +8,7 @@
 - 최신 소스 반영: 저장소 루트에서 `git pull origin main`
 - Flutter 의존성 준비: `now_app` 폴더에서 `flutter pub get`
 - 실제 실행 환경 확인: `now_app` 폴더에서 `python scripts/check_android_runtime.py`
+- APK 설치와 앱 실행 자동 확인: `now_app` 폴더에서 `python scripts/check_android_launch.py`
 - `Flutter CLI`가 버전은 출력하지만 종료가 늦어 `WARN`으로 표시되는 경우, Flutter 설치 자체는 확인된 상태로 보고 연결 기기와 서버 상태를 우선 점검한다.
 - 로컬 단독 사용 점검: 서버 연결을 끈 상태로 시작
 - 서버 연결 점검: 개인 Docker 서버 또는 테스트 서버를 먼저 실행
@@ -16,6 +17,7 @@
 
 ## 1. 앱 실행과 홈
 
+- [ ] `python scripts/check_android_launch.py`가 연결된 에뮬레이터 또는 실기기에서 통과한다.
 - [ ] 앱 이름이 NowNote로 표시된다.
 - [ ] 홈 화면에 오늘 일정과 오늘 메모 영역이 보인다.
 - [ ] 홈의 오늘 메모 진입 버튼으로 일자별 메모 작성 화면에 들어간다.

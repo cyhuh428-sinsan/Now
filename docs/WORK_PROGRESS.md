@@ -8,6 +8,7 @@
 ### 다음 작업 시작
 
 - 남은 1차 마무리 항목 중 로컬에서 추가로 확인 가능한 모바일/Play/릴리스 상태 재점검.
+- 실제 Android 기기/에뮬레이터가 연결됐을 때 설치와 실행 확인을 빠르게 닫을 수 있도록 자동 점검 도구 보강.
 
 ### 확인 내용
 
@@ -20,6 +21,11 @@
 - 공개 저장소 안전 점검은 `scripts/verify_public_repo_safety.py` 기준 8/8 통과.
 - `flutter analyze`, `dart analyze`, `flutter --version`, `dart --version`은 현재 PowerShell 세션에서 장시간 응답하지 않아 시간 초과. 분석 프로세스 잔류는 확인되지 않음.
 - GitHub Actions 상태 점검은 토큰 없는 GitHub API 조회에서 404가 반환되어, Actions 화면에서 `NowNote Preflight` 수동 실행 또는 Actions 읽기 권한 토큰이 필요함을 확인.
+- `now_app/scripts/check_android_launch.py` 추가. 연결된 Android 기기에 APK 설치, 런처 실행, 패키지 설치 확인, 프로세스 확인을 수행.
+- `now_app/README.md`와 `now_app/docs/mobile_runtime_checklist_ko.md`에 설치/실행 자동 확인 명령을 추가.
+- `now_app/scripts/verify_mobile_surface.py`와 `server/scripts/preflight.py`가 새 Android 설치/실행 점검 도구를 확인하도록 보강.
+- 새 기준 검증 결과: 모바일 표면 점검 119/119 통과, 서버 preflight 730/730 통과.
+- 현재 연결된 Android device 상태 기기가 없어 `check_android_launch.py`는 ADB와 APK 파일은 확인하고, 설치/실행 대상 없음으로 정상적으로 실패 사유를 출력.
 
 ### 보류
 
