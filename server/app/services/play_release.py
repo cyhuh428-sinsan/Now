@@ -71,9 +71,16 @@ def _play_docs_root() -> Path | None:
         Path("/play_docs"),
     ]
     for path in candidates:
+        if path.exists() and _has_required_play_docs(path):
+            return path
+    for path in candidates:
         if path.exists():
             return path
     return None
+
+
+def _has_required_play_docs(path: Path) -> bool:
+    return all((path / relative).exists() for relative in REQUIRED_DOCS)
 
 
 def _play_assets_root(docs_root: Path | None) -> Path | None:

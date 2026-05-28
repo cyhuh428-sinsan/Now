@@ -20,9 +20,16 @@
 ### 검증
 
 - `uv run python -m py_compile scripts\release_readiness.py server\app\services\release_readiness.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
-- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 865/865.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 867/867.
 - FastAPI TestClient로 `/admin/mobile` 200 응답, 모바일 점검 핵심 문구, `/admin/release`의 `/admin/mobile` 링크, release readiness API의 다음 행동 문구 확인.
 - `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지.
+
+### 추가 확인
+
+- WSL Docker 재배포 중 새 `/now_app/docs` 경로가 모바일 점검 문서만 가진 상태로 먼저 선택되어 Play 등록 준비 API가 `/play_docs`를 보지 못하는 문제 확인.
+- `play_release_summary()`가 필수 Play 문서가 모두 있는 경로를 우선 선택하도록 수정.
+- 관리자 Basic 인증 실패 시 한글 realm 헤더 때문에 401 대신 500이 날 수 있는 문제를 피하려고 realm 값을 ASCII로 변경.
+- FastAPI TestClient로 API 토큰이 설정된 상태의 `/monitor` 미인증 접근이 401로 응답하는지 확인.
 
 ## 2026-05-28 17:58 KST
 

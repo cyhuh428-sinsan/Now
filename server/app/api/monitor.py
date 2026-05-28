@@ -40,7 +40,7 @@ def _require_monitor_access(
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="admin token required",
-        headers={"WWW-Authenticate": 'Basic realm="NowNote 관리"'},
+        headers={"WWW-Authenticate": 'Basic realm="NowNote Admin"'},
     )
 
 
