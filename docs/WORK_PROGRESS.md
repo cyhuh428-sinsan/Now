@@ -3,6 +3,33 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 07:40 KST
+
+### 다음 작업 시작
+
+- Android 에뮬레이터에서 새 APK 재설치가 실패한 원인을 좁히고, 같은 문제가 다시 나왔을 때 점검 스크립트가 바로 원인과 우회 방법을 안내하도록 보강.
+
+### 확인 내용
+
+- `adb shell df -h /data` 기준 에뮬레이터 `emulator-5554`의 `/data` 여유 공간은 약 494MB, 사용률은 92%.
+- 설치된 NowNote 패키지는 `com.sinsan.nownote`, `versionName=1.0.0`, `versionCode=1`, `lastUpdateTime=2026-05-25 12:54:28`.
+- 일반 설치 점검은 `INSTALL_FAILED_INSUFFICIENT_STORAGE`로 실패하지만, 패키지 확인/앱 실행/프로세스/현재 화면 패키지는 정상 확인.
+- `--skip-install` 실행 점검은 통과.
+
+### 구현 내용
+
+- `now_app/scripts/check_android_launch.py`가 APK 설치 전 `df -k /data`를 읽어 Android 저장공간을 표시하도록 보강.
+- 설치 실패 메시지에 `INSTALL_FAILED_INSUFFICIENT_STORAGE`가 있으면 AVD 저장공간 정리 또는 `--skip-install` 실행 확인 안내를 함께 출력.
+- `now_app/README.md`, `now_app/docs/mobile_runtime_checklist_ko.md`, `server/scripts/preflight.py`에 저장공간 부족 대응 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile now_app\scripts\check_android_launch.py server\scripts\preflight.py` 통과.
+- `uv run python now_app\scripts\check_android_launch.py --serial emulator-5554 --timeout 90` 실행 결과 저장공간 494MB와 `INSTALL_FAILED_INSUFFICIENT_STORAGE` 안내 출력 확인.
+- `uv run python now_app\scripts\check_android_launch.py --serial emulator-5554 --skip-install --timeout 90` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 816/816.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+
 ## 2026-05-28 07:15 KST
 
 ### 다음 작업 시작

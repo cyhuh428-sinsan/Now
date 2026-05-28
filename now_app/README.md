@@ -95,4 +95,7 @@ python scripts/check_android_emulator.py --launch-app --skip-install
 python scripts/check_android_launch.py
 ```
 
+에뮬레이터 저장공간이 부족하면 설치 단계에서 `INSTALL_FAILED_INSUFFICIENT_STORAGE`가 나올 수 있습니다.
+이 경우 이미 설치된 앱은 `--skip-install`로 실행 상태를 확인하고, 새 APK 설치가 필요하면 AVD 저장공간을 정리한 뒤 다시 실행합니다.
+
 에뮬레이터와 실제 기기에서 확인해야 하는 흐름은 `docs/mobile_runtime_checklist_ko.md`를 기준으로 점검합니다.
