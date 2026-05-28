@@ -4722,7 +4722,7 @@ def _admin_release_html() -> str:
         <span class="sub">외부 조건별 분류</span>
       </div>
       <table>
-        <tr><th>유형</th><th>개수</th><th>기준</th><th>항목</th></tr>
+        <tr><th>유형</th><th>개수</th><th>기준</th><th>다음 행동</th><th>항목</th></tr>
         {_release_blocker_rows(readiness["blockers"])}
       </table>
     </section>
@@ -4757,7 +4757,7 @@ def _release_section_rows(sections: list[dict]) -> str:
 
 def _release_blocker_rows(blockers: list[dict]) -> str:
     if not blockers:
-        return '<tr><td colspan="4">남은 항목이 없습니다.</td></tr>'
+        return '<tr><td colspan="5">남은 항목이 없습니다.</td></tr>'
     rows = []
     for blocker in blockers:
         items = "".join(
@@ -4769,6 +4769,7 @@ def _release_blocker_rows(blockers: list[dict]) -> str:
             f"<td>{escape(blocker['name'])}</td>"
             f"<td>{blocker['count']}</td>"
             f"<td>{escape(blocker['guidance'])}</td>"
+            f"<td>{escape(blocker.get('next_action', '-'))}</td>"
             f"<td>{'<ul>' + items + '</ul>' if items else '-'}</td>"
             "</tr>"
         )

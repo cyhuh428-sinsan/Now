@@ -3,6 +3,31 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 08:05 KST
+
+### 다음 작업 시작
+
+- 1차 마무리 남은 항목은 대부분 외부 확인 또는 사용자 결정이 필요하므로 완료 처리하지 않음.
+- 대신 `/admin/release`, `/api/v1/admin/release-readiness`, `scripts/release_readiness.py --show-blockers`에서 보류 사유뿐 아니라 다음 행동까지 보이도록 보강.
+
+### 구현 내용
+
+- `server/app/services/release_readiness.py`에 남은 항목 유형별 `NEXT_ACTIONS` 추가.
+- `/api/v1/admin/release-readiness`의 각 blocker에 `next_action` 필드 추가.
+- `/admin/release`의 남은 항목 유형 표에 `다음 행동` 열 추가.
+- 루트 `scripts/release_readiness.py --show-blockers` 출력에도 `다음 행동` 추가.
+- `server/README.md`, `docs/PROJECT_STATUS.md`, `server/scripts/smoke_test.py`, `server/scripts/preflight.py`에 새 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile scripts\release_readiness.py server\app\services\release_readiness.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\release_readiness.py --show-blockers`에서 유형별 `다음 행동` 출력 확인.
+- FastAPI TestClient로 `/admin/release` 200 응답과 `다음 행동` 표시 확인.
+- FastAPI TestClient로 `/api/v1/admin/release-readiness` 200 응답과 모든 blocker의 `next_action` 필드 확인.
+- `git diff --check` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 823/823.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+
 ## 2026-05-28 07:40 KST
 
 ### 다음 작업 시작

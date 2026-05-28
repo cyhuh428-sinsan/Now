@@ -30,6 +30,25 @@ BLOCKER_GUIDANCE = {
     "기타": "개별 항목의 실제 조건을 확인해야 합니다.",
 }
 
+NEXT_ACTIONS = {
+    "실제 Android 기기/모바일 화면": (
+        "USB 디버깅 실기기를 연결한 뒤 now_app/scripts/check_android_runtime.py --require-physical, "
+        "check_android_launch.py --require-physical, mobile_runtime_checklist_ko.md 순서로 확인합니다."
+    ),
+    "WSL/Docker 서버 재배포": "WSL 배포 경로에서 server/scripts/deploy_local.sh를 실행하고 smoke test 통과를 확인합니다.",
+    "공용 서버 운영 결정": (
+        "도메인/HTTPS/reverse proxy를 확정한 뒤 server/.env에 NOW_PUBLIC_BASE_URL, "
+        "NOW_BEHIND_REVERSE_PROXY, NOW_USER_TOKEN_REQUIRED 값을 적용하고 public-server preflight를 실행합니다."
+    ),
+    "Google Play Console": (
+        "/admin/play의 문서/이미지/수동 확인 항목을 기준으로 Play Console 값, Data safety, "
+        "스크린샷, 내부 테스트 업로드를 사람이 최종 확인합니다."
+    ),
+    "GitHub Actions": "GitHub Actions 화면에서 NowNote Preflight를 실행한 뒤 scripts/check_github_actions_status.py로 통과 상태를 확인합니다.",
+    "오픈소스 라이선스 결정": "docs/LICENSE_DECISION.md를 기준으로 라이선스를 선택하고 LICENSE 파일을 추가한 뒤 체크리스트를 갱신합니다.",
+    "기타": "해당 체크리스트 항목의 실제 완료 조건을 확인한 뒤 docs/PHASE1_RELEASE_CHECKLIST.md를 갱신합니다.",
+}
+
 
 def parse_checklist(path: Path) -> list[ChecklistItem]:
     section = "기타"
@@ -103,8 +122,10 @@ def print_blockers(items: list[ChecklistItem]) -> None:
     print("## 남은 항목 유형")
     for group_name, group_items in groups.items():
         guidance = BLOCKER_GUIDANCE.get(group_name, BLOCKER_GUIDANCE["기타"])
+        next_action = NEXT_ACTIONS.get(group_name, NEXT_ACTIONS["기타"])
         print(f"### {group_name} ({len(group_items)}개)")
         print(f"- 기준: {guidance}")
+        print(f"- 다음 행동: {next_action}")
         for item in group_items:
             print(f"- [{item.section}] {item.label}")
         print()
