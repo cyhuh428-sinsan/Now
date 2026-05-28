@@ -10,6 +10,7 @@
 - 실제 실행 환경 확인: `now_app` 폴더에서 `python scripts/check_android_runtime.py`
 - 에뮬레이터 준비 확인: `now_app` 폴더에서 `python scripts/check_android_emulator.py`
 - 에뮬레이터 자동 시작과 앱 실행 확인: `now_app` 폴더에서 `python scripts/check_android_emulator.py --start --launch-app`
+- 이미 설치된 앱 실행 확인: `now_app` 폴더에서 `python scripts/check_android_emulator.py --launch-app --skip-install`
 - APK 설치와 앱 실행 자동 확인: `now_app` 폴더에서 `python scripts/check_android_launch.py`
 - `Flutter CLI`가 버전은 출력하지만 종료가 늦어 `WARN`으로 표시되는 경우, Flutter 설치 자체는 확인된 상태로 보고 연결 기기와 서버 상태를 우선 점검한다.
 - 로컬 단독 사용 점검: 서버 연결을 끈 상태로 시작
@@ -21,6 +22,7 @@
 
 - [ ] `python scripts/check_android_emulator.py`가 ADB, emulator CLI, AVD 목록을 확인한다.
 - [ ] `python scripts/check_android_launch.py`가 연결된 에뮬레이터 또는 실기기에서 통과한다.
+- [ ] 설치가 필요 없는 재확인은 `python scripts/check_android_emulator.py --launch-app --skip-install`로 통과한다.
 - [ ] 앱 이름이 NowNote로 표시된다.
 - [ ] 홈 화면에 오늘 일정과 오늘 메모 영역이 보인다.
 - [ ] 홈의 오늘 메모 진입 버튼으로 일자별 메모 작성 화면에 들어간다.

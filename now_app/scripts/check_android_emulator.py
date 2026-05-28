@@ -190,18 +190,18 @@ def wait_for_emulator(adb: str, timeout: int, interval: float) -> str | None:
     return seen_serial
 
 
-def run_launch_check(serial: str, timeout: int) -> CommandResult:
-    return run_command(
-        [
-            sys.executable,
-            str(LAUNCH_CHECK),
-            "--serial",
-            serial,
-            "--timeout",
-            str(timeout),
-        ],
-        timeout=max(timeout * 3, 90),
-    )
+def run_launch_check(serial: str, timeout: int, skip_install: bool) -> CommandResult:
+    command = [
+        sys.executable,
+        str(LAUNCH_CHECK),
+        "--serial",
+        serial,
+        "--timeout",
+        str(timeout),
+    ]
+    if skip_install:
+        command.append("--skip-install")
+    return run_command(command, timeout=max(timeout * 3, 90))
 
 
 def main() -> None:
@@ -211,6 +211,7 @@ def main() -> None:
     parser.add_argument("--headless", action="store_true", help="Start emulator without a visible window")
     parser.add_argument("--no-snapshot", action="store_true", help="Start emulator without loading/saving snapshots")
     parser.add_argument("--launch-app", action="store_true", help="Run check_android_launch.py after boot")
+    parser.add_argument("--skip-install", action="store_true", help="Launch an already installed app without adb install")
     parser.add_argument("--timeout", type=int, default=240, help="Boot wait timeout seconds")
     parser.add_argument("--interval", type=float, default=5.0, help="Boot polling interval seconds")
     args = parser.parse_args()
@@ -263,7 +264,7 @@ def main() -> None:
 
     if args.launch_app:
         if serial:
-            launch = run_launch_check(serial, 60)
+            launch = run_launch_check(serial, 60, args.skip_install)
             if launch.ok:
                 add(checks, "OK", "NowNote 설치/실행 점검", "check_android_launch.py 통과")
             else:
@@ -276,7 +277,8 @@ def main() -> None:
     if serial:
         print()
         print("다음 확인 명령")
-        print(f"- python scripts/check_android_launch.py --serial {serial}")
+        skip_install_option = " --skip-install" if args.skip_install else ""
+        print(f"- python scripts/check_android_launch.py --serial {serial}{skip_install_option}")
 
     failures = [check for check in checks if check.failed]
     if failures:

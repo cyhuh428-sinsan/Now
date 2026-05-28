@@ -1321,6 +1321,7 @@ def main() -> None:
                 ("verify_mobile_surface.py", "Mobile README documents surface verification", "mobile surface verification"),
                 ("check_android_runtime.py", "Mobile README documents Android runtime verification", "mobile Android runtime verification"),
                 ("check_android_emulator.py", "Mobile README documents Android emulator verification", "mobile Android emulator verification"),
+                ("--launch-app --skip-install", "Mobile README documents emulator launch-only check", "mobile emulator launch-only check"),
                 ("check_android_launch.py", "Mobile README documents Android launch verification", "mobile Android launch verification"),
                 ("mobile_runtime_checklist_ko.md", "Mobile README links runtime checklist", "mobile runtime checklist link"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
@@ -1335,6 +1336,7 @@ def main() -> None:
             [
                 ("check_android_runtime.py", "Mobile runtime checklist covers Android runtime check", "Android runtime check"),
                 ("check_android_emulator.py", "Mobile runtime checklist covers Android emulator check", "Android emulator check"),
+                ("--launch-app --skip-install", "Mobile runtime checklist covers emulator launch-only check", "emulator launch-only check"),
                 ("check_android_launch.py", "Mobile runtime checklist covers Android launch check", "Android launch check"),
                 ("Flutter CLI", "Mobile runtime checklist covers Flutter CLI warning", "Flutter CLI warning"),
                 ("Android 에뮬레이터", "Mobile runtime checklist covers emulator", "emulator check"),
@@ -1405,6 +1407,7 @@ def main() -> None:
                 ("--start", "Mobile Android emulator check supports start option", "start option"),
                 ("sys.boot_completed", "Mobile Android emulator check waits for boot", "boot wait"),
                 ("--launch-app", "Mobile Android emulator check supports launch option", "launch option"),
+                ("--skip-install", "Mobile Android emulator check supports launch-only option", "skip install option"),
                 ("check_android_launch.py", "Mobile Android emulator check links launch check", "launch integration"),
             ],
             failures,
