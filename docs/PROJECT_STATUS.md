@@ -21,7 +21,7 @@
 - 모바일 앱 전체 `dart analyze`는 최근 통과 기록이 있으나, 현재 PowerShell 세션에서는 Flutter/Dart 분석 명령 재확인은 보류 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 128/128 통과 상태입니다.
 - Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 현재 실행 중인 Android 기기가 없어 실제 설치/음성 흐름은 보류 상태입니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 740/740 통과 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 767/767 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 9개 남음 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
 - GitHub Actions는 workflow 파일은 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
@@ -39,7 +39,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 - 서버: Docker Compose 기반 API, PostgreSQL, 녹음 저장소, 동기화 API, 녹음 업로드, 분석 작업 큐, 사용자/기기 관리, 운영 화면.
 - 운영 화면: `/monitor`, `/admin`, 메모/녹음/사용자/기기/동기화/분석/백업/복구/배포/공용 서버 준비 상태 확인.
 - 백업/복구: 전체 JSON 백업, 항목별 JSON 내보내기, 백업 검증, 복구 절차 문서, 고아/누락 녹음 파일 점검.
-- 공용 서버 준비: 사용자별 접속 토큰, 토큰 확인 화면/API, 2단계 코드 검증, 사용자별 데이터 격리 smoke test, public preflight 기준.
+- 공용 서버 준비: 사용자별 접속 토큰, 토큰 확인 화면/API, 2단계 코드 검증, 사용자별 데이터 격리 smoke test, public preflight 기준, 공용 서버 오픈 체크리스트, Nginx/Caddy reverse proxy 예시.
 - 공개 저장소 준비: README, 보안 정책, 기여 안내, 이슈/PR 템플릿, GitHub Actions preflight 설정, 민감정보 제외 기준.
 - Google Play 빌드 준비: 로컬 업로드 키와 `key.properties` 준비, 서명된 AAB 빌드, Play release preflight 통과.
 

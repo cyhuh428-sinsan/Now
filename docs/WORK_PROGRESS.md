@@ -3,6 +3,32 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 04:45 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 항목 중 공용 서버 오픈 준비에서 로컬 문서와 reverse proxy 예시로 닫을 수 있는 부분을 보강.
+- 실제 도메인/HTTPS 적용은 외부 운영 결정이 필요하므로 완료 처리하지 않고, 적용 절차와 점검 기준을 먼저 고정.
+
+### 구현 내용
+
+- `server/PUBLIC_SERVER.md` 추가. 공용 서버 오픈 전 환경값, HTTPS/reverse proxy, 사용자 토큰 필수화, 데이터 격리 smoke test, 운영 화면 확인 순서를 문서화.
+- `server/reverse_proxy/nginx.nownote.conf.example` 추가. HTTPS 리다이렉트, 인증서 경로 예시, 업로드 크기, 프록시 헤더, timeout 기준을 포함.
+- `server/reverse_proxy/Caddyfile.example` 추가. Caddy 기준 HTTPS reverse proxy와 업로드 크기 제한 예시를 포함.
+- `server/README.md`, `server/DEPLOY.md`, `docs/SERVER_AUTH_POLICY.md`에서 공용 서버 오픈 문서와 reverse proxy 예시 위치를 연결.
+- `server/scripts/preflight.py`가 공용 서버 문서와 Nginx/Caddy 예시의 핵심 문구를 점검하도록 보강.
+
+### 검증
+
+- `uv run python -m py_compile server\scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 767/767.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+
+### 보류
+
+- 실제 공용 도메인, HTTPS 인증서, reverse proxy 적용, `NOW_USER_TOKEN_REQUIRED=true` 운영값 적용은 실제 운영 서버에서 확인해야 하므로 완료 처리하지 않음.
+
 ## 2026-05-28 04:05 KST
 
 ### 다음 작업 시작

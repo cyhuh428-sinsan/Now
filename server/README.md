@@ -6,6 +6,7 @@ NowNote 1차 서버는 개인 Docker 서버에서 메모와 녹음 파일을 동
 단독 사용자와 서버 연결 사용자의 차이는 [NowNote 도움말](../docs/HELP.md)을 기준으로 안내합니다.
 서버 인증 기준은 [NowNote 서버 인증 기준](../docs/SERVER_AUTH_POLICY.md)에 따로 정리합니다.
 WSL/Docker 배포 순서는 [DEPLOY.md](DEPLOY.md)를 기준으로 빠르게 확인할 수 있습니다.
+공용 서버 오픈 절차와 reverse proxy 예시는 [PUBLIC_SERVER.md](PUBLIC_SERVER.md)를 기준으로 확인합니다.
 
 ## 표기 기준
 
@@ -90,6 +91,7 @@ python3 scripts/preflight.py --public-server
 - 공개 도메인, HTTPS, reverse proxy, 복구 절차 최종 확인
 
 사용자별 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 데이터 격리 자동 검증은 smoke test 기준으로 준비 완료 항목에 포함됩니다.
+공개 도메인과 HTTPS reverse proxy 설정 예시는 [PUBLIC_SERVER.md](PUBLIC_SERVER.md)와 `reverse_proxy` 폴더를 기준으로 확인합니다.
 
 `.env` 예시:
 
