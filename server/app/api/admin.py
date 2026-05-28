@@ -17,6 +17,7 @@ from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
+from app.services.release_evidence import release_evidence_summary
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
@@ -666,6 +667,11 @@ def ops_status(db: Session = Depends(get_db)) -> dict:
 @router.get("/release-readiness")
 def release_readiness() -> dict:
     return release_readiness_summary()
+
+
+@router.get("/release-evidence")
+def release_evidence() -> dict:
+    return release_evidence_summary()
 
 
 @router.get("/play-release")

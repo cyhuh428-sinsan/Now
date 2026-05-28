@@ -15,6 +15,7 @@ from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
+from app.services.release_evidence import release_evidence_summary
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
@@ -238,6 +239,11 @@ def admin_public(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.get("/admin/release", include_in_schema=False)
 def admin_release(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
     return HTMLResponse(_admin_release_html())
+
+
+@router.get("/admin/evidence", include_in_schema=False)
+def admin_evidence(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_evidence_html())
 
 
 @router.get("/admin/play", include_in_schema=False)
@@ -791,6 +797,7 @@ def _admin_html() -> str:
         <a href="/admin/analysis">분석</a>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/evidence">수동 증빙</a>
         <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/open-source">공개 준비</a>
@@ -4694,6 +4701,7 @@ def _admin_release_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/ops">점검</a>
+        <a href="/admin/evidence">수동 증빙</a>
         <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/deploy">배포</a>
@@ -4787,6 +4795,223 @@ def _release_blocker_rows(blockers: list[dict]) -> str:
             f"<td>{escape(blocker['guidance'])}</td>"
             f"<td>{escape(blocker.get('next_action', '-'))}</td>"
             f"<td>{'<ul>' + items + '</ul>' if items else '-'}</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
+
+
+def _admin_evidence_html() -> str:
+    evidence = release_evidence_summary()
+    summary = evidence["summary"]
+    status = evidence["status"]
+    status_label = "증빙 필요" if status == "manual" else "증빙 완료"
+    status_class = "warn" if status == "manual" else "ok"
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 수동 증빙</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --amber: #d97706;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }}
+    main {{
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 32px 18px 48px;
+    }}
+    header {{
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      align-items: flex-start;
+      margin-bottom: 22px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 30px;
+      line-height: 1.2;
+    }}
+    a {{
+      color: var(--blue);
+      text-decoration: none;
+      font-weight: 650;
+    }}
+    .sub {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 14px;
+    }}
+    .nav {{
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }}
+    .nav a {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }}
+    .cards {{
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }}
+    .card, section {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }}
+    .card {{
+      padding: 18px;
+      min-height: 112px;
+    }}
+    .label {{
+      color: var(--muted);
+      font-size: 13px;
+      margin-bottom: 12px;
+    }}
+    .value {{
+      font-size: 24px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }}
+    .ok {{ color: var(--green); }}
+    .warn {{ color: var(--amber); }}
+    section {{
+      margin-top: 14px;
+      overflow: hidden;
+    }}
+    .section-head {{
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      font-weight: 700;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+    }}
+    th, td {{
+      padding: 13px 18px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      font-size: 14px;
+      vertical-align: top;
+    }}
+    th {{
+      color: var(--muted);
+      font-weight: 600;
+      background: #fafafa;
+    }}
+    tr:last-child td {{ border-bottom: 0; }}
+    ul {{
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      line-height: 1.6;
+    }}
+    code {{
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #eef2ff;
+      color: #1e3a8a;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 13px;
+    }}
+    @media (max-width: 800px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .cards {{ grid-template-columns: 1fr; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>NowNote 수동 증빙</h1>
+        <div class="sub">실제 기기, Play Console, 공용 서버처럼 사람이 확인해야 하는 항목의 증빙 기준입니다</div>
+      </div>
+      <nav class="nav">
+        <a href="/admin">관리</a>
+        <a href="/admin/release">1차 준비</a>
+        <a href="/admin/mobile">모바일 점검</a>
+        <a href="/admin/public">공용 서버</a>
+        <a href="/admin/play">Play 등록</a>
+        <a href="/admin/open-source">공개 준비</a>
+      </nav>
+    </header>
+
+    <div class="cards">
+      <div class="card">
+        <div class="label">상태</div>
+        <div class="value {status_class}">{status_label}</div>
+      </div>
+      <div class="card">
+        <div class="label">증빙 필요 항목</div>
+        <div class="value {status_class}">{summary["remaining"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">유형</div>
+        <div class="value">{summary["groups"]}</div>
+        <div class="sub"><a href="/api/v1/admin/release-evidence">JSON API</a></div>
+      </div>
+    </div>
+
+    <section>
+      <div class="section-head">
+        <span>수동 증빙 기준</span>
+        <span class="sub">증빙 확보 후 체크리스트 갱신</span>
+      </div>
+      <table>
+        <tr><th>유형</th><th>항목</th><th>필요 증빙</th><th>다음 행동</th><th>참고</th></tr>
+        {_release_evidence_rows(evidence["items"])}
+      </table>
+    </section>
+  </main>
+</body>
+</html>"""
+
+
+def _release_evidence_rows(items: list[dict]) -> str:
+    if not items:
+        return '<tr><td colspan="5">남은 수동 증빙 항목이 없습니다.</td></tr>'
+    rows = []
+    for item in items:
+        evidence = "".join(f"<li>{escape(value)}</li>" for value in item["evidence"])
+        references = "".join(f"<li><code>{escape(value)}</code></li>" for value in item["reference"])
+        rows.append(
+            "<tr>"
+            f"<td>{escape(item['group'])}</td>"
+            f"<td><strong>{escape(item['label'])}</strong><div class=\"sub\">{escape(item['section'])}</div></td>"
+            f"<td><ul>{evidence}</ul></td>"
+            f"<td>{escape(item['action'])}</td>"
+            f"<td><ul>{references}</ul></td>"
             "</tr>"
         )
     return "\n".join(rows)
@@ -4946,6 +5171,7 @@ def _admin_play_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/evidence">수동 증빙</a>
         <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/open-source">공개 준비</a>
         <a href="/admin/deploy">배포</a>
@@ -5170,6 +5396,7 @@ def _admin_open_source_html() -> str:
       <nav class="nav">
         <a href="/admin">관리</a>
         <a href="/admin/release">1차 준비</a>
+        <a href="/admin/evidence">수동 증빙</a>
         <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/help">도움말</a>

@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 08:47 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 22개 중 실제 Android 기기, 실제 공용 도메인/HTTPS, Play Console, GitHub Actions, 라이선스는 외부 확인 또는 신산님 결정이 필요해 임의 완료 처리하지 않음.
+- 대신 남은 수동 항목을 닫을 때 필요한 증빙을 화면/API로 바로 확인할 수 있게 보강.
+
+### 구현 내용
+
+- `server/app/services/release_evidence.py` 추가. `release_readiness_summary()`의 남은 항목을 기준으로 항목별 필요 증빙, 다음 행동, 참고 화면/스크립트를 생성.
+- `GET /api/v1/admin/release-evidence` 추가.
+- `/admin/evidence` 화면 추가. 실제 기기, 공용 서버, Play Console, GitHub Actions, 라이선스 남은 항목의 증빙 기준을 읽기 전용으로 표시.
+- `/admin`, `/admin/release`, `/admin/play`, `/admin/open-source`에서 수동 증빙 화면으로 이동할 수 있게 링크 추가.
+- GitHub Actions preflight 문법 검사 대상, smoke test, preflight, `server/README.md`, `docs/PROJECT_STATUS.md`에 새 화면/API 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\services\release_evidence.py server\app\api\admin.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- FastAPI TestClient로 `/admin/evidence` 200 응답과 `/api/v1/admin/release-evidence` 200 응답 확인. API 요약은 남은 증빙 22개, 유형 5개.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 896/896.
+
 ## 2026-05-29 07:39 KST
 
 ### 다음 작업 시작
