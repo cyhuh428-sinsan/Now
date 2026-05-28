@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 04:05 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 항목 중 로컬에서 추가로 확인 가능한 모바일/Play/릴리스 상태 재점검.
+
+### 확인 내용
+
+- 모바일 정적 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 110/110 통과.
+- Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인.
+- 현재 `adb devices -l` 기준 실행 중인 에뮬레이터나 USB 실기기가 없어 실제 음성 메모, 녹음 후 변환, 녹음 업로드, 실기기 설치 테스트는 완료 처리하지 않음.
+- Google Play 준비 상태는 `scripts/play_release_status.py --show-manual` 기준 자동 확인 27/27 OK, 경고 0개, Play Console/실기기 수동 확인 9개 남음.
+- 1차 릴리스 상태는 `scripts/release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음으로 유지.
+- 서버 preflight는 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 720/720 통과.
+- 공개 저장소 안전 점검은 `scripts/verify_public_repo_safety.py` 기준 8/8 통과.
+- `flutter analyze`, `dart analyze`, `flutter --version`, `dart --version`은 현재 PowerShell 세션에서 장시간 응답하지 않아 시간 초과. 분석 프로세스 잔류는 확인되지 않음.
+- GitHub Actions 상태 점검은 토큰 없는 GitHub API 조회에서 404가 반환되어, Actions 화면에서 `NowNote Preflight` 수동 실행 또는 Actions 읽기 권한 토큰이 필요함을 확인.
+
+### 보류
+
+- 실제 Android 기기/에뮬레이터가 연결되지 않은 상태에서는 모바일 음성/녹음 흐름을 완료 처리하지 않음.
+- Play Console 화면 입력, 공용 도메인/HTTPS 운영값, GitHub Actions 실행 기록, 라이선스 선택은 외부 결정 또는 외부 화면 확인이 필요하므로 완료 처리하지 않음.
+
 ## 2026-05-28 03:40 KST
 
 ### 다음 작업 시작
