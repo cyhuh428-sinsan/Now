@@ -101,6 +101,7 @@ def main() -> None:
     license_decision_path = repo_root / "docs" / "LICENSE_DECISION.md"
     public_repo_safety_check_path = repo_root / "scripts" / "verify_public_repo_safety.py"
     github_actions_status_check_path = repo_root / "scripts" / "check_github_actions_status.py"
+    github_actions_dispatch_check_path = repo_root / "scripts" / "dispatch_github_actions.py"
     local_environment_status_check_path = repo_root / "scripts" / "local_environment_status.py"
     play_release_status_check_path = repo_root / "scripts" / "play_release_status.py"
     release_readiness_check_path = repo_root / "scripts" / "release_readiness.py"
@@ -334,6 +335,7 @@ def main() -> None:
                 ("docs/LICENSE_DECISION.md", "Open source guide links license decision guide", "license decision guide"),
                 ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
                 ("check_github_actions_status.py", "Open source guide documents Actions status check script", "Actions status check script"),
+                ("dispatch_github_actions.py", "Open source guide documents Actions dispatch script", "Actions dispatch script"),
                 ("GH_TOKEN", "Open source guide documents gh token fallback", "GH_TOKEN fallback"),
             ],
             failures,
@@ -433,6 +435,7 @@ def main() -> None:
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
+                ("dispatch_github_actions.py", "GitHub preflight checks Actions dispatch script syntax", "workflow Actions dispatch script"),
                 ("local_environment_status.py", "GitHub preflight checks local environment status script syntax", "workflow local environment status script"),
                 ("play_release_status.py", "GitHub preflight checks Play release status script syntax", "workflow Play status script"),
                 ("release_readiness.py", "GitHub preflight checks release readiness script syntax", "workflow release readiness script"),
@@ -576,6 +579,7 @@ def main() -> None:
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
     check(github_actions_status_check_path.exists(), "GitHub Actions status check script exists", str(github_actions_status_check_path), failures)
+    check(github_actions_dispatch_check_path.exists(), "GitHub Actions dispatch script exists", str(github_actions_dispatch_check_path), failures)
     check(local_environment_status_check_path.exists(), "Local environment status script exists", str(local_environment_status_check_path), failures)
     check(play_release_status_check_path.exists(), "Play release status script exists", str(play_release_status_check_path), failures)
     check(release_readiness_check_path.exists(), "Release readiness summary script exists", str(release_readiness_check_path), failures)
@@ -845,6 +849,20 @@ def main() -> None:
                 ("GH_TOKEN", "GitHub Actions status script supports gh token env", "GH_TOKEN"),
                 ("workflow page", "GitHub Actions status script prints workflow page", "workflow page"),
                 ('conclusion") == "success"', "GitHub Actions status script checks success conclusion", "success conclusion"),
+            ],
+            failures,
+        )
+    if github_actions_dispatch_check_path.exists():
+        github_actions_dispatch_check = github_actions_dispatch_check_path.read_text(encoding="utf-8")
+        check_text_contains(
+            github_actions_dispatch_check,
+            [
+                ("NowNote GitHub Actions dispatch", "GitHub Actions dispatch script prints summary", "Actions dispatch summary"),
+                ("/dispatches", "GitHub Actions dispatch script calls workflow dispatch API", "workflow dispatch API"),
+                ("workflow/actions 쓰기 권한", "GitHub Actions dispatch script explains write permission", "workflow write permission"),
+                ("--dry-run", "GitHub Actions dispatch script supports dry run", "dry run"),
+                ("GITHUB_TOKEN", "GitHub Actions dispatch script supports token env", "dispatch GITHUB_TOKEN"),
+                ("GH_TOKEN", "GitHub Actions dispatch script supports gh token env", "dispatch GH_TOKEN"),
             ],
             failures,
         )

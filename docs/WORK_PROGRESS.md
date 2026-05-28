@@ -3,6 +3,29 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 07:39 KST
+
+### 다음 작업 시작
+
+- 남은 공개 저장소 항목 중 GitHub Actions preflight 통과 확인은 아직 실제 workflow run/status가 없어 완료 처리하지 않음.
+- 다만 상태 확인 스크립트만 있고 실행 요청 스크립트가 없어, 토큰이 있는 환경에서 Actions를 화면 대신 API로 실행 요청할 수 있도록 보강.
+
+### 구현 내용
+
+- `scripts/dispatch_github_actions.py` 추가. `GITHUB_TOKEN` 또는 `GH_TOKEN`이 있으면 `workflow_dispatch` API로 `preflight.yml` 실행 요청 가능.
+- `--dry-run` 옵션으로 실제 GitHub API 호출 없이 요청 대상과 workflow URL을 확인할 수 있게 함.
+- `.github/workflows/preflight.yml`의 Python 문법 검사 대상에 새 스크립트 추가.
+- `docs/OPEN_SOURCE_RELEASE.md`에 Actions 실행 요청 명령과 dry-run 명령 추가.
+- `server/scripts/preflight.py`가 새 스크립트와 문서 반영 여부를 확인하도록 보강.
+- `/admin/release`와 `scripts/release_readiness.py --show-blockers`의 GitHub Actions 다음 행동 문구에 실행 요청 스크립트를 반영.
+
+### 검증
+
+- `uv run python -m py_compile scripts\dispatch_github_actions.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\dispatch_github_actions.py --dry-run` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 876/876.
+- `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지. GitHub Actions 다음 행동 문구 갱신 확인.
+
 ## 2026-05-28 22:22 KST
 
 ### 다음 작업 시작
