@@ -332,6 +332,7 @@ def main() -> None:
         "/admin/recovery",
         "/admin/deploy",
         "/admin/public",
+        "/admin/release",
         "/admin/help",
         "/admin/users",
         "/admin/users/new",
@@ -381,6 +382,11 @@ def main() -> None:
             require("2단계 코드 검증 절차" in text, "공용 서버 준비 화면에 2단계 인증 기준이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
             require("/admin/users" in text and "/admin/devices" in text, "공용 서버 준비 화면에 사용자/기기 관리 링크가 없습니다")
+        if path == "/admin/release":
+            require("NowNote 1차 릴리스 준비" in text, "1차 릴리스 준비 화면 제목이 없습니다")
+            require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
+            require("남은 항목 유형" in text, "1차 릴리스 준비 화면에 남은 항목 유형이 없습니다")
+            require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")
         if path.startswith("/admin/devices"):
             require("기기 활성 상태" in text, "기기 관리 화면에 활성 상태 안내가 없습니다")
             require("비활성 기기는 동기화" in text, "기기 관리 화면에 비활성 기기 차단 안내가 없습니다")
@@ -433,6 +439,17 @@ def main() -> None:
         "GET /api/v1/admin/export/notes(filtered):",
         status,
         {"count": data.get("count"), "name": data.get("name")},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/release-readiness", args.token)
+    require(data.get("name") == "phase_one_release_readiness", "릴리스 준비 API 이름이 예상과 다릅니다")
+    require(data.get("summary", {}).get("total") == 57, "릴리스 준비 API의 전체 항목 수가 예상과 다릅니다")
+    require(data.get("summary", {}).get("remaining", 0) >= 0, "릴리스 준비 API의 남은 항목 수가 없습니다")
+    require(data.get("blockers") is not None, "릴리스 준비 API에 남은 항목 유형이 없습니다")
+    print(
+        "GET /api/v1/admin/release-readiness:",
+        status,
+        data.get("summary"),
     )
 
     status, data = request(

@@ -3,6 +3,32 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 05:15 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 항목을 CLI가 아니라 서버 화면/API에서 확인할 수 있도록 운영 표면 보강.
+- 실제 기기, Play Console, 공용 도메인, 라이선스처럼 외부 확인이 필요한 항목은 완료 처리하지 않고 보류 사유를 화면에 드러내는 방향으로 진행.
+
+### 구현 내용
+
+- `server/app/services/release_readiness.py` 추가. `docs/PHASE1_RELEASE_CHECKLIST.md`를 읽어 전체 완료 수, 영역별 진행률, 남은 항목 유형을 계산.
+- `GET /api/v1/admin/release-readiness` 추가. 관리자 API로 1차 릴리스 준비 상태를 JSON 반환.
+- `/admin/release` 화면 추가. 완료/남은 항목, 영역별 진행, 실제 Android 기기/공용 서버/Play Console/GitHub Actions/라이선스 보류 유형을 화면에서 확인.
+- 서버 Docker 이미지가 `docs/PHASE1_RELEASE_CHECKLIST.md`를 포함하도록 `server/Dockerfile`과 `.dockerignore` 보강.
+- `server/README.md`, `docs/PROJECT_STATUS.md`, `server/scripts/smoke_test.py`, `server/scripts/preflight.py`에 새 화면/API 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\api\admin.py server\app\api\monitor.py server\app\services\release_readiness.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `git diff --check` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 788/788.
+- FastAPI TestClient로 `/admin/release` 200 응답과 `/api/v1/admin/release-readiness` 200 응답 확인. API 요약은 35/57 완료, 22개 남음.
+
+### 보류
+
+- 실제 실행 중인 WSL/Docker 서버에는 아직 새 이미지가 재배포되지 않았으므로, `/admin/release` 실제 운영 화면 확인은 다음 배포 후 smoke test로 닫음.
+
 ## 2026-05-28 04:45 KST
 
 ### 다음 작업 시작

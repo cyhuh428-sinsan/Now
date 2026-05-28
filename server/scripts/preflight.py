@@ -120,6 +120,7 @@ def main() -> None:
     users_api_path = server_dir / "app" / "api" / "users.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
+    release_readiness_service_path = server_dir / "app" / "services" / "release_readiness.py"
     web_app_path = repo_root / "web" / "app.js"
     web_readme_path = repo_root / "web" / "README.md"
     mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
@@ -476,6 +477,7 @@ def main() -> None:
                 ("COPY server/app ./app", "Dockerfile copies server app", "server app copy"),
                 ("COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./", "Dockerfile copies admin docs", "admin docs copy"),
                 ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
+                ("COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile copies phase one checklist", "phase one checklist copy"),
             ],
             failures,
         )
@@ -489,6 +491,7 @@ def main() -> None:
                 ("!server/app/**", "Root Dockerignore allows server app", "server app context"),
                 ("!server/RECOVERY.md", "Root Dockerignore allows recovery doc", "recovery doc context"),
                 ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
+                ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Root Dockerignore allows phase one checklist", "phase one checklist context"),
             ],
             failures,
         )
@@ -512,6 +515,8 @@ def main() -> None:
                 ("recording-missing-files", "README documents missing recording export link", "recording missing export"),
                 ("누락 녹음 파일", "README documents missing recording ops check", "recording missing ops"),
                 ("/admin/public", "README documents public server admin page", "public server admin page"),
+                ("/admin/release", "README documents release readiness admin page", "release readiness admin page"),
+                ("/api/v1/admin/release-readiness", "README documents release readiness API", "release readiness API"),
                 ("PUBLIC_SERVER.md", "README links public server checklist", "public server checklist"),
                 ("reverse_proxy", "README links reverse proxy examples", "reverse proxy examples"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
@@ -603,6 +608,7 @@ def main() -> None:
     check(users_api_path.exists(), "User API source exists", str(users_api_path), failures)
     check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
     check(user_devices_service_path.exists(), "User devices service exists", str(user_devices_service_path), failures)
+    check(release_readiness_service_path.exists(), "Release readiness service exists", str(release_readiness_service_path), failures)
     check(web_app_path.exists(), "Web app source exists", str(web_app_path), failures)
     check(web_readme_path.exists(), "Web README exists", str(web_readme_path), failures)
     check(web_surface_check_path.exists(), "Web surface verification script exists", str(web_surface_check_path), failures)
@@ -921,6 +927,8 @@ def main() -> None:
                 ("백업/복구 절차", "Admin ops covers backup recovery procedure", "backup recovery ops"),
                 ("status_counts.bad=0", "Admin ops covers backup status count target", "status_counts.bad=0"),
                 ("checks.extend(public_server_readiness_checks())", "Admin ops uses shared public readiness checks", "public readiness checks"),
+                ("release_readiness_summary", "Admin API exposes release readiness service", "release readiness service"),
+                ('@router.get("/release-readiness")', "Admin API exposes release readiness endpoint", "release readiness endpoint"),
                 ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
                 ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
@@ -972,6 +980,20 @@ def main() -> None:
             ],
             failures,
         )
+    if release_readiness_service_path.exists():
+        release_readiness_source = release_readiness_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            release_readiness_source,
+            [
+                ("PHASE1_RELEASE_CHECKLIST.md", "Release readiness service reads phase one checklist", "phase one checklist"),
+                ("release_readiness_summary", "Release readiness service exports summary", "release readiness summary"),
+                ("BLOCKER_GUIDANCE", "Release readiness service groups blockers", "blocker guidance"),
+                ("실제 Android 기기/모바일 화면", "Release readiness service classifies mobile blockers", "mobile blockers"),
+                ("공용 서버 운영 결정", "Release readiness service classifies public server blockers", "public server blockers"),
+                ("오픈소스 라이선스 결정", "Release readiness service classifies license blockers", "license blockers"),
+            ],
+            failures,
+        )
     recording_storage_path = server_dir / "app" / "services" / "recording_storage.py"
     check(recording_storage_path.exists(), "Recording storage service exists", str(recording_storage_path), failures)
     if recording_storage_path.exists():
@@ -1009,6 +1031,10 @@ def main() -> None:
                 ("백업/복구 절차", "Monitor ops covers backup recovery procedure", "backup recovery ops"),
                 ('@router.get("/admin/public"', "Monitor exposes public server page", "public server page route"),
                 ("_admin_public_html", "Monitor renders public server page", "public server page renderer"),
+                ('@router.get("/admin/release"', "Monitor exposes release readiness page", "release readiness page route"),
+                ("_admin_release_html", "Monitor renders release readiness page", "release readiness page renderer"),
+                ("release_readiness_summary", "Monitor uses release readiness summary", "release readiness summary"),
+                ("NowNote 1차 릴리스 준비", "Monitor release page title", "release page title"),
                 ("비활성 기기", "Monitor ops covers inactive devices", "inactive devices"),
                 ("고아 녹음 파일", "Monitor ops covers orphan recording files", "orphan recording files"),
                 ("누락 녹음 파일", "Monitor ops covers missing recording files", "missing recording files"),
@@ -1514,6 +1540,7 @@ def main() -> None:
                 ("내보내기 화면에 기기 집계", "Smoke checks export page device count", "export device count"),
                 ("/admin/recovery", "Smoke covers recovery admin page", "admin/recovery"),
                 ("/admin/deploy", "Smoke covers deploy admin page", "admin/deploy"),
+                ("/admin/release", "Smoke covers release readiness admin page", "admin/release"),
                 ("배포 체크리스트 화면에 현재 서버 요약과 확인 링크", "Smoke checks deploy runtime summary", "deploy runtime summary"),
                 ("배포 체크리스트 화면에 공용 서버 사용자 토큰 강제 설정 안내", "Smoke checks deploy public token enforcement", "deploy public token enforcement"),
                 ("/admin/help", "Smoke covers help admin page", "admin/help"),
@@ -1595,6 +1622,9 @@ def main() -> None:
                 ("공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용", "Smoke checks public server page content", "public server page content"),
                 ("공용 서버 준비 화면에 사용자별 토큰 필수 기준", "Smoke checks public server token policy", "public server token policy"),
                 ("공용 서버 준비 화면에 데이터 격리 기준", "Smoke checks public server data isolation", "public server data isolation"),
+                ("1차 릴리스 준비 화면 제목", "Smoke checks release readiness page title", "release readiness page title"),
+                ("1차 릴리스 준비 화면에 남은 항목 유형", "Smoke checks release readiness blocker section", "release readiness blockers"),
+                ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),
                 ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
