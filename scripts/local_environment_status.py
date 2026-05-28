@@ -63,6 +63,16 @@ def run_command(command: list[str], cwd: Path | None = None, timeout: int = 15) 
     return result.returncode, output
 
 
+def wsl_command_cwd() -> Path | None:
+    for candidate in [Path.home(), Path("C:/"), Path.cwd()]:
+        try:
+            if candidate.exists():
+                return candidate
+        except OSError:
+            continue
+    return None
+
+
 def decode_command_output(data: bytes | str | None) -> str:
     if data is None:
         return ""
@@ -104,25 +114,30 @@ def check_git() -> CheckResult:
 def check_wsl() -> CheckResult:
     if not shutil.which("wsl.exe"):
         return CheckResult("WSL", "bad", "wsl.exe를 찾을 수 없습니다")
-    code, output = run_command(["wsl.exe", "-l", "-q"], timeout=15)
+    safe_cwd = wsl_command_cwd()
+    code, output = run_command(["wsl.exe", "-l", "-q"], cwd=safe_cwd, timeout=15)
     lines = [line.strip() for line in output.splitlines() if line.strip()]
     if code != 0 or not lines:
         return CheckResult("WSL", "warn", "사용 가능한 WSL 배포판을 확인하지 못했습니다")
-    exec_code, exec_output = run_command(["wsl.exe", "-e", "sh", "-lc", "echo WSL_EXEC_OK"], timeout=15)
+    exec_code, exec_output = run_command(["wsl.exe", "-e", "sh", "-lc", "echo WSL_EXEC_OK"], cwd=safe_cwd, timeout=15)
     if exec_code != 0 or "WSL_EXEC_OK" not in exec_output:
         return CheckResult(
             "WSL",
             "warn",
             f"배포판 목록은 보이지만 실행 확인 실패: {', '.join(lines)}",
-        )
+    )
     wsl_root = windows_path_to_wsl(ROOT)
     if wsl_root:
-        path_code, _ = run_command(["wsl.exe", "-e", "sh", "-lc", f"test -d {shlex.quote(wsl_root)}"], timeout=15)
+        path_code, _ = run_command(
+            ["wsl.exe", "-e", "sh", "-lc", f"test -d {shlex.quote(wsl_root)}"],
+            cwd=safe_cwd,
+            timeout=15,
+        )
         if path_code != 0:
             return CheckResult(
                 "WSL",
-                "warn",
-                f"shell 실행 가능, 다만 현재 작업 경로를 WSL에서 확인하지 못함: {wsl_root}",
+                "ok",
+                f"{', '.join(lines)}; 현재 Windows 작업 경로는 WSL에서 직접 확인하지 못함: {wsl_root}",
             )
     return CheckResult("WSL", "ok", ", ".join(lines))
 
@@ -138,6 +153,7 @@ def check_docker() -> CheckResult:
         windows_message = "Windows docker 명령을 찾을 수 없습니다"
 
     if shutil.which("wsl.exe"):
+        safe_cwd = wsl_command_cwd()
         code, output = run_command(
             [
                 "wsl.exe",
@@ -146,6 +162,7 @@ def check_docker() -> CheckResult:
                 "-lc",
                 "docker version --format '{{.Server.Version}}' 2>/dev/null || docker-compose --version 2>/dev/null",
             ],
+            cwd=safe_cwd,
             timeout=20,
         )
         docker_seen = DOCKER_VERSION_RE.search(output) or "Docker Compose version" in output
