@@ -333,6 +333,7 @@ def main() -> None:
         "/admin/deploy",
         "/admin/public",
         "/admin/release",
+        "/admin/mobile",
         "/admin/play",
         "/admin/open-source",
         "/admin/help",
@@ -389,7 +390,13 @@ def main() -> None:
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
             require("남은 항목 유형" in text, "1차 릴리스 준비 화면에 남은 항목 유형이 없습니다")
             require("다음 행동" in text, "1차 릴리스 준비 화면에 다음 행동 안내가 없습니다")
+            require("/admin/mobile" in text, "1차 릴리스 준비 화면에 모바일 점검 화면 링크가 없습니다")
             require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")
+        if path == "/admin/mobile":
+            require("NowNote 모바일 실제 실행 점검" in text, "모바일 실제 실행 점검 화면 제목이 없습니다")
+            require("음성 메모" in text, "모바일 실제 실행 점검 화면에 음성 메모 절차가 없습니다")
+            require("녹음 업로드 상태" in text, "모바일 실제 실행 점검 화면에 녹음 업로드 확인 절차가 없습니다")
+            require("check_android_launch.py" in text, "모바일 실제 실행 점검 화면에 Android 실행 점검 스크립트 안내가 없습니다")
         if path == "/admin/play":
             require("NowNote Google Play 등록 준비" in text, "Google Play 등록 준비 화면 제목이 없습니다")
             require("자동 확인 항목" in text, "Google Play 등록 준비 화면에 자동 확인 항목이 없습니다")

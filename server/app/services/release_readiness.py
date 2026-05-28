@@ -21,8 +21,9 @@ BLOCKER_GUIDANCE = {
 
 NEXT_ACTIONS = {
     "실제 Android 기기/모바일 화면": (
-        "USB 디버깅 실기기를 연결한 뒤 now_app/scripts/check_android_runtime.py --require-physical, "
-        "check_android_launch.py --require-physical, mobile_runtime_checklist_ko.md 순서로 확인합니다."
+        "/admin/mobile에서 점검 순서를 확인하고, USB 디버깅 실기기를 연결한 뒤 "
+        "now_app/scripts/check_android_runtime.py --require-physical, "
+        "check_android_launch.py --require-physical 순서로 확인합니다."
     ),
     "WSL/Docker 서버 재배포": (
         "WSL 배포 경로에서 server/scripts/deploy_local.sh를 실행하고 smoke test 통과를 확인합니다."

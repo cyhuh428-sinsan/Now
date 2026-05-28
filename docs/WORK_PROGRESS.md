@@ -3,6 +3,27 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 18:15 KST
+
+### 다음 작업 시작
+
+- 남은 1차 항목 중 실제 Android 기기, 음성 메모, 녹음 후 변환, 녹음 업로드는 아직 사람이 실제 기기에서 확인해야 하므로 완료 처리하지 않음.
+- 다만 점검 순서가 문서에만 있으면 운영 화면 기준에서 빠지므로 서버 관리자 화면에 모바일 실제 실행 점검 화면을 추가하는 방향으로 진행.
+
+### 구현 내용
+
+- `/admin/mobile` 화면 추가. `now_app/docs/mobile_runtime_checklist_ko.md`를 서버 운영 화면에서 읽기 전용으로 확인할 수 있게 함.
+- `/admin/release`의 모바일 남은 항목 다음 행동이 `/admin/mobile`을 안내하도록 갱신.
+- Docker 이미지에 모바일 런타임 점검 문서를 포함하도록 `server/Dockerfile`, `.dockerignore` 갱신.
+- `server/README.md`, `server/scripts/smoke_test.py`, `server/scripts/preflight.py`, `docs/PROJECT_STATUS.md`에 새 화면 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile scripts\release_readiness.py server\app\services\release_readiness.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 865/865.
+- FastAPI TestClient로 `/admin/mobile` 200 응답, 모바일 점검 핵심 문구, `/admin/release`의 `/admin/mobile` 링크, release readiness API의 다음 행동 문구 확인.
+- `uv run python scripts\release_readiness.py --show-blockers` 기준 35/57 완료, 22개 남음 유지.
+
 ## 2026-05-28 17:58 KST
 
 ### 다음 작업 시작

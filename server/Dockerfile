@@ -16,6 +16,7 @@ COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md
 COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md
 COPY docs/OPEN_SOURCE_RELEASE.md /docs/OPEN_SOURCE_RELEASE.md
 COPY docs/LICENSE_DECISION.md /docs/LICENSE_DECISION.md
+COPY now_app/docs/mobile_runtime_checklist_ko.md /now_app/docs/mobile_runtime_checklist_ko.md
 COPY now_app/docs/google_play_release_checklist.md /play_docs/google_play_release_checklist.md
 COPY now_app/docs/google_play_console_values_ko.md /play_docs/google_play_console_values_ko.md
 COPY now_app/docs/google_play_paste_ready_ko.md /play_docs/google_play_paste_ready_ko.md
