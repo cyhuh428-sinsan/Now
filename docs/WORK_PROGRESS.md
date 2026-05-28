@@ -3,6 +3,26 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-28 17:46 KST
+
+### 다음 작업 시작
+
+- 남은 1차 항목 중 자동으로 더 확인할 수 있는 후보로 GitHub Actions preflight 연결 상태를 재점검.
+- 최신 커밋 `563c745` 기준 GitHub workflow run/status는 아직 비어 있어 `GitHub Actions preflight 통과 확인` 항목은 완료 처리하지 않음.
+
+### 구현 내용
+
+- `.github/workflows/preflight.yml`의 Python 문법 검사 대상에 `scripts/release_readiness.py` 추가.
+- 같은 문법 검사 대상에 Android 실제 실행 점검 스크립트 `check_android_runtime.py`, `check_android_emulator.py`, `check_android_launch.py` 추가.
+- `server/scripts/preflight.py`가 GitHub Actions workflow에 위 스크립트 문법 검사 대상이 포함됐는지 확인하도록 보강.
+- `docs/PROJECT_STATUS.md`의 서버 preflight 최신 통과 수치를 827/827로 갱신.
+
+### 검증
+
+- `uv run python -m py_compile server\scripts\preflight.py scripts\release_readiness.py now_app\scripts\check_android_runtime.py now_app\scripts\check_android_emulator.py now_app\scripts\check_android_launch.py` 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 827/827.
+- GitHub 커넥터 기준 최신 커밋 `563c74574e1201cf523d1790fc9aedf47598be4b`의 workflow run/status가 아직 없음을 확인.
+
 ## 2026-05-28 08:05 KST
 
 ### 다음 작업 시작
