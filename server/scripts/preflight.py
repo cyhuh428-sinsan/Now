@@ -90,6 +90,9 @@ def main() -> None:
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
+    public_server_path = server_dir / "PUBLIC_SERVER.md"
+    nginx_reverse_proxy_path = server_dir / "reverse_proxy" / "nginx.nownote.conf.example"
+    caddy_reverse_proxy_path = server_dir / "reverse_proxy" / "Caddyfile.example"
     server_deploy_script_path = server_dir / "scripts" / "deploy_local.sh"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
     project_status_path = repo_root / "docs" / "PROJECT_STATUS.md"
@@ -509,6 +512,8 @@ def main() -> None:
                 ("recording-missing-files", "README documents missing recording export link", "recording missing export"),
                 ("누락 녹음 파일", "README documents missing recording ops check", "recording missing ops"),
                 ("/admin/public", "README documents public server admin page", "public server admin page"),
+                ("PUBLIC_SERVER.md", "README links public server checklist", "public server checklist"),
+                ("reverse_proxy", "README links reverse proxy examples", "reverse proxy examples"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
                 ("Preflight failed", "README explains preflight failure summary", "preflight failed summary"),
                 ("NowNote server smoke test passed", "README explains smoke pass summary", "smoke passed summary"),
@@ -531,6 +536,9 @@ def main() -> None:
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
+    check(public_server_path.exists(), "Public server checklist exists", str(public_server_path), failures)
+    check(nginx_reverse_proxy_path.exists(), "Nginx reverse proxy example exists", str(nginx_reverse_proxy_path), failures)
+    check(caddy_reverse_proxy_path.exists(), "Caddy reverse proxy example exists", str(caddy_reverse_proxy_path), failures)
     check(server_deploy_script_path.exists(), "Server deploy helper script exists", str(server_deploy_script_path), failures)
     check(auth_policy_path.exists(), "Server auth policy exists", str(auth_policy_path), failures)
     check(public_repo_safety_check_path.exists(), "Public repo safety verification script exists", str(public_repo_safety_check_path), failures)
@@ -1070,6 +1078,9 @@ def main() -> None:
                 ("NOW_USER_TOKEN_REQUIRED=true", "Deploy checklist documents public token enforcement setting", "deploy public token enforcement"),
                 ("사용자별 기기 조회/해제 API", "Deploy checklist covers public device self-management", "device self-management"),
                 ("사용자별 데이터 격리 자동 검증", "Deploy checklist covers public data isolation checks", "data isolation"),
+                ("PUBLIC_SERVER.md", "Deploy checklist links public server guide", "public server guide"),
+                ("nginx.nownote.conf.example", "Deploy checklist links Nginx example", "Nginx proxy example"),
+                ("Caddyfile.example", "Deploy checklist links Caddy example", "Caddy proxy example"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
                 ("SMOKE TEST HTTP FAILED", "Deploy checklist explains smoke HTTP failure summary", "smoke HTTP failure summary"),
@@ -1083,6 +1094,47 @@ def main() -> None:
                 ("status_counts.bad=0", "Deploy checklist covers backup verify status count target", "status_counts.bad=0"),
                 ("/api/v1/admin/export/all", "Deploy checklist covers backup export", "export/all"),
                 ("/api/v1/admin/export/verify", "Deploy checklist covers backup verification", "export/verify"),
+            ],
+            failures,
+        )
+    if public_server_path.exists():
+        public_server = public_server_path.read_text(encoding="utf-8")
+        check_text_contains(
+            public_server,
+            [
+                ("NOW_PUBLIC_BASE_URL=https://nownote.example.com", "Public server guide documents public base URL", "public base URL"),
+                ("NOW_BEHIND_REVERSE_PROXY=true", "Public server guide documents reverse proxy flag", "reverse proxy flag"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Public server guide documents user token required", "user token required"),
+                ("reverse_proxy/nginx.nownote.conf.example", "Public server guide links Nginx example", "Nginx example"),
+                ("reverse_proxy/Caddyfile.example", "Public server guide links Caddy example", "Caddy example"),
+                ("--public-server", "Public server guide documents public preflight", "public preflight"),
+                ("public_server_readiness.status", "Public server guide documents readiness API", "readiness API"),
+                ("사용자별 데이터 격리 smoke test", "Public server guide documents data isolation smoke test", "data isolation"),
+            ],
+            failures,
+        )
+    if nginx_reverse_proxy_path.exists():
+        nginx_reverse_proxy = nginx_reverse_proxy_path.read_text(encoding="utf-8")
+        check_text_contains(
+            nginx_reverse_proxy,
+            [
+                ("server_name nownote.example.com", "Nginx example has placeholder domain", "placeholder domain"),
+                ("return 301 https://$host$request_uri", "Nginx example redirects HTTP to HTTPS", "HTTP redirect"),
+                ("proxy_pass http://127.0.0.1:8750", "Nginx example proxies to local NowNote port", "local proxy"),
+                ("X-Forwarded-Proto https", "Nginx example forwards HTTPS proto", "forwarded proto"),
+                ("client_max_body_size 100m", "Nginx example allows recording uploads", "upload size"),
+            ],
+            failures,
+        )
+    if caddy_reverse_proxy_path.exists():
+        caddy_reverse_proxy = caddy_reverse_proxy_path.read_text(encoding="utf-8")
+        check_text_contains(
+            caddy_reverse_proxy,
+            [
+                ("nownote.example.com", "Caddy example has placeholder domain", "placeholder domain"),
+                ("reverse_proxy 127.0.0.1:8750", "Caddy example proxies to local NowNote port", "local proxy"),
+                ("X-Forwarded-Proto https", "Caddy example forwards HTTPS proto", "forwarded proto"),
+                ("max_size 100MB", "Caddy example allows recording uploads", "upload size"),
             ],
             failures,
         )
@@ -1118,6 +1170,8 @@ def main() -> None:
                 ("2단계 코드 검증", "Auth policy covers two-factor code flow", "two-factor code flow"),
                 ("사용자별 데이터 격리 자동 검증", "Auth policy covers user data isolation check", "data isolation"),
                 ("HTTPS, reverse proxy", "Auth policy covers public HTTPS proxy check", "HTTPS reverse proxy"),
+                ("server/PUBLIC_SERVER.md", "Auth policy links public server guide", "public server guide"),
+                ("server/reverse_proxy", "Auth policy links reverse proxy examples", "reverse proxy examples"),
                 ("--public-server", "Auth policy covers public preflight command", "public preflight"),
             ],
             failures,
