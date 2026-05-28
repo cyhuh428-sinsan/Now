@@ -147,6 +147,23 @@ def print_checks(checks: list[Check]) -> None:
         print(f"[{check.status}] {check.name} - {check.message}")
 
 
+def parse_data_available_kib(df_output: str) -> int | None:
+    lines = [line.strip() for line in df_output.splitlines() if line.strip()]
+    if len(lines) < 2:
+        return None
+    parts = lines[-1].split()
+    if len(parts) < 4:
+        return None
+    try:
+        return int(parts[3])
+    except ValueError:
+        return None
+
+
+def mib(value: int) -> str:
+    return f"{value / (1024 * 1024):.0f}MB"
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Install and launch NowNote on a connected Android device")
     parser.add_argument("--apk", default=str(DEFAULT_APK), help="APK path to install")
@@ -197,12 +214,32 @@ def main() -> None:
 
     serial = selected["serial"]
     if not args.skip_install:
+        storage = run_command(adb_command(adb, serial, "shell", "df", "-k", "/data"), args.timeout)
+        available_kib = parse_data_available_kib(storage.output)
+        if available_kib is None:
+            add(checks, "WARN", "Android 저장공간", "df -k /data 결과를 해석하지 못했습니다")
+        else:
+            available_bytes = available_kib * 1024
+            apk_size = apk_path.stat().st_size if apk_path.exists() else 0
+            if apk_size and available_bytes < apk_size * 3:
+                add(
+                    checks,
+                    "WARN",
+                    "Android 저장공간",
+                    f"여유 {mib(available_bytes)}, APK {mib(apk_size)}. 재설치 실패 시 --skip-install 또는 AVD 저장공간 정리가 필요합니다",
+                )
+            else:
+                add(checks, "OK", "Android 저장공간", f"여유 {mib(available_bytes)}")
+
         install = run_command(adb_command(adb, serial, "install", "-r", str(apk_path)), args.timeout)
         install_output = install.output
         if install.ok and "Success" in install_output:
             add(checks, "OK", "APK 설치", "Success")
         else:
-            add(checks, "FAIL", "APK 설치", install_output or "adb install 실패")
+            guidance = ""
+            if "INSTALL_FAILED_INSUFFICIENT_STORAGE" in install_output:
+                guidance = " 에뮬레이터 저장공간을 정리하거나 이미 설치된 앱은 --skip-install로 실행 확인하세요."
+            add(checks, "FAIL", "APK 설치", (install_output or "adb install 실패") + guidance)
 
     package_check = run_command(adb_command(adb, serial, "shell", "pm", "path", args.package), args.timeout)
     if package_check.ok and args.package in package_check.output:
