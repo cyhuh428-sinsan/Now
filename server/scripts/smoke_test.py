@@ -403,6 +403,8 @@ def main() -> None:
             require("남은 항목 유형" in text, "1차 릴리스 준비 화면에 남은 항목 유형이 없습니다")
             require("다음 행동" in text, "1차 릴리스 준비 화면에 다음 행동 안내가 없습니다")
             require("수동 증빙 반영" in text, "1차 릴리스 준비 화면에 수동 증빙 반영 집계가 없습니다")
+            require("바로 완료 증빙 기록" in text, "1차 릴리스 준비 화면에 바로 증빙 기록 섹션이 없습니다")
+            require('return_to" value="/admin/release"' in text, "1차 릴리스 준비 화면의 완료 기록 폼이 다시 릴리스 화면으로 돌아오지 않습니다")
             require("/admin/evidence" in text, "1차 릴리스 준비 화면에 수동 증빙 화면 링크가 없습니다")
             require("/admin/mobile" in text, "1차 릴리스 준비 화면에 모바일 점검 화면 링크가 없습니다")
             require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")

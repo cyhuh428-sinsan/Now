@@ -238,8 +238,11 @@ def admin_public(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/release", include_in_schema=False)
-def admin_release(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_release_html())
+def admin_release(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_release_html(request))
 
 
 @router.get("/admin/evidence", include_in_schema=False)
@@ -258,11 +261,12 @@ def admin_evidence_record_create(
     evidence_location: str = Form(default=""),
     actual_note: str = Form(default=""),
     memo: str = Form(default=""),
+    return_to: str = Form(default="/admin/evidence"),
     _: None = Depends(_require_monitor_access),
 ) -> RedirectResponse:
     parts = evidence_key.split("||", 2)
     if len(parts) != 3 or not parts[0].strip() or not parts[2].strip():
-        return RedirectResponse(url="/admin/evidence?error=invalid", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=_evidence_return_url(return_to, "error=invalid"), status_code=status.HTTP_303_SEE_OTHER)
     with SessionLocal() as db:
         db.add(
             ReleaseEvidenceRecord(
@@ -278,7 +282,7 @@ def admin_evidence_record_create(
             )
         )
         db.commit()
-    return RedirectResponse(url="/admin/evidence?saved=1", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=_evidence_return_url(return_to, "saved=1"), status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/play", include_in_schema=False)
@@ -4576,13 +4580,15 @@ def _admin_help_html() -> str:
 </html>"""
 
 
-def _admin_release_html() -> str:
+def _admin_release_html(request: Request) -> str:
     readiness = release_readiness_summary()
+    evidence = release_evidence_summary()
     summary = readiness["summary"]
     status = readiness["status"]
     status_label = "마무리 완료" if status == "ready" else "마무리 진행 중"
     status_class = "ok" if status == "ready" else "warn"
     source = "docs/PHASE1_RELEASE_CHECKLIST.md" if readiness.get("source") else "체크리스트 파일 없음"
+    saved_message = _release_evidence_saved_message(request)
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -4677,6 +4683,21 @@ def _admin_release_html() -> str:
     }}
     .ok {{ color: var(--green); }}
     .warn {{ color: var(--amber); }}
+    .message {{
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      background: #f0fdf4;
+      color: #166534;
+      font-size: 14px;
+      font-weight: 700;
+    }}
+    .message.error {{
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }}
     section {{
       margin-top: 14px;
       overflow: hidden;
@@ -4720,10 +4741,37 @@ def _admin_release_html() -> str:
       font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 13px;
     }}
+    .quick-form {{
+      display: grid;
+      grid-template-columns: minmax(140px, 1fr) minmax(180px, 1.4fr) auto;
+      gap: 8px;
+      align-items: start;
+    }}
+    .quick-form input {{
+      width: 100%;
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font: inherit;
+      font-size: 13px;
+    }}
+    .quick-form button {{
+      min-height: 34px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 10px;
+      background: var(--blue);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }}
     @media (max-width: 800px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
       .cards {{ grid-template-columns: 1fr; }}
+      .quick-form {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -4744,6 +4792,7 @@ def _admin_release_html() -> str:
         <a href="/admin/help">도움말</a>
       </nav>
     </header>
+    {saved_message}
 
     <div class="cards">
       <div class="card">
@@ -4787,9 +4836,47 @@ def _admin_release_html() -> str:
         {_release_blocker_rows(readiness["blockers"])}
       </table>
     </section>
+
+    <section>
+      <div class="section-head">
+        <span>바로 완료 증빙 기록</span>
+        <span class="sub">실제 확인이 끝난 항목만 완료로 저장</span>
+      </div>
+      <table>
+        <tr><th>유형</th><th>항목</th><th>필요 증빙</th><th>완료 기록</th></tr>
+        {_release_quick_evidence_rows(evidence["items"])}
+      </table>
+    </section>
   </main>
 </body>
 </html>"""
+
+
+def _release_quick_evidence_rows(items: list[dict]) -> str:
+    if not items:
+        return '<tr><td colspan="4">완료 증빙을 기록할 남은 항목이 없습니다.</td></tr>'
+    rows = []
+    for item in items:
+        evidence_key = "||".join([item["group"], item["section"], item["label"]])
+        evidence = "".join(f"<li>{escape(value)}</li>" for value in item["evidence"])
+        rows.append(
+            "<tr>"
+            f"<td>{escape(item['group'])}</td>"
+            f"<td><strong>{escape(item['label'])}</strong><div class=\"sub\">{escape(item['section'])}</div></td>"
+            f"<td><ul>{evidence}</ul></td>"
+            "<td>"
+            '<form class="quick-form" method="post" action="/admin/evidence/records">'
+            f'<input type="hidden" name="evidence_key" value="{escape(evidence_key, quote=True)}">'
+            '<input type="hidden" name="result" value="완료">'
+            '<input type="hidden" name="return_to" value="/admin/release">'
+            '<input type="text" name="evidence_location" placeholder="증빙 위치" required>'
+            '<input type="text" name="actual_note" placeholder="실제 확인 내용" required>'
+            '<button type="submit">완료 기록</button>'
+            "</form>"
+            "</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
 
 
 def _release_section_rows(sections: list[dict]) -> str:
@@ -5208,6 +5295,13 @@ def _release_evidence_saved_message(request: Request) -> str:
     if request.query_params.get("error") == "invalid":
         return '<div class="message error">증빙 항목을 선택해야 합니다.</div>'
     return ""
+
+
+def _evidence_return_url(return_to: str, query: str) -> str:
+    target = return_to.strip()
+    if target not in {"/admin/evidence", "/admin/release"}:
+        target = "/admin/evidence"
+    return f"{target}?{query}"
 
 
 def _release_evidence_option_rows(items: list[dict]) -> str:
