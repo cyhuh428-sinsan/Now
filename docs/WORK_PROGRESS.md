@@ -3,6 +3,17 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 20:48 KST
+
+### 수동 증빙 완료의 릴리스 준비 반영
+
+- `/admin/evidence`에서 외부 확인 항목을 `완료`로 저장해도 `/admin/release`의 완료 수는 체크리스트 파일만 기준으로 계산하던 구조를 보강.
+- `server/app/services/release_readiness.py`가 최신 수동 증빙 기록을 읽어, 체크리스트 미완료 항목이라도 같은 유형/영역/항목의 최신 기록이 `완료`이면 완료 수에 반영하도록 수정.
+- `/admin/release` 완료 카드에 `수동 증빙 반영 N건`을 표시하고, 영역별 진행 기준을 `체크리스트와 완료 증빙 기준`으로 명확히 표시.
+- API 응답 `/api/v1/admin/release-readiness`의 `summary.evidence_done`으로 수동 증빙 반영 건수를 확인할 수 있게 함.
+- smoke test와 preflight가 수동 증빙 반영 표시, `evidence_done`, `checked_source` 기준을 확인하도록 보강.
+- 검증: Python 문법 확인 통과, 임시 SQLite DB에서 `reverse proxy 적용.` 완료 증빙 1건 저장 시 54/57에서 55/57로 반영되는 것 확인, 서버 preflight 1030/1030 통과, `git diff --check` 통과.
+
 ## 2026-05-29 19:59 KST
 
 ### Nginx Proxy Manager 입력값 화면 고정
