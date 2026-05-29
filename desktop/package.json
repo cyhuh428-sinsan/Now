@@ -1,0 +1,50 @@
+{
+  "name": "nownote-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NowNote Windows desktop installer wrapper for the Web client.",
+  "author": "Sinsan",
+  "main": "main.cjs",
+  "scripts": {
+    "sync:web": "node scripts/sync-web-assets.mjs",
+    "start": "npm run sync:web && electron .",
+    "dist:win": "npm run sync:web && electron-builder --win nsis"
+  },
+  "devDependencies": {
+    "electron": "^42.3.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "kr.sinsan.nownote",
+    "productName": "NowNote",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.cjs",
+      "preload.cjs",
+      "app/**/*"
+    ],
+    "asar": true,
+    "win": {
+      "icon": "build/icon.ico",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "NowNote-Setup-${version}-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "NowNote"
+    }
+  }
+}

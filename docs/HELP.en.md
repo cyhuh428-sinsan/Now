@@ -124,7 +124,8 @@ Important mobile features:
 
 Web and installed apps focus on knowledge notes.
 Web can be used as a standalone app without connecting to a server, storing data in browser localStorage.
-In the first-phase scope, the installed app means installing the Web screen as a PWA and using it like a separate app window.
+The Windows installed app is provided as an `.exe` installer that wraps the Web screen in an Electron app.
+PWA installation is also supported.
 You can also connect to a public server without installing your own server by entering the operator-provided server URL and connection values in display settings.
 
 Recommended flow:
