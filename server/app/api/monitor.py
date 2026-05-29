@@ -4753,6 +4753,7 @@ def _admin_release_html() -> str:
       <div class="card">
         <div class="label">완료</div>
         <div class="value">{summary["done"]}/{summary["total"]}</div>
+        <div class="sub">수동 증빙 반영 {summary.get("evidence_done", 0)}건</div>
       </div>
       <div class="card">
         <div class="label">남은 항목</div>
@@ -4768,7 +4769,7 @@ def _admin_release_html() -> str:
     <section>
       <div class="section-head">
         <span>영역별 진행</span>
-        <span class="sub">체크리스트 기준</span>
+        <span class="sub">체크리스트와 완료 증빙 기준</span>
       </div>
       <table>
         <tr><th>영역</th><th>진행</th><th>상태</th><th>남은 항목</th></tr>

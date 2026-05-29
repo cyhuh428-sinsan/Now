@@ -75,16 +75,27 @@ def release_readiness_summary() -> dict:
         }
 
     items = _parse_checklist(checklist_path)
-    done = sum(1 for item in items if item.checked)
+    evidence_completed_keys = _completed_evidence_keys(items)
+    done = sum(1 for item in items if _item_done(item, evidence_completed_keys))
+    evidence_done = sum(
+        1
+        for item in items
+        if not item.checked and _item_key(item) in evidence_completed_keys
+    )
     remaining = len(items) - done
-    sections = _section_summaries(items)
-    blockers = _blocker_summaries(items)
+    sections = _section_summaries(items, evidence_completed_keys)
+    blockers = _blocker_summaries(items, evidence_completed_keys)
     return {
         "name": "phase_one_release_readiness",
         "checked_at": datetime.utcnow(),
         "status": "ready" if remaining == 0 else "blocked",
         "source": str(checklist_path),
-        "summary": {"done": done, "total": len(items), "remaining": remaining},
+        "summary": {
+            "done": done,
+            "total": len(items),
+            "remaining": remaining,
+            "evidence_done": evidence_done,
+        },
         "sections": sections,
         "blockers": blockers,
     }
@@ -124,7 +135,7 @@ def _parse_checklist(path: Path) -> list[ChecklistItem]:
     return items
 
 
-def _section_summaries(items: list[ChecklistItem]) -> list[dict]:
+def _section_summaries(items: list[ChecklistItem], evidence_completed_keys: set[tuple[str, str, str]]) -> list[dict]:
     sections: list[str] = []
     for item in items:
         if item.section not in sections:
@@ -133,8 +144,8 @@ def _section_summaries(items: list[ChecklistItem]) -> list[dict]:
     summaries: list[dict] = []
     for section in sections:
         section_items = [item for item in items if item.section == section]
-        done = sum(1 for item in section_items if item.checked)
-        remaining_items = [item for item in section_items if not item.checked]
+        done = sum(1 for item in section_items if _item_done(item, evidence_completed_keys))
+        remaining_items = [item for item in section_items if not _item_done(item, evidence_completed_keys)]
         summaries.append(
             {
                 "name": section,
@@ -142,7 +153,11 @@ def _section_summaries(items: list[ChecklistItem]) -> list[dict]:
                 "total": len(section_items),
                 "remaining": len(remaining_items),
                 "items": [
-                    {"label": item.label, "checked": item.checked}
+                    {
+                        "label": item.label,
+                        "checked": _item_done(item, evidence_completed_keys),
+                        "checked_source": _item_checked_source(item, evidence_completed_keys),
+                    }
                     for item in section_items
                 ],
             }
@@ -150,10 +165,10 @@ def _section_summaries(items: list[ChecklistItem]) -> list[dict]:
     return summaries
 
 
-def _blocker_summaries(items: list[ChecklistItem]) -> list[dict]:
+def _blocker_summaries(items: list[ChecklistItem], evidence_completed_keys: set[tuple[str, str, str]]) -> list[dict]:
     groups: dict[str, list[ChecklistItem]] = {}
     for item in items:
-        if item.checked:
+        if _item_done(item, evidence_completed_keys):
             continue
         groups.setdefault(_classify_remaining_item(item), []).append(item)
 
@@ -170,6 +185,59 @@ def _blocker_summaries(items: list[ChecklistItem]) -> list[dict]:
         }
         for name, group_items in groups.items()
     ]
+
+
+def _completed_evidence_keys(items: list[ChecklistItem]) -> set[tuple[str, str, str]]:
+    candidate_keys = {_item_key(item) for item in items if not item.checked}
+    if not candidate_keys:
+        return set()
+
+    try:
+        from sqlalchemy import select
+
+        from app.db import SessionLocal
+        from app.models.note import ReleaseEvidenceRecord
+    except Exception:
+        return set()
+
+    latest: dict[tuple[str, str, str], str] = {}
+    try:
+        with SessionLocal() as db:
+            records = db.scalars(
+                select(ReleaseEvidenceRecord).order_by(
+                    ReleaseEvidenceRecord.checked_at.desc(),
+                    ReleaseEvidenceRecord.id.desc(),
+                )
+            ).all()
+    except Exception:
+        return set()
+
+    for record in records:
+        key = (
+            str(record.group_name).strip(),
+            str(record.section).strip(),
+            str(record.label).strip(),
+        )
+        if key not in candidate_keys or key in latest:
+            continue
+        latest[key] = str(record.result).strip()
+    return {key for key, result in latest.items() if result == "완료"}
+
+
+def _item_done(item: ChecklistItem, evidence_completed_keys: set[tuple[str, str, str]]) -> bool:
+    return item.checked or _item_key(item) in evidence_completed_keys
+
+
+def _item_checked_source(item: ChecklistItem, evidence_completed_keys: set[tuple[str, str, str]]) -> str:
+    if item.checked:
+        return "checklist"
+    if _item_key(item) in evidence_completed_keys:
+        return "evidence"
+    return "none"
+
+
+def _item_key(item: ChecklistItem) -> tuple[str, str, str]:
+    return (_classify_remaining_item(item), item.section, item.label)
 
 
 def _classify_remaining_item(item: ChecklistItem) -> str:
