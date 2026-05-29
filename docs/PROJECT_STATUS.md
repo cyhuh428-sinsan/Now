@@ -7,24 +7,24 @@
 
 ## 현재 마무리 수치
 
-`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 40개 완료, 17개 남음입니다.
+`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 48개 완료, 9개 남음입니다.
 
 - 모바일 앱 실제 점검: 12/12 완료.
 - Web/설치형 점검: 12/12 완료.
 - 서버 재배포 점검: 9/9 완료.
-- 공용 서버 오픈 전 점검: 0/8 완료.
-- Google Play 등록 전 점검: 4/10 완료.
-- 공개 저장소 오픈 전 점검: 3/6 완료.
+- 공용 서버 오픈 전 점검: 1/8 완료.
+- Google Play 등록 전 점검: 9/10 완료.
+- 공개 저장소 오픈 전 점검: 5/6 완료.
 
 ## 최신 코드 품질 상태
 
 - 모바일 앱 전체 `dart analyze`는 최근 통과 기록이 있으나, 현재 PowerShell 세션에서는 Flutter/Dart 분석 명령 재확인은 보류 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 128/128 통과 상태입니다.
 - Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에서도 ARM64 APK ABI 호환성, APK 설치, `com.sinsan.nownote` 실행, 실행 직후 크래시 없음, 음성 메모 실시간 변환, 녹음 후 변환, 서버 녹음 업로드까지 확인했습니다. Google Play용 release APK도 같은 기기에 설치하고 실행 직후 크래시 없음까지 확인했습니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 945/945 통과 상태입니다.
-- Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 8개 남음 상태입니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 최신 통과 상태입니다.
+- Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK이며, 1차 체크리스트 기준 내부 테스트 트랙 업로드만 남은 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
-- GitHub Actions는 workflow 파일, 상태 확인 스크립트, 실행 요청 스크립트가 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
+- GitHub Actions는 workflow 파일, 상태 확인 스크립트, 실행 요청 스크립트가 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status 확인이 아직 남아 있습니다.
 
 ## 1차 목표 기준
 
@@ -40,7 +40,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 - 운영 화면: `/monitor`, `/admin`, 메모/녹음/사용자/기기/동기화/분석/백업/복구/배포/공용 서버/1차 릴리스/수동 증빙 기록/모바일 실제 실행 점검/Play 등록/공개 저장소 준비 상태 확인.
 - 백업/복구: 전체 JSON 백업, 항목별 JSON 내보내기, 백업 검증, 복구 절차 문서, 고아/누락 녹음 파일 점검.
 - 공용 서버 준비: 사용자별 접속 토큰, 토큰 확인 화면/API, 2단계 코드 검증, 사용자별 데이터 격리 smoke test, public preflight 기준, 공용 서버 오픈 체크리스트, Nginx/Caddy reverse proxy 예시.
-- 공개 저장소 준비: README, 보안 정책, 기여 안내, 이슈/PR 템플릿, GitHub Actions preflight 설정, 민감정보 제외 기준.
+- 공개 저장소 준비: README, 보안 정책, 기여 안내, 이슈/PR 템플릿, GitHub Actions preflight 설정, 민감정보 제외 기준, 라이선스 선택 완료, Apache License 2.0.
 - Google Play 빌드 준비: 로컬 업로드 키와 `key.properties` 준비, 최신 서명 AAB/release APK 빌드, Play release preflight 통과, 실제 기기 release APK 설치/실행 확인.
 
 ## 남은 1차 마무리
@@ -49,13 +49,10 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 ### 운영 결정 필요
 
-- 공용 서버를 열 경우 실제 도메인, HTTPS, reverse proxy, `NOW_USER_TOKEN_REQUIRED=true` 운영값 적용.
-- 오픈소스 라이선스 선택과 LICENSE 파일 추가.
+- 공용 서버를 열 경우 HTTPS, reverse proxy, `NOW_USER_TOKEN_REQUIRED=true` 운영값 적용.
 
 ### 등록 화면 확인 필요
 
-- 개인정보처리방침 URL 확정.
-- Play Console 앱 설명, 권한 설명, Data safety, 스크린샷/기능 그래픽 최종 확인.
 - 내부 테스트 트랙 업로드.
 
 ### 실제 기기 점검 완료

@@ -87,3 +87,7 @@ python3 scripts/preflight.py --public-server
 - 하나의 커밋은 하나의 의도를 갖습니다.
 - 기능 변경과 문서 정리는 가능하면 분리합니다.
 - 민감정보 제외, 공개 문서, 배포 절차처럼 운영에 영향을 주는 기준은 preflight 또는 smoke test에 회귀 방지 점검을 추가합니다.
+
+## 기여 라이선스
+
+NowNote에 제출하는 기여 코드는 별도 서면 합의가 없는 한 저장소의 Apache License 2.0 조건으로 제공됩니다.

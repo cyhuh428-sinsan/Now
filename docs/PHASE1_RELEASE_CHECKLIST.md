@@ -51,7 +51,7 @@
 
 공용 서버를 열지 않는 개인 Docker 서버라면 이 항목은 보류할 수 있습니다.
 
-- [ ] 실제 공개 도메인 확정.
+- [x] 실제 공개 도메인 확정.
 - [ ] `NOW_PUBLIC_BASE_URL=https://도메인` 설정.
 - [ ] reverse proxy 적용.
 - [ ] `NOW_BEHIND_REVERSE_PROXY=true` 설정.
@@ -65,11 +65,11 @@
 - [x] 실제 Android 서명 키 준비.
 - [x] `now_app/android/key.properties` 로컬 파일 준비.
 - [x] 서명된 AAB 빌드.
-- [ ] 개인정보처리방침 URL 확정.
-- [ ] Play Console 앱 설명 문구 최종 확인.
-- [ ] 권한 사용 설명 최종 확인.
-- [ ] Data safety 답변 최종 확인.
-- [ ] 스크린샷과 기능 그래픽 최종 확인.
+- [x] 개인정보처리방침 URL 확정.
+- [x] Play Console 앱 설명 문구 최종 확인.
+- [x] 권한 사용 설명 최종 확인.
+- [x] Data safety 답변 최종 확인.
+- [x] 스크린샷과 기능 그래픽 최종 확인.
 - [ ] 내부 테스트 트랙 업로드.
 - [x] 실제 기기 설치 테스트.
 
@@ -79,11 +79,11 @@
 - [ ] GitHub Actions preflight 통과 확인.
 - [x] README, SECURITY, CONTRIBUTING, 이슈/PR 템플릿 확인: `server/scripts/preflight.py` 기준.
 - [x] 오픈소스 라이선스 선택 가이드 준비.
-- [ ] 오픈소스 라이선스 선택.
-- [ ] 선택한 라이선스 파일 추가.
+- [x] 오픈소스 라이선스 선택.
+- [x] 선택한 라이선스 파일 추가.
 
 ## 현재 보류 항목
 
-- 라이선스는 법적 선택이므로 임의로 정하지 않습니다.
-- 실제 도메인과 HTTPS 설정은 운영 서버가 확정된 뒤 진행합니다.
-- 실제 서명 키와 Play Console 값은 공개 저장소에 올리지 않고 로컬에서만 관리합니다.
+- 라이선스는 Apache License 2.0으로 확정했습니다.
+- 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용은 별도 완료 확인이 필요합니다.
+- 실제 서명 키와 Play Console 내부 테스트 업로드 화면은 공개 저장소에 올리지 않고 로컬/콘솔에서만 관리합니다.

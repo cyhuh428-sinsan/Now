@@ -16,6 +16,7 @@ REQUIRED_FILES = [
     ("버그 이슈 템플릿", ".github/ISSUE_TEMPLATE/bug_report.md"),
     ("기능 제안 템플릿", ".github/ISSUE_TEMPLATE/feature_request.md"),
     ("GitHub Actions preflight", ".github/workflows/preflight.yml"),
+    ("LICENSE", "LICENSE"),
     ("공개 저장소 오픈 점검", "docs/OPEN_SOURCE_RELEASE.md"),
     ("라이선스 선택 가이드", "docs/LICENSE_DECISION.md"),
 ]
@@ -27,6 +28,9 @@ CONTENT_CHECKS = [
     ("라이선스 후보 MIT", "docs/LICENSE_DECISION.md", "MIT License"),
     ("라이선스 후보 Apache", "docs/LICENSE_DECISION.md", "Apache License 2.0"),
     ("라이선스 후보 AGPL", "docs/LICENSE_DECISION.md", "AGPLv3"),
+    ("라이선스 확정", "docs/LICENSE_DECISION.md", "선택 라이선스: Apache License 2.0"),
+    ("라이선스 파일 원문", "LICENSE", "Apache License"),
+    ("라이선스 버전", "LICENSE", "Version 2.0"),
     ("기여 라이선스 후속", "docs/LICENSE_DECISION.md", "CONTRIBUTING.md"),
 ]
 
@@ -78,12 +82,13 @@ def _build_checks() -> list[OpenSourceCheck]:
         message = relative if status == "ok" else f"문구 확인 필요: {expected}"
         checks.append(OpenSourceCheck(label, status, message))
 
-    license_path = _resolve_file("LICENSE")
+    license_text = _read_text("LICENSE")
+    license_ok = "Apache License" in license_text and "Version 2.0" in license_text
     checks.append(
         OpenSourceCheck(
             "LICENSE 파일",
-            "ok" if license_path and license_path.stat().st_size > 0 else "manual",
-            "LICENSE" if license_path else "라이선스 확정 후 루트 LICENSE 파일을 추가합니다.",
+            "ok" if license_ok else "warn",
+            "Apache License 2.0" if license_ok else "LICENSE 파일에 Apache License 2.0 원문 확인 필요",
         )
     )
     return checks
