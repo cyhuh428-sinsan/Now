@@ -22,7 +22,10 @@
 - `uv run python -m py_compile server\app\models\note.py server\app\db.py server\app\api\admin.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
 - FastAPI TestClient로 `/admin/evidence` 화면, `POST /api/v1/admin/release-evidence-records`, `GET /api/v1/admin/release-evidence-records`, `/api/v1/admin/export/all`, `/api/v1/admin/export/verify` 확인.
 - TestClient 기준 `release_evidence_records` 백업 포함과 백업 검증 `status: ok` 확인.
-- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 933/933.
+- WSL/Docker 실제 재배포 1차 smoke에서 `release_evidence_records`가 백업에 포함되며 export summary total 검증 누락을 확인했고, smoke total 기준에 증빙 기록 수를 반영.
+- WSL/Docker 실제 재배포 2차 smoke에서 저장된 증빙 기록이 있는 `/admin/evidence` 렌더링 중 `_truncate` 누락을 확인했고, 화면 렌더링 보조 함수와 저장 후 화면 확인 smoke를 추가.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 935/935.
+- WSL/Docker 실제 재배포 최종 통과. `scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull` 기준 preflight 935/935, `/admin/evidence` 저장 기록 표시, 증빙 기록 API, 전체 백업, 백업 검증, smoke test 모두 통과.
 - `uv run python scripts\release_readiness.py --show-blockers` 결과는 35/57 완료, 남은 항목 22개 유지.
 
 ## 2026-05-29 09:21 KST
