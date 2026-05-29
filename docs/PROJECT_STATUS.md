@@ -7,12 +7,12 @@
 
 ## 현재 마무리 수치
 
-`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 48개 완료, 9개 남음입니다.
+`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 54개 완료, 3개 남음입니다.
 
 - 모바일 앱 실제 점검: 12/12 완료.
 - Web/설치형 점검: 12/12 완료.
 - 서버 재배포 점검: 9/9 완료.
-- 공용 서버 오픈 전 점검: 1/8 완료.
+- 공용 서버 오픈 전 점검: 7/8 완료.
 - Google Play 등록 전 점검: 9/10 완료.
 - 공개 저장소 오픈 전 점검: 5/6 완료.
 
@@ -23,7 +23,8 @@
 - Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에서도 ARM64 APK ABI 호환성, APK 설치, `com.sinsan.nownote` 실행, 실행 직후 크래시 없음, 음성 메모 실시간 변환, 녹음 후 변환, 서버 녹음 업로드까지 확인했습니다. Google Play용 release APK도 같은 기기에 설치하고 실행 직후 크래시 없음까지 확인했습니다.
 - 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 최신 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK이며, 1차 체크리스트 기준 내부 테스트 트랙 업로드만 남은 상태입니다.
-- 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
+- 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, 공용 모드 사용자 토큰 필수 smoke test가 통과한 상태입니다.
+- 공용 모드 환경값과 서버 내부 준비 상태는 완료됐지만, 외부 `https://nownote.sinsan.kr/api/v1/server`는 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하므로 실제 Nginx Proxy Manager의 reverse proxy 대상 변경이 남았습니다.
 - GitHub Actions는 workflow 파일, 상태 확인 스크립트, 실행 요청 스크립트가 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status 확인이 아직 남아 있습니다.
 
 ## 1차 목표 기준
@@ -47,9 +48,9 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 
 남은 항목은 `docs/PHASE1_RELEASE_CHECKLIST.md`를 기준으로 닫습니다.
 
-### 운영 결정 필요
+### 운영 적용 필요
 
-- 공용 서버를 열 경우 HTTPS, reverse proxy, `NOW_USER_TOKEN_REQUIRED=true` 운영값 적용.
+- 실제 Nginx Proxy Manager에서 `nownote.sinsan.kr` Proxy Host를 NowNote API 서버로 연결.
 
 ### 등록 화면 확인 필요
 

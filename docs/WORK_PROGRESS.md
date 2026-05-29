@@ -26,6 +26,7 @@
 - 배포 후 smoke test 통과. 사용자 토큰 필수 모드, 사용자별 데이터 격리, 녹음 업로드, 분석 작업, 백업 검증까지 통과.
 - 외부 확인 기준 `https://nownote.sinsan.kr/api/v1/server`는 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하므로, 실제 공개 Nginx Proxy Manager에서 Proxy Host 대상을 `now-api:8080`으로 변경해야 함.
 - 현재 접근 가능한 로컬/WSL Nginx Proxy Manager에는 `nownote.sinsan.kr` Proxy Host 항목이 없으므로, 신산님이 화면으로 보여준 별도 실제 서버 NPM에서 변경해야 하는 상태로 판단.
+- 1차 체크리스트는 공용 모드 환경값, 사용자별 토큰, 공용 preflight, 데이터 격리 smoke 완료를 반영해 54/57 완료, 3개 남음으로 갱신. 남은 핵심 공용 서버 항목은 실제 reverse proxy 적용.
 
 ## 2026-05-29 17:30 KST
 

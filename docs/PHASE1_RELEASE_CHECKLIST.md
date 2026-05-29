@@ -52,13 +52,13 @@
 공용 서버를 열지 않는 개인 Docker 서버라면 이 항목은 보류할 수 있습니다.
 
 - [x] 실제 공개 도메인 확정.
-- [ ] `NOW_PUBLIC_BASE_URL=https://도메인` 설정.
+- [x] `NOW_PUBLIC_BASE_URL=https://도메인` 설정.
 - [ ] reverse proxy 적용.
-- [ ] `NOW_BEHIND_REVERSE_PROXY=true` 설정.
-- [ ] 사용자별 접속 토큰 발급.
-- [ ] `NOW_USER_TOKEN_REQUIRED=true` 설정.
-- [ ] 공용 서버 기준 `python3 scripts/preflight.py --public-server` 통과.
-- [ ] 사용자별 데이터 격리 smoke test 통과.
+- [x] `NOW_BEHIND_REVERSE_PROXY=true` 설정.
+- [x] 사용자별 접속 토큰 발급.
+- [x] `NOW_USER_TOKEN_REQUIRED=true` 설정.
+- [x] 공용 서버 기준 `python3 scripts/preflight.py --public-server` 통과.
+- [x] 사용자별 데이터 격리 smoke test 통과.
 
 ## 5. Google Play 등록 전 점검
 
@@ -85,5 +85,7 @@
 ## 현재 보류 항목
 
 - 라이선스는 Apache License 2.0으로 확정했습니다.
-- 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용은 별도 완료 확인이 필요합니다.
+- 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용만 별도 완료 확인이 필요합니다.
+- WSL/Docker 서버는 공용 모드 환경값과 사용자 토큰 필수 모드 smoke test까지 통과했습니다.
+- 현재 외부 `https://nownote.sinsan.kr/api/v1/server`는 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하므로, 실제 Nginx Proxy Manager의 Proxy Host 대상을 NowNote API로 변경해야 합니다.
 - 실제 서명 키와 Play Console 내부 테스트 업로드 화면은 공개 저장소에 올리지 않고 로컬/콘솔에서만 관리합니다.
