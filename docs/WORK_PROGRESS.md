@@ -13,6 +13,12 @@
 - `server/PUBLIC_SERVER.md`, `server/DEPLOY.md`에도 같은 기준을 추가해 화면과 문서의 안내가 어긋나지 않도록 정리.
 - smoke test와 preflight가 `/admin/public` 화면 및 문서에 위 값이 있는지 확인하도록 보강.
 - 검증: Python 문법 확인 통과, 서버 preflight 1026/1026 통과, release readiness 54/57 완료 및 남은 3개 확인, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+- 커밋 `docs: show NPM reverse proxy settings`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1032/1032.
+- 배포 후 smoke test 통과. `/admin/public` 화면은 200으로 응답하고 NPM 입력값 안내를 포함.
+- 외부 확인 `https://nownote.sinsan.kr/api/v1/server`는 아직 `Content-Type: text/html` 개인정보처리방침 HTML을 반환.
 - 남은 reverse proxy 항목은 실제 Nginx Proxy Manager 화면에서 Proxy Host 저장 후 `https://nownote.sinsan.kr/api/v1/server`가 JSON을 반환해야 완료 처리 가능.
 
 ## 2026-05-29 19:05 KST
