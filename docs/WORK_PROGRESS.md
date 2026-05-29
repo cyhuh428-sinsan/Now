@@ -14,6 +14,11 @@
 - smoke test와 preflight가 릴리스 화면의 바로 완료 증빙 기록 섹션과 되돌아오기 값을 확인하도록 보강.
 - 검증: Python 문법 확인 통과, 서버 preflight 1033/1033 통과, `git diff --check` 통과.
 - FastAPI TestClient로 `/admin/release` 화면 표시, 바로 완료 증빙 저장 후 `/admin/release?saved=1` 리다이렉트, `summary.evidence_done=1` 반영 확인.
+- 커밋 `feat: add quick release evidence recording`을 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1039/1039.
+- 배포 후 smoke test 통과. `/admin/release`는 200으로 응답하고 바로 완료 증빙 기록 섹션 포함을 확인.
 
 ## 2026-05-29 20:48 KST
 
