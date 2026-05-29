@@ -68,6 +68,15 @@ def public_route_summary(timeout_seconds: float = 5.0) -> dict:
     )
 
 
+def public_route_ops_check(timeout_seconds: float = 2.0) -> dict[str, str]:
+    summary = public_route_summary(timeout_seconds=timeout_seconds)
+    return {
+        "name": "공개 도메인 연결",
+        "status": _ops_status(str(summary.get("status"))),
+        "message": _ops_message(summary),
+    }
+
+
 def _json_endpoint_check(
     public_base_url: str,
     path: str,
@@ -158,3 +167,34 @@ def _summary_status(checks: list[dict[str, str | int | None]]) -> str:
     if "planned" in statuses:
         return "planned"
     return "ok"
+
+
+def _ops_status(summary_status: str) -> str:
+    if summary_status == "ok":
+        return "ok"
+    if summary_status == "planned":
+        return "info"
+    if summary_status == "warn":
+        return "warn"
+    return "bad"
+
+
+def _ops_message(summary: dict) -> str:
+    status = str(summary.get("status"))
+    public_base_url = str(summary.get("public_base_url") or "미설정")
+    checks = summary.get("checks", [])
+    if not isinstance(checks, list):
+        checks = []
+    failed_checks = [
+        check
+        for check in checks
+        if isinstance(check, dict) and str(check.get("status")) in {"warn", "bad", "planned"}
+    ]
+    if status == "ok":
+        return f"{public_base_url}에서 /health/ready와 /api/v1/server JSON 응답 확인"
+    if status == "planned":
+        return "NOW_PUBLIC_BASE_URL 미설정. 공용 오픈 전 공개 URL과 reverse proxy 연결 필요"
+    if failed_checks:
+        first = failed_checks[0]
+        return f"{public_base_url} · {first.get('name')}: {first.get('message')}"
+    return f"{public_base_url} 공개 연결 상태 확인 필요"
