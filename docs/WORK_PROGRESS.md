@@ -18,6 +18,9 @@
 - 배포 후 smoke test 통과. `/admin/release`와 `/admin/evidence`는 200으로 응답.
 - 실행 중 서버의 `/api/v1/admin/public-route`는 아직 `bad`이므로 실제 Nginx Proxy Manager의 외부 reverse proxy 적용은 남은 항목으로 유지.
 - WSL 배포 폴더에서 `server/.env.bak.public-deploy-20260529` 미추적 로컬 백업 파일을 확인. 삭제하지 않고, 같은 유형의 비밀 백업 파일이 추적되지 않도록 `.gitignore`와 preflight 기준에 `server/.env.bak*`를 추가.
+- GitHub 커넥터로 최신 커밋 `e6cec32`의 combined status와 workflow run을 확인했지만 둘 다 비어 있어 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
+- 로컬 PC에는 `gh` CLI가 설치되어 있지 않아 GitHub Actions 수동 실행은 GitHub 화면 또는 토큰 기반 스크립트 실행이 필요.
+- 외부에서 `https://nownote.sinsan.kr/api/v1/server`와 `https://nownote.sinsan.kr/health/ready`를 확인했지만 둘 다 `Content-Type: text/html`의 개인정보처리방침 HTML을 반환. 따라서 `reverse proxy 적용.`은 아직 미완료.
 
 ## 2026-05-29 22:17 KST
 
