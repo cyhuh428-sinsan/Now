@@ -11,6 +11,12 @@
 - `/admin/release`, `/api/v1/admin/release-readiness`, `scripts/release_readiness.py --show-blockers`가 실제 남은 작업을 reverse proxy 적용으로 안내하도록 수정.
 - 수동 증빙 안내도 Nginx Proxy Manager에서 `nownote.sinsan.kr` Proxy Host를 NowNote API 서버로 연결하는 기준으로 보강.
 - 검증: release readiness 출력 54/57 완료, 남은 3개 확인. Python 문법 확인 통과, 서버 preflight 1017/1017 통과, `git diff --check` 통과.
+- 커밋 `docs: clarify remaining public route work`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- 배포 후 `/api/v1/admin/release-readiness`는 54/57 완료, 남은 3개를 반환하고 smoke test 통과.
+- GitHub App 기준 최신 커밋 `49d337c6f3cc83d2b6235cd54ac518b465c9f76c`의 workflow run은 아직 0개.
+- 토큰 없는 GitHub API 상태 확인은 비공개 저장소라 HTTP 404를 반환. GitHub Actions 항목은 Actions 화면에서 `NowNote Preflight`를 수동 실행하거나 Actions 권한 토큰을 환경변수로 제공해야 완료 가능.
 
 ## 2026-05-29 17:49 KST
 
