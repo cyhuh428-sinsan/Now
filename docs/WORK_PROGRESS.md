@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 13:53 KST
+
+### Play release 설치 점검 반영본 배포
+
+- `docs: record Play release install check` 커밋으로 release 설치 점검 결과를 정리하고 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 `git pull origin main`으로 최신 커밋 반영.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750`로 WSL/Docker 서버 재배포.
+- 배포 전 서버 preflight 통과: 945/945.
+- 배포 후 smoke test 통과.
+- 실행 중인 서버의 `/api/v1/admin/release-readiness`가 40/57 완료, 17개 남음을 반환함을 확인.
+
+### 남은 항목 판단
+
+- 공용 서버 8개 항목은 실제 공개 도메인/HTTPS/reverse proxy 운영값이 필요해 보류.
+- Google Play 6개 항목은 Play Console 실제 화면 저장과 내부 테스트 트랙 업로드가 필요해 보류.
+- GitHub Actions 1개 항목은 비공개 저장소 Actions 조회/실행 권한 또는 GitHub 화면 확인이 필요해 보류.
+- 라이선스 2개 항목은 법적 선택이므로 사용자 확정 전 보류.
+
 ## 2026-05-29 13:48 KST
 
 ### Google Play 실제 기기 설치 테스트 완료
