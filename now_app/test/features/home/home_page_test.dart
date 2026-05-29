@@ -42,6 +42,15 @@ void main() {
       await tester.pumpAndSettle();
     }
 
+    Future<void> scrollToText(WidgetTester tester, String text) async {
+      await tester.scrollUntilVisible(
+        find.text(text),
+        240,
+        scrollable: find.byType(Scrollable).first,
+      );
+      await tester.pumpAndSettle();
+    }
+
     testWidgets('shows empty-state cards when no data exists', (tester) async {
       await pumpPage(tester);
 
@@ -51,14 +60,17 @@ void main() {
       expect(find.text('오늘 루틴'), findsNothing);
     });
 
-    testWidgets('renders context routines actions events and briefing data',
-        (tester) async {
+    testWidgets('renders context routines actions events and briefing data', (
+      tester,
+    ) async {
       final now = DateTime.now();
       final startOfToday = DateTime(now.year, now.month, now.day);
       final todayKey =
           '${now.year.toString().padLeft(4, '0')}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
 
-      await database.into(database.dailyContexts).insert(
+      await database
+          .into(database.dailyContexts)
+          .insert(
             DailyContextsCompanion.insert(
               contextId: 'ctx-1',
               userId: 'local_user',
@@ -69,7 +81,9 @@ void main() {
             ),
           );
 
-      await database.into(database.routineItems).insert(
+      await database
+          .into(database.routineItems)
+          .insert(
             RoutineItemsCompanion.insert(
               routineId: 'routine-1',
               userId: 'local_user',
@@ -81,7 +95,9 @@ void main() {
             ),
           );
 
-      await database.into(database.extractedItems).insert(
+      await database
+          .into(database.extractedItems)
+          .insert(
             ExtractedItemsCompanion.insert(
               itemId: 'item-1',
               meetingId: 'meeting-1',
@@ -92,7 +108,9 @@ void main() {
             ),
           );
 
-      await database.into(database.calendarEvents).insert(
+      await database
+          .into(database.calendarEvents)
+          .insert(
             CalendarEventsCompanion.insert(
               calendarEventId: 'event-1',
               userId: 'local_user',
@@ -102,7 +120,9 @@ void main() {
             ),
           );
 
-      await database.into(database.briefings).insert(
+      await database
+          .into(database.briefings)
+          .insert(
             BriefingsCompanion.insert(
               briefingId: 'briefing-1',
               userId: 'local_user',
@@ -117,14 +137,15 @@ void main() {
       await pumpPage(tester);
 
       expect(find.text('머리가 좀 맑아요'), findsOneWidget);
+      await scrollToText(tester, '오늘의 브리핑');
+      expect(find.text('집중이 필요한 하루예요'), findsOneWidget);
+      await scrollToText(tester, '오늘 루틴');
       expect(find.text('오늘 루틴'), findsOneWidget);
       expect(find.text('물 마시기'), findsOneWidget);
+      await scrollToText(tester, '제안서 보내기');
       expect(find.text('제안서 보내기'), findsOneWidget);
-      await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
-      await tester.pumpAndSettle();
+      await scrollToText(tester, '고객 미팅');
       expect(find.text('고객 미팅'), findsOneWidget);
-      expect(find.text('오늘의 브리핑'), findsOneWidget);
-      expect(find.text('집중이 필요한 하루예요'), findsOneWidget);
     });
   });
 }

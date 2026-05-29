@@ -40,7 +40,6 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-
     Future<void> scrollToText(WidgetTester tester, String text) async {
       await tester.scrollUntilVisible(
         find.text(text),
@@ -50,8 +49,9 @@ void main() {
       await tester.pumpAndSettle();
     }
 
-    testWidgets('shows section summaries using current settings',
-        (tester) async {
+    testWidgets('shows section summaries using current settings', (
+      tester,
+    ) async {
       await pumpPage(
         tester,
         preferences: {
@@ -69,16 +69,18 @@ void main() {
       expect(find.text('설정'), findsOneWidget);
       expect(find.text('브리핑 알림'), findsOneWidget);
       expect(find.text('매일 07:30 알림'), findsOneWidget);
-      expect(find.text('음성 입력'), findsNWidgets(2));
-      expect(find.text('LLM 연동'), findsNWidgets(2));
+      expect(find.text('음성 입력'), findsWidgets);
+      expect(find.text('LLM 연동'), findsWidgets);
       expect(find.text('로컬 Ollama'), findsOneWidget);
-      expect(find.text('루틴 관리'), findsNWidgets(2));
+      await scrollToText(tester, '루틴 관리');
+      expect(find.text('루틴 관리'), findsWidgets);
       await scrollToText(tester, '날씨 설정');
       expect(find.text('날씨 설정'), findsOneWidget);
     });
 
-    testWidgets('shows disabled notification summary and app info',
-        (tester) async {
+    testWidgets('shows disabled notification summary and app info', (
+      tester,
+    ) async {
       await pumpPage(
         tester,
         preferences: {
@@ -93,13 +95,13 @@ void main() {
       );
 
       expect(find.text('알림 꺼짐'), findsOneWidget);
-      await scrollToText(tester, '고급 기능');
-      expect(find.text('고급 기능'), findsOneWidget);
+      expect(find.text('Groq'), findsOneWidget);
+      await scrollToText(tester, '기능별 사용 설정');
+      expect(find.text('기능별 사용 설정'), findsOneWidget);
       expect(find.text('화자 분리'), findsOneWidget);
       await scrollToText(tester, '앱 정보');
       expect(find.text('앱 정보'), findsOneWidget);
-      expect(find.text('2.0.0 (2차-A)'), findsOneWidget);
-      expect(find.text('Groq'), findsOneWidget);
+      expect(find.text('1.0.0 (1차)'), findsOneWidget);
     });
   });
 }
