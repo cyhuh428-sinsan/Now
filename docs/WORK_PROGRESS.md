@@ -20,6 +20,8 @@
 - 배포 전 서버 preflight 통과: 1003/1003.
 - 배포 후 smoke test 통과.
 - 배포된 서버에서 `/api/v1/admin/public-route`가 200으로 응답하고 현재 로컬 `.env` 기준 `status=planned`, `checks=1`을 반환함을 확인.
+- 수동 증빙 기준도 `/api/v1/admin/public-route`를 공용 서버 URL/reverse proxy 확인 증빙으로 사용하도록 보강.
+- 검증: `release_evidence.py`, `preflight.py` 문법 확인 통과, 서버 preflight 1004/1004 통과.
 
 ## 2026-05-29 16:38 KST
 
