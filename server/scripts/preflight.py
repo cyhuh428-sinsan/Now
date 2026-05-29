@@ -133,6 +133,7 @@ def main() -> None:
     release_readiness_service_path = server_dir / "app" / "services" / "release_readiness.py"
     play_release_service_path = server_dir / "app" / "services" / "play_release.py"
     open_source_release_service_path = server_dir / "app" / "services" / "open_source_release.py"
+    public_route_service_path = server_dir / "app" / "services" / "public_route.py"
     web_app_path = repo_root / "web" / "app.js"
     web_readme_path = repo_root / "web" / "README.md"
     mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
@@ -466,6 +467,7 @@ def main() -> None:
                 ("app/api/monitor.py", "GitHub preflight checks monitor syntax", "workflow monitor syntax"),
                 ("app/api/public_pages.py", "GitHub preflight checks public page syntax", "workflow public page syntax"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
+                ("app/services/public_route.py", "GitHub preflight checks public route service syntax", "workflow public route service"),
                 ("app/services/release_evidence.py", "GitHub preflight checks release evidence service syntax", "workflow release evidence service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
                 ("dispatch_github_actions.py", "GitHub preflight checks Actions dispatch script syntax", "workflow Actions dispatch script"),
@@ -583,6 +585,7 @@ def main() -> None:
                 ("/api/v1/admin/release-readiness", "README documents release readiness API", "release readiness API"),
                 ("/api/v1/admin/play-release", "README documents Play release API", "Play release API"),
                 ("/api/v1/admin/open-source-release", "README documents open source release API", "open source API"),
+                ("/api/v1/admin/public-route", "README documents public route check API", "public route API"),
                 ("PUBLIC_SERVER.md", "README links public server checklist", "public server checklist"),
                 ("reverse_proxy", "README links reverse proxy examples", "reverse proxy examples"),
                 ("NowNote server preflight passed", "README explains preflight pass summary", "preflight passed summary"),
@@ -1093,6 +1096,8 @@ def main() -> None:
                 ('@router.get("/play-release")', "Admin API exposes Play release endpoint", "Play release endpoint"),
                 ("open_source_release_summary", "Admin API exposes open source release service", "open source service"),
                 ('@router.get("/open-source-release")', "Admin API exposes open source release endpoint", "open source endpoint"),
+                ("public_route_summary", "Admin API exposes public route check service", "public route service"),
+                ('@router.get("/public-route")', "Admin API exposes public route check endpoint", "public route endpoint"),
                 ("비활성 기기", "Admin ops covers inactive devices", "inactive devices"),
                 ("inactive_devices", "Admin ops summary covers inactive devices", "inactive devices summary"),
                 ("고아 녹음 파일", "Admin ops covers orphan recording files", "orphan recording files"),
@@ -1110,6 +1115,20 @@ def main() -> None:
                     "Admin API normalizes two-factor flag",
                     "two factor bool",
                 ),
+            ],
+            failures,
+        )
+    check(public_route_service_path.exists(), "Public route check service exists", str(public_route_service_path), failures)
+    if public_route_service_path.exists():
+        public_route_source = public_route_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            public_route_source,
+            [
+                ("public_route_summary", "Public route service exports summary", "public route summary"),
+                ("/health/ready", "Public route service checks ready endpoint", "ready endpoint"),
+                ("/api/v1/server", "Public route service checks server endpoint", "server endpoint"),
+                ("HTML이 반환됨", "Public route service detects static HTML misrouting", "HTML misrouting"),
+                ("NOW_PUBLIC_BASE_URL=https://도메인 설정 필요", "Public route service explains missing public URL", "missing public URL"),
             ],
             failures,
         )
@@ -1253,6 +1272,8 @@ def main() -> None:
                 ("백업/복구 절차", "Monitor ops covers backup recovery procedure", "backup recovery ops"),
                 ('@router.get("/admin/public"', "Monitor exposes public server page", "public server page route"),
                 ("_admin_public_html", "Monitor renders public server page", "public server page renderer"),
+                ("_public_route_summary_html", "Monitor renders public route summary", "public route summary renderer"),
+                ("/api/v1/admin/public-route", "Monitor links public route JSON API", "public route JSON link"),
                 ('@router.get("/admin/release"', "Monitor exposes release readiness page", "release readiness page route"),
                 ("_admin_release_html", "Monitor renders release readiness page", "release readiness page renderer"),
                 ("release_readiness_summary", "Monitor uses release readiness summary", "release readiness summary"),
@@ -1392,6 +1413,8 @@ def main() -> None:
                 ("reverse_proxy/Caddyfile.example", "Public server guide links Caddy example", "Caddy example"),
                 ("--public-server", "Public server guide documents public preflight", "public preflight"),
                 ("public_server_readiness.status", "Public server guide documents readiness API", "readiness API"),
+                ("/api/v1/admin/public-route", "Public server guide documents public route check API", "public route API"),
+                ("HTML을 반환하면", "Public server guide explains static page misrouting", "static HTML misrouting"),
                 ("사용자별 데이터 격리 smoke test", "Public server guide documents data isolation smoke test", "data isolation"),
             ],
             failures,
@@ -1946,7 +1969,7 @@ def main() -> None:
                 ("GET /api/v1/admin/play-release", "Smoke checks Play release API", "Play release API"),
                 ("공개 저장소 준비 화면 제목", "Smoke checks open source release page title", "open source page title"),
                 ("GET /api/v1/admin/open-source-release", "Smoke checks open source release API", "open source API"),
-                ("서버 정보에 공용 서버 준비 상태 planned", "Smoke checks server public readiness status", "server public readiness status"),
+                ("공용 서버 준비 상태가 planned 또는 ready", "Smoke checks server public readiness status", "server public readiness status"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목", "Smoke checks server public readiness ready items", "server public readiness ready items"),
                 ("서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목", "Smoke checks server public readiness detail items", "server public readiness detail items"),
                 ("서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증", "Smoke checks server public readiness data isolation", "server public readiness data isolation"),

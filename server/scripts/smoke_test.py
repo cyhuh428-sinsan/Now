@@ -250,8 +250,8 @@ def main() -> None:
                 stale_server_message("public_server_readiness", data),
             )
             require(
-                public_readiness.get("status") == "planned",
-                "서버 정보에 공용 서버 준비 상태 planned가 없습니다",
+                public_readiness.get("status") in {"planned", "ready"},
+                "서버 정보의 공용 서버 준비 상태가 planned 또는 ready가 아닙니다",
             )
             require(
                 "real_two_factor_challenge" in public_readiness.get("ready", []),
@@ -393,6 +393,7 @@ def main() -> None:
             require("2단계 코드 검증 절차" in text, "공용 서버 준비 화면에 2단계 인증 기준이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "공용 서버 준비 화면에 데이터 격리 기준이 없습니다")
             require("/admin/users" in text and "/admin/devices" in text, "공용 서버 준비 화면에 사용자/기기 관리 링크가 없습니다")
+            require("/api/v1/admin/public-route" in text, "공용 서버 준비 화면에 공개 연결 JSON 링크가 없습니다")
         if path == "/admin/release":
             require("NowNote 1차 릴리스 준비" in text, "1차 릴리스 준비 화면 제목이 없습니다")
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
@@ -593,6 +594,16 @@ def main() -> None:
         "GET /api/v1/admin/open-source-release:",
         status,
         data.get("summary"),
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/public-route", args.token)
+    require(data.get("name") == "public_route", "공개 연결 점검 API 이름이 예상과 다릅니다")
+    require(data.get("checks") is not None, "공개 연결 점검 API에 확인 항목이 없습니다")
+    require(data.get("status") in {"ok", "warn", "bad", "planned"}, "공개 연결 점검 API 상태가 예상과 다릅니다")
+    print(
+        "GET /api/v1/admin/public-route:",
+        status,
+        {"status": data.get("status"), "checks": len(data.get("checks", []))},
     )
 
     status, data = request(

@@ -17,6 +17,7 @@ from app.db import get_db
 from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
+from app.services.public_route import public_route_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
@@ -764,6 +765,11 @@ def play_release() -> dict:
 @router.get("/open-source-release")
 def open_source_release() -> dict:
     return open_source_release_summary()
+
+
+@router.get("/public-route")
+def public_route() -> dict:
+    return public_route_summary()
 
 
 def _export_payload(name: str, rows: list) -> dict:

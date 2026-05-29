@@ -3,6 +3,18 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 16:52 KST
+
+### 공용 도메인 연결 진단 보강
+
+- 공용 서버 준비 화면에서 실제 공개 URL이 NowNote API로 연결되는지 확인하도록 보강.
+- 신규 API 추가: `/api/v1/admin/public-route`.
+- 확인 기준: `NOW_PUBLIC_BASE_URL` 기준 `/health/ready`, `/api/v1/server`가 JSON으로 응답하고 기대 필드를 반환해야 함.
+- HTML이 반환되면 정적 페이지 또는 reverse proxy 오연결 가능으로 표시.
+- `/admin/public` 상단에 공개 연결 상태, 공개 URL, 확인 항목 수를 표시.
+- 서버 README, 공용 서버 문서, smoke test, preflight, GitHub Actions 문법 검증 목록에 신규 진단 기준 반영.
+- 검증: Python 문법 확인 통과, `server/scripts/preflight.py --env-file .env.example --allow-example` 1003/1003 통과, 공개 저장소 안전 점검 8/8 통과.
+
 ## 2026-05-29 16:38 KST
 
 ### 라이선스/공개 결정 반영본 배포와 공용 도메인 확인
