@@ -11,6 +11,12 @@
 - 서버 기능과 데이터 구조는 변경하지 않고, 릴리스 화면에서 바로 완료 증빙을 저장할 수 있다는 설명과 수동 증빙 기록 화면의 역할만 문서에 반영.
 - 현재 1차 체크리스트는 54/57 완료이며 남은 항목은 `reverse proxy 적용.`, `내부 테스트 트랙 업로드.`, `GitHub Actions preflight 통과 확인.` 3개입니다.
 - 검증: 서버 preflight 1033/1033 통과, 공개 저장소 안전 점검 8/8 통과, release readiness 54/57 완료 및 남은 3개 확인, `git diff --check` 통과.
+- 커밋 `docs: align release evidence screens`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1039/1039.
+- 배포 후 smoke test 통과. `/admin/release`와 `/admin/evidence`는 200으로 응답.
+- 실행 중 서버의 `/api/v1/admin/public-route`는 아직 `bad`이므로 실제 Nginx Proxy Manager의 외부 reverse proxy 적용은 남은 항목으로 유지.
 
 ## 2026-05-29 22:17 KST
 
