@@ -236,6 +236,7 @@ def main() -> None:
             gitignore,
             [
                 ("server/.env", "Gitignore excludes server env", "server .env must stay local"),
+                ("server/.env.bak*", "Gitignore excludes server env backups", "server env backups must stay local"),
                 ("now_app/android/key.properties", "Gitignore excludes Android key properties", "Android signing secrets must stay local"),
                 ("now_app/android/upload-keystore.jks", "Gitignore excludes Android upload keystore", "Android upload key must stay local"),
                 ("web/dist/", "Gitignore excludes web package artifacts", "web package artifacts"),

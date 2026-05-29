@@ -17,6 +17,7 @@
 - WSL 공용 서버 preflight 통과: 1039/1039.
 - 배포 후 smoke test 통과. `/admin/release`와 `/admin/evidence`는 200으로 응답.
 - 실행 중 서버의 `/api/v1/admin/public-route`는 아직 `bad`이므로 실제 Nginx Proxy Manager의 외부 reverse proxy 적용은 남은 항목으로 유지.
+- WSL 배포 폴더에서 `server/.env.bak.public-deploy-20260529` 미추적 로컬 백업 파일을 확인. 삭제하지 않고, 같은 유형의 비밀 백업 파일이 추적되지 않도록 `.gitignore`와 preflight 기준에 `server/.env.bak*`를 추가.
 
 ## 2026-05-29 22:17 KST
 
