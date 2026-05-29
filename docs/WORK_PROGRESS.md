@@ -22,6 +22,15 @@
 - 로컬 PC에는 `gh` CLI가 설치되어 있지 않아 GitHub Actions 수동 실행은 GitHub 화면 또는 토큰 기반 스크립트 실행이 필요.
 - 외부에서 `https://nownote.sinsan.kr/api/v1/server`와 `https://nownote.sinsan.kr/health/ready`를 확인했지만 둘 다 `Content-Type: text/html`의 개인정보처리방침 HTML을 반환. 따라서 `reverse proxy 적용.`은 아직 미완료.
 
+### 남은 외부 작업 바로가기 보강
+
+- `/admin/release`에 `외부 작업 바로가기` 섹션을 추가.
+- 공용 서버 항목은 Nginx Proxy Manager 입력값 `Scheme=http`, `Forward Hostname/IP=now-api`, `Forward Port=8080`, 확인 URL `https://nownote.sinsan.kr/api/v1/server`를 직접 표시.
+- Play Console 항목은 내부 테스트 업로드용 AAB 경로와 출시 노트 문서 위치를 표시.
+- GitHub Actions 항목은 Actions 화면 링크와 `dispatch_github_actions.py`, `check_github_actions_status.py` 실행 명령을 표시.
+- smoke test와 preflight가 새 외부 작업 바로가기, NPM 입력값, Play AAB 경로, Actions 실행 명령을 확인하도록 보강.
+- 검증: Python 문법 확인 통과, 서버 preflight 1042/1042 통과, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+
 ## 2026-05-29 22:17 KST
 
 ### 릴리스 준비 화면에서 바로 완료 증빙 저장
