@@ -17,6 +17,15 @@
 - `server/scripts/deploy_local.sh`는 공용 토큰 필수 모드에서 smoke test가 실패하지 않도록 `--user-token`, `--issue-local-user-token` 옵션을 지원하도록 보강.
 - `server/DEPLOY.md`와 `server/scripts/preflight.py`에 공용 모드 배포 도우미 기준을 반영.
 - 검증: `server/scripts/preflight.py` Python 문법 확인 통과, 서버 preflight 1017/1017 통과, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+- 커밋 `fix: pass public server env to compose`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- WSL에서 `sh -n server/scripts/deploy_local.sh` 문법 검사 통과.
+- WSL 공용 서버 preflight 통과: 1023/1023.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- 배포 후 `/api/v1/server`는 `auth_required=true`, `user_token_required=true`, `public_server_readiness.status=ready`를 반환.
+- 배포 후 smoke test 통과. 사용자 토큰 필수 모드, 사용자별 데이터 격리, 녹음 업로드, 분석 작업, 백업 검증까지 통과.
+- 외부 확인 기준 `https://nownote.sinsan.kr/api/v1/server`는 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하므로, 실제 공개 Nginx Proxy Manager에서 Proxy Host 대상을 `now-api:8080`으로 변경해야 함.
+- 현재 접근 가능한 로컬/WSL Nginx Proxy Manager에는 `nownote.sinsan.kr` Proxy Host 항목이 없으므로, 신산님이 화면으로 보여준 별도 실제 서버 NPM에서 변경해야 하는 상태로 판단.
 
 ## 2026-05-29 17:30 KST
 
