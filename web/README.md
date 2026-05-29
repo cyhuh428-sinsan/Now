@@ -1,6 +1,7 @@
 # NowNote Web
 
 NowNote Web은 PC 설치형 메모 프로그램과 같은 사용 흐름을 검증하는 로컬 우선 Web 클라이언트입니다.
+서버를 설치하지 않아도 브라우저 localStorage에 저장하는 단독 프로그램으로 사용할 수 있고, 운영자가 제공한 공용 NowNote 서버 접속값을 입력하면 공용 서버와 동기화할 수 있습니다.
 
 단독 사용자와 서버 연결 사용자의 차이는 [NowNote 도움말](../docs/HELP.md)을 기준으로 정리합니다.
 영어 문서는 [NowNote Help](../docs/HELP.en.md)에서 확인할 수 있습니다.
