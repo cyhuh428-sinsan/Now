@@ -15,6 +15,7 @@ now_app/android/upload-keystore.jks
 
 # Server local/runtime artifacts
 server/.env
+server/.env.bak*
 server/*.db
 server/data/
 server/.venv/
