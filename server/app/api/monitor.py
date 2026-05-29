@@ -12,7 +12,7 @@ from sqlalchemy import func, select, text
 from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
@@ -242,8 +242,42 @@ def admin_release(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 
 
 @router.get("/admin/evidence", include_in_schema=False)
-def admin_evidence(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
-    return HTMLResponse(_admin_evidence_html())
+def admin_evidence(
+    request: Request,
+    _: None = Depends(_require_monitor_access),
+) -> HTMLResponse:
+    return HTMLResponse(_admin_evidence_html(request))
+
+
+@router.post("/admin/evidence/records", include_in_schema=False)
+def admin_evidence_record_create(
+    evidence_key: str = Form(default=""),
+    result: str = Form(default="재확인 필요"),
+    checked_by: str = Form(default=""),
+    evidence_location: str = Form(default=""),
+    actual_note: str = Form(default=""),
+    memo: str = Form(default=""),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    parts = evidence_key.split("||", 2)
+    if len(parts) != 3 or not parts[0].strip() or not parts[2].strip():
+        return RedirectResponse(url="/admin/evidence?error=invalid", status_code=status.HTTP_303_SEE_OTHER)
+    with SessionLocal() as db:
+        db.add(
+            ReleaseEvidenceRecord(
+                group_name=parts[0].strip(),
+                section=parts[1].strip(),
+                label=parts[2].strip(),
+                result=result.strip() or "재확인 필요",
+                checked_by=checked_by.strip(),
+                evidence_location=evidence_location.strip(),
+                actual_note=actual_note.strip(),
+                memo=memo.strip(),
+                checked_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
+    return RedirectResponse(url="/admin/evidence?saved=1", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/play", include_in_schema=False)
@@ -4800,13 +4834,15 @@ def _release_blocker_rows(blockers: list[dict]) -> str:
     return "\n".join(rows)
 
 
-def _admin_evidence_html() -> str:
+def _admin_evidence_html(request: Request) -> str:
     evidence = release_evidence_summary()
     template = release_evidence_template()
+    records = _recent_release_evidence_records()
     summary = evidence["summary"]
     status = evidence["status"]
     status_label = "증빙 필요" if status == "manual" else "증빙 완료"
     status_class = "warn" if status == "manual" else "ok"
+    saved_message = _release_evidence_saved_message(request)
     return f"""<!doctype html>
 <html lang="ko">
 <head>
@@ -4930,6 +4966,68 @@ def _admin_evidence_html() -> str:
       background: #fafafa;
     }}
     tr:last-child td {{ border-bottom: 0; }}
+    .message {{
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      background: #f0fdf4;
+      color: #166534;
+      font-size: 14px;
+      font-weight: 700;
+    }}
+    .message.error {{
+      border-color: #fecaca;
+      background: #fef2f2;
+      color: #991b1b;
+    }}
+    .form-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      padding: 18px;
+    }}
+    .form-field {{
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }}
+    .form-field.full {{ grid-column: 1 / -1; }}
+    .form-field input,
+    .form-field select,
+    .form-field textarea {{
+      width: 100%;
+      min-height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel);
+      color: var(--text);
+      font: inherit;
+      font-weight: 500;
+    }}
+    .form-field textarea {{
+      min-height: 84px;
+      resize: vertical;
+    }}
+    .form-actions {{
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 0 18px 18px;
+    }}
+    .form-actions button {{
+      min-height: 38px;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 0 14px;
+      background: var(--blue);
+      color: #fff;
+      font-weight: 800;
+      cursor: pointer;
+    }}
     ul {{
       margin: 0;
       padding-left: 18px;
@@ -4959,6 +5057,7 @@ def _admin_evidence_html() -> str:
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
       .cards {{ grid-template-columns: 1fr; }}
+      .form-grid {{ grid-template-columns: 1fr; }}
     }}
   </style>
 </head>
@@ -4978,6 +5077,7 @@ def _admin_evidence_html() -> str:
         <a href="/admin/open-source">공개 준비</a>
       </nav>
     </header>
+    {saved_message}
 
     <div class="cards">
       <div class="card">
@@ -5005,6 +5105,54 @@ def _admin_evidence_html() -> str:
 
     <section>
       <div class="section-head">
+        <span>증빙 기록 저장</span>
+        <span class="sub">실제 확인이 끝난 항목만 저장</span>
+      </div>
+      <form method="post" action="/admin/evidence/records">
+        <div class="form-grid">
+          <label class="form-field full">항목
+            <select name="evidence_key" required>
+              {_release_evidence_option_rows(evidence["items"])}
+            </select>
+          </label>
+          <label class="form-field">결과
+            <select name="result">
+              <option value="완료">완료</option>
+              <option value="보류">보류</option>
+              <option value="재확인 필요" selected>재확인 필요</option>
+              <option value="미확인">미확인</option>
+            </select>
+          </label>
+          <label class="form-field">확인자
+            <input type="text" name="checked_by" placeholder="확인자 이름">
+          </label>
+          <label class="form-field full">증빙 위치
+            <input type="text" name="evidence_location" placeholder="화면 경로, URL, 파일 경로, 실행 결과 위치">
+          </label>
+          <label class="form-field full">실제 확인 내용
+            <textarea name="actual_note" placeholder="실제 확인한 내용"></textarea>
+          </label>
+          <label class="form-field full">메모
+            <textarea name="memo" placeholder="추가 메모"></textarea>
+          </label>
+        </div>
+        <div class="form-actions"><button type="submit">증빙 기록 저장</button></div>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-head">
+        <span>최근 증빙 기록</span>
+        <span class="sub"><a href="/api/v1/admin/release-evidence-records">기록 JSON API</a></span>
+      </div>
+      <table>
+        <tr><th>확인 시각</th><th>결과</th><th>유형</th><th>항목</th><th>확인자</th><th>증빙 위치</th><th>확인 내용</th></tr>
+        {_release_evidence_record_rows(records)}
+      </table>
+    </section>
+
+    <section>
+      <div class="section-head">
         <span>수동 증빙 기준</span>
         <span class="sub">증빙 확보 후 체크리스트 갱신</span>
       </div>
@@ -5016,6 +5164,53 @@ def _admin_evidence_html() -> str:
   </main>
 </body>
 </html>"""
+
+
+def _release_evidence_saved_message(request: Request) -> str:
+    if request.query_params.get("saved") == "1":
+        return '<div class="message">증빙 기록을 저장했습니다.</div>'
+    if request.query_params.get("error") == "invalid":
+        return '<div class="message error">증빙 항목을 선택해야 합니다.</div>'
+    return ""
+
+
+def _release_evidence_option_rows(items: list[dict]) -> str:
+    if not items:
+        return '<option value="">남은 수동 증빙 항목 없음</option>'
+    options = []
+    for item in items:
+        value = "||".join([item["group"], item["section"], item["label"]])
+        label = f"[{item['group']}] {item['label']}"
+        options.append(f'<option value="{escape(value, quote=True)}">{escape(label)}</option>')
+    return "\n".join(options)
+
+
+def _recent_release_evidence_records(limit: int = 20) -> list[ReleaseEvidenceRecord]:
+    with SessionLocal() as db:
+        return list(
+            db.scalars(
+                select(ReleaseEvidenceRecord)
+                .order_by(ReleaseEvidenceRecord.checked_at.desc(), ReleaseEvidenceRecord.id.desc())
+                .limit(limit)
+            ).all()
+        )
+
+
+def _release_evidence_record_rows(records: list[ReleaseEvidenceRecord]) -> str:
+    if not records:
+        return '<tr><td colspan="7">저장된 증빙 기록이 없습니다.</td></tr>'
+    return "\n".join(
+        "<tr>"
+        f"<td>{_format_datetime(record.checked_at)}</td>"
+        f"<td>{escape(record.result)}</td>"
+        f"<td>{escape(record.group_name)}</td>"
+        f"<td><strong>{escape(record.label)}</strong><div class=\"sub\">{escape(record.section)}</div></td>"
+        f"<td>{escape(record.checked_by or '-')}</td>"
+        f"<td>{escape(_truncate(record.evidence_location or '-', 80))}</td>"
+        f"<td>{escape(_truncate(record.actual_note or record.memo or '-', 100))}</td>"
+        "</tr>"
+        for record in records
+    )
 
 
 def _release_evidence_rows(items: list[dict]) -> str:

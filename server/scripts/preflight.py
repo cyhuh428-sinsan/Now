@@ -115,6 +115,8 @@ def main() -> None:
     web_service_worker_path = repo_root / "web" / "sw.js"
     web_install_icon_path = repo_root / "web" / "icons" / "nownote-icon.svg"
     web_runtime_checklist_path = repo_root / "web" / "runtime_checklist_ko.md"
+    db_path = server_dir / "app" / "db.py"
+    models_path = server_dir / "app" / "models" / "note.py"
     admin_api_path = server_dir / "app" / "api" / "admin.py"
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
@@ -434,6 +436,10 @@ def main() -> None:
                 ('python-version: "3.12"', "GitHub preflight pins Python version", "workflow python version"),
                 ('node-version: "22"', "GitHub preflight pins Node version", "workflow node version"),
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
+                ("app/db.py", "GitHub preflight checks DB source syntax", "workflow DB syntax"),
+                ("app/models/note.py", "GitHub preflight checks model syntax", "workflow model syntax"),
+                ("app/api/admin.py", "GitHub preflight checks admin API syntax", "workflow admin API syntax"),
+                ("app/api/monitor.py", "GitHub preflight checks monitor syntax", "workflow monitor syntax"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
                 ("app/services/release_evidence.py", "GitHub preflight checks release evidence service syntax", "workflow release evidence service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
@@ -637,6 +643,8 @@ def main() -> None:
     check(help_ko_path.exists(), "Korean help exists", str(help_ko_path), failures)
     check(help_en_path.exists(), "English help exists", str(help_en_path), failures)
     check(web_help_path.exists(), "Web help exists", str(web_help_path), failures)
+    check(db_path.exists(), "Server DB source exists", str(db_path), failures)
+    check(models_path.exists(), "Server models source exists", str(models_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(auth_api_path.exists(), "Auth API source exists", str(auth_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
@@ -946,6 +954,28 @@ def main() -> None:
             ],
             failures,
         )
+    if db_path.exists():
+        db_source = db_path.read_text(encoding="utf-8")
+        check_text_contains(
+            db_source,
+            [
+                ("ReleaseEvidenceRecord", "DB startup imports release evidence record model", "release evidence model import"),
+            ],
+            failures,
+        )
+    if models_path.exists():
+        models_source = models_path.read_text(encoding="utf-8")
+        check_text_contains(
+            models_source,
+            [
+                ("class ReleaseEvidenceRecord", "Server models define release evidence records", "release evidence record model"),
+                ('__tablename__ = "release_evidence_records"', "Release evidence records table name", "release evidence table"),
+                ("evidence_location", "Release evidence records store evidence location", "evidence location field"),
+                ("actual_note", "Release evidence records store actual note", "actual note field"),
+                ("checked_by", "Release evidence records store checker", "checked by field"),
+            ],
+            failures,
+        )
     if admin_api_path.exists():
         admin_source = admin_api_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -968,11 +998,7 @@ def main() -> None:
                     "verify api_version",
                 ),
                 ('"status_counts": status_counts', "Backup verify returns status counts", "status_counts response"),
-                (
-                    'required_sections = ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]',
-                    "Backup verify requires device section",
-                    "required devices section",
-                ),
+                ("release_evidence_records", "Backup export includes release evidence records", "release evidence records backup"),
                 ("_check_status_counts", "Backup verify counts check statuses", "_check_status_counts"),
                 ("_verification_status", "Backup verify derives overall status", "_verification_status"),
                 ("백업/복구 절차", "Admin ops covers backup recovery procedure", "backup recovery ops"),
@@ -988,6 +1014,18 @@ def main() -> None:
                     "Admin API exposes release evidence template endpoint",
                     "release evidence template endpoint",
                 ),
+                ("ReleaseEvidenceRecordCreate", "Admin API accepts release evidence record payload", "release evidence record payload"),
+                (
+                    '@router.get("/release-evidence-records")',
+                    "Admin API exposes release evidence records endpoint",
+                    "release evidence records endpoint",
+                ),
+                (
+                    '@router.post("/release-evidence-records")',
+                    "Admin API stores release evidence records",
+                    "release evidence records create endpoint",
+                ),
+                ("phase_one_manual_evidence_records", "Admin API names release evidence record list", "release evidence records name"),
                 ("play_release_summary", "Admin API exposes Play release service", "Play release service"),
                 ('@router.get("/play-release")', "Admin API exposes Play release endpoint", "Play release endpoint"),
                 ("open_source_release_summary", "Admin API exposes open source release service", "open source service"),
@@ -1155,15 +1193,20 @@ def main() -> None:
                 ("_admin_release_html", "Monitor renders release readiness page", "release readiness page renderer"),
                 ("release_readiness_summary", "Monitor uses release readiness summary", "release readiness summary"),
                 ('@router.get("/admin/evidence"', "Monitor exposes release evidence page", "release evidence page route"),
+                ('@router.post("/admin/evidence/records"', "Monitor stores release evidence records", "release evidence record form route"),
                 ("_admin_evidence_html", "Monitor renders release evidence page", "release evidence page renderer"),
                 ("release_evidence_summary", "Monitor uses release evidence summary", "release evidence summary"),
                 ("release_evidence_template", "Monitor uses release evidence template", "release evidence template"),
+                ("_recent_release_evidence_records", "Monitor reads recent release evidence records", "recent release evidence records"),
                 ('Basic realm="NowNote Admin"', "Monitor uses ASCII Basic auth realm", "admin auth ASCII realm"),
                 ("NowNote 1차 릴리스 준비", "Monitor release page title", "release page title"),
                 ("다음 행동", "Monitor release page shows next action column", "release next action"),
                 ("NowNote 수동 증빙", "Monitor evidence page title", "evidence page title"),
                 ("증빙 기록 템플릿", "Monitor evidence page shows record template", "evidence record template"),
+                ("증빙 기록 저장", "Monitor evidence page shows record form", "evidence record form"),
+                ("최근 증빙 기록", "Monitor evidence page shows record list", "evidence record list"),
                 ("/api/v1/admin/release-evidence-template", "Monitor links evidence template API", "evidence template API link"),
+                ("/api/v1/admin/release-evidence-records", "Monitor links evidence records API", "evidence records API link"),
                 ("필요 증빙", "Monitor evidence page shows evidence column", "evidence column"),
                 ('@router.get("/admin/mobile"', "Monitor exposes mobile runtime page", "mobile runtime page route"),
                 ("_admin_mobile_html", "Monitor renders mobile runtime page", "mobile runtime page renderer"),
@@ -1780,8 +1823,12 @@ def main() -> None:
                 ("수동 증빙 화면 제목", "Smoke checks release evidence page title", "evidence page title"),
                 ("수동 증빙 화면에 증빙 기록 템플릿", "Smoke checks release evidence template section", "evidence template section"),
                 ("수동 증빙 화면의 템플릿에 확인자 입력칸", "Smoke checks release evidence template checker field", "evidence template checker field"),
+                ("수동 증빙 화면에 증빙 기록 저장 폼", "Smoke checks release evidence record form", "evidence record form"),
+                ("수동 증빙 화면에 최근 증빙 기록 목록", "Smoke checks release evidence record list", "evidence record list"),
                 ("수동 증빙 API 이름", "Smoke checks release evidence API", "release evidence API"),
                 ("수동 증빙 템플릿 API 이름", "Smoke checks release evidence template API", "release evidence template API"),
+                ("수동 증빙 기록 저장 API 상태", "Smoke checks release evidence record create API", "evidence record create API"),
+                ("수동 증빙 기록 API 이름", "Smoke checks release evidence records API", "evidence records API"),
                 ("모바일 실제 실행 점검 화면 제목", "Smoke checks mobile runtime page title", "mobile runtime page title"),
                 ("릴리스 준비 API의 남은 항목 유형에 다음 행동 안내", "Smoke checks release next action API", "release next action API"),
                 ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),

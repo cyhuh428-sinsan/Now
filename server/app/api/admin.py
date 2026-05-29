@@ -14,7 +14,7 @@ from app.core.capabilities import API_VERSION, public_server_readiness_checks
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
-from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
+from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
@@ -48,6 +48,17 @@ class BackupVerifyRequest(BaseModel):
 
 class UserDeviceUpdate(BaseModel):
     is_active: bool = True
+
+
+class ReleaseEvidenceRecordCreate(BaseModel):
+    group_name: str = Field(max_length=120)
+    section: str = Field(default="", max_length=160)
+    label: str = Field(max_length=240)
+    result: str = Field(default="재확인 필요", max_length=40)
+    checked_by: str = Field(default="", max_length=120)
+    evidence_location: str = Field(default="", max_length=2000)
+    actual_note: str = Field(default="", max_length=4000)
+    memo: str = Field(default="", max_length=4000)
 
 
 @router.get("/export/notes")
@@ -254,6 +265,14 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
     sync_logs = list(
         db.scalars(select(SyncLog).order_by(SyncLog.created_at.desc(), SyncLog.id.desc())).all()
     )
+    release_evidence_records = list(
+        db.scalars(
+            select(ReleaseEvidenceRecord).order_by(
+                ReleaseEvidenceRecord.checked_at.desc(),
+                ReleaseEvidenceRecord.id.desc(),
+            )
+        ).all()
+    )
     payload = {
         "name": "now_note_server_backup",
         "backup_schema_version": 1,
@@ -270,6 +289,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
             "devices": [_model_to_dict(row) for row in devices],
             "analysis_jobs": [_model_to_dict(row) for row in analysis_jobs],
             "sync_logs": [_model_to_dict(row) for row in sync_logs],
+            "release_evidence_records": [_model_to_dict(row) for row in release_evidence_records],
         },
     }
     encoded_payload = jsonable_encoder(payload)
@@ -679,6 +699,63 @@ def release_evidence_record_template() -> dict:
     return release_evidence_template()
 
 
+@router.get("/release-evidence-records")
+def release_evidence_records(
+    group_name: str | None = Query(default=None),
+    label: str | None = Query(default=None),
+    result: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+    db: Session = Depends(get_db),
+) -> dict:
+    stmt = select(ReleaseEvidenceRecord)
+    if group_name:
+        stmt = stmt.where(ReleaseEvidenceRecord.group_name == group_name)
+    if label:
+        stmt = stmt.where(ReleaseEvidenceRecord.label == label)
+    if result:
+        stmt = stmt.where(ReleaseEvidenceRecord.result == result)
+    stmt = stmt.order_by(ReleaseEvidenceRecord.checked_at.desc(), ReleaseEvidenceRecord.id.desc()).limit(limit)
+    rows = list(db.scalars(stmt).all())
+    all_results = list(db.scalars(select(ReleaseEvidenceRecord.result)).all())
+    result_counts = {value: all_results.count(value) for value in sorted(set(all_results))}
+    return {
+        "name": "phase_one_manual_evidence_records",
+        "count": len(rows),
+        "result_counts": result_counts,
+        "items": [_model_to_dict(row) for row in rows],
+    }
+
+
+@router.post("/release-evidence-records")
+def create_release_evidence_record(
+    payload: ReleaseEvidenceRecordCreate,
+    db: Session = Depends(get_db),
+) -> dict:
+    record = ReleaseEvidenceRecord(
+        group_name=payload.group_name.strip(),
+        section=payload.section.strip(),
+        label=payload.label.strip(),
+        result=payload.result.strip() or "재확인 필요",
+        checked_by=payload.checked_by.strip(),
+        evidence_location=payload.evidence_location.strip(),
+        actual_note=payload.actual_note.strip(),
+        memo=payload.memo.strip(),
+        checked_at=datetime.utcnow(),
+    )
+    if not record.group_name or not record.label:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="group_name and label are required",
+        )
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return {
+        "status": "ok",
+        "record": _model_to_dict(record),
+    }
+
+
 @router.get("/play-release")
 def play_release() -> dict:
     return play_release_summary()
@@ -738,7 +815,15 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
     ]
 
     items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
-    required_sections = ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]
+    required_sections = [
+        "notes",
+        "recordings",
+        "users",
+        "devices",
+        "analysis_jobs",
+        "sync_logs",
+        "release_evidence_records",
+    ]
     missing_sections = [section for section in required_sections if not isinstance(items.get(section), list)]
     checks.append(
         _verify_check(
@@ -782,7 +867,15 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
 def _backup_verify_summary(payload: dict) -> dict:
     items = payload.get("items") if isinstance(payload.get("items"), dict) else {}
     summary = {}
-    for section in ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]:
+    for section in [
+        "notes",
+        "recordings",
+        "users",
+        "devices",
+        "analysis_jobs",
+        "sync_logs",
+        "release_evidence_records",
+    ]:
         value = items.get(section)
         summary[section] = len(value) if isinstance(value, list) else None
     summary["exported_at"] = payload.get("exported_at")
@@ -844,6 +937,7 @@ def _export_summary_counts(db: Session) -> dict:
     )
     analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
     sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
+    release_evidence_records = db.scalar(select(func.count()).select_from(ReleaseEvidenceRecord)) or 0
     recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
     recording_orphan_files = _recording_storage_orphan_files(
         settings.storage_dir,
@@ -866,7 +960,16 @@ def _export_summary_counts(db: Session) -> dict:
         "devices": devices,
         "analysis_jobs": analysis_jobs,
         "sync_logs": sync_logs,
-        "total_export_items": note_total + recordings + users + devices + analysis_jobs + sync_logs,
+        "release_evidence_records": release_evidence_records,
+        "total_export_items": (
+            note_total
+            + recordings
+            + users
+            + devices
+            + analysis_jobs
+            + sync_logs
+            + release_evidence_records
+        ),
     }
 
 
