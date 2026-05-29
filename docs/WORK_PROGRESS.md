@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 09:21 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 22개는 실제 기기, 공용 서버, Play Console, GitHub Actions, 라이선스처럼 외부 확인이 필요하므로 임의 완료 처리하지 않음.
+- 대신 `/admin/evidence`에서 확인한 증빙 기준을 그대로 작업 기록에 남길 수 있는 수동 증빙 기록 템플릿을 추가.
+
+### 구현 내용
+
+- `server/app/services/release_evidence.py`에 `release_evidence_template()` 추가.
+- `GET /api/v1/admin/release-evidence-template` 추가.
+- `/admin/evidence` 화면에 증빙 기록 템플릿과 템플릿 API 링크 추가.
+- smoke test, preflight, `server/README.md`, `docs/PROJECT_STATUS.md`에 새 템플릿 화면/API 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\services\release_evidence.py server\app\api\admin.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- FastAPI TestClient로 `/admin/evidence`, `/api/v1/admin/release-evidence`, `/api/v1/admin/release-evidence-template` 200 응답 확인.
+- 템플릿 API 요약은 기존과 동일하게 `remaining: 22`, `groups: 5`.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 908/908.
+- `uv run python scripts\release_readiness.py --show-blockers` 결과는 35/57 완료, 남은 항목 22개 유지.
+
 ## 2026-05-29 08:58 KST
 
 ### 다음 작업 시작

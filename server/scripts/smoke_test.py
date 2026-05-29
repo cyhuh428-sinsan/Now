@@ -396,9 +396,15 @@ def main() -> None:
             require("/api/v1/admin/release-readiness" in text, "1차 릴리스 준비 화면에 JSON API 링크가 없습니다")
         if path == "/admin/evidence":
             require("NowNote 수동 증빙" in text, "수동 증빙 화면 제목이 없습니다")
+            require("증빙 기록 템플릿" in text, "수동 증빙 화면에 증빙 기록 템플릿이 없습니다")
+            require("확인자:" in text, "수동 증빙 화면의 템플릿에 확인자 입력칸이 없습니다")
             require("수동 증빙 기준" in text, "수동 증빙 화면에 증빙 기준 표가 없습니다")
             require("필요 증빙" in text, "수동 증빙 화면에 필요 증빙 열이 없습니다")
             require("/api/v1/admin/release-evidence" in text, "수동 증빙 화면에 JSON API 링크가 없습니다")
+            require(
+                "/api/v1/admin/release-evidence-template" in text,
+                "수동 증빙 화면에 기록 템플릿 API 링크가 없습니다",
+            )
         if path == "/admin/mobile":
             require("NowNote 모바일 실제 실행 점검" in text, "모바일 실제 실행 점검 화면 제목이 없습니다")
             require("음성 메모" in text, "모바일 실제 실행 점검 화면에 음성 메모 절차가 없습니다")
@@ -495,6 +501,19 @@ def main() -> None:
         "GET /api/v1/admin/release-evidence:",
         status,
         data.get("summary"),
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/release-evidence-template", args.token)
+    require(
+        data.get("name") == "phase_one_manual_evidence_template",
+        "수동 증빙 템플릿 API 이름이 예상과 다릅니다",
+    )
+    require("확인자:" in data.get("content", ""), "수동 증빙 템플릿 API에 확인자 입력칸이 없습니다")
+    require("증빙 위치:" in data.get("content", ""), "수동 증빙 템플릿 API에 증빙 위치 입력칸이 없습니다")
+    print(
+        "GET /api/v1/admin/release-evidence-template:",
+        status,
+        {"name": data.get("name"), "content": len(data.get("content", ""))},
     )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/play-release", args.token)

@@ -78,7 +78,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 - 사용자는 가능하면 Python/DB/CLI를 직접 실행하지 않고 화면과 API로 상태를 확인합니다.
 - 배포 전 점검은 `server/scripts/preflight.py`, 실행 중 검증은 `server/scripts/smoke_test.py`가 담당합니다.
 - 1차 마무리 남은 항목은 `/admin/release`, `/api/v1/admin/release-readiness`, `scripts/release_readiness.py --show-blockers`로 외부 조건별 보류 사유와 다음 행동을 분리해 봅니다.
-- 수동 확인 항목의 증빙 기준은 `/admin/evidence`, `/api/v1/admin/release-evidence`에서 확인합니다.
+- 수동 확인 항목의 증빙 기준과 기록 템플릿은 `/admin/evidence`, `/api/v1/admin/release-evidence`, `/api/v1/admin/release-evidence-template`에서 확인합니다.
 - 모바일 실제 실행 점검은 `/admin/mobile`에서 실제 Android 기기, 음성 실시간 변환, 녹음 후 변환, 녹음 업로드 확인 순서를 봅니다.
 - WSL/Linux 서버 갱신은 `server/scripts/deploy_local.sh`로 소스 갱신, preflight, compose 재기동, ready 확인, smoke test를 한 번에 실행할 수 있습니다.
 - 로컬 개발/배포 환경 상태는 `scripts/local_environment_status.py`로 WSL/Docker/서버 capability를 한 번에 확인하고, 오래된 서버 배포본이 감지되면 재배포 기준을 함께 안내합니다.

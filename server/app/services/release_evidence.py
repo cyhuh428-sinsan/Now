@@ -285,3 +285,68 @@ def release_evidence_summary() -> dict:
         "groups": groups,
         "items": evidence_items,
     }
+
+
+def release_evidence_template() -> dict:
+    evidence = release_evidence_summary()
+    lines = [
+        "# NowNote 1차 수동 증빙 기록",
+        "",
+        f"- 기준 시각: {evidence['checked_at'].isoformat()}Z",
+        f"- 상태: {evidence['status']}",
+        f"- 남은 증빙 항목: {evidence['summary']['remaining']}",
+        f"- 증빙 유형: {evidence['summary']['groups']}",
+        "",
+        "## 기록 방법",
+        "",
+        "- 완료 처리는 실제 화면, URL, 명령 결과, 설치 결과처럼 다시 확인 가능한 증빙이 있을 때만 합니다.",
+        "- 외부 서비스나 실제 기기 확인이 필요한 항목은 추측으로 완료 처리하지 않습니다.",
+        "- 증빙 위치에는 화면 경로, 파일 경로, URL, 실행 결과 위치를 적습니다.",
+        "",
+    ]
+    if not evidence["groups"]:
+        lines.extend(
+            [
+                "## 남은 항목 없음",
+                "",
+                "- 확인일:",
+                "- 확인자:",
+                "- 결과: 완료",
+                "- 증빙 위치:",
+                "- 메모:",
+            ]
+        )
+    for group in evidence["groups"]:
+        lines.extend(["", f"## {group['name']} ({group['count']}건)", ""])
+        for item in group["items"]:
+            lines.extend(
+                [
+                    f"### {item['label']}",
+                    "",
+                    f"- 영역: {item['section']}",
+                    "- 확인일:",
+                    "- 확인자:",
+                    "- 결과: 미확인 / 완료 / 보류 / 재확인 필요",
+                    "- 증빙 위치:",
+                    "- 실제 확인 내용:",
+                    "- 메모:",
+                    "- 필요 증빙:",
+                ]
+            )
+            lines.extend(f"  - {value}" for value in item["evidence"])
+            lines.extend(
+                [
+                    f"- 다음 행동: {item['action']}",
+                    "- 참고:",
+                ]
+            )
+            lines.extend(f"  - {value}" for value in item["reference"])
+            lines.append("")
+
+    return {
+        "name": "phase_one_manual_evidence_template",
+        "checked_at": evidence["checked_at"],
+        "status": evidence["status"],
+        "summary": evidence["summary"],
+        "content": "\n".join(lines).strip() + "\n",
+    }

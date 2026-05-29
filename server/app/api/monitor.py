@@ -15,7 +15,7 @@ from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
-from app.services.release_evidence import release_evidence_summary
+from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
 from app.services.user_devices import set_user_device_active
@@ -4802,6 +4802,7 @@ def _release_blocker_rows(blockers: list[dict]) -> str:
 
 def _admin_evidence_html() -> str:
     evidence = release_evidence_summary()
+    template = release_evidence_template()
     summary = evidence["summary"]
     status = evidence["status"]
     status_label = "증빙 필요" if status == "manual" else "증빙 완료"
@@ -4943,6 +4944,17 @@ def _admin_evidence_html() -> str:
       font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
       font-size: 13px;
     }}
+    pre {{
+      margin: 0;
+      padding: 18px;
+      overflow: auto;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 13px;
+      line-height: 1.65;
+      background: #0f172a;
+      color: #e5e7eb;
+    }}
     @media (max-width: 800px) {{
       header {{ display: block; }}
       .nav {{ margin-top: 14px; }}
@@ -4979,9 +4991,17 @@ def _admin_evidence_html() -> str:
       <div class="card">
         <div class="label">유형</div>
         <div class="value">{summary["groups"]}</div>
-        <div class="sub"><a href="/api/v1/admin/release-evidence">JSON API</a></div>
+        <div class="sub"><a href="/api/v1/admin/release-evidence">JSON API</a> · <a href="/api/v1/admin/release-evidence-template">기록 템플릿 API</a></div>
       </div>
     </div>
+
+    <section>
+      <div class="section-head">
+        <span>증빙 기록 템플릿</span>
+        <span class="sub">실제 확인 후 작업 기록에 붙여넣기</span>
+      </div>
+      <pre>{escape(template["content"])}</pre>
+    </section>
 
     <section>
       <div class="section-head">

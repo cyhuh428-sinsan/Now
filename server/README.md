@@ -278,6 +278,14 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/release-evidence
 
 이 API는 `/admin/evidence` 화면과 같은 기준으로 남은 수동 확인 항목별 필요 증빙, 다음 행동, 참고 화면과 스크립트를 JSON으로 반환합니다.
 
+1차 수동 증빙 기록 템플릿 API:
+
+```powershell
+Invoke-WebRequest http://localhost:8750/api/v1/admin/release-evidence-template
+```
+
+이 API는 `/admin/evidence` 화면의 증빙 기록 템플릿과 같은 내용으로 확인일, 확인자, 결과, 증빙 위치, 실제 확인 내용을 적을 수 있는 텍스트를 JSON으로 반환합니다.
+
 Google Play 등록 준비 상태 API:
 
 ```powershell
