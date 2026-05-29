@@ -24,6 +24,8 @@ COPY now_app/docs/google_play_step_by_step_ko.md /play_docs/google_play_step_by_
 COPY now_app/docs/privacy_policy_draft_ko.md /play_docs/privacy_policy_draft_ko.md
 COPY now_app/docs/nownote_site/index.html /play_docs/nownote_site/index.html
 COPY now_app/docs/play_assets/*.png /play_docs/play_assets/
+COPY web/index.html web/app.js web/styles.css web/help.html web/manifest.webmanifest web/sw.js /web_app/
+COPY web/icons /web_app/icons
 
 EXPOSE 8080
 

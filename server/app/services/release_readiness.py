@@ -12,7 +12,7 @@ CHECKBOX_RE = re.compile(r"^-\s+\[(?P<mark>[ xX])\]\s+(?P<label>.+?)\s*$")
 BLOCKER_GUIDANCE = {
     "실제 Android 기기/모바일 화면": "USB 디버깅 실기기 또는 실제 앱 화면에서 확인해야 합니다.",
     "WSL/Docker 서버 재배포": "정상 WSL/Linux 배포 환경과 Docker Compose 실행 권한이 필요합니다.",
-    "공용 서버 운영 적용": "공개 도메인이 NowNote API로 연결되는 reverse proxy 적용 상태를 확인해야 합니다.",
+    "공용 서버 운영 적용": "공개 도메인이 NowNote 서버로 연결되는 reverse proxy 적용 상태를 확인해야 합니다.",
     "Google Play Console": "Play Console 화면에서 문구, Data safety, 내부 테스트 업로드를 확인해야 합니다.",
     "GitHub Actions": "GitHub Actions workflow 실행 기록 또는 Actions 읽기 권한이 필요합니다.",
     "오픈소스 라이선스 결정": "라이선스는 법적 선택이므로 사람이 최종 결정해야 합니다.",
@@ -30,8 +30,8 @@ NEXT_ACTIONS = {
     ),
     "공용 서버 운영 적용": (
         "Nginx Proxy Manager에서 nownote.sinsan.kr Proxy Host를 now-api:8080으로 연결하거나, "
-        "기존 개인정보처리방침 사이트를 유지할 경우 Custom Locations로 /api, /health, /admin, /monitor, /auth, /docs, /openapi.json만 "
-        "NowNote API에 연결합니다. 외부에서 https://nownote.sinsan.kr/api/v1/server가 JSON을 반환하는지 확인합니다."
+        "서버 IP:8750으로 연결합니다. 루트 주소는 Web 프로그램, /privacy는 개인정보처리방침, "
+        "/api/v1/server는 JSON을 반환하는지 확인합니다."
     ),
     "Google Play Console": (
         "/admin/play의 문서/이미지/수동 확인 항목을 기준으로 Play Console 값, Data safety, "

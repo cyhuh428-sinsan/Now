@@ -123,10 +123,15 @@ Important mobile features:
 ### Web / Installed App
 
 Web and installed apps focus on knowledge notes.
-Web can be used as a standalone app without connecting to a server, storing data in browser localStorage.
 The Windows installed app is provided as an `.exe` installer that wraps the Web screen in an Electron app.
-PWA installation is also supported.
-You can also connect to a public server without installing your own server by entering the operator-provided server URL and connection values in display settings.
+The Web program is a server-hosted browser app for external PCs.
+Users who do not run their own server use the public Web program at `https://nownote.sinsan.kr`.
+Users who run a personal server use `https://your-domain` or `http://server-ip:8750`.
+Enter the server URL and connection values provided by the operator in display settings.
+
+The developer file `web/index.html` is not the user-facing Web program address.
+The user-facing Web program opens at the server root address.
+`/app/` remains as a compatibility address for older guides.
 
 Recommended flow:
 
@@ -169,9 +174,9 @@ Start here:
 ```text
 User help: docs/HELP.md
 Mobile app guide: now_app/README.md
-Web entry file: web/index.html
-Web help screen: web/help.html
-Web/installed app guide: web/README.md
+Installed app guide: desktop/README.md
+Public Web program: https://nownote.sinsan.kr
+Public privacy policy: https://nownote.sinsan.kr/privacy
 ```
 
 If you only connect to a public server, enter the values issued by the operator.
@@ -189,7 +194,8 @@ Input location:
 
 ```text
 Mobile app: Server connection section in settings
-Web/installed app: Server connection section in display settings
+Installed app: Server connection section in display settings
+Web program: Display settings at https://nownote.sinsan.kr or https://your-domain
 ```
 
 Users do not need to see the server `.env` file.
@@ -206,19 +212,8 @@ User ID: local_user or the user ID issued by the operator
 Device ID: Generated automatically by the app or installed program
 ```
 
-When connecting from an Android emulator to a local PC server:
-
-```text
-http://10.0.2.2:8750
-```
-
-When checking directly from PC or WSL:
-
-```text
-http://localhost:8750/health
-http://localhost:8750/monitor
-http://localhost:8750/admin
-```
+When a personal server is installed on a Linux server, phones and external PCs do not use `localhost`.
+Use the server domain or server IP address.
 
 ## User Profile
 

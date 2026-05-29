@@ -1063,9 +1063,10 @@ function defaultSettings() {
 }
 
 function defaultServerSettings() {
+  const hostedServerUrl = defaultHostedServerUrl();
   return {
-    mode: "local",
-    url: "",
+    mode: hostedServerUrl ? "server" : "local",
+    url: hostedServerUrl,
     token: "",
     userToken: "",
     ownerId: "local_user",
@@ -1079,6 +1080,15 @@ function defaultServerSettings() {
     lastStatus: "idle",
     lastMessage: "",
   };
+}
+
+function defaultHostedServerUrl() {
+  if (!["http:", "https:"].includes(window.location.protocol)) return "";
+  const path = window.location.pathname.replace(/\/+$/, "");
+  if (path === "" || path === "/index.html" || path === "/app" || path.startsWith("/app/")) {
+    return window.location.origin;
+  }
+  return "";
 }
 
 function defaultServerUserProfile() {
