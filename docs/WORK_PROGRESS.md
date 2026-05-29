@@ -5,6 +5,20 @@
 
 ## 2026-05-30 00:12 KST
 
+### 처음 설치 가이드 문서 추가
+
+- 아무것도 모르는 설치자가 GitHub 저장소를 받은 뒤 그대로 따라 할 수 있도록 루트 `INSTALL.md` 작성 시작.
+- 개인 Docker 서버 설치, `.env` 작성, 배포 도우미 실행, 앱/Web 연결, 공용 서버 전환, Nginx Proxy Manager 연결, 사용자 토큰 발급, 백업 확인, 업데이트, 자주 막히는 부분을 한 문서로 정리.
+- 루트 README의 시작 위치에 `INSTALL.md` 링크를 추가.
+- 서버 없이 사용하는 사람을 위해 모바일 앱, Web 화면, PWA 설치형 사용 기준을 `INSTALL.md` 앞부분에 추가.
+- 현재 1차의 설치형 프로그램은 별도 `.exe/.msi`가 아니라 Web 화면을 PWA로 설치해 독립 창처럼 쓰는 방식이라고 명확히 설명.
+- 서버를 직접 설치하지 않는 사용자를 위해 앱/Web/PWA 확인 경로와 공용 서버 접속값 입력 위치를 `INSTALL.md`와 `docs/HELP.md`에 추가.
+- Android 모바일 앱 설치 경로를 Google Play 정식 배포, Google Play 내부 테스트, 개발/검증용 직접 실행으로 구분해 `INSTALL.md`와 `docs/HELP.md`에 반영.
+- Web과 PWA 설치형도 서버를 직접 설치하지 않고 로컬 단독 사용 또는 공용 서버 접속이 가능하다는 설명을 `INSTALL.md`, `docs/HELP.md`, `web/README.md`에 반영.
+- 영어 도움말 `docs/HELP.en.md`와 Web 도움말 화면 `web/help.html`에도 서버 미설치 사용자, Google Play 설치, 공용 서버 접속 기준을 반영.
+- 기존 서버 실행 코드나 운영 기능은 변경하지 않음.
+- 검증: 서버 preflight 1051/1051 통과, 공개 저장소 안전 점검 8/8 통과, Web 표면 검증 138/138 통과, `git diff --check` 통과.
+
 ### 릴리스 증빙 화면 문서 정합성 정리
 
 - `/admin/release`와 `/admin/evidence`가 더 이상 단순 읽기 전용 화면이 아니므로 서버 README와 프로젝트 상태 문서를 실제 운영 흐름에 맞게 수정 시작.
