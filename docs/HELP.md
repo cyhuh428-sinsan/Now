@@ -125,10 +125,15 @@ NowNote는 혼자 로컬에서 쓰는 메모 프로그램으로도 사용할 수
 ### Web / 설치형 프로그램
 
 Web과 설치형 프로그램은 지식 메모가 중심입니다.
-서버를 연결하지 않아도 Web은 브라우저 localStorage에 저장하는 단독 프로그램으로 사용할 수 있습니다.
 Windows 설치형 프로그램은 Web 화면을 Electron 앱으로 감싼 `.exe` 설치 파일로 제공합니다.
-PWA 설치도 함께 사용할 수 있습니다.
-서버를 직접 설치하지 않아도 공용 서버에 접속할 수 있으며, 화면 설정의 서버 연결 항목에 운영자가 제공한 서버 주소와 접속값을 입력합니다.
+Web 프로그램은 외부 PC에서 브라우저로 접속하는 서버 제공 화면입니다.
+서버를 직접 설치하지 않는 사용자는 공용 Web 프로그램 `https://nownote.sinsan.kr`에 접속합니다.
+개인 서버를 운영하는 사용자는 `https://내도메인` 또는 `http://서버IP:8750`으로 접속합니다.
+화면 설정의 서버 연결 항목에는 운영자가 제공한 서버 주소와 접속값을 입력합니다.
+
+개발자가 확인하는 `web/index.html`은 사용자용 Web 프로그램 주소가 아닙니다.
+사용자용 Web 프로그램은 서버 주소 자체에서 열립니다.
+`/app/`은 이전 안내와 호환하기 위한 보조 주소입니다.
 
 권장 사용 흐름:
 
@@ -171,9 +176,9 @@ Web과 설치형에서 중요한 기능:
 ```text
 사용자 도움말: docs/HELP.md
 모바일 앱 안내: now_app/README.md
-Web 실행 파일: web/index.html
-Web 화면 도움말: web/help.html
-Web/설치형 안내: web/README.md
+설치형 프로그램 안내: desktop/README.md
+공용 Web 프로그램: https://nownote.sinsan.kr
+공용 개인정보처리방침: https://nownote.sinsan.kr/privacy
 ```
 
 공용 서버에 접속만 하는 사용자는 운영자에게 받은 값을 입력합니다.
@@ -191,7 +196,8 @@ API 토큰: 운영자가 제공한 서버 연결용 토큰
 
 ```text
 모바일 앱: 설정 화면의 서버 연결 항목
-Web/설치형: 화면 설정의 서버 연결 항목
+설치형 프로그램: 화면 설정의 서버 연결 항목
+Web 프로그램: https://nownote.sinsan.kr 또는 https://내도메인의 화면 설정
 ```
 
 사용자는 서버의 `.env` 파일을 직접 볼 필요가 없습니다.
@@ -208,19 +214,8 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
 기기 ID: 앱 또는 설치형 프로그램에서 자동 생성
 ```
 
-Android 에뮬레이터에서 로컬 PC 서버에 연결할 때:
-
-```text
-http://10.0.2.2:8750
-```
-
-PC나 WSL에서 직접 확인할 때:
-
-```text
-http://localhost:8750/health
-http://localhost:8750/monitor
-http://localhost:8750/admin
-```
+개인 서버를 Linux 서버에 설치한 경우, 휴대폰이나 외부 PC에서는 `localhost`를 쓰지 않습니다.
+서버의 도메인 또는 서버 IP를 사용합니다.
 
 ## 사용자 프로필
 

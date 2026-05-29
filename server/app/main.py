@@ -1,5 +1,8 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
 from app.api.analysis import router as analysis_router
@@ -17,6 +20,17 @@ from app.core.config import get_settings
 from app.db import create_tables
 
 
+def _web_app_dir() -> Path | None:
+    candidates = [
+        Path("/web_app"),
+        Path(__file__).resolve().parents[2] / "web",
+    ]
+    for path in candidates:
+        if (path / "index.html").exists():
+            return path
+    return None
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.server_name)
@@ -31,6 +45,7 @@ def create_app() -> FastAPI:
     def on_startup() -> None:
         create_tables()
 
+    web_app_dir = _web_app_dir()
     app.include_router(health_router)
     app.include_router(auth_page_router)
     app.include_router(public_pages_router)
@@ -43,6 +58,9 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(analysis_router)
     app.include_router(admin_router)
+    if web_app_dir is not None:
+        app.mount("/app", StaticFiles(directory=str(web_app_dir), html=True), name="web_app_compat")
+        app.mount("/", StaticFiles(directory=str(web_app_dir), html=True), name="web_app")
     return app
 
 

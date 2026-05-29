@@ -307,12 +307,24 @@ def main() -> None:
             )
         print(f"{method} {path}: {status} {data}")
 
-    for path in ["/", "/privacy", "/privacy-policy"]:
+    status, text = request_text("GET", f"{base_url}/")
+    require("<title>NowNote Web</title>" in text, "/ Web 프로그램 제목이 없습니다")
+    require("./app.js" in text, "/ Web 프로그램 스크립트 연결이 없습니다")
+    require("serverModeSelect" in text, "/ 서버 연결 설정 화면이 없습니다")
+    print(f"GET /: {status} html={len(text)} bytes")
+
+    for path in ["/privacy", "/privacy-policy"]:
         status, text = request_text("GET", f"{base_url}{path}")
         require("NowNote 개인정보처리방침" in text, f"{path} 개인정보처리방침 제목이 없습니다")
-        require("공개 URL: https://nownote.sinsan.kr/" in text, f"{path} 공개 URL 안내가 없습니다")
+        require("공개 URL: https://nownote.sinsan.kr/privacy" in text, f"{path} 공개 URL 안내가 없습니다")
         require("서버 연결을 켠 경우" in text, f"{path} 서버 연결 개인정보 처리 안내가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
+
+    status, text = request_text("GET", f"{base_url}/app/")
+    require("<title>NowNote Web</title>" in text, "/app/ Web 프로그램 제목이 없습니다")
+    require("./app.js" in text, "/app/ Web 프로그램 스크립트 연결이 없습니다")
+    require("serverModeSelect" in text, "/app/ 서버 연결 설정 화면이 없습니다")
+    print(f"GET /app/: {status} html={len(text)} bytes")
 
     admin_pages = [
         "/monitor",
@@ -385,7 +397,7 @@ def main() -> None:
             require(
                 "docker-compose logs now-api --tail=80" in text
                 and "docker-compose logs now-worker --tail=80" in text,
-                "배포 체크리스트 화면에 WSL docker-compose 로그 확인 안내가 없습니다",
+                "배포 체크리스트 화면에 docker-compose 로그 확인 안내가 없습니다",
             )
         if path == "/admin/public":
             require("NowNote 서버 인증 기준" in text, "공용 서버 준비 화면에 SERVER_AUTH_POLICY.md 내용이 없습니다")
@@ -397,7 +409,7 @@ def main() -> None:
             require("Forward Hostname/IP" in text and "now-api" in text, "공용 서버 준비 화면에 Nginx Proxy Manager 연결 대상 안내가 없습니다")
             require("Forward Port" in text and "8080" in text, "공용 서버 준비 화면에 Nginx Proxy Manager 포트 안내가 없습니다")
             require("서버 IP 또는 호스트명:8750" in text, "공용 서버 준비 화면에 다른 네트워크 NPM 대체 연결값이 없습니다")
-            require("경로별 연결" in text and "/openapi.json" in text, "공용 서버 준비 화면에 NPM 경로별 연결 안내가 없습니다")
+            require("도메인 연결" in text and "/privacy" in text, "공용 서버 준비 화면에 NPM 루트 Web 연결 안내가 없습니다")
         if path == "/admin/release":
             require("NowNote 1차 릴리스 준비" in text, "1차 릴리스 준비 화면 제목이 없습니다")
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
@@ -406,7 +418,7 @@ def main() -> None:
             require("수동 증빙 반영" in text, "1차 릴리스 준비 화면에 수동 증빙 반영 집계가 없습니다")
             require("외부 작업 바로가기" in text, "1차 릴리스 준비 화면에 외부 작업 바로가기 섹션이 없습니다")
             require("Nginx Proxy Manager" in text and "now-api" in text and "8080" in text, "1차 릴리스 준비 화면에 NPM 입력값이 없습니다")
-            require("Custom locations" in text and "/openapi.json" in text, "1차 릴리스 준비 화면에 NPM 경로별 연결 안내가 없습니다")
+            require("루트 주소는 Web 프로그램" in text and "/privacy" in text, "1차 릴리스 준비 화면에 NPM 루트 Web 연결 안내가 없습니다")
             require("now_app/build/app/outputs/bundle/release/app-release.aab" in text, "1차 릴리스 준비 화면에 Play AAB 경로가 없습니다")
             require("dispatch_github_actions.py" in text, "1차 릴리스 준비 화면에 Actions 실행 명령이 없습니다")
             require("바로 완료 증빙 기록" in text, "1차 릴리스 준비 화면에 바로 증빙 기록 섹션이 없습니다")

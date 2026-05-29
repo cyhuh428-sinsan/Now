@@ -2,7 +2,7 @@
 
 시행일: 2026년 5월 5일
 
-공개 URL: https://nownote.sinsan.kr/
+공개 URL: https://nownote.sinsan.kr/privacy
 
 NowNote는 사용자의 개인 기록을 안전하게 관리하기 위해 필요한 최소한의 권한과 데이터를 사용합니다.
 

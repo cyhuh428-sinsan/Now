@@ -134,7 +134,7 @@ ITEM_GUIDES = {
             "외부 브라우저에서 https://도메인/admin 접속 성공 화면",
             "/api/v1/admin/public-route에서 HTML 오연결 없이 JSON 확인 항목이 ok인 결과",
         ),
-        action="Nginx Proxy Manager에서 도메인 전체를 NowNote API 서버로 연결하거나, 기존 개인정보처리방침 사이트를 유지할 경우 /api, /health, /admin, /monitor, /auth, /docs, /openapi.json Custom Locations만 NowNote API 서버로 연결합니다.",
+        action="Nginx Proxy Manager에서 도메인 전체를 NowNote 서버로 연결합니다. 루트 주소는 Web 프로그램, /privacy는 개인정보처리방침, /api와 /health는 서버 API가 반환되어야 합니다.",
         reference=("server/reverse_proxy/nginx.nownote.sinsan.kr.conf.example", "server/reverse_proxy/nginx.nownote.conf.example", "server/reverse_proxy/Caddyfile.example", "/api/v1/admin/public-route"),
     ),
     "`NOW_BEHIND_REVERSE_PROXY=true` 설정.": EvidenceGuide(

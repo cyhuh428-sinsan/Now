@@ -87,5 +87,5 @@
 - 라이선스는 Apache License 2.0으로 확정했습니다.
 - 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용만 별도 완료 확인이 필요합니다.
 - WSL/Docker 서버는 공용 모드 환경값과 사용자 토큰 필수 모드 smoke test까지 통과했습니다.
-- 현재 외부 `https://nownote.sinsan.kr/api/v1/server`는 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하므로, 실제 Nginx Proxy Manager의 Proxy Host 대상을 NowNote API로 변경해야 합니다.
+- 정상 기준은 `https://nownote.sinsan.kr/`가 Web 프로그램, `https://nownote.sinsan.kr/privacy`가 개인정보처리방침, `https://nownote.sinsan.kr/api/v1/server`가 JSON을 반환하는 것입니다. 실제 Nginx Proxy Manager의 Proxy Host 대상을 NowNote 서버로 변경해야 합니다.
 - 실제 서명 키와 Play Console 내부 테스트 업로드 화면은 공개 저장소에 올리지 않고 로컬/콘솔에서만 관리합니다.

@@ -151,7 +151,7 @@ def _content_checks(docs_root: Path) -> list[PlayCheck]:
     checks.append(
         PlayCheck(
             "개인정보처리방침 URL",
-            "ok" if "https://nownote.sinsan.kr/" in console_values else "warn",
+            "ok" if "https://nownote.sinsan.kr/privacy" in console_values else "warn",
             "google_play_console_values_ko.md",
         )
     )

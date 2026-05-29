@@ -21,11 +21,6 @@ def _privacy_policy_candidates() -> list[Path]:
     ]
 
 
-@router.get("/", response_class=HTMLResponse, include_in_schema=False)
-def privacy_policy_home() -> HTMLResponse:
-    return HTMLResponse(_privacy_policy_html())
-
-
 @router.get("/privacy", response_class=HTMLResponse, include_in_schema=False)
 def privacy_policy() -> HTMLResponse:
     return HTMLResponse(_privacy_policy_html())
@@ -80,7 +75,7 @@ def _privacy_policy_fallback() -> str:
   <main>
     <header>
       <h1>NowNote 개인정보처리방침</h1>
-      <p class="meta">공개 URL: https://nownote.sinsan.kr/</p>
+      <p class="meta">공개 URL: https://nownote.sinsan.kr/privacy</p>
     </header>
     <section class="panel">
       <p>NowNote는 사용자의 개인 기록을 안전하게 관리하기 위해 필요한 최소한의 권한과 데이터를 사용합니다.</p>

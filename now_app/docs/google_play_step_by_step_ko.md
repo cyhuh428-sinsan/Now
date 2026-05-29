@@ -7,7 +7,7 @@
 먼저 아래 파일들이 준비되어 있는지 확인합니다.
 
 - 붙여넣기 값 문서: `D:\Project\Now\now_app\docs\google_play_paste_ready_ko.md`
-- 개인정보처리방침 URL: `https://nownote.sinsan.kr/`
+- 개인정보처리방침 URL: `https://nownote.sinsan.kr/privacy`
 - 기능 그래픽: `D:\Project\Now\now_app\docs\play_assets\feature_graphic_1024x500.png`
 - 스크린샷 1: `D:\Project\Now\now_app\docs\play_assets\screenshot_01_home.png`
 - 스크린샷 2: `D:\Project\Now\now_app\docs\play_assets\screenshot_02_daily_notes.png`
@@ -140,10 +140,11 @@ https://nownote.sinsan.kr/
 개인정보처리방침 URL에 아래 값을 입력합니다.
 
 ```text
-https://nownote.sinsan.kr/
+https://nownote.sinsan.kr/privacy
 ```
 
-입력 전 브라우저에서 NowNote 서버의 `/` 또는 `/privacy` 페이지가 인증 없이 공개로 열리는지 다시 확인합니다.
+입력 전 브라우저에서 NowNote 서버의 `/privacy` 페이지가 인증 없이 공개로 열리는지 다시 확인합니다.
+루트 `/`는 Web 프로그램 화면으로 열리는 것이 정상입니다.
 
 ## 6. 앱 액세스
 

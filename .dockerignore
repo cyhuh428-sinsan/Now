@@ -31,3 +31,12 @@
 !now_app/docs/privacy_policy_draft_ko.md
 !now_app/docs/nownote_site/index.html
 !now_app/docs/play_assets/*.png
+!web/
+!web/index.html
+!web/app.js
+!web/styles.css
+!web/help.html
+!web/manifest.webmanifest
+!web/sw.js
+!web/icons/
+!web/icons/**

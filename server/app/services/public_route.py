@@ -44,6 +44,24 @@ def public_route_summary(timeout_seconds: float = 5.0) -> dict:
         }
     )
     checks.append(
+        _html_endpoint_check(
+            public_base_url,
+            "/",
+            timeout_seconds,
+            expected_text="NowNote",
+            name="Web 프로그램",
+        )
+    )
+    checks.append(
+        _html_endpoint_check(
+            public_base_url,
+            "/privacy",
+            timeout_seconds,
+            expected_text="NowNote 개인정보처리방침",
+            name="개인정보처리방침",
+        )
+    )
+    checks.append(
         _json_endpoint_check(
             public_base_url,
             "/health/ready",
@@ -66,6 +84,58 @@ def public_route_summary(timeout_seconds: float = 5.0) -> dict:
         public_base_url=public_base_url,
         checks=checks,
     )
+
+
+def _html_endpoint_check(
+    public_base_url: str,
+    path: str,
+    timeout_seconds: float,
+    *,
+    expected_text: str,
+    name: str,
+) -> dict[str, str | int | None]:
+    url = urllib.parse.urljoin(public_base_url + "/", path.lstrip("/"))
+    try:
+        request = urllib.request.Request(url, headers={"Accept": "text/html"})
+        with urllib.request.urlopen(request, timeout=timeout_seconds) as response:
+            http_status = response.status
+            content_type = response.headers.get("Content-Type", "")
+            body = response.read(8192).decode("utf-8", errors="replace")
+    except urllib.error.HTTPError as exc:
+        return {
+            "name": name,
+            "status": "bad",
+            "message": f"HTTP {exc.code}: {exc.reason}",
+            "http_status": exc.code,
+        }
+    except Exception as exc:
+        return {
+            "name": name,
+            "status": "bad",
+            "message": f"연결 실패: {exc}",
+            "http_status": None,
+        }
+
+    if http_status != 200:
+        return {
+            "name": name,
+            "status": "bad",
+            "message": f"HTTP {http_status}",
+            "http_status": http_status,
+        }
+    if expected_text not in body:
+        return {
+            "name": name,
+            "status": "bad",
+            "message": f"예상 문구 없음. Content-Type: {content_type or '확인 불가'}",
+            "http_status": http_status,
+        }
+    return {
+        "name": name,
+        "status": "ok",
+        "message": f"{path} HTML 응답 확인",
+        "http_status": http_status,
+    }
 
 
 def public_route_ops_check(timeout_seconds: float = 2.0) -> dict[str, str]:
@@ -191,7 +261,7 @@ def _ops_message(summary: dict) -> str:
         if isinstance(check, dict) and str(check.get("status")) in {"warn", "bad", "planned"}
     ]
     if status == "ok":
-        return f"{public_base_url}에서 /health/ready와 /api/v1/server JSON 응답 확인"
+        return f"{public_base_url}에서 Web, /privacy, /health/ready, /api/v1/server 응답 확인"
     if status == "planned":
         return "NOW_PUBLIC_BASE_URL 미설정. 공용 오픈 전 공개 URL과 reverse proxy 연결 필요"
     if failed_checks:
