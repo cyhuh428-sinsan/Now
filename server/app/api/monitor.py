@@ -4838,6 +4838,8 @@ def _admin_evidence_html(request: Request) -> str:
     evidence = release_evidence_summary()
     template = release_evidence_template()
     records = _recent_release_evidence_records()
+    latest_records = _latest_release_evidence_records()
+    progress = _release_evidence_progress(evidence["items"], latest_records)
     summary = evidence["summary"]
     status = evidence["status"]
     status_label = "증빙 필요" if status == "manual" else "증빙 완료"
@@ -4937,6 +4939,25 @@ def _admin_evidence_html(request: Request) -> str:
     }}
     .ok {{ color: var(--green); }}
     .warn {{ color: var(--amber); }}
+    .pill {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      background: #f3f4f6;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }}
+    .pill.ok {{
+      background: #dcfce7;
+      color: #166534;
+    }}
+    .pill.warn {{
+      background: #fef3c7;
+      color: #92400e;
+    }}
     section {{
       margin-top: 14px;
       overflow: hidden;
@@ -5093,6 +5114,18 @@ def _admin_evidence_html(request: Request) -> str:
         <div class="value">{summary["groups"]}</div>
         <div class="sub"><a href="/api/v1/admin/release-evidence">JSON API</a> · <a href="/api/v1/admin/release-evidence-template">기록 템플릿 API</a></div>
       </div>
+      <div class="card">
+        <div class="label">증빙 완료 기록</div>
+        <div class="value ok">{progress["done"]}/{progress["total"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">기록 있음</div>
+        <div class="value">{progress["recorded"]}</div>
+      </div>
+      <div class="card">
+        <div class="label">미기록</div>
+        <div class="value warn">{progress["unrecorded"]}</div>
+      </div>
     </div>
 
     <section>
@@ -5154,11 +5187,11 @@ def _admin_evidence_html(request: Request) -> str:
     <section>
       <div class="section-head">
         <span>수동 증빙 기준</span>
-        <span class="sub">증빙 확보 후 체크리스트 갱신</span>
+        <span class="sub">최근 기록 상태와 대조해 체크리스트 갱신</span>
       </div>
       <table>
-        <tr><th>유형</th><th>항목</th><th>필요 증빙</th><th>다음 행동</th><th>참고</th></tr>
-        {_release_evidence_rows(evidence["items"])}
+        <tr><th>상태</th><th>유형</th><th>항목</th><th>필요 증빙</th><th>다음 행동</th><th>참고</th></tr>
+        {_release_evidence_rows(evidence["items"], latest_records)}
       </table>
     </section>
   </main>
@@ -5196,6 +5229,45 @@ def _recent_release_evidence_records(limit: int = 20) -> list[ReleaseEvidenceRec
         )
 
 
+def _latest_release_evidence_records() -> dict[str, ReleaseEvidenceRecord]:
+    latest: dict[str, ReleaseEvidenceRecord] = {}
+    with SessionLocal() as db:
+        records = db.scalars(
+            select(ReleaseEvidenceRecord).order_by(
+                ReleaseEvidenceRecord.checked_at.desc(),
+                ReleaseEvidenceRecord.id.desc(),
+            )
+        ).all()
+    for record in records:
+        key = _release_evidence_record_key(record.group_name, record.section, record.label)
+        latest.setdefault(key, record)
+    return latest
+
+
+def _release_evidence_record_key(group: str, section: str, label: str) -> str:
+    return "||".join([group.strip(), section.strip(), label.strip()])
+
+
+def _release_evidence_item_key(item: dict) -> str:
+    return _release_evidence_record_key(item["group"], item["section"], item["label"])
+
+
+def _release_evidence_progress(items: list[dict], latest_records: dict[str, ReleaseEvidenceRecord]) -> dict[str, int]:
+    total = len(items)
+    recorded = sum(1 for item in items if _release_evidence_item_key(item) in latest_records)
+    done = sum(
+        1
+        for item in items
+        if (record := latest_records.get(_release_evidence_item_key(item))) is not None and record.result == "완료"
+    )
+    return {
+        "total": total,
+        "done": done,
+        "recorded": recorded,
+        "unrecorded": max(total - recorded, 0),
+    }
+
+
 def _release_evidence_record_rows(records: list[ReleaseEvidenceRecord]) -> str:
     if not records:
         return '<tr><td colspan="7">저장된 증빙 기록이 없습니다.</td></tr>'
@@ -5220,15 +5292,18 @@ def _truncate(value: str, limit: int) -> str:
     return f"{normalized[:limit]}..."
 
 
-def _release_evidence_rows(items: list[dict]) -> str:
+def _release_evidence_rows(items: list[dict], latest_records: dict[str, ReleaseEvidenceRecord]) -> str:
     if not items:
-        return '<tr><td colspan="5">남은 수동 증빙 항목이 없습니다.</td></tr>'
+        return '<tr><td colspan="6">남은 수동 증빙 항목이 없습니다.</td></tr>'
     rows = []
     for item in items:
+        latest = latest_records.get(_release_evidence_item_key(item))
+        status_cell = _release_evidence_status_cell(latest)
         evidence = "".join(f"<li>{escape(value)}</li>" for value in item["evidence"])
         references = "".join(f"<li><code>{escape(value)}</code></li>" for value in item["reference"])
         rows.append(
             "<tr>"
+            f"<td>{status_cell}</td>"
             f"<td>{escape(item['group'])}</td>"
             f"<td><strong>{escape(item['label'])}</strong><div class=\"sub\">{escape(item['section'])}</div></td>"
             f"<td><ul>{evidence}</ul></td>"
@@ -5237,6 +5312,17 @@ def _release_evidence_rows(items: list[dict]) -> str:
             "</tr>"
         )
     return "\n".join(rows)
+
+
+def _release_evidence_status_cell(record: ReleaseEvidenceRecord | None) -> str:
+    if record is None:
+        return '<span class="pill warn">미기록</span>'
+    css_class = "ok" if record.result == "완료" else "warn"
+    detail = _format_datetime(record.checked_at)
+    return (
+        f'<span class="pill {css_class}">{escape(record.result)}</span>'
+        f'<div class="sub">{escape(detail)}</div>'
+    )
 
 
 def _admin_play_html() -> str:

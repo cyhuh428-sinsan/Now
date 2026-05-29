@@ -400,6 +400,8 @@ def main() -> None:
             require("확인자:" in text, "수동 증빙 화면의 템플릿에 확인자 입력칸이 없습니다")
             require("증빙 기록 저장" in text, "수동 증빙 화면에 증빙 기록 저장 폼이 없습니다")
             require("최근 증빙 기록" in text, "수동 증빙 화면에 최근 증빙 기록 목록이 없습니다")
+            require("증빙 완료 기록" in text, "수동 증빙 화면에 완료 기록 집계가 없습니다")
+            require("미기록" in text, "수동 증빙 화면에 미기록 집계가 없습니다")
             require("수동 증빙 기준" in text, "수동 증빙 화면에 증빙 기준 표가 없습니다")
             require("필요 증빙" in text, "수동 증빙 화면에 필요 증빙 열이 없습니다")
             require("/api/v1/admin/release-evidence" in text, "수동 증빙 화면에 JSON API 링크가 없습니다")
@@ -561,6 +563,7 @@ def main() -> None:
 
     status, text = request_text("GET", f"{base_url}/admin/evidence", args.token)
     require("smoke_release_evidence_record" in text, "수동 증빙 화면의 최근 기록 목록에 저장된 기록이 없습니다")
+    require("증빙 완료 기록" in text, "수동 증빙 화면의 증빙 진행 집계가 없습니다")
     print(f"GET /admin/evidence(after record): {status} html={len(text)} bytes")
 
     status, data = request("GET", f"{base_url}/api/v1/admin/play-release", args.token)

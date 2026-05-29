@@ -3,6 +3,34 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 10:22 KST
+
+### 다음 작업 시작
+
+- 남은 22개 항목 중 실제 외부 증빙 없이 닫을 수 없는 항목은 완료 처리하지 않고, 운영자가 화면에서 어떤 항목이 기록됐는지 바로 볼 수 있게 보강.
+- Android 에뮬레이터 점검 중 새 APK 재설치는 저장공간 부족으로 실패했지만 기존 설치 앱 실행은 가능한 상황을 확인.
+
+### 구현 내용
+
+- `now_app/scripts/check_android_emulator.py`가 `INSTALL_FAILED_INSUFFICIENT_STORAGE` 발생 시 패키지 설치와 현재 화면 패키지가 확인되면 `--skip-install` 실행 확인을 자동 재시도하도록 보강.
+- `/admin/evidence`에 증빙 완료 기록, 기록 있음, 미기록 집계 카드 추가.
+- `/admin/evidence`의 수동 증빙 기준 표에 항목별 최신 기록 상태를 표시.
+- smoke test와 preflight가 수동 증빙 진행 집계를 확인하도록 보강.
+- `docs/PROJECT_STATUS.md`의 preflight 수치와 수동 증빙 운영 설명 갱신.
+
+### 검증
+
+- `uv run python -m py_compile now_app\scripts\check_android_emulator.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 128/128.
+- `uv run python now_app\scripts\check_android_emulator.py --launch-app --timeout 60 --interval 5` 통과. 에뮬레이터 저장공간 부족으로 재설치는 경고 처리, 기존 설치 앱 실행은 통과.
+- FastAPI TestClient로 `/admin/evidence` 200 응답과 `증빙 완료 기록`, `미기록`, `수동 증빙 기준` 표시 확인.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 942/942.
+- `uv run python scripts\release_readiness.py --show-blockers` 결과는 35/57 완료, 남은 항목 22개 유지.
+
+### 보류
+
+- 실제 Android 기기 음성 흐름, 공용 도메인/HTTPS, Play Console 입력/업로드, GitHub Actions run, 오픈소스 라이선스 선택은 실제 외부 증빙 또는 신산님 결정이 필요해 완료 처리하지 않음.
+
 ## 2026-05-29 09:53 KST
 
 ### 다음 작업 시작

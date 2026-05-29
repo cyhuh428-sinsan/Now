@@ -204,6 +204,15 @@ def run_launch_check(serial: str, timeout: int, skip_install: bool) -> CommandRe
     return run_command(command, timeout=max(timeout * 3, 90))
 
 
+def should_retry_launch_without_install(result: CommandResult) -> bool:
+    output = result.output
+    return (
+        "INSTALL_FAILED_INSUFFICIENT_STORAGE" in output
+        and "[OK] 패키지 설치 확인" in output
+        and "[OK] 현재 화면 패키지" in output
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Prepare an Android emulator for NowNote mobile checks")
     parser.add_argument("--avd", help="AVD name to start. Defaults to the first registered AVD")
@@ -267,6 +276,23 @@ def main() -> None:
             launch = run_launch_check(serial, 60, args.skip_install)
             if launch.ok:
                 add(checks, "OK", "NowNote 설치/실행 점검", "check_android_launch.py 통과")
+            elif not args.skip_install and should_retry_launch_without_install(launch):
+                retry_launch = run_launch_check(serial, 60, True)
+                if retry_launch.ok:
+                    add(
+                        checks,
+                        "WARN",
+                        "APK 재설치",
+                        "에뮬레이터 저장공간 부족으로 재설치는 실패했지만 기존 설치 앱 실행은 확인됨",
+                    )
+                    add(checks, "OK", "NowNote 실행 점검", "check_android_launch.py --skip-install 통과")
+                else:
+                    add(
+                        checks,
+                        "FAIL",
+                        "NowNote 설치/실행 점검",
+                        retry_launch.output or "check_android_launch.py 재확인 실패",
+                    )
             else:
                 add(checks, "FAIL", "NowNote 설치/실행 점검", launch.output or "check_android_launch.py 실패")
         else:
