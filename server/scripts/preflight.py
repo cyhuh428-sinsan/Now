@@ -511,6 +511,9 @@ def main() -> None:
     check("context: .." in compose, "Compose builds from repository root", "root context for shared docs", failures)
     check("dockerfile: server/Dockerfile" in compose, "Compose uses server Dockerfile", "server Dockerfile path", failures)
     check("NOW_API_TOKEN: ${NOW_API_TOKEN:-}" in compose, "Compose reads NOW_API_TOKEN", "API and worker", failures)
+    check("NOW_USER_TOKEN_REQUIRED: ${NOW_USER_TOKEN_REQUIRED:-false}" in compose, "Compose reads user token required setting", "user token required", failures)
+    check("NOW_PUBLIC_BASE_URL: ${NOW_PUBLIC_BASE_URL:-}" in compose, "Compose reads public base URL setting", "public base URL", failures)
+    check("NOW_BEHIND_REVERSE_PROXY: ${NOW_BEHIND_REVERSE_PROXY:-false}" in compose, "Compose reads reverse proxy setting", "reverse proxy setting", failures)
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(dockerfile_path.exists(), "Server Dockerfile exists", str(dockerfile_path), failures)
@@ -1363,6 +1366,8 @@ def main() -> None:
                 ("scripts/deploy_local.sh", "Deploy checklist covers one-command deploy helper", "deploy helper"),
                 ("--base-url", "Deploy checklist covers deploy helper base URL option", "deploy helper base URL"),
                 ("--public-server", "Deploy checklist covers deploy helper public server option", "deploy helper public server"),
+                ("--issue-local-user-token", "Deploy checklist covers public smoke token issuing", "public smoke token issuing"),
+                ("--user-token", "Deploy checklist covers public smoke user token", "public smoke user token"),
                 ("--skip-pull", "Deploy checklist covers deploy helper skip pull option", "deploy helper skip pull"),
                 ("git pull origin main", "Deploy checklist covers source update", "git pull origin main"),
                 ("python3 scripts/preflight.py", "Deploy checklist covers preflight", "preflight"),
@@ -1485,6 +1490,9 @@ def main() -> None:
                 ("git pull origin main", "Deploy helper updates source", "git pull origin main"),
                 ("scripts/preflight.py", "Deploy helper runs preflight", "preflight"),
                 ("--public-server", "Deploy helper supports public server preflight", "public server preflight"),
+                ("--issue-local-user-token", "Deploy helper can issue local user token for smoke", "issue local user token"),
+                ("--user-token", "Deploy helper accepts user token for smoke", "user token smoke"),
+                ("NOW_USER_TOKEN_REQUIRED", "Deploy helper reads user token required flag", "user token required flag"),
                 ("docker compose up --build -d", "Deploy helper supports docker compose", "docker compose"),
                 ("docker-compose up --build -d", "Deploy helper supports docker-compose fallback", "docker-compose"),
                 ("/health/ready", "Deploy helper waits for ready endpoint", "ready endpoint"),

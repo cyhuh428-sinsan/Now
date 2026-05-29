@@ -7,6 +7,8 @@ SKIP_PULL=false
 SMOKE_TIMEOUT="30"
 READY_RETRIES="10"
 READY_DELAY="3"
+USER_TOKEN=""
+ISSUE_LOCAL_USER_TOKEN=false
 
 usage() {
   cat <<'EOF'
@@ -22,6 +24,9 @@ NowNote 로컬/WSL 서버 갱신 도우미
   --timeout 초         smoke test 요청 대기 시간. 기본: 30
   --ready-retries 횟수 /health/ready 준비 재시도 횟수. 기본: 10
   --ready-delay 초     /health/ready 재시도 간격. 기본: 3
+  --user-token TOKEN   NOW_USER_TOKEN_REQUIRED=true smoke test에 사용할 사용자별 접속 토큰
+  --issue-local-user-token
+                      smoke test 전에 local_user 토큰을 발급해 공용 모드 검증에 사용
   -h, --help           도움말 표시
 EOF
 }
@@ -67,6 +72,18 @@ while [ "$#" -gt 0 ]; do
       fi
       READY_DELAY="$2"
       shift 2
+      ;;
+    --user-token)
+      if [ "$#" -lt 2 ]; then
+        echo "--user-token 값이 필요합니다." >&2
+        exit 2
+      fi
+      USER_TOKEN="$2"
+      shift 2
+      ;;
+    --issue-local-user-token)
+      ISSUE_LOCAL_USER_TOKEN=true
+      shift
       ;;
     -h|--help)
       usage
@@ -177,20 +194,27 @@ curl -fsS "$BASE_URL/api/v1/server" >/dev/null
 
 echo "== 스모크 테스트 =="
 API_TOKEN=$(get_env_value "NOW_API_TOKEN")
-if [ -n "$API_TOKEN" ]; then
-  "$PYTHON" scripts/smoke_test.py \
-    --base-url "$BASE_URL" \
-    --token "$API_TOKEN" \
-    --timeout "$SMOKE_TIMEOUT" \
-    --ready-retries "$READY_RETRIES" \
-    --ready-delay "$READY_DELAY"
-else
-  "$PYTHON" scripts/smoke_test.py \
-    --base-url "$BASE_URL" \
-    --timeout "$SMOKE_TIMEOUT" \
-    --ready-retries "$READY_RETRIES" \
-    --ready-delay "$READY_DELAY"
+USER_TOKEN_REQUIRED=$(get_env_value "NOW_USER_TOKEN_REQUIRED")
+if [ "$USER_TOKEN_REQUIRED" = "true" ] && [ -z "$USER_TOKEN" ] && [ "$ISSUE_LOCAL_USER_TOKEN" = "false" ]; then
+  echo "NOW_USER_TOKEN_REQUIRED=true입니다. smoke test에는 --user-token 또는 --issue-local-user-token이 필요합니다." >&2
+  exit 1
 fi
+
+set -- scripts/smoke_test.py \
+  --base-url "$BASE_URL" \
+  --timeout "$SMOKE_TIMEOUT" \
+  --ready-retries "$READY_RETRIES" \
+  --ready-delay "$READY_DELAY"
+if [ -n "$API_TOKEN" ]; then
+  set -- "$@" --token "$API_TOKEN"
+fi
+if [ -n "$USER_TOKEN" ]; then
+  set -- "$@" --user-token "$USER_TOKEN"
+fi
+if [ "$ISSUE_LOCAL_USER_TOKEN" = "true" ]; then
+  set -- "$@" --issue-local-user-token
+fi
+"$PYTHON" "$@"
 
 echo "== 완료 =="
 echo "운영 화면: $BASE_URL/admin"

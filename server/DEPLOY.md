@@ -15,6 +15,14 @@ sh scripts/deploy_local.sh --base-url http://localhost:8750
 ```
 
 공용 서버 오픈 전 기준까지 함께 확인하려면 `--public-server`를 추가합니다.
+`NOW_USER_TOKEN_REQUIRED=true` 상태에서 빠른 갱신 명령을 쓰려면 smoke test용 사용자 토큰도 필요합니다.
+테스트용 `local_user` 토큰을 배포 중 새로 발급해 검증하려면 `--issue-local-user-token`을 함께 사용합니다.
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token
+```
+
+이미 발급한 사용자별 접속 토큰으로 검증하려면 `--user-token 사용자별-접속-토큰`을 사용합니다.
 이미 소스를 직접 갱신한 상태라면 `--skip-pull`로 `git pull origin main`을 생략할 수 있습니다.
 공개 도메인과 HTTPS reverse proxy를 설정할 때는 `reverse_proxy/nginx.nownote.sinsan.kr.conf.example`, `reverse_proxy/nginx.nownote.conf.example` 또는 `reverse_proxy/Caddyfile.example`을 실제 환경에 맞게 수정합니다.
 공용 서버 예시 환경값은 `server/.env.public.example`을 기준으로 확인합니다.
@@ -119,6 +127,13 @@ JSON 응답을 해석하지 못하면 `SMOKE TEST JSON FAILED: 원인` 형식으
 ```bash
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --issue-local-user-token
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰 --user-token 사용자별-접속-토큰
+```
+
+배포 도우미를 사용할 때도 같은 기준을 적용합니다.
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token
+sh scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --user-token 사용자별-접속-토큰
 ```
 
 ## 7. 운영 화면 확인

@@ -3,6 +3,21 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 17:49 KST
+
+### 공용 Docker reverse proxy 배포 설정 보강
+
+- 실제 공개 도메인 `https://nownote.sinsan.kr/api/v1/server`가 아직 NowNote API JSON이 아니라 개인정보처리방침 HTML을 반환하는 상태를 확인.
+- Nginx Proxy Manager의 현재 Proxy Host가 `nownote-site:80` 정적 페이지로 연결되어 있어, 실제 API 서버로 연결하려면 Forward Hostname/IP를 `now-api`, Forward Port를 `8080`으로 변경해야 함.
+- Nginx Proxy Manager 컨테이너 `npm`을 NowNote 서버 compose 네트워크 `server_default`에 연결했고, `npm` 컨테이너 내부에서 `http://now-api:8080/health/ready` 접근이 성공함을 확인.
+- WSL 배포 경로의 `server/.env`에는 공용 모드 기준으로 `NOW_USER_TOKEN_REQUIRED=true`, `NOW_PUBLIC_BASE_URL=https://nownote.sinsan.kr`, `NOW_BEHIND_REVERSE_PROXY=true`를 적용.
+- 공용 서버 preflight는 WSL 배포 경로 기준 1015/1015 통과.
+- Docker Compose가 위 공용 모드 환경값을 `now-api`, `now-worker` 컨테이너에 전달하지 않아 실행 중 API에서 `user_token_required=false`로 보이는 문제를 확인.
+- `server/docker-compose.yml`에 `NOW_USER_TOKEN_REQUIRED`, `NOW_PUBLIC_BASE_URL`, `NOW_BEHIND_REVERSE_PROXY` 전달을 추가.
+- `server/scripts/deploy_local.sh`는 공용 토큰 필수 모드에서 smoke test가 실패하지 않도록 `--user-token`, `--issue-local-user-token` 옵션을 지원하도록 보강.
+- `server/DEPLOY.md`와 `server/scripts/preflight.py`에 공용 모드 배포 도우미 기준을 반영.
+- 검증: `server/scripts/preflight.py` Python 문법 확인 통과, 서버 preflight 1017/1017 통과, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+
 ## 2026-05-29 17:30 KST
 
 ### 운영 점검의 공개 도메인 연결 표시 보강
