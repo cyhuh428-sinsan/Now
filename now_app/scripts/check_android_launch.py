@@ -5,6 +5,8 @@ import os
 import shutil
 import subprocess
 import sys
+import time
+import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -164,6 +166,28 @@ def mib(value: int) -> str:
     return f"{value / (1024 * 1024):.0f}MB"
 
 
+def apk_native_abis(apk_path: Path) -> set[str]:
+    abis: set[str] = set()
+    try:
+        with zipfile.ZipFile(apk_path) as archive:
+            for name in archive.namelist():
+                parts = name.split("/")
+                if len(parts) >= 3 and parts[0] == "lib" and parts[-1].endswith(".so"):
+                    abis.add(parts[1])
+    except zipfile.BadZipFile:
+        return set()
+    return abis
+
+
+def parse_device_abis(primary: str, abi_list: str) -> list[str]:
+    values: list[str] = []
+    for raw in [primary, *abi_list.replace("\n", ",").split(",")]:
+        value = raw.strip()
+        if value and value not in values:
+            values.append(value)
+    return values
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Install and launch NowNote on a connected Android device")
     parser.add_argument("--apk", default=str(DEFAULT_APK), help="APK path to install")
@@ -214,6 +238,26 @@ def main() -> None:
 
     serial = selected["serial"]
     if not args.skip_install:
+        primary_abi_result = run_command(adb_command(adb, serial, "shell", "getprop", "ro.product.cpu.abi"), args.timeout)
+        abi_list_result = run_command(adb_command(adb, serial, "shell", "getprop", "ro.product.cpu.abilist"), args.timeout)
+        device_abis = parse_device_abis(primary_abi_result.output, abi_list_result.output)
+        native_abis = apk_native_abis(apk_path)
+        if native_abis and device_abis:
+            matched_abis = sorted(native_abis.intersection(device_abis))
+            if matched_abis:
+                add(checks, "OK", "APK ABI 호환성", f"기기 {device_abis[0]}, APK {', '.join(matched_abis)}")
+            else:
+                add(
+                    checks,
+                    "FAIL",
+                    "APK ABI 호환성",
+                    f"기기 ABI {', '.join(device_abis)}와 APK ABI {', '.join(sorted(native_abis))}가 맞지 않습니다",
+                )
+        elif native_abis:
+            add(checks, "WARN", "APK ABI 호환성", "기기 ABI를 확인하지 못했습니다")
+        else:
+            add(checks, "WARN", "APK ABI 호환성", "APK에서 native library ABI를 찾지 못했습니다")
+
         storage = run_command(adb_command(adb, serial, "shell", "df", "-k", "/data"), args.timeout)
         available_kib = parse_data_available_kib(storage.output)
         if available_kib is None:
@@ -247,6 +291,10 @@ def main() -> None:
     else:
         add(checks, "FAIL", "패키지 설치 확인", package_check.output or f"{args.package}를 찾지 못했습니다")
 
+    crash_clear = run_command(adb_command(adb, serial, "logcat", "-b", "crash", "-c"), args.timeout)
+    if not crash_clear.ok:
+        add(checks, "WARN", "크래시 로그 초기화", crash_clear.output or "crash buffer 초기화 실패")
+
     launch = run_command(
         adb_command(
             adb,
@@ -266,6 +314,8 @@ def main() -> None:
     else:
         add(checks, "FAIL", "앱 실행 요청", launch.output or "monkey launch 실패")
 
+    time.sleep(5)
+
     pid = run_command(adb_command(adb, serial, "shell", "pidof", args.package), args.timeout)
     if pid.ok and pid.output.strip():
         add(checks, "OK", "앱 프로세스", pid.output.strip())
@@ -277,6 +327,26 @@ def main() -> None:
         add(checks, "OK", "현재 화면 패키지", args.package)
     else:
         add(checks, "WARN", "현재 화면 패키지", "dumpsys activity top에서 패키지를 찾지 못했습니다")
+
+    crash = run_command(adb_command(adb, serial, "logcat", "-b", "crash", "-d", "-t", "200"), args.timeout)
+    if crash.ok and args.package in crash.output and "FATAL EXCEPTION" in crash.output:
+        first_line = next(
+            (line.strip() for line in crash.output.splitlines() if "FATAL EXCEPTION" in line or "MissingLibraryException" in line),
+            "앱 실행 직후 크래시가 감지됐습니다",
+        )
+        add(checks, "FAIL", "앱 크래시 확인", first_line)
+    elif crash.ok:
+        add(checks, "OK", "앱 크래시 확인", "실행 직후 crash buffer에 앱 크래시 없음")
+    else:
+        add(checks, "WARN", "앱 크래시 확인", crash.output or "crash buffer 확인 실패")
+
+    process_state = run_command(adb_command(adb, serial, "shell", "dumpsys", "activity", "processes"), args.timeout)
+    if args.package in process_state.output and "mCrashing=true" in process_state.output:
+        add(checks, "FAIL", "프로세스 크래시 상태", "ActivityManager가 앱을 crashing 상태로 보고합니다")
+    elif process_state.ok:
+        add(checks, "OK", "프로세스 크래시 상태", "crashing 상태 아님")
+    else:
+        add(checks, "WARN", "프로세스 크래시 상태", process_state.output or "프로세스 상태 확인 실패")
 
     print("NowNote Android install/launch check")
     print_checks(checks)
