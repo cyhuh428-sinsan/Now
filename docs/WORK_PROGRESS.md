@@ -30,6 +30,11 @@
 - GitHub Actions 항목은 Actions 화면 링크와 `dispatch_github_actions.py`, `check_github_actions_status.py` 실행 명령을 표시.
 - smoke test와 preflight가 새 외부 작업 바로가기, NPM 입력값, Play AAB 경로, Actions 실행 명령을 확인하도록 보강.
 - 검증: Python 문법 확인 통과, 서버 preflight 1042/1042 통과, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+- 커밋 `feat: add release external action shortcuts`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1048/1048.
+- 배포 후 smoke test 통과. `/admin/release`는 200으로 응답하고 새 외부 작업 바로가기 섹션을 포함.
 
 ## 2026-05-29 22:17 KST
 
