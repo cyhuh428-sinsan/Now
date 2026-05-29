@@ -31,6 +31,7 @@ router = APIRouter(
 
 
 class UserAccountUpdate(BaseModel):
+    password: str | None = Field(default=None, max_length=200)
     email: str | None = Field(default=None, max_length=240)
     display_name: str | None = Field(default=None, max_length=120)
     timezone: str = Field(default="Asia/Seoul", max_length=80)
@@ -385,6 +386,7 @@ def create_user(
     user = create_user_account(
         db,
         owner_id=payload.owner_id,
+        password=payload.password,
         email=payload.email,
         display_name=payload.display_name,
         timezone=payload.timezone,
@@ -411,6 +413,7 @@ def update_user(
     user = update_user_account(
         db,
         owner_id=owner_id,
+        password=payload.password,
         email=payload.email,
         display_name=payload.display_name,
         timezone=payload.timezone,
@@ -984,9 +987,11 @@ def _model_to_dict(row) -> dict:
     data = {column.name: getattr(row, column.name) for column in row.__table__.columns}
     if isinstance(row, UserAccount):
         data.pop("access_token_hash", None)
+        data.pop("password_hash", None)
         data["is_active"] = bool(row.is_active)
         data["two_factor_enabled"] = bool(row.two_factor_enabled)
         data["access_token_configured"] = bool(row.access_token_hash)
+        data["password_configured"] = bool(row.password_hash)
     if isinstance(row, UserDevice):
         data["is_active"] = bool(row.is_active)
     return data

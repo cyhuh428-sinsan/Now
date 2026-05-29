@@ -82,6 +82,8 @@ class UserAccount(Base):
     group_name: Mapped[str] = mapped_column(String(80), default="사용자", index=True)
     two_factor_enabled: Mapped[int] = mapped_column(Integer, default=0)
     is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    password_hash: Mapped[str | None] = mapped_column(String(240), nullable=True)
+    password_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     access_token_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     access_token_issued_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     access_token_last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -107,6 +109,23 @@ class UserDevice(Base):
     is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
     first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     last_seen_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class WebSession(Base):
+    __tablename__ = "web_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    session_token_hash: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    device_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow

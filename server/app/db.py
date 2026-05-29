@@ -35,6 +35,7 @@ def create_tables() -> None:
         SyncLog,
         UserAccount,
         UserDevice,
+        WebSession,
     )
 
     if engine.dialect.name == "postgresql":
@@ -55,6 +56,8 @@ def migrate_schema(conn: Connection | None = None) -> None:
         return
     existing_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
     columns = {
+        "password_hash": "VARCHAR(240)",
+        "password_updated_at": "TIMESTAMP",
         "access_token_hash": "VARCHAR(128)",
         "access_token_issued_at": "TIMESTAMP",
         "access_token_last_used_at": "TIMESTAMP",

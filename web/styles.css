@@ -47,6 +47,55 @@ button {
   cursor: pointer;
 }
 
+.web-login-view {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(10px);
+}
+
+.web-login-card {
+  width: min(420px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.login-brand {
+  padding-bottom: 4px;
+}
+
+.web-login-card label {
+  display: grid;
+  gap: 8px;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.web-login-status {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.web-login-status.bad {
+  color: var(--red);
+}
+
+.web-login-status.ok {
+  color: var(--green);
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 48px 220px minmax(0, 1fr);
@@ -517,7 +566,7 @@ body.resizing {
 }
 
 .settings-card {
-  width: min(760px, 100%);
+  width: min(880px, 100%);
   max-height: calc(100vh - 36px);
   overflow: auto;
   border: 1px solid var(--line);
@@ -544,6 +593,10 @@ body.resizing {
   border-bottom: 1px solid var(--line);
 }
 
+.settings-row > div:first-child {
+  min-width: 0;
+}
+
 .settings-row:last-child {
   border-bottom: 0;
 }
@@ -557,6 +610,7 @@ body.resizing {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.45;
 }
 
 .settings-select {
@@ -1714,12 +1768,13 @@ kbd {
 
 .server-settings-row {
   align-items: start;
+  grid-template-columns: 1fr;
 }
 
 .server-settings-form {
   display: grid;
   gap: 10px;
-  width: min(440px, 100%);
+  width: 100%;
 }
 
 .server-settings-form label {
@@ -1728,6 +1783,37 @@ kbd {
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
+}
+
+.server-guide-box {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--blue-soft) 54%, var(--panel));
+}
+
+.server-guide-box strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.server-guide-box ul {
+  display: grid;
+  gap: 5px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.45;
 }
 
 .server-identity-grid {

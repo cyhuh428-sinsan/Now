@@ -7,6 +7,25 @@ def require_api_token(
     authorization: str | None = Header(default=None),
     x_now_token: str | None = Header(default=None),
 ) -> None:
+    _require_supplied_api_token(authorization=authorization, x_now_token=x_now_token)
+
+
+def require_client_api_access(
+    authorization: str | None = Header(default=None),
+    x_now_token: str | None = Header(default=None),
+    x_now_web_session: str | None = Header(default=None, alias="X-Now-Web-Session"),
+) -> None:
+    settings = get_settings()
+    if settings.user_token_required or x_now_web_session:
+        return
+    _require_supplied_api_token(authorization=authorization, x_now_token=x_now_token)
+
+
+def _require_supplied_api_token(
+    *,
+    authorization: str | None,
+    x_now_token: str | None,
+) -> None:
     settings = get_settings()
     expected = settings.api_token
     if not expected:

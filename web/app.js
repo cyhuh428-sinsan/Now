@@ -1,5 +1,6 @@
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
+const WEB_SESSION_KEY = "nownote.web.session.v1";
 
 const ACCENTS = [
   { id: "blue", labelKey: "accent.blue", label: "파랑", value: "#2563eb" },
@@ -102,7 +103,7 @@ const I18N = {
     "note.tabClose": "닫기",
     "note.restore": "복원",
     "note.nodeDeletePermanent": "영구 삭제",
-    "app.title": "NowNote Web",
+    "app.title": "NowNote",
     "accent.blue": "파랑",
     "accent.purple": "보라",
     "accent.green": "초록",
@@ -233,7 +234,21 @@ const I18N = {
     "tabs.closeAll": "모두 닫기",
     "editor.favorite": "즐겨찾기",
     "editor.unfavorite": "즐겨찾기 해제",
+    "editor.share": "공유",
+    "editor.unshare": "공유 안 함",
     "editor.copyLink": "링크 복사",
+    "web.login.desc": "서버 공유 문서에 접속합니다.",
+    "web.login.owner": "사용자 ID",
+    "web.login.password": "비밀번호",
+    "web.login.twoFactor": "2단계 인증 코드",
+    "web.login.twoFactorPlaceholder": "사용 중일 때만 입력",
+    "web.login.submit": "로그인",
+    "web.login.ready": "서버에 저장된 공유 문서만 표시됩니다.",
+    "web.login.loading": "서버 공유 문서를 불러오는 중입니다.",
+    "web.login.failed": "로그인 실패: {message}",
+    "web.login.ok": "로그인되었습니다.",
+    "web.login.logout": "로그아웃",
+    "web.login.loggedOut": "로그아웃되었습니다.",
     "editor.find": "본문 찾기",
     "editor.findPlaceholder": "본문에서 검색",
     "editor.findTitle": "Enter 다음, Shift+Enter 이전",
@@ -303,11 +318,24 @@ const I18N = {
     "settings.server.mode.server": "서버 연결",
     "settings.server.mode": "사용 방식",
     "settings.server.url": "서버 주소",
+    "settings.server.url.placeholder": "https://nownote.sinsan.kr",
+    "settings.server.url.hint": "공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.",
     "settings.server.token": "API 토큰",
+    "settings.server.token.placeholder": "운영자가 제공한 경우 입력",
+    "settings.server.token.hint": "개인 서버 관리자용 토큰입니다. 운영자가 안내한 경우에만 입력합니다.",
     "settings.server.userToken": "사용자별 접속 토큰",
+    "settings.server.userToken.placeholder": "사용자별 접속 토큰",
+    "settings.server.userToken.hint": "공용 서버나 사용자별 토큰 필수 서버에서 내 계정을 확인하는 개인 접속 토큰입니다.",
     "settings.server.twoFactorCode": "2단계 인증 코드",
+    "settings.server.twoFactorCode.placeholder": "필요한 경우 6자리 코드",
+    "settings.server.twoFactorCode.hint": "2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
+    "settings.server.guide.title": "입력 기준",
+    "settings.server.guide.local": "단독 사용: 서버 없이 이 기기에만 저장합니다.",
+    "settings.server.guide.personal": "설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.",
+    "settings.server.guide.public": "Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.",
+    "settings.server.guide.issue": "사용자별 접속 토큰은 설치형/앱용이며 서버 관리자 화면 /admin/users에서 발급합니다.",
     "settings.server.profile.title": "사용자 프로필",
     "settings.server.profile.desc": "표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.",
     "settings.server.profile.displayName": "표시 이름",
@@ -582,7 +610,7 @@ const I18N = {
     "note.tabClose": "Close",
     "note.restore": "Restore",
     "note.nodeDeletePermanent": "Delete permanently",
-    "app.title": "NowNote Web",
+    "app.title": "NowNote",
     "accent.blue": "Blue",
     "accent.purple": "Purple",
     "accent.green": "Green",
@@ -713,7 +741,21 @@ const I18N = {
     "tabs.closeAll": "Close all",
     "editor.favorite": "Favorite",
     "editor.unfavorite": "Unfavorite",
+    "editor.share": "Shared",
+    "editor.unshare": "Not shared",
     "editor.copyLink": "Copy link",
+    "web.login.desc": "Open shared documents from the server.",
+    "web.login.owner": "User ID",
+    "web.login.password": "Password",
+    "web.login.twoFactor": "Two-factor code",
+    "web.login.twoFactorPlaceholder": "Enter only when enabled",
+    "web.login.submit": "Log in",
+    "web.login.ready": "Only server-shared documents are shown.",
+    "web.login.loading": "Loading shared documents from the server.",
+    "web.login.failed": "Login failed: {message}",
+    "web.login.ok": "Logged in.",
+    "web.login.logout": "Log out",
+    "web.login.loggedOut": "Logged out.",
     "editor.find": "Find in note",
     "editor.findPlaceholder": "Find in content",
     "editor.findTitle": "Enter next, Shift+Enter previous",
@@ -783,11 +825,24 @@ const I18N = {
     "settings.server.mode.server": "Server connection",
     "settings.server.mode": "Mode",
     "settings.server.url": "Server URL",
+    "settings.server.url.placeholder": "https://nownote.sinsan.kr",
+    "settings.server.url.hint": "Use https://nownote.sinsan.kr for the public server, or your own server URL for a personal server.",
     "settings.server.token": "API token",
+    "settings.server.token.placeholder": "Enter only if provided",
+    "settings.server.token.hint": "This is an administrator/personal-server token. Enter it only when the operator provides one.",
     "settings.server.userToken": "Per-user access token",
+    "settings.server.userToken.placeholder": "Per-user access token",
+    "settings.server.userToken.hint": "This personal access token identifies your account on public servers or servers that require per-user tokens.",
     "settings.server.twoFactorCode": "2FA code",
+    "settings.server.twoFactorCode.placeholder": "6-digit code when required",
+    "settings.server.twoFactorCode.hint": "Enter the six-digit code only when your account uses two-factor authentication.",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
+    "settings.server.guide.title": "Connection guide",
+    "settings.server.guide.local": "Standalone: save only on this device without a server.",
+    "settings.server.guide.personal": "Desktop/app: enter the server URL, user ID, and per-user access token.",
+    "settings.server.guide.public": "Web: log in at the server address with user ID and password.",
+    "settings.server.guide.issue": "Per-user access tokens are for desktop/app clients and are issued at /admin/users.",
     "settings.server.profile.title": "User profile",
     "settings.server.profile.desc": "Save display name, email, and time zone as server user information.",
     "settings.server.profile.displayName": "Display name",
@@ -1027,16 +1082,22 @@ const state = {
   selectedDeletedTreeIds: new Set(),
   capturingShortcutId: null,
   search: "",
-  data: {
-    daily: {},
-    archivedDaily: [],
-    deletedTree: [],
-    tree: [],
-  },
+  data: defaultData(),
   settings: defaultSettings(),
 };
 
 let storageWarningShown = false;
+let hostedWebSyncTimer = null;
+let hostedWebSyncSuspended = false;
+
+function defaultData() {
+  return {
+    daily: {},
+    archivedDaily: [],
+    deletedTree: [],
+    tree: [],
+  };
+}
 
 function defaultSettings() {
   return {
@@ -1069,8 +1130,9 @@ function defaultServerSettings() {
     url: hostedServerUrl,
     token: "",
     userToken: "",
+    webSessionToken: "",
     ownerId: "local_user",
-    deviceId: "web-desktop",
+    deviceId: isHostedWebClient() ? "web-client" : "web-desktop",
     userProfile: defaultServerUserProfile(),
     capabilities: null,
     publicServerReadiness: null,
@@ -1089,6 +1151,10 @@ function defaultHostedServerUrl() {
     return window.location.origin;
   }
   return "";
+}
+
+function isHostedWebClient() {
+  return Boolean(defaultHostedServerUrl());
 }
 
 function defaultServerUserProfile() {
@@ -1218,6 +1284,7 @@ const elements = {
   treeLevelLabel: $("#treeLevelLabel"),
   treeSavedLabel: $("#treeSavedLabel"),
   favoriteBtn: $("#favoriteBtn"),
+  shareTreeBtn: $("#shareTreeBtn"),
   copyLinkBtn: $("#copyLinkBtn"),
   noteFindToggleBtn: $("#noteFindToggleBtn"),
   outlineToggleBtn: $("#outlineToggleBtn"),
@@ -1301,6 +1368,7 @@ const elements = {
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
   serverFullSyncBtn: $("#serverFullSyncBtn"),
+  webLogoutBtn: $("#webLogoutBtn"),
   serverStatusText: $("#serverStatusText"),
   serverMetaText: $("#serverMetaText"),
   serverCapabilitiesText: $("#serverCapabilitiesText"),
@@ -1334,6 +1402,13 @@ const elements = {
   confirmCancelBtn: $("#confirmCancelBtn"),
   confirmOkBtn: $("#confirmOkBtn"),
   toastRegion: $("#toastRegion"),
+  webLoginView: $("#webLoginView"),
+  webLoginForm: $("#webLoginForm"),
+  webLoginOwnerInput: $("#webLoginOwnerInput"),
+  webLoginPasswordInput: $("#webLoginPasswordInput"),
+  webLoginTwoFactorInput: $("#webLoginTwoFactorInput"),
+  webLoginSubmitBtn: $("#webLoginSubmitBtn"),
+  webLoginStatus: $("#webLoginStatus"),
 };
 
 function confirmAction(message) {
@@ -1388,6 +1463,150 @@ function showNotice(message, type = "info") {
   }, type === "error" ? 5200 : 3600);
 }
 
+async function initializeHostedWebClient() {
+  if (!isHostedWebClient()) {
+    return;
+  }
+  const session = loadWebSession();
+  if (!session?.ownerId || !session?.token) {
+    showWebLogin(t("web.login.ready"));
+    return;
+  }
+  applyWebSession(session);
+  showWebLogin(t("web.login.loading"), "ok");
+  try {
+    await verifyWebSession();
+    await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
+    hideWebLogin();
+  } catch (error) {
+    clearWebSession();
+    showWebLogin(t("web.login.failed", { message: error.message }), "bad");
+  }
+}
+
+function loadWebSession() {
+  try {
+    const raw = sessionStorage.getItem(WEB_SESSION_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveWebSession(session) {
+  sessionStorage.setItem(WEB_SESSION_KEY, JSON.stringify(session));
+}
+
+function clearWebSession() {
+  sessionStorage.removeItem(WEB_SESSION_KEY);
+}
+
+function applyWebSession(session) {
+  const server = state.settings.server || defaultServerSettings();
+  state.settings.server = {
+    ...server,
+    mode: "server",
+    url: defaultHostedServerUrl(),
+    token: "",
+    userToken: "",
+    webSessionToken: session.token,
+    ownerId: normalizeOwnerId(session.ownerId),
+    deviceId: session.deviceId || server.deviceId || "web-client",
+  };
+  persistSettings();
+  renderSettings();
+}
+
+function showWebLogin(message = t("web.login.ready"), status = "") {
+  if (!elements.webLoginView) return;
+  elements.webLoginView.classList.remove("hidden");
+  elements.webLoginStatus.textContent = message;
+  elements.webLoginStatus.classList.toggle("bad", status === "bad");
+  elements.webLoginStatus.classList.toggle("ok", status === "ok");
+}
+
+function hideWebLogin() {
+  elements.webLoginView?.classList.add("hidden");
+}
+
+async function handleWebLoginSubmit(event) {
+  event.preventDefault();
+  if (!isHostedWebClient()) return;
+  const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
+  const password = elements.webLoginPasswordInput.value;
+  const twoFactorCode = elements.webLoginTwoFactorInput.value.trim();
+  showWebLogin(t("web.login.loading"), "ok");
+  elements.webLoginSubmitBtn.disabled = true;
+  try {
+    const response = await fetch(`${defaultHostedServerUrl()}/api/v1/auth/web-login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        owner_id: ownerId,
+        password,
+        device_id: "web-client",
+        ...(twoFactorCode ? { two_factor_code: twoFactorCode } : {}),
+      }),
+    });
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const payload = await response.json();
+    const session = {
+      ownerId,
+      token: payload.session_token,
+      deviceId: "web-client",
+      expiresAt: payload.expires_at,
+    };
+    saveWebSession(session);
+    applyWebSession(session);
+    applyServerUserProfile(payload.user);
+    await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
+    hideWebLogin();
+    showNotice(t("web.login.ok"));
+  } catch (error) {
+    showWebLogin(t("web.login.failed", { message: error.message }), "bad");
+  } finally {
+    elements.webLoginSubmitBtn.disabled = false;
+  }
+}
+
+async function handleWebLogout() {
+  if (!isHostedWebClient()) return;
+  const server = state.settings.server || defaultServerSettings();
+  try {
+    if (server.webSessionToken) {
+      await fetch(`${defaultHostedServerUrl()}/api/v1/auth/web-logout`, {
+        method: "POST",
+        headers: serverAuthHeaders(server),
+      });
+    }
+  } catch {
+    // 로그아웃은 로컬 세션 폐기를 우선한다.
+  }
+  clearWebSession();
+  hostedWebSyncSuspended = true;
+  try {
+    state.data = defaultData();
+    state.selectedTreeId = null;
+    state.selectedDate = toDateKey(new Date());
+    state.expandedTreeIds.clear();
+    state.selectedDeletedTreeIds.clear();
+    state.settings.server = {
+      ...defaultServerSettings(),
+      mode: "server",
+      url: defaultHostedServerUrl(),
+      deviceId: "web-client",
+      lastStatus: "idle",
+      lastMessage: t("web.login.loggedOut"),
+    };
+    persistSettings();
+    render();
+    renderSettings();
+    showWebLogin(t("web.login.loggedOut"), "ok");
+  } finally {
+    hostedWebSyncSuspended = false;
+  }
+}
+
 load();
 loadSettings();
 applyLanguageQueryOverride();
@@ -1395,6 +1614,7 @@ bindEvents();
 renderSettings();
 applySettings();
 render();
+initializeHostedWebClient();
 
 function bindEvents() {
   elements.navTabs.forEach((button) => {
@@ -1605,6 +1825,7 @@ function bindEvents() {
   elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
   elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
+  elements.webLogoutBtn.addEventListener("click", handleWebLogout);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
@@ -1658,6 +1879,15 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected) return;
     selected.favorite = !selected.favorite;
+    markTreeNodeChanged(selected);
+    persist();
+    renderTree();
+  });
+
+  elements.shareTreeBtn.addEventListener("click", () => {
+    const selected = getSelectedTreeNode();
+    if (!selected || isHostedWebClient()) return;
+    selected.shared = selected.shared === false;
     markTreeNodeChanged(selected);
     persist();
     renderTree();
@@ -1732,6 +1962,7 @@ function bindEvents() {
   elements.quickInput.addEventListener("keydown", handleQuickInputKey);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
+  elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
   bindOverlayDismiss(elements.graphView, closeGraph);
@@ -1843,6 +2074,7 @@ function renderServerSettings() {
   elements.serverEmailInput.value = profile.email;
   elements.serverTimezoneInput.value = profile.timezone;
   const isServerMode = server.mode === "server";
+  applyHostedServerSettingsVisibility();
   elements.serverTestBtn.disabled = !isServerMode;
   elements.serverSyncBtn.disabled = !isServerMode;
   elements.serverFullSyncBtn.disabled = !isServerMode;
@@ -1857,8 +2089,50 @@ function renderServerSettings() {
   renderServerProfileMeta(profile);
 }
 
+function applyHostedServerSettingsVisibility() {
+  const hosted = isHostedWebClient();
+  const configNodes = [
+    elements.serverModeSelect?.closest("label"),
+    elements.serverUrlInput?.closest("label"),
+    elements.serverTokenInput?.closest("label"),
+    elements.serverUserTokenInput?.closest("label"),
+    elements.serverTwoFactorCodeInput?.closest("label"),
+    elements.ownerIdInput?.closest(".server-identity-grid"),
+  ];
+  configNodes.forEach((node) => node?.classList.toggle("hidden", hosted));
+  [
+    elements.serverSaveBtn,
+    elements.serverTestBtn,
+    elements.serverSyncBtn,
+    elements.serverFullSyncBtn,
+  ].forEach((node) => node?.classList.toggle("hidden", hosted));
+  elements.webLogoutBtn?.classList.toggle("hidden", !hosted);
+}
+
 function saveServerSettingsFromForm(message = t("settings.server.saved")) {
   const previous = state.settings.server || defaultServerSettings();
+  if (isHostedWebClient()) {
+    state.settings.server = {
+      ...previous,
+      mode: "server",
+      url: defaultHostedServerUrl(),
+      token: "",
+      userToken: "",
+      ownerId: normalizeOwnerId(previous.ownerId),
+      deviceId: previous.deviceId || "web-client",
+      userProfile: {
+        ...normalizeServerUserProfile(previous.userProfile),
+        displayName: elements.serverDisplayNameInput.value.trim(),
+        email: elements.serverEmailInput.value.trim(),
+        timezone: elements.serverTimezoneInput.value.trim() || "Asia/Seoul",
+      },
+      lastStatus: "saved",
+      lastMessage: message,
+    };
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
   const nextUrl = normalizeServerUrl(elements.serverUrlInput.value);
   const nextToken = elements.serverTokenInput.value.trim();
   const nextUserToken = elements.serverUserTokenInput.value.trim();
@@ -2175,7 +2449,11 @@ async function testServerConnection() {
     server.capabilities = payload.capabilities || null;
     server.publicServerReadiness = payload.public_server_readiness || null;
     let tokenMessage = "";
-    if ((server.userToken || "").trim()) {
+    if ((server.webSessionToken || "").trim()) {
+      const sessionPayload = await verifyWebSession();
+      applyServerUserProfile(sessionPayload.user);
+      tokenMessage = ` · ${t("web.login.ok")}`;
+    } else if ((server.userToken || "").trim()) {
       const tokenPayload = await verifyServerUserToken(server);
       applyServerUserProfile(tokenPayload.user);
       tokenMessage = ` · ${t("settings.server.userTokenOk")}`;
@@ -2209,6 +2487,55 @@ async function verifyServerUserToken(server) {
   });
   if (!response.ok) throw new Error(await serverResponseError(response));
   return response.json();
+}
+
+async function verifyWebSession() {
+  const server = state.settings.server;
+  const ownerId = normalizeOwnerId(server.ownerId);
+  const payload = await requestServerJson(
+    server,
+    `/api/v1/auth/web-session?owner_id=${encodeURIComponent(ownerId)}`,
+  );
+  applyServerUserProfile(payload.user);
+  return payload;
+}
+
+async function loadServerSharedNotes({ replace = false, message = t("settings.server.syncing") } = {}) {
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+  renderServerStatus("testing", message);
+  const payload = await requestServerJson(server, "/api/v1/sync", {
+    method: "POST",
+    body: JSON.stringify({
+      owner_id: normalizeOwnerId(server.ownerId),
+      device_id: server.deviceId || "web-client",
+      updated_after: null,
+      include_deleted: true,
+      notes: [],
+    }),
+  });
+  hostedWebSyncSuspended = true;
+  try {
+    if (replace) {
+      state.data = defaultData();
+      state.selectedTreeId = null;
+      state.expandedTreeIds.clear();
+      state.selectedDeletedTreeIds.clear();
+    }
+    const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+    markServerSyncedNotes();
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
+    server.lastMessage = t("settings.server.syncOk");
+    persist();
+    persistSettings();
+    render();
+    renderServerSettings();
+    return mergeResult;
+  } finally {
+    hostedWebSyncSuspended = false;
+  }
 }
 
 async function loadServerUserProfile() {
@@ -2418,6 +2745,10 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
 }
 
 function prepareServerRequest(server) {
+  if (isHostedWebClient() && !server.webSessionToken) {
+    showWebLogin(t("web.login.ready"));
+    return false;
+  }
   if (server.mode !== "server") {
     server.lastStatus = "idle";
     server.lastMessage = t("settings.server.local");
@@ -2452,6 +2783,7 @@ function serverAuthHeaders(server) {
   return {
     ...(server.token ? { Authorization: `Bearer ${server.token}` } : {}),
     ...(server.userToken ? { "X-Now-User-Token": server.userToken } : {}),
+    ...(server.webSessionToken ? { "X-Now-Web-Session": server.webSessionToken } : {}),
   };
 }
 
@@ -2632,6 +2964,7 @@ function createPulledTreeNode(note, parentId, level) {
     children: [],
     status: note.deleted_at ? "deleted" : "active",
     syncState: "synced",
+    shared: true,
     favorite: false,
     tags: tagsFromServerNote(note),
     createdAt: note.created_at || note.client_updated_at || note.updated_at || new Date().toISOString(),
@@ -2677,9 +3010,11 @@ function buildServerSyncNotes(server) {
       .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => archivedDailyNoteToServerNote(note, server)),
     ...flattenTree(state.data.tree)
+      .filter(isTreeNodeSharedForServer)
       .filter((node) => shouldSendServerNote(node, changedOnly))
       .map((node) => treeNodeToServerNote(node, server, null)),
     ...state.data.deletedTree
+      .filter(isTreeNodeSharedForServer)
       .filter((node) => shouldSendServerNote(node, changedOnly))
       .map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
   ];
@@ -2688,6 +3023,16 @@ function buildServerSyncNotes(server) {
 
 function shouldSendServerNote(item, changedOnly) {
   return !changedOnly || item.syncState === "pending";
+}
+
+function isTreeNodeSharedForServer(node) {
+  if (node.shared === false) return false;
+  let parent = node.parentId ? findTreeNode(state.data.tree, node.parentId) : null;
+  while (parent) {
+    if (parent.shared === false) return false;
+    parent = parent.parentId ? findTreeNode(state.data.tree, parent.parentId) : null;
+  }
+  return true;
 }
 
 function dailyNoteToServerNote(note, server) {
@@ -2953,6 +3298,7 @@ function applySettings() {
     : state.settings.theme;
   const accent = ACCENTS.find((item) => item.id === state.settings.accent) || ACCENTS[0];
   document.documentElement.dataset.theme = resolvedTheme;
+  document.documentElement.dataset.client = isHostedWebClient() ? "hosted" : "local";
   document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
   document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.railMode = state.settings.railMode;
@@ -3018,6 +3364,13 @@ function applyLanguage() {
   setText("#helpBtn", t("side.help"));
   setText("#treeEyebrow", t("tree.eyebrow"));
   setText("#treeTitle", t("tree.title"));
+  setText("#webLoginTitle", t("app.title"));
+  setText("#webLoginDesc", t("web.login.desc"));
+  setText("#webLoginOwnerLabel", t("web.login.owner"));
+  setText("#webLoginPasswordLabel", t("web.login.password"));
+  setText("#webLoginTwoFactorLabel", t("web.login.twoFactor"));
+  setText("#webLoginSubmitBtn", t("web.login.submit"));
+  setPlaceholder(elements.webLoginTwoFactorInput, t("web.login.twoFactorPlaceholder"));
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
   setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
   setIconLabel(elements.addRootBtn, t("tree.addRoot"));
@@ -3027,6 +3380,7 @@ function applyLanguage() {
   setPlaceholder(elements.treeTitleInput, t("tree.titlePlaceholder"));
   setPlaceholder(elements.treeContent, t("tree.contentPlaceholder"));
   setText("#copyLinkBtn", t("editor.copyLink"));
+  setText("#shareTreeBtn", t("editor.share"));
   setText("#reopenClosedTabBtn", t("tabs.reopen"));
   setText("#closeOtherTabsBtn", t("tabs.closeOther"));
   setText("#closeAllTabsBtn", t("tabs.closeAll"));
@@ -3121,6 +3475,11 @@ function applyLanguage() {
   setText("#featuresSettingDesc", t("settings.features.desc"));
   setText("#serverSettingTitle", t("settings.server.title"));
   setText("#serverSettingDesc", t("settings.server.desc"));
+  setText("#serverGuideTitle", t("settings.server.guide.title"));
+  setText("#serverGuideLocal", t("settings.server.guide.local"));
+  setText("#serverGuidePersonal", t("settings.server.guide.personal"));
+  setText("#serverGuidePublic", t("settings.server.guide.public"));
+  setText("#serverGuideIssue", t("settings.server.guide.issue"));
   setText("#serverModeLocalOption", t("settings.server.mode.local"));
   setText("#serverModeServerOption", t("settings.server.mode.server"));
   setText("#serverModeLabel", t("settings.server.mode"));
@@ -3128,6 +3487,10 @@ function applyLanguage() {
   setText("#serverTokenLabel", t("settings.server.token"));
   setText("#serverUserTokenLabel", t("settings.server.userToken"));
   setText("#serverTwoFactorCodeLabel", t("settings.server.twoFactorCode"));
+  setText("#serverUrlHint", t("settings.server.url.hint"));
+  setText("#serverTokenHint", t("settings.server.token.hint"));
+  setText("#serverUserTokenHint", t("settings.server.userToken.hint"));
+  setText("#serverTwoFactorCodeHint", t("settings.server.twoFactorCode.hint"));
   setText("#ownerIdLabel", t("settings.server.owner"));
   setText("#deviceIdLabel", t("settings.server.device"));
   setText("#serverProfileTitle", t("settings.server.profile.title"));
@@ -3145,9 +3508,11 @@ function applyLanguage() {
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
-  setPlaceholder(elements.serverTokenInput, t("settings.server.token"));
-  setPlaceholder(elements.serverUserTokenInput, t("settings.server.userToken"));
-  setPlaceholder(elements.serverTwoFactorCodeInput, t("settings.server.twoFactorCode"));
+  setText("#webLogoutBtn", t("web.login.logout"));
+  setPlaceholder(elements.serverUrlInput, t("settings.server.url.placeholder"));
+  setPlaceholder(elements.serverTokenInput, t("settings.server.token.placeholder"));
+  setPlaceholder(elements.serverUserTokenInput, t("settings.server.userToken.placeholder"));
+  setPlaceholder(elements.serverTwoFactorCodeInput, t("settings.server.twoFactorCode.placeholder"));
   setText("#sidebarAssistSettingTitle", t("settings.sidebarAssist.title"));
   setText("#sidebarAssistSettingDesc", t("settings.sidebarAssist.desc"));
   setText("#backupSettingTitle", t("settings.backup.title"));
@@ -3227,7 +3592,10 @@ function updateHelpLinks() {
   const language = state.settings.language === "en" ? "en" : "ko";
   const helpUrl = `./help.html?lang=${encodeURIComponent(language)}`;
   [elements.helpBtn, elements.settingsHelpBtn].forEach((link) => {
-    if (link) link.href = helpUrl;
+    if (!link) return;
+    link.href = helpUrl;
+    link.removeAttribute("target");
+    link.removeAttribute("rel");
   });
 }
 
@@ -4464,6 +4832,7 @@ function renderTreeEditor() {
   elements.treeTitleInput.value = selected.title;
   elements.treeContent.value = selected.content;
   renderFavorite(selected);
+  renderShareState(selected);
   renderTags();
   renderNoteStats(selected);
   elements.markdownPreview.classList.add("hidden");
@@ -4682,6 +5051,13 @@ function removeTreeTabReferences(id) {
 function renderFavorite(node) {
   elements.favoriteBtn.classList.toggle("active", Boolean(node.favorite));
   elements.favoriteBtn.textContent = node.favorite ? t("editor.unfavorite") : t("editor.favorite");
+}
+
+function renderShareState(node) {
+  const shared = node.shared !== false;
+  elements.shareTreeBtn.classList.toggle("active", shared);
+  elements.shareTreeBtn.disabled = isHostedWebClient();
+  elements.shareTreeBtn.textContent = shared ? t("editor.share") : t("editor.unshare");
 }
 
 function renderTags() {
@@ -5470,6 +5846,7 @@ function createNode(title, content, parentId, level) {
     children: [],
     status: "active",
     syncState: "pending",
+    shared: isHostedWebClient(),
     favorite: false,
     tags: extractTags(content),
     createdAt: new Date().toISOString(),
@@ -5621,6 +5998,10 @@ function flattenTree(nodes) {
 }
 
 function load() {
+  if (isHostedWebClient()) {
+    state.data = defaultData();
+    return;
+  }
   const raw = localStorage.getItem(STORAGE_KEY);
   if (!raw) return;
   try {
@@ -5708,6 +6089,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.url = typeof normalized.url === "string" ? normalizeServerUrl(normalized.url) : "";
   normalized.token = typeof normalized.token === "string" ? normalized.token : "";
   normalized.userToken = typeof normalized.userToken === "string" ? normalized.userToken : "";
+  normalized.webSessionToken = typeof normalized.webSessionToken === "string" ? normalized.webSessionToken : "";
   normalized.ownerId = normalizeOwnerId(normalized.ownerId || defaults.ownerId);
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
@@ -5786,7 +6168,20 @@ function normalizeFeatureSettings(value, fallback) {
 }
 
 function persistSettings() {
-  writeStorage(SETTINGS_KEY, state.settings);
+  writeStorage(SETTINGS_KEY, settingsForStorage());
+}
+
+function settingsForStorage() {
+  if (!isHostedWebClient()) return state.settings;
+  return {
+    ...state.settings,
+    server: {
+      ...defaultServerSettings(),
+      mode: "server",
+      url: defaultHostedServerUrl(),
+      deviceId: "web-client",
+    },
+  };
 }
 
 function normalizeData() {
@@ -5824,6 +6219,7 @@ function normalizeData() {
     node.children = [];
     node.status = "deleted";
     node.syncState = node.syncState || "synced";
+    node.shared = node.shared !== false;
     node.deletedAt = node.deletedAt || node.updatedAt || new Date().toISOString();
     node.updatedAt = node.updatedAt || node.deletedAt;
     node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
@@ -5873,6 +6269,7 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.children = Array.isArray(node.children) ? node.children.filter(isPlainObject) : [];
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
+    node.shared = node.shared !== false;
     node.favorite = Boolean(node.favorite);
     node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
     node.createdAt = node.createdAt || new Date().toISOString();
@@ -5895,7 +6292,20 @@ function mergeOverflowTreeChildren(content, children) {
 }
 
 function persist() {
-  writeStorage(STORAGE_KEY, state.data);
+  if (!isHostedWebClient()) {
+    writeStorage(STORAGE_KEY, state.data);
+  }
+  scheduleHostedWebSync();
+}
+
+function scheduleHostedWebSync() {
+  if (!isHostedWebClient() || hostedWebSyncSuspended) return;
+  const server = state.settings.server || defaultServerSettings();
+  if (server.mode !== "server" || !server.webSessionToken || countPendingSyncNotes() === 0) return;
+  window.clearTimeout(hostedWebSyncTimer);
+  hostedWebSyncTimer = window.setTimeout(() => {
+    syncWebNotesToServer(t("settings.server.syncing"));
+  }, 1200);
 }
 
 function writeStorage(key, value) {

@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import require_api_token
+from app.core.security import require_client_api_access
 from app.db import get_db
 from app.models.note import UserAccount, UserDevice
 from app.services.user_accounts import require_user_api_access, update_user_account
@@ -12,7 +12,7 @@ from app.services.user_devices import set_user_device_active
 router = APIRouter(
     prefix="/api/v1/users",
     tags=["users"],
-    dependencies=[Depends(require_api_token)],
+    dependencies=[Depends(require_client_api_access)],
 )
 
 
@@ -30,9 +30,15 @@ class UserDeviceUpdate(BaseModel):
 def user_profile(
     owner_id: str,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    user = require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     return {"status": "ok", "user": _user_payload(user)}
 
 
@@ -41,9 +47,15 @@ def update_user_profile(
     owner_id: str,
     payload: UserProfileUpdate,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    user = require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     updated = update_user_account(
         db,
         owner_id=owner_id,
@@ -63,9 +75,15 @@ def update_user_profile(
 def user_devices(
     owner_id: str,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> dict:
-    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     devices = list(
         db.scalars(
             select(UserDevice)
@@ -90,9 +108,15 @@ def update_user_device(
     device_id: str,
     payload: UserDeviceUpdate,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> dict:
-    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     existing = db.scalar(
         select(UserDevice).where(
             UserDevice.owner_id == owner_id,

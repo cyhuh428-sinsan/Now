@@ -76,11 +76,12 @@ Available features:
 
 Notes:
 
-- A server URL and API token are required.
-- API tokens entered in the app and installed programs are stored in the device secure storage.
+- Mobile and installed apps require a server URL, user ID, and either an API token or a per-user access token depending on the server mode.
+- The Web program logs in at the server address with a user ID and password.
+- The API token protects personal servers or operator/admin APIs. It is not a normal Web login value.
 - Personal server users must change the token and database password in `.env`.
 - Public server users use connection information issued by the operator.
-- The current first-phase server can start with a single API token for personal Docker servers, and also provides per-user access tokens plus two-factor code verification for public-server use.
+- The current first-phase server can start with an admin API token for personal Docker servers, and also provides per-user access tokens, Web login passwords, and two-factor code verification for public-server use.
 - Before opening a public server, all `scripts/preflight.py --public-server` failures must be resolved. Current failures are a safety signal that per-user token enforcement and the public operations environment such as HTTPS/reverse proxy are still unfinished.
 - Server backup verification checks backup schema, checksum, required sections, and token-sensitive data exposure.
 - Archived daily notes are not deleted after server connection. They stay as inactive backup records.
@@ -106,9 +107,8 @@ Recommended flow:
 - Quickly write today's note from Home.
 - Add daily notes by voice or typing.
 - Create hierarchical notes when needed.
-- Server-connected users enter the server URL and token in settings.
-- API tokens entered in the app are stored in the device secure storage.
-- If a public server requires it, also enter the per-user access token.
+- Server-connected users enter the server URL, user ID, and per-user access token in settings.
+- If two-factor authentication is enabled, enter the six-digit code when checking the connection.
 
 Important mobile features:
 
@@ -120,14 +120,13 @@ Important mobile features:
 - Server recording upload status
 - Server analysis job creation and result review
 
-### Web / Installed App
+### Web Program
 
-Web and installed apps focus on knowledge notes.
-The Windows installed app is provided as an `.exe` installer that wraps the Web screen in an Electron app.
 The Web program is a server-hosted browser app for external PCs.
+It is not a local note source. It shows and edits only your server-shared documents.
 Users who do not run their own server use the public Web program at `https://nownote.sinsan.kr`.
 Users who run a personal server use `https://your-domain` or `http://server-ip:8750`.
-Enter the server URL and connection values provided by the operator in display settings.
+Web users log in with user ID and password, not by pasting a per-user access token.
 
 The developer file `web/index.html` is not the user-facing Web program address.
 The user-facing Web program opens at the server root address.
@@ -141,7 +140,7 @@ Recommended flow:
 - Open daily notes briefly when needed.
 - Adjust shortcuts and feature visibility to personal preference.
 
-Important web and installed-app features:
+Important Web features:
 
 - Hierarchical knowledge notes
 - Tab-based editing
@@ -154,16 +153,27 @@ Important web and installed-app features:
 - Markdown import and export
 - Server analysis job creation, result summary review, and adding results to notes
 
+### Installed App
+
+The Windows installed app is the PC version of NowNote.
+Its design can look similar to the Web program, but its internal behavior is different.
+The installed app handles both PC-local documents and server-shared documents.
+Without a server connection, it can be used standalone on the PC.
+With a server connection, it syncs daily notes and knowledge notes that the user chose to share.
+
 ## Server Connection
 
-Required values:
+Required values for mobile and installed apps:
 
 - Server URL
-- API token
-- Per-user access token: Used by public servers or servers that require it
-- Two-factor code: Enter only for users with two-factor authentication enabled
 - User ID
+- API token: Used by personal-server default mode
+- Per-user access token
+- Two-factor code: Enter only for users with two-factor authentication enabled
 - Device ID
+
+The Web program logs in at the server address with a user ID and password.
+On public servers, the API token protects operator screens and admin APIs.
 
 ### Users Who Do Not Install A Server
 
@@ -182,12 +192,14 @@ Public privacy policy: https://nownote.sinsan.kr/privacy
 If you only connect to a public server, enter the values issued by the operator.
 
 ```text
-Server URL: example) https://nownote.sinsan.kr
-API token: Server connection token provided by the operator
-User ID: User ID created by the operator
-Per-user access token: User token issued by the operator
+Web URL: example) https://nownote.sinsan.kr
+Web login: User ID and password created by the operator
+App/installed server URL: example) https://nownote.sinsan.kr
+App/installed user ID: User ID created by the operator
+App/installed per-user access token: User token issued by the operator
+App/installed API token: Leave empty on public servers
 Two-factor code: Six-digit code when two-factor authentication is enabled
-Device ID: Automatically generated by the app or Web/installed program
+Device ID: Automatically generated by the app or installed program
 ```
 
 Input location:
@@ -195,7 +207,7 @@ Input location:
 ```text
 Mobile app: Server connection section in settings
 Installed app: Server connection section in display settings
-Web program: Display settings at https://nownote.sinsan.kr or https://your-domain
+Web program: Login screen at https://nownote.sinsan.kr or https://your-domain
 ```
 
 Users do not need to see the server `.env` file.
@@ -204,9 +216,11 @@ Use only the connection values separately provided by the operator.
 Personal Docker server example:
 
 ```text
-Server URL: http://server-address:8750
-API token: NOW_API_TOKEN in server .env
-Per-user access token: Token issued per user in the admin screen
+Web URL: http://server-address:8750
+Web login: User ID and Web password created in the admin screen
+App/installed server URL: http://server-address:8750
+App/installed API token: NOW_API_TOKEN from server .env in personal-server default mode
+App/installed per-user access token: Token issued per user in the admin screen
 Two-factor code: Six-digit code when required
 User ID: local_user or the user ID issued by the operator
 Device ID: Generated automatically by the app or installed program
@@ -231,7 +245,8 @@ User information:
 - Last access time
 
 Apps and installed programs can edit the user's own email, display name, and time zone.
-In the mobile app and the Web/installed program, open server settings, enter the user ID, then load or save the user profile.
+In the mobile app and installed program, open server settings, enter the user ID, then load or save the user profile.
+The Web program uses the logged-in user and server-shared documents.
 
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
 Public server operators can create a user ID in the admin screen before the user connects.
@@ -242,7 +257,8 @@ Users with two-factor authentication enabled must enter the six-digit verificati
 
 ### Web / Installed App JSON Backup
 
-JSON is used to back up or restore all NowNote data in the Web/installed app.
+JSON is used to back up or restore data in the development Web screen or installed app.
+For the public Web program, the server shared documents are the source of truth, so server backup is the primary backup path.
 
 Included data:
 

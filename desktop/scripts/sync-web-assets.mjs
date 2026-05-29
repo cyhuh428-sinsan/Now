@@ -51,4 +51,4 @@ for (const directory of directories) {
   copyDirectory(directory);
 }
 
-console.log(`NowNote Web assets copied to ${targetRoot}`);
+console.log(`NowNote assets copied to ${targetRoot}`);

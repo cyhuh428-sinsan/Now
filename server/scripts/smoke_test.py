@@ -950,6 +950,21 @@ def main() -> None:
             {"owner_id": data.get("owner_id"), "issued": bool(USER_TOKEN)},
         )
         if USER_TOKEN_REQUIRED:
+            status, data = request_with_user_token(
+                "GET",
+                f"{base_url}/api/v1/notes?owner_id=local_user",
+                token=None,
+                user_token=USER_TOKEN,
+            )
+            require(
+                status == 200,
+                "사용자 토큰 필수 모드에서 관리자 API 토큰 없이 사용자별 접속 토큰만으로 데이터 API를 사용할 수 없습니다",
+            )
+            print(
+                "GET /api/v1/notes(user_token_only):",
+                status,
+                {"auth": "user token only"},
+            )
             status, data = request_error_with_user_token(
                 "GET",
                 f"{base_url}/api/v1/notes?owner_id=local_user",
