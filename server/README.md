@@ -271,6 +271,7 @@ Invoke-WebRequest http://localhost:8750/api/v1/admin/release-readiness
 ```
 
 이 API는 `/admin/release` 화면과 같은 기준으로 전체 체크리스트 완료 수, 영역별 진행률, 실제 기기/공용 서버/Play Console/라이선스처럼 외부 확인이 필요한 남은 항목 유형과 다음 행동을 JSON으로 반환합니다.
+`/admin/evidence`에서 같은 항목의 최신 수동 증빙 기록을 `완료`로 저장하면 `summary.evidence_done`에 집계되고 완료 수에도 반영됩니다.
 
 1차 수동 증빙 API:
 

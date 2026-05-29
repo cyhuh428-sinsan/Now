@@ -586,6 +586,7 @@ def main() -> None:
                 ("/admin/play", "README documents Play release admin page", "Play release admin page"),
                 ("/admin/open-source", "README documents open source release admin page", "open source admin page"),
                 ("/api/v1/admin/release-readiness", "README documents release readiness API", "release readiness API"),
+                ("summary.evidence_done", "README documents release evidence completion reflection", "release evidence reflection"),
                 ("/api/v1/admin/play-release", "README documents Play release API", "Play release API"),
                 ("/api/v1/admin/open-source-release", "README documents open source release API", "open source API"),
                 ("/api/v1/admin/public-route", "README documents public route check API", "public route API"),
