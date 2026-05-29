@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 12:56 KST
+
+### 남은 1차 항목 재점검
+
+- `scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `scripts\play_release_status.py --show-manual` 통과: 자동 확인 27/27 OK, 경고 0.
+- GitHub Actions 상태 확인은 저장소가 비공개이고 현재 셸에 `GITHUB_TOKEN`/`GH_TOKEN`이 없어 `scripts\check_github_actions_status.py`가 HTTP 404 안내를 반환함. 완료 처리하지 않음.
+- GitHub 커넥터 기준 저장소 `cyhuh428-sinsan/Now`는 private이고 현재 사용자 권한은 admin/push 가능 상태임을 확인.
+
+### 현재 보류 판단
+
+- 공용 서버 8개 항목은 실제 도메인, HTTPS reverse proxy, 공용 운영 토큰 정책 확정 전에는 완료 처리하지 않음.
+- Google Play 수동 7개 항목은 Play Console 화면 확인과 내부 테스트 트랙 업로드가 필요해 완료 처리하지 않음.
+- Play 실제 기기 설치 테스트는 현재 실기기에 설치된 debug 앱과 release 서명 앱의 서명이 달라질 수 있어, 강제 진행 시 앱 데이터 삭제가 필요할 수 있으므로 사용자 승인 전에는 진행하지 않음.
+- 라이선스 2개 항목은 법적 선택이므로 사용자 확정 전에는 완료 처리하지 않음.
+
 ## 2026-05-29 12:52 KST
 
 ### 모바일 음성 점검 반영본 배포
