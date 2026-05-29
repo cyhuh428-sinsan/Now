@@ -27,6 +27,17 @@
 
 - 실제 Android 기기에서 음성 메모 실시간 변환, 음성 녹음 후 변환, 녹음 업로드 상태는 아직 앱 화면 조작과 마이크 권한/서버 연결 확인이 필요해 완료 처리하지 않음.
 
+### 추가 확인 및 보강
+
+- 최초 설치된 APK가 에뮬레이터용 `x86_64` native library만 포함해 실제 `arm64-v8a` 기기에서 `libflutter.so`를 찾지 못하고 크래시 나는 문제를 확인.
+- 샌드박스 밖에서 `flutter build apk --debug --target-platform android-arm64`를 실행해 최신 `app-debug.apk`를 재빌드.
+- 재빌드된 APK는 `lib/arm64-v8a/libflutter.so`를 포함하며, 실제 기기 `R3CN90A1WZF`에 설치 후 실행 직후 crash buffer와 ActivityManager crashing 상태가 모두 정상임을 확인.
+- `now_app\scripts\check_android_launch.py`가 APK ABI 호환성, 실행 직후 crash buffer, ActivityManager crashing 상태까지 확인하도록 보강.
+- 모바일 README와 실제 실행 점검서에 ABI/크래시 확인 기준 추가.
+- `uv run python now_app\scripts\check_android_launch.py --serial R3CN90A1WZF --require-physical --timeout 90` 재실행 통과.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 945/945.
+- `uv run python now_app\scripts\verify_mobile_surface.py` 통과: 128/128.
+
 ## 2026-05-29 10:22 KST
 
 ### 다음 작업 시작

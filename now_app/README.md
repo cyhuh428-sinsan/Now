@@ -95,6 +95,7 @@ python scripts/check_android_emulator.py --launch-app --skip-install
 python scripts/check_android_launch.py
 ```
 
+이 점검은 APK ABI와 기기 ABI 호환성, 실행 직후 crash buffer의 앱 크래시 여부도 함께 확인합니다.
 에뮬레이터 저장공간이 부족하면 설치 단계에서 `INSTALL_FAILED_INSUFFICIENT_STORAGE`가 나올 수 있습니다.
 이 경우 이미 설치된 앱은 `--skip-install`로 실행 상태를 확인하고, 새 APK 설치가 필요하면 AVD 저장공간을 정리한 뒤 다시 실행합니다.
 

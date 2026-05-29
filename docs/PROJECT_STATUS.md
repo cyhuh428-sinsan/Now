@@ -20,8 +20,8 @@
 
 - 모바일 앱 전체 `dart analyze`는 최근 통과 기록이 있으나, 현재 PowerShell 세션에서는 Flutter/Dart 분석 명령 재확인은 보류 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 128/128 통과 상태입니다.
-- Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에서도 APK 설치, `com.sinsan.nownote` 실행, foreground package 확인까지 통과했습니다.
-- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 942/942 통과 상태입니다.
+- Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에서도 ARM64 APK ABI 호환성, APK 설치, `com.sinsan.nownote` 실행, 실행 직후 크래시 없음까지 통과했습니다.
+- 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 945/945 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 9개 남음 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
 - GitHub Actions는 workflow 파일, 상태 확인 스크립트, 실행 요청 스크립트가 준비되어 있으나, 현재 최신 커밋 기준 workflow run/status가 아직 잡히지 않은 상태입니다.
