@@ -397,6 +397,7 @@ def main() -> None:
             require("Forward Hostname/IP" in text and "now-api" in text, "공용 서버 준비 화면에 Nginx Proxy Manager 연결 대상 안내가 없습니다")
             require("Forward Port" in text and "8080" in text, "공용 서버 준비 화면에 Nginx Proxy Manager 포트 안내가 없습니다")
             require("서버 IP 또는 호스트명:8750" in text, "공용 서버 준비 화면에 다른 네트워크 NPM 대체 연결값이 없습니다")
+            require("경로별 연결" in text and "/openapi.json" in text, "공용 서버 준비 화면에 NPM 경로별 연결 안내가 없습니다")
         if path == "/admin/release":
             require("NowNote 1차 릴리스 준비" in text, "1차 릴리스 준비 화면 제목이 없습니다")
             require("영역별 진행" in text, "1차 릴리스 준비 화면에 영역별 진행이 없습니다")
@@ -405,6 +406,7 @@ def main() -> None:
             require("수동 증빙 반영" in text, "1차 릴리스 준비 화면에 수동 증빙 반영 집계가 없습니다")
             require("외부 작업 바로가기" in text, "1차 릴리스 준비 화면에 외부 작업 바로가기 섹션이 없습니다")
             require("Nginx Proxy Manager" in text and "now-api" in text and "8080" in text, "1차 릴리스 준비 화면에 NPM 입력값이 없습니다")
+            require("Custom locations" in text and "/openapi.json" in text, "1차 릴리스 준비 화면에 NPM 경로별 연결 안내가 없습니다")
             require("now_app/build/app/outputs/bundle/release/app-release.aab" in text, "1차 릴리스 준비 화면에 Play AAB 경로가 없습니다")
             require("dispatch_github_actions.py" in text, "1차 릴리스 준비 화면에 Actions 실행 명령이 없습니다")
             require("바로 완료 증빙 기록" in text, "1차 릴리스 준비 화면에 바로 증빙 기록 섹션이 없습니다")

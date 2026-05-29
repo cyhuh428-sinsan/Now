@@ -36,6 +36,14 @@
 - WSL 공용 서버 preflight 통과: 1048/1048.
 - 배포 후 smoke test 통과. `/admin/release`는 200으로 응답하고 새 외부 작업 바로가기 섹션을 포함.
 
+### 공용 도메인 경로별 프록시 안내 보강
+
+- 기존 개인정보처리방침 정적 사이트를 루트 도메인에 유지하면서 NowNote API만 붙일 수 있도록 Nginx Proxy Manager `Custom locations` 방식을 공식 안내에 추가.
+- `server/PUBLIC_SERVER.md`, `server/DEPLOY.md`, `/admin/public`, `/admin/release`, 릴리스 readiness/evidence 안내에 `/api`, `/health`, `/admin`, `/monitor`, `/auth`, `/docs`, `/openapi.json` 경로별 API 연결 기준을 반영.
+- 전체 도메인을 NowNote API로 연결하는 방식 A와 기존 개인정보처리방침 사이트를 유지하는 방식 B를 분리.
+- smoke test와 preflight가 공용 서버 화면, 릴리스 화면, 배포 문서, 공용 서버 문서의 경로별 프록시 안내를 확인하도록 보강.
+- 검증: Python 문법 확인 통과, 서버 preflight 1051/1051 통과, 공개 저장소 안전 점검 8/8 통과, release readiness 54/57 완료 및 남은 3개 확인, `git diff --check` 통과.
+
 ## 2026-05-29 22:17 KST
 
 ### 릴리스 준비 화면에서 바로 완료 증빙 저장
