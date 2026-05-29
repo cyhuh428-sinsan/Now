@@ -2,6 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
@@ -59,6 +60,10 @@ def create_app() -> FastAPI:
     app.include_router(analysis_router)
     app.include_router(admin_router)
     if web_app_dir is not None:
+        @app.get("/app", include_in_schema=False)
+        def web_app_compat_index() -> FileResponse:
+            return FileResponse(web_app_dir / "index.html")
+
         app.mount("/app", StaticFiles(directory=str(web_app_dir), html=True), name="web_app_compat")
         app.mount("/", StaticFiles(directory=str(web_app_dir), html=True), name="web_app")
     return app

@@ -1037,6 +1037,8 @@ def main() -> None:
                 ("public_pages_router", "Server app imports public page router", "public page router import"),
                 ("app.include_router(public_pages_router)", "Server app serves public pages before admin routes", "public pages router include"),
                 ("StaticFiles", "Server app serves hosted web files", "hosted web static files"),
+                ("FileResponse", "Server app can serve /app compatibility index", "app compatibility index response"),
+                ('@app.get("/app", include_in_schema=False)', "Server app serves /app without trailing slash", "app compatibility no slash"),
                 ('app.mount("/", StaticFiles', "Server app mounts Web program at domain root", "root web app mount"),
                 ('app.mount("/app", StaticFiles', "Server app keeps /app compatibility route", "app compatibility mount"),
             ],
@@ -1381,6 +1383,14 @@ def main() -> None:
                 ("_note_export_query", "Monitor notes page builds filtered export link", "note export query"),
                 ("제목/내용 검색", "Monitor notes page has search filter", "notes search filter"),
                 ("삭제 제외", "Monitor notes page has deleted filter", "notes deleted filter"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            monitor_source,
+            [
+                ('@router.get("/", include_in_schema=False)', "Monitor no longer intercepts domain root", "root now serves Web app"),
+                ('RedirectResponse(url="/monitor"', "Monitor no longer redirects root to admin monitor", "root monitor redirect"),
             ],
             failures,
         )
@@ -1919,6 +1929,8 @@ def main() -> None:
                 ("/api/v1/admin/export/all", "Smoke covers full backup export", "export/all"),
                 ("/api/v1/admin/export/devices", "Smoke covers device export", "export/devices"),
                 ("/api/v1/admin/export/verify", "Smoke covers backup verification", "export/verify"),
+                ('f"{base_url}/app"', "Smoke checks /app no-slash compatibility route", "smoke app no-slash compatibility route"),
+                ('f"{base_url}/app/"', "Smoke checks /app/ compatibility route", "smoke app slash compatibility route"),
                 ("--timeout", "Smoke supports request timeout option", "smoke timeout option"),
                 ("--ready-retries", "Smoke supports readiness retry option", "smoke readiness retries"),
                 ("--ready-delay", "Smoke supports readiness retry delay option", "smoke readiness delay"),
