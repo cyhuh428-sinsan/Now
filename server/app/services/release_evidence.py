@@ -22,14 +22,14 @@ DEFAULT_GUIDES = {
         action="/admin/mobile 순서대로 실기기 점검을 진행하고 결과를 작업 기록에 남깁니다.",
         reference=("/admin/mobile", "now_app/docs/mobile_runtime_checklist_ko.md"),
     ),
-    "공용 서버 운영 결정": EvidenceGuide(
+    "공용 서버 운영 적용": EvidenceGuide(
         evidence=(
             "실제 HTTPS 도메인으로 접속되는 서버 URL",
             "공용 서버 .env 운영값 적용 결과",
             "/api/v1/admin/public-route에서 공개 도메인이 NowNote API JSON으로 연결된 결과",
             "public-server preflight와 사용자별 데이터 격리 smoke test 통과 결과",
         ),
-        action="/admin/public과 server/PUBLIC_SERVER.md 기준으로 도메인, HTTPS, 토큰 필수 모드를 확인합니다.",
+        action="/admin/public과 /api/v1/admin/public-route 기준으로 공개 도메인이 NowNote API JSON을 반환하는지 확인합니다.",
         reference=("/admin/public", "/api/v1/admin/public-route", "server/PUBLIC_SERVER.md", "server/DEPLOY.md"),
     ),
     "Google Play Console": EvidenceGuide(
@@ -130,11 +130,11 @@ ITEM_GUIDES = {
     ),
     "reverse proxy 적용.": EvidenceGuide(
         evidence=(
-            "Nginx 또는 Caddy 설정 파일의 실제 도메인 반영 결과",
+            "Nginx Proxy Manager Proxy Host가 now-api:8080 또는 실제 서버 IP:8750으로 연결된 설정",
             "외부 브라우저에서 https://도메인/admin 접속 성공 화면",
             "/api/v1/admin/public-route에서 HTML 오연결 없이 JSON 확인 항목이 ok인 결과",
         ),
-        action="reverse proxy 예시 파일을 실제 도메인과 인증서 경로에 맞춰 적용합니다.",
+        action="Nginx Proxy Manager에서 nownote.sinsan.kr Proxy Host의 Forward Hostname/IP와 Port를 NowNote API 서버로 변경합니다.",
         reference=("server/reverse_proxy/nginx.nownote.sinsan.kr.conf.example", "server/reverse_proxy/nginx.nownote.conf.example", "server/reverse_proxy/Caddyfile.example", "/api/v1/admin/public-route"),
     ),
     "`NOW_BEHIND_REVERSE_PROXY=true` 설정.": EvidenceGuide(
