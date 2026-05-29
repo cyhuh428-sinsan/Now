@@ -3,6 +3,24 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 12:52 KST
+
+### 모바일 음성 점검 반영본 배포
+
+- 실제 Android 기기 음성 점검 완료 내역을 `test: verify mobile voice flows` 커밋으로 정리하고 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 `git pull origin main`으로 최신 커밋 반영.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750`로 WSL/Docker 서버 재배포.
+- 배포 전 서버 preflight 통과: 945/945.
+- 배포 후 smoke test 통과.
+- 실행 중인 서버의 `/api/v1/admin/release-readiness`가 39/57 완료, 18개 남음을 반환함을 확인.
+
+### 현재 상태
+
+- 모바일 앱 실제 점검은 12/12 완료.
+- Web/설치형 점검은 12/12 완료.
+- 서버 재배포 점검은 9/9 완료.
+- 남은 18개는 공용 서버 운영 결정, Google Play Console 수동 확인, GitHub Actions 통과 확인, 라이선스 선택/파일 추가 항목.
+
 ## 2026-05-29 12:45 KST
 
 ### 실제 Android 녹음 후 변환과 업로드 확인
