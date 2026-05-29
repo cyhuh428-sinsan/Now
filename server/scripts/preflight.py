@@ -999,6 +999,8 @@ def main() -> None:
             db_source,
             [
                 ("ReleaseEvidenceRecord", "DB startup imports release evidence record model", "release evidence model import"),
+                ("pg_advisory_xact_lock", "DB startup serializes PostgreSQL schema creation", "PostgreSQL schema creation lock"),
+                ("SCHEMA_MIGRATION_LOCK_ID", "DB startup uses stable schema lock id", "schema lock id"),
             ],
             failures,
         )

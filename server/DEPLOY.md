@@ -99,10 +99,24 @@ curl http://localhost:8750/api/v1/server
 컨테이너 상태와 로그:
 
 ```bash
+docker compose ps
+docker compose logs now-api --tail=80
+docker compose logs now-worker --tail=80
+```
+
+환경에 따라 `docker compose`가 없고 `docker-compose`만 있을 수 있습니다.
+반대로 최신 Ubuntu 서버처럼 `docker-compose` 명령이 없으면 `docker compose`를 사용합니다.
+
+구버전 환경에서 `docker-compose`만 쓸 수 있으면 아래처럼 확인합니다.
+
+```bash
 docker-compose ps
 docker-compose logs now-api --tail=80
 docker-compose logs now-worker --tail=80
 ```
+
+Linux 서버 자체에서 점검할 때 `localhost:8750`은 서버 자신을 뜻합니다.
+다른 PC나 휴대폰에서 접속할 때는 `localhost`가 아니라 `http://서버IP:8750` 또는 공용 도메인을 사용합니다.
 
 ## 6. 스모크 테스트
 
