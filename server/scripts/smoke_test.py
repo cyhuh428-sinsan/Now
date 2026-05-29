@@ -464,6 +464,7 @@ def main() -> None:
             require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
             require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
+            require("공개 도메인 연결" in text, "운영 점검 화면에 공개 도메인 실제 연결 항목이 없습니다")
         if path == "/admin/help":
             require("사용자 토큰 확인 화면/API" in text, "도움말 화면에 사용자 토큰 확인 화면/API 점검 안내가 없습니다")
             require("2단계 코드 검증" in text, "도움말 화면에 2단계 코드 검증 점검 안내가 없습니다")
@@ -854,6 +855,7 @@ def main() -> None:
     require("사용자별 기기 조회/해제 API" in ops_check_names, "운영 점검에 사용자별 기기 조회/해제 API 항목이 없습니다")
     require("사용자별 데이터 격리 자동 검증" in ops_check_names, "운영 점검에 사용자별 데이터 격리 자동 검증 항목이 없습니다")
     require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
+    require("공개 도메인 연결" in ops_check_names, "운영 점검에 공개 도메인 실제 연결 항목이 없습니다")
     require("공용 서버 인증" in ops_check_names, "운영 점검에 공용 서버 인증 항목이 없습니다")
     require("users_without_token" in data.get("summary", {}), "운영 점검 요약에 토큰 없는 사용자 집계가 없습니다")
     require(

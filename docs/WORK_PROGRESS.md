@@ -3,6 +3,17 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 17:30 KST
+
+### 운영 점검의 공개 도메인 연결 표시 보강
+
+- 남은 공용 서버 오픈 항목을 운영자가 한 화면에서 판단할 수 있도록 `/admin/ops`와 `/api/v1/admin/ops`에 `공개 도메인 연결` 점검 항목 추가.
+- 점검 기준은 `/api/v1/admin/public-route`와 같은 서비스 로직을 사용하되, 운영 점검 화면이 오래 멈추지 않도록 항목 단위 timeout은 2초로 제한.
+- `NOW_PUBLIC_BASE_URL` 미설정은 `info`, 공개 URL/reverse proxy 경고는 `warn`, 공개 API가 HTML을 반환하거나 연결 실패하면 `bad`로 표시.
+- smoke test와 preflight가 운영 점검 화면/API의 공개 도메인 실제 연결 항목을 확인하도록 보강.
+- 검증: Python 문법 확인 통과, `git diff --check` 통과, 서버 preflight 1009/1009 통과, 공개 저장소 안전 점검 8/8 통과.
+- 1차 릴리스 상태는 `scripts/release_readiness.py --show-blockers` 기준 48/57 완료, 9개 남음 유지.
+
 ## 2026-05-29 16:52 KST
 
 ### 공용 도메인 연결 진단 보강

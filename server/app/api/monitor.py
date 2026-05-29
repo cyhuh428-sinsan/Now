@@ -15,7 +15,7 @@ from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
-from app.services.public_route import public_route_summary
+from app.services.public_route import public_route_ops_check, public_route_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
@@ -3315,6 +3315,7 @@ def _admin_ops_html() -> str:
         }
     )
     checks.extend(public_server_readiness_checks())
+    checks.append(public_route_ops_check())
     password_status, password_message = _database_password_state(settings.database_url)
     checks.append(
         {
