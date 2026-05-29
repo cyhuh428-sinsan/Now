@@ -13,6 +13,11 @@
 - API 응답 `/api/v1/admin/release-readiness`의 `summary.evidence_done`으로 수동 증빙 반영 건수를 확인할 수 있게 함.
 - smoke test와 preflight가 수동 증빙 반영 표시, `evidence_done`, `checked_source` 기준을 확인하도록 보강.
 - 검증: Python 문법 확인 통과, 임시 SQLite DB에서 `reverse proxy 적용.` 완료 증빙 1건 저장 시 54/57에서 55/57로 반영되는 것 확인, 서버 preflight 1030/1030 통과, `git diff --check` 통과.
+- 커밋 `feat: count completed release evidence`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1036/1036.
+- 배포 후 smoke test 통과. `/api/v1/admin/release-readiness`는 현재 실제 완료 증빙이 없어 54/57, `evidence_done=0`을 반환.
 
 ## 2026-05-29 19:59 KST
 
