@@ -543,8 +543,12 @@ class _BackupCardState extends ConsumerState<_BackupCard> {
   }
 
   Future<void> _loadDbSize() async {
-    final size = await BackupService.dbFileSize();
-    if (mounted) setState(() => _dbSize = size);
+    try {
+      final size = await BackupService.dbFileSize();
+      if (mounted) setState(() => _dbSize = size);
+    } catch (_) {
+      if (mounted) setState(() => _dbSize = '-');
+    }
   }
 
   Future<void> _export() async {
