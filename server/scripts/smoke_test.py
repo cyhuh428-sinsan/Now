@@ -326,6 +326,12 @@ def main() -> None:
     require("serverModeSelect" in text, "/app/ 서버 연결 설정 화면이 없습니다")
     print(f"GET /app/: {status} html={len(text)} bytes")
 
+    status, text = request_text("GET", f"{base_url}/app")
+    require("<title>NowNote Web</title>" in text, "/app Web 프로그램 제목이 없습니다")
+    require("./app.js" in text, "/app Web 프로그램 스크립트 연결이 없습니다")
+    require("serverModeSelect" in text, "/app 서버 연결 설정 화면이 없습니다")
+    print(f"GET /app: {status} html={len(text)} bytes")
+
     admin_pages = [
         "/monitor",
         "/admin",

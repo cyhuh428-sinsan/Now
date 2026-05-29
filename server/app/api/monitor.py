@@ -25,11 +25,6 @@ router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
 
 
-@router.get("/", include_in_schema=False)
-def root() -> RedirectResponse:
-    return RedirectResponse(url="/monitor")
-
-
 def _require_monitor_access(
     credentials: HTTPBasicCredentials | None = Depends(basic_security),
 ) -> None:
