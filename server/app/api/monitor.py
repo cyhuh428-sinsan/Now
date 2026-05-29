@@ -15,6 +15,7 @@ from app.db import SessionLocal
 from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
+from app.services.public_route import public_route_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
 from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
@@ -5819,6 +5820,7 @@ def _admin_public_html() -> str:
         title="NowNote 공용 서버 준비",
         subtitle="사용자별 토큰, 로그인, 2단계 인증, 데이터 격리 기준을 확인합니다",
         missing_message="docs/SERVER_AUTH_POLICY.md 파일을 찾을 수 없습니다.",
+        lead_html=_public_route_summary_html(),
         nav_links=[
             ("/admin", "관리"),
             ("/admin/users", "사용자"),
@@ -5827,6 +5829,53 @@ def _admin_public_html() -> str:
             ("/admin/deploy", "배포"),
             ("/admin/help", "도움말"),
         ],
+    )
+
+
+def _public_route_summary_html() -> str:
+    summary = public_route_summary()
+    status_label = {
+        "ok": "정상",
+        "warn": "주의",
+        "bad": "확인 필요",
+        "planned": "대기",
+    }.get(str(summary.get("status")), str(summary.get("status")))
+    public_base_url = str(summary.get("public_base_url") or "미설정")
+    checks = summary.get("checks", [])
+    ok_count = sum(1 for check in checks if check.get("status") == "ok")
+    check_count = len(checks)
+    cards = [
+        ("공개 연결 상태", status_label),
+        ("공개 URL", public_base_url),
+        ("확인 항목", f"{ok_count}/{check_count} OK"),
+    ]
+    card_html = "\n".join(
+        '<div class="runtime-card">'
+        f'<div class="label">{escape(label)}</div>'
+        f'<div class="value">{escape(value)}</div>'
+        "</div>"
+        for label, value in cards
+    )
+    rows = "\n".join(
+        '<div class="runtime-card">'
+        f'<div class="label">{escape(str(check.get("name", "")))} · {escape(str(check.get("status", "")))}</div>'
+        f'<div class="value">{escape(str(check.get("message", "")))}</div>'
+        "</div>"
+        for check in checks
+        if isinstance(check, dict)
+    )
+    return (
+        '<div class="runtime-grid">'
+        f"{card_html}"
+        "</div>"
+        '<div class="runtime-links">'
+        '<a href="/api/v1/admin/public-route">공개 연결 JSON</a>'
+        '<a href="/api/v1/server">서버 정보 API</a>'
+        '<a href="/admin/ops">운영 점검</a>'
+        "</div>"
+        '<div class="runtime-grid">'
+        f"{rows}"
+        "</div>"
     )
 
 
