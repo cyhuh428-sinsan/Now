@@ -3,6 +3,18 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 19:59 KST
+
+### Nginx Proxy Manager 입력값 화면 고정
+
+- 실제 공개 NPM 화면에서 `nownote.sinsan.kr`이 정적 개인정보처리방침 페이지로 연결되는 혼선을 줄이기 위해 `/admin/public`에 Nginx Proxy Manager 입력값을 직접 표시하도록 보강.
+- 같은 Docker 네트워크 기준 입력값은 `Scheme=http`, `Forward Hostname/IP=now-api`, `Forward Port=8080`으로 안내.
+- NPM이 다른 네트워크 또는 별도 서버에 있을 때의 대체 입력값은 `서버 IP 또는 호스트명:8750`으로 안내.
+- `server/PUBLIC_SERVER.md`, `server/DEPLOY.md`에도 같은 기준을 추가해 화면과 문서의 안내가 어긋나지 않도록 정리.
+- smoke test와 preflight가 `/admin/public` 화면 및 문서에 위 값이 있는지 확인하도록 보강.
+- 검증: Python 문법 확인 통과, 서버 preflight 1026/1026 통과, release readiness 54/57 완료 및 남은 3개 확인, 공개 저장소 안전 점검 8/8 통과, `git diff --check` 통과.
+- 남은 reverse proxy 항목은 실제 Nginx Proxy Manager 화면에서 Proxy Host 저장 후 `https://nownote.sinsan.kr/api/v1/server`가 JSON을 반환해야 완료 처리 가능.
+
 ## 2026-05-29 19:05 KST
 
 ### 남은 1차 항목 안내 문구 정정

@@ -5850,12 +5850,27 @@ def _public_route_summary_html() -> str:
         ("공개 URL", public_base_url),
         ("확인 항목", f"{ok_count}/{check_count} OK"),
     ]
+    npm_cards = [
+        ("Nginx Proxy Manager Scheme", "http"),
+        ("Forward Hostname/IP", "now-api"),
+        ("Forward Port", "8080"),
+        ("대체 연결값", "서버 IP 또는 호스트명:8750"),
+        ("저장 후 확인", f"{public_base_url or 'https://nownote.sinsan.kr'}/api/v1/server"),
+        ("HTML 반환 시", "정적 페이지나 다른 컨테이너로 연결된 상태"),
+    ]
     card_html = "\n".join(
         '<div class="runtime-card">'
         f'<div class="label">{escape(label)}</div>'
         f'<div class="value">{escape(value)}</div>'
         "</div>"
         for label, value in cards
+    )
+    npm_card_html = "\n".join(
+        '<div class="runtime-card">'
+        f'<div class="label">{escape(label)}</div>'
+        f'<div class="value">{escape(value)}</div>'
+        "</div>"
+        for label, value in npm_cards
     )
     rows = "\n".join(
         '<div class="runtime-card">'
@@ -5873,6 +5888,9 @@ def _public_route_summary_html() -> str:
         '<a href="/api/v1/admin/public-route">공개 연결 JSON</a>'
         '<a href="/api/v1/server">서버 정보 API</a>'
         '<a href="/admin/ops">운영 점검</a>'
+        "</div>"
+        '<div class="runtime-grid">'
+        f"{npm_card_html}"
         "</div>"
         '<div class="runtime-grid">'
         f"{rows}"

@@ -47,6 +47,31 @@ NowNote API 컨테이너는 기본적으로 호스트 `8750` 포트에서 대기
 운영 서버에서는 예시의 도메인과 인증서 설정을 실제 값으로 바꿉니다.
 방화벽은 일반적으로 `80`, `443`만 공개하고, `8750`은 서버 내부 또는 reverse proxy에서만 접근하게 둡니다.
 
+### Nginx Proxy Manager 사용 시
+
+NowNote API와 Nginx Proxy Manager가 같은 Docker 네트워크에서 서로 이름을 해석할 수 있으면 Proxy Host를 아래처럼 설정합니다.
+
+```text
+Domain Names: nownote.sinsan.kr
+Scheme: http
+Forward Hostname / IP: now-api
+Forward Port: 8080
+Websockets Support: 필요 시 켬
+SSL: 기존 Let's Encrypt 인증서 유지
+Force SSL: 켬
+```
+
+Nginx Proxy Manager가 `now-api` 컨테이너 이름을 해석하지 못하는 환경이면 대체로 아래처럼 호스트 공개 포트를 사용합니다.
+
+```text
+Scheme: http
+Forward Hostname / IP: 서버 IP 또는 호스트명
+Forward Port: 8750
+```
+
+저장 후 `https://nownote.sinsan.kr/api/v1/server`가 HTML이 아니라 JSON을 반환해야 합니다.
+개인정보처리방침 HTML이 계속 반환되면 아직 `nownote-site:80` 같은 정적 사이트로 연결된 상태입니다.
+
 ## 4. 배포와 점검
 
 공용 기준까지 함께 확인하려면 아래처럼 실행합니다.
