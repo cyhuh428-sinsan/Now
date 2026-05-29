@@ -62,14 +62,14 @@ python3 scripts/preflight.py --env-file .env.example --allow-example
 
 ## 5. 라이선스
 
-라이선스는 법적 선택이므로 자동으로 정하지 않습니다.
-오픈소스 공개 전 신산님이 라이선스를 확정한 뒤 루트에 `LICENSE` 파일을 추가합니다.
-선택 기준은 `docs/LICENSE_DECISION.md`에 따로 정리합니다.
+라이선스는 Apache License 2.0으로 확정했습니다.
+루트 `LICENSE` 파일을 기준으로 저장소 전체에 적용합니다.
+선택 기준과 확정 사유는 `docs/LICENSE_DECISION.md`에 정리합니다.
 
 후보 예시:
 
 - MIT License: 사용과 배포가 단순한 편입니다.
-- Apache License 2.0: 특허 조항까지 명확히 다루고 싶을 때 적합합니다.
+- Apache License 2.0: 특허 조항까지 명확히 다루고 싶을 때 적합하며, NowNote의 현재 확정 라이선스입니다.
 - AGPLv3: 서버 프로그램을 수정해 네트워크로 제공하는 경우에도 공개 의무를 강하게 두고 싶을 때 검토합니다.
 
 ## 6. 공개 후 첫 확인

@@ -16,7 +16,8 @@ sh scripts/deploy_local.sh --base-url http://localhost:8750
 
 공용 서버 오픈 전 기준까지 함께 확인하려면 `--public-server`를 추가합니다.
 이미 소스를 직접 갱신한 상태라면 `--skip-pull`로 `git pull origin main`을 생략할 수 있습니다.
-공개 도메인과 HTTPS reverse proxy를 설정할 때는 `reverse_proxy/nginx.nownote.conf.example` 또는 `reverse_proxy/Caddyfile.example`을 실제 환경에 맞게 수정합니다.
+공개 도메인과 HTTPS reverse proxy를 설정할 때는 `reverse_proxy/nginx.nownote.sinsan.kr.conf.example`, `reverse_proxy/nginx.nownote.conf.example` 또는 `reverse_proxy/Caddyfile.example`을 실제 환경에 맞게 수정합니다.
+공용 서버 예시 환경값은 `server/.env.public.example`을 기준으로 확인합니다.
 
 ## 1. 소스 갱신
 

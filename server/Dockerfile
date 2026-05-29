@@ -10,7 +10,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY server/app ./app
 COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./
-COPY README.md SECURITY.md CONTRIBUTING.md /repo_docs/
+COPY README.md SECURITY.md CONTRIBUTING.md LICENSE /repo_docs/
 COPY .github /repo_docs/.github
 COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md
 COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md

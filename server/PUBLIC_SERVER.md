@@ -7,10 +7,10 @@
 
 먼저 실제 공개 도메인을 확정합니다.
 
-예시:
+현재 1차 공개 도메인은 아래 값으로 확정했습니다.
 
 ```text
-nownote.example.com
+nownote.sinsan.kr
 ```
 
 DNS는 서버의 공인 IP를 가리켜야 합니다.
@@ -24,11 +24,12 @@ NowNote 서버는 공개 페이지로 `/`와 `/privacy`에서 개인정보처리
 `server/.env`에서 아래 값을 공용 운영 기준으로 바꿉니다.
 
 ```env
-NOW_PUBLIC_BASE_URL=https://nownote.example.com
+NOW_PUBLIC_BASE_URL=https://nownote.sinsan.kr
 NOW_BEHIND_REVERSE_PROXY=true
 NOW_USER_TOKEN_REQUIRED=true
 ```
 
+예시 파일은 `server/.env.public.example`입니다.
 `NOW_API_TOKEN`과 `NOW_POSTGRES_PASSWORD`는 긴 랜덤 값이어야 합니다.
 사용자별 접속 토큰 필수 모드에서는 앱과 Web/설치형 프로그램이 `X-Now-User-Token` 헤더를 함께 보내야 합니다.
 
@@ -40,6 +41,7 @@ NowNote API 컨테이너는 기본적으로 호스트 `8750` 포트에서 대기
 예시 파일:
 
 - Nginx: `reverse_proxy/nginx.nownote.conf.example`
+- Nginx 실제 도메인 예시: `reverse_proxy/nginx.nownote.sinsan.kr.conf.example`
 - Caddy: `reverse_proxy/Caddyfile.example`
 
 운영 서버에서는 예시의 도메인과 인증서 설정을 실제 값으로 바꿉니다.
@@ -51,7 +53,7 @@ NowNote API 컨테이너는 기본적으로 호스트 `8750` 포트에서 대기
 
 ```bash
 cd ~/deploy/Now/server
-sh scripts/deploy_local.sh --base-url https://nownote.example.com --public-server
+sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr --public-server
 ```
 
 수동으로 나눠 확인할 때:
@@ -59,7 +61,7 @@ sh scripts/deploy_local.sh --base-url https://nownote.example.com --public-serve
 ```bash
 python3 scripts/preflight.py --public-server
 docker compose up --build -d
-python3 scripts/smoke_test.py --base-url https://nownote.example.com --token 긴-랜덤-토큰 --issue-local-user-token
+python3 scripts/smoke_test.py --base-url https://nownote.sinsan.kr --token 긴-랜덤-토큰 --issue-local-user-token
 ```
 
 `--public-server`는 아래 조건이 부족하면 실패하는 것이 정상입니다.
@@ -72,22 +74,26 @@ python3 scripts/smoke_test.py --base-url https://nownote.example.com --token 긴
 
 공용 오픈 전에는 아래 화면을 확인합니다.
 
-- `https://nownote.example.com/admin/public`
-- `https://nownote.example.com/admin/ops`
-- `https://nownote.example.com/admin/users`
-- `https://nownote.example.com/admin/devices`
-- `https://nownote.example.com/auth/token`
+- `https://nownote.sinsan.kr/`
+- `https://nownote.sinsan.kr/privacy`
+- `https://nownote.sinsan.kr/admin/public`
+- `https://nownote.sinsan.kr/admin/ops`
+- `https://nownote.sinsan.kr/admin/users`
+- `https://nownote.sinsan.kr/admin/devices`
+- `https://nownote.sinsan.kr/auth/token`
 
 `/api/v1/server` 응답의 `public_server_readiness.status`가 `ready`인지 확인합니다.
 `remaining`에 `public_https_reverse_proxy`가 남아 있으면 공개 URL 또는 reverse proxy 설정이 아직 끝나지 않은 상태입니다.
 
 ## 6. 사용자 발급 흐름
 
-1. `/admin/users/new`에서 사용자 ID를 만듭니다.
-2. 사용자 수정 화면에서 사용자별 접속 토큰을 발급합니다.
-3. 발급된 토큰 원문은 한 번만 표시되므로 사용자에게 안전하게 전달합니다.
-4. 2단계 인증을 켠 사용자는 토큰 확인 때 6자리 코드를 함께 입력합니다.
-5. 사용자는 앱 또는 Web/설치형 설정 화면에 서버 주소, API 토큰, 사용자 ID, 기기 ID, 사용자별 접속 토큰을 입력합니다.
+1. `NOW_API_TOKEN`은 운영자/API 보호용으로만 사용하고 일반 사용자에게 배포하지 않습니다.
+2. `/admin/users/new`에서 운영자 계정 1개와 테스트 사용자 1개를 먼저 만듭니다.
+3. `/admin/users`에서 사용자별 접속 토큰을 발급합니다.
+4. 발급된 토큰 원문은 한 번만 표시되므로 사용자에게 안전하게 전달합니다.
+5. 신규 사용자는 처음에는 테스트 그룹 또는 비활성 상태로 만들고, 연결 확인 후 활성화합니다.
+6. 운영자 계정은 2단계 인증을 켭니다.
+7. 사용자는 앱 또는 Web/설치형 설정 화면에 서버 주소, 사용자 ID, 기기 ID, 사용자별 접속 토큰을 입력합니다.
 
 ## 7. 오픈 전 보류 기준
 

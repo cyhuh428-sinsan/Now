@@ -75,6 +75,7 @@ def main() -> None:
     repo_root = server_dir.parent
     env_path = (server_dir / args.env_file).resolve()
     gitignore_path = repo_root / ".gitignore"
+    license_path = repo_root / "LICENSE"
     root_readme_path = repo_root / "README.md"
     security_path = repo_root / "SECURITY.md"
     contributing_path = repo_root / "CONTRIBUTING.md"
@@ -87,6 +88,7 @@ def main() -> None:
     main_app_path = server_dir / "app" / "main.py"
     root_dockerignore_path = repo_root / ".dockerignore"
     readme_path = server_dir / "README.md"
+    public_env_example_path = server_dir / ".env.public.example"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
     public_pages_api_path = server_dir / "app" / "api" / "public_pages.py"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
@@ -94,6 +96,7 @@ def main() -> None:
     deploy_path = server_dir / "DEPLOY.md"
     public_server_path = server_dir / "PUBLIC_SERVER.md"
     nginx_reverse_proxy_path = server_dir / "reverse_proxy" / "nginx.nownote.conf.example"
+    nownote_nginx_reverse_proxy_path = server_dir / "reverse_proxy" / "nginx.nownote.sinsan.kr.conf.example"
     caddy_reverse_proxy_path = server_dir / "reverse_proxy" / "Caddyfile.example"
     server_deploy_script_path = server_dir / "scripts" / "deploy_local.sh"
     auth_policy_path = repo_root / "docs" / "SERVER_AUTH_POLICY.md"
@@ -258,6 +261,8 @@ def main() -> None:
                 ("docs/PHASE1_RELEASE_CHECKLIST.md", "Root README links phase one checklist", "phase one checklist path"),
                 ("docs/OPEN_SOURCE_RELEASE.md", "Root README links public repository release guide", "public release guide path"),
                 ("docs/LICENSE_DECISION.md", "Root README links license decision guide", "license decision guide path"),
+                ("Apache License 2.0", "Root README documents selected license", "selected license"),
+                ("LICENSE", "Root README links root license file", "root license path"),
                 ("scripts/release_readiness.py", "Root README documents release readiness summary", "release readiness summary"),
                 ("--show-blockers", "Root README documents release blocker summary", "release blocker summary"),
                 ("scripts/play_release_status.py", "Root README documents Play release status", "Play release status"),
@@ -339,6 +344,7 @@ def main() -> None:
                 ("CONTRIBUTING.md", "Open source guide lists contributing review", "contributing review"),
                 ("LICENSE", "Open source guide keeps license decision explicit", "license decision"),
                 ("docs/LICENSE_DECISION.md", "Open source guide links license decision guide", "license decision guide"),
+                ("Apache License 2.0으로 확정", "Open source guide documents selected license", "selected license"),
                 ("GitHub Actions preflight", "Open source guide documents Actions follow-up", "Actions follow-up"),
                 ("check_github_actions_status.py", "Open source guide documents Actions status check script", "Actions status check script"),
                 ("dispatch_github_actions.py", "Open source guide documents Actions dispatch script", "Actions dispatch script"),
@@ -352,12 +358,26 @@ def main() -> None:
             license_decision,
             [
                 ("라이선스는 법적 선택이므로 자동으로 정하지 않고", "License decision guide keeps human decision", "human license decision"),
+                ("선택 라이선스: Apache License 2.0", "License decision guide records selected license", "selected license"),
+                ("확정일: 2026-05-29", "License decision guide records decision date", "decision date"),
                 ("MIT License", "License decision guide covers MIT", "MIT"),
                 ("Apache License 2.0", "License decision guide covers Apache 2.0", "Apache 2.0"),
                 ("AGPLv3", "License decision guide covers AGPLv3", "AGPLv3"),
                 ("서버 수정본 공개 의무", "License decision guide covers server disclosure choice", "server disclosure"),
                 ("루트에 `LICENSE` 파일 추가", "License decision guide covers license file follow-up", "LICENSE follow-up"),
                 ("CONTRIBUTING.md", "License decision guide covers contribution policy follow-up", "contribution policy"),
+            ],
+            failures,
+        )
+    check(license_path.exists(), "Root LICENSE exists", str(license_path), failures)
+    if license_path.exists():
+        license_text = license_path.read_text(encoding="utf-8")
+        check_text_contains(
+            license_text,
+            [
+                ("Apache License", "LICENSE contains Apache License title", "Apache title"),
+                ("Version 2.0", "LICENSE contains Apache 2.0 version", "Apache version"),
+                ("Copyright 2026 NowNote contributors", "LICENSE contains NowNote copyright line", "copyright line"),
             ],
             failures,
         )
@@ -372,6 +392,7 @@ def main() -> None:
                 ("메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다", "Contributing guide keeps photo scope", "photo scope"),
                 ("주제 / 분류 / 메모 3단계", "Contributing guide keeps tree depth naming", "tree depth naming"),
                 ("암호화 저장은 1차 범위에서는 켜지지 않습니다", "Contributing guide keeps encryption phase one policy", "encryption policy"),
+                ("Apache License 2.0", "Contributing guide documents contribution license", "contribution license"),
                 ("server/.env", "Contributing guide blocks server env commits", "server env secret"),
                 ("now_app/android/upload-keystore.jks", "Contributing guide blocks Android keystore commits", "Android keystore secret"),
                 ("python3 scripts/preflight.py", "Contributing guide documents preflight", "preflight command"),
@@ -498,7 +519,7 @@ def main() -> None:
             [
                 ("COPY server/app ./app", "Dockerfile copies server app", "server app copy"),
                 ("COPY server/README.md server/DEPLOY.md server/RECOVERY.md ./", "Dockerfile copies admin docs", "admin docs copy"),
-                ("COPY README.md SECURITY.md CONTRIBUTING.md /repo_docs/", "Dockerfile copies public repo docs", "public repo docs copy"),
+                ("COPY README.md SECURITY.md CONTRIBUTING.md LICENSE /repo_docs/", "Dockerfile copies public repo docs and license", "public repo docs copy"),
                 ("COPY .github /repo_docs/.github", "Dockerfile copies GitHub templates", "GitHub templates copy"),
                 ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
                 ("COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile copies phase one checklist", "phase one checklist copy"),
@@ -523,6 +544,7 @@ def main() -> None:
                 ("!README.md", "Root Dockerignore allows root README", "root README context"),
                 ("!SECURITY.md", "Root Dockerignore allows security policy", "security policy context"),
                 ("!CONTRIBUTING.md", "Root Dockerignore allows contributing guide", "contributing context"),
+                ("!LICENSE", "Root Dockerignore allows license file", "license context"),
                 ("!.github/workflows/preflight.yml", "Root Dockerignore allows preflight workflow", "preflight workflow context"),
                 ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
                 ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Root Dockerignore allows phase one checklist", "phase one checklist context"),
@@ -1188,7 +1210,8 @@ def main() -> None:
                 ("OPEN_SOURCE_RELEASE.md", "Open source release service checks public release guide", "open source guide"),
                 ("LICENSE_DECISION.md", "Open source release service checks license decision guide", "license decision guide"),
                 ("preflight.yml", "Open source release service checks GitHub Actions workflow", "preflight workflow"),
-                ("LICENSE 파일", "Open source release service keeps license file manual", "license manual"),
+                ("LICENSE 파일", "Open source release service checks license file", "license file"),
+                ("Apache License 2.0", "Open source release service checks selected license", "selected license"),
                 ("PHASE1_RELEASE_CHECKLIST.md", "Open source release service reads phase one checklist", "phase one checklist"),
             ],
             failures,
@@ -1335,6 +1358,8 @@ def main() -> None:
                 ("사용자별 데이터 격리 자동 검증", "Deploy checklist covers public data isolation checks", "data isolation"),
                 ("PUBLIC_SERVER.md", "Deploy checklist links public server guide", "public server guide"),
                 ("nginx.nownote.conf.example", "Deploy checklist links Nginx example", "Nginx proxy example"),
+                ("nginx.nownote.sinsan.kr.conf.example", "Deploy checklist links selected-domain Nginx example", "selected Nginx proxy example"),
+                (".env.public.example", "Deploy checklist links public env example", "public env example"),
                 ("Caddyfile.example", "Deploy checklist links Caddy example", "Caddy proxy example"),
                 ("NowNote server smoke test passed", "Deploy checklist explains smoke pass summary", "smoke passed summary"),
                 ("SMOKE TEST FAILED", "Deploy checklist explains smoke failure summary", "smoke failure summary"),
@@ -1357,14 +1382,32 @@ def main() -> None:
         check_text_contains(
             public_server,
             [
-                ("NOW_PUBLIC_BASE_URL=https://nownote.example.com", "Public server guide documents public base URL", "public base URL"),
+                ("nownote.sinsan.kr", "Public server guide documents selected public domain", "selected public domain"),
+                ("NOW_PUBLIC_BASE_URL=https://nownote.sinsan.kr", "Public server guide documents public base URL", "public base URL"),
                 ("NOW_BEHIND_REVERSE_PROXY=true", "Public server guide documents reverse proxy flag", "reverse proxy flag"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Public server guide documents user token required", "user token required"),
+                ("server/.env.public.example", "Public server guide links public env example", "public env example"),
                 ("reverse_proxy/nginx.nownote.conf.example", "Public server guide links Nginx example", "Nginx example"),
+                ("reverse_proxy/nginx.nownote.sinsan.kr.conf.example", "Public server guide links selected Nginx example", "selected Nginx example"),
                 ("reverse_proxy/Caddyfile.example", "Public server guide links Caddy example", "Caddy example"),
                 ("--public-server", "Public server guide documents public preflight", "public preflight"),
                 ("public_server_readiness.status", "Public server guide documents readiness API", "readiness API"),
                 ("사용자별 데이터 격리 smoke test", "Public server guide documents data isolation smoke test", "data isolation"),
+            ],
+            failures,
+        )
+    check(public_env_example_path.exists(), "Public env example exists", str(public_env_example_path), failures)
+    if public_env_example_path.exists():
+        public_env_example = public_env_example_path.read_text(encoding="utf-8")
+        check_text_contains(
+            public_env_example,
+            [
+                ("NOW_SERVER_NAME=NowNote Public Server", "Public env example names public server", "public server name"),
+                ("NOW_USER_TOKEN_REQUIRED=true", "Public env example requires user tokens", "user token required"),
+                ("NOW_PUBLIC_BASE_URL=https://nownote.sinsan.kr", "Public env example sets selected public URL", "public URL"),
+                ("NOW_BEHIND_REVERSE_PROXY=true", "Public env example enables reverse proxy mode", "reverse proxy mode"),
+                ("change-this-api-token", "Public env example keeps API token placeholder", "API token placeholder"),
+                ("change-this-postgres-password", "Public env example keeps DB password placeholder", "DB password placeholder"),
             ],
             failures,
         )
@@ -1378,6 +1421,20 @@ def main() -> None:
                 ("proxy_pass http://127.0.0.1:8750", "Nginx example proxies to local NowNote port", "local proxy"),
                 ("X-Forwarded-Proto https", "Nginx example forwards HTTPS proto", "forwarded proto"),
                 ("client_max_body_size 100m", "Nginx example allows recording uploads", "upload size"),
+            ],
+            failures,
+        )
+    check(nownote_nginx_reverse_proxy_path.exists(), "Selected-domain Nginx reverse proxy example exists", str(nownote_nginx_reverse_proxy_path), failures)
+    if nownote_nginx_reverse_proxy_path.exists():
+        nownote_nginx_reverse_proxy = nownote_nginx_reverse_proxy_path.read_text(encoding="utf-8")
+        check_text_contains(
+            nownote_nginx_reverse_proxy,
+            [
+                ("server_name nownote.sinsan.kr", "Selected Nginx example has public domain", "selected domain"),
+                ("return 301 https://$host$request_uri", "Selected Nginx example redirects HTTP to HTTPS", "HTTP redirect"),
+                ("proxy_pass http://127.0.0.1:8750", "Selected Nginx example proxies to local NowNote port", "local proxy"),
+                ("X-Forwarded-Proto https", "Selected Nginx example forwards HTTPS proto", "forwarded proto"),
+                ("client_max_body_size 100m", "Selected Nginx example allows recording uploads", "upload size"),
             ],
             failures,
         )
