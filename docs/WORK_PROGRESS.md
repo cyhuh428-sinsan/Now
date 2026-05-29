@@ -50,6 +50,7 @@
 - 배포 후 smoke test 통과. `/admin/public`과 `/admin/release`는 경로별 프록시 안내를 포함.
 - 실행 중 서버의 `/api/v1/admin/public-route`는 아직 `bad`이므로 실제 Nginx Proxy Manager의 외부 reverse proxy 적용은 남은 항목으로 유지.
 - 외부에서 `https://nownote.sinsan.kr/api/v1/server`를 다시 확인했지만 아직 `Content-Type: text/html`을 반환하므로 실제 경로별 proxy 적용은 미완료.
+- GitHub 커넥터로 최신 커밋 `23899dc`의 combined status와 workflow run을 확인했지만 둘 다 비어 있어 `GitHub Actions preflight 통과 확인`은 완료 처리하지 않음.
 
 ## 2026-05-29 22:17 KST
 
