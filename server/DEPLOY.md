@@ -27,6 +27,7 @@ sh scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --is
 공개 도메인과 HTTPS reverse proxy를 설정할 때는 `reverse_proxy/nginx.nownote.sinsan.kr.conf.example`, `reverse_proxy/nginx.nownote.conf.example` 또는 `reverse_proxy/Caddyfile.example`을 실제 환경에 맞게 수정합니다.
 Nginx Proxy Manager를 사용하면 같은 Docker 네트워크에서는 `Scheme=http`, `Forward Hostname/IP=now-api`, `Forward Port=8080`으로 연결합니다.
 다른 네트워크나 별도 서버 NPM이면 `Forward Hostname/IP=서버 IP`, `Forward Port=8750`을 사용합니다.
+기존 개인정보처리방침 정적 사이트를 루트 도메인에 유지하려면 NPM `Custom locations`에서 `/api`, `/health`, `/admin`, `/monitor`, `/auth`, `/docs`, `/openapi.json`만 NowNote API로 연결합니다.
 저장 후 `https://nownote.sinsan.kr/api/v1/server`가 개인정보처리방침 HTML이 아니라 JSON을 반환해야 합니다.
 공용 서버 예시 환경값은 `server/.env.public.example`을 기준으로 확인합니다.
 

@@ -38,8 +38,9 @@ NEXT_ACTIONS = {
     ),
     "WSL/Docker 서버 재배포": "WSL 배포 경로에서 server/scripts/deploy_local.sh를 실행하고 smoke test 통과를 확인합니다.",
     "공용 서버 운영 적용": (
-        "Nginx Proxy Manager에서 nownote.sinsan.kr Proxy Host의 Forward Hostname/IP를 now-api, "
-        "Forward Port를 8080으로 저장하고, 외부에서 https://nownote.sinsan.kr/api/v1/server가 JSON을 반환하는지 확인합니다."
+        "Nginx Proxy Manager에서 nownote.sinsan.kr Proxy Host를 now-api:8080으로 연결하거나, "
+        "기존 개인정보처리방침 사이트를 유지할 경우 Custom Locations로 /api, /health, /admin, /monitor, /auth, /docs, /openapi.json만 "
+        "NowNote API에 연결합니다. 외부에서 https://nownote.sinsan.kr/api/v1/server가 JSON을 반환하는지 확인합니다."
     ),
     "Google Play Console": (
         "/admin/play의 문서/이미지/수동 확인 항목을 기준으로 Play Console 값, Data safety, "

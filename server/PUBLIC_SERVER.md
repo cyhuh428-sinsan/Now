@@ -49,6 +49,8 @@ NowNote API 컨테이너는 기본적으로 호스트 `8750` 포트에서 대기
 
 ### Nginx Proxy Manager 사용 시
 
+#### 방식 A. 도메인 전체를 NowNote API로 연결
+
 NowNote API와 Nginx Proxy Manager가 같은 Docker 네트워크에서 서로 이름을 해석할 수 있으면 Proxy Host를 아래처럼 설정합니다.
 
 ```text
@@ -69,8 +71,27 @@ Forward Hostname / IP: 서버 IP 또는 호스트명
 Forward Port: 8750
 ```
 
+NowNote 서버 자체가 `/`와 `/privacy`에서 개인정보처리방침을 제공하므로, 이 방식으로 연결해도 Google Play 개인정보처리방침 URL은 유지됩니다.
+
+#### 방식 B. 기존 개인정보처리방침 사이트를 유지하고 API 경로만 연결
+
+기존 `nownote-site:80` 정적 개인정보처리방침 사이트를 루트 도메인으로 유지하려면, Nginx Proxy Manager의 `Custom locations`에서 아래 경로만 NowNote API로 보냅니다.
+
+```text
+/api          -> http://now-api:8080
+/health       -> http://now-api:8080
+/admin        -> http://now-api:8080
+/monitor      -> http://now-api:8080
+/auth         -> http://now-api:8080
+/docs         -> http://now-api:8080
+/openapi.json -> http://now-api:8080
+```
+
+Nginx Proxy Manager가 `now-api` 이름을 해석하지 못하면 각 경로의 Forward Hostname/IP를 `서버 IP 또는 호스트명`, Forward Port를 `8750`으로 설정합니다.
+
 저장 후 `https://nownote.sinsan.kr/api/v1/server`가 HTML이 아니라 JSON을 반환해야 합니다.
 개인정보처리방침 HTML이 계속 반환되면 아직 `nownote-site:80` 같은 정적 사이트로 연결된 상태입니다.
+경로별 연결 방식을 쓰는 경우에도 `https://nownote.sinsan.kr/health/ready`가 JSON `{"status":"ready"}`를 반환해야 합니다.
 
 ## 4. 배포와 점검
 

@@ -4906,6 +4906,7 @@ def _release_action_cards(blockers: list[dict]) -> str:
                 <li>Forward Port: <code>8080</code></li>
                 <li>확인 URL: <code>https://nownote.sinsan.kr/api/v1/server</code></li>
               </ul>
+              <p>기존 개인정보처리방침 사이트를 유지하려면 NPM <code>Custom locations</code>에서 <code>/api</code>, <code>/health</code>, <code>/admin</code>, <code>/monitor</code>, <code>/auth</code>, <code>/docs</code>, <code>/openapi.json</code>만 NowNote API로 연결합니다.</p>
               <a href="/admin/public">공용 서버 화면</a>
               <a href="/api/v1/admin/public-route">경로 점검 API</a>
             </div>
@@ -6051,6 +6052,7 @@ def _public_route_summary_html() -> str:
         ("Forward Hostname/IP", "now-api"),
         ("Forward Port", "8080"),
         ("대체 연결값", "서버 IP 또는 호스트명:8750"),
+        ("경로별 연결", "/api, /health, /admin, /monitor, /auth, /docs, /openapi.json"),
         ("저장 후 확인", f"{public_base_url or 'https://nownote.sinsan.kr'}/api/v1/server"),
         ("HTML 반환 시", "정적 페이지나 다른 컨테이너로 연결된 상태"),
     ]
