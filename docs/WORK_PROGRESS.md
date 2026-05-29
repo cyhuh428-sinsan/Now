@@ -25,6 +25,7 @@
 - `uv run python now_app\scripts\check_android_emulator.py --launch-app --timeout 60 --interval 5` 통과. 에뮬레이터 저장공간 부족으로 재설치는 경고 처리, 기존 설치 앱 실행은 통과.
 - FastAPI TestClient로 `/admin/evidence` 200 응답과 `증빙 완료 기록`, `미기록`, `수동 증빙 기준` 표시 확인.
 - `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 942/942.
+- WSL/Docker 실제 재배포 최종 통과. `scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull` 기준 preflight 942/942, `/admin/evidence` 증빙 진행 집계 표시, smoke test 모두 통과.
 - `uv run python scripts\release_readiness.py --show-blockers` 결과는 35/57 완료, 남은 항목 22개 유지.
 
 ### 보류
