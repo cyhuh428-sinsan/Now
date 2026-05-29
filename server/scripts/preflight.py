@@ -1791,6 +1791,7 @@ def main() -> None:
                 ("내보내기 요약에 고아 녹음 파일 건수", "Smoke checks export summary orphan recordings", "summary orphan recordings"),
                 ("내보내기 요약에 고아 녹음 파일 크기", "Smoke checks export summary orphan bytes", "summary orphan bytes"),
                 ("내보내기 요약에 누락 녹음 파일 건수", "Smoke checks export summary missing recordings", "summary missing recordings"),
+                ("내보내기 요약에 수동 증빙 기록 건수", "Smoke checks export summary release evidence records", "summary release evidence records"),
                 ("항목 합계와 다릅니다", "Smoke checks export summary total consistency", "summary total consistency"),
                 ("verify(missing-devices)", "Smoke checks missing devices backup verification", "missing devices verify"),
                 ("기기 누락 백업 검증", "Smoke checks devices missing message", "missing devices message"),

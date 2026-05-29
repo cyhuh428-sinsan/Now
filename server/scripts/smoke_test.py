@@ -681,9 +681,18 @@ def main() -> None:
     require("recording_orphan_files" in summary_items, "내보내기 요약에 고아 녹음 파일 건수가 없습니다")
     require("recording_orphan_bytes" in summary_items, "내보내기 요약에 고아 녹음 파일 크기가 없습니다")
     require("recording_missing_files" in summary_items, "내보내기 요약에 누락 녹음 파일 건수가 없습니다")
+    require("release_evidence_records" in summary_items, "내보내기 요약에 수동 증빙 기록 건수가 없습니다")
     summed_items = sum(
         int(summary_items.get(name, 0) or 0)
-        for name in ["notes", "recordings", "users", "devices", "analysis_jobs", "sync_logs"]
+        for name in [
+            "notes",
+            "recordings",
+            "users",
+            "devices",
+            "analysis_jobs",
+            "sync_logs",
+            "release_evidence_records",
+        ]
     )
     require(
         summary_items.get("total_export_items") == summed_items,
@@ -697,6 +706,7 @@ def main() -> None:
             "recordings": summary_items.get("recordings"),
             "users": summary_items.get("users"),
             "devices": summary_items.get("devices"),
+            "release_evidence_records": summary_items.get("release_evidence_records"),
             "recording_orphan_files": summary_items.get("recording_orphan_files"),
             "recording_missing_files": summary_items.get("recording_missing_files"),
             "total_export_items": summary_items.get("total_export_items"),
