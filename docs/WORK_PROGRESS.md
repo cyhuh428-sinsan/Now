@@ -3,6 +3,17 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 16:04 KST
+
+### 개인정보처리방침 서버 페이지 전환 진행
+
+- 신산님이 현재 `https://nownote.sinsan.kr/`에 보이는 개인정보처리방침을 NowNote 서버의 단일 Page로 만들 것을 요청.
+- 서버 공개 라우트로 `/`와 `/privacy`, `/privacy-policy`를 추가하는 방향으로 결정.
+- 기존 `/monitor`, `/admin` 운영 화면은 유지하고, Play Console 개인정보처리방침 URL은 `https://nownote.sinsan.kr/`를 그대로 사용할 수 있게 구성.
+- 서버 라우트 확인 완료: `/`, `/privacy`, `/privacy-policy`, `/monitor`가 함께 등록됨.
+- FastAPI TestClient 기준 `/`와 `/privacy`가 200으로 개인정보처리방침 HTML을 반환함을 확인.
+- 서버 preflight 통과: 959/959.
+
 ## 2026-05-29 13:53 KST
 
 ### Play release 설치 점검 반영본 배포

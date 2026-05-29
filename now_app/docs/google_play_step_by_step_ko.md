@@ -143,7 +143,7 @@ https://nownote.sinsan.kr/
 https://nownote.sinsan.kr/
 ```
 
-입력 전 브라우저에서 페이지가 공개로 열리는지 다시 확인합니다.
+입력 전 브라우저에서 NowNote 서버의 `/` 또는 `/privacy` 페이지가 인증 없이 공개로 열리는지 다시 확인합니다.
 
 ## 6. 앱 액세스
 
