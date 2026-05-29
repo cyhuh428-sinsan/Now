@@ -13,6 +13,11 @@
 - smoke test와 preflight가 운영 점검 화면/API의 공개 도메인 실제 연결 항목을 확인하도록 보강.
 - 검증: Python 문법 확인 통과, `git diff --check` 통과, 서버 preflight 1009/1009 통과, 공개 저장소 안전 점검 8/8 통과.
 - 1차 릴리스 상태는 `scripts/release_readiness.py --show-blockers` 기준 48/57 완료, 9개 남음 유지.
+- 커밋 `feat: show public route status in ops`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --skip-pull`로 Docker 서버 재배포.
+- 배포 전 서버 preflight 통과: 1009/1009.
+- 배포 후 smoke test 통과. 실행 중인 서버의 `/api/v1/admin/ops`는 26개 점검 항목을 반환하고 `공개 도메인 연결` 항목 포함을 확인.
 
 ## 2026-05-29 16:52 KST
 
