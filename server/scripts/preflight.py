@@ -1154,6 +1154,7 @@ def main() -> None:
                 ("Google Play Console", "Release evidence service covers Play evidence", "Play evidence"),
                 ("GitHub Actions", "Release evidence service covers Actions evidence", "Actions evidence"),
                 ("오픈소스 라이선스 결정", "Release evidence service covers license evidence", "license evidence"),
+                ("/api/v1/admin/public-route", "Release evidence service references public route evidence", "public route evidence"),
             ],
             failures,
         )

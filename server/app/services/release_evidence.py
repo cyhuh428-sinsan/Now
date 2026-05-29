@@ -26,10 +26,11 @@ DEFAULT_GUIDES = {
         evidence=(
             "실제 HTTPS 도메인으로 접속되는 서버 URL",
             "공용 서버 .env 운영값 적용 결과",
+            "/api/v1/admin/public-route에서 공개 도메인이 NowNote API JSON으로 연결된 결과",
             "public-server preflight와 사용자별 데이터 격리 smoke test 통과 결과",
         ),
         action="/admin/public과 server/PUBLIC_SERVER.md 기준으로 도메인, HTTPS, 토큰 필수 모드를 확인합니다.",
-        reference=("/admin/public", "server/PUBLIC_SERVER.md", "server/DEPLOY.md"),
+        reference=("/admin/public", "/api/v1/admin/public-route", "server/PUBLIC_SERVER.md", "server/DEPLOY.md"),
     ),
     "Google Play Console": EvidenceGuide(
         evidence=(
@@ -122,25 +123,28 @@ ITEM_GUIDES = {
         evidence=(
             "server/.env의 NOW_PUBLIC_BASE_URL 값이 https:// 실제 도메인인 상태",
             "/api/v1/server의 public_server_readiness에서 공개 URL 항목이 해소된 결과",
+            "/api/v1/admin/public-route에서 /api/v1/server JSON 확인 항목이 ok인 결과",
         ),
         action="공용 서버 .env에 HTTPS 공개 주소를 반영하고 서버를 재기동합니다.",
-        reference=("server/.env", "server/PUBLIC_SERVER.md", "/api/v1/server"),
+        reference=("server/.env", "server/PUBLIC_SERVER.md", "/api/v1/server", "/api/v1/admin/public-route"),
     ),
     "reverse proxy 적용.": EvidenceGuide(
         evidence=(
             "Nginx 또는 Caddy 설정 파일의 실제 도메인 반영 결과",
             "외부 브라우저에서 https://도메인/admin 접속 성공 화면",
+            "/api/v1/admin/public-route에서 HTML 오연결 없이 JSON 확인 항목이 ok인 결과",
         ),
         action="reverse proxy 예시 파일을 실제 도메인과 인증서 경로에 맞춰 적용합니다.",
-        reference=("server/reverse_proxy/nginx.nownote.conf.example", "server/reverse_proxy/Caddyfile.example"),
+        reference=("server/reverse_proxy/nginx.nownote.sinsan.kr.conf.example", "server/reverse_proxy/nginx.nownote.conf.example", "server/reverse_proxy/Caddyfile.example", "/api/v1/admin/public-route"),
     ),
     "`NOW_BEHIND_REVERSE_PROXY=true` 설정.": EvidenceGuide(
         evidence=(
             "server/.env의 NOW_BEHIND_REVERSE_PROXY=true 설정",
             "HTTPS reverse proxy 뒤에서 /health/ready와 /api/v1/server가 정상 응답한 결과",
+            "/api/v1/admin/public-route에서 /health/ready와 /api/v1/server 확인 항목이 ok인 결과",
         ),
         action="reverse proxy 적용 후 서버 환경값을 true로 바꾸고 public-server preflight를 다시 실행합니다.",
-        reference=("server/.env", "server/scripts/preflight.py"),
+        reference=("server/.env", "server/scripts/preflight.py", "/api/v1/admin/public-route"),
     ),
     "사용자별 접속 토큰 발급.": EvidenceGuide(
         evidence=(
