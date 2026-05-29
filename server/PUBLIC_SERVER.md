@@ -16,6 +16,9 @@ nownote.example.com
 DNS는 서버의 공인 IP를 가리켜야 합니다.
 사설망 테스트에서는 공용 서버 완료 항목으로 처리하지 않습니다.
 
+NowNote 서버는 공개 페이지로 `/`와 `/privacy`에서 개인정보처리방침을 제공합니다.
+공용 도메인을 열 때 `https://nownote.sinsan.kr/`가 인증 없이 열려야 하며, 운영 화면은 `/admin`과 `/monitor`에서 별도로 확인합니다.
+
 ## 2. 서버 환경값
 
 `server/.env`에서 아래 값을 공용 운영 기준으로 바꿉니다.

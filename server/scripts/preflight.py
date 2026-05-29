@@ -84,9 +84,11 @@ def main() -> None:
     github_preflight_workflow_path = repo_root / ".github" / "workflows" / "preflight.yml"
     compose_path = server_dir / "docker-compose.yml"
     dockerfile_path = server_dir / "Dockerfile"
+    main_app_path = server_dir / "app" / "main.py"
     root_dockerignore_path = repo_root / ".dockerignore"
     readme_path = server_dir / "README.md"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
+    public_pages_api_path = server_dir / "app" / "api" / "public_pages.py"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
@@ -105,6 +107,7 @@ def main() -> None:
     local_environment_status_check_path = repo_root / "scripts" / "local_environment_status.py"
     play_release_status_check_path = repo_root / "scripts" / "play_release_status.py"
     release_readiness_check_path = repo_root / "scripts" / "release_readiness.py"
+    privacy_site_path = repo_root / "now_app" / "docs" / "nownote_site" / "index.html"
     help_ko_path = repo_root / "docs" / "HELP.md"
     help_en_path = repo_root / "docs" / "HELP.en.md"
     web_help_path = repo_root / "web" / "help.html"
@@ -440,6 +443,7 @@ def main() -> None:
                 ("app/models/note.py", "GitHub preflight checks model syntax", "workflow model syntax"),
                 ("app/api/admin.py", "GitHub preflight checks admin API syntax", "workflow admin API syntax"),
                 ("app/api/monitor.py", "GitHub preflight checks monitor syntax", "workflow monitor syntax"),
+                ("app/api/public_pages.py", "GitHub preflight checks public page syntax", "workflow public page syntax"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
                 ("app/services/release_evidence.py", "GitHub preflight checks release evidence service syntax", "workflow release evidence service"),
                 ("check_github_actions_status.py", "GitHub preflight checks Actions status script syntax", "workflow Actions status script"),
@@ -502,6 +506,7 @@ def main() -> None:
                 ("COPY docs/LICENSE_DECISION.md /docs/LICENSE_DECISION.md", "Dockerfile copies license decision doc", "license decision doc copy"),
                 ("COPY now_app/docs/mobile_runtime_checklist_ko.md", "Dockerfile copies mobile runtime checklist", "mobile checklist copy"),
                 ("COPY now_app/docs/google_play_release_checklist.md", "Dockerfile copies Play checklist doc", "Play checklist doc copy"),
+                ("COPY now_app/docs/nownote_site/index.html", "Dockerfile copies privacy policy page", "privacy policy page copy"),
                 ("COPY now_app/docs/play_assets/*.png", "Dockerfile copies Play image assets", "Play image asset copy"),
             ],
             failures,
@@ -645,9 +650,11 @@ def main() -> None:
     check(web_help_path.exists(), "Web help exists", str(web_help_path), failures)
     check(db_path.exists(), "Server DB source exists", str(db_path), failures)
     check(models_path.exists(), "Server models source exists", str(models_path), failures)
+    check(main_app_path.exists(), "Server app entrypoint exists", str(main_app_path), failures)
     check(admin_api_path.exists(), "Admin API source exists", str(admin_api_path), failures)
     check(auth_api_path.exists(), "Auth API source exists", str(auth_api_path), failures)
     check(monitor_api_path.exists(), "Monitor API source exists", str(monitor_api_path), failures)
+    check(public_pages_api_path.exists(), "Public page API source exists", str(public_pages_api_path), failures)
     check(capabilities_path.exists(), "Server capabilities source exists", str(capabilities_path), failures)
     check(users_api_path.exists(), "User API source exists", str(users_api_path), failures)
     check(user_accounts_service_path.exists(), "User accounts service exists", str(user_accounts_service_path), failures)
@@ -973,6 +980,40 @@ def main() -> None:
                 ("evidence_location", "Release evidence records store evidence location", "evidence location field"),
                 ("actual_note", "Release evidence records store actual note", "actual note field"),
                 ("checked_by", "Release evidence records store checker", "checked by field"),
+            ],
+            failures,
+        )
+    if main_app_path.exists():
+        main_app_source = main_app_path.read_text(encoding="utf-8")
+        check_text_contains(
+            main_app_source,
+            [
+                ("public_pages_router", "Server app imports public page router", "public page router import"),
+                ("app.include_router(public_pages_router)", "Server app serves public pages before admin routes", "public pages router include"),
+            ],
+            failures,
+        )
+    if public_pages_api_path.exists():
+        public_pages_source = public_pages_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            public_pages_source,
+            [
+                ('@router.get("/", response_class=HTMLResponse', "Public page exposes domain root", "public root route"),
+                ('@router.get("/privacy", response_class=HTMLResponse', "Public page exposes privacy route", "privacy route"),
+                ('@router.get("/privacy-policy", response_class=HTMLResponse', "Public page exposes privacy policy alias", "privacy policy alias"),
+                ('Path("/play_docs/nownote_site/index.html")', "Public page reads Docker privacy page copy", "Docker privacy page source"),
+                ("NowNote 개인정보처리방침", "Public page fallback keeps privacy policy title", "privacy title"),
+            ],
+            failures,
+        )
+    if privacy_site_path.exists():
+        privacy_site = privacy_site_path.read_text(encoding="utf-8")
+        check_text_contains(
+            privacy_site,
+            [
+                ("NowNote 개인정보처리방침", "Privacy page has title", "privacy title"),
+                ("공개 URL: https://nownote.sinsan.kr/", "Privacy page has public URL", "privacy public URL"),
+                ("사용자가 NowNote 서버 연결을 켠 경우", "Privacy page covers optional server transfer", "optional server transfer"),
             ],
             failures,
         )

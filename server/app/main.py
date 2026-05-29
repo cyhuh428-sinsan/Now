@@ -8,6 +8,7 @@ from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
+from app.api.public_pages import router as public_pages_router
 from app.api.recordings import router as recordings_router
 from app.api.server import router as server_router
 from app.api.sync import router as sync_router
@@ -32,6 +33,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health_router)
     app.include_router(auth_page_router)
+    app.include_router(public_pages_router)
     app.include_router(monitor_router)
     app.include_router(server_router)
     app.include_router(auth_api_router)

@@ -5482,6 +5482,7 @@ def _admin_play_html() -> str:
         <a href="/admin/evidence">수동 증빙</a>
         <a href="/admin/mobile">모바일 점검</a>
         <a href="/admin/open-source">공개 준비</a>
+        <a href="/privacy">개인정보방침</a>
         <a href="/admin/deploy">배포</a>
         <a href="/admin/help">도움말</a>
       </nav>

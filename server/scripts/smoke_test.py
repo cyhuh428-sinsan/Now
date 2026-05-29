@@ -307,6 +307,13 @@ def main() -> None:
             )
         print(f"{method} {path}: {status} {data}")
 
+    for path in ["/", "/privacy", "/privacy-policy"]:
+        status, text = request_text("GET", f"{base_url}{path}")
+        require("NowNote 개인정보처리방침" in text, f"{path} 개인정보처리방침 제목이 없습니다")
+        require("공개 URL: https://nownote.sinsan.kr/" in text, f"{path} 공개 URL 안내가 없습니다")
+        require("서버 연결을 켠 경우" in text, f"{path} 서버 연결 개인정보 처리 안내가 없습니다")
+        print(f"GET {path}: {status} html={len(text)} bytes")
+
     admin_pages = [
         "/monitor",
         "/admin",
