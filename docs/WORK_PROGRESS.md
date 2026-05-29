@@ -3,6 +3,21 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 16:38 KST
+
+### 라이선스/공개 결정 반영본 배포와 공용 도메인 확인
+
+- `chore: finalize phase one release decisions` 커밋을 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750`로 Docker 서버 재배포.
+- 배포 전 서버 preflight 통과: 989/989.
+- 배포 후 smoke test 통과.
+- 실행 중인 서버의 `/api/v1/admin/release-readiness`가 48/57 완료, 9개 남음을 반환함을 확인.
+- 실행 중인 서버의 `/api/v1/admin/play-release`는 자동 22/22 OK, 수동 1개 남음.
+- 실행 중인 서버의 `/api/v1/admin/open-source-release`는 자동 21/21 OK, 수동 1개 남음.
+- `https://nownote.sinsan.kr/`는 HTTPS 200, `http://nownote.sinsan.kr/`는 HTTPS로 301 리다이렉트 확인.
+- 단, `https://nownote.sinsan.kr/health`와 `/api/v1/server`도 개인정보처리방침 HTML을 반환하므로 현재 공용 도메인은 NowNote API reverse proxy가 아니라 정적 개인정보 페이지로 연결된 상태임.
+
 ## 2026-05-29 16:28 KST
 
 ### 라이선스와 공개/Play 결정 항목 반영
