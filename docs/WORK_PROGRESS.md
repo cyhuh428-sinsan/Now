@@ -3,6 +3,15 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 19:05 KST
+
+### 남은 1차 항목 안내 문구 정정
+
+- 공용 서버 환경값, 사용자 토큰 필수 모드, 공용 preflight, 사용자별 데이터 격리 smoke test는 이미 완료됐으므로 남은 항목 분류를 `공용 서버 운영 결정`에서 `공용 서버 운영 적용`으로 정정.
+- `/admin/release`, `/api/v1/admin/release-readiness`, `scripts/release_readiness.py --show-blockers`가 실제 남은 작업을 reverse proxy 적용으로 안내하도록 수정.
+- 수동 증빙 안내도 Nginx Proxy Manager에서 `nownote.sinsan.kr` Proxy Host를 NowNote API 서버로 연결하는 기준으로 보강.
+- 검증: release readiness 출력 54/57 완료, 남은 3개 확인. Python 문법 확인 통과, 서버 preflight 1017/1017 통과, `git diff --check` 통과.
+
 ## 2026-05-29 17:49 KST
 
 ### 공용 Docker reverse proxy 배포 설정 보강

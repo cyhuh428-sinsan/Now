@@ -12,7 +12,7 @@ CHECKBOX_RE = re.compile(r"^-\s+\[(?P<mark>[ xX])\]\s+(?P<label>.+?)\s*$")
 BLOCKER_GUIDANCE = {
     "실제 Android 기기/모바일 화면": "USB 디버깅 실기기 또는 실제 앱 화면에서 확인해야 합니다.",
     "WSL/Docker 서버 재배포": "정상 WSL/Linux 배포 환경과 Docker Compose 실행 권한이 필요합니다.",
-    "공용 서버 운영 결정": "실제 도메인, HTTPS, reverse proxy, 사용자 토큰 운영값을 확정해야 합니다.",
+    "공용 서버 운영 적용": "공개 도메인이 NowNote API로 연결되는 reverse proxy 적용 상태를 확인해야 합니다.",
     "Google Play Console": "Play Console 화면에서 문구, Data safety, 내부 테스트 업로드를 확인해야 합니다.",
     "GitHub Actions": "GitHub Actions workflow 실행 기록 또는 Actions 읽기 권한이 필요합니다.",
     "오픈소스 라이선스 결정": "라이선스는 법적 선택이므로 사람이 최종 결정해야 합니다.",
@@ -28,9 +28,9 @@ NEXT_ACTIONS = {
     "WSL/Docker 서버 재배포": (
         "WSL 배포 경로에서 server/scripts/deploy_local.sh를 실행하고 smoke test 통과를 확인합니다."
     ),
-    "공용 서버 운영 결정": (
-        "도메인/HTTPS/reverse proxy를 확정한 뒤 server/.env에 NOW_PUBLIC_BASE_URL, "
-        "NOW_BEHIND_REVERSE_PROXY, NOW_USER_TOKEN_REQUIRED 값을 적용하고 public-server preflight를 실행합니다."
+    "공용 서버 운영 적용": (
+        "Nginx Proxy Manager에서 nownote.sinsan.kr Proxy Host의 Forward Hostname/IP를 now-api, "
+        "Forward Port를 8080으로 저장하고, 외부에서 https://nownote.sinsan.kr/api/v1/server가 JSON을 반환하는지 확인합니다."
     ),
     "Google Play Console": (
         "/admin/play의 문서/이미지/수동 확인 항목을 기준으로 Play Console 값, Data safety, "
@@ -176,7 +176,7 @@ def _classify_remaining_item(item: ChecklistItem) -> str:
     if "서버 재배포 점검" in item.section:
         return "WSL/Docker 서버 재배포"
     if "공용 서버 오픈 전 점검" in item.section:
-        return "공용 서버 운영 결정"
+        return "공용 서버 운영 적용"
     if "Google Play 등록 전 점검" in item.section:
         if "실제 기기" in item.label:
             return "실제 Android 기기/모바일 화면"
