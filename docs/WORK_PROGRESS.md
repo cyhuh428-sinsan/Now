@@ -43,6 +43,13 @@
 - 전체 도메인을 NowNote API로 연결하는 방식 A와 기존 개인정보처리방침 사이트를 유지하는 방식 B를 분리.
 - smoke test와 preflight가 공용 서버 화면, 릴리스 화면, 배포 문서, 공용 서버 문서의 경로별 프록시 안내를 확인하도록 보강.
 - 검증: Python 문법 확인 통과, 서버 preflight 1051/1051 통과, 공개 저장소 안전 점검 8/8 통과, release readiness 54/57 완료 및 남은 3개 확인, `git diff --check` 통과.
+- 커밋 `docs: add public route proxy options`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750 --public-server --issue-local-user-token --skip-pull`로 Docker 서버 재배포.
+- WSL 공용 서버 preflight 통과: 1057/1057.
+- 배포 후 smoke test 통과. `/admin/public`과 `/admin/release`는 경로별 프록시 안내를 포함.
+- 실행 중 서버의 `/api/v1/admin/public-route`는 아직 `bad`이므로 실제 Nginx Proxy Manager의 외부 reverse proxy 적용은 남은 항목으로 유지.
+- 외부에서 `https://nownote.sinsan.kr/api/v1/server`를 다시 확인했지만 아직 `Content-Type: text/html`을 반환하므로 실제 경로별 proxy 적용은 미완료.
 
 ## 2026-05-29 22:17 KST
 
