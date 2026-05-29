@@ -7,9 +7,9 @@
 
 ## 현재 마무리 수치
 
-`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 35개 완료, 22개 남음입니다.
+`docs/PHASE1_RELEASE_CHECKLIST.md` 기준 현재 상태는 57개 중 36개 완료, 21개 남음입니다.
 
-- 모바일 앱 실제 점검: 8/12 완료.
+- 모바일 앱 실제 점검: 9/12 완료.
 - Web/설치형 점검: 12/12 완료.
 - 서버 재배포 점검: 9/9 완료.
 - 공용 서버 오픈 전 점검: 0/8 완료.
@@ -20,7 +20,7 @@
 
 - 모바일 앱 전체 `dart analyze`는 최근 통과 기록이 있으나, 현재 PowerShell 세션에서는 Flutter/Dart 분석 명령 재확인은 보류 상태입니다.
 - 모바일 핵심 표면 점검은 `now_app/scripts/verify_mobile_surface.py` 기준 128/128 통과 상태입니다.
-- Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 새 APK 재설치는 에뮬레이터 `/data` 여유 공간 494MB 상태에서 `INSTALL_FAILED_INSUFFICIENT_STORAGE`가 날 수 있어, 기존 설치 앱 실행 재확인 경로를 점검 스크립트에 반영했습니다.
+- Android 런타임 점검은 Flutter CLI, ADB, AVD 목록, 로컬 서버 health/ready까지 확인했고, 에뮬레이터 `emulator-5554`에서 설치된 NowNote 앱 실행과 홈 화면 표시를 확인했습니다. 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에서도 APK 설치, `com.sinsan.nownote` 실행, foreground package 확인까지 통과했습니다.
 - 서버 정적/문서/운영 표면 점검은 `server/scripts/preflight.py --env-file .env.example --allow-example` 기준 942/942 통과 상태입니다.
 - Google Play 등록 자료 자동 확인은 `scripts/play_release_status.py --show-manual` 기준 27/27 OK, 수동 확인 9개 남음 상태입니다.
 - 현재 실행 중인 `http://localhost:8750` 서버는 WSL/Docker 재배포 후 health/ready, 서버 capability, 운영 화면, smoke test가 통과한 상태입니다.
@@ -64,7 +64,7 @@ NowNote 1차 목표는 한국어 사용 흐름을 기준으로 한 로컬 우선
 ### 도구 한계로 보류
 
 - Android 에뮬레이터에서는 앱 실행, 홈 오늘 메모, 일자별 메모 추가, 계층 메모 3단계와 삭제 제한, 서버 연결 테스트, 메모 동기화를 확인했다.
-- 실제 Android 기기는 아직 연결하지 않아 완료 처리를 보류한다.
+- 실제 Android 기기 실행은 확인했으나, 음성 메모 실시간 변환, 녹음 후 변환, 녹음 업로드 상태는 마이크 권한과 앱 화면 조작이 필요해 아직 완료 처리하지 않는다.
 
 ## 1차 범위 밖 또는 보류
 

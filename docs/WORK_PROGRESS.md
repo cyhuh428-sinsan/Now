@@ -3,6 +3,30 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 11:04 KST
+
+### 실제 Android 기기 점검
+
+- 신산님이 실제 Android 휴대폰에서 개발자 옵션과 USB 디버깅을 켜고 PC에 연결.
+- ADB 기준 `SM-N981N(R3CN90A1WZF)`이 `device` 상태로 인식됨.
+- `now_app\scripts\check_android_runtime.py --require-physical --timeout 15` 통과.
+- `now_app\scripts\check_android_launch.py --serial R3CN90A1WZF --require-physical --timeout 90` 통과.
+- APK 설치, `com.sinsan.nownote` 실행, foreground package 확인까지 완료.
+
+### 반영 내용
+
+- `docs\PHASE1_RELEASE_CHECKLIST.md`에서 `실제 Android 기기에서 앱 실행.` 항목을 완료 처리.
+- 실행 중인 서버의 `/api/v1/admin/release-evidence-records`에 실제 기기 실행 증빙 기록 저장. 기록 ID는 5.
+
+### 현재 상태
+
+- `uv run python scripts\release_readiness.py --show-blockers` 기준 36/57 완료, 남은 항목 21개.
+- 모바일 앱 실제 점검은 9/12 완료.
+
+### 보류
+
+- 실제 Android 기기에서 음성 메모 실시간 변환, 음성 녹음 후 변환, 녹음 업로드 상태는 아직 앱 화면 조작과 마이크 권한/서버 연결 확인이 필요해 완료 처리하지 않음.
+
 ## 2026-05-29 10:22 KST
 
 ### 다음 작업 시작
