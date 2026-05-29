@@ -1302,6 +1302,8 @@ def main() -> None:
                 ("NowNote 1차 릴리스 준비", "Monitor release page title", "release page title"),
                 ("다음 행동", "Monitor release page shows next action column", "release next action"),
                 ("수동 증빙 반영", "Monitor release page shows manual evidence completion count", "release evidence completion count"),
+                ("바로 완료 증빙 기록", "Monitor release page supports quick evidence completion", "quick evidence completion"),
+                ('return_to" value="/admin/release"', "Monitor release evidence form returns to release page", "release evidence return"),
                 ("NowNote 수동 증빙", "Monitor evidence page title", "evidence page title"),
                 ("증빙 기록 템플릿", "Monitor evidence page shows record template", "evidence record template"),
                 ("증빙 기록 저장", "Monitor evidence page shows record form", "evidence record form"),
