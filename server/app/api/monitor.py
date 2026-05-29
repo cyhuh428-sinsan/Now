@@ -5213,6 +5213,13 @@ def _release_evidence_record_rows(records: list[ReleaseEvidenceRecord]) -> str:
     )
 
 
+def _truncate(value: str, limit: int) -> str:
+    normalized = " ".join(str(value).split())
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit]}..."
+
+
 def _release_evidence_rows(items: list[dict]) -> str:
     if not items:
         return '<tr><td colspan="5">남은 수동 증빙 항목이 없습니다.</td></tr>'

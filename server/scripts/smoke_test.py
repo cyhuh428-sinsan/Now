@@ -559,6 +559,10 @@ def main() -> None:
         {"count": data.get("count"), "result_counts": data.get("result_counts")},
     )
 
+    status, text = request_text("GET", f"{base_url}/admin/evidence", args.token)
+    require("smoke_release_evidence_record" in text, "수동 증빙 화면의 최근 기록 목록에 저장된 기록이 없습니다")
+    print(f"GET /admin/evidence(after record): {status} html={len(text)} bytes")
+
     status, data = request("GET", f"{base_url}/api/v1/admin/play-release", args.token)
     require(data.get("name") == "google_play_release_readiness", "Play 등록 준비 API 이름이 예상과 다릅니다")
     require(data.get("summary", {}).get("auto_total", 0) >= 20, "Play 등록 준비 API의 자동 확인 항목이 부족합니다")

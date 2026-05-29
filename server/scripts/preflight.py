@@ -1830,6 +1830,7 @@ def main() -> None:
                 ("수동 증빙 템플릿 API 이름", "Smoke checks release evidence template API", "release evidence template API"),
                 ("수동 증빙 기록 저장 API 상태", "Smoke checks release evidence record create API", "evidence record create API"),
                 ("수동 증빙 기록 API 이름", "Smoke checks release evidence records API", "evidence records API"),
+                ("수동 증빙 화면의 최근 기록 목록", "Smoke checks release evidence records render after save", "evidence records render after save"),
                 ("모바일 실제 실행 점검 화면 제목", "Smoke checks mobile runtime page title", "mobile runtime page title"),
                 ("릴리스 준비 API의 남은 항목 유형에 다음 행동 안내", "Smoke checks release next action API", "release next action API"),
                 ("GET /api/v1/admin/release-readiness", "Smoke checks release readiness API", "release readiness API"),
