@@ -14,6 +14,12 @@
 - `/admin/public` 상단에 공개 연결 상태, 공개 URL, 확인 항목 수를 표시.
 - 서버 README, 공용 서버 문서, smoke test, preflight, GitHub Actions 문법 검증 목록에 신규 진단 기준 반영.
 - 검증: Python 문법 확인 통과, `server/scripts/preflight.py --env-file .env.example --allow-example` 1003/1003 통과, 공개 저장소 안전 점검 8/8 통과.
+- 커밋 `feat: add public route readiness check`를 원격 `main`에 push.
+- WSL 배포 경로 `/home/daon/deploy/Now`에서 최신 커밋을 fast-forward pull.
+- `server/scripts/deploy_local.sh --base-url http://localhost:8750`로 Docker 서버 재배포.
+- 배포 전 서버 preflight 통과: 1003/1003.
+- 배포 후 smoke test 통과.
+- 배포된 서버에서 `/api/v1/admin/public-route`가 200으로 응답하고 현재 로컬 `.env` 기준 `status=planned`, `checks=1`을 반환함을 확인.
 
 ## 2026-05-29 16:38 KST
 
