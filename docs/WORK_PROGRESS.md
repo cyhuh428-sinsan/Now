@@ -3,6 +3,25 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 13:48 KST
+
+### Google Play 실제 기기 설치 테스트 완료
+
+- 최신 소스로 release AAB 재빌드 성공: `build\app\outputs\bundle\release\app-release.aab`.
+- AAB 빌드 직후 Play release preflight 통과.
+- 같은 release 서명 설정으로 release APK 빌드 성공: `build\app\outputs\flutter-apk\app-release.apk`.
+- 실제 Android 기기 `SM-N981N(R3CN90A1WZF)`에 기존 debug 서명 앱이 있어 `adb install -r`은 서명 불일치로 실패함을 확인.
+- release 설치 테스트를 위해 기존 debug 앱을 삭제한 뒤 release APK 설치와 실행 점검을 진행.
+- `now_app\scripts\check_android_launch.py --serial R3CN90A1WZF --require-physical --apk ...\app-release.apk --timeout 120` 통과.
+- 확인 내용: APK ABI 호환성, 저장공간, 설치 성공, 패키지 설치 확인, 앱 실행, 현재 화면 패키지, 실행 직후 crash buffer, ActivityManager crashing 상태.
+- 실행 중인 서버의 `/api/v1/admin/release-evidence-records`에 실제 기기 설치 테스트 증빙 기록 저장. 기록 ID는 13.
+
+### 현재 상태
+
+- `docs\PHASE1_RELEASE_CHECKLIST.md`에서 `실제 기기 설치 테스트.` 항목을 완료 처리.
+- 전체 1차 체크리스트는 40/57 완료, 남은 항목 17개.
+- Google Play 등록 전 점검은 4/10 완료.
+
 ## 2026-05-29 12:56 KST
 
 ### 남은 1차 항목 재점검
