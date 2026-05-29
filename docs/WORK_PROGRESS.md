@@ -19,6 +19,7 @@
 - WSL 공용 서버 preflight 통과: 1036/1036.
 - 배포 후 smoke test 통과. `/api/v1/admin/release-readiness`는 현재 실제 완료 증빙이 없어 54/57, `evidence_done=0`을 반환.
 - `server/README.md`에도 수동 증빙 `완료` 기록이 `summary.evidence_done`과 완료 수에 반영된다는 설명 추가. 서버 preflight 1031/1031 통과.
+- README 설명 변경까지 포함해 WSL 배포를 한 번 더 실행했고, WSL 공용 서버 preflight 1037/1037 및 smoke test 통과.
 
 ## 2026-05-29 19:59 KST
 
