@@ -13,6 +13,13 @@ ICON = ROOT / "icons" / "nownote-icon.svg"
 RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
 PACKAGE_SCRIPT = ROOT / "scripts" / "package_web.py"
 IMPORT_EXPORT_CHECK = ROOT / "scripts" / "check_import_export.mjs"
+DESKTOP = ROOT.parent / "desktop"
+DESKTOP_PACKAGE = DESKTOP / "package.json"
+DESKTOP_MAIN = DESKTOP / "main.cjs"
+DESKTOP_PRELOAD = DESKTOP / "preload.cjs"
+DESKTOP_SYNC_SCRIPT = DESKTOP / "scripts" / "sync-web-assets.mjs"
+DESKTOP_README = DESKTOP / "README.md"
+DESKTOP_ICON = DESKTOP / "build" / "icon.ico"
 
 CHECK_TOTAL = 0
 CHECK_PASSED = 0
@@ -36,7 +43,24 @@ def has_id(html: str, element_id: str) -> bool:
 def main() -> None:
     failures: list[str] = []
 
-    for path in [INDEX, APP, STYLES, README, MANIFEST, SERVICE_WORKER, ICON, RUNTIME_CHECKLIST, PACKAGE_SCRIPT, IMPORT_EXPORT_CHECK]:
+    for path in [
+        INDEX,
+        APP,
+        STYLES,
+        README,
+        MANIFEST,
+        SERVICE_WORKER,
+        ICON,
+        RUNTIME_CHECKLIST,
+        PACKAGE_SCRIPT,
+        IMPORT_EXPORT_CHECK,
+        DESKTOP_PACKAGE,
+        DESKTOP_MAIN,
+        DESKTOP_PRELOAD,
+        DESKTOP_SYNC_SCRIPT,
+        DESKTOP_README,
+        DESKTOP_ICON,
+    ]:
         check(path.exists(), f"{path.name} exists", str(path), failures)
 
     if failures:
@@ -52,6 +76,10 @@ def main() -> None:
     runtime_checklist = RUNTIME_CHECKLIST.read_text(encoding="utf-8")
     package_script = PACKAGE_SCRIPT.read_text(encoding="utf-8")
     import_export_check = IMPORT_EXPORT_CHECK.read_text(encoding="utf-8")
+    desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
+    desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
+    desktop_sync_script = DESKTOP_SYNC_SCRIPT.read_text(encoding="utf-8")
+    desktop_readme = DESKTOP_README.read_text(encoding="utf-8")
 
     html_requirements = [
         ('rel="manifest"', "PWA manifest link"),
@@ -172,6 +200,7 @@ def main() -> None:
         ("서버 연결", "server connection documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
         ("PWA 설치", "PWA install direction documented"),
+        ("Windows `.exe` 설치형 프로그램", "Windows exe install direction documented"),
         ("runtime_checklist_ko.md", "runtime checklist documented"),
     ]
     for needle, label in readme_requirements:
@@ -237,6 +266,48 @@ def main() -> None:
     ]
     for needle, label in import_export_requirements:
         check(needle in import_export_check, f"Web import/export check has {label}", needle, failures)
+
+    desktop_package_requirements = [
+        ('"electron"', "Electron dependency"),
+        ('"electron-builder"', "electron-builder dependency"),
+        ('"dist:win"', "Windows installer build script"),
+        ('"target": "nsis"', "NSIS installer target"),
+        ("NowNote-Setup", "installer artifact name"),
+        ('"icon": "build/icon.ico"', "Windows installer icon"),
+    ]
+    for needle, label in desktop_package_requirements:
+        check(needle in desktop_package, f"Desktop package has {label}", needle, failures)
+
+    desktop_main_requirements = [
+        ("BrowserWindow", "Electron BrowserWindow"),
+        ("loadFile", "local Web app loading"),
+        ("index.html", "Web entry file loading"),
+        ("setWindowOpenHandler", "external link handler"),
+        ("Menu.setApplicationMenu", "desktop menu"),
+    ]
+    for needle, label in desktop_main_requirements:
+        check(needle in desktop_main, f"Desktop main has {label}", needle, failures)
+
+    desktop_sync_requirements = [
+        ("webRoot", "Web source root"),
+        ("targetRoot", "desktop app target"),
+        ("index.html", "index asset copy"),
+        ("app.js", "app asset copy"),
+        ("styles.css", "style asset copy"),
+        ("help.html", "help asset copy"),
+        ("icons", "icon directory copy"),
+    ]
+    for needle, label in desktop_sync_requirements:
+        check(needle in desktop_sync_script, f"Desktop sync script has {label}", needle, failures)
+
+    desktop_readme_requirements = [
+        (".exe", "exe installer documentation"),
+        ("npm run dist:win", "Windows build command documentation"),
+        ("NowNote-Setup-0.1.0-x64.exe", "installer output documentation"),
+        ("공용 서버", "public server connection documentation"),
+    ]
+    for needle, label in desktop_readme_requirements:
+        check(needle in desktop_readme, f"Desktop README has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),

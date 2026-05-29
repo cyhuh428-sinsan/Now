@@ -16,8 +16,17 @@
 - Android 모바일 앱 설치 경로를 Google Play 정식 배포, Google Play 내부 테스트, 개발/검증용 직접 실행으로 구분해 `INSTALL.md`와 `docs/HELP.md`에 반영.
 - Web과 PWA 설치형도 서버를 직접 설치하지 않고 로컬 단독 사용 또는 공용 서버 접속이 가능하다는 설명을 `INSTALL.md`, `docs/HELP.md`, `web/README.md`에 반영.
 - 영어 도움말 `docs/HELP.en.md`와 Web 도움말 화면 `web/help.html`에도 서버 미설치 사용자, Google Play 설치, 공용 서버 접속 기준을 반영.
+- Windows 설치형 프로그램을 위해 `desktop` Electron 패키지를 추가. Web 정적 파일을 복사해 Electron 앱으로 실행하고 NSIS 기반 `.exe` 설치 파일을 생성하는 구조.
+- `desktop/README.md`, 루트 README, `web/README.md`, `INSTALL.md`, 사용자 도움말에 Windows `.exe` 설치형 기준과 PWA 병행 기준을 반영.
+- Electron 의존성을 `electron@42.3.0`, `electron-builder@26.8.1`로 갱신하고 `npm audit --audit-level=high` 기준 취약점 0건을 확인.
+- NowNote 설치 아이콘을 Windows 설치형 빌드 설정에 연결해 기본 Electron 아이콘으로 보이지 않도록 보완.
+- `npm run dist:win`으로 Windows 설치 파일 `desktop/dist/NowNote-Setup-0.1.0-x64.exe` 생성을 확인. 배포 산출물은 Git 추적에서 제외하고, 저장소에는 빌드 방법과 설정 파일만 포함.
+- AMD Linux 서버 첫 기동 로그에서 `now-api`와 `now-worker`가 동시에 DB 테이블 생성을 시도해 PostgreSQL `duplicate key value violates unique constraint "pg_type_typname_nsp_index"`가 1회 발생한 것을 확인.
+- `create_tables()`에 PostgreSQL `pg_advisory_xact_lock` 기반 스키마 생성 잠금을 추가해 API/worker 동시 기동 시 테이블 생성 충돌을 방지.
+- `INSTALL.md`와 `server/DEPLOY.md`에 Linux 서버에서의 `localhost` 의미, 외부 PC/휴대폰에서는 서버 IP 또는 도메인을 써야 한다는 기준, 최신 Ubuntu의 `docker compose` 명령 기준을 반영.
+- Nginx Proxy Manager 화면에서 기존 `Forward Hostname/IP=nownote-site`, `Forward Port=80`으로 되어 있던 값을 AMD 서버 기준 `140.245.68.207`, `8750`으로 바꾸는 절차를 `INSTALL.md`, `server/PUBLIC_SERVER.md`, `server/DEPLOY.md`에 반영.
 - 기존 서버 실행 코드나 운영 기능은 변경하지 않음.
-- 검증: 서버 preflight 1051/1051 통과, 공개 저장소 안전 점검 8/8 통과, Web 표면 검증 138/138 통과, `git diff --check` 통과.
+- 검증: 서버 preflight 1053/1053 통과, 공개 저장소 안전 점검 8/8 통과, Web 표면 검증 167/167 통과, `npm audit --audit-level=high` 취약점 0건, Windows 설치 파일 빌드 통과, `git diff --check` 통과.
 
 ### 릴리스 증빙 화면 문서 정합성 정리
 

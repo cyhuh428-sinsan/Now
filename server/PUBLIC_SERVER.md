@@ -71,6 +71,21 @@ Forward Hostname / IP: 서버 IP 또는 호스트명
 Forward Port: 8750
 ```
 
+AMD 서버 기준으로 NowNote API가 `140.245.68.207:8750`에서 준비 완료라면 Nginx Proxy Manager의 Proxy Host 화면을 아래처럼 둡니다.
+
+```text
+Domain Names: nownote.sinsan.kr
+Scheme: http
+Forward Hostname / IP: 140.245.68.207
+Forward Port: 8750
+Access List: Publicly Accessible
+SSL: Let's Encrypt 인증서
+Force SSL: 켬
+```
+
+기존 화면이 `Forward Hostname / IP=nownote-site`, `Forward Port=80`이면 아직 정적 개인정보처리방침 사이트로 연결된 상태입니다.
+도메인 전체를 NowNote 서버로 전환할 때는 `nownote-site -> 140.245.68.207`, `80 -> 8750`으로 바꿉니다.
+
 NowNote 서버 자체가 `/`와 `/privacy`에서 개인정보처리방침을 제공하므로, 이 방식으로 연결해도 Google Play 개인정보처리방침 URL은 유지됩니다.
 
 #### 방식 B. 기존 개인정보처리방침 사이트를 유지하고 API 경로만 연결
@@ -89,7 +104,7 @@ NowNote 서버 자체가 `/`와 `/privacy`에서 개인정보처리방침을 제
 
 Nginx Proxy Manager가 `now-api` 이름을 해석하지 못하면 각 경로의 Forward Hostname/IP를 `서버 IP 또는 호스트명`, Forward Port를 `8750`으로 설정합니다.
 
-저장 후 `https://nownote.sinsan.kr/api/v1/server`가 HTML이 아니라 JSON을 반환해야 합니다.
+저장 후 `https://nownote.sinsan.kr/health`, `https://nownote.sinsan.kr/health/ready`, `https://nownote.sinsan.kr/api/v1/server`가 HTML이 아니라 JSON을 반환해야 합니다.
 개인정보처리방침 HTML이 계속 반환되면 아직 `nownote-site:80` 같은 정적 사이트로 연결된 상태입니다.
 경로별 연결 방식을 쓰는 경우에도 `https://nownote.sinsan.kr/health/ready`가 JSON `{"status":"ready"}`를 반환해야 합니다.
 

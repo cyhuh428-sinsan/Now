@@ -28,6 +28,11 @@ web/dist/
 web/**/__pycache__/
 web/**/*.pyc
 
+# Desktop installer artifacts
+desktop/app/
+desktop/dist/
+desktop/node_modules/
+
 # Root script runtime artifacts
 scripts/**/__pycache__/
 scripts/**/*.pyc

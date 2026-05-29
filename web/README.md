@@ -80,7 +80,18 @@ node scripts/check_import_export.mjs
 
 브라우저 실행 파일을 자동으로 찾지 못하거나 headless 브라우저가 불안정하면 `NOWNOTE_BROWSER_PATH`에 Chrome 또는 Edge 실행 파일 경로를 지정합니다.
 
-PWA 설치형 배포 묶음은 아래 명령으로 생성합니다.
+Windows `.exe` 설치형 프로그램은 `desktop/README.md` 기준으로 생성합니다.
+1차 Windows 설치형은 Web 화면을 Electron 앱으로 감싸고, NSIS 기반 `.exe` 설치 파일을 만듭니다.
+
+```bash
+cd ../desktop
+npm install
+npm run dist:win
+```
+
+생성 결과는 `desktop/dist/NowNote-Setup-0.1.0-x64.exe`입니다.
+
+PWA 설치형 배포 묶음도 아래 명령으로 생성할 수 있습니다.
 
 ```bash
 python scripts/package_web.py
@@ -99,10 +110,10 @@ python scripts/package_web.py
 브라우저 기준 주소를 `http://127.0.0.1:8750`으로 바꿔 다시 확인하고, 그래도 실패하면 서버 컨테이너가 최신 소스의 CORS 설정으로 재배포됐는지 확인합니다.
 `서버로 동기화`는 증분 동기화를 수행하고, `전체 다시 동기화`는 마지막 동기화 시점을 초기화해서
 서버에 전체 노트를 다시 전송합니다.
-1차 설치형 프로그램 포장 방식은 PWA 설치를 기준으로 확정합니다.
+1차 설치형 프로그램 포장 방식은 Windows `.exe` 설치 파일과 PWA 설치를 함께 지원하는 방향으로 정리합니다.
 `manifest.webmanifest`, `sw.js`, `icons/nownote-icon.svg`를 포함해 브라우저의 설치 기능으로 독립 실행 창을 만들 수 있게 합니다.
 서비스 워커는 `https`, `localhost`, `127.0.0.1`에서만 등록되므로 파일을 직접 여는 경우에는 기존 로컬 Web 화면처럼 동작합니다.
-나중에 Windows/macOS/Linux 설치 파일이 필요해지면 같은 화면을 Tauri 또는 Electron으로 감싸는 방식으로 확장합니다.
+Windows `.exe`는 `desktop`의 Electron 패키지로 생성하고, macOS/Linux 설치 파일과 `.msi`는 별도 빌드 도구를 붙이는 단계에서 확장합니다.
 
 서버 연결 후에는 보관된 일자별 메모도 삭제하지 않습니다.
 설치형 서버는 사용자의 개인 서버이므로, 보관 메모는 서버에 `archived` 상태의 비활성 백업본으로 동기화합니다.
