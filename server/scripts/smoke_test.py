@@ -398,6 +398,8 @@ def main() -> None:
             require("NowNote 수동 증빙" in text, "수동 증빙 화면 제목이 없습니다")
             require("증빙 기록 템플릿" in text, "수동 증빙 화면에 증빙 기록 템플릿이 없습니다")
             require("확인자:" in text, "수동 증빙 화면의 템플릿에 확인자 입력칸이 없습니다")
+            require("증빙 기록 저장" in text, "수동 증빙 화면에 증빙 기록 저장 폼이 없습니다")
+            require("최근 증빙 기록" in text, "수동 증빙 화면에 최근 증빙 기록 목록이 없습니다")
             require("수동 증빙 기준" in text, "수동 증빙 화면에 증빙 기준 표가 없습니다")
             require("필요 증빙" in text, "수동 증빙 화면에 필요 증빙 열이 없습니다")
             require("/api/v1/admin/release-evidence" in text, "수동 증빙 화면에 JSON API 링크가 없습니다")
@@ -514,6 +516,47 @@ def main() -> None:
         "GET /api/v1/admin/release-evidence-template:",
         status,
         {"name": data.get("name"), "content": len(data.get("content", ""))},
+    )
+
+    evidence_record_payload = {
+        "group_name": "smoke_test",
+        "section": "server smoke",
+        "label": "smoke_release_evidence_record",
+        "result": "재확인 필요",
+        "checked_by": "smoke_test",
+        "evidence_location": "/api/v1/admin/release-evidence-records",
+        "actual_note": "smoke test record",
+        "memo": "자동 검증용 기록",
+    }
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/admin/release-evidence-records",
+        args.token,
+        evidence_record_payload,
+    )
+    require(data.get("status") == "ok", "수동 증빙 기록 저장 API 상태가 ok가 아닙니다")
+    require(data.get("record", {}).get("label") == "smoke_release_evidence_record", "수동 증빙 기록 저장 결과가 예상과 다릅니다")
+    print(
+        "POST /api/v1/admin/release-evidence-records:",
+        status,
+        {"id": data.get("record", {}).get("id"), "label": data.get("record", {}).get("label")},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/admin/release-evidence-records?label=smoke_release_evidence_record",
+        args.token,
+    )
+    require(data.get("name") == "phase_one_manual_evidence_records", "수동 증빙 기록 API 이름이 예상과 다릅니다")
+    require(data.get("count", 0) >= 1, "수동 증빙 기록 API에 저장된 기록이 없습니다")
+    require(
+        any(item.get("checked_by") == "smoke_test" for item in data.get("items", [])),
+        "수동 증빙 기록 API에서 smoke 기록을 찾지 못했습니다",
+    )
+    print(
+        "GET /api/v1/admin/release-evidence-records:",
+        status,
+        {"count": data.get("count"), "result_counts": data.get("result_counts")},
     )
 
     status, data = request("GET", f"{base_url}/api/v1/admin/play-release", args.token)
@@ -687,6 +730,7 @@ def main() -> None:
     require(checksum == recalculated_checksum, "전체 백업 체크섬이 본문 내용과 일치하지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
     require("devices" in data.get("items", {}), "전체 백업에 기기 항목이 없습니다")
+    require("release_evidence_records" in data.get("items", {}), "전체 백업에 수동 증빙 기록 항목이 없습니다")
     full_backup = data
     print(
         "GET /api/v1/admin/export/all:",
@@ -696,6 +740,7 @@ def main() -> None:
             "recordings": len(data.get("items", {}).get("recordings", [])),
             "users": len(data.get("items", {}).get("users", [])),
             "devices": len(data.get("items", {}).get("devices", [])),
+            "release_evidence_records": len(data.get("items", {}).get("release_evidence_records", [])),
         },
     )
 
@@ -708,6 +753,7 @@ def main() -> None:
     require(data.get("status") == "ok", "전체 백업 검증 API가 실패했습니다")
     require("notes" in data.get("summary", {}), "전체 백업 검증 요약에 메모 건수가 없습니다")
     require("devices" in data.get("summary", {}), "전체 백업 검증 요약에 기기 건수가 없습니다")
+    require("release_evidence_records" in data.get("summary", {}), "전체 백업 검증 요약에 수동 증빙 기록 건수가 없습니다")
     require(data.get("status_counts", {}).get("bad") == 0, "전체 백업 검증 결과에 bad가 있습니다")
     require(data.get("status_counts", {}).get("ok", 0) >= 1, "전체 백업 검증 결과의 ok 집계가 없습니다")
     print(

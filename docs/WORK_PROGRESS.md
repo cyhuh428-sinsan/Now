@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-29 09:53 KST
+
+### 다음 작업 시작
+
+- 남은 1차 마무리 항목은 실제 확인 증빙이 있어야 닫을 수 있으므로, 수동 증빙을 화면에서 저장/조회할 수 있게 보강.
+- 기존 메모/녹음/동기화 데이터 구조는 변경하지 않고, 별도 운영 테이블로 증빙 기록만 추가.
+
+### 구현 내용
+
+- `release_evidence_records` 테이블 모델 추가.
+- `GET /api/v1/admin/release-evidence-records`, `POST /api/v1/admin/release-evidence-records` 추가.
+- `/admin/evidence` 화면에 증빙 기록 저장 폼과 최근 증빙 기록 목록 추가.
+- smoke test, preflight, GitHub Actions 문법 검사 대상, `server/README.md`, `docs/PROJECT_STATUS.md`에 수동 증빙 기록 기준 반영.
+
+### 검증
+
+- `uv run python -m py_compile server\app\models\note.py server\app\db.py server\app\api\admin.py server\app\api\monitor.py server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- FastAPI TestClient로 `/admin/evidence` 화면, `POST /api/v1/admin/release-evidence-records`, `GET /api/v1/admin/release-evidence-records`, `/api/v1/admin/export/all`, `/api/v1/admin/export/verify` 확인.
+- TestClient 기준 `release_evidence_records` 백업 포함과 백업 검증 `status: ok` 확인.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 933/933.
+- `uv run python scripts\release_readiness.py --show-blockers` 결과는 35/57 완료, 남은 항목 22개 유지.
+
 ## 2026-05-29 09:21 KST
 
 ### 다음 작업 시작

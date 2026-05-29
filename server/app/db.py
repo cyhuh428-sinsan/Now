@@ -24,7 +24,15 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
-    from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice  # noqa: F401
+    from app.models.note import (  # noqa: F401
+        AnalysisJob,
+        Note,
+        Recording,
+        ReleaseEvidenceRecord,
+        SyncLog,
+        UserAccount,
+        UserDevice,
+    )
 
     Base.metadata.create_all(bind=engine)
     migrate_schema()

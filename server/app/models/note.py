@@ -124,3 +124,22 @@ class SyncLog(Base):
     include_deleted: Mapped[int] = mapped_column(Integer, default=0)
     updated_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class ReleaseEvidenceRecord(Base):
+    __tablename__ = "release_evidence_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_name: Mapped[str] = mapped_column(String(120), index=True)
+    section: Mapped[str] = mapped_column(String(160), index=True)
+    label: Mapped[str] = mapped_column(String(240), index=True)
+    result: Mapped[str] = mapped_column(String(40), default="재확인 필요", index=True)
+    checked_by: Mapped[str] = mapped_column(String(120), default="")
+    evidence_location: Mapped[str] = mapped_column(Text, default="")
+    actual_note: Mapped[str] = mapped_column(Text, default="")
+    memo: Mapped[str] = mapped_column(Text, default="")
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
