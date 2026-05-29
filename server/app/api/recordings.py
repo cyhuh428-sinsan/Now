@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, File, Form, Header, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.security import require_api_token
+from app.core.security import require_client_api_access
 from app.db import get_db
 from app.models.note import Recording
 from app.schemas.note import RecordingOut
@@ -13,7 +13,7 @@ from app.services.user_devices import require_active_user_device
 router = APIRouter(
     prefix="/api/v1/recordings",
     tags=["recordings"],
-    dependencies=[Depends(require_api_token)],
+    dependencies=[Depends(require_client_api_access)],
 )
 
 
@@ -21,9 +21,15 @@ router = APIRouter(
 def list_recordings(
     owner_id: str = "local_user",
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> list[Recording]:
-    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     return list(
         db.scalars(
             select(Recording)
@@ -42,9 +48,15 @@ async def upload_recording(
     transcript: str | None = Form(default=None),
     file: UploadFile = File(...),
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> Recording:
-    require_user_api_access(db, owner_id=owner_id, access_token=user_token)
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     require_active_user_device(db, owner_id=owner_id, device_id=device_id)
     file_name, storage_path = await save_recording_file(
         owner_id=owner_id,

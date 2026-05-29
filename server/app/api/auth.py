@@ -4,7 +4,7 @@ from datetime import datetime
 from html import escape
 from secrets import compare_digest
 
-from fastapi import APIRouter, Depends, Form, HTTPException, status
+from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select
@@ -12,7 +12,13 @@ from sqlalchemy.orm import Session
 
 from app.db import get_db
 from app.models.note import UserAccount
-from app.services.user_accounts import hash_access_token
+from app.services.user_accounts import (
+    hash_access_token,
+    issue_web_session,
+    require_web_session_access,
+    revoke_web_session,
+    verify_password,
+)
 
 api_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 page_router = APIRouter(tags=["auth"])
@@ -21,6 +27,13 @@ page_router = APIRouter(tags=["auth"])
 class TokenLoginRequest(BaseModel):
     owner_id: str = Field(max_length=80)
     access_token: str = Field(min_length=1)
+    two_factor_code: str | None = Field(default=None, max_length=20)
+
+
+class WebLoginRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    password: str = Field(min_length=1)
+    device_id: str | None = Field(default=None, max_length=120)
     two_factor_code: str | None = Field(default=None, max_length=20)
 
 
@@ -33,6 +46,62 @@ def token_login(payload: TokenLoginRequest, db: Session = Depends(get_db)) -> di
         two_factor_code=payload.two_factor_code,
     )
     return {"status": "ok", "user": _user_payload(user)}
+
+
+@api_router.post("/web-login")
+def web_login(
+    payload: WebLoginRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _authenticate_user_password(
+        db,
+        payload.owner_id,
+        payload.password,
+        two_factor_code=payload.two_factor_code,
+    )
+    session, session_token = issue_web_session(
+        db,
+        owner_id=user.owner_id,
+        device_id=payload.device_id,
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(user)
+    db.refresh(session)
+    return {
+        "status": "ok",
+        "session_token": session_token,
+        "expires_at": session.expires_at,
+        "user": _user_payload(user),
+    }
+
+
+@api_router.get("/web-session")
+def web_session(
+    owner_id: str,
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_web_session_access(
+        db,
+        owner_id=owner_id,
+        session_token=web_session_token,
+    )
+    db.commit()
+    db.refresh(user)
+    return {"status": "ok", "user": _user_payload(user)}
+
+
+@api_router.post("/web-logout")
+def web_logout(
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    if web_session_token:
+        revoke_web_session(db, session_token=web_session_token)
+        db.commit()
+    return {"status": "ok"}
 
 
 @page_router.get("/auth/token", include_in_schema=False)
@@ -90,7 +159,42 @@ def _authenticate_user_token(
     return user
 
 
+def _authenticate_user_password(
+    db: Session,
+    owner_id: str,
+    password: str,
+    *,
+    two_factor_code: str | None = None,
+) -> UserAccount:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id.strip()))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
+    if not bool(user.is_active):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="user inactive")
+    if not verify_password(password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid password")
+    if bool(user.two_factor_enabled):
+        _require_two_factor_code_for_secret(
+            user.owner_id,
+            user.password_hash or "",
+            two_factor_code,
+        )
+
+    now = datetime.utcnow()
+    user.last_login_at = now
+    user.last_seen_at = now
+    return user
+
+
 def _require_two_factor_code(owner_id: str, access_token: str, supplied_code: str | None) -> None:
+    _require_two_factor_code_for_secret(
+        owner_id,
+        hash_access_token(access_token.strip()),
+        supplied_code,
+    )
+
+
+def _require_two_factor_code_for_secret(owner_id: str, secret: str, supplied_code: str | None) -> None:
     cleaned = (supplied_code or "").strip()
     if not cleaned:
         raise HTTPException(
@@ -99,7 +203,7 @@ def _require_two_factor_code(owner_id: str, access_token: str, supplied_code: st
         )
     current_step = int(time.time() // 30)
     valid_codes = {
-        _two_factor_code(owner_id, access_token, current_step + offset)
+        _two_factor_code(owner_id, secret, current_step + offset)
         for offset in (-1, 0, 1)
     }
     if cleaned not in valid_codes:
@@ -109,10 +213,9 @@ def _require_two_factor_code(owner_id: str, access_token: str, supplied_code: st
         )
 
 
-def _two_factor_code(owner_id: str, access_token: str, step: int) -> str:
-    secret = hash_access_token(access_token.strip()).encode("utf-8")
+def _two_factor_code(owner_id: str, secret: str, step: int) -> str:
     message = f"{owner_id.strip()}:{step}".encode("utf-8")
-    digest = hmac.new(secret, message, "sha256").hexdigest()
+    digest = hmac.new(secret.encode("utf-8"), message, "sha256").hexdigest()
     return str(int(digest[:12], 16) % 1_000_000).zfill(6)
 
 

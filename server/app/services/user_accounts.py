@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 from secrets import compare_digest
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -9,11 +9,51 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.note import UserAccount
+from app.models.note import UserAccount, WebSession
+
+PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
+PASSWORD_HASH_ITERATIONS = 210_000
+WEB_SESSION_DAYS = 1
 
 
 def hash_access_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def hash_password(password: str) -> str:
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        password.encode("utf-8"),
+        salt,
+        PASSWORD_HASH_ITERATIONS,
+    )
+    return "$".join(
+        [
+            PASSWORD_HASH_ALGORITHM,
+            str(PASSWORD_HASH_ITERATIONS),
+            salt.hex(),
+            digest.hex(),
+        ]
+    )
+
+
+def verify_password(password: str, password_hash: str | None) -> bool:
+    if not password_hash:
+        return False
+    try:
+        algorithm, iterations_text, salt_hex, digest_hex = password_hash.split("$", 3)
+        if algorithm != PASSWORD_HASH_ALGORITHM:
+            return False
+        digest = hashlib.pbkdf2_hmac(
+            "sha256",
+            password.encode("utf-8"),
+            bytes.fromhex(salt_hex),
+            int(iterations_text),
+        )
+        return compare_digest(digest.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
 
 
 def touch_user_activity(
@@ -50,6 +90,7 @@ def require_user_api_access(
     *,
     owner_id: str,
     access_token: str | None = None,
+    web_session_token: str | None = None,
 ) -> UserAccount:
     user = touch_user_activity(db, owner_id=owner_id)
     if not bool(user.is_active):
@@ -57,6 +98,16 @@ def require_user_api_access(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="user inactive",
         )
+
+    if web_session_token:
+        session_user = require_web_session_access(
+            db,
+            owner_id=owner_id,
+            session_token=web_session_token,
+        )
+        db.commit()
+        db.refresh(session_user)
+        return session_user
 
     settings = get_settings()
     if settings.user_token_required:
@@ -82,10 +133,82 @@ def require_user_api_access(
     return user
 
 
+def require_web_session_access(
+    db: Session,
+    *,
+    owner_id: str,
+    session_token: str | None,
+) -> UserAccount:
+    if not session_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="web session required",
+        )
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
+    if not bool(user.is_active):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="user inactive",
+        )
+
+    session = db.scalar(
+        select(WebSession).where(WebSession.session_token_hash == hash_access_token(session_token.strip()))
+    )
+    now = datetime.utcnow()
+    if (
+        session is None
+        or session.owner_id != owner_id
+        or session.revoked_at is not None
+        or session.expires_at <= now
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="invalid web session",
+        )
+    session.last_used_at = now
+    user.last_login_at = now
+    user.last_seen_at = now
+    return user
+
+
+def issue_web_session(
+    db: Session,
+    *,
+    owner_id: str,
+    device_id: str | None = None,
+    user_agent: str | None = None,
+) -> tuple[WebSession, str]:
+    raw_token = secrets.token_urlsafe(40)
+    now = datetime.utcnow()
+    session = WebSession(
+        owner_id=owner_id,
+        session_token_hash=hash_access_token(raw_token),
+        device_id=_clean_optional(device_id, 120),
+        user_agent=_clean_optional(user_agent, 500),
+        expires_at=now + timedelta(days=WEB_SESSION_DAYS),
+        last_used_at=now,
+    )
+    db.add(session)
+    return session, raw_token
+
+
+def revoke_web_session(db: Session, *, session_token: str) -> bool:
+    session = db.scalar(
+        select(WebSession).where(WebSession.session_token_hash == hash_access_token(session_token.strip()))
+    )
+    if session is None or session.revoked_at is not None:
+        return False
+    session.revoked_at = datetime.utcnow()
+    return True
+
+
 def create_user_account(
     db: Session,
     *,
     owner_id: str,
+    password: str | None = None,
     email: str | None = None,
     display_name: str | None = None,
     timezone: str = "Asia/Seoul",
@@ -108,6 +231,7 @@ def create_user_account(
         two_factor_enabled=1 if two_factor_enabled else 0,
         is_active=1 if is_active else 0,
     )
+    set_user_password(user, password)
     db.add(user)
     return user
 
@@ -116,6 +240,7 @@ def update_user_account(
     db: Session,
     *,
     owner_id: str,
+    password: str | None = None,
     email: str | None = None,
     display_name: str | None = None,
     timezone: str = "Asia/Seoul",
@@ -133,6 +258,7 @@ def update_user_account(
     user.group_name = _clean_required(group_name, "사용자", 80)
     user.two_factor_enabled = 1 if two_factor_enabled else 0
     user.is_active = 1 if is_active else 0
+    set_user_password(user, password)
     return user
 
 
@@ -145,6 +271,14 @@ def issue_user_access_token(db: Session, *, owner_id: str) -> tuple[UserAccount,
     user.access_token_issued_at = datetime.utcnow()
     user.access_token_last_used_at = None
     return user, raw_token
+
+
+def set_user_password(user: UserAccount, password: str | None) -> None:
+    cleaned = (password or "").strip()
+    if not cleaned:
+        return
+    user.password_hash = hash_password(cleaned)
+    user.password_updated_at = datetime.utcnow()
 
 
 def _clean_optional(value: str | None, max_length: int) -> str | None:

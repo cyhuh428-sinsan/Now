@@ -176,7 +176,7 @@
         <ul>
           <li data-i18n="standalone.point.start">바로 시작할 수 있습니다.</li>
           <li data-i18n="standalone.point.private">메모가 외부 서버로 올라가지 않습니다.</li>
-          <li data-i18n="standalone.point.backup">Web/설치형은 JSON 백업, 모바일은 DB 백업을 주기적으로 해두는 것이 좋습니다.</li>
+          <li data-i18n="standalone.point.backup">설치형/개발용 Web은 JSON 백업, 모바일은 DB 백업을 주기적으로 해두는 것이 좋습니다.</li>
         </ul>
       </article>
 
@@ -185,11 +185,11 @@
         <h2 data-i18n="server.title">서버 연결 사용자</h2>
         <p data-i18n="server.desc">개인 Docker 서버나 공용 NowNote 서버에 연결해서 여러 기기와 메모를 동기화합니다.</p>
         <ul>
-          <li data-i18n="server.point.token">서버 주소와 API 토큰이 필요합니다.</li>
+          <li data-i18n="server.point.token">앱/설치형은 사용자별 접속 토큰을 쓰고, Web은 사용자 ID와 비밀번호로 로그인합니다.</li>
           <li data-i18n="server.point.profile">사용자 프로필, 시간대, 그룹, 활성 상태를 관리할 수 있습니다.</li>
           <li data-i18n="server.point.expand">서버 백업, 녹음 저장, 분석 작업으로 확장할 수 있습니다.</li>
           <li data-i18n="server.point.backupVerify">서버 백업 검증으로 스키마, 체크섬, 필수 항목, 토큰 민감정보 노출 여부를 확인합니다.</li>
-          <li data-i18n="server.point.publicAuth">공용 서버용 사용자별 접속 토큰과 2단계 코드 검증을 제공합니다.</li>
+          <li data-i18n="server.point.publicAuth">공용 서버용 Web 로그인, 사용자별 접속 토큰, 2단계 코드 검증을 제공합니다.</li>
           <li data-i18n="server.point.publicOps">공용 서버 오픈 전에는 사용자별 접속 토큰 강제 설정, 공개 HTTPS, reverse proxy 환경을 확인해야 합니다.</li>
         </ul>
       </article>
@@ -212,7 +212,7 @@
         </div>
         <div>
           <h3 data-i18n="platform.web.title">Web / 설치형 프로그램</h3>
-          <p data-i18n="platform.web.desc">지식 메모가 중심입니다. 주제 / 분류 / 메모 구조로 정리하고 Markdown으로 긴 글을 작성합니다.</p>
+          <p data-i18n="platform.web.desc">디자인은 비슷하지만 내부 동작은 다릅니다. Web은 서버 공유 문서만 접속하고, 설치형 프로그램은 PC 로컬 문서와 공유 문서를 함께 다룹니다.</p>
           <ul>
             <li data-i18n="platform.web.tree">계층형 지식 메모</li>
             <li data-i18n="platform.web.tabs">탭 기반 편집</li>
@@ -226,12 +226,12 @@
 
     <section>
       <h2 data-i18n="connection.title">서버 연결 설정</h2>
-      <p data-i18n="connection.desc">서버 연결에 필요한 값은 서버 주소, API 토큰, 사용자 ID, 기기 ID입니다. 공용 서버에서 요구하면 사용자별 접속 토큰과 2단계 인증 코드도 입력합니다. 앱에 입력한 토큰은 기기 보안 저장소에 저장합니다.</p>
-      <div class="note" data-i18n="connection.standalone">서버를 설치하지 않고 단독으로 쓰는 경우 서버 연결 설정은 비워둡니다. 모바일 앱은 Google Play에서 설치하고, 집 PC에서는 Windows <code>.exe</code> 설치형 프로그램을 사용합니다. 외부 PC Web은 공용 서버 <code>https://nownote.sinsan.kr</code> 또는 개인 서버 주소로 접속합니다.</div>
-      <div class="note" data-i18n="connection.public">공용 서버에 접속만 하는 사용자는 서버를 직접 설치하지 않습니다. 운영자가 제공한 서버 주소, API 토큰, 사용자 ID, 사용자별 접속 토큰, 필요한 경우 2단계 인증 코드를 앱 설정 또는 Web 화면 설정의 서버 연결 항목에 입력합니다.</div>
-      <pre><code data-i18n="connection.code">서버 주소: http://서버주소:8750
-API 토큰: 서버 .env의 NOW_API_TOKEN
-사용자별 접속 토큰: 관리자 화면에서 사용자별로 발급한 토큰
+      <p data-i18n="connection.desc">설치형 프로그램과 모바일 앱은 서버 주소, 사용자 ID, 사용자별 접속 토큰, 기기 ID를 저장해 공유 문서를 동기화합니다. Web은 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.</p>
+      <div class="note" data-i18n="connection.standalone">서버를 설치하지 않고 단독으로 쓰는 경우 모바일 앱과 설치형 프로그램의 서버 연결 설정은 비워둡니다. Web은 서버에 부속된 화면이므로 단독 로컬 저장용으로 쓰지 않습니다.</div>
+      <div class="note" data-i18n="connection.public">공용 서버에 접속만 하는 사용자는 서버를 직접 설치하지 않습니다. Web은 사용자 ID와 비밀번호로 로그인하고, 설치형 프로그램/모바일 앱은 운영자가 제공한 사용자별 접속 토큰을 입력합니다.</div>
+      <pre><code data-i18n="connection.code">Web: 사용자 ID + 비밀번호
+설치형/앱 서버 주소: http://서버주소:8750 또는 https://도메인
+설치형/앱 사용자별 접속 토큰: 서버 관리자 화면 /admin/users에서 발급
 2단계 인증 코드: 필요한 경우 6자리 코드
 기기 ID: 앱 또는 설치형 프로그램에서 자동 생성</code></pre>
       <p data-i18n="connection.android">Android 에뮬레이터에서 로컬 PC 서버에 연결할 때는 아래 주소를 사용합니다.</p>
@@ -255,8 +255,8 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
 
     <section>
       <h2 data-i18n="backup.title">백업과 가져오기</h2>
-      <h3 data-i18n="backup.json.title">Web / 설치형 JSON 백업</h3>
-      <p data-i18n="backup.json.desc">JSON은 Web/설치형 NowNote 전체 데이터를 백업하거나 복원할 때 사용합니다. 가져오기는 현재 데이터를 백업 파일 내용으로 교체하는 성격이 강합니다.</p>
+      <h3 data-i18n="backup.json.title">설치형 / 개발용 Web JSON 백업</h3>
+      <p data-i18n="backup.json.desc">JSON은 설치형 또는 개발용 Web 데이터를 백업하거나 복원할 때 사용합니다. 공용 Web 프로그램의 원본은 서버 공유 문서이므로 서버 백업 절차를 우선합니다.</p>
       <h3 data-i18n="backup.mobile.title">모바일 DB 백업</h3>
       <p data-i18n="backup.mobile.desc">모바일 앱은 .db 파일로 전체 데이터를 백업하거나 복원합니다. 가져오기는 현재 모바일 데이터를 백업 파일 내용으로 교체하며, 완료 후 앱을 다시 실행해야 합니다.</p>
       <h3 data-i18n="backup.markdown.title">Markdown 가져오기</h3>
@@ -304,11 +304,11 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "standalone.desc": "Save notes only on the current device without connecting to a server.",
         "standalone.point.start": "You can start immediately.",
         "standalone.point.private": "Notes are not uploaded to an external server.",
-        "standalone.point.backup": "Periodically back up your data: JSON for Web/installed apps, DB backup for mobile.",
+        "standalone.point.backup": "Periodically back up your data: JSON for the installed app/development Web, DB backup for mobile.",
         "server.badge": "Sync enabled",
         "server.title": "Server-connected user",
         "server.desc": "Connect to a personal Docker server or public NowNote server to sync notes across devices.",
-        "server.point.token": "A server URL and API token are required.",
+        "server.point.token": "The app/installed program uses a per-user access token, while Web uses a user ID and password.",
         "server.point.profile": "User profiles, time zones, groups, and active status can be managed.",
         "server.point.expand": "This can expand into server backups, recording storage, and analysis jobs.",
         "server.point.backupVerify": "Server backup verification checks schema, checksum, required sections, and token-sensitive data exposure.",
@@ -324,17 +324,17 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "platform.mobile.recordings": "Check server recording upload status",
         "platform.mobile.analysis": "Create server analysis jobs and review results",
         "platform.web.title": "Web / Installed app",
-        "platform.web.desc": "Knowledge notes are the focus. Organize by topic / category / note, and write longer content in Markdown.",
+        "platform.web.desc": "The design is similar, but the internals differ. Web accesses only server-shared documents, while the installed program handles both PC-local and shared documents.",
         "platform.web.tree": "Hierarchical knowledge notes",
         "platform.web.tabs": "Tab-based editing",
         "platform.web.find": "Find in note and quick switch",
         "platform.web.toggles": "Feature toggles and editable shortcuts",
         "platform.web.analysis": "Review server analysis results and add them to notes",
         "connection.title": "Server Connection Settings",
-        "connection.desc": "Server connection requires a server URL, API token, user ID, and device ID. If a public server requires it, also enter the per-user access token and two-factor code. Tokens entered in the app are stored in device secure storage.",
+        "connection.desc": "The installed program and mobile app store server URL, user ID, per-user access token, and device ID to sync shared documents. Web logs in at the server URL with user ID and password.",
         "connection.standalone": "If you use NowNote standalone without installing a server, leave server connection settings empty. Install the mobile app from Google Play and use the Windows <code>.exe</code> installed app on your home PC. For external-PC Web use, open the public server <code>https://nownote.sinsan.kr</code> or your personal server address.",
-        "connection.public": "Users who only connect to a public server do not install a server themselves. Enter the server URL, API token, user ID, per-user access token, and two-factor code when required in the server connection section of app settings or Web display settings.",
-        "connection.code": "Server URL: http://server-address:8750\nAPI token: NOW_API_TOKEN in the server .env\nPer-user access token: Token issued per user in the admin screen\n2FA code: Six-digit code when required\nDevice ID: Automatically generated by the app or installed program",
+        "connection.public": "Users who only connect to a public server do not install a server themselves. Web uses user ID and password, while the installed program/mobile app use the per-user access token provided by the operator.",
+        "connection.code": "Web: user ID + password\nInstalled/app server URL: http://server-address:8750 or https://domain\nInstalled/app per-user access token: issued at /admin/users in the server admin screen\n2FA code: six-digit code when required\nDevice ID: automatically generated by the app or installed program",
         "connection.android": "Use the address below when connecting from an Android emulator to a local PC server.",
         "profile.title": "User Profile",
         "profile.desc": "Server-connected users have user information created on the server.",
@@ -346,8 +346,8 @@ API 토큰: 서버 .env의 NOW_API_TOKEN
         "profile.note": "The app and installed program can edit your own email, display name, and time zone. Groups, two-factor authentication, and active status are managed in the admin screen.",
         "profile.twoFactorNote": "Users with two-factor authentication enabled must enter the six-digit verification code during token login checks.",
         "backup.title": "Backup And Import",
-        "backup.json.title": "Web / Installed App JSON Backup",
-        "backup.json.desc": "JSON is used to back up or restore all NowNote data in the Web/installed app. Importing usually replaces current data with the backup file contents.",
+        "backup.json.title": "Installed App / Development Web JSON Backup",
+        "backup.json.desc": "JSON is used to back up or restore installed-app or development-Web data. For the public Web program, server-shared documents are the source of truth, so server backup is the primary path.",
         "backup.mobile.title": "Mobile DB Backup",
         "backup.mobile.desc": "The mobile app backs up and restores all data with a .db file. Import replaces current mobile data with the backup file contents, and the app must be restarted after import.",
         "backup.markdown.title": "Markdown import",

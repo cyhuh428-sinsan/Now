@@ -3,6 +3,28 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-30 01:35 KST
+
+### Web/설치형 동작 분리와 공유 문서 기준 반영
+
+- Web은 로컬 프로그램이 아니라 서버 부속 화면이며, 서버에 공유된 내 문서만 조회/편집하는 구조로 정리.
+- Web 로그인은 사용자별 접속 토큰 붙여넣기가 아니라 사용자 ID/비밀번호 기반으로 변경하고, 로그인 후 서버가 발급한 Web 세션으로 데이터 API를 호출하도록 구현.
+- Web 설정 화면에서는 서버 주소/API 토큰/사용자별 접속 토큰 입력칸을 숨기고, 로그인 사용자 프로필/분석/로그아웃 중심으로 보이도록 조정.
+- 설치형 프로그램과 모바일 앱은 기존 서버 연결 흐름을 유지하되, 개인 서버 기본 모드에서는 API 토큰, 공용/사용자 토큰 필수 서버에서는 사용자별 접속 토큰을 쓰는 기준으로 문서화.
+- 일자별 메모는 서버 공유 대상으로 유지하고, 지식 메모는 공유 선택된 항목과 공유된 상위 계층만 서버에 전송하도록 Web 동기화 기준 보강.
+- 서버는 사용자별로 메모를 저장하고 계층 구조를 검증하며, 중간 단계가 없는 하위 지식 메모 저장 요청을 `400`으로 차단하도록 보강.
+- 관리자 사용자 생성/수정 화면에서 Web 로그인 비밀번호를 설정할 수 있도록 반영.
+- `README.md`, `INSTALL.md`, `docs/HELP.md`, `docs/HELP.en.md`, `docs/SERVER_AUTH_POLICY.md`, `server/README.md`, `server/PUBLIC_SERVER.md`, `web/README.md`, `web/help.html`의 안내를 새 구조에 맞춰 정리.
+
+### 검증
+
+- `node --check web\app.js` 통과.
+- `uv run python web\scripts\verify_web_surface.py` 통과: 193/193.
+- `uv run python -m py_compile ...` 서버 변경 파일 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1089/1089.
+- 임시 SQLite DB + FastAPI TestClient로 Web 로그인, Web 세션 검증, 관리자 API 차단, 공유 계층 메모 동기화, 중간 부모 없는 하위 메모 차단, Web 로그아웃 흐름 확인.
+- `git diff --check` 통과.
+
 ## 2026-05-30 00:45 KST
 
 ### Web 프로그램 루트 주소 전환

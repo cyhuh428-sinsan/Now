@@ -82,12 +82,15 @@ def main() -> None:
     desktop_readme = DESKTOP_README.read_text(encoding="utf-8")
 
     html_requirements = [
+        ("<title>NowNote</title>", "app title without Web suffix"),
         ('rel="manifest"', "PWA manifest link"),
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
+    check('id="helpBtn" class="ghost-btn help-link" href="./help.html"' in html, "Help link opens in same window", "helpBtn same-window link", failures)
+    check('id="settingsHelpBtn" class="secondary-btn help-link" href="./help.html"' in html, "Settings help link opens in same window", "settingsHelpBtn same-window link", failures)
 
     required_ids = [
         ("treeList", "knowledge tree list"),
@@ -112,12 +115,21 @@ def main() -> None:
         ("openTabs", "open tabs list"),
         ("shortcutEditor", "shortcut editor"),
         ("serverModeSelect", "server mode selector"),
+        ("serverGuideIssue", "server token issue guide"),
+        ("serverUserTokenHint", "per-user token hint"),
         ("serverTestBtn", "server test button"),
         ("serverSyncBtn", "server sync button"),
         ("serverFullSyncBtn", "full server sync button"),
         ("serverAnalysisCreateBtn", "server analysis create button"),
         ("languageSelect", "language selector"),
         ("confirmDialog", "internal confirm dialog"),
+        ("webLoginView", "hosted Web login view"),
+        ("webLoginForm", "hosted Web login form"),
+        ("webLoginOwnerInput", "hosted Web owner ID input"),
+        ("webLoginPasswordInput", "hosted Web password input"),
+        ("webLoginTwoFactorInput", "hosted Web two-factor input"),
+        ("webLogoutBtn", "hosted Web logout button"),
+        ("shareTreeBtn", "knowledge note share toggle"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -130,7 +142,16 @@ def main() -> None:
         ("function markdownToHtml", "Markdown preview renderer"),
         ("async function syncWebNotesToServer", "server sync function"),
         ("async function testServerConnection", "server connection test function"),
+        ("async function handleWebLoginSubmit", "hosted Web login function"),
+        ("async function handleWebLogout", "hosted Web logout function"),
+        ("async function loadServerSharedNotes", "hosted Web shared document loader"),
         ("async function createSelectedNoteAnalysisJob", "server analysis job function"),
+        ('"app.title": "NowNote"', "app title translation without Web suffix"),
+        ("settings.server.guide.issue", "server token issue translation"),
+        ("/api/v1/auth/web-login", "hosted Web password login API"),
+        ("/api/v1/auth/web-session", "hosted Web session API"),
+        ("/api/v1/auth/web-logout", "hosted Web logout API"),
+        ("X-Now-Web-Session", "hosted Web session header"),
         ("function noteFindMatches", "in-note search function"),
         ("function renderOpenTreeTabs", "tab rendering function"),
         ("function normalizeShortcutSettings", "shortcut normalization"),
@@ -139,6 +160,8 @@ def main() -> None:
         ("archivedDaily", "daily archive state"),
         ("selected.level >= 3", "tree depth guard"),
         ("serverUserTokenInput", "public server user token input"),
+        ("function isTreeNodeSharedForServer", "knowledge share filter"),
+        ("if (parent.shared === false) return false", "ancestor share guard before server sync"),
         ("function confirmAction", "internal confirm dialog function"),
     ]
     for needle, label in app_requirements:
@@ -198,6 +221,9 @@ def main() -> None:
         ("본문 찾기", "in-note search documented"),
         ("단축키", "shortcuts documented"),
         ("서버 연결", "server connection documented"),
+        ("서버 공유 문서가 원본", "hosted Web server source documented"),
+        ("사용자 ID와 비밀번호", "hosted Web password login documented"),
+        ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
         ("PWA 설치", "PWA install direction documented"),
         ("Windows `.exe` 설치형 프로그램", "Windows exe install direction documented"),

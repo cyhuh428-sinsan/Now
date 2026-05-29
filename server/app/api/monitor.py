@@ -114,6 +114,7 @@ def admin_user_new(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 @router.post("/admin/users/new", include_in_schema=False)
 def admin_user_create(
     owner_id: str = Form(),
+    password: str = Form(default=""),
     email: str = Form(default=""),
     display_name: str = Form(default=""),
     timezone: str = Form(default="Asia/Seoul"),
@@ -126,6 +127,7 @@ def admin_user_create(
         user = create_user_account(
             db,
             owner_id=owner_id,
+            password=password,
             email=email,
             display_name=display_name,
             timezone=timezone,
@@ -150,6 +152,7 @@ def admin_user_edit(
 @router.post("/admin/users/edit", include_in_schema=False)
 def admin_user_update(
     owner_id: str = Form(),
+    password: str = Form(default=""),
     email: str = Form(default=""),
     display_name: str = Form(default=""),
     timezone: str = Form(default="Asia/Seoul"),
@@ -162,6 +165,7 @@ def admin_user_update(
         update_user_account(
             db,
             owner_id=owner_id,
+            password=password,
             email=email,
             display_name=display_name,
             timezone=timezone,
@@ -2938,6 +2942,10 @@ def _admin_user_form_html() -> str:
         <input type="text" name="owner_id" required placeholder="local_user">
       </div>
       <div class="row">
+        <label><strong>비밀번호</strong><span>Web 로그인에 사용하는 비밀번호</span></label>
+        <input type="password" name="password" autocomplete="new-password" placeholder="Web을 사용할 경우 입력">
+      </div>
+      <div class="row">
         <label><strong>이메일</strong><span>로그인 계정 또는 연락용 주소</span></label>
         <input type="email" name="email">
       </div>
@@ -3100,6 +3108,10 @@ def _admin_user_edit_html(owner_id: str) -> str:
 
     <form method="post" action="/admin/users/edit">
       <input type="hidden" name="owner_id" value="{escape(user.owner_id, quote=True)}">
+      <div class="row">
+        <label><strong>비밀번호</strong><span>Web 로그인용 비밀번호. 비워두면 변경하지 않습니다.</span></label>
+        <input type="password" name="password" autocomplete="new-password" placeholder="변경할 때만 입력">
+      </div>
       <div class="row">
         <label><strong>이메일</strong><span>로그인 계정 또는 연락용 주소</span></label>
         <input type="email" name="email" value="{escape(user.email or '', quote=True)}">

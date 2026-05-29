@@ -3,13 +3,38 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>NowNote Web</title>
+  <title>NowNote</title>
   <meta name="theme-color" content="#315f73">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/nownote-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
+  <section id="webLoginView" class="web-login-view hidden" aria-labelledby="webLoginTitle">
+    <form id="webLoginForm" class="web-login-card">
+      <div class="brand login-brand">
+        <div class="brand-mark">N</div>
+        <div>
+          <h1 id="webLoginTitle">NowNote</h1>
+          <p id="webLoginDesc">서버 공유 문서에 접속합니다.</p>
+        </div>
+      </div>
+      <label>
+        <span id="webLoginOwnerLabel">사용자 ID</span>
+        <input id="webLoginOwnerInput" class="settings-input" type="text" autocomplete="username" required>
+      </label>
+      <label>
+        <span id="webLoginPasswordLabel">비밀번호</span>
+        <input id="webLoginPasswordInput" class="settings-input" type="password" autocomplete="current-password" required>
+      </label>
+      <label>
+        <span id="webLoginTwoFactorLabel">2단계 인증 코드</span>
+        <input id="webLoginTwoFactorInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="사용 중일 때만 입력">
+      </label>
+      <button id="webLoginSubmitBtn" class="primary-btn" type="submit">로그인</button>
+      <p id="webLoginStatus" class="web-login-status">서버에 저장된 공유 문서만 표시됩니다.</p>
+    </form>
+  </section>
   <div class="app-shell">
     <nav id="appRail" class="app-rail" aria-label="빠른 메뉴">
       <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기" data-rail-letter="목" data-rail-icon="☰">목</button>
@@ -90,7 +115,7 @@
             <strong id="deletedTreeCount">0</strong>
           </button>
           <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
-          <a id="helpBtn" class="ghost-btn help-link" href="./help.html" target="_blank" rel="noopener">도움말</a>
+          <a id="helpBtn" class="ghost-btn help-link" href="./help.html">도움말</a>
         </section>
       </div>
     </aside>
@@ -139,6 +164,7 @@
                 </div>
                 <div class="editor-status">
                   <button id="favoriteBtn" class="icon-text-btn" type="button">즐겨찾기</button>
+                  <button id="shareTreeBtn" class="icon-text-btn" type="button">공유</button>
                   <button id="copyLinkBtn" class="icon-text-btn" type="button">링크 복사</button>
                   <span id="treeSavedLabel" class="save-state">저장됨</span>
                 </div>
@@ -393,6 +419,15 @@
               <p id="serverSettingDesc">단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.</p>
             </div>
             <div class="server-settings-form">
+              <div class="server-guide-box">
+                <strong id="serverGuideTitle">입력 기준</strong>
+                <ul>
+                  <li id="serverGuideLocal">단독 사용: 서버 없이 이 기기에만 저장합니다.</li>
+                  <li id="serverGuidePersonal">설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.</li>
+                  <li id="serverGuidePublic">Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.</li>
+                  <li id="serverGuideIssue">사용자별 접속 토큰은 설치형/앱용이며 서버 관리자 화면 /admin/users에서 발급합니다.</li>
+                </ul>
+              </div>
               <label>
                 <span id="serverModeLabel">사용 방식</span>
                 <select id="serverModeSelect" class="settings-select">
@@ -402,19 +437,23 @@
               </label>
               <label>
                 <span id="serverUrlLabel">서버 주소</span>
-                <input id="serverUrlInput" class="settings-input" type="url" placeholder="http://localhost:8750">
+                <input id="serverUrlInput" class="settings-input" type="url" placeholder="https://nownote.sinsan.kr">
+                <small id="serverUrlHint" class="field-hint">공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.</small>
               </label>
               <label>
                 <span id="serverTokenLabel">API 토큰</span>
-                <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="서버 API 토큰">
+                <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="운영자가 제공한 경우 입력">
+                <small id="serverTokenHint" class="field-hint">개인 서버 관리자용 토큰입니다. 운영자가 안내한 경우에만 입력합니다.</small>
               </label>
               <label>
                 <span id="serverUserTokenLabel">사용자별 접속 토큰</span>
-                <input id="serverUserTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="공용 서버 사용자 토큰">
+                <input id="serverUserTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="사용자별 접속 토큰">
+                <small id="serverUserTokenHint" class="field-hint">공용 서버나 사용자별 토큰 필수 서버에서 내 계정을 확인하는 개인 접속 토큰입니다.</small>
               </label>
               <label>
                 <span id="serverTwoFactorCodeLabel">2단계 인증 코드</span>
                 <input id="serverTwoFactorCodeInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="필요한 경우 6자리 코드">
+                <small id="serverTwoFactorCodeHint" class="field-hint">2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.</small>
               </label>
               <div class="server-identity-grid">
                 <label>
@@ -456,6 +495,7 @@
                 <button id="serverTestBtn" class="secondary-btn" type="button">연결 테스트</button>
                 <button id="serverSyncBtn" class="secondary-btn" type="button">서버로 동기화</button>
                 <button id="serverFullSyncBtn" class="secondary-btn" type="button">전체 다시 동기화</button>
+                <button id="webLogoutBtn" class="secondary-btn hidden" type="button">로그아웃</button>
               </div>
               <div class="server-analysis-box">
                 <div>
@@ -512,7 +552,7 @@
               <h3 id="helpSettingTitle">도움말</h3>
               <p id="helpSettingDesc">단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.</p>
             </div>
-            <a id="settingsHelpBtn" class="secondary-btn help-link" href="./help.html" target="_blank" rel="noopener">도움말 열기</a>
+            <a id="settingsHelpBtn" class="secondary-btn help-link" href="./help.html">도움말 열기</a>
           </section>
         </div>
       </div>
