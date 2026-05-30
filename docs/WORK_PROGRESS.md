@@ -6725,3 +6725,20 @@
 - `node --check web\app.js`
 - `web\scripts\verify_web_surface.py`
 - `git diff --check`
+
+# 2026-05-31 02:05 KST
+
+## 작업 내용
+
+- Android 앱의 서버 동기화에서 `pulled_notes`를 숫자만 세고 버리던 문제를 수정.
+- 서버에서 내려온 `tree` 계층메모를 앱의 `memos` 테이블에 `note_tree` 소스로 저장하도록 반영.
+- 서버에서 내려온 `daily` 일자 메모도 앱의 `meetings`/`transcript_segments`에 반영하도록 보강.
+- 서버에서 삭제된 계층메모/일자메모가 내려오면 앱 로컬 활성 데이터에서 제거하도록 처리.
+- 계층메모 수신 반영 테스트를 추가.
+
+## 검증
+
+- 실제 기기 `SM_N981N / R3CN90A1WZF` 연결 확인.
+- `now_app` 전체 Flutter 테스트 통과: 57/57.
+- release APK 생성 통과.
+- 실제 기기 release APK 설치/실행 점검 통과.
