@@ -259,7 +259,7 @@ def main() -> None:
     parser.add_argument(
         "--ready-retries",
         type=int,
-        default=10,
+        default=60,
         help="Number of readiness attempts before running full checks",
     )
     parser.add_argument(

@@ -1504,7 +1504,7 @@ def main() -> None:
                 ("curl http://localhost:8750/api/v1/server", "Deploy checklist covers server info endpoint", "server info endpoint"),
                 ("python3 scripts/smoke_test.py", "Deploy checklist covers smoke test", "smoke_test.py"),
                 ("--timeout 60", "Deploy checklist covers smoke timeout option", "smoke timeout"),
-                ("--ready-retries 10", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
+                ("--ready-retries 120", "Deploy checklist covers smoke readiness retries", "smoke readiness retries"),
                 ("NOW_USER_TOKEN_REQUIRED=true", "Deploy checklist documents public token enforcement setting", "deploy public token enforcement"),
                 ("사용자별 기기 조회/해제 API", "Deploy checklist covers public device self-management", "device self-management"),
                 ("사용자별 데이터 격리 자동 검증", "Deploy checklist covers public data isolation checks", "data isolation"),
