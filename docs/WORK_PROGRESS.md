@@ -19,6 +19,17 @@
 - `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
 - `git diff --check` 통과.
 
+### 추가 수정
+
+- 자동 발급된 정상 사용자 토큰으로 먼저 API를 호출하면 `access_token_last_used_at`이 갱신되는 것이 정상인데, 기존 smoke test가 이후 잘못된 토큰 요청 뒤에도 값을 `None`으로 기대하던 문제 수정.
+- 잘못된 토큰 요청 검증 기준을 `None` 여부가 아니라 실패 요청 전후 `access_token_last_used_at` 값이 바뀌지 않는지 비교하도록 변경.
+
+### 추가 검증
+
+- `uv run python -m py_compile server\scripts\smoke_test.py` 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
+- `git diff --check` 통과.
+
 ## 2026-05-30 15:20 KST
 
 ### 공용 Web 직접 가입과 연결 토큰 흐름 보강
