@@ -6786,3 +6786,20 @@
 - `flutter test`
 - release APK 재생성
 - 실제 기기 설치/실행 점검
+
+# 2026-05-31 03:33 KST
+
+## 작업 내용
+
+- GitHub README의 `NowNote Preflight` 배지가 실패로 보이던 원인을 확인.
+- 실제 원인은 배지 자체가 아니라 GitHub Actions preflight가 예전 암호화 정책 문구를 검사하고 있었던 문제로 정리.
+- README, CONTRIBUTING, Web/모바일 도움말, 한국어/영어 도움말 문서를 현재 기능인 메모 단위 암호화 기준으로 수정.
+- preflight 검증 기준도 “1차 암호화 비활성” 문구가 아니라 “메모 단위 암호화와 키 미저장 정책”을 확인하도록 수정.
+
+## 검증
+
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
+- `scripts/verify_public_repo_safety.py` 통과: 8/8.
+- `web/scripts/verify_web_surface.py` 통과: 211/211.
+- `now_app/scripts/verify_mobile_surface.py` 통과: 128/128.
+- `node --check web/scripts/check_import_export.mjs` 통과.

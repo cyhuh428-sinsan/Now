@@ -127,6 +127,6 @@ python3 scripts/local_environment_status.py --base-url http://localhost:8750
 ## 현재 정책
 
 - 메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다.
-- 암호화 저장은 1차 범위에서는 켜지지 않으며, 로그인 사용자 전용 선택 기능으로 분리해 설계합니다.
+- 지식 메모는 필요할 때 메모 단위로 암호화할 수 있으며, 같은 키를 입력해야 Web/설치형/앱에서 열 수 있습니다.
 - 공용 서버 오픈 전에는 `NOW_USER_TOKEN_REQUIRED=true`, 공개 HTTPS, reverse proxy 환경을 반드시 확인합니다.
 - 실제 `.env`, Android `key.properties`, `upload-keystore.jks`는 Git에 올리지 않습니다.

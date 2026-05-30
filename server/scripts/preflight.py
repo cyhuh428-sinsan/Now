@@ -312,7 +312,7 @@ def main() -> None:
                 ("개인 Docker 서버", "Root README documents private server mode", "private server mode"),
                 ("공용 서버", "Root README documents public server mode", "public server mode"),
                 ("2단계 인증 코드는 저장하지 않고", "Root README documents request-only 2FA code", "2FA storage policy"),
-                ("암호화 저장은 1차 범위에서는 켜지지 않으며", "Root README marks encryption disabled", "encryption phase one"),
+                ("메모 단위로 암호화할 수 있으며", "Root README documents note encryption", "encryption note-level"),
                 ("upload-keystore.jks`는 Git에 올리지 않습니다", "Root README documents signing secret policy", "signing secret policy"),
             ],
             failures,
@@ -429,7 +429,7 @@ def main() -> None:
                 ("한국어 사용 흐름", "Contributing guide keeps Korean-first direction", "Korean-first contributing"),
                 ("메모 본문에 사진 첨부는 1차 범위에 넣지 않습니다", "Contributing guide keeps photo scope", "photo scope"),
                 ("주제 / 분류 / 메모 3단계", "Contributing guide keeps tree depth naming", "tree depth naming"),
-                ("암호화 저장은 1차 범위에서는 켜지지 않습니다", "Contributing guide keeps encryption phase one policy", "encryption policy"),
+                ("암호화 키를 저장소나 서버에 저장하지 않습니다", "Contributing guide keeps encryption key policy", "encryption policy"),
                 ("Apache License 2.0", "Contributing guide documents contribution license", "contribution license"),
                 ("server/.env", "Contributing guide blocks server env commits", "server env secret"),
                 ("now_app/android/upload-keystore.jks", "Contributing guide blocks Android keystore commits", "Android keystore secret"),
@@ -1667,8 +1667,8 @@ def main() -> None:
             [
                 ("2단계 인증 코드", "Korean help documents two-factor code setup", "2FA code help ko"),
                 ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
-                ("암호화 저장은 현재 1차 범위에서는 켜지지 않는 기능입니다", "Korean help marks encryption disabled in phase one", "encryption phase one help ko"),
-                ("로그인 기반 암호화 저장이 필요한 운영 구조", "Korean help describes encryption as operating readiness", "encryption readiness help ko"),
+                ("메모 단위로 암호화할 수 있습니다", "Korean help documents note encryption", "encryption help ko"),
+                ("같은 키를 입력해야 합니다", "Korean help documents shared encryption key", "encryption key help ko"),
                 ("사용자별 접속 토큰 강제 설정", "Korean help documents public token enforcement", "public token enforcement help ko"),
             ],
             failures,
@@ -1688,8 +1688,8 @@ def main() -> None:
             [
                 ("Two-factor code", "English help documents two-factor code setup", "2FA code help en"),
                 ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
-                ("Encrypted storage is not enabled in the current first-phase scope", "English help marks encryption disabled in phase one", "encryption phase one help en"),
-                ("operating model that can support login-based encrypted storage", "English help describes encryption as operating readiness", "encryption readiness help en"),
+                ("Knowledge notes can be encrypted note by note", "English help documents note encryption", "encryption help en"),
+                ("enter the same key", "English help documents shared encryption key", "encryption key help en"),
                 ("per-user token enforcement", "English help documents public token enforcement", "public token enforcement help en"),
             ],
             failures,
@@ -1706,8 +1706,8 @@ def main() -> None:
         check_text_contains(
             web_help,
             [
-                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Web help marks encryption disabled in phase one", "web encryption phase one"),
-                ("Encrypted storage is not enabled in the current first-phase scope", "Web English help marks encryption disabled in phase one", "web encryption phase one en"),
+                ("메모 단위로 암호화할 수 있습니다", "Web help documents note encryption", "web encryption"),
+                ("Knowledge notes can be encrypted note by note", "Web English help documents note encryption", "web encryption en"),
                 ("사용자별 접속 토큰 강제 설정", "Web help documents public token enforcement", "web public token enforcement"),
                 ("per-user token enforcement", "Web English help documents public token enforcement", "web public token enforcement en"),
             ],
@@ -1725,7 +1725,7 @@ def main() -> None:
         check_text_contains(
             mobile_help,
             [
-                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile help marks encryption disabled in phase one", "mobile encryption phase one"),
+                ("메모 단위로 암호화할 수 있습니다", "Mobile help documents note encryption", "mobile encryption"),
                 ("서버 주소, API 토큰, 사용자 ID, 기기 ID", "Mobile help documents server connection values", "mobile server connection values"),
                 ("사용자별 접속 토큰과 2단계 인증 코드", "Mobile help documents public token and two-factor code", "mobile public token and 2FA help"),
                 ("사용자별 접속 토큰 강제 설정", "Mobile help documents public token enforcement", "mobile public token enforcement"),
@@ -1757,7 +1757,7 @@ def main() -> None:
                 ("check_android_launch.py", "Mobile README documents Android launch verification", "mobile Android launch verification"),
                 ("mobile_runtime_checklist_ko.md", "Mobile README links runtime checklist", "mobile runtime checklist link"),
                 ("2단계 인증 코드는 저장하지 않고", "Mobile README documents request-only 2FA code", "mobile README 2FA storage policy"),
-                ("암호화 저장은 현재 1차 범위에서는 켜지지 않습니다", "Mobile README marks encryption disabled", "mobile README encryption phase one"),
+                ("메모 단위로 암호화할 수 있습니다", "Mobile README documents note encryption", "mobile README encryption"),
             ],
             failures,
         )

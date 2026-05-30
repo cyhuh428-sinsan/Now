@@ -26,6 +26,7 @@ Available features:
 - Backlinks and linked-note view
 - Markdown writing and preview
 - Trash
+- Note-level encrypted storage
 - Backup and restore: JSON for Web/installed apps, DB for mobile
 - Markdown import and export
 - Display settings
@@ -37,7 +38,6 @@ Unavailable features:
 - Server backup
 - Server-based user management
 - Server-based LLM analysis jobs
-- Encrypted storage for server-login users
 
 Standalone users should periodically use backup or Markdown export. Web/installed apps use JSON backup, while the mobile app uses DB backup.
 
@@ -56,7 +56,7 @@ This mode fits when:
 - You want a server-side backup copy.
 - You need to manage accounts, devices, and access status.
 - You want to use server-based analysis features.
-- You want to prepare an operating model that can support login-based encrypted storage.
+- You want to open encrypted notes across devices with the same key.
 
 Available features:
 
