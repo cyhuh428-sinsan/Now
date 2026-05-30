@@ -1011,6 +1011,9 @@ def main() -> None:
                 status == 401 and data.get("detail") == "user token required",
                 "사용자 토큰 필수 모드에서 토큰 없는 요청이 user token required로 차단되지 않았습니다",
             )
+            status, data = request("GET", f"{base_url}/api/v1/admin/users?owner_id=local_user", args.token)
+            items = data.get("items", []) if isinstance(data, dict) else []
+            last_used_before_invalid = items[0].get("access_token_last_used_at") if items else None
             status, data = request_error_with_user_token(
                 "GET",
                 f"{base_url}/api/v1/notes?owner_id=local_user",
@@ -1023,9 +1026,9 @@ def main() -> None:
             )
             status, data = request("GET", f"{base_url}/api/v1/admin/users?owner_id=local_user", args.token)
             items = data.get("items", []) if isinstance(data, dict) else []
-            last_used_at = items[0].get("access_token_last_used_at") if items else None
+            last_used_after_invalid = items[0].get("access_token_last_used_at") if items else None
             require(
-                last_used_at is None,
+                last_used_after_invalid == last_used_before_invalid,
                 "실패한 사용자 토큰 요청이 마지막 사용 시각을 갱신했습니다",
             )
             print(
