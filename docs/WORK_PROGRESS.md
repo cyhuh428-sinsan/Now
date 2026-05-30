@@ -6696,3 +6696,17 @@
 - `node --check web\app.js`
 - `web\scripts\verify_web_surface.py`
 - `git diff --check`
+
+# 2026-05-31 01:10 KST
+
+## 작업 내용
+
+- 확인/암호 키 입력 계열 모달의 제목, 설명, 입력창, 버튼 글자 크기를 10px 기준으로 최종 보정.
+- 모달 내부 여백과 버튼 높이를 줄여 전체 화면 밀도를 맞춤.
+
+## 검증 예정
+
+- `node --check web\app.js`
+- `web\scripts\verify_web_surface.py`
+- `git diff --check`
+- 설치형 실행 파일 재생성
