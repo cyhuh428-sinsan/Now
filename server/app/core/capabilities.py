@@ -5,9 +5,14 @@ SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 
 PUBLIC_SERVER_READY_ITEMS = [
     {
+        "id": "self_registration",
+        "label": "사용자 직접 가입",
+        "message": "관리자 개입 없이 Web에서 사용자 가입과 Web 로그인을 지원",
+    },
+    {
         "id": "user_access_tokens",
-        "label": "사용자별 접속 토큰",
-        "message": "사용자별 토큰 발급, 필수 모드, 마지막 사용 시각 추적 지원",
+        "label": "기기별 연결 토큰",
+        "message": "Web에서 앱/설치형 연결 토큰 발급, 재확인, 재발급 지원",
     },
     {
         "id": "user_profile_admin",
@@ -36,8 +41,8 @@ PUBLIC_SERVER_READY_ITEMS = [
     },
     {
         "id": "login_or_token_delivery",
-        "label": "사용자 토큰 확인 화면/API",
-        "message": "사용자별 접속 토큰을 확인하는 공개 화면과 token-login API 지원",
+        "label": "사용자 로그인",
+        "message": "Web ID/비밀번호 로그인과 앱/설치형 token-login API 지원",
     },
     {
         "id": "real_two_factor_challenge",
@@ -45,6 +50,12 @@ PUBLIC_SERVER_READY_ITEMS = [
         "message": "2단계 인증 사용자는 토큰 로그인 때 6자리 추가 코드를 검증",
     },
 ]
+
+PUBLIC_SERVER_PASSWORD_RESET_ITEM = {
+    "id": "password_reset_email",
+    "label": "이메일 비밀번호 재설정",
+    "message": "등록 이메일 기반 비밀번호 재설정 메일 발송 설정 확인",
+}
 
 PUBLIC_SERVER_HTTPS_ITEM = {
     "id": "public_https_reverse_proxy",
@@ -66,6 +77,9 @@ SERVER_CAPABILITIES = {
     "two_factor_auth": TWO_FACTOR_AUTH_STATUS,
     "user_groups": True,
     "user_access_tokens": True,
+    "self_registration": True,
+    "device_access_tokens": True,
+    "password_reset_email": True,
     "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
     "supported_note_types": SUPPORTED_NOTE_TYPES,
 }
@@ -81,7 +95,10 @@ def public_server_readiness() -> dict:
     https_item = dict(PUBLIC_SERVER_HTTPS_ITEM)
     https_item["status"] = "ready" if public_https_ready() else "planned"
     https_item["message"] = public_https_message()
-    dynamic_items = [*PUBLIC_SERVER_READY_ITEMS, https_item]
+    password_reset_item = dict(PUBLIC_SERVER_PASSWORD_RESET_ITEM)
+    password_reset_item["status"] = "ready" if password_reset_email_ready() else "planned"
+    password_reset_item["message"] = password_reset_email_message()
+    dynamic_items = [*PUBLIC_SERVER_READY_ITEMS, password_reset_item, https_item]
     ready = [item["id"] for item in dynamic_items if item.get("status", "ready") == "ready"]
     remaining = [item["id"] for item in dynamic_items if item.get("status") == "planned"]
     return {
@@ -116,6 +133,19 @@ def public_https_ready() -> bool:
     settings = get_settings()
     public_base_url = (settings.public_base_url or "").strip().lower()
     return public_base_url.startswith("https://") and bool(settings.behind_reverse_proxy)
+
+
+def password_reset_email_ready() -> bool:
+    from app.core.config import get_settings
+
+    settings = get_settings()
+    return bool((settings.smtp_host or "").strip() and (settings.smtp_from or "").strip())
+
+
+def password_reset_email_message() -> str:
+    if password_reset_email_ready():
+        return "등록 이메일 기반 비밀번호 재설정 메일 발송 설정 확인됨"
+    return "공용 오픈 전 NOW_SMTP_HOST와 NOW_SMTP_FROM 설정 필요"
 
 
 def public_https_message() -> str:

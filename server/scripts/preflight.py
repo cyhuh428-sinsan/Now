@@ -178,6 +178,15 @@ def main() -> None:
         "NOW_LLM_PROVIDER",
         "NOW_PUBLIC_BASE_URL",
         "NOW_BEHIND_REVERSE_PROXY",
+        "NOW_SELF_REGISTRATION_ENABLED",
+        "NOW_SELF_ACCOUNT_DELETE_ENABLED",
+        "NOW_SMTP_HOST",
+        "NOW_SMTP_PORT",
+        "NOW_SMTP_USERNAME",
+        "NOW_SMTP_PASSWORD",
+        "NOW_SMTP_FROM",
+        "NOW_SMTP_USE_TLS",
+        "NOW_PASSWORD_RESET_CODE_MINUTES",
     ]
     for key in required_keys:
         check(key in values, f"{key} set", env_path.name, failures)
@@ -190,6 +199,13 @@ def main() -> None:
     user_token_required = values.get("NOW_USER_TOKEN_REQUIRED", "").lower()
     public_base_url = values.get("NOW_PUBLIC_BASE_URL", "")
     behind_reverse_proxy = values.get("NOW_BEHIND_REVERSE_PROXY", "").lower()
+    self_registration_enabled = values.get("NOW_SELF_REGISTRATION_ENABLED", "").lower()
+    self_account_delete_enabled = values.get("NOW_SELF_ACCOUNT_DELETE_ENABLED", "").lower()
+    smtp_host = values.get("NOW_SMTP_HOST", "")
+    smtp_port = values.get("NOW_SMTP_PORT", "")
+    smtp_from = values.get("NOW_SMTP_FROM", "")
+    smtp_use_tls = values.get("NOW_SMTP_USE_TLS", "").lower()
+    password_reset_code_minutes = values.get("NOW_PASSWORD_RESET_CODE_MINUTES", "")
 
     if args.allow_example:
         check(
@@ -224,6 +240,26 @@ def main() -> None:
         behind_reverse_proxy in {"true", "false"},
         "Reverse proxy flag valid",
         "NOW_BEHIND_REVERSE_PROXY true/false",
+        failures,
+    )
+    check(
+        self_registration_enabled in {"true", "false"},
+        "Self registration flag valid",
+        "NOW_SELF_REGISTRATION_ENABLED true/false",
+        failures,
+    )
+    check(
+        self_account_delete_enabled in {"true", "false"},
+        "Self account delete flag valid",
+        "NOW_SELF_ACCOUNT_DELETE_ENABLED true/false",
+        failures,
+    )
+    check(smtp_port.isdigit() and int(smtp_port) > 0, "SMTP port valid", smtp_port, failures)
+    check(smtp_use_tls in {"true", "false"}, "SMTP TLS flag valid", "NOW_SMTP_USE_TLS true/false", failures)
+    check(
+        password_reset_code_minutes.isdigit() and int(password_reset_code_minutes) > 0,
+        "Password reset code minutes valid",
+        password_reset_code_minutes,
         failures,
     )
     check(poll_seconds.isdigit() and int(poll_seconds) > 0, "Worker poll seconds valid", poll_seconds, failures)
@@ -464,9 +500,14 @@ def main() -> None:
                 ("python -m py_compile scripts/preflight.py scripts/smoke_test.py", "GitHub preflight checks Python syntax", "workflow py_compile"),
                 ("app/db.py", "GitHub preflight checks DB source syntax", "workflow DB syntax"),
                 ("app/models/note.py", "GitHub preflight checks model syntax", "workflow model syntax"),
+                ("app/core/config.py", "GitHub preflight checks config syntax", "workflow config syntax"),
+                ("app/core/capabilities.py", "GitHub preflight checks capabilities syntax", "workflow capabilities syntax"),
                 ("app/api/admin.py", "GitHub preflight checks admin API syntax", "workflow admin API syntax"),
+                ("app/api/auth.py", "GitHub preflight checks auth API syntax", "workflow auth API syntax"),
                 ("app/api/monitor.py", "GitHub preflight checks monitor syntax", "workflow monitor syntax"),
                 ("app/api/public_pages.py", "GitHub preflight checks public page syntax", "workflow public page syntax"),
+                ("app/services/user_accounts.py", "GitHub preflight checks user account service syntax", "workflow user account service syntax"),
+                ("app/services/email_delivery.py", "GitHub preflight checks email delivery service syntax", "workflow email delivery service syntax"),
                 ("app/services/open_source_release.py", "GitHub preflight checks open source release service syntax", "workflow open source service"),
                 ("app/services/public_route.py", "GitHub preflight checks public route service syntax", "workflow public route service"),
                 ("app/services/release_evidence.py", "GitHub preflight checks release evidence service syntax", "workflow release evidence service"),
@@ -500,7 +541,8 @@ def main() -> None:
                 ("NOW_USER_TOKEN_REQUIRED=true", "Security policy covers public user token requirement", "public user token requirement"),
                 ("NOW_PUBLIC_BASE_URL=https://도메인", "Security policy covers public HTTPS base URL", "public HTTPS"),
                 ("2단계 인증 코드는 저장하지 않고", "Security policy covers request-only 2FA code", "request-only 2FA code"),
-                ("사용자별 접속 토큰은 원문을 저장하지 않고", "Security policy covers hashed user token storage", "hashed user token"),
+                ("Web에서 발급한 기기별 연결 토큰은 사용자가 다시 확인할 수 있도록 서버 DB에 보관", "Security policy covers user-visible device token storage", "device token visibility"),
+                ("백업 JSON과 관리자 export에는 포함하지 않습니다", "Security policy covers token export exclusion", "token export exclusion"),
                 ("Android 자동 클라우드 백업", "Security policy covers Android cloud backup exclusion", "Android backup exclusion"),
                 ("python3 scripts/preflight.py --public-server", "Security policy documents public preflight", "public preflight"),
             ],
@@ -515,6 +557,9 @@ def main() -> None:
     check("NOW_USER_TOKEN_REQUIRED: ${NOW_USER_TOKEN_REQUIRED:-false}" in compose, "Compose reads user token required setting", "user token required", failures)
     check("NOW_PUBLIC_BASE_URL: ${NOW_PUBLIC_BASE_URL:-}" in compose, "Compose reads public base URL setting", "public base URL", failures)
     check("NOW_BEHIND_REVERSE_PROXY: ${NOW_BEHIND_REVERSE_PROXY:-false}" in compose, "Compose reads reverse proxy setting", "reverse proxy setting", failures)
+    check("NOW_SELF_REGISTRATION_ENABLED: ${NOW_SELF_REGISTRATION_ENABLED:-true}" in compose, "Compose reads self registration setting", "self registration", failures)
+    check("NOW_SMTP_HOST: ${NOW_SMTP_HOST:-}" in compose, "Compose reads SMTP host setting", "SMTP host", failures)
+    check("NOW_SMTP_FROM: ${NOW_SMTP_FROM:-}" in compose, "Compose reads SMTP sender setting", "SMTP sender", failures)
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(dockerfile_path.exists(), "Server Dockerfile exists", str(dockerfile_path), failures)
@@ -759,9 +804,14 @@ def main() -> None:
                 ),
                 ("PUBLIC_SERVER_READY_ITEMS", "Capabilities defines public server ready items", "PUBLIC_SERVER_READY_ITEMS"),
                 ("PUBLIC_SERVER_HTTPS_ITEM", "Capabilities defines public HTTPS readiness item", "PUBLIC_SERVER_HTTPS_ITEM"),
+                ("PUBLIC_SERVER_PASSWORD_RESET_ITEM", "Capabilities defines password reset readiness item", "password reset readiness item"),
                 ("public_https_ready", "Capabilities checks public HTTPS readiness dynamically", "public_https_ready"),
                 ("public_https_message", "Capabilities explains public HTTPS readiness", "public_https_message"),
+                ("password_reset_email_ready", "Capabilities checks password reset email readiness dynamically", "password reset readiness"),
                 ("login_or_token_delivery", "Capabilities marks token login ready item", "login_or_token_delivery"),
+                ("self_registration", "Capabilities marks self-registration support", "self registration capability"),
+                ("device_access_tokens", "Capabilities marks device access token support", "device access tokens capability"),
+                ("password_reset_email", "Capabilities marks password reset email support", "password reset email capability"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
                 ('"ready": ready', "Capabilities returns public server ready list", "public readiness ready list"),
@@ -775,6 +825,12 @@ def main() -> None:
             auth_api_source,
             [
                 ('@api_router.post("/token-login")', "Auth API exposes token login", "token login API"),
+                ('@api_router.post("/client-login")', "Auth API exposes app/desktop client login", "client login API"),
+                ('@api_router.post("/register")', "Auth API exposes self registration", "self registration API"),
+                ('@api_router.post("/device-token")', "Auth API exposes device token issue", "device token issue API"),
+                ('@api_router.get("/device-tokens")', "Auth API exposes device token list", "device token list API"),
+                ('@api_router.post("/password-reset/request")', "Auth API exposes password reset request", "password reset request API"),
+                ('@api_router.post("/password-reset/confirm")', "Auth API exposes password reset confirm", "password reset confirm API"),
                 ('@api_router.post("/web-login")', "Auth API exposes hosted Web login", "hosted web login API"),
                 ('@api_router.get("/web-session")', "Auth API exposes hosted Web session check", "hosted web session API"),
                 ('@api_router.post("/web-logout")', "Auth API exposes hosted Web logout", "hosted web logout API"),
@@ -785,6 +841,7 @@ def main() -> None:
                 ("_two_factor_code", "Auth API computes two-factor code", "_two_factor_code"),
                 ("invalid user token", "Auth login rejects invalid user token", "invalid user token"),
                 ("NowNote 토큰 확인", "Auth page is Korean", "Korean auth page"),
+                ("send_password_reset_email", "Auth API sends password reset email", "password reset email delivery"),
             ],
             failures,
         )
@@ -2137,6 +2194,12 @@ def main() -> None:
             public_base_url.startswith("https://") and behind_reverse_proxy == "true",
             "Public server HTTPS/reverse proxy",
             "NOW_PUBLIC_BASE_URL must be https:// and NOW_BEHIND_REVERSE_PROXY must be true before opening",
+            failures,
+        )
+        check(
+            bool(smtp_host and smtp_from),
+            "Public server password reset email",
+            "NOW_SMTP_HOST and NOW_SMTP_FROM must be set before public opening",
             failures,
         )
 

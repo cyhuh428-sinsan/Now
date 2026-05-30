@@ -857,12 +857,15 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
         )
     )
 
-    users = items.get("users") if isinstance(items.get("users"), list) else []
-    token_leaks = [
-        user
-        for user in users
-        if isinstance(user, dict) and ("access_token_hash" in user or "token" in user)
-    ]
+    token_leaks = []
+    for section_value in items.values():
+        if not isinstance(section_value, list):
+            continue
+        for row in section_value:
+            if not isinstance(row, dict):
+                continue
+            if any(key in row for key in ("access_token_hash", "access_token_value")) or "token" in row:
+                token_leaks.append(row)
     checks.append(
         _verify_check(
             "토큰 민감정보",
@@ -988,12 +991,16 @@ def _model_to_dict(row) -> dict:
     if isinstance(row, UserAccount):
         data.pop("access_token_hash", None)
         data.pop("password_hash", None)
+        data.pop("password_recovery_hash", None)
         data["is_active"] = bool(row.is_active)
         data["two_factor_enabled"] = bool(row.two_factor_enabled)
         data["access_token_configured"] = bool(row.access_token_hash)
         data["password_configured"] = bool(row.password_hash)
     if isinstance(row, UserDevice):
+        data.pop("access_token_hash", None)
+        data.pop("access_token_value", None)
         data["is_active"] = bool(row.is_active)
+        data["access_token_configured"] = bool(row.access_token_hash)
     return data
 
 

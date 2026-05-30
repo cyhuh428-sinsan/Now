@@ -240,12 +240,27 @@ const I18N = {
     "web.login.desc": "서버 공유 문서에 접속합니다.",
     "web.login.owner": "사용자 ID",
     "web.login.password": "비밀번호",
+    "web.login.email": "등록 이메일",
+    "web.login.emailPlaceholder": "계정 만들기와 비밀번호 재설정에 사용",
     "web.login.twoFactor": "2단계 인증 코드",
     "web.login.twoFactorPlaceholder": "사용 중일 때만 입력",
+    "web.login.resetCode": "비밀번호 재설정 코드",
+    "web.login.resetCodePlaceholder": "메일로 받은 코드",
     "web.login.submit": "로그인",
+    "web.login.register": "계정 만들기",
+    "web.login.resetRequest": "재설정 메일",
+    "web.login.resetConfirm": "비밀번호 재설정",
     "web.login.ready": "서버에 저장된 공유 문서만 표시됩니다.",
     "web.login.loading": "서버 공유 문서를 불러오는 중입니다.",
     "web.login.failed": "로그인 실패: {message}",
+    "web.login.registering": "계정을 만드는 중입니다.",
+    "web.login.registerFailed": "계정 생성 실패: {message}",
+    "web.login.registerOk": "계정을 만들고 로그인했습니다.",
+    "web.login.resetRequesting": "비밀번호 재설정 메일을 요청하는 중입니다.",
+    "web.login.resetRequested": "등록 이메일로 재설정 코드를 보냈습니다.",
+    "web.login.resetConfirming": "비밀번호를 재설정하는 중입니다.",
+    "web.login.resetConfirmed": "비밀번호를 재설정했습니다. 새 비밀번호로 로그인하세요.",
+    "web.login.resetFailed": "비밀번호 재설정 실패: {message}",
     "web.login.ok": "로그인되었습니다.",
     "web.login.logout": "로그아웃",
     "web.login.loggedOut": "로그아웃되었습니다.",
@@ -314,18 +329,19 @@ const I18N = {
     "settings.features.desc": "사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.",
     "settings.server.title": "서버 연결",
     "settings.server.desc": "단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.",
+    "settings.server.desc.hosted": "Web은 사용자 ID와 비밀번호로 로그인하고 서버의 공유 문서만 사용합니다.",
     "settings.server.mode.local": "단독 사용",
     "settings.server.mode.server": "서버 연결",
     "settings.server.mode": "사용 방식",
     "settings.server.url": "서버 주소",
     "settings.server.url.placeholder": "https://nownote.sinsan.kr",
     "settings.server.url.hint": "공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.",
-    "settings.server.token": "API 토큰",
-    "settings.server.token.placeholder": "운영자가 제공한 경우 입력",
-    "settings.server.token.hint": "개인 서버 관리자용 토큰입니다. 운영자가 안내한 경우에만 입력합니다.",
-    "settings.server.userToken": "사용자별 접속 토큰",
-    "settings.server.userToken.placeholder": "사용자별 접속 토큰",
-    "settings.server.userToken.hint": "공용 서버나 사용자별 토큰 필수 서버에서 내 계정을 확인하는 개인 접속 토큰입니다.",
+    "settings.server.token": "개인 서버 API 토큰",
+    "settings.server.token.placeholder": "개인 서버에서 요구할 때만 입력",
+    "settings.server.token.hint": "개인 서버 관리자 보호용입니다. 공용 Web 로그인에는 사용하지 않습니다.",
+    "settings.server.userToken": "앱/설치형 접속 토큰",
+    "settings.server.userToken.placeholder": "앱/설치형 접속 토큰",
+    "settings.server.userToken.hint": "앱/설치형 프로그램이 서버와 동기화할 때 사용하는 개인 토큰입니다. Web 로그인에는 사용하지 않습니다.",
     "settings.server.twoFactorCode": "2단계 인증 코드",
     "settings.server.twoFactorCode.placeholder": "필요한 경우 6자리 코드",
     "settings.server.twoFactorCode.hint": "2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.",
@@ -333,9 +349,9 @@ const I18N = {
     "settings.server.device": "기기 ID",
     "settings.server.guide.title": "입력 기준",
     "settings.server.guide.local": "단독 사용: 서버 없이 이 기기에만 저장합니다.",
-    "settings.server.guide.personal": "설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.",
-    "settings.server.guide.public": "Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.",
-    "settings.server.guide.issue": "사용자별 접속 토큰은 설치형/앱용이며 서버 관리자 화면 /admin/users에서 발급합니다.",
+    "settings.server.guide.personal": "설치형/앱: 서버 주소, 사용자 ID, 앱/설치형 접속 토큰을 입력합니다.",
+    "settings.server.guide.public": "Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인하며 토큰을 입력하지 않습니다.",
+    "settings.server.guide.issue": "앱/설치형 접속 토큰은 서버 관리자 화면 /admin/users에서 발급합니다.",
     "settings.server.profile.title": "사용자 프로필",
     "settings.server.profile.desc": "표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.",
     "settings.server.profile.displayName": "표시 이름",
@@ -413,6 +429,19 @@ const I18N = {
     "settings.server.analysis.applied": "분석 결과를 메모에 추가했습니다.",
     "settings.server.analysis.applyMissing": "연결된 메모를 찾을 수 없습니다.",
     "settings.server.analysis.sectionTitle": "서버 분석 결과",
+    "settings.server.deviceToken.title": "앱/설치형 연결 토큰",
+    "settings.server.deviceToken.desc": "앱이나 설치형 프로그램을 공용 서버에 연결할 때 여기서 토큰을 직접 발급하고 다시 확인합니다.",
+    "settings.server.deviceToken.name": "기기 이름",
+    "settings.server.deviceToken.id": "기기 ID",
+    "settings.server.deviceToken.issue": "연결 토큰 발급",
+    "settings.server.deviceToken.placeholder": "발급된 토큰 목록이 여기에 표시됩니다.",
+    "settings.server.deviceToken.help": "토큰이 노출되면 같은 기기 ID로 다시 발급해 이전 값을 교체합니다.",
+    "settings.server.deviceToken.issuing": "연결 토큰을 발급하는 중입니다.",
+    "settings.server.deviceToken.issued": "연결 토큰을 발급했습니다.",
+    "settings.server.deviceToken.loading": "연결 토큰 목록을 불러오는 중입니다.",
+    "settings.server.deviceToken.loaded": "연결 토큰 목록을 불러왔습니다.",
+    "settings.server.deviceToken.empty": "아직 발급된 연결 토큰이 없습니다.",
+    "settings.server.deviceToken.item": "{name} / {device}: {token}",
     "settings.server.never": "없음",
     "settings.sidebarAssist.title": "보조 목록 표시",
     "settings.sidebarAssist.desc": "왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.",
@@ -747,12 +776,27 @@ const I18N = {
     "web.login.desc": "Open shared documents from the server.",
     "web.login.owner": "User ID",
     "web.login.password": "Password",
+    "web.login.email": "Registered email",
+    "web.login.emailPlaceholder": "Used for account creation and password reset",
     "web.login.twoFactor": "Two-factor code",
     "web.login.twoFactorPlaceholder": "Enter only when enabled",
+    "web.login.resetCode": "Password reset code",
+    "web.login.resetCodePlaceholder": "Code from email",
     "web.login.submit": "Log in",
+    "web.login.register": "Create account",
+    "web.login.resetRequest": "Send reset email",
+    "web.login.resetConfirm": "Reset password",
     "web.login.ready": "Only server-shared documents are shown.",
     "web.login.loading": "Loading shared documents from the server.",
     "web.login.failed": "Login failed: {message}",
+    "web.login.registering": "Creating account.",
+    "web.login.registerFailed": "Account creation failed: {message}",
+    "web.login.registerOk": "Account created and signed in.",
+    "web.login.resetRequesting": "Requesting password reset email.",
+    "web.login.resetRequested": "Password reset code sent to the registered email.",
+    "web.login.resetConfirming": "Resetting password.",
+    "web.login.resetConfirmed": "Password reset. Sign in with the new password.",
+    "web.login.resetFailed": "Password reset failed: {message}",
     "web.login.ok": "Logged in.",
     "web.login.logout": "Log out",
     "web.login.loggedOut": "Logged out.",
@@ -821,18 +865,19 @@ const I18N = {
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
     "settings.server.title": "Server connection",
     "settings.server.desc": "Choose standalone use or connect to a personal/public NowNote server.",
+    "settings.server.desc.hosted": "The Web client signs in with a user ID and password and uses only shared server notes.",
     "settings.server.mode.local": "Standalone",
     "settings.server.mode.server": "Server connection",
     "settings.server.mode": "Mode",
     "settings.server.url": "Server URL",
     "settings.server.url.placeholder": "https://nownote.sinsan.kr",
     "settings.server.url.hint": "Use https://nownote.sinsan.kr for the public server, or your own server URL for a personal server.",
-    "settings.server.token": "API token",
-    "settings.server.token.placeholder": "Enter only if provided",
-    "settings.server.token.hint": "This is an administrator/personal-server token. Enter it only when the operator provides one.",
-    "settings.server.userToken": "Per-user access token",
-    "settings.server.userToken.placeholder": "Per-user access token",
-    "settings.server.userToken.hint": "This personal access token identifies your account on public servers or servers that require per-user tokens.",
+    "settings.server.token": "Personal server API token",
+    "settings.server.token.placeholder": "Enter only when your personal server requires it",
+    "settings.server.token.hint": "This protects a personal server or administrator API. It is not used for public Web login.",
+    "settings.server.userToken": "App/desktop access token",
+    "settings.server.userToken.placeholder": "App/desktop access token",
+    "settings.server.userToken.hint": "This personal token is used by the mobile app or installed desktop client for server sync. It is not used for Web login.",
     "settings.server.twoFactorCode": "2FA code",
     "settings.server.twoFactorCode.placeholder": "6-digit code when required",
     "settings.server.twoFactorCode.hint": "Enter the six-digit code only when your account uses two-factor authentication.",
@@ -840,9 +885,9 @@ const I18N = {
     "settings.server.device": "Device ID",
     "settings.server.guide.title": "Connection guide",
     "settings.server.guide.local": "Standalone: save only on this device without a server.",
-    "settings.server.guide.personal": "Desktop/app: enter the server URL, user ID, and per-user access token.",
-    "settings.server.guide.public": "Web: log in at the server address with user ID and password.",
-    "settings.server.guide.issue": "Per-user access tokens are for desktop/app clients and are issued at /admin/users.",
+    "settings.server.guide.personal": "Desktop/app: enter the server URL, user ID, and app/desktop access token.",
+    "settings.server.guide.public": "Web: log in at the server address with user ID and password. No token entry is needed.",
+    "settings.server.guide.issue": "App/desktop access tokens are issued at /admin/users.",
     "settings.server.profile.title": "User profile",
     "settings.server.profile.desc": "Save display name, email, and time zone as server user information.",
     "settings.server.profile.displayName": "Display name",
@@ -920,6 +965,19 @@ const I18N = {
     "settings.server.analysis.applied": "Analysis result was added to the note.",
     "settings.server.analysis.applyMissing": "The linked note could not be found.",
     "settings.server.analysis.sectionTitle": "Server analysis result",
+    "settings.server.deviceToken.title": "App/desktop connection token",
+    "settings.server.deviceToken.desc": "Issue and review the token used to connect the mobile app or installed desktop client to this public server.",
+    "settings.server.deviceToken.name": "Device name",
+    "settings.server.deviceToken.id": "Device ID",
+    "settings.server.deviceToken.issue": "Issue connection token",
+    "settings.server.deviceToken.placeholder": "Issued connection tokens will appear here.",
+    "settings.server.deviceToken.help": "If a token is exposed, issue again with the same device ID to replace the old value.",
+    "settings.server.deviceToken.issuing": "Issuing connection token.",
+    "settings.server.deviceToken.issued": "Connection token issued.",
+    "settings.server.deviceToken.loading": "Loading connection tokens.",
+    "settings.server.deviceToken.loaded": "Connection tokens loaded.",
+    "settings.server.deviceToken.empty": "No connection token has been issued yet.",
+    "settings.server.deviceToken.item": "{name} / {device}: {token}",
     "settings.server.never": "Never",
     "settings.sidebarAssist.title": "Show helper lists",
     "settings.sidebarAssist.desc": "Show favorites, recent notes, and tags on the left.",
@@ -1364,6 +1422,12 @@ const elements = {
   serverAnalysisCreateBtn: $("#serverAnalysisCreateBtn"),
   serverAnalysisRefreshBtn: $("#serverAnalysisRefreshBtn"),
   serverAnalysisList: $("#serverAnalysisList"),
+  hostedDeviceTokenBox: $("#hostedDeviceTokenBox"),
+  deviceTokenNameInput: $("#deviceTokenNameInput"),
+  deviceTokenIdInput: $("#deviceTokenIdInput"),
+  deviceTokenIssueBtn: $("#deviceTokenIssueBtn"),
+  deviceTokenOutput: $("#deviceTokenOutput"),
+  deviceTokenText: $("#deviceTokenText"),
   serverSaveBtn: $("#serverSaveBtn"),
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
@@ -1406,8 +1470,13 @@ const elements = {
   webLoginForm: $("#webLoginForm"),
   webLoginOwnerInput: $("#webLoginOwnerInput"),
   webLoginPasswordInput: $("#webLoginPasswordInput"),
+  webRegisterEmailInput: $("#webRegisterEmailInput"),
   webLoginTwoFactorInput: $("#webLoginTwoFactorInput"),
+  webResetCodeInput: $("#webResetCodeInput"),
   webLoginSubmitBtn: $("#webLoginSubmitBtn"),
+  webRegisterSubmitBtn: $("#webRegisterSubmitBtn"),
+  webResetRequestBtn: $("#webResetRequestBtn"),
+  webResetConfirmBtn: $("#webResetConfirmBtn"),
   webLoginStatus: $("#webLoginStatus"),
 };
 
@@ -1477,6 +1546,7 @@ async function initializeHostedWebClient() {
   try {
     await verifyWebSession();
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
+    await refreshDeviceTokens({ silent: true });
     hideWebLogin();
   } catch (error) {
     clearWebSession();
@@ -1560,12 +1630,120 @@ async function handleWebLoginSubmit(event) {
     applyWebSession(session);
     applyServerUserProfile(payload.user);
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
+    await refreshDeviceTokens({ silent: true });
     hideWebLogin();
     showNotice(t("web.login.ok"));
   } catch (error) {
     showWebLogin(t("web.login.failed", { message: error.message }), "bad");
   } finally {
     elements.webLoginSubmitBtn.disabled = false;
+  }
+}
+
+async function handleWebRegisterSubmit() {
+  if (!isHostedWebClient()) return;
+  const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
+  const password = elements.webLoginPasswordInput.value;
+  const email = elements.webRegisterEmailInput.value.trim();
+  if (!ownerId || !password) {
+    showWebLogin(t("web.login.registerFailed", { message: t("settings.server.noUrl") }), "bad");
+    return;
+  }
+  if (!email || !email.includes("@")) {
+    showWebLogin(t("web.login.registerFailed", { message: "등록 이메일을 입력하세요." }), "bad");
+    return;
+  }
+  showWebLogin(t("web.login.registering"), "ok");
+  elements.webLoginSubmitBtn.disabled = true;
+  elements.webRegisterSubmitBtn.disabled = true;
+  try {
+    const response = await fetch(`${defaultHostedServerUrl()}/api/v1/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        owner_id: ownerId,
+        password,
+        email,
+        display_name: ownerId,
+        device_id: "web-client",
+        device_name: "Web",
+      }),
+    });
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const payload = await response.json();
+    const session = {
+      ownerId,
+      token: payload.session_token,
+      deviceId: "web-client",
+      expiresAt: payload.expires_at,
+    };
+    saveWebSession(session);
+    applyWebSession(session);
+    applyServerUserProfile(payload.user);
+    await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
+    await refreshDeviceTokens({ silent: true });
+    hideWebLogin();
+    showNotice(t("web.login.registerOk"));
+  } catch (error) {
+    showWebLogin(t("web.login.registerFailed", { message: error.message }), "bad");
+  } finally {
+    elements.webLoginSubmitBtn.disabled = false;
+    elements.webRegisterSubmitBtn.disabled = false;
+  }
+}
+
+async function handlePasswordResetRequest() {
+  if (!isHostedWebClient()) return;
+  const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
+  const email = elements.webRegisterEmailInput.value.trim();
+  if (!ownerId || !email) {
+    showWebLogin(t("web.login.resetFailed", { message: "사용자 ID와 등록 이메일을 입력하세요." }), "bad");
+    return;
+  }
+  showWebLogin(t("web.login.resetRequesting"), "ok");
+  elements.webResetRequestBtn.disabled = true;
+  try {
+    const response = await fetch(`${defaultHostedServerUrl()}/api/v1/auth/password-reset/request`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ owner_id: ownerId, email }),
+    });
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    showWebLogin(t("web.login.resetRequested"), "ok");
+  } catch (error) {
+    showWebLogin(t("web.login.resetFailed", { message: error.message }), "bad");
+  } finally {
+    elements.webResetRequestBtn.disabled = false;
+  }
+}
+
+async function handlePasswordResetConfirm() {
+  if (!isHostedWebClient()) return;
+  const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
+  const resetCode = elements.webResetCodeInput.value.trim();
+  const newPassword = elements.webLoginPasswordInput.value;
+  if (!ownerId || !resetCode || !newPassword) {
+    showWebLogin(t("web.login.resetFailed", { message: "사용자 ID, 새 비밀번호, 재설정 코드를 입력하세요." }), "bad");
+    return;
+  }
+  showWebLogin(t("web.login.resetConfirming"), "ok");
+  elements.webResetConfirmBtn.disabled = true;
+  try {
+    const response = await fetch(`${defaultHostedServerUrl()}/api/v1/auth/password-reset/confirm`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        owner_id: ownerId,
+        reset_code: resetCode,
+        new_password: newPassword,
+      }),
+    });
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    showWebLogin(t("web.login.resetConfirmed"), "ok");
+  } catch (error) {
+    showWebLogin(t("web.login.resetFailed", { message: error.message }), "bad");
+  } finally {
+    elements.webResetConfirmBtn.disabled = false;
   }
 }
 
@@ -1825,6 +2003,7 @@ function bindEvents() {
   elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
   elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
+  elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webLogoutBtn.addEventListener("click", handleWebLogout);
 
   elements.sidebarAssistToggle.addEventListener("change", () => {
@@ -1963,6 +2142,9 @@ function bindEvents() {
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
+  elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
+  elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
+  elements.webResetConfirmBtn?.addEventListener("click", handlePasswordResetConfirm);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
   bindOverlayDismiss(elements.graphView, closeGraph);
@@ -2091,22 +2273,27 @@ function renderServerSettings() {
 
 function applyHostedServerSettingsVisibility() {
   const hosted = isHostedWebClient();
-  const configNodes = [
-    elements.serverModeSelect?.closest("label"),
-    elements.serverUrlInput?.closest("label"),
-    elements.serverTokenInput?.closest("label"),
-    elements.serverUserTokenInput?.closest("label"),
-    elements.serverTwoFactorCodeInput?.closest("label"),
-    elements.ownerIdInput?.closest(".server-identity-grid"),
-  ];
+  const configNodes = Array.from(document.querySelectorAll(".desktop-server-only"));
   configNodes.forEach((node) => node?.classList.toggle("hidden", hosted));
-  [
-    elements.serverSaveBtn,
-    elements.serverTestBtn,
-    elements.serverSyncBtn,
-    elements.serverFullSyncBtn,
-  ].forEach((node) => node?.classList.toggle("hidden", hosted));
+  Array.from(document.querySelectorAll(".hosted-web-only"))
+    .forEach((node) => node?.classList.toggle("hidden", !hosted));
   elements.webLogoutBtn?.classList.toggle("hidden", !hosted);
+}
+
+function renderDeviceTokenList(items = []) {
+  if (!elements.deviceTokenOutput || !elements.deviceTokenText) return;
+  const issued = items.filter((item) => item?.access_token);
+  if (issued.length === 0) {
+    elements.deviceTokenOutput.value = "";
+    elements.deviceTokenText.textContent = t("settings.server.deviceToken.empty");
+    return;
+  }
+  elements.deviceTokenOutput.value = issued.map((item) => t("settings.server.deviceToken.item", {
+    name: item.display_name || t("settings.server.deviceToken.name"),
+    device: item.device_id || "-",
+    token: item.access_token,
+  })).join("\n\n");
+  elements.deviceTokenText.textContent = t("settings.server.deviceToken.help");
 }
 
 function saveServerSettingsFromForm(message = t("settings.server.saved")) {
@@ -2680,6 +2867,68 @@ async function refreshServerAnalysisJobs() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+async function refreshDeviceTokens({ silent = false } = {}) {
+  if (!isHostedWebClient()) return;
+  const server = state.settings.server || defaultServerSettings();
+  if (!server.webSessionToken) return;
+  if (!silent) elements.deviceTokenText.textContent = t("settings.server.deviceToken.loading");
+  try {
+    const response = await fetch(
+      `${server.url}/api/v1/auth/device-tokens?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+      { headers: serverAuthHeaders(server) },
+    );
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const payload = await response.json();
+    renderDeviceTokenList(payload.items || []);
+    if (!silent && elements.deviceTokenText.textContent !== t("settings.server.deviceToken.empty")) {
+      elements.deviceTokenText.textContent = t("settings.server.deviceToken.loaded");
+    }
+  } catch (error) {
+    elements.deviceTokenText.textContent = `${t("settings.server.fail")}: ${error.message}`;
+  }
+}
+
+async function issueDeviceToken() {
+  if (!isHostedWebClient()) return;
+  const server = state.settings.server || defaultServerSettings();
+  if (!server.webSessionToken) return;
+  const deviceName = elements.deviceTokenNameInput.value.trim() || "NowNote";
+  const deviceId = normalizeDeviceId(
+    elements.deviceTokenIdInput.value.trim()
+    || `desktop_${new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14)}`,
+  );
+  elements.deviceTokenIssueBtn.disabled = true;
+  elements.deviceTokenText.textContent = t("settings.server.deviceToken.issuing");
+  try {
+    const response = await fetch(`${server.url}/api/v1/auth/device-token`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...serverAuthHeaders(server),
+      },
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        device_id: deviceId,
+        device_name: deviceName,
+      }),
+    });
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const payload = await response.json();
+    elements.deviceTokenIdInput.value = payload.device_id || deviceId;
+    renderDeviceTokenList([{
+      display_name: deviceName,
+      device_id: payload.device_id || deviceId,
+      access_token: payload.access_token,
+    }]);
+    elements.deviceTokenText.textContent = t("settings.server.deviceToken.issued");
+    await refreshDeviceTokens({ silent: true });
+  } catch (error) {
+    elements.deviceTokenText.textContent = `${t("settings.server.fail")}: ${error.message}`;
+  } finally {
+    elements.deviceTokenIssueBtn.disabled = false;
+  }
 }
 
 async function syncWebNotesToServer(message = t("settings.server.syncing")) {
@@ -3368,9 +3617,16 @@ function applyLanguage() {
   setText("#webLoginDesc", t("web.login.desc"));
   setText("#webLoginOwnerLabel", t("web.login.owner"));
   setText("#webLoginPasswordLabel", t("web.login.password"));
+  setText("#webRegisterEmailLabel", t("web.login.email"));
   setText("#webLoginTwoFactorLabel", t("web.login.twoFactor"));
+  setText("#webResetCodeLabel", t("web.login.resetCode"));
   setText("#webLoginSubmitBtn", t("web.login.submit"));
+  setText("#webRegisterSubmitBtn", t("web.login.register"));
+  setText("#webResetRequestBtn", t("web.login.resetRequest"));
+  setText("#webResetConfirmBtn", t("web.login.resetConfirm"));
+  setPlaceholder(elements.webRegisterEmailInput, t("web.login.emailPlaceholder"));
   setPlaceholder(elements.webLoginTwoFactorInput, t("web.login.twoFactorPlaceholder"));
+  setPlaceholder(elements.webResetCodeInput, t("web.login.resetCodePlaceholder"));
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
   setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
   setIconLabel(elements.addRootBtn, t("tree.addRoot"));
@@ -3474,7 +3730,7 @@ function applyLanguage() {
   setText("#featuresSettingTitle", t("settings.features.title"));
   setText("#featuresSettingDesc", t("settings.features.desc"));
   setText("#serverSettingTitle", t("settings.server.title"));
-  setText("#serverSettingDesc", t("settings.server.desc"));
+  setText("#serverSettingDesc", t(isHostedWebClient() ? "settings.server.desc.hosted" : "settings.server.desc"));
   setText("#serverGuideTitle", t("settings.server.guide.title"));
   setText("#serverGuideLocal", t("settings.server.guide.local"));
   setText("#serverGuidePersonal", t("settings.server.guide.personal"));
@@ -3500,6 +3756,12 @@ function applyLanguage() {
   setText("#serverTimezoneLabel", t("settings.server.profile.timezone"));
   setText("#serverProfileLoadBtn", t("settings.server.profile.load"));
   setText("#serverProfileSaveBtn", t("settings.server.profile.save"));
+  setText("#deviceTokenTitle", t("settings.server.deviceToken.title"));
+  setText("#deviceTokenDesc", t("settings.server.deviceToken.desc"));
+  setText("#deviceTokenNameLabel", t("settings.server.deviceToken.name"));
+  setText("#deviceTokenIdLabel", t("settings.server.deviceToken.id"));
+  setText("#deviceTokenIssueBtn", t("settings.server.deviceToken.issue"));
+  setPlaceholder(elements.deviceTokenOutput, t("settings.server.deviceToken.placeholder"));
   setText("#serverAnalysisTitle", t("settings.server.analysis.title"));
   setText("#serverAnalysisDesc", t("settings.server.analysis.desc"));
   setText("#serverAnalysisCreateBtn", t("settings.server.analysis.create"));
@@ -6129,6 +6391,11 @@ function normalizeServerUserProfile(profile = {}, defaults = defaultServerUserPr
 function normalizeOwnerId(value) {
   const trimmed = typeof value === "string" ? value.trim() : "";
   return trimmed || "local_user";
+}
+
+function normalizeDeviceId(value) {
+  const trimmed = typeof value === "string" ? value.trim() : "";
+  return trimmed || "desktop";
 }
 
 function blankToNull(value) {
