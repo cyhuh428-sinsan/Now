@@ -6438,6 +6438,34 @@
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `git diff --check` 통과.
 
+## 2026-05-30 22:45 KST
+
+### 다음 작업 시작
+
+- Web/설치형 공통 메모 편집 화면에서 작성 공간을 넓히고, 필요한 메뉴성 기능을 선별 추가.
+
+### 구현 내용
+
+- 지식 메모 목록 패널 접기/펼치기 버튼 추가.
+- 메모 편집 상단의 중복 단계 표시를 제거하고 편집 도구를 한 줄 흐름으로 유지.
+- Web/설치형 저장 흐름에서 서버 연결 상태일 때 최초 실행과 저장 시점에 자동 동기화 예약.
+- `공유 안 함` 지식 메모는 서버 공유 문서에서 제외되도록 삭제 동기화 형태로 전송.
+- 메모 본문에서 URL, `www.` 주소, 이메일을 Markdown 미리보기 링크로 자동 표시하고, 편집 중 커서 위치 링크 열기 버튼 추가.
+- 메모 단위 암호화/복호화/잠금 버튼 추가. 암호 키는 저장하지 않고, 본문은 AES-GCM/PBKDF2 기반 암호문으로 저장.
+- 로컬 개발 주소(`127.0.0.1`, `localhost`, `::1`)는 서버 부속 Web이 아니라 로컬 Web/설치형 동작으로 판단하도록 수정.
+
+### 검증
+
+- `node --check web\app.js` 통과.
+- `C:\Users\cyhuh\anaconda3\python.exe web\scripts\verify_web_surface.py` 통과: 211/211.
+- `node web\scripts\check_import_export.mjs` 재실행 통과.
+- `git diff --check -- web\index.html web\app.js web\styles.css` 통과.
+
+### 보류
+
+- 실제 설치형 `.exe` 재빌드와 공용 서버 재배포는 별도 명령으로 진행 필요.
+- in-app Browser 직접 확인은 브라우저 연결 런타임이 Windows sandbox 오류로 두 차례 종료되어 자동 확인하지 못함.
+
 ## 2026-05-26 11:29 KST
 
 ### 다음 작업 시작

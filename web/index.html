@@ -141,6 +141,7 @@
             <h2 id="treeTitle">지식 메모</h2>
           </div>
           <div class="header-actions">
+            <button id="toggleTreePanelBtn" class="header-icon-btn secondary-btn" type="button" aria-label="목록 접기" title="목록 접기">⇤</button>
             <button id="expandAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 펼치기" title="모두 펼치기">⇲</button>
             <button id="collapseAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 접기" title="모두 접기">⇱</button>
             <button id="addRootBtn" class="header-icon-btn primary-btn" type="button" aria-label="주제 추가" title="주제 추가">+</button>
@@ -172,7 +173,6 @@
             <div id="treeEditor" class="tree-editor hidden">
               <div class="editor-head">
                 <div>
-                  <p id="treeLevelLabel" class="eyebrow"></p>
                   <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
                 </div>
                 <div class="editor-status">
@@ -183,6 +183,10 @@
                   <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
                   <button id="outlineToggleBtn" class="secondary-btn" type="button">개요</button>
                   <button id="insertTimeBtn" class="secondary-btn" type="button">시간 넣기</button>
+                  <button id="openDetectedLinkBtn" class="secondary-btn" type="button">링크 열기</button>
+                  <button id="encryptNoteBtn" class="secondary-btn" type="button">암호화</button>
+                  <button id="unlockNoteBtn" class="secondary-btn hidden" type="button">복호화</button>
+                  <button id="lockNoteBtn" class="secondary-btn hidden" type="button">잠금</button>
                   <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
                 </div>
               </div>
@@ -685,6 +689,18 @@
       <div class="confirm-actions">
         <button id="confirmCancelBtn" class="secondary-btn" type="button">취소</button>
         <button id="confirmOkBtn" class="danger-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="keyDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="keyDialogTitle" aria-describedby="keyDialogMessage">
+    <div class="confirm-card key-card">
+      <h2 id="keyDialogTitle">암호 키 입력</h2>
+      <p id="keyDialogMessage">이 메모에 사용할 키를 입력하세요.</p>
+      <input id="keyDialogInput" class="settings-input" type="password" autocomplete="current-password">
+      <div class="confirm-actions">
+        <button id="keyDialogCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="keyDialogOkBtn" class="primary-btn" type="button">확인</button>
       </div>
     </div>
   </section>

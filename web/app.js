@@ -1,6 +1,8 @@
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
 const WEB_SESSION_KEY = "nownote.web.session.v1";
+const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
+const ENCRYPTION_ITERATIONS = 210000;
 
 const ACCENTS = [
   { id: "blue", labelKey: "accent.blue", label: "파랑", value: "#2563eb" },
@@ -218,6 +220,8 @@ const I18N = {
     "rail.letter.settings": "설",
     "tree.eyebrow": "주제 / 분류 / 메모",
     "tree.title": "지식 메모",
+    "tree.panelCollapse": "목록 접기",
+    "tree.panelExpand": "목록 펼치기",
     "tree.expandAll": "모두 펼치기",
     "tree.collapseAll": "모두 접기",
     "tree.addRoot": "주제 추가",
@@ -269,8 +273,22 @@ const I18N = {
     "editor.findTitle": "Enter 다음, Shift+Enter 이전",
     "editor.outline": "개요",
     "editor.insertTime": "시간 넣기",
+    "editor.openLink": "링크 열기",
+    "editor.openLinkNone": "커서 위치에 열 수 있는 URL이나 이메일이 없습니다.",
     "editor.preview": "Markdown 보기",
     "editor.edit": "편집하기",
+    "editor.encrypt": "암호화",
+    "editor.unlock": "복호화",
+    "editor.lock": "잠금",
+    "encryption.keyTitle": "암호 키 입력",
+    "encryption.encryptMessage": "이 메모를 암호화할 키를 입력하세요. 이 키를 잊으면 내용을 복구할 수 없습니다.",
+    "encryption.unlockMessage": "암호화된 메모를 열 키를 입력하세요.",
+    "encryption.lockedPlaceholder": "암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.",
+    "encryption.empty": "암호화할 내용이 없습니다.",
+    "encryption.done": "암호화됨",
+    "encryption.unlocked": "복호화됨",
+    "encryption.locked": "잠김",
+    "encryption.fail": "복호화 실패. 키를 확인하세요.",
     "results.eyebrow": "통합 검색",
     "results.title": "검색 결과",
     "results.close": "검색 닫기",
@@ -754,6 +772,8 @@ const I18N = {
     "rail.letter.settings": "C",
     "tree.eyebrow": "Topic / Category / Note",
     "tree.title": "Knowledge notes",
+    "tree.panelCollapse": "Collapse list",
+    "tree.panelExpand": "Expand list",
     "tree.expandAll": "Expand all",
     "tree.collapseAll": "Collapse all",
     "tree.addRoot": "Add topic",
@@ -805,8 +825,22 @@ const I18N = {
     "editor.findTitle": "Enter next, Shift+Enter previous",
     "editor.outline": "Outline",
     "editor.insertTime": "Insert time",
+    "editor.openLink": "Open link",
+    "editor.openLinkNone": "No URL or email is available at the cursor.",
     "editor.preview": "Markdown preview",
     "editor.edit": "Edit",
+    "editor.encrypt": "Encrypt",
+    "editor.unlock": "Decrypt",
+    "editor.lock": "Lock",
+    "encryption.keyTitle": "Encryption key",
+    "encryption.encryptMessage": "Enter the key for this note. If you forget it, the content cannot be recovered.",
+    "encryption.unlockMessage": "Enter the key to open this encrypted note.",
+    "encryption.lockedPlaceholder": "This note is encrypted. Press Decrypt and enter the key.",
+    "encryption.empty": "There is no content to encrypt.",
+    "encryption.done": "Encrypted",
+    "encryption.unlocked": "Decrypted",
+    "encryption.locked": "Locked",
+    "encryption.fail": "Could not decrypt. Check the key.",
     "results.eyebrow": "Global search",
     "results.title": "Search results",
     "results.close": "Close search",
@@ -1145,9 +1179,13 @@ const state = {
 };
 
 let storageWarningShown = false;
-let hostedWebSyncTimer = null;
+let serverSyncTimer = null;
+let serverSyncRunning = false;
+let serverSyncQueued = false;
 let hostedWebSyncSuspended = false;
 let webLoginMode = "login";
+const unlockedEncryptedNotes = new Map();
+const encryptedSaveTimers = new Map();
 
 function defaultData() {
   return {
@@ -1165,6 +1203,7 @@ function defaultSettings() {
     accent: "blue",
     wideEditor: true,
     treeListWidth: 280,
+    treePanelCollapsed: false,
     sidebarCollapsed: false,
     railMode: "icon",
     fontSize: "medium",
@@ -1205,6 +1244,7 @@ function defaultServerSettings() {
 
 function defaultHostedServerUrl() {
   if (!["http:", "https:"].includes(window.location.protocol)) return "";
+  if (["127.0.0.1", "localhost", "::1"].includes(window.location.hostname)) return "";
   const path = window.location.pathname.replace(/\/+$/, "");
   if (path === "" || path === "/index.html" || path === "/app" || path.startsWith("/app/")) {
     return window.location.origin;
@@ -1324,6 +1364,7 @@ const elements = {
   archiveCountLabel: $("#archiveCountLabel"),
   prevMonthBtn: $("#prevMonthBtn"),
   nextMonthBtn: $("#nextMonthBtn"),
+  toggleTreePanelBtn: $("#toggleTreePanelBtn"),
   expandAllBtn: $("#expandAllBtn"),
   collapseAllBtn: $("#collapseAllBtn"),
   addRootBtn: $("#addRootBtn"),
@@ -1340,7 +1381,6 @@ const elements = {
   treeTitleInput: $("#treeTitleInput"),
   treeContent: $("#treeContent"),
   treePathLabel: $("#treePathLabel"),
-  treeLevelLabel: $("#treeLevelLabel"),
   treeSavedLabel: $("#treeSavedLabel"),
   favoriteBtn: $("#favoriteBtn"),
   shareTreeBtn: $("#shareTreeBtn"),
@@ -1358,6 +1398,10 @@ const elements = {
   tagList: $("#tagList"),
   noteStats: $("#noteStats"),
   previewToggleBtn: $("#previewToggleBtn"),
+  openDetectedLinkBtn: $("#openDetectedLinkBtn"),
+  encryptNoteBtn: $("#encryptNoteBtn"),
+  unlockNoteBtn: $("#unlockNoteBtn"),
+  lockNoteBtn: $("#lockNoteBtn"),
   markdownPreview: $("#markdownPreview"),
   moveUpBtn: $("#moveUpBtn"),
   moveDownBtn: $("#moveDownBtn"),
@@ -1466,6 +1510,12 @@ const elements = {
   confirmMessage: $("#confirmMessage"),
   confirmCancelBtn: $("#confirmCancelBtn"),
   confirmOkBtn: $("#confirmOkBtn"),
+  keyDialog: $("#keyDialog"),
+  keyDialogTitle: $("#keyDialogTitle"),
+  keyDialogMessage: $("#keyDialogMessage"),
+  keyDialogInput: $("#keyDialogInput"),
+  keyDialogCancelBtn: $("#keyDialogCancelBtn"),
+  keyDialogOkBtn: $("#keyDialogOkBtn"),
   toastRegion: $("#toastRegion"),
   webLoginView: $("#webLoginView"),
   webLoginForm: $("#webLoginForm"),
@@ -1512,6 +1562,41 @@ function confirmAction(message) {
     elements.confirmDialog.addEventListener("click", onBackdrop);
     window.addEventListener("keydown", onKeyDown);
     window.setTimeout(() => elements.confirmOkBtn.focus(), 0);
+  });
+}
+
+function requestEncryptionKey(message) {
+  if (!elements.keyDialog) return Promise.resolve("");
+  elements.keyDialogTitle.textContent = t("encryption.keyTitle");
+  elements.keyDialogMessage.textContent = message;
+  elements.keyDialogCancelBtn.textContent = t("dialog.cancel");
+  elements.keyDialogOkBtn.textContent = t("dialog.ok");
+  elements.keyDialogInput.value = "";
+  elements.keyDialog.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const close = (value) => {
+      elements.keyDialog.classList.add("hidden");
+      elements.keyDialogOkBtn.removeEventListener("click", onOk);
+      elements.keyDialogCancelBtn.removeEventListener("click", onCancel);
+      elements.keyDialog.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKeyDown);
+      resolve(value);
+    };
+    const onOk = () => close(elements.keyDialogInput.value);
+    const onCancel = () => close("");
+    const onBackdrop = (event) => {
+      if (event.target === elements.keyDialog) close("");
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") close("");
+      if (event.key === "Enter") close(elements.keyDialogInput.value);
+    };
+    elements.keyDialogOkBtn.addEventListener("click", onOk);
+    elements.keyDialogCancelBtn.addEventListener("click", onCancel);
+    elements.keyDialog.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => elements.keyDialogInput.focus(), 0);
   });
 }
 
@@ -1833,6 +1918,7 @@ renderSettings();
 applySettings();
 render();
 initializeHostedWebClient();
+scheduleServerSync({ force: true, delay: 1600 });
 
 function bindEvents() {
   elements.navTabs.forEach((button) => {
@@ -2032,6 +2118,7 @@ function bindEvents() {
 
   elements.serverSaveBtn.addEventListener("click", () => {
     saveServerSettingsFromForm();
+    scheduleServerSync({ force: true, delay: 800 });
   });
 
   elements.serverTestBtn.addEventListener("click", testServerConnection);
@@ -2046,6 +2133,16 @@ function bindEvents() {
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webLogoutBtn.addEventListener("click", handleWebLogout);
 
+  window.addEventListener("online", () => {
+    scheduleServerSync({ force: true, delay: 800 });
+  });
+
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      scheduleServerSync({ force: true, delay: 800 });
+    }
+  });
+
   elements.sidebarAssistToggle.addEventListener("change", () => {
     state.settings.showSidebarAssist = elements.sidebarAssistToggle.checked;
     persistSettings();
@@ -2056,6 +2153,12 @@ function bindEvents() {
 
   elements.addRootBtn.addEventListener("click", () => {
     addRootNote();
+  });
+
+  elements.toggleTreePanelBtn?.addEventListener("click", () => {
+    state.settings.treePanelCollapsed = !state.settings.treePanelCollapsed;
+    persistSettings();
+    applySettings();
   });
 
   elements.expandAllBtn.addEventListener("click", () => {
@@ -2107,6 +2210,7 @@ function bindEvents() {
     const selected = getSelectedTreeNode();
     if (!selected || isHostedWebClient()) return;
     selected.shared = selected.shared === false;
+    selected.unsharedAt = selected.shared === false ? new Date().toISOString() : null;
     markTreeNodeChanged(selected);
     persist();
     renderTree();
@@ -2126,6 +2230,10 @@ function bindEvents() {
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
   elements.insertTimeBtn.addEventListener("click", insertCurrentTimeIntoTreeNote);
+  elements.openDetectedLinkBtn?.addEventListener("click", openDetectedLinkFromEditor);
+  elements.encryptNoteBtn?.addEventListener("click", encryptSelectedNote);
+  elements.unlockNoteBtn?.addEventListener("click", unlockSelectedNote);
+  elements.lockNoteBtn?.addEventListener("click", lockSelectedNote);
   elements.pinTabBtn.addEventListener("click", toggleSelectedTreeTabPin);
   elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
   elements.closeOtherTabsBtn.addEventListener("click", closeOtherTreeTabs);
@@ -2141,7 +2249,7 @@ function bindEvents() {
     elements.treeContent.classList.toggle("hidden", isOpening);
     elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
     if (isOpening) {
-      renderMarkdownPreview(selected.content);
+      renderMarkdownPreview(visibleContentForNode(selected));
     } else {
       elements.treeContent.focus();
     }
@@ -2971,27 +3079,34 @@ async function issueDeviceToken() {
   }
 }
 
-async function syncWebNotesToServer(message = t("settings.server.syncing")) {
-  saveServerSettingsFromForm(message);
-  const server = state.settings.server;
-  if (server.mode !== "server") {
-    server.lastStatus = "idle";
-    server.lastMessage = t("settings.server.local");
-    persistSettings();
-    renderServerSettings();
+async function syncWebNotesToServer(message = t("settings.server.syncing"), options = {}) {
+  if (serverSyncRunning) {
+    serverSyncQueued = true;
     return;
   }
-  if (!server.url) {
-    server.lastStatus = "bad";
-    server.lastMessage = t("settings.server.noUrl");
-    persistSettings();
-    renderServerSettings();
-    return;
-  }
-
-  const notes = buildServerSyncNotes(server);
-  renderServerStatus("testing", message);
+  serverSyncRunning = true;
   try {
+    if (!options.skipFormSave) {
+      saveServerSettingsFromForm(message);
+    }
+    const server = state.settings.server;
+    if (server.mode !== "server") {
+      server.lastStatus = "idle";
+      server.lastMessage = t("settings.server.local");
+      persistSettings();
+      renderServerSettings();
+      return;
+    }
+    if (!server.url) {
+      server.lastStatus = "bad";
+      server.lastMessage = t("settings.server.noUrl");
+      persistSettings();
+      renderServerSettings();
+      return;
+    }
+
+    const notes = buildServerSyncNotes(server);
+    renderServerStatus("testing", message);
     const response = await fetch(`${server.url}/api/v1/sync`, {
       method: "POST",
       headers: {
@@ -3008,29 +3123,36 @@ async function syncWebNotesToServer(message = t("settings.server.syncing")) {
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
-      const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
-      const pushedCount = payload.pushed_notes?.length || 0;
-      const pulledCount = (payload.pulled_notes || []).length;
-      markServerSyncedNotes();
-      server.lastStatus = "ok";
-      server.lastCheckedAt = new Date().toISOString();
-      server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
-      if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
-        server.lastMessage = t("settings.server.syncEmpty");
-      } else {
-        const syncSummary = t("note.syncMessage", { sent: pushedCount, received: mergeResult.applied });
-        server.lastMessage = `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`;
-      }
-      persist();
-      render();
-      renderServerMeta();
+    const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+    const pushedCount = payload.pushed_notes?.length || 0;
+    const pulledCount = (payload.pulled_notes || []).length;
+    markServerSyncedNotes();
+    server.lastStatus = "ok";
+    server.lastCheckedAt = new Date().toISOString();
+    server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
+    if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
+      server.lastMessage = t("settings.server.syncEmpty");
+    } else {
+      const syncSummary = t("note.syncMessage", { sent: pushedCount, received: mergeResult.applied });
+      server.lastMessage = `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`;
+    }
+    persist();
+    render();
+    renderServerMeta();
   } catch (error) {
+    const server = state.settings.server;
     server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
     server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+  } finally {
+    persistSettings();
+    renderServerSettings();
+    serverSyncRunning = false;
+    if (serverSyncQueued) {
+      serverSyncQueued = false;
+      scheduleServerSync({ force: true, delay: 800 });
+    }
   }
-  persistSettings();
-  renderServerSettings();
 }
 
 function prepareServerRequest(server) {
@@ -3254,6 +3376,7 @@ function createPulledTreeNode(note, parentId, level) {
     status: note.deleted_at ? "deleted" : "active",
     syncState: "synced",
     shared: true,
+    unsharedAt: null,
     favorite: false,
     tags: tagsFromServerNote(note),
     createdAt: note.created_at || note.client_updated_at || note.updated_at || new Date().toISOString(),
@@ -3299,11 +3422,13 @@ function buildServerSyncNotes(server) {
       .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => archivedDailyNoteToServerNote(note, server)),
     ...flattenTree(state.data.tree)
-      .filter(isTreeNodeSharedForServer)
       .filter((node) => shouldSendServerNote(node, changedOnly))
-      .map((node) => treeNodeToServerNote(node, server, null)),
+      .map((node) => treeNodeToServerNote(
+        node,
+        server,
+        isTreeNodeSharedForServer(node) ? null : node.unsharedAt || node.updatedAt || new Date().toISOString(),
+      )),
     ...state.data.deletedTree
-      .filter(isTreeNodeSharedForServer)
       .filter((node) => shouldSendServerNote(node, changedOnly))
       .map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
   ];
@@ -3589,6 +3714,7 @@ function applySettings() {
   document.documentElement.dataset.theme = resolvedTheme;
   document.documentElement.dataset.client = isHostedWebClient() ? "hosted" : "local";
   document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
+  document.documentElement.dataset.treePanel = state.settings.treePanelCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.railMode = state.settings.railMode;
   document.documentElement.dataset.fontSize = state.settings.fontSize;
@@ -3667,6 +3793,7 @@ function applyLanguage() {
   setPlaceholder(elements.webRegisterEmailInput, t("web.login.emailPlaceholder"));
   setPlaceholder(elements.webLoginTwoFactorInput, t("web.login.twoFactorPlaceholder"));
   setPlaceholder(elements.webResetCodeInput, t("web.login.resetCodePlaceholder"));
+  renderTreePanelToggle();
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
   setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
   setIconLabel(elements.addRootBtn, t("tree.addRoot"));
@@ -3688,6 +3815,10 @@ function applyLanguage() {
   setIconLabel(elements.noteFindCloseBtn, t("aria.close"));
   setText("#outlineToggleBtn", t("editor.outline"));
   setText("#insertTimeBtn", t("editor.insertTime"));
+  setText("#openDetectedLinkBtn", t("editor.openLink"));
+  setText("#encryptNoteBtn", t("editor.encrypt"));
+  setText("#unlockNoteBtn", t("editor.unlock"));
+  setText("#lockNoteBtn", t("editor.lock"));
   setText(
     "#previewToggleBtn",
     elements.markdownPreview.classList.contains("hidden") ? t("editor.preview") : t("editor.edit"),
@@ -4335,6 +4466,18 @@ function continueMarkdownLineOnEnter() {
 function syncTreeContentFromEditor() {
   const selected = getSelectedTreeNode();
   if (!selected) return;
+  if (isEncryptedContent(selected.content)) {
+    const unlocked = unlockedEncryptedNotes.get(selected.id);
+    if (!unlocked) return;
+    unlocked.plain = elements.treeContent.value;
+    scheduleEncryptedNoteSave(selected);
+    renderMarkdownPreview(unlocked.plain);
+    renderTags();
+    renderNoteStats({ ...selected, content: unlocked.plain });
+    renderOutlinePanel({ ...selected, content: unlocked.plain });
+    renderLinkPanel();
+    return;
+  }
   selected.content = elements.treeContent.value;
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
@@ -5120,6 +5263,14 @@ function expandAllTreeNodes() {
   renderTreeListOnly();
 }
 
+function renderTreePanelToggle() {
+  if (!elements.toggleTreePanelBtn) return;
+  const collapsed = Boolean(state.settings.treePanelCollapsed);
+  const label = collapsed ? t("tree.panelExpand") : t("tree.panelCollapse");
+  elements.toggleTreePanelBtn.textContent = collapsed ? "⇥" : "⇤";
+  setIconLabel(elements.toggleTreePanelBtn, label);
+}
+
 function renderTreeEditor() {
   const selected = getSelectedTreeNode();
   elements.emptyTreeEditor.classList.toggle("hidden", Boolean(selected));
@@ -5130,19 +5281,23 @@ function renderTreeEditor() {
   }
   addOpenTreeTab(selected.id);
 
-  elements.treeLevelLabel.textContent = levelName(selected.level);
   elements.treeTitleInput.value = selected.title;
-  elements.treeContent.value = selected.content;
+  const displayContent = visibleContentForNode(selected);
+  const editableContent = editableContentForNode(selected);
+  elements.treeContent.value = isEncryptedContent(selected.content) && !isEncryptedNodeUnlocked(selected)
+    ? displayContent
+    : editableContent;
   renderFavorite(selected);
   renderShareState(selected);
+  renderEncryptionControls(selected);
   renderTags();
   renderNoteStats(selected);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
   elements.previewToggleBtn.textContent = t("editor.preview");
   renderTreePath(selected);
-  renderMarkdownPreview(selected.content);
-  renderOutlinePanel(selected);
+  renderMarkdownPreview(displayContent);
+  renderOutlinePanel({ ...selected, content: displayContent });
   renderLinkPanel();
   elements.addChildBtn.disabled = selected.level >= 3;
   renderTreeMoveButtons(selected);
@@ -5368,13 +5523,16 @@ function renderTags() {
     elements.tagList.replaceChildren();
     return;
   }
-  selected.tags = extractTags(selected.content);
-  if (selected.tags.length === 0) {
+  const tags = isEncryptedContent(selected.content)
+    ? (isEncryptedNodeUnlocked(selected) ? extractTags(editableContentForNode(selected)) : [])
+    : extractTags(selected.content);
+  if (!isEncryptedContent(selected.content)) selected.tags = tags;
+  if (tags.length === 0) {
     elements.tagList.innerHTML = `<span class="tag-empty">${escapeHtml(t("note.tagEmpty"))}</span>`;
     return;
   }
   elements.tagList.replaceChildren(
-    ...selected.tags.map((tag) => {
+    ...tags.map((tag) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "tag-chip";
@@ -5390,11 +5548,11 @@ function renderTags() {
 }
 
 function renderNoteStats(node) {
-  const text = node.content || "";
+  const text = visibleContentForNode(node);
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
   const chars = text.replace(/\s/g, "").length;
   const lines = text ? text.split("\n").length : 0;
-  const outgoing = outgoingLinksFor(node);
+  const outgoing = outgoingLinksFor({ ...node, content: text });
   const links = outgoing.length;
   const missingLinks = outgoing.filter((link) => !link.exists).length;
   const backlinks = backlinksFor(node).length;
@@ -5415,7 +5573,7 @@ function renderNoteStats(node) {
 function toggleOutlinePanel() {
   elements.outlinePanel.classList.toggle("hidden");
   const selected = getSelectedTreeNode();
-  if (selected) renderOutlinePanel(selected);
+  if (selected) renderOutlinePanel({ ...selected, content: visibleContentForNode(selected) });
 }
 
 function renderOutlinePanel(node) {
@@ -5611,7 +5769,8 @@ function renderLinkPanel() {
     elements.backlinksPanel.replaceChildren();
     return;
   }
-  const outgoing = outgoingLinksFor(selected);
+  const displayNode = { ...selected, content: visibleContentForNode(selected) };
+  const outgoing = outgoingLinksFor(displayNode);
   const backlinks = backlinksFor(selected);
   const blocks = [];
 
@@ -5765,21 +5924,209 @@ function toggleMarkdownTask(taskIndex) {
   syncTreeContentFromEditor();
 }
 
+function isEncryptedContent(content) {
+  return String(content || "").startsWith(ENCRYPTED_NOTE_PREFIX);
+}
+
+function encryptedPayloadFromContent(content) {
+  if (!isEncryptedContent(content)) return null;
+  try {
+    return JSON.parse(atob(String(content).slice(ENCRYPTED_NOTE_PREFIX.length)));
+  } catch {
+    return null;
+  }
+}
+
+function bytesToBase64(bytes) {
+  const view = new Uint8Array(bytes);
+  let binary = "";
+  for (let index = 0; index < view.length; index += 0x8000) {
+    binary += String.fromCharCode(...view.slice(index, index + 0x8000));
+  }
+  return btoa(binary);
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(String(value || "")), (char) => char.charCodeAt(0));
+}
+
+async function encryptionKeyFromPassword(password, saltBytes, usages) {
+  const material = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(password),
+    "PBKDF2",
+    false,
+    ["deriveKey"],
+  );
+  return crypto.subtle.deriveKey(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBytes,
+      iterations: ENCRYPTION_ITERATIONS,
+    },
+    material,
+    { name: "AES-GCM", length: 256 },
+    false,
+    usages,
+  );
+}
+
+async function encryptPlainText(plainText, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await encryptionKeyFromPassword(password, salt, ["encrypt"]);
+  const encrypted = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv },
+    key,
+    new TextEncoder().encode(plainText),
+  );
+  const payload = {
+    v: 1,
+    alg: "AES-GCM",
+    kdf: "PBKDF2-SHA256",
+    iterations: ENCRYPTION_ITERATIONS,
+    salt: bytesToBase64(salt),
+    iv: bytesToBase64(iv),
+    data: bytesToBase64(encrypted),
+  };
+  return `${ENCRYPTED_NOTE_PREFIX}${btoa(JSON.stringify(payload))}`;
+}
+
+async function decryptPlainText(encryptedContent, password) {
+  const payload = encryptedPayloadFromContent(encryptedContent);
+  if (!payload || payload.v !== 1 || !payload.salt || !payload.iv || !payload.data) {
+    throw new Error(t("encryption.fail"));
+  }
+  const salt = base64ToBytes(payload.salt);
+  const iv = base64ToBytes(payload.iv);
+  const key = await encryptionKeyFromPassword(password, salt, ["decrypt"]);
+  const decrypted = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv },
+    key,
+    base64ToBytes(payload.data),
+  );
+  return new TextDecoder().decode(decrypted);
+}
+
+function visibleContentForNode(node) {
+  if (!node) return "";
+  if (!isEncryptedContent(node.content)) return node.content || "";
+  return unlockedEncryptedNotes.get(node.id)?.plain || t("encryption.lockedPlaceholder");
+}
+
+function editableContentForNode(node) {
+  if (!node) return "";
+  if (!isEncryptedContent(node.content)) return node.content || "";
+  return unlockedEncryptedNotes.get(node.id)?.plain || "";
+}
+
+function isEncryptedNodeUnlocked(node) {
+  return Boolean(node && isEncryptedContent(node.content) && unlockedEncryptedNotes.has(node.id));
+}
+
+function renderEncryptionControls(node) {
+  if (!node) return;
+  const encrypted = isEncryptedContent(node.content);
+  const unlocked = isEncryptedNodeUnlocked(node);
+  elements.encryptNoteBtn.classList.toggle("hidden", encrypted);
+  elements.unlockNoteBtn.classList.toggle("hidden", !encrypted || unlocked);
+  elements.lockNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
+  elements.treeContent.readOnly = encrypted && !unlocked;
+  elements.treeContent.classList.toggle("locked", encrypted && !unlocked);
+}
+
+async function encryptSelectedNote() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isEncryptedContent(selected.content)) return;
+  const plain = elements.treeContent.value || selected.content || "";
+  if (!plain.trim()) {
+    showNotice(t("encryption.empty"), "info");
+    return;
+  }
+  const key = await requestEncryptionKey(t("encryption.encryptMessage"));
+  if (!key) return;
+  try {
+    selected.content = await encryptPlainText(plain, key);
+    unlockedEncryptedNotes.delete(selected.id);
+    selected.tags = [];
+    markTreeNodeChanged(selected);
+    persist();
+    renderTree();
+    showNotice(t("encryption.done"), "success");
+  } catch (error) {
+    showNotice(error.message || t("encryption.fail"), "error");
+  }
+}
+
+async function unlockSelectedNote() {
+  const selected = getSelectedTreeNode();
+  if (!selected || !isEncryptedContent(selected.content)) return;
+  const key = await requestEncryptionKey(t("encryption.unlockMessage"));
+  if (!key) return;
+  try {
+    const plain = await decryptPlainText(selected.content, key);
+    unlockedEncryptedNotes.set(selected.id, { key, plain });
+    renderTreeEditor();
+    showNotice(t("encryption.unlocked"), "success");
+  } catch {
+    showNotice(t("encryption.fail"), "error");
+  }
+}
+
+function lockSelectedNote() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  unlockedEncryptedNotes.delete(selected.id);
+  window.clearTimeout(encryptedSaveTimers.get(selected.id));
+  encryptedSaveTimers.delete(selected.id);
+  renderTreeEditor();
+  showNotice(t("encryption.locked"), "success");
+}
+
+function scheduleEncryptedNoteSave(node) {
+  const unlocked = unlockedEncryptedNotes.get(node.id);
+  if (!unlocked) return;
+  window.clearTimeout(encryptedSaveTimers.get(node.id));
+  const timer = window.setTimeout(async () => {
+    encryptedSaveTimers.delete(node.id);
+    const latest = findTreeNode(state.data.tree, node.id);
+    const latestUnlocked = unlockedEncryptedNotes.get(node.id);
+    if (!latest || !latestUnlocked) return;
+    latest.content = await encryptPlainText(latestUnlocked.plain, latestUnlocked.key);
+    latest.tags = [];
+    markTreeNodeChanged(latest);
+    persist();
+    renderNoteStats(latest);
+    showSaved(elements.treeSavedLabel);
+  }, 700);
+  encryptedSaveTimers.set(node.id, timer);
+}
+
 function inlineMarkdown(text) {
   const codeSpans = [];
-  const protectedText = text.replace(/`([^`]+)`/g, (_, code) => {
+  const markdownLinks = [];
+  const protectedText = text
+    .replace(/`([^`]+)`/g, (_, code) => {
     const index = codeSpans.push(code) - 1;
     return `\u0000CODE${index}\u0000`;
-  });
+    })
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
+      const index = markdownLinks.push(renderExternalLink(label, url)) - 1;
+      return `\u0000LINK${index}\u0000`;
+    });
   return protectedText
     .replace(/\[\[([^\]]+)\]\]/g, (_, title) => {
       const target = decodeHtml(title.trim());
       return `<button class="wiki-link" type="button" data-wiki-link="${escapeHtml(target)}">${title}</button>`;
     })
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => renderExternalLink(label, url))
+    .replace(/\bhttps?:\/\/[^\s<>()]+/gi, (value) => renderDetectedLink(value))
+    .replace(/\bwww\.[^\s<>()]+/gi, (value) => renderDetectedLink(value))
+    .replace(/\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi, (value) => renderDetectedLink(value))
     .replace(/(^|\s)#([0-9A-Za-z가-힣_-]+)/g, '$1<span class="tag-inline">#$2</span>')
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
+    .replace(/\u0000LINK(\d+)\u0000/g, (_, index) => markdownLinks[Number(index)] || "")
     .replace(/\u0000CODE(\d+)\u0000/g, (_, index) => `<code>${codeSpans[Number(index)] || ""}</code>`);
 }
 
@@ -5789,6 +6136,51 @@ function renderExternalLink(label, url) {
     return `[${label}](${url})`;
   }
   return `<a href="${escapeHtml(trimmedUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+}
+
+function renderDetectedLink(value) {
+  const target = normalizeDetectedLinkTarget(value);
+  return `<a href="${escapeHtml(target)}" target="_blank" rel="noopener noreferrer">${value}</a>`;
+}
+
+function normalizeDetectedLinkTarget(value) {
+  const text = decodeHtml(String(value || "").trim()).replace(/[.,;:!?]+$/, "");
+  if (/^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i.test(text)) return `mailto:${text}`;
+  if (/^https?:\/\//i.test(text)) return text;
+  return `https://${text}`;
+}
+
+function detectedLinkFromText(value, selectionStart = 0, selectionEnd = selectionStart) {
+  const text = String(value || "");
+  const selected = text.slice(selectionStart, selectionEnd).trim();
+  if (selected && detectedLinkCandidate(selected) === selected) return normalizeDetectedLinkTarget(selected);
+  const pattern = /(?:https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+  let match;
+  while ((match = pattern.exec(text))) {
+    const start = match.index;
+    const end = start + match[0].length;
+    if (selectionStart >= start && selectionStart <= end) {
+      return normalizeDetectedLinkTarget(match[0]);
+    }
+  }
+  return "";
+}
+
+function detectedLinkCandidate(value) {
+  return String(value || "").match(/^(?:https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})$/i)?.[0] || "";
+}
+
+function openDetectedLinkFromEditor() {
+  const target = detectedLinkFromText(
+    elements.treeContent.value,
+    elements.treeContent.selectionStart ?? 0,
+    elements.treeContent.selectionEnd ?? 0,
+  );
+  if (!target) {
+    showNotice(t("editor.openLinkNone"), "info");
+    return;
+  }
+  window.open(target, "_blank", "noopener,noreferrer");
 }
 
 async function openWikiLink(title) {
@@ -6149,6 +6541,7 @@ function createNode(title, content, parentId, level) {
     status: "active",
     syncState: "pending",
     shared: isHostedWebClient(),
+    unsharedAt: null,
     favorite: false,
     tags: extractTags(content),
     createdAt: new Date().toISOString(),
@@ -6363,6 +6756,7 @@ function normalizeSettings(settings = {}) {
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
+  normalized.treePanelCollapsed = normalizeToggle(normalized.treePanelCollapsed, defaults.treePanelCollapsed);
   normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);
   normalized.showBacklinks = normalizeToggle(normalized.showBacklinks, defaults.showBacklinks);
   normalized.enableShortcuts = normalizeToggle(normalized.enableShortcuts, defaults.enableShortcuts);
@@ -6577,14 +6971,15 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
     node.shared = node.shared !== false;
+    node.unsharedAt = node.shared === false ? (node.unsharedAt || node.updatedAt || null) : null;
     node.favorite = Boolean(node.favorite);
-    node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
+    node.tags = isEncryptedContent(node.content) ? [] : (Array.isArray(node.tags) ? node.tags : extractTags(node.content));
     node.createdAt = node.createdAt || new Date().toISOString();
     node.updatedAt = node.updatedAt || node.createdAt;
     if (node.level >= 3 && node.children.length > 0) {
       node.content = mergeOverflowTreeChildren(node.content, node.children);
       node.children = [];
-      node.tags = extractTags(node.content);
+      node.tags = isEncryptedContent(node.content) ? [] : extractTags(node.content);
     }
     normalizeTreeNodes(node.children, node.id, node.level + 1);
   });
@@ -6602,17 +6997,19 @@ function persist() {
   if (!isHostedWebClient()) {
     writeStorage(STORAGE_KEY, state.data);
   }
-  scheduleHostedWebSync();
+  scheduleServerSync();
 }
 
-function scheduleHostedWebSync() {
-  if (!isHostedWebClient() || hostedWebSyncSuspended) return;
+function scheduleServerSync(options = {}) {
+  if (hostedWebSyncSuspended) return;
   const server = state.settings.server || defaultServerSettings();
-  if (server.mode !== "server" || !server.webSessionToken || countPendingSyncNotes() === 0) return;
-  window.clearTimeout(hostedWebSyncTimer);
-  hostedWebSyncTimer = window.setTimeout(() => {
-    syncWebNotesToServer(t("settings.server.syncing"));
-  }, 1200);
+  if (server.mode !== "server" || !server.url) return;
+  if (isHostedWebClient() && !server.webSessionToken) return;
+  if (!options.force && countPendingSyncNotes() === 0) return;
+  window.clearTimeout(serverSyncTimer);
+  serverSyncTimer = window.setTimeout(() => {
+    syncWebNotesToServer(t("settings.server.syncing"), { skipFormSave: true });
+  }, options.delay ?? 1200);
 }
 
 function writeStorage(key, value) {

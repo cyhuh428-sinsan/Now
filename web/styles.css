@@ -568,6 +568,16 @@ button {
   min-height: 0;
 }
 
+:root[data-tree-panel="collapsed"] .tree-layout {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+
+:root[data-tree-panel="collapsed"] .tree-panel,
+:root[data-tree-panel="collapsed"] .resize-handle {
+  display: none;
+}
+
 .daily-layout {
   grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
   gap: 16px;
@@ -1474,7 +1484,8 @@ kbd {
   outline: none;
 }
 
-.memo-editor.readonly {
+.memo-editor.readonly,
+.memo-editor.locked {
   background: color-mix(in srgb, var(--panel) 82%, var(--bg));
   color: var(--muted);
   cursor: default;
@@ -2337,6 +2348,11 @@ kbd {
   color: var(--text);
   white-space: pre-line;
   line-height: 1.6;
+}
+
+.key-card {
+  display: grid;
+  gap: 14px;
 }
 
 .confirm-actions {
