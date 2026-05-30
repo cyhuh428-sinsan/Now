@@ -279,6 +279,7 @@ const I18N = {
     "editor.edit": "편집하기",
     "editor.encrypt": "암호화",
     "editor.unlock": "복호화",
+    "editor.decrypt": "암호화 해제",
     "editor.lock": "잠금",
     "encryption.keyTitle": "암호 키 입력",
     "encryption.encryptMessage": "이 메모를 암호화할 키를 입력하세요. 이 키를 잊으면 내용을 복구할 수 없습니다.",
@@ -287,6 +288,8 @@ const I18N = {
     "encryption.empty": "암호화할 내용이 없습니다.",
     "encryption.done": "암호화됨",
     "encryption.unlocked": "복호화됨",
+    "encryption.decrypted": "암호화를 해제했습니다.",
+    "encryption.decryptMessage": "암호화를 해제하려면 키를 입력하세요. 이후 이 메모는 평문으로 저장됩니다.",
     "encryption.locked": "잠김",
     "encryption.fail": "복호화 실패. 키를 확인하세요.",
     "results.eyebrow": "통합 검색",
@@ -831,6 +834,7 @@ const I18N = {
     "editor.edit": "Edit",
     "editor.encrypt": "Encrypt",
     "editor.unlock": "Decrypt",
+    "editor.decrypt": "Remove encryption",
     "editor.lock": "Lock",
     "encryption.keyTitle": "Encryption key",
     "encryption.encryptMessage": "Enter the key for this note. If you forget it, the content cannot be recovered.",
@@ -839,6 +843,8 @@ const I18N = {
     "encryption.empty": "There is no content to encrypt.",
     "encryption.done": "Encrypted",
     "encryption.unlocked": "Decrypted",
+    "encryption.decrypted": "Encryption removed.",
+    "encryption.decryptMessage": "Enter the key to remove encryption. This note will be saved as plain text.",
     "encryption.locked": "Locked",
     "encryption.fail": "Could not decrypt. Check the key.",
     "results.eyebrow": "Global search",
@@ -1401,6 +1407,7 @@ const elements = {
   openDetectedLinkBtn: $("#openDetectedLinkBtn"),
   encryptNoteBtn: $("#encryptNoteBtn"),
   unlockNoteBtn: $("#unlockNoteBtn"),
+  decryptNoteBtn: $("#decryptNoteBtn"),
   lockNoteBtn: $("#lockNoteBtn"),
   markdownPreview: $("#markdownPreview"),
   moveUpBtn: $("#moveUpBtn"),
@@ -2233,6 +2240,7 @@ function bindEvents() {
   elements.openDetectedLinkBtn?.addEventListener("click", openDetectedLinkFromEditor);
   elements.encryptNoteBtn?.addEventListener("click", encryptSelectedNote);
   elements.unlockNoteBtn?.addEventListener("click", unlockSelectedNote);
+  elements.decryptNoteBtn?.addEventListener("click", decryptSelectedNote);
   elements.lockNoteBtn?.addEventListener("click", lockSelectedNote);
   elements.pinTabBtn.addEventListener("click", toggleSelectedTreeTabPin);
   elements.reopenClosedTabBtn.addEventListener("click", reopenClosedTreeTab);
@@ -3123,10 +3131,14 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
-    const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+    const serverAcceptedNotes = [
+      ...(payload.pushed_notes || []),
+      ...(payload.pulled_notes || []),
+    ];
+    const mergeResult = applyPulledServerNotes(serverAcceptedNotes);
     const pushedCount = payload.pushed_notes?.length || 0;
     const pulledCount = (payload.pulled_notes || []).length;
-    markServerSyncedNotes();
+    markServerSyncedNotes(payload.pushed_notes || []);
     server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
@@ -3259,6 +3271,44 @@ function applyPulledServerNotes(serverNotes) {
   return result;
 }
 
+function serverNoteTime(note) {
+  return note?.client_updated_at || note?.updated_at || note?.deleted_at || note?.created_at || "";
+}
+
+function localNoteTime(note) {
+  return note?.updatedAt || note?.archivedAt || note?.deletedAt || note?.createdAt || "";
+}
+
+function timeValue(value) {
+  const time = Date.parse(value || "");
+  return Number.isNaN(time) ? 0 : time;
+}
+
+function shouldApplyPulledNote(local, note) {
+  if (!local || local.syncState !== "pending") return true;
+  const remoteTime = timeValue(serverNoteTime(note));
+  const localTime = timeValue(localNoteTime(local));
+  if (remoteTime === 0 && localTime === 0) return false;
+  if (remoteTime > localTime) return true;
+  if (
+    remoteTime === localTime
+    && isEncryptedContent(note?.content)
+    && !isEncryptedContent(local?.content)
+  ) {
+    return true;
+  }
+  if (remoteTime === localTime && String(note?.content || "") !== String(local?.content || "")) {
+    return true;
+  }
+  return false;
+}
+
+function clearUnlockedEncryptionState(nodeId) {
+  unlockedEncryptedNotes.delete(nodeId);
+  window.clearTimeout(encryptedSaveTimers.get(nodeId));
+  encryptedSaveTimers.delete(nodeId);
+}
+
 function applyPulledDailyNote(note) {
   const date = dailyDateFromServerNote(note);
   if (!date) return false;
@@ -3266,7 +3316,7 @@ function applyPulledDailyNote(note) {
     return applyPulledArchivedDailyNote(note, date);
   }
   const current = state.data.daily[date];
-  if (current?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(current, note)) return false;
   state.data.daily[date] = {
     ...(current || {}),
     date,
@@ -3294,7 +3344,7 @@ function applyPulledDailyNote(note) {
 function applyPulledArchivedDailyNote(note, date) {
   const id = note.local_id.replace(/^daily-archive:/, "") || note.local_id;
   const current = state.data.archivedDaily.find((item) => item.id === id);
-  if (current?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(current, note)) return false;
   const next = {
     ...(current || {}),
     id,
@@ -3316,9 +3366,9 @@ function applyPulledArchivedDailyNote(note, date) {
 
 function applyPulledTreeNote(note) {
   const current = findTreeNode(state.data.tree, note.local_id);
-  if (current?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(current, note)) return false;
   const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
-  if (deleted?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(deleted, note)) return false;
   removePulledDeletedTreeNote(note.local_id);
   const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
   const nextLevel = Math.min(3, Math.max(1, note.level || (parent ? parent.level + 1 : 1)));
@@ -3326,6 +3376,7 @@ function applyPulledTreeNote(note) {
   if (current) {
     current.title = noteTitle(note.title);
     current.content = note.content || "";
+    clearUnlockedEncryptionState(current.id);
     current.parentId = nextParentId;
     current.level = nextLevel;
     current.status = "active";
@@ -3347,13 +3398,14 @@ function applyPulledTreeNote(note) {
 
 function applyPulledDeletedTreeNote(note) {
   const current = findTreeNode(state.data.tree, note.local_id);
-  if (current?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(current, note)) return false;
   if (current) {
+    clearUnlockedEncryptionState(note.local_id);
     detachTreeNode(note.local_id);
     removeTreeTabReferences(note.local_id);
   }
   const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
-  if (deleted?.syncState === "pending") return false;
+  if (!shouldApplyPulledNote(deleted, note)) return false;
   const next = createPulledTreeNode(note, note.parent_local_id || null, note.level || 1);
   next.status = "deleted";
   next.deletedAt = note.deleted_at || note.updated_at || new Date().toISOString();
@@ -3500,7 +3552,23 @@ function treeNodeToServerNote(node, server, deletedAt) {
   };
 }
 
-function markServerSyncedNotes() {
+function markServerSyncedNotes(pushedNotes = null) {
+  if (Array.isArray(pushedNotes)) {
+    const syncedIds = new Set(pushedNotes.map((note) => `${note.note_type}:${note.local_id}`));
+    Object.values(state.data.daily).forEach((note) => {
+      if (syncedIds.has(`daily:daily:${note.date}`)) note.syncState = "synced";
+    });
+    state.data.archivedDaily.forEach((note) => {
+      if (syncedIds.has(`daily:daily-archive:${note.id}`)) note.syncState = "synced";
+    });
+    flattenTree(state.data.tree).forEach((node) => {
+      if (syncedIds.has(`tree:${node.id}`)) node.syncState = "synced";
+    });
+    state.data.deletedTree.forEach((node) => {
+      if (syncedIds.has(`tree:${node.id}`)) node.syncState = "synced";
+    });
+    return;
+  }
   Object.values(state.data.daily).forEach((note) => {
     note.syncState = "synced";
   });
@@ -3818,6 +3886,7 @@ function applyLanguage() {
   setText("#openDetectedLinkBtn", t("editor.openLink"));
   setText("#encryptNoteBtn", t("editor.encrypt"));
   setText("#unlockNoteBtn", t("editor.unlock"));
+  setText("#decryptNoteBtn", t("editor.decrypt"));
   setText("#lockNoteBtn", t("editor.lock"));
   setText(
     "#previewToggleBtn",
@@ -6031,6 +6100,7 @@ function renderEncryptionControls(node) {
   const unlocked = isEncryptedNodeUnlocked(node);
   elements.encryptNoteBtn.classList.toggle("hidden", encrypted);
   elements.unlockNoteBtn.classList.toggle("hidden", !encrypted || unlocked);
+  elements.decryptNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
   elements.lockNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
   elements.treeContent.readOnly = encrypted && !unlocked;
   elements.treeContent.classList.toggle("locked", encrypted && !unlocked);
@@ -6082,6 +6152,28 @@ function lockSelectedNote() {
   encryptedSaveTimers.delete(selected.id);
   renderTreeEditor();
   showNotice(t("encryption.locked"), "success");
+}
+
+async function decryptSelectedNote() {
+  const selected = getSelectedTreeNode();
+  if (!selected || !isEncryptedContent(selected.content)) return;
+  let unlocked = unlockedEncryptedNotes.get(selected.id);
+  if (!unlocked) {
+    const key = await requestEncryptionKey(t("encryption.decryptMessage"));
+    if (!key) return;
+    try {
+      unlocked = { key, plain: await decryptPlainText(selected.content, key) };
+    } catch {
+      showNotice(t("encryption.fail"), "error");
+      return;
+    }
+  }
+  selected.content = unlocked.plain || "";
+  clearUnlockedEncryptionState(selected.id);
+  markTreeNodeChanged(selected);
+  persist();
+  renderTree();
+  showNotice(t("encryption.decrypted"), "success");
 }
 
 function scheduleEncryptedNoteSave(node) {

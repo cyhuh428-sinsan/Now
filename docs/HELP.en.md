@@ -303,18 +303,20 @@ Export rules:
 
 ## Encrypted Storage
 
-Encrypted storage is not enabled in the current first-phase scope.
+Knowledge notes can be encrypted note by note when needed.
 
-Later, it will be offered as an optional feature for server-login users and will stay off by default.
+Encrypted notes stay encrypted when synced to the server. To open the same note in the web app, desktop app, or mobile app, enter the same key.
 
 Principles:
 
 - Login is used to verify access permission.
-- The actual encryption key is separated based on the user password or recovery key.
+- The actual encryption key is not stored on the server or in browser storage.
 - Even the server operator should not be able to read encrypted note contents.
 - Encrypted notes are excluded from LLM analysis by default.
+- Decrypting temporarily opens the content.
+- Removing encryption saves the note as plain text again.
 
-This feature will be implemented after the storage and sync structure is finalized.
+If you forget the key, NowNote cannot recover the content.
 
 ## Recommended Start
 
