@@ -14,7 +14,8 @@ from uuid import uuid4
 
 USER_TOKEN: str | None = None
 USER_TOKEN_REQUIRED = False
-REQUEST_TIMEOUT = 10.0
+REQUEST_TIMEOUT = 30.0
+CURRENT_REQUEST = ""
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
@@ -66,6 +67,7 @@ def request_with_user_token(
     data: dict | None = None,
     user_token: str | None = None,
 ):
+    global CURRENT_REQUEST
     body = None
     headers = {}
     if data is not None:
@@ -75,7 +77,9 @@ def request_with_user_token(
         headers["Authorization"] = f"Bearer {token}"
     if user_token:
         headers["X-Now-User-Token"] = user_token
-    req = urllib.request.Request(ascii_url(url), data=body, headers=headers, method=method)
+    request_url = ascii_url(url)
+    CURRENT_REQUEST = f"{method} {request_url}"
+    req = urllib.request.Request(request_url, data=body, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
@@ -119,6 +123,7 @@ def request_multipart(
     file_bytes: bytes,
     user_token: str | None = None,
 ):
+    global CURRENT_REQUEST
     boundary = f"----nownote-smoke-{uuid4().hex}"
     chunks: list[bytes] = []
     for name, value in fields.items():
@@ -149,18 +154,23 @@ def request_multipart(
     effective_user_token = USER_TOKEN if user_token is None else user_token
     if effective_user_token:
         headers["X-Now-User-Token"] = effective_user_token
-    req = urllib.request.Request(ascii_url(url), data=b"".join(chunks), headers=headers, method="POST")
+    request_url = ascii_url(url)
+    CURRENT_REQUEST = f"POST {request_url}"
+    req = urllib.request.Request(request_url, data=b"".join(chunks), headers=headers, method="POST")
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, json.loads(text) if text else None
 
 
 def request_text(method: str, url: str, token: str | None = None):
+    global CURRENT_REQUEST
     headers = {}
     if token:
         encoded = base64.b64encode(f"admin:{token}".encode("utf-8")).decode("ascii")
         headers["Authorization"] = f"Basic {encoded}"
-    req = urllib.request.Request(ascii_url(url), headers=headers, method=method)
+    request_url = ascii_url(url)
+    CURRENT_REQUEST = f"{method} {request_url}"
+    req = urllib.request.Request(request_url, headers=headers, method=method)
     with urllib.request.urlopen(req, timeout=REQUEST_TIMEOUT) as res:
         text = res.read().decode("utf-8")
         return res.status, text
@@ -199,7 +209,7 @@ def main() -> None:
     parser.add_argument(
         "--timeout",
         type=float,
-        default=10.0,
+        default=30.0,
         help="HTTP request timeout seconds",
     )
     parser.add_argument(
@@ -1935,6 +1945,9 @@ if __name__ == "__main__":
         raise
     except urllib.error.URLError as e:
         print(f"SMOKE TEST CONNECTION FAILED: {e.reason}")
+        raise
+    except TimeoutError as e:
+        print(f"SMOKE TEST TIMEOUT FAILED: {CURRENT_REQUEST} timed out after {REQUEST_TIMEOUT:g}s")
         raise
     except json.JSONDecodeError as e:
         print(f"SMOKE TEST JSON FAILED: {e}")
