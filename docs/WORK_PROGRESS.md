@@ -3,6 +3,22 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-30 16:05 KST
+
+### 공용 서버 smoke 사용자 토큰 자동 발급
+
+- `NOW_USER_TOKEN_REQUIRED=true`인 공용 서버에서 smoke test가 `/api/v1/sync` 단계에서 `user token required`로 중단되는 문제를 수정.
+- 원인은 smoke test가 공용 서버 사용자 토큰 필수 모드를 알고도 `--user-token` 또는 `--issue-local-user-token` 입력을 사용자에게 맡긴 구조였음.
+- `server\scripts\smoke_test.py`가 사용자 토큰 필수 모드이고 `--user-token`이 없으면 관리자 토큰으로 검증용 `local_user` 토큰을 자동 발급하도록 변경.
+- `server\scripts\deploy_local.sh`도 같은 기준으로 공용 서버 smoke 검증 시 사용자 토큰이 없으면 자동 발급 흐름을 사용하도록 변경.
+- `server\DEPLOY.md`, `server\README.md`, `server\scripts\preflight.py`의 안내와 검증 기준을 자동 발급 흐름으로 맞춤.
+
+### 검증
+
+- `uv run python -m py_compile server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
+- `git diff --check` 통과.
+
 ## 2026-05-30 15:20 KST
 
 ### 공용 Web 직접 가입과 연결 토큰 흐름 보강
