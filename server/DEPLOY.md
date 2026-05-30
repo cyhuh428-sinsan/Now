@@ -131,7 +131,7 @@ Linux 서버 자체에서 점검할 때 `localhost:8750`은 서버 자신을 뜻
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
-컨테이너가 느리게 응답하는 환경에서는 `--timeout 30`처럼 요청 대기 시간을 늘릴 수 있습니다.
+스모크 테스트의 기본 요청 대기 시간은 30초입니다. 컨테이너가 느리게 응답하는 환경에서는 `--timeout 60`처럼 요청 대기 시간을 늘릴 수 있습니다.
 컨테이너가 올라오는 중이면 `--ready-retries 10 --ready-delay 3`처럼 `/health/ready` 준비 대기를 늘릴 수 있습니다.
 
 성공하면 마지막에 `NowNote server smoke test passed`가 표시됩니다.
@@ -145,6 +145,7 @@ python scripts\local_environment_status.py --base-url http://localhost:8750
 ```
 서버가 오류 응답을 반환하면 `SMOKE TEST HTTP FAILED: 상태코드 원인` 형식으로 HTTP 실패 이유가 먼저 표시됩니다.
 서버가 떠 있지 않거나 포트가 맞지 않으면 `SMOKE TEST CONNECTION FAILED: 원인` 형식으로 연결 실패 이유가 먼저 표시됩니다.
+요청이 너무 오래 걸리면 `SMOKE TEST TIMEOUT FAILED: 요청 URL timed out after 초s` 형식으로 어느 요청에서 멈췄는지 표시됩니다.
 JSON 응답을 해석하지 못하면 `SMOKE TEST JSON FAILED: 원인` 형식으로 응답 파싱 실패 이유가 먼저 표시됩니다.
 
 사용자별 접속 토큰 필수 모드에서는 아래 중 하나를 사용합니다.
