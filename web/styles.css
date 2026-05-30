@@ -490,11 +490,25 @@ button {
   flex-wrap: wrap;
 }
 
+.editor-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 6px;
+  min-height: 34px;
+  overflow: hidden;
+}
+
 .tree-editor .editor-actions {
+  display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 6px;
-  margin-top: 6px;
+  flex: 0 0 auto;
+  margin-top: 0;
   white-space: nowrap;
 }
 
@@ -1742,10 +1756,9 @@ kbd {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 28px;
-  margin-top: 6px;
-  border-top: 1px solid var(--line);
-  padding-top: 6px;
+  min-width: 0;
+  min-height: 26px;
+  margin-top: 0;
   overflow: hidden;
   white-space: nowrap;
   font-size: 12px;
