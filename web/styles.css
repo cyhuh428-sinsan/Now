@@ -2507,6 +2507,38 @@ kbd {
   }
 }
 
+.confirm-backdrop .confirm-card {
+  padding: 16px;
+}
+
+.confirm-backdrop .confirm-card h2 {
+  margin-bottom: 8px;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.confirm-backdrop .confirm-card p,
+.confirm-backdrop .confirm-card input,
+.confirm-backdrop .confirm-card button {
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.confirm-backdrop .confirm-card .settings-input {
+  min-height: 30px;
+  padding: 0 9px;
+}
+
+.confirm-backdrop .confirm-actions {
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.confirm-backdrop .confirm-actions button {
+  min-height: 30px;
+  padding: 0 10px;
+}
+
 @media (max-width: 640px) {
   .workspace,
   .sidebar {
