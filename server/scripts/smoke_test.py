@@ -308,7 +308,7 @@ def main() -> None:
         print(f"{method} {path}: {status} {data}")
 
     status, text = request_text("GET", f"{base_url}/")
-    require("<title>NowNote Web</title>" in text, "/ Web 프로그램 제목이 없습니다")
+    require("<title>NowNote</title>" in text, "/ Web 프로그램 제목이 없습니다")
     require("./app.js" in text, "/ Web 프로그램 스크립트 연결이 없습니다")
     require("serverModeSelect" in text, "/ 서버 연결 설정 화면이 없습니다")
     print(f"GET /: {status} html={len(text)} bytes")
@@ -321,13 +321,13 @@ def main() -> None:
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, text = request_text("GET", f"{base_url}/app/")
-    require("<title>NowNote Web</title>" in text, "/app/ Web 프로그램 제목이 없습니다")
+    require("<title>NowNote</title>" in text, "/app/ Web 프로그램 제목이 없습니다")
     require("./app.js" in text, "/app/ Web 프로그램 스크립트 연결이 없습니다")
     require("serverModeSelect" in text, "/app/ 서버 연결 설정 화면이 없습니다")
     print(f"GET /app/: {status} html={len(text)} bytes")
 
     status, text = request_text("GET", f"{base_url}/app")
-    require("<title>NowNote Web</title>" in text, "/app Web 프로그램 제목이 없습니다")
+    require("<title>NowNote</title>" in text, "/app Web 프로그램 제목이 없습니다")
     require("./app.js" in text, "/app Web 프로그램 스크립트 연결이 없습니다")
     require("serverModeSelect" in text, "/app 서버 연결 설정 화면이 없습니다")
     print(f"GET /app: {status} html={len(text)} bytes")
