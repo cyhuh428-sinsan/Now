@@ -81,6 +81,12 @@ button {
   font-weight: 800;
 }
 
+.web-login-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
 .web-login-status {
   margin: 0;
   color: var(--muted);
@@ -1761,14 +1767,33 @@ kbd {
 }
 
 .settings-input:focus,
-.settings-select:focus {
+.settings-select:focus,
+.settings-textarea:focus {
   border-color: var(--blue);
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.settings-textarea {
+  width: 100%;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  padding: 10px 12px;
+  outline: none;
+  line-height: 1.5;
 }
 
 .server-settings-row {
   align-items: start;
   grid-template-columns: 1fr;
+}
+
+.server-settings-row > div:first-child {
+  width: 100%;
+  min-width: 0;
+  word-break: keep-all;
 }
 
 .server-settings-form {

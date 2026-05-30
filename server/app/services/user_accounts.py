@@ -9,7 +9,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.note import UserAccount, WebSession
+from app.models.note import UserAccount, UserDevice, WebSession
 
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 210_000
@@ -116,17 +116,29 @@ def require_user_api_access(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="user token required",
             )
-        if not user.access_token_hash:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="user token not issued",
+        token_hash = hash_access_token(access_token.strip())
+        device = db.scalar(
+            select(UserDevice).where(
+                UserDevice.owner_id == owner_id,
+                UserDevice.access_token_hash == token_hash,
             )
-        if not compare_digest(hash_access_token(access_token), user.access_token_hash):
+        )
+        legacy_token_ok = bool(user.access_token_hash) and compare_digest(token_hash, user.access_token_hash)
+        if device is None and not legacy_token_ok:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="invalid user token",
             )
-        user.access_token_last_used_at = datetime.utcnow()
+        if device is not None and not bool(device.is_active):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="device inactive",
+            )
+        if device is not None:
+            device.access_token_last_used_at = datetime.utcnow()
+            device.last_seen_at = datetime.utcnow()
+        if legacy_token_ok:
+            user.access_token_last_used_at = datetime.utcnow()
 
     db.commit()
     db.refresh(user)
@@ -271,6 +283,48 @@ def issue_user_access_token(db: Session, *, owner_id: str) -> tuple[UserAccount,
     user.access_token_issued_at = datetime.utcnow()
     user.access_token_last_used_at = None
     return user, raw_token
+
+
+def issue_user_device_access_token(
+    db: Session,
+    *,
+    owner_id: str,
+    device_id: str | None,
+    display_name: str | None = None,
+) -> tuple[UserDevice, str] | None:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+    if user is None:
+        return None
+    cleaned_device_id = _clean_required(device_id, "desktop", 120)
+    now = datetime.utcnow()
+    device = db.scalar(
+        select(UserDevice).where(
+            UserDevice.owner_id == owner_id,
+            UserDevice.device_id == cleaned_device_id,
+        )
+    )
+    if device is None:
+        device = UserDevice(
+            owner_id=owner_id,
+            device_id=cleaned_device_id,
+            display_name=_clean_optional(display_name, 120),
+            is_active=1,
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        db.add(device)
+    else:
+        device.display_name = _clean_optional(display_name, 120) or device.display_name
+        device.is_active = 1
+        device.last_seen_at = now
+    raw_token = secrets.token_urlsafe(32)
+    device.access_token_hash = hash_access_token(raw_token)
+    device.access_token_value = raw_token
+    device.access_token_issued_at = now
+    device.access_token_last_used_at = None
+    user.last_login_at = now
+    user.last_seen_at = now
+    return device, raw_token
 
 
 def set_user_password(user: UserAccount, password: str | None) -> None:

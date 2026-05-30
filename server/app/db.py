@@ -52,23 +52,43 @@ def create_tables() -> None:
 def migrate_schema(conn: Connection | None = None) -> None:
     bind = conn or engine
     inspector = inspect(bind)
-    if "user_accounts" not in inspector.get_table_names():
+    table_names = inspector.get_table_names()
+    if "user_accounts" not in table_names:
         return
-    existing_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
-    columns = {
+    account_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
+    account_migrations = {
         "password_hash": "VARCHAR(240)",
         "password_updated_at": "TIMESTAMP",
+        "password_recovery_hash": "VARCHAR(128)",
+        "password_recovery_issued_at": "TIMESTAMP",
         "access_token_hash": "VARCHAR(128)",
         "access_token_issued_at": "TIMESTAMP",
         "access_token_last_used_at": "TIMESTAMP",
     }
-    missing = [(name, definition) for name, definition in columns.items() if name not in existing_columns]
-    if not missing:
+    migrations = [
+        ("user_accounts", name, definition)
+        for name, definition in account_migrations.items()
+        if name not in account_columns
+    ]
+    if "user_devices" in table_names:
+        device_columns = {column["name"] for column in inspector.get_columns("user_devices")}
+        device_migrations = {
+            "access_token_hash": "VARCHAR(128)",
+            "access_token_value": "VARCHAR(240)",
+            "access_token_issued_at": "TIMESTAMP",
+            "access_token_last_used_at": "TIMESTAMP",
+        }
+        migrations.extend(
+            ("user_devices", name, definition)
+            for name, definition in device_migrations.items()
+            if name not in device_columns
+        )
+    if not migrations:
         return
     if conn is not None:
-        for name, definition in missing:
-            conn.execute(text(f"ALTER TABLE user_accounts ADD COLUMN {name} {definition}"))
+        for table, name, definition in migrations:
+            conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
         return
     with engine.begin() as fallback_conn:
-        for name, definition in missing:
-            fallback_conn.execute(text(f"ALTER TABLE user_accounts ADD COLUMN {name} {definition}"))
+        for table, name, definition in migrations:
+            fallback_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))

@@ -3,6 +3,47 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-05-30 15:20 KST
+
+### 공용 Web 직접 가입과 연결 토큰 흐름 보강
+
+- 공용 서버의 일반 사용자가 관리자에게 계정/토큰을 요청하지 않고 Web에서 직접 가입하도록 서버 인증 흐름을 보강.
+- Web 로그인 화면에 회원가입, 등록 이메일 기반 비밀번호 재설정 요청/확인, 앱/설치형 연결 토큰 발급/재확인 흐름을 추가.
+- 사용자별 기기 토큰을 서버 DB에 보관해 사용자가 다시 확인할 수 있게 하고, 노출 시 Web에서 재발급하는 기준으로 정리.
+- 관리자 생성/토큰 발급은 운영자 계정 선등록, 테스트 계정, 장애 대응용 보조 기능으로 남기고 일반 공용 사용 흐름에서는 제외.
+- 공용 서버 readiness에 이메일 비밀번호 재설정 SMTP 설정 항목을 추가해, `NOW_SMTP_HOST`와 `NOW_SMTP_FROM`이 없으면 공용 오픈 전 남은 항목으로 표시되도록 조정.
+- `.env.example`, `.env.public.example`, Docker Compose에 회원가입/계정 삭제/SMTP/비밀번호 재설정 환경값을 반영.
+- GitHub Actions preflight 문법 검사 대상에 인증 API, capability/config, 사용자 계정 서비스, 이메일 발송 서비스를 추가.
+- 설치 매뉴얼, 도움말, Web 도움말, 서버 README, 공용 서버 문서, 배포 문서, 보안 정책, 인증 기준, 복구 문서를 새 운영 흐름에 맞게 수정.
+
+### 검증
+
+- `node --check web\app.js` 통과.
+- `uv run python -m py_compile ...` 서버 인증/관리/API/점검 파일 통과.
+- `uv run python web\scripts\verify_web_surface.py` 통과: 211/211.
+- `uv run python server\scripts\preflight.py --env-file .env.example --allow-example` 통과: 1124/1124.
+- `uv run python server\scripts\preflight.py --env-file .env.public.example --allow-example --public-server` 통과: 1131/1131.
+- `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.
+- 임시 SQLite DB + FastAPI TestClient로 회원가입, Web 세션, 기기 토큰 발급/재확인, Web 로그인, token-login, 중복 가입 차단, SMTP 미설정 시 비밀번호 재설정 요청 503 흐름 확인.
+- `desktop` Web 자산 동기화 후 `npm run dist:win`으로 설치 파일 재생성.
+- 설치 파일: `desktop/dist/NowNote-Setup-0.1.0-x64.exe`, 100,987,923 bytes, SHA256 `EC8C65F95599B62F456D5B1C7EC3BCDDD757F624EABCE830B58DEE9A941C62C3`.
+
+## 2026-05-30 02:10 KST
+
+### Web 설정 토큰 입력 제거와 설치형 화면 깨짐 보정
+
+- Web 접속 화면에서는 API 토큰/사용자별 접속 토큰 입력과 관련 안내를 숨기고, 사용자 ID/비밀번호 로그인 기준 안내만 남기도록 정리.
+- 설치형/앱용 서버 설정에서는 토큰 명칭을 `개인 서버 API 토큰`, `앱/설치형 접속 토큰`으로 바꿔 Web 로그인 값과 혼동하지 않도록 조정.
+- 서버 연결 설정 행이 좁은 폭에서 왼쪽 설명 글자를 세로로 깨뜨리지 않도록 레이아웃을 보강.
+- `desktop/app` 자산을 최신 `web` 원본으로 동기화.
+
+### 검증
+
+- `node --check web\app.js` 통과.
+- `uv run python web\scripts\verify_web_surface.py` 통과: 193/193.
+- `git diff --check` 통과.
+
 ## 2026-05-30 01:35 KST
 
 ### Web/설치형 동작 분리와 공유 문서 기준 반영

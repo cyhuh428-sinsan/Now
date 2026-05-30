@@ -151,8 +151,8 @@ ITEM_GUIDES = {
             "/admin/users에서 공용 서버 사용자 계정 생성 또는 확인",
             "사용자별 접속 토큰 발급 완료 화면 또는 token_issued 집계",
         ),
-        action="/admin/users에서 사용자별 접속 토큰을 발급하고 토큰 원문을 사용자에게 안전하게 전달합니다.",
-        reference=("/admin/users", "/auth/token", "docs/SERVER_AUTH_POLICY.md"),
+        action="Web에서 사용자가 앱/설치형 연결 토큰을 직접 발급하고, 관리자 화면에서는 토큰 발급 상태를 모니터링합니다.",
+        reference=("/", "/auth/token", "/admin/users", "docs/SERVER_AUTH_POLICY.md"),
     ),
     "`NOW_USER_TOKEN_REQUIRED=true` 설정.": EvidenceGuide(
         evidence=(

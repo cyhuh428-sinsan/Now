@@ -17,6 +17,15 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
     public_base_url: str | None = None
     behind_reverse_proxy: bool = False
+    self_registration_enabled: bool = True
+    self_account_delete_enabled: bool = True
+    smtp_host: str | None = None
+    smtp_port: int = 587
+    smtp_username: str | None = None
+    smtp_password: str | None = None
+    smtp_from: str | None = None
+    smtp_use_tls: bool = True
+    password_reset_code_minutes: int = 30
 
     model_config = SettingsConfigDict(env_prefix="NOW_")
 

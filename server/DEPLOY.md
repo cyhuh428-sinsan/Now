@@ -60,9 +60,11 @@ nano .env
 - `NOW_USER_TOKEN_REQUIRED`
 - `NOW_STORAGE_DIR`
 - `NOW_LLM_PROVIDER`
+- 공용 서버: `NOW_SELF_REGISTRATION_ENABLED`, `NOW_SMTP_HOST`, `NOW_SMTP_FROM`
 
 개인 Docker 서버는 `NOW_USER_TOKEN_REQUIRED=false`로 시작할 수 있습니다.
-공용 서버로 열기 전에는 사용자별 접속 토큰을 발급하고 `NOW_USER_TOKEN_REQUIRED=true`를 사용합니다.
+공용 서버로 열기 전에는 사용자가 Web에서 직접 가입하고 앱/설치형 연결 토큰을 발급할 수 있도록 `NOW_SELF_REGISTRATION_ENABLED=true`, `NOW_USER_TOKEN_REQUIRED=true`를 사용합니다.
+비밀번호 재설정을 제공하려면 SMTP 설정도 완료합니다.
 
 ## 3. 배포 전 점검
 
@@ -79,7 +81,7 @@ python3 scripts/preflight.py
 python3 scripts/preflight.py --public-server
 ```
 
-현재 1차 서버에서 `--public-server`는 `NOW_USER_TOKEN_REQUIRED=true`, `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true` 설정이 없으면 공용 서버 오픈 전 항목 때문에 실패하는 것이 정상입니다. 사용자 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 기기 조회/해제 API, 사용자별 데이터 격리 자동 검증은 준비 완료 항목으로 확인합니다.
+현재 1차 서버에서 `--public-server`는 `NOW_USER_TOKEN_REQUIRED=true`, `NOW_PUBLIC_BASE_URL=https://도메인`, `NOW_BEHIND_REVERSE_PROXY=true`, `NOW_SMTP_HOST`, `NOW_SMTP_FROM` 설정이 없으면 공용 서버 오픈 전 항목 때문에 실패하는 것이 정상입니다. 사용자 직접 가입, 사용자 토큰 확인 화면/API, 2단계 코드 검증 절차, 사용자별 기기 조회/해제 API, 사용자별 데이터 격리 자동 검증은 준비 완료 항목으로 확인합니다.
 
 ## 4. 컨테이너 시작
 

@@ -1,24 +1,31 @@
 import hmac
+import secrets
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from html import escape
+from pathlib import Path
 from secrets import compare_digest
 
 from fastapi import APIRouter, Depends, Form, Header, HTTPException, Request, status
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.config import get_settings
 from app.db import get_db
-from app.models.note import UserAccount
+from app.models.note import AnalysisJob, Note, Recording, SyncLog, UserAccount, UserDevice, WebSession
 from app.services.user_accounts import (
+    create_user_account,
     hash_access_token,
+    issue_user_device_access_token,
     issue_web_session,
     require_web_session_access,
     revoke_web_session,
+    set_user_password,
     verify_password,
 )
+from app.services.email_delivery import send_password_reset_email
 
 api_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 page_router = APIRouter(tags=["auth"])
@@ -37,6 +44,46 @@ class WebLoginRequest(BaseModel):
     two_factor_code: str | None = Field(default=None, max_length=20)
 
 
+class ClientLoginRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    password: str = Field(min_length=1)
+    device_id: str = Field(default="desktop", max_length=120)
+    device_name: str | None = Field(default=None, max_length=120)
+    two_factor_code: str | None = Field(default=None, max_length=20)
+
+
+class RegisterRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    password: str = Field(min_length=8, max_length=200)
+    email: str = Field(min_length=3, max_length=240)
+    display_name: str | None = Field(default=None, max_length=120)
+    timezone: str = Field(default="Asia/Seoul", max_length=80)
+    device_id: str = Field(default="web-client", max_length=120)
+    device_name: str | None = Field(default=None, max_length=120)
+
+
+class DeleteAccountRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    password: str = Field(min_length=1)
+
+
+class DeviceTokenRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    device_id: str = Field(default="desktop", max_length=120)
+    device_name: str | None = Field(default=None, max_length=120)
+
+
+class PasswordResetRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    email: str = Field(min_length=3, max_length=240)
+
+
+class PasswordResetConfirmRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    reset_code: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)
+
+
 @api_router.post("/token-login")
 def token_login(payload: TokenLoginRequest, db: Session = Depends(get_db)) -> dict:
     user = _authenticate_user_token(
@@ -46,6 +93,94 @@ def token_login(payload: TokenLoginRequest, db: Session = Depends(get_db)) -> di
         two_factor_code=payload.two_factor_code,
     )
     return {"status": "ok", "user": _user_payload(user)}
+
+
+@api_router.post("/client-login")
+def client_login(payload: ClientLoginRequest, db: Session = Depends(get_db)) -> dict:
+    user = _authenticate_user_password(
+        db,
+        payload.owner_id,
+        payload.password,
+        two_factor_code=payload.two_factor_code,
+    )
+    issued = issue_user_device_access_token(
+        db,
+        owner_id=user.owner_id,
+        device_id=payload.device_id,
+        display_name=payload.device_name,
+    )
+    if issued is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
+    device, access_token = issued
+    db.commit()
+    db.refresh(user)
+    db.refresh(device)
+    return {
+        "status": "ok",
+        "access_token": access_token,
+        "device_id": device.device_id,
+        "user": _user_payload(user),
+    }
+
+
+@api_router.post("/register")
+def register(
+    payload: RegisterRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict:
+    settings = get_settings()
+    if not settings.self_registration_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self registration disabled")
+    if not _valid_owner_id(payload.owner_id):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="owner_id must use letters, numbers, dot, underscore, or hyphen",
+        )
+    if not _valid_email(payload.email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="valid email required")
+    user = create_user_account(
+        db,
+        owner_id=payload.owner_id,
+        password=payload.password,
+        email=payload.email,
+        display_name=payload.display_name,
+        timezone=payload.timezone,
+        group_name="사용자",
+        two_factor_enabled=False,
+        is_active=True,
+    )
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="user already exists")
+    user.confirmed_at = datetime.utcnow()
+    db.flush()
+    issued = issue_user_device_access_token(
+        db,
+        owner_id=user.owner_id,
+        device_id=payload.device_id,
+        display_name=payload.device_name,
+    )
+    if issued is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="client token issue failed")
+    device, access_token = issued
+    session, session_token = issue_web_session(
+        db,
+        owner_id=user.owner_id,
+        device_id=payload.device_id,
+        user_agent=request.headers.get("user-agent"),
+    )
+    db.commit()
+    db.refresh(user)
+    db.refresh(device)
+    db.refresh(session)
+    return {
+        "status": "ok",
+        "access_token": access_token,
+        "device_id": device.device_id,
+        "session_token": session_token,
+        "expires_at": session.expires_at,
+        "user": _user_payload(user),
+    }
 
 
 @api_router.post("/web-login")
@@ -77,6 +212,55 @@ def web_login(
     }
 
 
+@api_router.post("/delete-account")
+def delete_account(payload: DeleteAccountRequest, db: Session = Depends(get_db)) -> dict:
+    settings = get_settings()
+    if not settings.self_account_delete_enabled:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="self account delete disabled")
+    user = _authenticate_user_password(db, payload.owner_id, payload.password)
+    _delete_user_data(db, owner_id=user.owner_id)
+    db.commit()
+    return {"status": "ok"}
+
+
+@api_router.post("/password-reset/request")
+def request_password_reset(payload: PasswordResetRequest, db: Session = Depends(get_db)) -> dict:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == payload.owner_id.strip()))
+    if user is None or (user.email or "").strip().lower() != payload.email.strip().lower():
+        return {"status": "ok", "message": "password reset email sent if account exists"}
+    reset_code = secrets.token_urlsafe(24)
+    user.password_recovery_hash = hash_access_token(reset_code)
+    user.password_recovery_issued_at = datetime.utcnow()
+    try:
+        send_password_reset_email(
+            to_email=user.email or "",
+            owner_id=user.owner_id,
+            reset_code=reset_code,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    db.commit()
+    return {"status": "ok", "message": "password reset email sent if account exists"}
+
+
+@api_router.post("/password-reset/confirm")
+def confirm_password_reset(payload: PasswordResetConfirmRequest, db: Session = Depends(get_db)) -> dict:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == payload.owner_id.strip()))
+    if user is None or not user.password_recovery_hash or not user.password_recovery_issued_at:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid reset code")
+    expires_at = user.password_recovery_issued_at + timedelta(minutes=get_settings().password_reset_code_minutes)
+    if expires_at <= datetime.utcnow():
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="reset code expired")
+    if not compare_digest(hash_access_token(payload.reset_code.strip()), user.password_recovery_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid reset code")
+    set_user_password(user, payload.new_password)
+    user.password_recovery_hash = None
+    user.password_recovery_issued_at = None
+    user.is_active = 1
+    db.commit()
+    return {"status": "ok"}
+
+
 @api_router.get("/web-session")
 def web_session(
     owner_id: str,
@@ -102,6 +286,74 @@ def web_logout(
         revoke_web_session(db, session_token=web_session_token)
         db.commit()
     return {"status": "ok"}
+
+
+@api_router.post("/device-token")
+def issue_device_token(
+    payload: DeviceTokenRequest,
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_web_session_access(
+        db,
+        owner_id=payload.owner_id.strip(),
+        session_token=web_session_token,
+    )
+    issued = issue_user_device_access_token(
+        db,
+        owner_id=user.owner_id,
+        device_id=payload.device_id,
+        display_name=payload.device_name,
+    )
+    if issued is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
+    device, access_token = issued
+    db.commit()
+    db.refresh(device)
+    db.refresh(user)
+    return {
+        "status": "ok",
+        "access_token": access_token,
+        "device_id": device.device_id,
+        "user": _user_payload(user),
+    }
+
+
+@api_router.get("/device-tokens")
+def list_device_tokens(
+    owner_id: str,
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_web_session_access(
+        db,
+        owner_id=owner_id.strip(),
+        session_token=web_session_token,
+    )
+    devices = list(
+        db.scalars(
+            select(UserDevice)
+            .where(UserDevice.owner_id == user.owner_id)
+            .order_by(UserDevice.updated_at.desc(), UserDevice.id.desc())
+        ).all()
+    )
+    db.commit()
+    return {
+        "status": "ok",
+        "items": [
+            {
+                "device_id": device.device_id,
+                "display_name": device.display_name,
+                "access_token": device.access_token_value or "",
+                "is_active": bool(device.is_active),
+                "issued_at": device.access_token_issued_at,
+                "last_used_at": device.access_token_last_used_at,
+                "last_seen_at": device.last_seen_at,
+            }
+            for device in devices
+            if device.access_token_value
+        ],
+    }
 
 
 @page_router.get("/auth/token", include_in_schema=False)
@@ -143,15 +395,27 @@ def _authenticate_user_token(
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
     if not bool(user.is_active):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="user inactive")
-    if not user.access_token_hash:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user token not issued")
-    if not compare_digest(hash_access_token(access_token.strip()), user.access_token_hash):
+    token_hash = hash_access_token(access_token.strip())
+    device = db.scalar(
+        select(UserDevice).where(
+            UserDevice.owner_id == user.owner_id,
+            UserDevice.access_token_hash == token_hash,
+        )
+    )
+    legacy_token_ok = bool(user.access_token_hash) and compare_digest(token_hash, user.access_token_hash)
+    if device is None and not legacy_token_ok:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid user token")
+    if device is not None and not bool(device.is_active):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="device inactive")
     if bool(user.two_factor_enabled):
         _require_two_factor_code(user.owner_id, access_token, two_factor_code)
 
     now = datetime.utcnow()
-    user.access_token_last_used_at = now
+    if legacy_token_ok:
+        user.access_token_last_used_at = now
+    if device is not None:
+        device.access_token_last_used_at = now
+        device.last_seen_at = now
     user.last_login_at = now
     user.last_seen_at = now
     db.commit()
@@ -217,6 +481,30 @@ def _two_factor_code(owner_id: str, secret: str, step: int) -> str:
     message = f"{owner_id.strip()}:{step}".encode("utf-8")
     digest = hmac.new(secret.encode("utf-8"), message, "sha256").hexdigest()
     return str(int(digest[:12], 16) % 1_000_000).zfill(6)
+
+
+def _valid_owner_id(owner_id: str) -> bool:
+    cleaned = owner_id.strip()
+    if not (3 <= len(cleaned) <= 80):
+        return False
+    return all(char.isalnum() or char in "._-" for char in cleaned)
+
+
+def _valid_email(email: str) -> bool:
+    cleaned = email.strip()
+    return "@" in cleaned and "." in cleaned.rsplit("@", 1)[-1]
+
+
+def _delete_user_data(db: Session, *, owner_id: str) -> None:
+    recordings = list(db.scalars(select(Recording).where(Recording.owner_id == owner_id)).all())
+    for recording in recordings:
+        try:
+            Path(recording.storage_path).unlink(missing_ok=True)
+        except OSError:
+            pass
+    for model in (Note, Recording, AnalysisJob, SyncLog, UserDevice, WebSession):
+        db.execute(delete(model).where(model.owner_id == owner_id))
+    db.execute(delete(UserAccount).where(UserAccount.owner_id == owner_id))
 
 
 def _user_payload(user: UserAccount) -> dict:
@@ -331,7 +619,7 @@ def _token_login_html(user: dict | None = None, error_message: str = "") -> str:
 <body>
   <main>
     <h1>NowNote 토큰 확인</h1>
-    <p>관리자에게 받은 사용자별 접속 토큰이 현재 서버에서 유효한지 확인합니다.</p>
+    <p>Web에서 발급한 앱/설치형 연결 토큰이 현재 서버에서 유효한지 확인합니다.</p>
     <form method="post" action="/auth/token">
       <label for="owner_id">사용자 ID</label>
       <input id="owner_id" name="owner_id" autocomplete="username" required>
