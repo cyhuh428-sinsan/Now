@@ -18,7 +18,8 @@ from app.api.server import router as server_router
 from app.api.sync import router as sync_router
 from app.api.users import router as users_router
 from app.core.config import get_settings
-from app.db import create_tables
+from app.db import SessionLocal, create_tables
+from app.services.user_accounts import ensure_user_groups
 
 
 def _web_app_dir() -> Path | None:
@@ -45,6 +46,9 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     def on_startup() -> None:
         create_tables()
+        with SessionLocal() as db:
+            ensure_user_groups(db)
+            db.commit()
 
     web_app_dir = _web_app_dir()
     app.include_router(health_router)

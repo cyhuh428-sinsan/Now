@@ -398,6 +398,7 @@ def main() -> None:
         "/admin/help",
         "/admin/users",
         "/admin/users/new",
+        "/admin/groups",
         "/admin/users?status=inactive",
         "/admin/users?status=never_seen&q=smoke",
         "/admin/users?group=테스트",
@@ -507,6 +508,11 @@ def main() -> None:
         if path == "/admin/users" or path.startswith("/admin/users?"):
             require("현재 조건 JSON" in text, "사용자 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner, 이메일, 표시 이름 검색" in text, "사용자 관리 화면에 검색 필터가 없습니다")
+            require("/admin/groups" in text, "사용자 관리 화면에 그룹 관리 링크가 없습니다")
+        if path == "/admin/groups":
+            require("그룹 관리" in text, "그룹 관리 화면 제목이 없습니다")
+            require("/admin/groups/new" in text, "그룹 관리 화면에 그룹 추가 폼이 없습니다")
+            require("/api/v1/admin/groups" in text, "그룹 관리 화면에 JSON API 링크가 없습니다")
         if path.startswith("/admin/analysis"):
             require("현재 조건 JSON" in text, "분석 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "작업 유형" in text, "분석 관리 화면에 필터가 없습니다")
@@ -946,6 +952,16 @@ def main() -> None:
         "GET /api/v1/admin/users(token=missing):",
         status,
         {"count": data.get("count"), "token_missing": data.get("token_missing")},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/admin/groups", args.token)
+    group_names = {item.get("name") for item in data.get("items", [])}
+    require("사용자" in group_names, "그룹 API에 기본 사용자 그룹이 없습니다")
+    require("user_count" in (data.get("items", [{}])[0] if data.get("items") else {}), "그룹 API에 사용자 수가 없습니다")
+    print(
+        "GET /api/v1/admin/groups:",
+        status,
+        {"count": data.get("count"), "groups": sorted(group_names)},
     )
 
     should_issue_local_user_token = args.issue_local_user_token or (USER_TOKEN_REQUIRED and USER_TOKEN is None)

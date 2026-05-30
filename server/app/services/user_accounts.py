@@ -9,11 +9,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.note import UserAccount, UserDevice, WebSession
+from app.models.note import UserAccount, UserDevice, UserGroup, WebSession
 
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 210_000
 WEB_SESSION_DAYS = 1
+DEFAULT_USER_GROUPS: tuple[tuple[str, str, int], ...] = (
+    ("관리자", "서버 운영과 사용자 상태를 확인하는 운영자 그룹", 10),
+    ("사용자", "일반 NowNote 사용자 기본 그룹", 20),
+    ("테스트", "검증과 smoke test에 사용하는 그룹", 90),
+)
 
 
 def hash_access_token(token: str) -> str:
@@ -234,12 +239,13 @@ def create_user_account(
     existing = db.scalar(select(UserAccount).where(UserAccount.owner_id == cleaned_owner_id))
     if existing is not None:
         return None
+    cleaned_group_name = ensure_user_group(db, group_name).name
     user = UserAccount(
         owner_id=cleaned_owner_id,
         email=_clean_optional(email, 240),
         display_name=_clean_optional(display_name, 120),
         timezone=_valid_timezone(timezone),
-        group_name=_clean_required(group_name, "사용자", 80),
+        group_name=cleaned_group_name,
         two_factor_enabled=1 if two_factor_enabled else 0,
         is_active=1 if is_active else 0,
     )
@@ -267,11 +273,111 @@ def update_user_account(
     user.email = _clean_optional(email, 240)
     user.display_name = _clean_optional(display_name, 120)
     user.timezone = _valid_timezone(timezone)
-    user.group_name = _clean_required(group_name, "사용자", 80)
+    user.group_name = ensure_user_group(db, group_name).name
     user.two_factor_enabled = 1 if two_factor_enabled else 0
     user.is_active = 1 if is_active else 0
     set_user_password(user, password)
     return user
+
+
+def ensure_user_groups(db: Session) -> list[UserGroup]:
+    for name, description, sort_order in DEFAULT_USER_GROUPS:
+        ensure_user_group(
+            db,
+            name,
+            description=description,
+            sort_order=sort_order,
+        )
+    existing_user_groups = db.scalars(select(UserAccount.group_name).distinct()).all()
+    for group_name in existing_user_groups:
+        ensure_user_group(db, group_name)
+    return list_user_groups(db)
+
+
+def ensure_user_group(
+    db: Session,
+    name: str | None,
+    *,
+    description: str = "",
+    sort_order: int = 100,
+    is_active: bool = True,
+) -> UserGroup:
+    cleaned_name = _clean_required(name, "사용자", 80)
+    group = db.scalar(select(UserGroup).where(UserGroup.name == cleaned_name))
+    if group is None:
+        group = UserGroup(
+            name=cleaned_name,
+            description=_clean_required(description, "", 240),
+            sort_order=sort_order,
+            is_active=1 if is_active else 0,
+        )
+        db.add(group)
+        db.flush()
+        return group
+    if description and not group.description:
+        group.description = _clean_required(description, "", 240)
+    if sort_order != 100 and group.sort_order == 100:
+        group.sort_order = sort_order
+    return group
+
+
+def list_user_groups(db: Session, *, include_inactive: bool = True) -> list[UserGroup]:
+    ensure_default_user_groups_only(db)
+    stmt = select(UserGroup)
+    if not include_inactive:
+        stmt = stmt.where(UserGroup.is_active == 1)
+    return list(db.scalars(stmt.order_by(UserGroup.sort_order, UserGroup.name)).all())
+
+
+def update_user_group(
+    db: Session,
+    *,
+    group_id: int,
+    name: str,
+    description: str = "",
+    sort_order: int = 100,
+    is_active: bool = True,
+) -> UserGroup | None:
+    group = db.scalar(select(UserGroup).where(UserGroup.id == group_id))
+    if group is None:
+        return None
+    cleaned_name = _clean_required(name, "사용자", 80)
+    duplicate = db.scalar(
+        select(UserGroup).where(UserGroup.name == cleaned_name, UserGroup.id != group_id)
+    )
+    if duplicate is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="group name already exists",
+        )
+    old_name = group.name
+    group.name = cleaned_name
+    group.description = _clean_required(description, "", 240)
+    group.sort_order = max(0, min(int(sort_order), 9999))
+    group.is_active = 1 if is_active else 0
+    if old_name != cleaned_name:
+        users = list(db.scalars(select(UserAccount).where(UserAccount.group_name == old_name)).all())
+        for user in users:
+            user.group_name = cleaned_name
+    return group
+
+
+def ensure_default_user_groups_only(db: Session) -> None:
+    created = False
+    for name, description, sort_order in DEFAULT_USER_GROUPS:
+        group = db.scalar(select(UserGroup).where(UserGroup.name == name))
+        if group is None:
+            db.add(
+                UserGroup(
+                    name=name,
+                    description=description,
+                    sort_order=sort_order,
+                    is_active=1,
+                )
+            )
+            created = True
+    if created:
+        db.flush()
 
 
 def issue_user_access_token(db: Session, *, owner_id: str) -> tuple[UserAccount, str] | None:

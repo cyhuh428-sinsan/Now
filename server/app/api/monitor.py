@@ -12,17 +12,98 @@ from sqlalchemy import func, select, text
 from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
+from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.public_route import public_route_ops_check, public_route_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
-from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
+from app.services.user_accounts import (
+    ensure_user_group,
+    ensure_user_groups,
+    create_user_account,
+    issue_user_access_token,
+    update_user_account,
+    update_user_group,
+)
 from app.services.user_devices import set_user_device_active
 
 router = APIRouter(tags=["monitor"])
 basic_security = HTTPBasic(auto_error=False)
+
+
+def _admin_nav_html() -> str:
+    groups = [
+        ("운영", [
+            ("/admin", "관리"),
+            ("/monitor", "모니터"),
+            ("/admin/ops", "점검"),
+            ("/admin/users", "사용자"),
+            ("/admin/groups", "그룹"),
+            ("/admin/devices", "기기"),
+            ("/admin/sync", "동기화"),
+            ("/admin/export", "내보내기"),
+        ]),
+        ("자료", [
+            ("/admin/notes", "메모"),
+            ("/admin/recordings", "녹음"),
+            ("/admin/analysis", "분석"),
+        ]),
+        ("준비", [
+            ("/admin/public", "공용 서버"),
+            ("/admin/release", "1차 준비"),
+            ("/admin/evidence", "수동 증빙"),
+            ("/admin/mobile", "모바일 점검"),
+            ("/admin/play", "Play 등록"),
+            ("/admin/open-source", "공개 준비"),
+            ("/admin/help", "도움말"),
+            ("/docs", "API"),
+        ]),
+    ]
+    parts: list[str] = []
+    for index, (label, links) in enumerate(groups):
+        if index:
+            parts.append('<span class="nav-break"></span>')
+        parts.append(f'<span class="nav-label">{escape(label)}</span>')
+        parts.extend(
+            f'<a href="{escape(href, quote=True)}">{escape(text)}</a>'
+            for href, text in links
+        )
+    return "\n".join(parts)
+
+
+def _admin_nav_css() -> str:
+    return """
+    .nav {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      max-width: 820px;
+      justify-content: flex-end;
+    }
+    .nav a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--panel);
+      font-size: 13px;
+    }
+    .nav-break {
+      flex-basis: 100%;
+      height: 0;
+    }
+    .nav-label {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
+    }
+    """
 
 
 def _require_monitor_access(
@@ -206,6 +287,53 @@ def admin_user_bulk_update(
             user.is_active = next_active
         db.commit()
     return RedirectResponse(url="/admin/users", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.get("/admin/groups", include_in_schema=False)
+def admin_groups(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
+    return HTMLResponse(_admin_groups_html())
+
+
+@router.post("/admin/groups/new", include_in_schema=False)
+def admin_group_create(
+    name: str = Form(),
+    description: str = Form(default=""),
+    sort_order: int = Form(default=100),
+    is_active: str | None = Form(default=None),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    with SessionLocal() as db:
+        ensure_user_group(
+            db,
+            name,
+            description=description,
+            sort_order=sort_order,
+            is_active=is_active == "on",
+        )
+        db.commit()
+    return RedirectResponse(url="/admin/groups", status_code=status.HTTP_303_SEE_OTHER)
+
+
+@router.post("/admin/groups/edit", include_in_schema=False)
+def admin_group_update(
+    group_id: int = Form(),
+    name: str = Form(),
+    description: str = Form(default=""),
+    sort_order: int = Form(default=100),
+    is_active: str | None = Form(default=None),
+    _: None = Depends(_require_monitor_access),
+) -> RedirectResponse:
+    with SessionLocal() as db:
+        update_user_group(
+            db,
+            group_id=group_id,
+            name=name,
+            description=description,
+            sort_order=sort_order,
+            is_active=is_active == "on",
+        )
+        db.commit()
+    return RedirectResponse(url="/admin/groups", status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/admin/ops", include_in_schema=False)
@@ -416,6 +544,7 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
       font-size: 13px;
       white-space: nowrap;
     }}
+    {_admin_nav_css()}
     .grid {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -539,8 +668,12 @@ def monitor(_: None = Depends(_require_monitor_access)) -> str:
         <h1>{server_name}</h1>
         <div class="sub">NowNote 서버 모니터링 · 30초마다 자동 새로고침</div>
       </div>
-      <div class="badge">API 토큰: {auth_required}</div>
+      <nav class="nav" aria-label="관리 메뉴">
+        {_admin_nav_html()}
+      </nav>
     </header>
+
+    <div class="badge" style="margin-bottom:14px;">API 토큰: {auth_required}</div>
 
     <div class="grid">
       <div class="card">
@@ -730,6 +863,7 @@ def _admin_html() -> str:
       background: var(--panel);
       font-size: 13px;
     }}
+    {_admin_nav_css()}
     .grid {{
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -823,16 +957,22 @@ def _admin_html() -> str:
         <h1>NowNote 관리</h1>
         <div class="sub">읽기 전용 관리 화면 · 운영 설정과 처리 현황 확인</div>
       </div>
-      <nav class="nav">
+      <nav class="nav" aria-label="관리 메뉴">
+        <span class="nav-label">운영</span>
         <a href="/monitor">모니터</a>
-        <a href="/admin/notes">메모</a>
-        <a href="/admin/recordings">녹음</a>
+        <a href="/admin/ops">점검</a>
         <a href="/admin/users">사용자</a>
+        <a href="/admin/groups">그룹</a>
         <a href="/admin/devices">기기</a>
         <a href="/admin/sync">동기화</a>
-        <a href="/admin/ops">점검</a>
         <a href="/admin/export">내보내기</a>
+        <span class="nav-break"></span>
+        <span class="nav-label">자료</span>
+        <a href="/admin/notes">메모</a>
+        <a href="/admin/recordings">녹음</a>
         <a href="/admin/analysis">분석</a>
+        <span class="nav-break"></span>
+        <span class="nav-label">준비</span>
         <a href="/admin/public">공용 서버</a>
         <a href="/admin/release">1차 준비</a>
         <a href="/admin/evidence">수동 증빙</a>
@@ -840,8 +980,7 @@ def _admin_html() -> str:
         <a href="/admin/play">Play 등록</a>
         <a href="/admin/open-source">공개 준비</a>
         <a href="/admin/help">도움말</a>
-        <a href="/docs">API 문서</a>
-        <a href="/health/ready">준비 상태</a>
+        <a href="/docs">API</a>
       </nav>
     </header>
 
@@ -2554,6 +2693,7 @@ def _admin_users_html(request: Request) -> str:
       background: var(--panel);
       font-size: 13px;
     }}
+    {_admin_nav_css()}
     .grid {{
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -2690,16 +2830,8 @@ def _admin_users_html(request: Request) -> str:
         <h1>사용자 관리</h1>
         <div class="sub">시간대, 2단계 인증, 사용자 그룹, 접속 시간을 확인합니다.</div>
       </div>
-      <nav class="nav">
-        <a href="/admin">관리</a>
-        <a href="/admin/notes">메모</a>
-        <a href="/admin/recordings">녹음</a>
-        <a href="/admin/devices">기기</a>
-        <a href="/admin/sync">동기화</a>
-        <a href="/admin/ops">점검</a>
-        <a href="/admin/export">내보내기</a>
-        <a href="/monitor">모니터</a>
-        <a href="/admin/help">도움말</a>
+      <nav class="nav" aria-label="관리 메뉴">
+        {_admin_nav_html()}
       </nav>
     </header>
 
@@ -2739,7 +2871,7 @@ def _admin_users_html(request: Request) -> str:
     </section>
 
     <section>
-      <div class="section-head"><span>그룹별 사용자</span><span class="sub">운영 권한 분류 기준</span></div>
+      <div class="section-head"><span>그룹별 사용자</span><span><a href="/admin/groups">그룹 관리</a></span></div>
       <table><tr><th>그룹</th><th>사용자 수</th></tr>{_note_group_rows(group_counts)}</table>
     </section>
 
@@ -2821,6 +2953,150 @@ def _user_export_query(search: str, status_filter: str, group_filter: str, token
     if token_filter in {"issued", "missing"}:
         params["token"] = token_filter
     return urlencode(params)
+
+
+def _group_select(name: str = "사용자") -> str:
+    with SessionLocal() as db:
+        groups = ensure_user_groups(db)
+        db.commit()
+    options = []
+    selected_exists = False
+    for group in groups:
+        if not group.is_active and group.name != name:
+            continue
+        selected = group.name == name
+        selected_exists = selected_exists or selected
+        options.append(
+            f'<option value="{escape(group.name, quote=True)}" {"selected" if selected else ""}>{escape(group.name)}</option>'
+        )
+    if name and not selected_exists:
+        options.insert(0, f'<option value="{escape(name, quote=True)}" selected>{escape(name)}</option>')
+    return '<select name="group_name">' + "\n".join(options) + "</select>"
+
+
+def _admin_groups_html() -> str:
+    error_message = ""
+    groups: list[UserGroup] = []
+    user_counts: dict[str, int] = {}
+    try:
+        with SessionLocal() as db:
+            db.execute(text("select 1"))
+            groups = ensure_user_groups(db)
+            user_counts = dict(
+                db.execute(
+                    select(UserAccount.group_name, func.count())
+                    .group_by(UserAccount.group_name)
+                ).all()
+            )
+            db.commit()
+    except Exception as exc:
+        error_message = str(exc)
+
+    return f"""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote 그룹 관리</title>
+  <style>
+    :root {{
+      color-scheme: light;
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --text: #111827;
+      --muted: #6b7280;
+      --line: #e5e7eb;
+      --blue: #2563eb;
+      --green: #16a34a;
+      --red: #dc2626;
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{ margin: 0; background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }}
+    main {{ max-width: 1180px; margin: 0 auto; padding: 32px 18px 48px; }}
+    header {{ display: flex; justify-content: space-between; gap: 18px; align-items: flex-start; margin-bottom: 22px; }}
+    h1 {{ margin: 0; font-size: 30px; line-height: 1.2; }}
+    a {{ color: var(--blue); text-decoration: none; font-weight: 650; }}
+    .sub {{ margin-top: 8px; color: var(--muted); font-size: 14px; }}
+    {_admin_nav_css()}
+    section {{ margin-top: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }}
+    .section-head {{ display: flex; justify-content: space-between; gap: 12px; padding: 16px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }}
+    table {{ width: 100%; border-collapse: collapse; }}
+    th, td {{ padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; vertical-align: top; }}
+    th {{ color: var(--muted); font-weight: 600; background: #fafafa; }}
+    input[type="text"], input[type="number"] {{ width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; }}
+    .inline-form {{ display: grid; grid-template-columns: 160px minmax(180px, 1fr) 90px 80px auto; gap: 8px; align-items: center; }}
+    button {{ min-height: 36px; padding: 0 12px; border: 1px solid var(--blue); border-radius: 8px; background: var(--blue); color: #fff; font-weight: 750; cursor: pointer; }}
+    .badge {{ display: inline-flex; align-items: center; min-height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 800; }}
+    .ok {{ background: #dcfce7; color: #166534; }}
+    .bad {{ background: #fee2e2; color: #991b1b; }}
+    .error {{ margin-top: 14px; padding: 14px 16px; border: 1px solid #fecaca; border-radius: 8px; background: #fff1f2; color: #991b1b; font-size: 14px; }}
+    @media (max-width: 760px) {{
+      header {{ display: block; }}
+      .nav {{ margin-top: 14px; }}
+      .inline-form {{ grid-template-columns: 1fr; }}
+      h1 {{ font-size: 24px; }}
+      main {{ padding: 22px 12px 36px; }}
+    }}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div>
+        <h1>그룹 관리</h1>
+        <div class="sub">사용자 그룹을 먼저 만들고, 사용자 추가/수정 화면에서 선택합니다.</div>
+      </div>
+      <nav class="nav" aria-label="관리 메뉴">
+        {_admin_nav_html()}
+      </nav>
+    </header>
+
+    <section>
+      <div class="section-head"><span>그룹 추가</span><span class="sub">권한 분류 이름을 명확하게 관리합니다.</span></div>
+      <form class="inline-form" method="post" action="/admin/groups/new" style="padding:14px 18px;">
+        <input type="text" name="name" required placeholder="그룹 이름">
+        <input type="text" name="description" placeholder="설명">
+        <input type="number" name="sort_order" value="100" min="0" max="9999" aria-label="정렬">
+        <label><input type="checkbox" name="is_active" checked> 활성</label>
+        <button type="submit">추가</button>
+      </form>
+    </section>
+
+    <section>
+      <div class="section-head"><span>그룹 목록</span><span><a href="/api/v1/admin/groups">JSON</a></span></div>
+      <table>
+        <tr><th>그룹</th><th>설명</th><th>사용자</th><th>상태</th><th>정렬</th><th>관리</th></tr>
+        {_group_rows(groups, user_counts)}
+      </table>
+    </section>
+
+    {_error_block(error_message)}
+  </main>
+</body>
+</html>"""
+
+
+def _group_rows(groups: list[UserGroup], user_counts: dict[str, int]) -> str:
+    if not groups:
+        return '<tr><td colspan="6">등록된 그룹이 없습니다.</td></tr>'
+    rows = []
+    for group in groups:
+        rows.append(
+            "<tr>"
+            '<td colspan="6">'
+            f'<form class="inline-form" method="post" action="/admin/groups/edit">'
+            f'<input type="hidden" name="group_id" value="{group.id}">'
+            f'<input type="text" name="name" value="{escape(group.name, quote=True)}" required>'
+            f'<input type="text" name="description" value="{escape(group.description or "", quote=True)}">'
+            f'<span>{int(user_counts.get(group.name, 0))}명</span>'
+            f'<label>{_simple_badge("ok" if group.is_active else "bad", "활성" if group.is_active else "비활성")} <input type="checkbox" name="is_active" {"checked" if group.is_active else ""}> 사용</label>'
+            f'<input type="number" name="sort_order" value="{group.sort_order}" min="0" max="9999" aria-label="정렬">'
+            '<button type="submit">저장</button>'
+            "</form>"
+            "</td>"
+            "</tr>"
+        )
+    return "\n".join(rows)
 
 
 def _simple_badge(status: str, label: str) -> str:
@@ -2961,7 +3237,7 @@ def _admin_user_form_html() -> str:
       </div>
       <div class="row">
         <label><strong>사용자 그룹</strong><span>운영 권한 분류 기준</span></label>
-        <input type="text" name="group_name" value="사용자">
+        {_group_select("사용자")}
       </div>
       <div class="row">
         <label><strong>2단계 인증</strong><span>로그인 보안 사용 여부</span></label>
@@ -3128,7 +3404,7 @@ def _admin_user_edit_html(owner_id: str) -> str:
       </div>
       <div class="row">
         <label><strong>사용자 그룹</strong><span>운영 권한 분류 기준</span></label>
-        <input type="text" name="group_name" value="{escape(user.group_name, quote=True)}">
+        {_group_select(user.group_name)}
       </div>
       <div class="row">
         <label><strong>2단계 인증</strong><span>로그인 보안 사용 여부</span></label>
@@ -4169,6 +4445,8 @@ def _admin_export_html() -> str:
       display: flex;
       gap: 10px;
       flex-wrap: wrap;
+      max-width: 820px;
+      justify-content: flex-end;
     }}
     .nav a {{
       display: inline-flex;
@@ -4179,6 +4457,18 @@ def _admin_export_html() -> str:
       border-radius: 999px;
       background: var(--panel);
       font-size: 13px;
+    }}
+    .nav-break {{
+      flex-basis: 100%;
+      height: 0;
+    }}
+    .nav-label {{
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 750;
     }}
     section {{
       margin-top: 14px;
