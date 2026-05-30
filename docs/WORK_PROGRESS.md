@@ -6682,3 +6682,17 @@
 - `web\scripts\verify_web_surface.py`
 - `web\scripts\check_import_export.mjs`
 - 설치형 실행 파일 재생성
+
+# 2026-05-31 00:55 KST
+
+## 작업 내용
+
+- Web/설치형 공통 UI 글자 크기 기준을 `10px / 12px / 14px` 체계로 정리.
+- 설정 화면 제목/설명/입력/버튼, 확인/암호 키 모달, 일반 UI 버튼/탭/검색/상태/결과/토스트 글자 크기 보정.
+- 메모 본문 글자 크기 프리셋을 작게 `10px`, 보통 `12px`, 크게 `14px`로 변경.
+
+## 검증 예정
+
+- `node --check web\app.js`
+- `web\scripts\verify_web_surface.py`
+- `git diff --check`
