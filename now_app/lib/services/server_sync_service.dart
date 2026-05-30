@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -420,6 +421,14 @@ class ServerSyncService {
     return syncNotes(settings);
   }
 
+  @visibleForTesting
+  Future<void> applyPulledNotesForTest(
+    ServerSettings settings,
+    List<dynamic> pulledNotes,
+  ) {
+    return _applyPulledNotes(settings, pulledNotes);
+  }
+
   Future<void> _verifyUserToken(
     ServerSettings settings, {
     required String twoFactorCode,
@@ -482,6 +491,8 @@ class ServerSyncService {
       final pushed = pushedNotes.length;
       final pulledNotes = (res.data?['pulled_notes'] as List?) ?? const [];
       final pulled = pulledNotes.length;
+
+      await _applyPulledNotes(settings, pulledNotes);
 
       final serverTime = _parseSyncTime(res.data?['server_time']?.toString());
       if (serverTime != null) {
@@ -849,6 +860,150 @@ class ServerSyncService {
     return payloads;
   }
 
+  Future<void> _applyPulledNotes(
+    ServerSettings settings,
+    List<dynamic> pulledNotes,
+  ) async {
+    if (pulledNotes.isEmpty) return;
+    for (final raw in pulledNotes) {
+      if (raw is! Map) continue;
+      final note = Map<String, dynamic>.from(raw);
+      final noteType = note['note_type']?.toString();
+      if (noteType == 'tree') {
+        await _applyPulledTreeMemo(settings, note);
+      } else if (noteType == 'daily') {
+        await _applyPulledDailyMemo(note);
+      }
+    }
+  }
+
+  Future<void> _applyPulledTreeMemo(
+    ServerSettings settings,
+    Map<String, dynamic> note,
+  ) async {
+    final localId = note['local_id']?.toString() ?? '';
+    if (localId.isEmpty) return;
+
+    final serverUpdatedAt = _noteUpdatedAt(note);
+    final existing =
+        await (_db.select(_db.memos)
+              ..where((m) => m.memoId.equals(localId)))
+            .getSingleOrNull();
+    if (existing != null &&
+        serverUpdatedAt != null &&
+        existing.updatedAt.isAfter(serverUpdatedAt)) {
+      return;
+    }
+
+    if (_isDeletedServerNote(note)) {
+      await (_db.delete(_db.memos)..where((m) => m.memoId.equals(localId))).go();
+      await _clearPendingDeletedTreeMemos({localId});
+      return;
+    }
+
+    final title = _noteTitle(note['title']?.toString());
+    final body = note['content']?.toString().trim() ?? '';
+    final content = body.isEmpty ? title : '$title\n$body';
+    final updatedAt = serverUpdatedAt ?? DateTime.now();
+    final createdAt =
+        _parseSyncTime(note['created_at']?.toString()) ??
+        existing?.createdAt ??
+        updatedAt;
+    final tags = _treeTagsFromServerNote(note);
+
+    final companion = MemosCompanion(
+      memoId: Value(localId),
+      userId: Value(_normalizeOwnerId(settings.ownerId)),
+      content: Value(content),
+      tags: Value(tags),
+      source: const Value('note_tree'),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+
+    if (existing == null) {
+      await _db.into(_db.memos).insert(companion);
+    } else {
+      await (_db.update(_db.memos)..where((m) => m.memoId.equals(localId)))
+          .write(companion);
+    }
+  }
+
+  Future<void> _applyPulledDailyMemo(Map<String, dynamic> note) async {
+    final localId = note['local_id']?.toString() ?? '';
+    if (localId.isEmpty) return;
+
+    final serverUpdatedAt = _noteUpdatedAt(note);
+    final existing =
+        await (_db.select(_db.meetings)
+              ..where((m) => m.meetingId.equals(localId)))
+            .getSingleOrNull();
+    if (existing != null &&
+        serverUpdatedAt != null &&
+        existing.updatedAt.isAfter(serverUpdatedAt)) {
+      return;
+    }
+
+    if (_isDeletedServerNote(note)) {
+      await (_db.delete(_db.meetings)..where((m) => m.meetingId.equals(localId)))
+          .go();
+      await (_db.delete(_db.transcriptSegments)
+            ..where((s) => s.meetingId.equals(localId)))
+          .go();
+      return;
+    }
+
+    final content = note['content']?.toString().trim() ?? '';
+    final updatedAt = serverUpdatedAt ?? DateTime.now();
+    final startedAt = _dailyDateFromServerNote(note) ?? updatedAt;
+    final createdAt = existing?.createdAt ?? updatedAt;
+    final title = _noteTitle(note['title']?.toString(), fallback: '오늘 메모');
+
+    final companion = MeetingsCompanion(
+      meetingId: Value(localId),
+      title: Value(title),
+      status: const Value('closed'),
+      recordType: const Value('memo'),
+      participantName: const Value(null),
+      startedAt: Value(startedAt),
+      endedAt: Value(updatedAt),
+      summary: Value(content),
+      segmentCount: Value(content.isEmpty ? 0 : 1),
+      actionCount: const Value(0),
+      decisionCount: const Value(0),
+      isImportant: existing == null
+          ? const Value(false)
+          : Value(existing.isImportant),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+
+    if (existing == null) {
+      await _db.into(_db.meetings).insert(companion);
+    } else {
+      await (_db.update(_db.meetings)..where((m) => m.meetingId.equals(localId)))
+          .write(companion);
+      await (_db.delete(_db.transcriptSegments)
+            ..where((s) => s.meetingId.equals(localId)))
+          .go();
+    }
+
+    if (content.isNotEmpty) {
+      await _db.into(_db.transcriptSegments).insert(
+            TranscriptSegmentsCompanion.insert(
+              segmentId: '${localId}_server',
+              meetingId: localId,
+              speaker: const Value('user'),
+              timestamp: Value(startedAt),
+              content: content,
+              source: const Value('server_sync'),
+              createdAt: Value(updatedAt),
+            ),
+            mode: InsertMode.replace,
+          );
+    }
+  }
+
   Future<Map<String, Map<String, dynamic>>> _loadDeletedTreeMemos([
     SharedPreferences? prefs,
   ]) async {
@@ -911,6 +1066,62 @@ class ServerSyncService {
     }
     return dio;
   }
+}
+
+bool _isDeletedServerNote(Map<String, dynamic> note) {
+  final raw = note['deleted_at'];
+  return raw != null && raw.toString().trim().isNotEmpty;
+}
+
+DateTime? _noteUpdatedAt(Map<String, dynamic> note) {
+  return _parseSyncTime(note['client_updated_at']?.toString()) ??
+      _parseSyncTime(note['updated_at']?.toString()) ??
+      _parseSyncTime(note['created_at']?.toString());
+}
+
+DateTime? _dailyDateFromServerNote(Map<String, dynamic> note) {
+  final localId = note['local_id']?.toString() ?? '';
+  final match = RegExp(r'^daily:(\d{4})-(\d{2})-(\d{2})$').firstMatch(localId);
+  if (match != null) {
+    final year = int.tryParse(match.group(1)!);
+    final month = int.tryParse(match.group(2)!);
+    final day = int.tryParse(match.group(3)!);
+    if (year != null && month != null && day != null) {
+      return DateTime(year, month, day);
+    }
+  }
+  return _noteUpdatedAt(note);
+}
+
+String _noteTitle(String? value, {String fallback = '제목 없음'}) {
+  final trimmed = value?.trim() ?? '';
+  return trimmed.isEmpty ? fallback : trimmed;
+}
+
+String _treeTagsFromServerNote(Map<String, dynamic> note) {
+  final rawTags = note['tags']?.toString().trim() ?? '';
+  final parsed = _parseTags(rawTags);
+  final parent = note['parent_local_id']?.toString().trim() ?? '';
+  final level = int.tryParse(note['level']?.toString() ?? '') ?? 1;
+
+  if (parsed.isNotEmpty) {
+    parsed['kind'] = 'tree';
+    parsed['parent'] = parent;
+    parsed['level'] = level.toString();
+    return parsed.entries
+        .map((entry) => '${entry.key}=${entry.value}')
+        .join(';');
+  }
+
+  final parts = <String>[
+    'kind=tree',
+    'parent=$parent',
+    'level=$level',
+  ];
+  if (rawTags.isNotEmpty) {
+    parts.add('serverTags=${rawTags.replaceAll(';', ',')}');
+  }
+  return parts.join(';');
 }
 
 Map<String, String> _parseTags(String? raw) {
