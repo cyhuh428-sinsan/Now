@@ -488,8 +488,8 @@ def main() -> None:
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
-            require("사용자별 접속 토큰" in text, "운영 점검 화면에 준비된 사용자별 접속 토큰 항목이 없습니다")
-            require("사용자 토큰 확인 화면/API" in text, "운영 점검 화면에 사용자 토큰 확인 준비 항목이 없습니다")
+            require("기기별 연결 토큰" in text, "운영 점검 화면에 기기별 연결 토큰 항목이 없습니다")
+            require("사용자 로그인" in text, "운영 점검 화면에 사용자 로그인 준비 항목이 없습니다")
             require("2단계 코드 검증 절차" in text, "운영 점검 화면에 2단계 인증 항목이 없습니다")
             require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
             require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
