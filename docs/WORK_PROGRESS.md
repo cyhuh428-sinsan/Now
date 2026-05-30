@@ -6664,3 +6664,21 @@
 - `uv run python scripts\release_readiness.py` 결과는 26/57 완료, 31개 남음으로 유지.
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `git diff --check` 통과.
+# 2026-05-31 00:20 KST
+
+## 작업 내용
+
+- Web/설치형 공통 암호화 메모 동기화 병합 기준 점검.
+- 서버에서 더 최신 암호화 메모가 내려오면 로컬 `pending` 상태만 보고 무시하지 않고 적용하도록 수정.
+- 로컬 수정이 서버보다 더 최신이면 기존처럼 로컬 내용을 보호하도록 유지.
+- 서버와 로컬 수정 시간이 같지만 내용이 다르면 서버의 확정본을 기준으로 맞추도록 보강.
+- 동기화 성공 후 전체 로컬 메모를 무조건 `synced`로 바꾸지 않고, 서버가 실제로 받은 항목만 동기화 완료 처리하도록 수정.
+- 암호화된 메모를 평문으로 되돌리는 `암호화 해제` 버튼과 동작 추가.
+- 암호화 도움말을 현재 구현 상태에 맞게 갱신.
+
+## 검증 예정
+
+- `node --check web\app.js`
+- `web\scripts\verify_web_surface.py`
+- `web\scripts\check_import_export.mjs`
+- 설치형 실행 파일 재생성
