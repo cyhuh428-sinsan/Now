@@ -12,6 +12,8 @@ import '../../services/server_sync_service.dart';
 import '../../llm/services/llm_settings_service.dart';
 import '../../repositories/repository_providers.dart';
 
+const _encryptedMemoPrefix = 'NOW_ENCRYPTED_V1:';
+
 class TreeDeletedMemo {
   final String memoId;
   final String title;
@@ -609,6 +611,12 @@ class TreeMemoNode {
     required this.tags,
   });
 
+  bool get isEncrypted => _isEncryptedMemoContent(content);
+
+  String get displayContent => isEncrypted
+      ? '암호화된 메모입니다. Web/설치형 프로그램에서 복호화하세요.'
+      : content;
+
   factory TreeMemoNode.fromMemo(Memo memo) {
     final tags = _parseTags(memo.tags);
     final lines = memo.content.split('\n');
@@ -623,6 +631,10 @@ class TreeMemoNode {
       tags: memo.tags ?? '',
     );
   }
+}
+
+bool _isEncryptedMemoContent(String? content) {
+  return (content ?? '').startsWith(_encryptedMemoPrefix);
 }
 
 Map<String, String> _parseTags(String? raw) {
@@ -669,7 +681,17 @@ class _TreeMemoTile extends ConsumerWidget {
             color: const Color(0xFF2563EB),
           ),
           title: InkWell(
-            onTap: () => _showTreeMemoDialog(context, ref, editingNode: node),
+            onTap: () {
+              if (node.isEncrypted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('암호화된 메모는 Web/설치형 프로그램에서 복호화 후 편집할 수 있습니다.'),
+                  ),
+                );
+                return;
+              }
+              _showTreeMemoDialog(context, ref, editingNode: node);
+            },
             child: Text(
               node.title,
               style: const TextStyle(
@@ -679,10 +701,10 @@ class _TreeMemoTile extends ConsumerWidget {
               ),
             ),
           ),
-          subtitle: node.content.isEmpty
+          subtitle: node.displayContent.isEmpty
               ? null
               : Text(
-                  node.content,
+                  node.displayContent,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -701,7 +723,9 @@ class _TreeMemoTile extends ConsumerWidget {
                   height: 36,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: () => _requestTreeMemoAnalysis(context, ref, node),
+                onPressed: node.isEncrypted
+                    ? null
+                    : () => _requestTreeMemoAnalysis(context, ref, node),
               ),
               if (addParent != null && addLevel != null)
                 IconButton(
