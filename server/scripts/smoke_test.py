@@ -56,6 +56,44 @@ def stale_server_message(field_name: str, data: dict) -> str:
     )
 
 
+def public_readiness_items_from_server(public_readiness: dict) -> list[dict]:
+    raw_items = public_readiness.get("items", [])
+    require(isinstance(raw_items, list), "서버 정보의 공용 서버 준비 상세 항목 형식이 올바르지 않습니다")
+    items: list[dict] = []
+    for index, item in enumerate(raw_items, start=1):
+        require(isinstance(item, dict), f"공용 서버 준비 상세 {index}번 항목 형식이 올바르지 않습니다")
+        item_id = item.get("id")
+        label = item.get("label")
+        status = item.get("status")
+        require(isinstance(item_id, str) and bool(item_id), f"공용 서버 준비 상세 {index}번 항목 id가 없습니다")
+        require(isinstance(label, str) and bool(label), f"공용 서버 준비 상세 {item_id} label이 없습니다")
+        require(status in {"ready", "planned"}, f"공용 서버 준비 상세 {item_id} status가 올바르지 않습니다")
+        items.append(item)
+    require(items, "서버 정보의 공용 서버 준비 상세 항목이 비어 있습니다")
+    return items
+
+
+def readiness_labels_from_items(items: list[dict]) -> dict[str, str]:
+    labels: dict[str, str] = {}
+    for item in items:
+        labels[item["id"]] = item["label"]
+    require(len(labels) == len(items), "공용 서버 준비 상세 항목 id가 중복되었습니다")
+    return labels
+
+
+def ready_labels_from_items(items: list[dict]) -> list[str]:
+    return [item["label"] for item in items if item.get("status") == "ready"]
+
+
+def missing_labels(expected_labels: list[str], actual_texts: set[str] | str) -> list[str]:
+    if isinstance(actual_texts, str):
+        return sorted(label for label in expected_labels if label not in actual_texts)
+    return sorted(label for label in expected_labels if label not in actual_texts)
+
+
+def require_no_missing_labels(missing: list[str], message: str) -> None:
+    require(not missing, f"{message}: {', '.join(missing)}")
+
 def request(method: str, url: str, token: str | None = None, data: dict | None = None):
     return request_with_user_token(method, url, token, data, USER_TOKEN)
 
@@ -242,6 +280,7 @@ def main() -> None:
     USER_TOKEN = args.user_token
 
     base_url = args.base_url.rstrip("/")
+    public_readiness_ready_labels: list[str] = []
     wait_until_ready(base_url, args.token, args.ready_retries, args.ready_delay)
     checks = [
         ("GET", "/health", None),
@@ -263,32 +302,16 @@ def main() -> None:
                 public_readiness.get("status") in {"planned", "ready"},
                 "서버 정보의 공용 서버 준비 상태가 planned 또는 ready가 아닙니다",
             )
+            public_readiness_items = public_readiness_items_from_server(public_readiness)
+            public_readiness_labels = readiness_labels_from_items(public_readiness_items)
+            ready_ids = public_readiness.get("ready", [])
+            require(isinstance(ready_ids, list), "서버 정보의 공용 서버 준비 ready 항목 형식이 올바르지 않습니다")
+            unknown_ready_ids = sorted(str(item_id) for item_id in ready_ids if item_id not in public_readiness_labels)
+            require(not unknown_ready_ids, f"공용 서버 준비 ready 항목이 상세 목록에 없습니다: {', '.join(unknown_ready_ids)}")
+            public_readiness_ready_labels = ready_labels_from_items(public_readiness_items)
             require(
-                "real_two_factor_challenge" in public_readiness.get("ready", []),
-                "서버 정보의 공용 서버 준비 상태에 2단계 인증 준비 항목이 없습니다",
-            )
-            require(
-                "user_data_isolation_verification" in public_readiness.get("ready", []),
-                "서버 정보의 공용 서버 준비 상태에 사용자별 데이터 격리 자동 검증 준비 항목이 없습니다",
-            )
-            require(
-                "login_or_token_delivery" in public_readiness.get("ready", []),
-                "서버 정보의 공용 서버 준비 상태에 사용자 토큰 확인 화면/API 준비 항목이 없습니다",
-            )
-            require(
-                "user_access_tokens" in public_readiness.get("ready", []),
-                "서버 정보의 공용 서버 준비 상태에 사용자별 접속 토큰 준비 항목이 없습니다",
-            )
-            public_readiness_items = public_readiness.get("items", [])
-            require(
-                isinstance(public_readiness_items, list)
-                and any(
-                    item.get("id") == "user_device_self_management"
-                    and item.get("status") == "ready"
-                    for item in public_readiness_items
-                    if isinstance(item, dict)
-                ),
-                "서버 정보의 공용 서버 준비 상태 상세에 사용자 기기 관리 준비 항목이 없습니다",
+                set(ready_ids) == {item["id"] for item in public_readiness_items if item.get("status") == "ready"},
+                "공용 서버 준비 ready 목록과 상세 항목 status가 일치하지 않습니다",
             )
             capabilities = data.get("capabilities", {})
             require(capabilities.get("sync") is True, "서버 capability에 sync가 없습니다")
@@ -498,15 +521,13 @@ def main() -> None:
         if path == "/admin/ops":
             require("백업/복구 절차" in text, "운영 점검 화면에 백업/복구 절차 항목이 없습니다")
             require("status_counts.bad=0" in text, "운영 점검 화면에 백업 검증 집계 기준 안내가 없습니다")
-            require("기기별 연결 토큰" in text, "운영 점검 화면에 기기별 연결 토큰 항목이 없습니다")
-            require("사용자 로그인" in text, "운영 점검 화면에 사용자 로그인 준비 항목이 없습니다")
-            require("2단계 코드 검증 절차" in text, "운영 점검 화면에 2단계 인증 항목이 없습니다")
-            require("사용자별 기기 조회/해제 API" in text, "운영 점검 화면에 사용자별 기기 조회/해제 준비 항목이 없습니다")
-            require("사용자별 데이터 격리 자동 검증" in text, "운영 점검 화면에 공용 서버 데이터 격리 항목이 없습니다")
-            require("공개 운영 환경" in text, "운영 점검 화면에 공개 운영 환경 항목이 없습니다")
+            require_no_missing_labels(
+                missing_labels(public_readiness_ready_labels, text),
+                "운영 점검 화면에 공용 서버 준비 항목이 없습니다",
+            )
             require("공개 도메인 연결" in text, "운영 점검 화면에 공개 도메인 실제 연결 항목이 없습니다")
         if path == "/admin/help":
-            require("사용자 토큰 확인 화면/API" in text, "도움말 화면에 사용자 토큰 확인 화면/API 점검 안내가 없습니다")
+            require("/auth/token" in text or "/api/v1/auth/token-login" in text, "도움말 화면에 인증 API 안내가 없습니다")
             require("2단계 코드 검증" in text, "도움말 화면에 2단계 코드 검증 점검 안내가 없습니다")
             require("기기 등록" in text, "도움말 화면에 공용 서버 기기 등록 점검 안내가 없습니다")
             require("데이터 격리" in text, "도움말 화면에 공용 서버 데이터 격리 점검 안내가 없습니다")
@@ -891,11 +912,10 @@ def main() -> None:
         (item for item in data.get("checks", []) if item.get("name") == "공용 서버 인증"),
         {},
     )
-    require("사용자 토큰 확인 화면/API" in ops_check_names, "운영 점검에 사용자 토큰 확인 화면/API 항목이 없습니다")
-    require("2단계 코드 검증 절차" in ops_check_names, "운영 점검에 2단계 코드 검증 절차 항목이 없습니다")
-    require("사용자별 기기 조회/해제 API" in ops_check_names, "운영 점검에 사용자별 기기 조회/해제 API 항목이 없습니다")
-    require("사용자별 데이터 격리 자동 검증" in ops_check_names, "운영 점검에 사용자별 데이터 격리 자동 검증 항목이 없습니다")
-    require("공개 운영 환경" in ops_check_names, "운영 점검에 공개 운영 환경 항목이 없습니다")
+    require_no_missing_labels(
+        missing_labels(public_readiness_ready_labels, ops_check_names),
+        "운영 점검에 공용 서버 준비 항목이 없습니다",
+    )
     require("공개 도메인 연결" in ops_check_names, "운영 점검에 공개 도메인 실제 연결 항목이 없습니다")
     require("공용 서버 인증" in ops_check_names, "운영 점검에 공용 서버 인증 항목이 없습니다")
     require("users_without_token" in data.get("summary", {}), "운영 점검 요약에 토큰 없는 사용자 집계가 없습니다")
