@@ -25,6 +25,21 @@
 - `uv run python server\scripts\preflight.py --env-file .env.public.example --allow-example --public-server` 통과: 1131/1131.
 - `uv run python scripts\verify_public_repo_safety.py` 통과: 8/8.
 - `git diff --check` 통과.
+
+## 2026-05-30 KST
+
+### 수정 내용
+
+- `server\scripts\smoke_test.py`의 공용 서버 준비 항목 검증을 화면 문구 하드코딩 방식에서 서버 응답 기반 검증으로 변경.
+- `/api/v1/server`의 `public_server_readiness.items`, `ready`, `status` 구조가 서로 일치하는지 먼저 확인하도록 정리.
+- `/admin/ops` 화면/API는 서버가 내려준 준비 항목 label 목록이 그대로 반영되는지만 비교하도록 변경.
+- `server\scripts\preflight.py`도 기존 한국어 항목명 고정 검증 대신 smoke test의 구조 기반 검증 로직 존재를 확인하도록 조정.
+
+### 검증
+
+- `uv run python -m py_compile server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1125/1125.
+- `git diff --check` 통과.
 - 임시 SQLite DB + FastAPI TestClient로 회원가입, Web 세션, 기기 토큰 발급/재확인, Web 로그인, token-login, 중복 가입 차단, SMTP 미설정 시 비밀번호 재설정 요청 503 흐름 확인.
 - `desktop` Web 자산 동기화 후 `npm run dist:win`으로 설치 파일 재생성.
 - 설치 파일: `desktop/dist/NowNote-Setup-0.1.0-x64.exe`, 100,987,923 bytes, SHA256 `EC8C65F95599B62F456D5B1C7EC3BCDDD757F624EABCE830B58DEE9A941C62C3`.
