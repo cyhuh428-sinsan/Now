@@ -270,7 +270,7 @@ def main() -> None:
     parser.add_argument(
         "--issue-local-user-token",
         action="store_true",
-        help="Issue a fresh local_user token through the admin API before data checks",
+        help="Issue a fresh local_user token through the admin API before data checks. Public servers do this automatically when no --user-token is provided.",
     )
     args = parser.parse_args()
     require(args.timeout > 0, "--timeout은 0보다 커야 합니다")
@@ -948,7 +948,12 @@ def main() -> None:
         {"count": data.get("count"), "token_missing": data.get("token_missing")},
     )
 
-    if args.issue_local_user_token:
+    should_issue_local_user_token = args.issue_local_user_token or (USER_TOKEN_REQUIRED and USER_TOKEN is None)
+    if should_issue_local_user_token:
+        require(
+            args.token,
+            "사용자 토큰 필수 모드에서는 smoke test가 검증용 사용자 토큰을 자동 발급해야 하므로 관리자 API 토큰이 필요합니다. --token 값을 지정하세요.",
+        )
         status, data = request_error(
             "POST",
             f"{base_url}/api/v1/admin/users",
@@ -974,7 +979,11 @@ def main() -> None:
         print(
             "POST /api/v1/admin/users/local_user/token:",
             status,
-            {"owner_id": data.get("owner_id"), "issued": bool(USER_TOKEN)},
+            {
+                "owner_id": data.get("owner_id"),
+                "issued": bool(USER_TOKEN),
+                "mode": "auto" if not args.issue_local_user_token else "requested",
+            },
         )
         if USER_TOKEN_REQUIRED:
             status, data = request_with_user_token(

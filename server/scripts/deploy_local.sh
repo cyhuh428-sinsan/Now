@@ -26,7 +26,7 @@ NowNote 로컬/WSL 서버 갱신 도우미
   --ready-delay 초     /health/ready 재시도 간격. 기본: 3
   --user-token TOKEN   NOW_USER_TOKEN_REQUIRED=true smoke test에 사용할 사용자별 접속 토큰
   --issue-local-user-token
-                      smoke test 전에 local_user 토큰을 발급해 공용 모드 검증에 사용
+                      호환용 옵션. 공용 모드에서는 사용자 토큰이 없으면 자동 발급됩니다.
   -h, --help           도움말 표시
 EOF
 }
@@ -195,9 +195,8 @@ curl -fsS "$BASE_URL/api/v1/server" >/dev/null
 echo "== 스모크 테스트 =="
 API_TOKEN=$(get_env_value "NOW_API_TOKEN")
 USER_TOKEN_REQUIRED=$(get_env_value "NOW_USER_TOKEN_REQUIRED")
-if [ "$USER_TOKEN_REQUIRED" = "true" ] && [ -z "$USER_TOKEN" ] && [ "$ISSUE_LOCAL_USER_TOKEN" = "false" ]; then
-  echo "NOW_USER_TOKEN_REQUIRED=true입니다. smoke test에는 --user-token 또는 --issue-local-user-token이 필요합니다." >&2
-  exit 1
+if [ "$USER_TOKEN_REQUIRED" = "true" ] && [ -z "$USER_TOKEN" ]; then
+  ISSUE_LOCAL_USER_TOKEN=true
 fi
 
 set -- scripts/smoke_test.py \
