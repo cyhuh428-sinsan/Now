@@ -2958,16 +2958,24 @@ def _user_export_query(search: str, status_filter: str, group_filter: str, token
 def _group_select(name: str = "사용자") -> str:
     with SessionLocal() as db:
         groups = ensure_user_groups(db)
+        group_items = [
+            {
+                "name": group.name,
+                "is_active": bool(group.is_active),
+            }
+            for group in groups
+        ]
         db.commit()
     options = []
     selected_exists = False
-    for group in groups:
-        if not group.is_active and group.name != name:
+    for group in group_items:
+        group_name = str(group["name"])
+        if not group["is_active"] and group_name != name:
             continue
-        selected = group.name == name
+        selected = group_name == name
         selected_exists = selected_exists or selected
         options.append(
-            f'<option value="{escape(group.name, quote=True)}" {"selected" if selected else ""}>{escape(group.name)}</option>'
+            f'<option value="{escape(group_name, quote=True)}" {"selected" if selected else ""}>{escape(group_name)}</option>'
         )
     if name and not selected_exists:
         options.insert(0, f'<option value="{escape(name, quote=True)}" selected>{escape(name)}</option>')
@@ -2976,18 +2984,28 @@ def _group_select(name: str = "사용자") -> str:
 
 def _admin_groups_html() -> str:
     error_message = ""
-    groups: list[UserGroup] = []
+    groups: list[dict[str, object]] = []
     user_counts: dict[str, int] = {}
     try:
         with SessionLocal() as db:
             db.execute(text("select 1"))
-            groups = ensure_user_groups(db)
+            group_rows = ensure_user_groups(db)
             user_counts = dict(
                 db.execute(
                     select(UserAccount.group_name, func.count())
                     .group_by(UserAccount.group_name)
                 ).all()
             )
+            groups = [
+                {
+                    "id": group.id,
+                    "name": group.name,
+                    "description": group.description or "",
+                    "is_active": bool(group.is_active),
+                    "sort_order": group.sort_order,
+                }
+                for group in group_rows
+            ]
             db.commit()
     except Exception as exc:
         error_message = str(exc)
@@ -3076,21 +3094,26 @@ def _admin_groups_html() -> str:
 </html>"""
 
 
-def _group_rows(groups: list[UserGroup], user_counts: dict[str, int]) -> str:
+def _group_rows(groups: list[dict[str, object]], user_counts: dict[str, int]) -> str:
     if not groups:
         return '<tr><td colspan="6">등록된 그룹이 없습니다.</td></tr>'
     rows = []
     for group in groups:
+        group_id = int(group["id"])
+        group_name = str(group["name"])
+        description = str(group["description"])
+        is_active = bool(group["is_active"])
+        sort_order = int(group["sort_order"])
         rows.append(
             "<tr>"
             '<td colspan="6">'
             f'<form class="inline-form" method="post" action="/admin/groups/edit">'
-            f'<input type="hidden" name="group_id" value="{group.id}">'
-            f'<input type="text" name="name" value="{escape(group.name, quote=True)}" required>'
-            f'<input type="text" name="description" value="{escape(group.description or "", quote=True)}">'
-            f'<span>{int(user_counts.get(group.name, 0))}명</span>'
-            f'<label>{_simple_badge("ok" if group.is_active else "bad", "활성" if group.is_active else "비활성")} <input type="checkbox" name="is_active" {"checked" if group.is_active else ""}> 사용</label>'
-            f'<input type="number" name="sort_order" value="{group.sort_order}" min="0" max="9999" aria-label="정렬">'
+            f'<input type="hidden" name="group_id" value="{group_id}">'
+            f'<input type="text" name="name" value="{escape(group_name, quote=True)}" required>'
+            f'<input type="text" name="description" value="{escape(description, quote=True)}">'
+            f'<span>{int(user_counts.get(group_name, 0))}명</span>'
+            f'<label>{_simple_badge("ok" if is_active else "bad", "활성" if is_active else "비활성")} <input type="checkbox" name="is_active" {"checked" if is_active else ""}> 사용</label>'
+            f'<input type="number" name="sort_order" value="{sort_order}" min="0" max="9999" aria-label="정렬">'
             '<button type="submit">저장</button>'
             "</form>"
             "</td>"
