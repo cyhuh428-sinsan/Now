@@ -2756,7 +2756,6 @@ function countPendingSyncNotes() {
     ...Object.values(state.data.daily),
     ...state.data.archivedDaily,
     ...flattenTree(state.data.tree),
-    ...state.data.deletedTree,
   ].filter((item) => item?.syncState === "pending").length;
 }
 
@@ -3368,7 +3367,7 @@ function applyPulledTreeNote(note) {
   const current = findTreeNode(state.data.tree, note.local_id);
   if (!shouldApplyPulledNote(current, note)) return false;
   const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
-  if (!shouldApplyPulledNote(deleted, note)) return false;
+  if (deleted) return false;
   removePulledDeletedTreeNote(note.local_id);
   const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
   const nextLevel = Math.min(3, Math.max(1, note.level || (parent ? parent.level + 1 : 1)));
@@ -3403,18 +3402,9 @@ function applyPulledDeletedTreeNote(note) {
     clearUnlockedEncryptionState(note.local_id);
     detachTreeNode(note.local_id);
     removeTreeTabReferences(note.local_id);
+    return true;
   }
-  const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
-  if (!shouldApplyPulledNote(deleted, note)) return false;
-  const next = createPulledTreeNode(note, note.parent_local_id || null, note.level || 1);
-  next.status = "deleted";
-  next.deletedAt = note.deleted_at || note.updated_at || new Date().toISOString();
-  if (deleted) {
-    Object.assign(deleted, next);
-  } else {
-    state.data.deletedTree.unshift(next);
-  }
-  return true;
+  return false;
 }
 
 function createPulledTreeNode(note, parentId, level) {
@@ -3480,9 +3470,6 @@ function buildServerSyncNotes(server) {
         server,
         isTreeNodeSharedForServer(node) ? null : node.unsharedAt || node.updatedAt || new Date().toISOString(),
       )),
-    ...state.data.deletedTree
-      .filter((node) => shouldSendServerNote(node, changedOnly))
-      .map((node) => treeNodeToServerNote(node, server, node.deletedAt || new Date().toISOString())),
   ];
   return notes.filter(Boolean);
 }
@@ -3564,9 +3551,6 @@ function markServerSyncedNotes(pushedNotes = null) {
     flattenTree(state.data.tree).forEach((node) => {
       if (syncedIds.has(`tree:${node.id}`)) node.syncState = "synced";
     });
-    state.data.deletedTree.forEach((node) => {
-      if (syncedIds.has(`tree:${node.id}`)) node.syncState = "synced";
-    });
     return;
   }
   Object.values(state.data.daily).forEach((note) => {
@@ -3576,9 +3560,6 @@ function markServerSyncedNotes(pushedNotes = null) {
     note.syncState = "synced";
   });
   flattenTree(state.data.tree).forEach((node) => {
-    node.syncState = "synced";
-  });
-  state.data.deletedTree.forEach((node) => {
     node.syncState = "synced";
   });
 }
@@ -6716,7 +6697,7 @@ function archiveDeletedTreeNode(id) {
     ...node,
     children: [],
     status: "deleted",
-    syncState: "pending",
+    syncState: "local",
     deletedAt: new Date().toISOString(),
   });
   return true;

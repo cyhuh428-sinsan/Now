@@ -6710,3 +6710,18 @@
 - `web\scripts\verify_web_surface.py`
 - `git diff --check`
 - 설치형 실행 파일 재생성
+
+# 2026-05-31 01:25 KST
+
+## 작업 내용
+
+- 삭제 보관함 항목을 서버 동기화 전송 대상에서 제외.
+- 삭제 보관함 항목을 동기화 대기 개수에서 제외.
+- 서버에서 삭제된 지식 메모가 내려오면 로컬 삭제 보관함에 쌓지 않고 활성 목록에서만 제거하도록 수정.
+- 로컬 삭제 보관함 항목의 상태를 `pending` 대신 `local`로 저장.
+
+## 검증 예정
+
+- `node --check web\app.js`
+- `web\scripts\verify_web_surface.py`
+- `git diff --check`
