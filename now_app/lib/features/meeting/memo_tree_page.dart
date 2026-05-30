@@ -8,11 +8,10 @@ import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
 import '../../core/database/app_database.dart';
+import '../../services/note_encryption_service.dart';
 import '../../services/server_sync_service.dart';
 import '../../llm/services/llm_settings_service.dart';
 import '../../repositories/repository_providers.dart';
-
-const _encryptedMemoPrefix = 'NOW_ENCRYPTED_V1:';
 
 class TreeDeletedMemo {
   final String memoId;
@@ -73,6 +72,7 @@ class MemoTreePage extends ConsumerStatefulWidget {
 class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   bool _showDeleted = false;
   final Set<String> _selectedDeletedIds = {};
+  final Map<String, String> _unlockedEncryptedContents = {};
 
   int _deletedMemoCount(AsyncValue<List<TreeDeletedMemo>> async) {
     if (async is AsyncData<List<TreeDeletedMemo>>) {
@@ -104,6 +104,160 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     final hh = value.hour.toString().padLeft(2, '0');
     final mm = value.minute.toString().padLeft(2, '0');
     return '$y.$m.$d $hh:$mm';
+  }
+
+  Future<String?> _requestEncryptionKey({
+    required String title,
+    required String message,
+  }) async {
+    final ctrl = TextEditingController();
+    final result = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(title),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            const SizedBox(height: 12),
+            TextField(
+              controller: ctrl,
+              obscureText: true,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '암호 키',
+                border: OutlineInputBorder(),
+              ),
+              onSubmitted: (_) => Navigator.pop(ctx, ctrl.text),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, ctrl.text),
+            child: const Text('확인'),
+          ),
+        ],
+      ),
+    );
+    final trimmed = result?.trim();
+    return trimmed == null || trimmed.isEmpty ? null : trimmed;
+  }
+
+  Future<void> _saveTreeMemoBody(TreeMemoNode node, String body) async {
+    final db = ref.read(appDatabaseProvider);
+    await (db.update(db.memos)..where((m) => m.memoId.equals(node.id))).write(
+      MemosCompanion(
+        content: Value('${node.title}\n$body'),
+        updatedAt: Value(DateTime.now()),
+      ),
+    );
+    ref.invalidate(treeMemosProvider);
+    await _syncTreeMemosIfConfigured();
+  }
+
+  Future<void> _syncTreeMemosIfConfigured() async {
+    final settings = await ServerSettings.load();
+    if (!settings.enabled || !settings.isConfigured) return;
+    try {
+      await ref.read(serverSyncServiceProvider).syncNotes(settings);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('로컬 저장 완료. 서버 동기화는 나중에 다시 시도하세요.')),
+      );
+    }
+  }
+
+  Future<void> _unlockTreeMemo(TreeMemoNode node) async {
+    final key = await _requestEncryptionKey(
+      title: '복호화',
+      message: '이 메모를 잠시 열어볼 암호 키를 입력하세요.',
+    );
+    if (key == null) return;
+    try {
+      final plain = await NoteEncryptionService().decrypt(node.content, key);
+      if (!mounted) return;
+      setState(() {
+        _unlockedEncryptedContents[node.id] = plain;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('메모를 복호화했습니다.')),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('복호화 실패: 암호 키를 확인하세요.'),
+          backgroundColor: Color(0xFFEF4444),
+        ),
+      );
+    }
+  }
+
+  void _lockTreeMemo(TreeMemoNode node) {
+    setState(() {
+      _unlockedEncryptedContents.remove(node.id);
+    });
+  }
+
+  Future<void> _removeTreeMemoEncryption(TreeMemoNode node) async {
+    final plain = _unlockedEncryptedContents[node.id];
+    if (plain == null) return;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('암호화 해제'),
+        content: const Text('이 메모를 평문으로 저장할까요? 서버와 동기화되면 서버에도 평문으로 저장됩니다.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('취소'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('해제'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    await _saveTreeMemoBody(node, plain);
+    _unlockedEncryptedContents.remove(node.id);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('암호화를 해제하고 평문으로 저장했습니다.')),
+    );
+  }
+
+  Future<void> _encryptTreeMemo(TreeMemoNode node) async {
+    if (node.content.trim().isEmpty) return;
+    final key = await _requestEncryptionKey(
+      title: '암호화',
+      message: '이 메모를 암호화할 키를 입력하세요. 키를 잊으면 복구할 수 없습니다.',
+    );
+    if (key == null) return;
+    try {
+      final encrypted = await NoteEncryptionService().encrypt(node.content, key);
+      await _saveTreeMemoBody(node, encrypted);
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('메모를 암호화했습니다.')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('암호화 실패: $e'),
+          backgroundColor: const Color(0xFFEF4444),
+        ),
+      );
+    }
   }
 
   Future<void> _deleteSelectedDeletedMemos() async {
@@ -565,8 +719,15 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
                           padding: const EdgeInsets.only(bottom: 100),
                           children: roots
                               .map(
-                                (node) =>
-                                    _TreeMemoTile(node: node, allNodes: nodes),
+                                (node) => _TreeMemoTile(
+                                  node: node,
+                                  allNodes: nodes,
+                                  unlockedContents: _unlockedEncryptedContents,
+                                  onUnlock: _unlockTreeMemo,
+                                  onLock: _lockTreeMemo,
+                                  onRemoveEncryption: _removeTreeMemoEncryption,
+                                  onEncrypt: _encryptTreeMemo,
+                                ),
                               )
                               .toList(),
                         );
@@ -611,11 +772,12 @@ class TreeMemoNode {
     required this.tags,
   });
 
-  bool get isEncrypted => _isEncryptedMemoContent(content);
+  bool get isEncrypted => isEncryptedNoteContent(content);
 
-  String get displayContent => isEncrypted
-      ? '암호화된 메모입니다. Web/설치형 프로그램에서 복호화하세요.'
-      : content;
+  String displayContent(String? unlockedContent) {
+    if (!isEncrypted) return content;
+    return unlockedContent ?? '암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.';
+  }
 
   factory TreeMemoNode.fromMemo(Memo memo) {
     final tags = _parseTags(memo.tags);
@@ -633,10 +795,6 @@ class TreeMemoNode {
   }
 }
 
-bool _isEncryptedMemoContent(String? content) {
-  return (content ?? '').startsWith(_encryptedMemoPrefix);
-}
-
 Map<String, String> _parseTags(String? raw) {
   final result = <String, String>{};
   for (final part in (raw ?? '').split(';')) {
@@ -650,8 +808,21 @@ Map<String, String> _parseTags(String? raw) {
 class _TreeMemoTile extends ConsumerWidget {
   final TreeMemoNode node;
   final List<TreeMemoNode> allNodes;
+  final Map<String, String> unlockedContents;
+  final Future<void> Function(TreeMemoNode node) onUnlock;
+  final void Function(TreeMemoNode node) onLock;
+  final Future<void> Function(TreeMemoNode node) onRemoveEncryption;
+  final Future<void> Function(TreeMemoNode node) onEncrypt;
 
-  const _TreeMemoTile({required this.node, required this.allNodes});
+  const _TreeMemoTile({
+    required this.node,
+    required this.allNodes,
+    required this.unlockedContents,
+    required this.onUnlock,
+    required this.onLock,
+    required this.onRemoveEncryption,
+    required this.onEncrypt,
+  });
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -659,6 +830,8 @@ class _TreeMemoTile extends ConsumerWidget {
     final indent = (node.level - 1) * 16.0;
     final addParent = _resolveAddParent(node);
     final addLevel = addParent == null ? null : _resolveNextLevel(addParent);
+    final unlockedContent = unlockedContents[node.id];
+    final displayContent = node.displayContent(unlockedContent);
 
     return Padding(
       padding: EdgeInsets.only(left: indent, bottom: 8),
@@ -683,14 +856,30 @@ class _TreeMemoTile extends ConsumerWidget {
           title: InkWell(
             onTap: () {
               if (node.isEncrypted) {
+                if (unlockedContent != null) {
+                  _showTreeMemoContentSheet(
+                    context,
+                    ref,
+                    node,
+                    unlockedContent,
+                    editable: false,
+                  );
+                  return;
+                }
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
-                    content: Text('암호화된 메모는 Web/설치형 프로그램에서 복호화 후 편집할 수 있습니다.'),
+                    content: Text('암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.'),
                   ),
                 );
                 return;
               }
-              _showTreeMemoDialog(context, ref, editingNode: node);
+              _showTreeMemoContentSheet(
+                context,
+                ref,
+                node,
+                displayContent,
+                editable: true,
+              );
             },
             child: Text(
               node.title,
@@ -701,10 +890,10 @@ class _TreeMemoTile extends ConsumerWidget {
               ),
             ),
           ),
-          subtitle: node.displayContent.isEmpty
+          subtitle: displayContent.isEmpty
               ? null
               : Text(
-                  node.displayContent,
+                  displayContent,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -715,6 +904,40 @@ class _TreeMemoTile extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
+              IconButton(
+                tooltip: node.isEncrypted
+                    ? (unlockedContent == null ? '복호화' : '잠금')
+                    : '암호화',
+                icon: Icon(
+                  node.isEncrypted
+                      ? (unlockedContent == null
+                            ? Icons.lock_open_outlined
+                            : Icons.lock_outline)
+                      : Icons.enhanced_encryption_outlined,
+                  size: 18,
+                ),
+                constraints: const BoxConstraints.tightFor(
+                  width: 36,
+                  height: 36,
+                ),
+                padding: EdgeInsets.zero,
+                onPressed: node.isEncrypted
+                    ? (unlockedContent == null
+                          ? () => onUnlock(node)
+                          : () => onLock(node))
+                    : () => onEncrypt(node),
+              ),
+              if (node.isEncrypted && unlockedContent != null)
+                IconButton(
+                  tooltip: '암호화 해제',
+                  icon: const Icon(Icons.no_encryption_outlined, size: 18),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 36,
+                    height: 36,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () => onRemoveEncryption(node),
+                ),
               IconButton(
                 tooltip: '서버 분석',
                 icon: const Icon(Icons.auto_awesome_outlined, size: 18),
@@ -760,12 +983,118 @@ class _TreeMemoTile extends ConsumerWidget {
             ],
           ),
           children: children
-              .map((child) => _TreeMemoTile(node: child, allNodes: allNodes))
+              .map(
+                (child) => _TreeMemoTile(
+                  node: child,
+                  allNodes: allNodes,
+                  unlockedContents: unlockedContents,
+                  onUnlock: onUnlock,
+                  onLock: onLock,
+                  onRemoveEncryption: onRemoveEncryption,
+                  onEncrypt: onEncrypt,
+                ),
+              )
               .toList(),
         ),
       ),
     );
   }
+}
+
+Future<void> _showTreeMemoContentSheet(
+  BuildContext context,
+  WidgetRef ref,
+  TreeMemoNode node,
+  String content, {
+  required bool editable,
+}) async {
+  await showModalBottomSheet<void>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => DraggableScrollableSheet(
+      expand: false,
+      initialChildSize: 0.78,
+      minChildSize: 0.45,
+      maxChildSize: 0.95,
+      builder: (ctx, scrollController) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 18),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 42,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFE5E7EB),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      node.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Color(0xFF111827),
+                      ),
+                    ),
+                  ),
+                  if (editable)
+                    TextButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        _showTreeMemoDialog(context, ref, editingNode: node);
+                      },
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('편집'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                _treeMemoKind(node.level),
+                style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
+              ),
+              const Divider(height: 24),
+              Expanded(
+                child: content.trim().isEmpty
+                    ? const Center(
+                        child: Text(
+                          '메모 내용이 없습니다',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Color(0xFF9CA3AF),
+                          ),
+                        ),
+                      )
+                    : SingleChildScrollView(
+                        controller: scrollController,
+                        child: SelectableText(
+                          content,
+                          style: const TextStyle(
+                            fontSize: 15,
+                            height: 1.55,
+                            color: Color(0xFF111827),
+                          ),
+                        ),
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
 }
 
 Future<void> _requestTreeMemoAnalysis(
