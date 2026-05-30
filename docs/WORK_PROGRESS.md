@@ -40,6 +40,18 @@
 - `uv run python -m py_compile server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
 - `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1125/1125.
 - `git diff --check` 통과.
+
+### 추가 수정
+
+- `/admin/help` smoke 검증에서 인증 API, 2단계, 데이터 격리 같은 도움말 본문 문구 강제 검증을 제거.
+- 도움말은 페이지 렌더링과 운영 화면 링크만 확인하도록 축소.
+- 도움말 내용 변경이 서버 배포 smoke 실패로 이어지지 않도록 정리.
+
+### 추가 검증
+
+- `uv run python -m py_compile server\scripts\smoke_test.py server\scripts\preflight.py` 통과.
+- `uv run python scripts\preflight.py --env-file .env.example --allow-example` 통과: 1125/1125.
+- `git diff --check` 통과.
 - 임시 SQLite DB + FastAPI TestClient로 회원가입, Web 세션, 기기 토큰 발급/재확인, Web 로그인, token-login, 중복 가입 차단, SMTP 미설정 시 비밀번호 재설정 요청 503 흐름 확인.
 - `desktop` Web 자산 동기화 후 `npm run dist:win`으로 설치 파일 재생성.
 - 설치 파일: `desktop/dist/NowNote-Setup-0.1.0-x64.exe`, 100,987,923 bytes, SHA256 `EC8C65F95599B62F456D5B1C7EC3BCDDD757F624EABCE830B58DEE9A941C62C3`.

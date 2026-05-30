@@ -527,13 +527,10 @@ def main() -> None:
             )
             require("공개 도메인 연결" in text, "운영 점검 화면에 공개 도메인 실제 연결 항목이 없습니다")
         if path == "/admin/help":
-            require("/auth/token" in text or "/api/v1/auth/token-login" in text, "도움말 화면에 인증 API 안내가 없습니다")
-            require("2단계 코드 검증" in text, "도움말 화면에 2단계 코드 검증 점검 안내가 없습니다")
-            require("기기 등록" in text, "도움말 화면에 공용 서버 기기 등록 점검 안내가 없습니다")
-            require("데이터 격리" in text, "도움말 화면에 공용 서버 데이터 격리 점검 안내가 없습니다")
-            require("/admin/deploy" in text, "도움말 화면에 배포 체크리스트 링크가 없습니다")
-            require("배포 직후" in text and "/admin/export" in text, "도움말 화면에 배포 후 백업 확인 안내가 없습니다")
-            require("bad" in text and "warn" in text and "/admin/ops" in text, "도움말 화면에 복구 검증 결과 대응 안내가 없습니다")
+            require("<title>NowNote 도움말</title>" in text, "도움말 화면 제목이 없습니다")
+            require("/admin/deploy" in text, "도움말 화면에 배포 화면 링크가 없습니다")
+            require("/admin/ops" in text, "도움말 화면에 운영 점검 화면 링크가 없습니다")
+            require("/admin/export" in text, "도움말 화면에 내보내기 화면 링크가 없습니다")
         print(f"GET {path}: {status} html={len(text)} bytes")
 
     status, data = request(
