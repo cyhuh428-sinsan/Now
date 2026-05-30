@@ -2,6 +2,7 @@ import argparse
 import base64
 import hashlib
 import hmac
+import http.client
 import json
 import re
 import time
@@ -232,7 +233,12 @@ def wait_until_ready(base_url: str, token: str | None, retries: int, delay_secon
             if retries > 1:
                 print(f"GET /health/ready: ready after {attempt}/{retries}")
             return
-        except (urllib.error.HTTPError, urllib.error.URLError) as exc:
+        except (
+            urllib.error.HTTPError,
+            urllib.error.URLError,
+            http.client.HTTPException,
+            OSError,
+        ) as exc:
             if attempt >= retries:
                 raise
             print(f"GET /health/ready: waiting {attempt}/{retries} ({exc})")
@@ -253,7 +259,7 @@ def main() -> None:
     parser.add_argument(
         "--ready-retries",
         type=int,
-        default=1,
+        default=10,
         help="Number of readiness attempts before running full checks",
     )
     parser.add_argument(
