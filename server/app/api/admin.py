@@ -14,13 +14,20 @@ from app.core.capabilities import API_VERSION, public_server_readiness_checks
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
-from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice
+from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.public_route import public_route_ops_check, public_route_summary
 from app.services.release_evidence import release_evidence_summary, release_evidence_template
 from app.services.release_readiness import release_readiness_summary
-from app.services.user_accounts import create_user_account, issue_user_access_token, update_user_account
+from app.services.user_accounts import (
+    ensure_user_group,
+    ensure_user_groups,
+    create_user_account,
+    issue_user_access_token,
+    update_user_account,
+    update_user_group,
+)
 from app.services.user_devices import set_user_device_active
 
 router = APIRouter(
@@ -42,6 +49,17 @@ class UserAccountUpdate(BaseModel):
 
 class UserAccountCreate(UserAccountUpdate):
     owner_id: str = Field(max_length=80)
+
+
+class UserGroupCreate(BaseModel):
+    name: str = Field(max_length=80)
+    description: str = Field(default="", max_length=240)
+    sort_order: int = Field(default=100, ge=0, le=9999)
+    is_active: bool = True
+
+
+class UserGroupUpdate(UserGroupCreate):
+    pass
 
 
 class BackupVerifyRequest(BaseModel):
@@ -327,6 +345,66 @@ def verify_export(payload: BackupVerifyRequest) -> dict:
         "status_counts": status_counts,
         "checks": checks,
     }
+
+
+@router.get("/groups")
+def user_groups(db: Session = Depends(get_db)) -> dict:
+    groups = ensure_user_groups(db)
+    db.commit()
+    user_counts = dict(
+        db.execute(
+            select(UserAccount.group_name, func.count())
+            .group_by(UserAccount.group_name)
+        ).all()
+    )
+    return {
+        "count": len(groups),
+        "items": [
+            {
+                **_model_to_dict(group),
+                "user_count": int(user_counts.get(group.name, 0)),
+            }
+            for group in groups
+        ],
+    }
+
+
+@router.post("/groups")
+def create_group(
+    payload: UserGroupCreate,
+    db: Session = Depends(get_db),
+) -> dict:
+    group = ensure_user_group(
+        db,
+        payload.name,
+        description=payload.description,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    db.commit()
+    db.refresh(group)
+    return {"status": "ok", "group": _model_to_dict(group)}
+
+
+@router.patch("/groups/{group_id}")
+def patch_group(
+    group_id: int,
+    payload: UserGroupUpdate,
+    db: Session = Depends(get_db),
+) -> dict:
+    group = update_user_group(
+        db,
+        group_id=group_id,
+        name=payload.name,
+        description=payload.description,
+        sort_order=payload.sort_order,
+        is_active=payload.is_active,
+    )
+    if group is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="group not found")
+    db.commit()
+    db.refresh(group)
+    return {"status": "ok", "group": _model_to_dict(group)}
 
 
 @router.get("/users")
@@ -1001,6 +1079,8 @@ def _model_to_dict(row) -> dict:
         data.pop("access_token_value", None)
         data["is_active"] = bool(row.is_active)
         data["access_token_configured"] = bool(row.access_token_hash)
+    if isinstance(row, UserGroup):
+        data["is_active"] = bool(row.is_active)
     return data
 
 

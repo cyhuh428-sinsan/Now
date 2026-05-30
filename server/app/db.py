@@ -35,6 +35,7 @@ def create_tables() -> None:
         SyncLog,
         UserAccount,
         UserDevice,
+        UserGroup,
         WebSession,
     )
 

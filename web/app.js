@@ -351,7 +351,7 @@ const I18N = {
     "settings.server.guide.local": "단독 사용: 서버 없이 이 기기에만 저장합니다.",
     "settings.server.guide.personal": "설치형/앱: 서버 주소, 사용자 ID, 앱/설치형 접속 토큰을 입력합니다.",
     "settings.server.guide.public": "Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인하며 토큰을 입력하지 않습니다.",
-    "settings.server.guide.issue": "앱/설치형 접속 토큰은 서버 관리자 화면 /admin/users에서 발급합니다.",
+    "settings.server.guide.issue": "앱/설치형 접속 토큰은 Web 로그인 후 내 연결 토큰 화면에서 직접 발급합니다.",
     "settings.server.profile.title": "사용자 프로필",
     "settings.server.profile.desc": "표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.",
     "settings.server.profile.displayName": "표시 이름",
@@ -887,7 +887,7 @@ const I18N = {
     "settings.server.guide.local": "Standalone: save only on this device without a server.",
     "settings.server.guide.personal": "Desktop/app: enter the server URL, user ID, and app/desktop access token.",
     "settings.server.guide.public": "Web: log in at the server address with user ID and password. No token entry is needed.",
-    "settings.server.guide.issue": "App/desktop access tokens are issued at /admin/users.",
+    "settings.server.guide.issue": "App/desktop access tokens are issued from your connection-token panel after Web sign-in.",
     "settings.server.profile.title": "User profile",
     "settings.server.profile.desc": "Save display name, email, and time zone as server user information.",
     "settings.server.profile.displayName": "Display name",
@@ -1147,6 +1147,7 @@ const state = {
 let storageWarningShown = false;
 let hostedWebSyncTimer = null;
 let hostedWebSyncSuspended = false;
+let webLoginMode = "login";
 
 function defaultData() {
   return {
@@ -1590,6 +1591,7 @@ function applyWebSession(session) {
 function showWebLogin(message = t("web.login.ready"), status = "") {
   if (!elements.webLoginView) return;
   elements.webLoginView.classList.remove("hidden");
+  renderWebLoginMode();
   elements.webLoginStatus.textContent = message;
   elements.webLoginStatus.classList.toggle("bad", status === "bad");
   elements.webLoginStatus.classList.toggle("ok", status === "ok");
@@ -1599,8 +1601,31 @@ function hideWebLogin() {
   elements.webLoginView?.classList.add("hidden");
 }
 
+function setWebLoginMode(mode) {
+  webLoginMode = ["login", "register", "reset-request", "reset-confirm"].includes(mode) ? mode : "login";
+  renderWebLoginMode();
+}
+
+function renderWebLoginMode() {
+  if (!elements.webLoginView) return;
+  document.querySelectorAll("[data-login-mode]").forEach((node) => {
+    const modes = String(node.dataset.loginMode || "").split(/\s+/);
+    node.classList.toggle("hidden", !modes.includes(webLoginMode));
+  });
+  const buttonModes = new Map([
+    [elements.webLoginSubmitBtn, ["login", "register", "reset-request", "reset-confirm"]],
+    [elements.webRegisterSubmitBtn, ["login", "register"]],
+    [elements.webResetRequestBtn, ["login", "reset-request"]],
+    [elements.webResetConfirmBtn, ["reset-confirm"]],
+  ]);
+  buttonModes.forEach((modes, button) => {
+    button?.classList.toggle("hidden", !modes.includes(webLoginMode));
+  });
+}
+
 async function handleWebLoginSubmit(event) {
   event.preventDefault();
+  setWebLoginMode("login");
   if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const password = elements.webLoginPasswordInput.value;
@@ -1642,6 +1667,12 @@ async function handleWebLoginSubmit(event) {
 
 async function handleWebRegisterSubmit() {
   if (!isHostedWebClient()) return;
+  if (webLoginMode !== "register") {
+    setWebLoginMode("register");
+    showWebLogin(t("web.login.emailPlaceholder"));
+    elements.webRegisterEmailInput.focus();
+    return;
+  }
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const password = elements.webLoginPasswordInput.value;
   const email = elements.webRegisterEmailInput.value.trim();
@@ -1694,6 +1725,12 @@ async function handleWebRegisterSubmit() {
 
 async function handlePasswordResetRequest() {
   if (!isHostedWebClient()) return;
+  if (webLoginMode !== "reset-request") {
+    setWebLoginMode("reset-request");
+    showWebLogin(t("web.login.resetRequest"));
+    elements.webRegisterEmailInput.focus();
+    return;
+  }
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const email = elements.webRegisterEmailInput.value.trim();
   if (!ownerId || !email) {
@@ -1709,7 +1746,9 @@ async function handlePasswordResetRequest() {
       body: JSON.stringify({ owner_id: ownerId, email }),
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
+    setWebLoginMode("reset-confirm");
     showWebLogin(t("web.login.resetRequested"), "ok");
+    elements.webResetCodeInput.focus();
   } catch (error) {
     showWebLogin(t("web.login.resetFailed", { message: error.message }), "bad");
   } finally {
@@ -1719,6 +1758,7 @@ async function handlePasswordResetRequest() {
 
 async function handlePasswordResetConfirm() {
   if (!isHostedWebClient()) return;
+  setWebLoginMode("reset-confirm");
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const resetCode = elements.webResetCodeInput.value.trim();
   const newPassword = elements.webLoginPasswordInput.value;

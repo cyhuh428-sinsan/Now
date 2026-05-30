@@ -81,6 +81,11 @@ button {
   font-weight: 800;
 }
 
+.web-login-card label.hidden,
+.web-login-actions .hidden {
+  display: none;
+}
+
 .web-login-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

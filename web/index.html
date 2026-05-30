@@ -27,15 +27,15 @@
         <span id="webLoginPasswordLabel">비밀번호</span>
         <input id="webLoginPasswordInput" class="settings-input" type="password" autocomplete="current-password" required>
       </label>
-      <label>
+      <label class="web-login-extra" data-login-mode="register reset-request reset-confirm">
         <span id="webRegisterEmailLabel">등록 이메일</span>
         <input id="webRegisterEmailInput" class="settings-input" type="email" autocomplete="email" placeholder="계정 만들기와 비밀번호 재설정에 사용">
       </label>
-      <label>
+      <label class="web-login-extra" data-login-mode="login">
         <span id="webLoginTwoFactorLabel">2단계 인증 코드</span>
         <input id="webLoginTwoFactorInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="사용 중일 때만 입력">
       </label>
-      <label>
+      <label class="web-login-extra" data-login-mode="reset-confirm">
         <span id="webResetCodeLabel">비밀번호 재설정 코드</span>
         <input id="webResetCodeInput" class="settings-input" type="text" autocomplete="one-time-code" placeholder="메일로 받은 코드">
       </label>
@@ -438,7 +438,7 @@
                   <li id="serverGuideLocal">단독 사용: 서버 없이 이 기기에만 저장합니다.</li>
                   <li id="serverGuidePersonal">설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.</li>
                   <li id="serverGuidePublic">Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.</li>
-                  <li id="serverGuideIssue">사용자별 접속 토큰은 설치형/앱용이며 서버 관리자 화면 /admin/users에서 발급합니다.</li>
+                  <li id="serverGuideIssue">앱/설치형 접속 토큰은 Web 로그인 후 내 연결 토큰 화면에서 직접 발급합니다.</li>
                 </ul>
               </div>
               <label class="desktop-server-only">

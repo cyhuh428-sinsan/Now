@@ -98,6 +98,20 @@ class UserAccount(Base):
     )
 
 
+class UserGroup(Base):
+    __tablename__ = "user_groups"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    description: Mapped[str] = mapped_column(String(240), default="")
+    is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    sort_order: Mapped[int] = mapped_column(Integer, default=100, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class UserDevice(Base):
     __tablename__ = "user_devices"
     __table_args__ = (

@@ -2,8 +2,20 @@ const { app, BrowserWindow, Menu, shell } = require("electron");
 const path = require("path");
 
 const APP_TITLE = "NowNote";
+const APP_INDEX = path.join(__dirname, "app", "index.html");
+const APP_HELP = path.join(__dirname, "app", "help.html");
 
-function createMainWindow() {
+function loadAppFile(filePath) {
+  const [window] = BrowserWindow.getAllWindows();
+  if (window) {
+    window.loadFile(filePath);
+    window.focus();
+  } else {
+    createMainWindow(filePath);
+  }
+}
+
+function createMainWindow(startFile = APP_INDEX) {
   const iconPath = path.join(__dirname, "app", "icons", "nownote-icon.svg");
   const window = new BrowserWindow({
     title: APP_TITLE,
@@ -20,7 +32,7 @@ function createMainWindow() {
     },
   });
 
-  window.loadFile(path.join(__dirname, "app", "index.html"));
+  window.loadFile(startFile);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:")) {
@@ -62,6 +74,20 @@ function createMenu() {
         { role: "resetZoom", label: "기본 크기" },
         { type: "separator" },
         { role: "togglefullscreen", label: "전체 화면" },
+      ],
+    },
+    {
+      label: "도움말",
+      submenu: [
+        {
+          label: "NowNote 도움말",
+          accelerator: "F1",
+          click: () => loadAppFile(APP_HELP),
+        },
+        {
+          label: "NowNote로 돌아가기",
+          click: () => loadAppFile(APP_INDEX),
+        },
       ],
     },
   ]);
