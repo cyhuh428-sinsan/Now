@@ -5,8 +5,8 @@ BASE_URL="http://localhost:8750"
 PUBLIC_SERVER=false
 SKIP_PULL=false
 SMOKE_TIMEOUT="30"
-READY_RETRIES="10"
-READY_DELAY="3"
+READY_RETRIES="60"
+READY_DELAY="2"
 USER_TOKEN=""
 ISSUE_LOCAL_USER_TOKEN=false
 
@@ -22,8 +22,8 @@ NowNote 로컬/WSL 서버 갱신 도우미
   --public-server      공용 서버 오픈 전 preflight 기준까지 확인
   --skip-pull          git pull origin main 생략
   --timeout 초         smoke test 요청 대기 시간. 기본: 30
-  --ready-retries 횟수 /health/ready 준비 재시도 횟수. 기본: 10
-  --ready-delay 초     /health/ready 재시도 간격. 기본: 3
+  --ready-retries 횟수 /health/ready 준비 재시도 횟수. 기본: 60
+  --ready-delay 초     /health/ready 재시도 간격. 기본: 2
   --user-token TOKEN   NOW_USER_TOKEN_REQUIRED=true smoke test에 사용할 사용자별 접속 토큰
   --issue-local-user-token
                       호환용 옵션. 공용 모드에서는 사용자 토큰이 없으면 자동 발급됩니다.
