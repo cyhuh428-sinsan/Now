@@ -115,7 +115,7 @@ NowNote 1.x는 한 번에 1.5나 2.0으로 뛰지 않고 아래 순서로 단계
 | 1.4 | Canvas와 시각적 사고 정리 | `docs/NOW_1_4_CANVAS_DESIGN.md` |
 | 1.5 | 첨부/미디어/빠른 기록 | `docs/NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md` |
 | 1.6 | 작성 보조와 명령 체계 | `docs/NOW_1_6_WRITING_COMMAND_DESIGN.md` |
-| 1.7 | 복구/가져오기/마이그레이션 | 별도 1.7 설계서 작성 예정 |
+| 1.7 | 복구/가져오기/마이그레이션 | `docs/NOW_1_7_RECOVERY_IMPORT_DESIGN.md` |
 | 1.8 | 출판/발표/공개 지식 묶음 | 별도 1.8 설계서 작성 예정 |
 | 1.9 | 작업공간/운영형 지식 관리 완성 | 별도 1.9 설계서 작성 예정 |
 | 2.0 | Obsidian 유용 기능 흡수 완료와 LLM 지식화 | 별도 2.0 설계서 작성 예정 |

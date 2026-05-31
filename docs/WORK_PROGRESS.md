@@ -5,6 +5,14 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.7 복구/가져오기/마이그레이션 시작
+
+- `main`의 1.6 병합 완료 상태를 기준으로 `codex/recovery-import-1.7` 브랜치 생성.
+- `docs/NOW_1_7_RECOVERY_IMPORT_DESIGN.md`를 추가해 1.7 완료 기준 문서로 확정.
+- Web/설치형 공통 화면 설정에 복구/가져오기 점검 패널을 추가해 수동 스냅샷, 스냅샷 복구, 가져오기 진단을 확인하도록 구현.
+- JSON/Markdown 가져오기 전 자동 스냅샷을 남기도록 보강.
+- 일반 Markdown frontmatter를 NowNote 속성으로 매핑하고 Obsidian wiki 링크/첨부 표기를 보정해 진단 목록에 표시하도록 구현.
+
 ### NowNote 1.6 작성 보조와 명령 체계 시작
 
 - `main`의 1.5 병합 완료 상태를 기준으로 `codex/writing-command-1.6` 브랜치 생성.

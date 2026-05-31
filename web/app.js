@@ -100,6 +100,9 @@ const I18N = {
     "note.markdownImportConfirm": "{count}개 Markdown 파일을 가져올까요? 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportDone": "Markdown 가져오기 완료: 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportError": "Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
+    "note.snapshotCreated": "복구 스냅샷을 만들었습니다.",
+    "note.snapshotRestored": "선택한 스냅샷으로 복구했습니다.",
+    "note.snapshotRestoreConfirm": "선택한 스냅샷으로 현재 데이터를 복구할까요? 현재 상태도 먼저 스냅샷으로 남깁니다.",
     "note.fallbackMarkDownTitle": "가져온 Markdown",
     "note.exportDenied": "파일을 내보낼 수 없습니다. 브라우저 다운로드 권한이나 저장 공간을 확인해 주세요.",
     "note.newNote": "새 메모",
@@ -678,6 +681,9 @@ const I18N = {
     "note.markdownImportConfirm": "Import {count} Markdown file(s)? Notes: {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportDone": "Markdown import complete: note {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportError": "Unable to read Markdown file. Please check file permission or format.",
+    "note.snapshotCreated": "Recovery snapshot created.",
+    "note.snapshotRestored": "Restored the selected snapshot.",
+    "note.snapshotRestoreConfirm": "Restore current data from the selected snapshot? The current state will be saved as a snapshot first.",
     "note.fallbackMarkDownTitle": "Imported markdown",
     "note.exportDenied": "Unable to export file. Please check browser download permission or disk space.",
     "note.newNote": "New note",
@@ -1550,6 +1556,8 @@ function defaultData() {
     deletedTree: [],
     canvases: [],
     captures: [],
+    snapshots: [],
+    importReports: [],
     tree: [],
   };
 }
@@ -1990,6 +1998,11 @@ const elements = {
   captureSearchInput: $("#captureSearchInput"),
   captureSummary: $("#captureSummary"),
   captureList: $("#captureList"),
+  snapshotCreateBtn: $("#snapshotCreateBtn"),
+  snapshotSelect: $("#snapshotSelect"),
+  snapshotRestoreBtn: $("#snapshotRestoreBtn"),
+  snapshotSummary: $("#snapshotSummary"),
+  importReportList: $("#importReportList"),
   confirmDialog: $("#confirmDialog"),
   confirmTitle: $("#confirmTitle"),
   confirmMessage: $("#confirmMessage"),
@@ -2839,6 +2852,14 @@ function bindEvents() {
   elements.exportBtn.addEventListener("click", exportData);
   elements.importInput.addEventListener("change", importData);
   elements.importMarkdownInput.addEventListener("change", importMarkdownData);
+  elements.snapshotCreateBtn?.addEventListener("click", () => {
+    createRecoverySnapshot("manual");
+    persist();
+    renderRecoveryPanel();
+    showNotice(t("note.snapshotCreated"), "success");
+  });
+  elements.snapshotRestoreBtn?.addEventListener("click", restoreSelectedSnapshot);
+  elements.snapshotSelect?.addEventListener("change", renderRecoveryPanel);
   elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
   elements.searchPopoverInput.addEventListener("keydown", handleSearchPopoverInputKey);
   elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
@@ -7376,6 +7397,7 @@ function render() {
   if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
   if (!elements.canvasView.classList.contains("hidden")) renderCanvas();
   if (!elements.captureView.classList.contains("hidden")) renderCaptures();
+  renderRecoveryPanel();
 }
 
 function renderDeletedTreeButton() {
@@ -9623,6 +9645,8 @@ function normalizeData() {
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
   state.data.canvases = Array.isArray(state.data.canvases) ? state.data.canvases : [];
   state.data.captures = Array.isArray(state.data.captures) ? state.data.captures : [];
+  state.data.snapshots = Array.isArray(state.data.snapshots) ? state.data.snapshots : [];
+  state.data.importReports = Array.isArray(state.data.importReports) ? state.data.importReports : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
   state.data.daily = normalizeDailyNotes(state.data.daily);
@@ -9630,6 +9654,8 @@ function normalizeData() {
   state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
   state.data.canvases = state.data.canvases.filter(isPlainObject).map(normalizeCanvas).slice(0, 12);
   state.data.captures = state.data.captures.filter(isPlainObject).map(normalizeCaptureCard).slice(0, 500);
+  state.data.snapshots = state.data.snapshots.filter(isPlainObject).map(normalizeRecoverySnapshot).slice(0, 12);
+  state.data.importReports = state.data.importReports.filter(isPlainObject).map(normalizeImportReport).slice(0, 20);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
   Object.values(state.data.daily).forEach((note) => {
@@ -9660,6 +9686,28 @@ function normalizeData() {
     node.tags = Array.isArray(node.tags) ? node.tags : extractTags(node.content);
   });
   normalizeTreeNodes(state.data.tree, null, 1);
+}
+
+function normalizeRecoverySnapshot(snapshot = {}) {
+  return {
+    id: typeof snapshot.id === "string" && snapshot.id ? snapshot.id : crypto.randomUUID(),
+    reason: normalizeText(snapshot.reason).slice(0, 40) || "snapshot",
+    createdAt: snapshot.createdAt || new Date().toISOString(),
+    summary: isPlainObject(snapshot.summary) ? snapshot.summary : backupSummary(snapshot.data || {}),
+    data: isBackupData(snapshot.data) ? backupDataShape(snapshot.data, { includeRecoveryMeta: false }) : defaultData(),
+  };
+}
+
+function normalizeImportReport(report = {}) {
+  return {
+    id: typeof report.id === "string" && report.id ? report.id : crypto.randomUUID(),
+    source: normalizeText(report.source).slice(0, 80) || "import",
+    createdAt: report.createdAt || new Date().toISOString(),
+    nodes: Math.max(0, Number(report.nodes) || 0),
+    fixes: Math.max(0, Number(report.fixes) || 0),
+    warnings: Math.max(0, Number(report.warnings) || 0),
+    messages: Array.isArray(report.messages) ? report.messages.map((message) => normalizeText(message).slice(0, 180)).slice(0, 20) : [],
+  };
 }
 
 function normalizeDailyNotes(daily) {
@@ -9949,8 +9997,13 @@ function importData(event) {
       })))) {
         return;
       }
+      createRecoverySnapshot("before-json-import");
+      const preservedSnapshots = state.data.snapshots;
+      const preservedReports = state.data.importReports;
       downloadCurrentBackup("nownote-before-import");
       state.data = backupDataShape(imported.data);
+      state.data.snapshots = preservedSnapshots;
+      state.data.importReports = preservedReports;
       if (imported.settings) {
         state.settings = normalizeSettings(imported.settings);
         persistSettings();
@@ -9998,12 +10051,13 @@ async function importMarkdownData(event) {
           archivedDailyNotes,
         };
       }
-      const title = titleFromMarkdownFile(file.name, content);
+      const converted = markdownFileToImportNode(file.name, content);
       return {
-        title,
-        nodes: [createNode(title, content, null, 1)],
+        title: converted.title,
+        nodes: [converted.node],
         dailyNotes: [],
         archivedDailyNotes: [],
+        report: converted.report,
       };
     }))).filter(Boolean);
     if (imports.length === 0) {
@@ -10020,6 +10074,8 @@ async function importMarkdownData(event) {
     ].join("\n")))) {
       return;
     }
+    createRecoverySnapshot("before-markdown-import");
+    recordImportReport("Markdown 가져오기", imports);
     const nodes = imports.flatMap((item) => item.nodes);
     const dailyNotes = imports.flatMap((item) => item.dailyNotes || []);
     const archivedDailyNotes = imports.flatMap((item) => item.archivedDailyNotes || []);
@@ -10076,6 +10132,184 @@ function readTextFile(file) {
       reject(error);
     }
   });
+}
+
+function markdownFileToImportNode(fileName, content) {
+  const { attributes, body, messages, fixes } = parseMarkdownFrontmatter(content);
+  const converted = convertObsidianMarkdown(body || content);
+  const title = normalizeText(attributes.title).slice(0, 80) || titleFromMarkdownFile(fileName, converted.content);
+  const node = createNode(title, converted.content, null, 1);
+  node.properties = propertiesFromFrontmatter(attributes);
+  node.tags = frontmatterTags(attributes).length ? frontmatterTags(attributes) : extractTags(node.content);
+  node.favorite = Boolean(attributes.favorite || attributes.pinned);
+  return {
+    title,
+    node,
+    report: {
+      fixes: fixes + converted.fixes,
+      warnings: messages.length + converted.messages.length,
+      messages: [...messages, ...converted.messages],
+    },
+  };
+}
+
+function parseMarkdownFrontmatter(content) {
+  const match = String(content || "").match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { attributes: {}, body: content, messages: [], fixes: 0 };
+  const attributes = {};
+  const messages = [];
+  match[1].split(/\r?\n/).forEach((line) => {
+    const field = line.match(/^([A-Za-z0-9_-]+):\s*(.*)$/);
+    if (!field) {
+      if (line.trim()) messages.push(`frontmatter 보류: ${line.trim()}`);
+      return;
+    }
+    const key = field[1].trim();
+    let value = field[2].trim();
+    if (/^\[.*\]$/.test(value)) {
+      value = value.slice(1, -1).split(",").map((item) => item.trim().replace(/^["']|["']$/g, "")).filter(Boolean);
+    } else {
+      value = value.replace(/^["']|["']$/g, "");
+    }
+    attributes[key] = value;
+  });
+  return { attributes, body: match[2], messages, fixes: Object.keys(attributes).length };
+}
+
+function frontmatterTags(attributes) {
+  const tags = attributes.tags || attributes.tag;
+  if (Array.isArray(tags)) return tags.map((tag) => normalizeText(tag).replace(/^#/, "")).filter(Boolean);
+  return normalizeText(tags).split(/[,\s]+/).map((tag) => tag.replace(/^#/, "")).filter(Boolean);
+}
+
+function propertiesFromFrontmatter(attributes) {
+  return normalizeNoteProperties({
+    status: attributes.status || attributes.state || "",
+    priority: attributes.priority || "",
+    type: attributes.type || attributes.category || "",
+    project: attributes.project || "",
+    source: attributes.source || attributes.url || "",
+    author: attributes.author || "",
+    due: attributes.due || attributes.dueDate || attributes.deadline || "",
+  });
+}
+
+function convertObsidianMarkdown(content) {
+  const messages = [];
+  let fixes = 0;
+  let converted = String(content || "");
+  converted = converted.replace(/!\[\[([^\]]+)\]\]/g, (_match, target) => {
+    fixes += 1;
+    messages.push(`첨부 표기 보정: ${target}`);
+    return `[첨부: ${target}]`;
+  });
+  converted = converted.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, (_match, target) => {
+    fixes += 1;
+    messages.push(`별칭 링크 보정: ${target}`);
+    return `[[${target.trim()}]]`;
+  });
+  converted = converted.replace(/\[\[#([^\]]+)\]\]/g, (_match, target) => {
+    fixes += 1;
+    messages.push(`헤딩 링크 보류: ${target}`);
+    return `[[${target.trim()}]]`;
+  });
+  return { content: converted.trim(), fixes, messages };
+}
+
+function createRecoverySnapshot(reason = "manual") {
+  const snapshot = {
+    id: crypto.randomUUID(),
+    reason,
+    createdAt: new Date().toISOString(),
+    summary: backupSummary(state.data),
+    data: backupDataShape(state.data, { includeRecoveryMeta: false }),
+  };
+  state.data.snapshots = [snapshot, ...(state.data.snapshots || [])].slice(0, 12);
+  return snapshot;
+}
+
+async function restoreSelectedSnapshot() {
+  const snapshotId = elements.snapshotSelect?.value || "";
+  const snapshot = (state.data.snapshots || []).find((item) => item.id === snapshotId);
+  if (!snapshot) return;
+  if (!(await confirmAction(t("note.snapshotRestoreConfirm")))) return;
+  createRecoverySnapshot("before-restore");
+  const preservedSnapshots = state.data.snapshots;
+  const preservedReports = state.data.importReports;
+  state.data = backupDataShape(snapshot.data);
+  state.data.snapshots = preservedSnapshots;
+  state.data.importReports = preservedReports;
+  normalizeData();
+  state.selectedTreeId = null;
+  persist();
+  render();
+  showNotice(t("note.snapshotRestored"), "success");
+}
+
+function renderRecoveryPanel() {
+  if (!elements.snapshotSelect || !elements.snapshotSummary || !elements.importReportList) return;
+  const snapshots = Array.isArray(state.data.snapshots) ? state.data.snapshots : [];
+  const selected = elements.snapshotSelect.value;
+  elements.snapshotSelect.replaceChildren(
+    optionElement("", "스냅샷 선택"),
+    ...snapshots.map((snapshot) => optionElement(snapshot.id, snapshotLabel(snapshot))),
+  );
+  if (selected && snapshots.some((snapshot) => snapshot.id === selected)) {
+    elements.snapshotSelect.value = selected;
+  }
+  elements.snapshotRestoreBtn.disabled = !elements.snapshotSelect.value;
+  elements.snapshotSummary.textContent = snapshots.length
+    ? `최근 스냅샷 ${snapshots.length}개 · ${snapshotLabel(snapshots[0])}`
+    : "스냅샷이 없습니다.";
+  const reports = Array.isArray(state.data.importReports) ? state.data.importReports.slice(0, 6) : [];
+  if (!reports.length) {
+    elements.importReportList.textContent = "가져오기 진단이 없습니다.";
+    return;
+  }
+  elements.importReportList.replaceChildren(...reports.map(importReportElement));
+}
+
+function optionElement(value, text) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = text;
+  return option;
+}
+
+function snapshotLabel(snapshot) {
+  const summary = snapshot.summary || backupSummary(snapshot.data || {});
+  return `${formatBackupTime(snapshot.createdAt)} · ${snapshot.reason || "snapshot"} · 지식 ${summary.tree || 0}개`;
+}
+
+function importReportElement(report) {
+  const item = document.createElement("div");
+  item.className = "import-report-item";
+  const title = document.createElement("strong");
+  title.textContent = `${report.source || "Markdown"} · ${formatBackupTime(report.createdAt)}`;
+  const meta = document.createElement("span");
+  meta.textContent = `추가 ${report.nodes || 0}개 · 보정 ${report.fixes || 0}개 · 경고 ${report.warnings || 0}개`;
+  item.append(title, meta);
+  (report.messages || []).slice(0, 5).forEach((message) => {
+    const line = document.createElement("small");
+    line.textContent = message;
+    item.append(line);
+  });
+  return item;
+}
+
+function recordImportReport(source, imports) {
+  const messages = imports.flatMap((item) => item.report?.messages || []);
+  const report = {
+    id: crypto.randomUUID(),
+    source,
+    createdAt: new Date().toISOString(),
+    nodes: imports.reduce((count, item) => count + (item.nodes?.length || 0), 0),
+    fixes: imports.reduce((count, item) => count + (item.report?.fixes || 0), 0),
+    warnings: imports.reduce((count, item) => count + (item.report?.warnings || 0), 0),
+    messages,
+  };
+  state.data.importReports = [report, ...(state.data.importReports || [])].slice(0, 20);
+  return report;
 }
 
 function parseNowNoteMarkdownTree(content) {
@@ -10292,8 +10526,8 @@ function titleFromMarkdownFile(fileName, content) {
   return normalizeText(title).slice(0, 80) || t("note.fallbackMarkDownTitle");
 }
 
-function backupDataShape(data) {
-  return {
+function backupDataShape(data, options = {}) {
+  const shape = {
     daily: data.daily,
     archivedDaily: data.archivedDaily,
     deletedTree: data.deletedTree,
@@ -10301,6 +10535,11 @@ function backupDataShape(data) {
     captures: data.captures,
     tree: data.tree,
   };
+  if (options.includeRecoveryMeta !== false) {
+    shape.snapshots = data.snapshots;
+    shape.importReports = data.importReports;
+  }
+  return shape;
 }
 
 function parseBackupData(parsed) {
@@ -10323,6 +10562,8 @@ function isBackupData(data) {
     || Array.isArray(data.deletedTree)
     || Array.isArray(data.canvases)
     || Array.isArray(data.captures)
+    || Array.isArray(data.snapshots)
+    || Array.isArray(data.importReports)
   ));
 }
 
