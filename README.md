@@ -2,6 +2,10 @@
 
 ![NowNote Preflight](https://github.com/cyhuh428-sinsan/Now/actions/workflows/preflight.yml/badge.svg)
 
+> GitHub README는 사용자의 NowNote 언어 설정을 자동으로 읽을 수 없어서 한국어 기준으로 표시합니다.
+> Web/설치형 프로그램 안에서는 설정에서 한국어, English, 中文, 日本語, Tiếng Việt, العربية를 선택할 수 있습니다.
+> 영어 도움말은 [`docs/HELP.en.md`](docs/HELP.en.md)에서 확인할 수 있습니다.
+
 NowNote는 한국어 사용 흐름을 먼저 기준으로 만든 로컬/서버 병행 메모 시스템입니다.
 
 모바일 앱은 빠른 기록과 음성 메모를 중심으로 사용하고, Windows 설치형 프로그램은 PC 로컬 문서와 공유 문서를 함께 다룹니다. 서버 제공 Web 프로그램은 로컬 메모장이 아니라 서버에 공유된 내 문서만 접속하는 브라우저 클라이언트입니다. 서버는 Docker 기반으로 직접 운영하거나 공용 서버에 연결할 수 있도록 준비합니다.
