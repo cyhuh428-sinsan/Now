@@ -2,11 +2,13 @@ import 'dart:io';
 
 import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' hide Column;
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_sound/flutter_sound.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:speech_to_text/speech_to_text.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../../core/database/app_database.dart';
 import '../../services/note_encryption_service.dart';
 import '../../services/server_sync_service.dart';
@@ -1079,14 +1081,7 @@ Future<void> _showTreeMemoContentSheet(
                       )
                     : SingleChildScrollView(
                         controller: scrollController,
-                        child: SelectableText(
-                          content,
-                          style: const TextStyle(
-                            fontSize: 15,
-                            height: 1.55,
-                            color: Color(0xFF111827),
-                          ),
-                        ),
+                        child: _LinkifiedSelectableText(content: content),
                       ),
               ),
             ],
@@ -1095,6 +1090,87 @@ Future<void> _showTreeMemoContentSheet(
       ),
     ),
   );
+}
+
+class _LinkifiedSelectableText extends StatelessWidget {
+  final String content;
+
+  const _LinkifiedSelectableText({required this.content});
+
+  @override
+  Widget build(BuildContext context) {
+    const baseStyle = TextStyle(
+      fontSize: 15,
+      height: 1.55,
+      color: Color(0xFF111827),
+    );
+    const linkStyle = TextStyle(
+      fontSize: 15,
+      height: 1.55,
+      color: Color(0xFF2563EB),
+      decoration: TextDecoration.underline,
+    );
+    return SelectableText.rich(
+      TextSpan(
+        style: baseStyle,
+        children: _linkifiedMemoSpans(content, baseStyle, linkStyle),
+      ),
+    );
+  }
+}
+
+List<InlineSpan> _linkifiedMemoSpans(
+  String text,
+  TextStyle baseStyle,
+  TextStyle linkStyle,
+) {
+  final pattern = RegExp(
+    r'(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})',
+    caseSensitive: false,
+  );
+  final spans = <InlineSpan>[];
+  var index = 0;
+  for (final match in pattern.allMatches(text)) {
+    if (match.start > index) {
+      spans.add(TextSpan(text: text.substring(index, match.start), style: baseStyle));
+    }
+    final raw = match.group(0) ?? '';
+    final trimmed = raw.replaceFirst(RegExp(r'[.,;:!?]+$'), '');
+    final trailing = raw.substring(trimmed.length);
+    spans.add(
+      TextSpan(
+        text: trimmed,
+        style: linkStyle,
+        recognizer: TapGestureRecognizer()..onTap = () => _openMemoLink(trimmed),
+      ),
+    );
+    if (trailing.isNotEmpty) {
+      spans.add(TextSpan(text: trailing, style: baseStyle));
+    }
+    index = match.end;
+  }
+  if (index < text.length) {
+    spans.add(TextSpan(text: text.substring(index), style: baseStyle));
+  }
+  return spans;
+}
+
+Future<void> _openMemoLink(String value) async {
+  final target = _normalizeMemoLink(value);
+  final uri = Uri.tryParse(target);
+  if (uri == null) return;
+  await launchUrl(uri, mode: LaunchMode.externalApplication);
+}
+
+String _normalizeMemoLink(String value) {
+  final text = value.trim().replaceFirst(RegExp(r'[.,;:!?]+$'), '');
+  final emailPattern = RegExp(
+    r'^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$',
+    caseSensitive: false,
+  );
+  if (emailPattern.hasMatch(text)) return 'mailto:$text';
+  if (text.startsWith(RegExp(r'https?:\/\/', caseSensitive: false))) return text;
+  return 'https://$text';
 }
 
 Future<void> _requestTreeMemoAnalysis(

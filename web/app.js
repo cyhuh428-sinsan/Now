@@ -1586,7 +1586,9 @@ function setText(selector, value) {
 }
 
 function setPlaceholder(element, value) {
-  if (element) element.placeholder = value;
+  if (!element) return;
+  if ("placeholder" in element) element.placeholder = value;
+  element.dataset.placeholder = value;
 }
 
 function localizeOrFallback(key, fallback) {
@@ -2208,12 +2210,63 @@ async function handleWebLogout() {
 load();
 loadSettings();
 applyLanguageQueryOverride();
+initializeLiveMemoEditor();
 bindEvents();
 renderSettings();
 applySettings();
 render();
 initializeHostedWebClient();
 scheduleServerSync({ force: true, delay: 1600 });
+
+function initializeLiveMemoEditor() {
+  const editor = elements.treeContent;
+  if (!editor || editor.tagName === "TEXTAREA" || editor.dataset.liveEditorReady === "true") return;
+  editor.dataset.liveEditorReady = "true";
+
+  Object.defineProperty(editor, "value", {
+    configurable: true,
+    get() {
+      return readLiveMemoEditorText(editor);
+    },
+    set(value) {
+      renderLiveMemoEditorText(editor, String(value ?? ""));
+    },
+  });
+
+  Object.defineProperty(editor, "selectionStart", {
+    configurable: true,
+    get() {
+      return getLiveMemoEditorSelection(editor).start;
+    },
+  });
+
+  Object.defineProperty(editor, "selectionEnd", {
+    configurable: true,
+    get() {
+      return getLiveMemoEditorSelection(editor).end;
+    },
+  });
+
+  Object.defineProperty(editor, "readOnly", {
+    configurable: true,
+    get() {
+      return editor.getAttribute("contenteditable") === "false";
+    },
+    set(value) {
+      editor.setAttribute("contenteditable", value ? "false" : "true");
+      editor.setAttribute("aria-readonly", value ? "true" : "false");
+    },
+  });
+
+  editor.setSelectionRange = (start, end = start) => setLiveMemoEditorSelection(editor, start, end);
+  editor.addEventListener("paste", pastePlainTextIntoLiveMemoEditor);
+  editor.addEventListener("click", openLiveMemoEditorLink);
+  editor.addEventListener("blur", () => {
+    const selection = getLiveMemoEditorSelection(editor);
+    renderLiveMemoEditorText(editor, editor.value);
+    setLiveMemoEditorSelection(editor, selection.start, selection.end);
+  });
+}
 
 function bindEvents() {
   elements.navTabs.forEach((button) => {
@@ -6513,6 +6566,149 @@ function scheduleEncryptedNoteSave(node) {
     showSaved(elements.treeSavedLabel);
   }, 700);
   encryptedSaveTimers.set(node.id, timer);
+}
+
+function readLiveMemoEditorText(editor) {
+  return Array.from(editor.childNodes)
+    .map((node) => liveMemoNodeText(node))
+    .join("")
+    .replace(/\r\n/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .replace(/\n$/, "");
+}
+
+function liveMemoNodeText(node) {
+  if (node.nodeType === Node.TEXT_NODE) return node.nodeValue || "";
+  if (node.nodeName === "BR") return "\n";
+  if (node.nodeType !== Node.ELEMENT_NODE) return "";
+  const text = Array.from(node.childNodes).map((child) => liveMemoNodeText(child)).join("");
+  return node.nodeName === "DIV" || node.nodeName === "P" ? `${text}\n` : text;
+}
+
+function renderLiveMemoEditorText(editor, text) {
+  editor.innerHTML = liveMemoEditorHtml(text);
+}
+
+function liveMemoEditorHtml(text) {
+  const source = String(text || "");
+  if (!source) return "";
+  const pattern = /(?:https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi;
+  let html = "";
+  let lastIndex = 0;
+  let match;
+  while ((match = pattern.exec(source))) {
+    const raw = match[0].replace(/[.,;:!?]+$/, "");
+    const trailing = match[0].slice(raw.length);
+    html += liveMemoPlainHtml(source.slice(lastIndex, match.index));
+    html += `<span class="live-editor-link" data-href="${escapeHtml(normalizeDetectedLinkTarget(raw))}">${escapeHtml(raw)}</span>`;
+    html += liveMemoPlainHtml(trailing);
+    lastIndex = match.index + match[0].length;
+  }
+  html += liveMemoPlainHtml(source.slice(lastIndex));
+  return html;
+}
+
+function liveMemoPlainHtml(text) {
+  return escapeHtml(text).replace(/\n/g, "<br>");
+}
+
+function getLiveMemoEditorSelection(editor) {
+  const selection = window.getSelection();
+  const length = editor.value.length;
+  if (!selection || selection.rangeCount === 0) return { start: length, end: length };
+  const range = selection.getRangeAt(0);
+  if (!editor.contains(range.startContainer) || !editor.contains(range.endContainer)) {
+    return { start: length, end: length };
+  }
+  const start = liveMemoOffsetFromDomPoint(editor, range.startContainer, range.startOffset);
+  const end = liveMemoOffsetFromDomPoint(editor, range.endContainer, range.endOffset);
+  return { start: Math.min(start, end), end: Math.max(start, end) };
+}
+
+function liveMemoOffsetFromDomPoint(root, target, targetOffset) {
+  let offset = 0;
+  let found = false;
+  const visit = (node) => {
+    if (found) return;
+    if (node === target) {
+      if (node.nodeType === Node.TEXT_NODE) {
+        offset += Math.min(targetOffset, (node.nodeValue || "").length);
+      } else {
+        offset += Array.from(node.childNodes)
+          .slice(0, targetOffset)
+          .map((child) => liveMemoNodeText(child))
+          .join("").length;
+      }
+      found = true;
+      return;
+    }
+    if (node.nodeType === Node.TEXT_NODE) {
+      offset += (node.nodeValue || "").length;
+      return;
+    }
+    if (node.nodeName === "BR") {
+      offset += 1;
+      return;
+    }
+    Array.from(node.childNodes).forEach(visit);
+  };
+  Array.from(root.childNodes).forEach(visit);
+  return offset;
+}
+
+function setLiveMemoEditorSelection(editor, start, end = start) {
+  const textLength = editor.value.length;
+  const range = document.createRange();
+  const startPoint = liveMemoDomPointFromOffset(editor, Math.max(0, Math.min(start, textLength)));
+  const endPoint = liveMemoDomPointFromOffset(editor, Math.max(0, Math.min(end, textLength)));
+  range.setStart(startPoint.node, startPoint.offset);
+  range.setEnd(endPoint.node, endPoint.offset);
+  const selection = window.getSelection();
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+function liveMemoDomPointFromOffset(root, targetOffset) {
+  let current = 0;
+  let point = { node: root, offset: root.childNodes.length };
+  const visit = (node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.nodeValue || "";
+      const next = current + text.length;
+      if (targetOffset <= next) {
+        point = { node, offset: Math.max(0, targetOffset - current) };
+        return true;
+      }
+      current = next;
+      return false;
+    }
+    if (node.nodeName === "BR") {
+      if (targetOffset <= current) {
+        const parent = node.parentNode || root;
+        point = { node: parent, offset: Math.max(0, Array.from(parent.childNodes).indexOf(node)) };
+        return true;
+      }
+      current += 1;
+      return false;
+    }
+    return Array.from(node.childNodes).some(visit);
+  };
+  Array.from(root.childNodes).some(visit);
+  return point;
+}
+
+function pastePlainTextIntoLiveMemoEditor(event) {
+  if (elements.treeContent?.tagName === "TEXTAREA") return;
+  event.preventDefault();
+  document.execCommand("insertText", false, event.clipboardData?.getData("text/plain") || "");
+}
+
+function openLiveMemoEditorLink(event) {
+  const link = event.target.closest?.(".live-editor-link");
+  if (!link) return;
+  event.preventDefault();
+  const target = normalizeDetectedLinkTarget(link.textContent || link.dataset.href || "");
+  if (target) window.open(target, "_blank", "noopener,noreferrer");
 }
 
 function inlineMarkdown(text) {

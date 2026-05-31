@@ -205,7 +205,15 @@
               <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
               <div id="tagList" class="tag-list" aria-label="태그"></div>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
-              <textarea id="treeContent" class="memo-editor" placeholder="메모 내용을 입력하세요."></textarea>
+              <div
+                id="treeContent"
+                class="memo-editor live-memo-editor"
+                contenteditable="true"
+                role="textbox"
+                aria-multiline="true"
+                spellcheck="true"
+                data-placeholder="메모 내용을 입력하세요."
+              ></div>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <div class="editor-footer">
                 <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>
