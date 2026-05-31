@@ -1548,6 +1548,7 @@ function defaultSettings() {
     closedTreeTabs: [],
     pinnedTreeTabs: [],
     graph: defaultGraphSettings(),
+    properties: defaultPropertyViewSettings(),
   };
 }
 
@@ -1559,6 +1560,16 @@ function defaultGraphSettings() {
     tag: "",
     group: "topic",
     bookmarks: [],
+  };
+}
+
+function defaultPropertyViewSettings() {
+  return {
+    search: "",
+    status: "",
+    priority: "",
+    group: "status",
+    savedFilters: [],
   };
 }
 
@@ -1741,6 +1752,14 @@ const elements = {
   treeTitleInput: $("#treeTitleInput"),
   treeContent: $("#treeContent"),
   treePathLabel: $("#treePathLabel"),
+  notePropertiesPanel: $("#notePropertiesPanel"),
+  propertyStatusSelect: $("#propertyStatusSelect"),
+  propertyPrioritySelect: $("#propertyPrioritySelect"),
+  propertyTypeInput: $("#propertyTypeInput"),
+  propertyProjectInput: $("#propertyProjectInput"),
+  propertySourceInput: $("#propertySourceInput"),
+  propertyAuthorInput: $("#propertyAuthorInput"),
+  propertyDueInput: $("#propertyDueInput"),
   treeSavedLabel: $("#treeSavedLabel"),
   favoriteBtn: $("#favoriteBtn"),
   shareTreeBtn: $("#shareTreeBtn"),
@@ -1886,6 +1905,20 @@ const elements = {
   graphIsolatedList: $("#graphIsolatedList"),
   graphHubList: $("#graphHubList"),
   graphCloseBtn: $("#graphCloseBtn"),
+  propertiesBtn: $("#propertiesBtn"),
+  propertiesView: $("#propertiesView"),
+  propertiesCloseBtn: $("#propertiesCloseBtn"),
+  propertiesSearchInput: $("#propertiesSearchInput"),
+  propertiesStatusFilter: $("#propertiesStatusFilter"),
+  propertiesPriorityFilter: $("#propertiesPriorityFilter"),
+  propertiesGroupSelect: $("#propertiesGroupSelect"),
+  propertiesFilterSaveBtn: $("#propertiesFilterSaveBtn"),
+  propertiesSavedFilterSelect: $("#propertiesSavedFilterSelect"),
+  propertiesSummary: $("#propertiesSummary"),
+  propertiesList: $("#propertiesList"),
+  propertiesMissingList: $("#propertiesMissingList"),
+  propertyTemplateSelect: $("#propertyTemplateSelect"),
+  propertyTemplateCreateBtn: $("#propertyTemplateCreateBtn"),
   confirmDialog: $("#confirmDialog"),
   confirmTitle: $("#confirmTitle"),
   confirmMessage: $("#confirmMessage"),
@@ -2768,6 +2801,46 @@ function bindEvents() {
   });
   elements.graphBookmarkSaveBtn.addEventListener("click", saveGraphBookmark);
   elements.graphBookmarkSelect.addEventListener("change", applyGraphBookmark);
+  const propertyInputs = [
+    elements.propertyStatusSelect,
+    elements.propertyPrioritySelect,
+    elements.propertyTypeInput,
+    elements.propertyProjectInput,
+    elements.propertySourceInput,
+    elements.propertyAuthorInput,
+    elements.propertyDueInput,
+  ];
+  propertyInputs.forEach((input) => {
+    input?.addEventListener("input", updateSelectedNoteProperties);
+    input?.addEventListener("change", updateSelectedNoteProperties);
+  });
+  elements.propertiesBtn?.addEventListener("click", openPropertiesView);
+  elements.propertiesCloseBtn?.addEventListener("click", closePropertiesView);
+  elements.propertiesSearchInput?.addEventListener("input", () => {
+    state.settings.properties.search = elements.propertiesSearchInput.value.trim();
+    persistSettings();
+    renderPropertiesView();
+  });
+  elements.propertiesStatusFilter?.addEventListener("change", () => {
+    state.settings.properties.status = elements.propertiesStatusFilter.value;
+    persistSettings();
+    renderPropertiesView();
+  });
+  elements.propertiesPriorityFilter?.addEventListener("change", () => {
+    state.settings.properties.priority = elements.propertiesPriorityFilter.value;
+    persistSettings();
+    renderPropertiesView();
+  });
+  elements.propertiesGroupSelect?.addEventListener("change", () => {
+    state.settings.properties.group = propertyGroupKeys().includes(elements.propertiesGroupSelect.value)
+      ? elements.propertiesGroupSelect.value
+      : "status";
+    persistSettings();
+    renderPropertiesView();
+  });
+  elements.propertiesFilterSaveBtn?.addEventListener("click", savePropertyFilter);
+  elements.propertiesSavedFilterSelect?.addEventListener("change", applyPropertyFilter);
+  elements.propertyTemplateCreateBtn?.addEventListener("click", createNoteFromPropertyTemplate);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
   elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
@@ -2775,6 +2848,7 @@ function bindEvents() {
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
   bindOverlayDismiss(elements.graphView, closeGraph);
+  bindOverlayDismiss(elements.propertiesView, closePropertiesView);
   bindOverlayDismiss(elements.deletedTreeView, closeDeletedTreeBox);
   bindOverlayDismiss(elements.dailyView, closeDailyPopup);
   bindOverlayDismiss(elements.settingsView, closeSettingsPopup);
@@ -5784,6 +5858,291 @@ function applyGraphBookmark() {
   renderGraph();
 }
 
+function propertyStatusKeys() {
+  return ["idea", "active", "waiting", "done"];
+}
+
+function propertyPriorityKeys() {
+  return ["low", "normal", "high"];
+}
+
+function propertyGroupKeys() {
+  return ["status", "priority", "type", "project", "share"];
+}
+
+function defaultNoteProperties() {
+  return {
+    status: "",
+    priority: "",
+    type: "",
+    source: "",
+    author: "",
+    dueDate: "",
+    project: "",
+  };
+}
+
+function normalizeNoteProperties(properties = {}) {
+  const source = properties && typeof properties === "object" ? properties : {};
+  const normalized = {
+    ...defaultNoteProperties(),
+    ...source,
+  };
+  normalized.status = propertyStatusKeys().includes(normalized.status) ? normalized.status : "";
+  normalized.priority = propertyPriorityKeys().includes(normalized.priority) ? normalized.priority : "";
+  normalized.type = normalizeText(normalized.type).slice(0, 60);
+  normalized.source = normalizeText(normalized.source).slice(0, 160);
+  normalized.author = normalizeText(normalized.author).slice(0, 60);
+  normalized.project = normalizeText(normalized.project).slice(0, 80);
+  normalized.dueDate = isDateKey(normalized.dueDate) ? normalized.dueDate : "";
+  return normalized;
+}
+
+function propertyLabel(kind, value) {
+  const labels = {
+    status: { idea: "아이디어", active: "진행", waiting: "대기", done: "완료" },
+    priority: { low: "낮음", normal: "보통", high: "높음" },
+  };
+  return labels[kind]?.[value] || value || "미지정";
+}
+
+function renderNoteProperties(node) {
+  const properties = normalizeNoteProperties(node.properties);
+  node.properties = properties;
+  elements.propertyStatusSelect.value = properties.status;
+  elements.propertyPrioritySelect.value = properties.priority;
+  elements.propertyTypeInput.value = properties.type;
+  elements.propertyProjectInput.value = properties.project;
+  elements.propertySourceInput.value = properties.source;
+  elements.propertyAuthorInput.value = properties.author;
+  elements.propertyDueInput.value = properties.dueDate;
+}
+
+function updateSelectedNoteProperties() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  selected.properties = normalizeNoteProperties({
+    status: elements.propertyStatusSelect.value,
+    priority: elements.propertyPrioritySelect.value,
+    type: elements.propertyTypeInput.value,
+    project: elements.propertyProjectInput.value,
+    source: elements.propertySourceInput.value,
+    author: elements.propertyAuthorInput.value,
+    dueDate: elements.propertyDueInput.value,
+  });
+  markTreeNodeChanged(selected);
+  persist();
+  renderTreeListOnly();
+  renderSidebarKnowledge();
+  if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
+  showSaved(elements.treeSavedLabel);
+}
+
+function openPropertiesView() {
+  closePopupLayers();
+  syncPropertyControls();
+  renderPropertiesView();
+  elements.propertiesView.classList.remove("hidden");
+  elements.propertiesSearchInput.focus();
+}
+
+function closePropertiesView() {
+  elements.propertiesView.classList.add("hidden");
+}
+
+function syncPropertyControls() {
+  const settings = normalizePropertyViewSettings(state.settings.properties);
+  state.settings.properties = settings;
+  elements.propertiesSearchInput.value = settings.search || "";
+  elements.propertiesStatusFilter.value = settings.status || "";
+  elements.propertiesPriorityFilter.value = settings.priority || "";
+  elements.propertiesGroupSelect.value = settings.group || "status";
+  elements.propertiesSavedFilterSelect.replaceChildren(
+    optionElement("", "저장 필터"),
+    ...settings.savedFilters.map((filter, index) => optionElement(String(index), filter.name)),
+  );
+}
+
+function propertyMatches(node, settings) {
+  const properties = normalizeNoteProperties(node.properties);
+  if (settings.status && properties.status !== settings.status) return false;
+  if (settings.priority && properties.priority !== settings.priority) return false;
+  const query = (settings.search || "").toLowerCase();
+  if (!query) return true;
+  return [
+    node.title,
+    node.content,
+    properties.status,
+    properties.priority,
+    properties.type,
+    properties.source,
+    properties.author,
+    properties.project,
+    properties.dueDate,
+    ...(node.tags || []),
+  ].join(" ").toLowerCase().includes(query);
+}
+
+function propertyGroupValue(node, group) {
+  const properties = normalizeNoteProperties(node.properties);
+  if (group === "share") return node.shared === false ? "비공유" : "공유";
+  if (group === "status") return propertyLabel("status", properties.status);
+  if (group === "priority") return propertyLabel("priority", properties.priority);
+  if (group === "type") return properties.type || "미지정";
+  if (group === "project") return properties.project || "미지정";
+  return "미지정";
+}
+
+function renderPropertiesView() {
+  const settings = normalizePropertyViewSettings(state.settings.properties);
+  state.settings.properties = settings;
+  syncPropertyControls();
+  const nodes = flattenTree(state.data.tree);
+  const filtered = nodes.filter((node) => propertyMatches(node, settings));
+  const missing = nodes.filter((node) => missingPropertyKeys(node).length > 0);
+  elements.propertiesSummary.innerHTML = [
+    `<span>전체 <strong>${nodes.length}</strong></span>`,
+    `<span>표시 <strong>${filtered.length}</strong></span>`,
+    `<span>누락 <strong>${missing.length}</strong></span>`,
+  ].join("");
+  if (filtered.length === 0) {
+    elements.propertiesList.innerHTML = `<div class="empty-compact">조건에 맞는 메모가 없습니다.</div>`;
+  } else {
+    const groups = groupBy(filtered, (node) => propertyGroupValue(node, settings.group));
+    elements.propertiesList.replaceChildren(
+      ...Array.from(groups.entries()).map(([groupName, groupNodes]) => propertyGroupElement(groupName, groupNodes)),
+    );
+  }
+  renderPropertiesMissingList(missing.slice(0, 12));
+}
+
+function propertyGroupElement(groupName, nodes) {
+  const section = document.createElement("section");
+  section.className = "properties-group";
+  const rows = nodes
+    .sort((a, b) => (b.updatedAt || "").localeCompare(a.updatedAt || ""))
+    .map((node) => propertyRowHtml(node))
+    .join("");
+  section.innerHTML = `<h3>${escapeHtml(groupName)} <span>${nodes.length}</span></h3><div class="properties-table">${rows}</div>`;
+  section.querySelectorAll("[data-note-id]").forEach((button) => {
+    button.addEventListener("click", () => selectTreeNode(button.dataset.noteId));
+  });
+  return section;
+}
+
+function propertyRowHtml(node) {
+  const properties = normalizeNoteProperties(node.properties);
+  const chips = [
+    propertyLabel("status", properties.status),
+    propertyLabel("priority", properties.priority),
+    properties.type,
+    properties.project,
+    properties.dueDate,
+    node.shared === false ? "비공유" : "공유",
+  ].filter(Boolean);
+  return `
+    <button class="properties-row" type="button" data-note-id="${escapeHtml(node.id)}">
+      <strong>${escapeHtml(noteTitle(node.title))}</strong>
+      <span>${chips.map((chip) => escapeHtml(chip)).join(" · ")}</span>
+    </button>
+  `;
+}
+
+function missingPropertyKeys(node) {
+  const properties = normalizeNoteProperties(node.properties);
+  return ["status", "priority", "type", "project"].filter((key) => !properties[key]);
+}
+
+function renderPropertiesMissingList(nodes) {
+  if (nodes.length === 0) {
+    elements.propertiesMissingList.innerHTML = `<div class="empty-compact">누락 속성이 없습니다.</div>`;
+    return;
+  }
+  renderGraphMiniList(elements.propertiesMissingList, nodes, (node) => {
+    const missing = missingPropertyKeys(node).join(", ");
+    const button = graphNodeButton(node);
+    button.querySelector("span").textContent = `누락: ${missing}`;
+    return button;
+  });
+}
+
+function savePropertyFilter() {
+  const settings = normalizePropertyViewSettings(state.settings.properties);
+  const parts = [
+    settings.search,
+    propertyLabel("status", settings.status),
+    propertyLabel("priority", settings.priority),
+    propertyGroupValue({ shared: true, properties: { [settings.group]: "" } }, settings.group),
+  ].filter((part) => part && part !== "미지정");
+  const filter = {
+    name: parts.slice(0, 3).join(" · ") || `속성 ${new Date().toLocaleTimeString()}`,
+    search: settings.search,
+    status: settings.status,
+    priority: settings.priority,
+    group: settings.group,
+  };
+  settings.savedFilters = [filter, ...settings.savedFilters.filter((item) => item.name !== filter.name)].slice(0, 12);
+  state.settings.properties = settings;
+  persistSettings();
+  syncPropertyControls();
+}
+
+function applyPropertyFilter() {
+  const index = Number(elements.propertiesSavedFilterSelect.value);
+  const filter = state.settings.properties.savedFilters[index];
+  if (!filter) return;
+  state.settings.properties = normalizePropertyViewSettings({
+    ...state.settings.properties,
+    ...filter,
+    savedFilters: state.settings.properties.savedFilters,
+  });
+  persistSettings();
+  renderPropertiesView();
+}
+
+function createNoteFromPropertyTemplate() {
+  const template = propertyTemplate(elements.propertyTemplateSelect.value);
+  const node = createNode(template.title, template.content, null, 1);
+  node.properties = normalizeNoteProperties(template.properties);
+  state.data.tree.push(node);
+  state.selectedTreeId = node.id;
+  state.expandedTreeIds.add(node.id);
+  persist();
+  closePropertiesView();
+  renderTree();
+}
+
+function propertyTemplate(id) {
+  const now = new Date().toISOString().slice(0, 16).replace("T", " ");
+  const templates = {
+    project: {
+      title: `프로젝트 메모 ${now}`,
+      content: "## 목표\n\n## 진행\n\n## 다음 행동\n",
+      properties: { status: "active", priority: "normal", type: "프로젝트", project: "" },
+    },
+    meeting: {
+      title: `회의 메모 ${now}`,
+      content: "## 참석자\n\n## 결정\n\n## 할 일\n",
+      properties: { status: "active", priority: "normal", type: "회의", project: "" },
+    },
+    source: {
+      title: `자료 메모 ${now}`,
+      content: "## 요약\n\n## 인용/근거\n\n## 연결할 메모\n",
+      properties: { status: "idea", priority: "normal", type: "자료", source: "" },
+    },
+  };
+  return templates[id] || templates.project;
+}
+
+function groupBy(items, selector) {
+  return items.reduce((groups, item) => {
+    const key = selector(item);
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item);
+    return groups;
+  }, new Map());
+}
+
 function renderDeletedTreeList() {
   const deleted = state.data.deletedTree || [];
   renderDeletedTreeButton();
@@ -5947,6 +6306,7 @@ function closePopupLayers() {
   closeQuickSwitch();
   closeSearchPopover();
   closeGraph();
+  closePropertiesView();
   closeDeletedTreeBox();
   closeSettingsPopup();
 }
@@ -5981,6 +6341,7 @@ function render() {
   renderResults();
   renderSidebarKnowledge();
   renderDeletedTreeButton();
+  if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
 }
 
 function renderDeletedTreeButton() {
@@ -6388,6 +6749,7 @@ function renderTreeEditor() {
   renderShareState(selected);
   renderEncryptionControls(selected);
   renderTags();
+  renderNoteProperties(selected);
   renderNoteStats(selected);
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
@@ -7808,6 +8170,7 @@ function createNode(title, content, parentId, level) {
     unsharedAt: null,
     favorite: false,
     tags: extractTags(content),
+    properties: defaultNoteProperties(),
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -8036,6 +8399,7 @@ function normalizeSettings(settings = {}) {
   normalized.closedTreeTabs = normalizeIdList(normalized.closedTreeTabs, 10);
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
   normalized.graph = normalizeGraphSettings(normalized.graph, defaults.graph);
+  normalized.properties = normalizePropertyViewSettings(normalized.properties, defaults.properties);
   normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
   return normalized;
@@ -8064,6 +8428,32 @@ function normalizeGraphSettings(graph = {}, defaults = defaultGraphSettings()) {
           group: ["topic", "tag", "share", "analysis"].includes(bookmark.group) ? bookmark.group : defaults.group,
         }))
         .filter((bookmark) => bookmark.name)
+        .slice(0, 12)
+    : [];
+  return normalized;
+}
+
+function normalizePropertyViewSettings(properties = {}, defaults = defaultPropertyViewSettings()) {
+  const source = properties && typeof properties === "object" ? properties : {};
+  const normalized = {
+    ...defaults,
+    ...source,
+  };
+  normalized.search = typeof normalized.search === "string" ? normalized.search.slice(0, 80) : "";
+  normalized.status = propertyStatusKeys().includes(normalized.status) ? normalized.status : "";
+  normalized.priority = propertyPriorityKeys().includes(normalized.priority) ? normalized.priority : "";
+  normalized.group = propertyGroupKeys().includes(normalized.group) ? normalized.group : defaults.group;
+  normalized.savedFilters = Array.isArray(normalized.savedFilters)
+    ? normalized.savedFilters
+        .filter((filter) => filter && typeof filter === "object" && typeof filter.name === "string")
+        .map((filter) => ({
+          name: filter.name.trim().slice(0, 48),
+          search: typeof filter.search === "string" ? filter.search.slice(0, 80) : "",
+          status: propertyStatusKeys().includes(filter.status) ? filter.status : "",
+          priority: propertyPriorityKeys().includes(filter.priority) ? filter.priority : "",
+          group: propertyGroupKeys().includes(filter.group) ? filter.group : defaults.group,
+        }))
+        .filter((filter) => filter.name)
         .slice(0, 12)
     : [];
   return normalized;
@@ -8279,6 +8669,7 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.unsharedAt = node.shared === false ? (node.unsharedAt || node.updatedAt || null) : null;
     node.favorite = Boolean(node.favorite);
     node.tags = isEncryptedContent(node.content) ? [] : (Array.isArray(node.tags) ? node.tags : extractTags(node.content));
+    node.properties = normalizeNoteProperties(node.properties);
     node.createdAt = node.createdAt || new Date().toISOString();
     node.updatedAt = node.updatedAt || node.createdAt;
     if (node.level >= 3 && node.children.length > 0) {

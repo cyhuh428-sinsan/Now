@@ -5,6 +5,15 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.3 속성 기반 지식 관리 시작
+
+- `main`의 1.2 병합 완료 상태를 기준으로 `codex/properties-1.3` 브랜치 생성.
+- `docs/NOW_1_3_PROPERTIES_DESIGN.md`를 추가해 1.3 완료 기준 문서로 확정.
+- 지식 메모에 `node.properties` 구조를 추가하고 기존 메모는 빈 속성으로 정규화하도록 준비.
+- 편집 화면에 상태, 중요도, 유형, 출처, 작성자, 마감일, 프로젝트 속성 패널을 추가.
+- 속성 보기 팝업에서 검색/상태/중요도 필터, 그룹화, 저장 필터, 누락 속성 점검, 템플릿 메모 생성을 제공하도록 구현.
+- `web/README.md`, `web/runtime_checklist_ko.md`, `docs/PROJECT_STATUS.md`, 업그레이드 전략 문서를 1.3 기준으로 갱신.
+
 ### NowNote 1.2 관계 탐색과 그래프뷰 시작
 
 - `main`의 1.1 병합 완료 상태를 기준으로 `codex/graph-view-1.2` 브랜치 생성.

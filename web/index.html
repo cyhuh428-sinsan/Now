@@ -115,6 +115,7 @@
           <h2 id="exploreActionTitle">탐색</h2>
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
+          <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
         </section>
         <section id="fileActionGroup" class="side-action-group" aria-label="파일">
           <h2 id="fileActionTitle">파일</h2>
@@ -204,6 +205,49 @@
               </div>
               <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
               <div id="tagList" class="tag-list" aria-label="태그"></div>
+              <section id="notePropertiesPanel" class="note-properties-panel" aria-label="메모 속성">
+                <div class="properties-grid">
+                  <label>
+                    <span>상태</span>
+                    <select id="propertyStatusSelect" class="settings-select">
+                      <option value="">미지정</option>
+                      <option value="idea">아이디어</option>
+                      <option value="active">진행</option>
+                      <option value="waiting">대기</option>
+                      <option value="done">완료</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>중요도</span>
+                    <select id="propertyPrioritySelect" class="settings-select">
+                      <option value="">미지정</option>
+                      <option value="low">낮음</option>
+                      <option value="normal">보통</option>
+                      <option value="high">높음</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>유형</span>
+                    <input id="propertyTypeInput" class="settings-input" type="text" placeholder="예: 회의, 자료, 아이디어">
+                  </label>
+                  <label>
+                    <span>프로젝트</span>
+                    <input id="propertyProjectInput" class="settings-input" type="text" placeholder="관련 프로젝트">
+                  </label>
+                  <label>
+                    <span>출처</span>
+                    <input id="propertySourceInput" class="settings-input" type="text" placeholder="URL, 책, 사람">
+                  </label>
+                  <label>
+                    <span>작성자</span>
+                    <input id="propertyAuthorInput" class="settings-input" type="text" placeholder="작성자">
+                  </label>
+                  <label>
+                    <span>마감일</span>
+                    <input id="propertyDueInput" class="settings-input" type="date">
+                  </label>
+                </div>
+              </section>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
               <div
                 id="treeContent"
@@ -745,6 +789,64 @@
           <section>
             <h3>허브 메모</h3>
             <div id="graphHubList" class="graph-mini-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="propertiesView" class="quick-popover hidden" aria-labelledby="propertiesTitle">
+      <div class="quick-card properties-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">속성 / 필터 / 점검</p>
+            <h2 id="propertiesTitle">속성 보기</h2>
+          </div>
+          <button id="propertiesCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="properties-toolbar" aria-label="속성 필터">
+          <input id="propertiesSearchInput" class="settings-input" type="search" placeholder="제목, 본문, 속성 검색">
+          <select id="propertiesStatusFilter" class="settings-select" aria-label="상태 필터">
+            <option value="">전체 상태</option>
+            <option value="idea">아이디어</option>
+            <option value="active">진행</option>
+            <option value="waiting">대기</option>
+            <option value="done">완료</option>
+          </select>
+          <select id="propertiesPriorityFilter" class="settings-select" aria-label="중요도 필터">
+            <option value="">전체 중요도</option>
+            <option value="low">낮음</option>
+            <option value="normal">보통</option>
+            <option value="high">높음</option>
+          </select>
+          <select id="propertiesGroupSelect" class="settings-select" aria-label="그룹 기준">
+            <option value="status">상태</option>
+            <option value="priority">중요도</option>
+            <option value="type">유형</option>
+            <option value="project">프로젝트</option>
+            <option value="share">공유</option>
+          </select>
+          <button id="propertiesFilterSaveBtn" class="secondary-btn" type="button">필터 저장</button>
+          <select id="propertiesSavedFilterSelect" class="settings-select" aria-label="저장된 속성 필터">
+            <option value="">저장 필터</option>
+          </select>
+        </div>
+        <div id="propertiesSummary" class="graph-summary"></div>
+        <div id="propertiesList" class="properties-list"></div>
+        <div class="properties-insights">
+          <section>
+            <h3>누락 속성</h3>
+            <div id="propertiesMissingList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>템플릿</h3>
+            <div class="template-actions">
+              <select id="propertyTemplateSelect" class="settings-select" aria-label="메모 템플릿">
+                <option value="project">프로젝트 메모</option>
+                <option value="meeting">회의 메모</option>
+                <option value="source">자료 메모</option>
+              </select>
+              <button id="propertyTemplateCreateBtn" class="primary-btn" type="button">템플릿으로 만들기</button>
+            </div>
           </section>
         </div>
       </div>

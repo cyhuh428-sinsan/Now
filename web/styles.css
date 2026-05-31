@@ -2452,6 +2452,106 @@ kbd {
   font-size: 13px;
 }
 
+.note-properties-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--blue-soft);
+}
+
+.properties-grid,
+.properties-toolbar,
+.template-actions {
+  display: grid;
+  gap: 10px;
+}
+
+.properties-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.properties-grid label {
+  display: grid;
+  gap: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.properties-card {
+  width: min(1120px, calc(100vw - 32px));
+  max-height: min(860px, calc(100vh - 32px));
+}
+
+.properties-toolbar {
+  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, 160px)) auto minmax(140px, 180px);
+  align-items: center;
+}
+
+.properties-list {
+  display: grid;
+  gap: 14px;
+  overflow: auto;
+  min-height: 260px;
+  max-height: 420px;
+  padding-right: 4px;
+}
+
+.properties-group {
+  display: grid;
+  gap: 8px;
+}
+
+.properties-group h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.properties-group h3 span,
+.properties-row span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.properties-table {
+  display: grid;
+  gap: 6px;
+}
+
+.properties-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(260px, 1.2fr);
+  gap: 12px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.properties-row:hover {
+  border-color: var(--accent);
+}
+
+.properties-insights {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.properties-insights section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;
@@ -2742,7 +2842,11 @@ kbd {
   }
 
   .graph-toolbar,
-  .graph-insights {
+  .graph-insights,
+  .properties-grid,
+  .properties-toolbar,
+  .properties-insights,
+  .properties-row {
     grid-template-columns: 1fr;
   }
 
