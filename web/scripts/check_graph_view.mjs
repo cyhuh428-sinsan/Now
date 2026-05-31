@@ -332,6 +332,27 @@ async function runOnce() {
         createNoteFromPropertyTemplate();
         const templateCreated = getSelectedTreeNode().properties.type === "회의"
           && getSelectedTreeNode().content.includes("## 결정");
+        state.selectedTreeId = "a";
+        state.data.canvases = [];
+        openCanvasView();
+        addSelectedNoteCanvasCard();
+        addTextCanvasCard();
+        const canvas = activeCanvas();
+        const noteCard = canvas.cards.find((card) => card.type === "note");
+        const textCard = canvas.cards.find((card) => card.type === "text");
+        state.selectedCanvasCardIds = [noteCard.id, textCard.id];
+        connectSelectedCanvasCards();
+        moveSelectedCanvasCard(40, 40);
+        adjustCanvasZoom(0.1);
+        const movedCanvas = activeCanvas();
+        const movedTextCard = movedCanvas.cards.find((card) => card.type === "text");
+        const canvasBasics = movedCanvas.cards.length === 2
+          && movedCanvas.edges.length === 1
+          && movedTextCard.x >= 160
+          && movedCanvas.zoom > 1;
+        createCanvasDraftFromGraph();
+        const graphDraft = activeCanvas().cards.length >= 2
+          && document.querySelectorAll("#canvasBoard .canvas-board-card").length >= 2;
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -348,6 +369,8 @@ async function runOnce() {
           propertyFilterSaved,
           missingRendered,
           templateCreated,
+          canvasBasics,
+          graphDraft,
         };
       })()
     `);
@@ -367,11 +390,14 @@ async function runOnce() {
     assert(result.propertyFilterSaved, "속성 필터가 저장되지 않았습니다.");
     assert(result.missingRendered, "누락 속성 목록이 렌더링되지 않았습니다.");
     assert(result.templateCreated, "속성 템플릿 메모가 생성되지 않았습니다.");
+    assert(result.canvasBasics, "Canvas 카드/연결/이동/확대가 동작하지 않습니다.");
+    assert(result.graphDraft, "그래프 주변 메모 Canvas 초안이 생성되지 않았습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
     console.log("- Suggested links and graph filter bookmarks work");
     console.log("- Note properties, saved filters, missing checks, and templates work");
+    console.log("- Canvas cards, edges, zoom, movement, and graph drafts work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);
