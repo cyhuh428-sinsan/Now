@@ -193,7 +193,11 @@ async function evaluate(page, expression) {
     returnByValue: true,
   });
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || "Runtime.evaluate failed");
+    const detail = result.exceptionDetails.exception?.description
+      || result.exceptionDetails.exception?.value
+      || result.exceptionDetails.text
+      || "Runtime.evaluate failed";
+    throw new Error(detail);
   }
   return result.result?.value;
 }
@@ -353,6 +357,36 @@ async function runOnce() {
         createCanvasDraftFromGraph();
         const graphDraft = activeCanvas().cards.length >= 2
           && document.querySelectorAll("#canvasBoard .canvas-board-card").length >= 2;
+        state.data.captures = [];
+        openCaptureView();
+        elements.captureContentInput.value = "- [ ] 첫 일\\n- [x] 끝난 일";
+        elements.captureChecklistToggle.checked = true;
+        elements.capturePinToggle.checked = true;
+        elements.captureColorSelect.value = "amber";
+        elements.captureLabelInput.value = "idea, now";
+        elements.captureReminderInput.value = "2026-06-15T09:30";
+        pendingCaptureAttachment = normalizeCaptureAttachment({
+          name: "sample.png",
+          type: "image/png",
+          size: 2048,
+          dataUrl: "data:image/png;base64,",
+        });
+        captureSketchDirty = true;
+        saveQuickCapture();
+        const capture = state.data.captures[0];
+        const captureSaved = capture
+          && capture.pinned
+          && capture.color === "amber"
+          && capture.checklist.length === 2
+          && capture.labels.includes("idea")
+          && capture.reminderAt
+          && capture.attachments[0]?.name === "sample.png"
+          && capture.sketchData.startsWith("data:image/png");
+        toggleCaptureArchive(capture.id);
+        elements.captureFilterSelect.value = "archived";
+        renderCaptures();
+        const captureArchived = state.data.captures[0].archived
+          && document.querySelectorAll("#captureList .capture-item").length === 1;
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -371,6 +405,8 @@ async function runOnce() {
           templateCreated,
           canvasBasics,
           graphDraft,
+          captureSaved,
+          captureArchived,
         };
       })()
     `);
@@ -392,12 +428,15 @@ async function runOnce() {
     assert(result.templateCreated, "속성 템플릿 메모가 생성되지 않았습니다.");
     assert(result.canvasBasics, "Canvas 카드/연결/이동/확대가 동작하지 않습니다.");
     assert(result.graphDraft, "그래프 주변 메모 Canvas 초안이 생성되지 않았습니다.");
+    assert(result.captureSaved, "빠른 기록 카드가 저장되지 않았습니다.");
+    assert(result.captureArchived, "빠른 기록 보관함 흐름이 동작하지 않습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
     console.log("- Suggested links and graph filter bookmarks work");
     console.log("- Note properties, saved filters, missing checks, and templates work");
     console.log("- Canvas cards, edges, zoom, movement, and graph drafts work");
+    console.log("- Quick capture pins, colors, checklists, reminders, attachments, sketches, and archive work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);

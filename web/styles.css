@@ -2651,6 +2651,138 @@ kbd {
   gap: 6px;
 }
 
+.capture-card {
+  width: min(1040px, calc(100vw - 32px));
+  max-height: min(900px, calc(100vh - 32px));
+}
+
+.capture-composer {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+}
+
+#captureContentInput {
+  min-height: 90px;
+  resize: vertical;
+}
+
+.capture-options,
+.capture-media-row,
+.capture-sketch-tools,
+.capture-toolbar {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.capture-options {
+  grid-template-columns: 120px minmax(180px, 1fr) 190px auto auto;
+}
+
+.capture-media-row,
+.capture-sketch-tools {
+  grid-template-columns: minmax(180px, auto) 1fr;
+}
+
+.capture-check-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.capture-sketch-canvas {
+  width: 100%;
+  height: 220px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  touch-action: none;
+}
+
+.capture-toolbar {
+  grid-template-columns: 160px minmax(220px, 1fr) auto;
+}
+
+.capture-list {
+  display: grid;
+  gap: 12px;
+  overflow: auto;
+  max-height: 420px;
+  padding-right: 4px;
+}
+
+.capture-item {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+}
+
+.capture-item header,
+.capture-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  align-items: center;
+}
+
+.capture-item header span,
+.capture-reminder,
+.capture-attachments {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.capture-item p {
+  margin: 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.capture-item ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: 0;
+  list-style: none;
+}
+
+.capture-item img {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.capture-blue {
+  border-color: rgba(37, 99, 235, 0.45);
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.capture-green {
+  border-color: rgba(20, 184, 166, 0.45);
+  background: rgba(20, 184, 166, 0.08);
+}
+
+.capture-amber {
+  border-color: rgba(217, 119, 6, 0.45);
+  background: rgba(217, 119, 6, 0.1);
+}
+
+.capture-red {
+  border-color: rgba(220, 38, 38, 0.45);
+  background: rgba(220, 38, 38, 0.08);
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;
@@ -2947,7 +3079,11 @@ kbd {
   .properties-insights,
   .properties-row,
   .canvas-toolbar,
-  .canvas-footer {
+  .canvas-footer,
+  .capture-options,
+  .capture-media-row,
+  .capture-sketch-tools,
+  .capture-toolbar {
     grid-template-columns: 1fr;
   }
 

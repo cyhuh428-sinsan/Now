@@ -5,6 +5,16 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.5 첨부/미디어/빠른 기록 시작
+
+- `main`의 1.4 병합 완료 상태를 기준으로 `codex/quick-capture-1.5` 브랜치 생성.
+- `docs/NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md`를 추가해 1.5 완료 기준 문서로 확정.
+- Web/설치형 공통 화면에 빠른 기록 팝업, 제목 없는 기록 카드, 핀, 색상, 체크리스트, 시간 리마인더, 라벨, 보관/복원 흐름을 추가.
+- 첨부 원본 영구 저장은 제외하고 1.5 범위에서는 파일명, 유형, 크기, 임시 미리보기 데이터 중심의 첨부 메타데이터를 기록.
+- 간단한 그림판을 추가해 빠른 기록 카드에 PNG 미리보기로 저장하도록 구현.
+- `state.data.captures` 저장 구조를 추가하고 기존 백업/복원 데이터 형태에 빠른 기록을 포함.
+- `web/README.md`, `web/runtime_checklist_ko.md`, `docs/PROJECT_STATUS.md`, 업그레이드 전략 문서를 1.5 기준으로 갱신.
+
 ### NowNote 1.4 Canvas와 시각적 사고 정리 시작
 
 - `main`의 1.3 병합 완료 상태를 기준으로 `codex/canvas-1.4` 브랜치 생성.
