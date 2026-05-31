@@ -116,6 +116,7 @@
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
           <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
+          <button id="canvasBtn" class="ghost-btn" type="button">Canvas</button>
         </section>
         <section id="fileActionGroup" class="side-action-group" aria-label="파일">
           <h2 id="fileActionTitle">파일</h2>
@@ -848,6 +849,39 @@
               <button id="propertyTemplateCreateBtn" class="primary-btn" type="button">템플릿으로 만들기</button>
             </div>
           </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="canvasView" class="quick-popover hidden" aria-labelledby="canvasTitle">
+      <div class="quick-card canvas-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">카드 / 연결 / 배치</p>
+            <h2 id="canvasTitle">Canvas</h2>
+          </div>
+          <button id="canvasCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="canvas-toolbar" aria-label="Canvas 도구">
+          <input id="canvasTitleInput" class="settings-input" type="text" placeholder="Canvas 제목">
+          <button id="canvasAddNoteBtn" class="secondary-btn" type="button">메모 카드</button>
+          <button id="canvasAddTextBtn" class="secondary-btn" type="button">텍스트 카드</button>
+          <button id="canvasConnectBtn" class="secondary-btn" type="button">선 연결</button>
+          <button id="canvasDraftFromGraphBtn" class="secondary-btn" type="button">그래프 초안</button>
+          <button id="canvasZoomOutBtn" class="icon-btn" type="button" aria-label="축소">−</button>
+          <button id="canvasZoomInBtn" class="icon-btn" type="button" aria-label="확대">+</button>
+          <button id="canvasFitBtn" class="secondary-btn" type="button">전체 보기</button>
+        </div>
+        <div id="canvasSummary" class="graph-summary"></div>
+        <div id="canvasBoard" class="canvas-board" aria-label="Canvas 보드"></div>
+        <div class="canvas-footer">
+          <div id="canvasSelectionLabel" class="path-label">카드를 선택하세요.</div>
+          <div class="canvas-move-controls" aria-label="카드 이동">
+            <button id="canvasMoveLeftBtn" class="icon-btn" type="button" aria-label="왼쪽">←</button>
+            <button id="canvasMoveUpBtn" class="icon-btn" type="button" aria-label="위">↑</button>
+            <button id="canvasMoveDownBtn" class="icon-btn" type="button" aria-label="아래">↓</button>
+            <button id="canvasMoveRightBtn" class="icon-btn" type="button" aria-label="오른쪽">→</button>
+          </div>
         </div>
       </div>
     </section>

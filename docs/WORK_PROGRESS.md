@@ -5,6 +5,15 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.4 Canvas와 시각적 사고 정리 시작
+
+- `main`의 1.3 병합 완료 상태를 기준으로 `codex/canvas-1.4` 브랜치 생성.
+- `docs/NOW_1_4_CANVAS_DESIGN.md`를 추가해 1.4 완료 기준 문서로 확정.
+- Web/설치형 공통 화면에 Canvas 팝업, 메모 카드, 텍스트 카드, 카드 선택, 방향 버튼 이동, 카드 연결선, 확대/축소, 전체 보기 기능을 추가.
+- `state.data.canvases` 저장 구조를 추가하고 기존 백업/복원 데이터 형태에 Canvas를 포함.
+- 그래프 주변 메모를 Canvas 초안으로 만드는 흐름을 추가.
+- `web/README.md`, `web/runtime_checklist_ko.md`, `docs/PROJECT_STATUS.md`, 업그레이드 전략 문서를 1.4 기준으로 갱신.
+
 ### NowNote 1.3 속성 기반 지식 관리 시작
 
 - `main`의 1.2 병합 완료 상태를 기준으로 `codex/properties-1.3` 브랜치 생성.
