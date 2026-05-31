@@ -20,6 +20,7 @@ PROPERTIES_DESIGN = ROOT.parent / "docs" / "NOW_1_3_PROPERTIES_DESIGN.md"
 CANVAS_DESIGN = ROOT.parent / "docs" / "NOW_1_4_CANVAS_DESIGN.md"
 CAPTURE_DESIGN = ROOT.parent / "docs" / "NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md"
 COMMAND_DESIGN = ROOT.parent / "docs" / "NOW_1_6_WRITING_COMMAND_DESIGN.md"
+RECOVERY_IMPORT_DESIGN = ROOT.parent / "docs" / "NOW_1_7_RECOVERY_IMPORT_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -69,6 +70,7 @@ def main() -> None:
         CANVAS_DESIGN,
         CAPTURE_DESIGN,
         COMMAND_DESIGN,
+        RECOVERY_IMPORT_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -99,6 +101,7 @@ def main() -> None:
     canvas_design = CANVAS_DESIGN.read_text(encoding="utf-8")
     capture_design = CAPTURE_DESIGN.read_text(encoding="utf-8")
     command_design = COMMAND_DESIGN.read_text(encoding="utf-8")
+    recovery_import_design = RECOVERY_IMPORT_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -238,6 +241,11 @@ def main() -> None:
         ("commandPaletteSummary", "command palette summary"),
         ("commandPaletteList", "command palette list"),
         ("commandPaletteCloseBtn", "command palette close button"),
+        ("snapshotCreateBtn", "recovery snapshot create button"),
+        ("snapshotSelect", "recovery snapshot selector"),
+        ("snapshotRestoreBtn", "recovery snapshot restore button"),
+        ("snapshotSummary", "recovery snapshot summary"),
+        ("importReportList", "import report list"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -351,6 +359,15 @@ def main() -> None:
         ("function mergeSelectedNoteChildren", "1.6 note composer merge action"),
         ("function splitSelectedNoteByHeading", "1.6 note composer split action"),
         ("WRITING_TEMPLATES", "1.6 writing templates"),
+        ("function createRecoverySnapshot", "1.7 recovery snapshot action"),
+        ("function restoreSelectedSnapshot", "1.7 snapshot restore action"),
+        ("function renderRecoveryPanel", "1.7 recovery panel renderer"),
+        ("function recordImportReport", "1.7 import report recorder"),
+        ("function markdownFileToImportNode", "1.7 markdown import converter"),
+        ("function parseMarkdownFrontmatter", "1.7 frontmatter parser"),
+        ("function convertObsidianMarkdown", "1.7 Obsidian markdown converter"),
+        ("snapshots", "1.7 snapshot data shape"),
+        ("importReports", "1.7 import report data shape"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -365,7 +382,7 @@ def main() -> None:
         ("parseNowNoteMarkdownTree(content)", "Markdown import parses NowNote tree export"),
         ("parseNowNoteMarkdownDaily(content)", "Markdown import parses NowNote daily export"),
         ("parseNowNoteMarkdownArchivedDaily(content)", "Markdown import parses archived daily export"),
-        ("titleFromMarkdownFile(file.name, content)", "Markdown import creates a topic from plain Markdown"),
+        ("markdownFileToImportNode(file.name, content)", "Markdown import creates a topic from plain Markdown"),
         ("state.data.tree.push(...nodes)", "Markdown import adds tree nodes"),
         ("mergeImportedDailyNote(note)", "Markdown import merges daily notes"),
         ("showMarkdownImportResult(nodes, dailyNotes)", "Markdown import opens the imported result"),
@@ -414,6 +431,9 @@ def main() -> None:
         (".command-card", "command palette card styling"),
         (".command-list", "command palette list styling"),
         (".command-item", "command palette item styling"),
+        (".recovery-panel", "recovery panel styling"),
+        (".import-report-list", "import report list styling"),
+        (".import-report-item", "import report item styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -435,6 +455,7 @@ def main() -> None:
         ("1.4 Canvas와 시각적 사고 정리", "1.4 Canvas documented"),
         ("1.5 첨부/미디어/빠른 기록", "1.5 quick capture documented"),
         ("1.6 작성 보조와 명령 체계", "1.6 command palette documented"),
+        ("1.7 복구/가져오기/마이그레이션", "1.7 recovery import documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -460,6 +481,7 @@ def main() -> None:
         ("Canvas와 시각적 사고 정리", "runtime checklist Canvas section"),
         ("첨부/미디어/빠른 기록", "runtime checklist quick capture section"),
         ("작성 보조와 명령 체계", "runtime checklist writing command section"),
+        ("복구/가져오기/마이그레이션", "runtime checklist recovery import section"),
         ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
@@ -608,6 +630,9 @@ def main() -> None:
         ("executeSlashCommandFromEditor", "slash command assertion"),
         ("splitSelectedNoteByHeading", "note split assertion"),
         ("mergeSelectedNoteChildren", "note merge assertion"),
+        ("createRecoverySnapshot", "recovery snapshot assertion"),
+        ("markdownFileToImportNode", "frontmatter import assertion"),
+        ("restoreOk", "snapshot restore assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
@@ -671,6 +696,18 @@ def main() -> None:
     ]
     for needle, label in command_design_requirements:
         check(needle in command_design, f"1.6 design has {label}", needle, failures)
+
+    recovery_import_design_requirements = [
+        ("NowNote 1.7 복구, 가져오기, 마이그레이션 설계서", "1.7 recovery import design title"),
+        ("화면 기반 로컬 스냅샷", "snapshot scope"),
+        ("가져오기 전 자동 스냅샷", "pre-import snapshot scope"),
+        ("선택 스냅샷 복구", "snapshot restore scope"),
+        ("frontmatter와 NowNote 속성 매핑", "frontmatter mapping scope"),
+        ("Obsidian wiki 링크와 첨부 표기 보정", "Obsidian conversion scope"),
+        ("가져오기 후 문제/보정 목록 표시", "import report scope"),
+    ]
+    for needle, label in recovery_import_design_requirements:
+        check(needle in recovery_import_design, f"1.7 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
