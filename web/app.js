@@ -518,6 +518,7 @@ const I18N = {
     "shortcut.action.noteFind": "본문 찾기",
     "shortcut.action.quickSwitch": "빠른 전환",
     "shortcut.action.quickOpen": "빠른 전환 보조",
+    "shortcut.action.commandPalette": "명령 팔레트",
     "shortcut.action.daily": "일자별 메모",
     "shortcut.action.graph": "연결 보기",
     "shortcut.action.saveState": "저장 상태 확인",
@@ -1095,6 +1096,7 @@ const I18N = {
     "shortcut.action.noteFind": "Find in note",
     "shortcut.action.quickSwitch": "Quick switch",
     "shortcut.action.quickOpen": "Quick switch helper",
+    "shortcut.action.commandPalette": "Command palette",
     "shortcut.action.daily": "Daily note",
     "shortcut.action.graph": "Linked notes",
     "shortcut.action.saveState": "Check sync state",
@@ -1453,6 +1455,7 @@ const SHORTCUT_ACTIONS = [
   { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
   { id: "quickSwitch", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickSwitch", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" }, group: "창과 탭" },
   { id: "quickOpen", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickOpen", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" }, group: "창과 탭" },
+  { id: "commandPalette", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.commandPalette", label: "명령 팔레트", defaultShortcut: { ctrl: true, shift: true, key: "p" }, group: "창과 탭" },
   { id: "daily", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.daily", label: "일자별 메모", defaultShortcut: { ctrl: true, key: "d" }, group: "창과 탭" },
   { id: "graph", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.graph", label: "연결 보기", defaultShortcut: { ctrl: true, key: "g" }, group: "창과 탭" },
   { id: "saveState", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.saveState", label: "저장 상태 확인", defaultShortcut: { ctrl: true, key: "s" }, group: "창과 탭" },
@@ -1518,6 +1521,27 @@ let pendingCaptureAttachment = null;
 let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
+
+const WRITING_TEMPLATES = {
+  project: {
+    label: "프로젝트 템플릿",
+    title: "프로젝트 메모",
+    content: "## 목표\n\n## 범위\n\n## 다음 작업\n- [ ] ",
+    properties: { status: "active", priority: "normal", type: "프로젝트", project: "" },
+  },
+  meeting: {
+    label: "회의 템플릿",
+    title: "회의 메모",
+    content: "## 안건\n\n## 결정\n\n## 후속 작업\n- [ ] ",
+    properties: { status: "active", priority: "normal", type: "회의", project: "" },
+  },
+  source: {
+    label: "자료 템플릿",
+    title: "자료 메모",
+    content: "## 출처\n\n## 핵심 내용\n\n## 연결할 메모\n- [[ ]]",
+    properties: { status: "idea", priority: "normal", type: "자료", source: "" },
+  },
+};
 
 function defaultData() {
   return {
@@ -1810,6 +1834,7 @@ const elements = {
   importMarkdownBtn: $("#importMarkdownBtn"),
   importMarkdownInput: $("#importMarkdownInput"),
   quickSwitchBtn: $("#quickSwitchBtn"),
+  commandPaletteBtn: $("#commandPaletteBtn"),
   graphBtn: $("#graphBtn"),
   settingsBtn: $("#settingsBtn"),
   helpBtn: $("#helpBtn"),
@@ -1882,6 +1907,11 @@ const elements = {
   quickCount: $("#quickCount"),
   quickResults: $("#quickResults"),
   quickCloseBtn: $("#quickCloseBtn"),
+  commandPaletteView: $("#commandPaletteView"),
+  commandPaletteInput: $("#commandPaletteInput"),
+  commandPaletteSummary: $("#commandPaletteSummary"),
+  commandPaletteList: $("#commandPaletteList"),
+  commandPaletteCloseBtn: $("#commandPaletteCloseBtn"),
   searchPopoverView: $("#searchPopoverView"),
   searchPopoverInput: $("#searchPopoverInput"),
   searchScopeSelect: $("#searchScopeSelect"),
@@ -2537,6 +2567,10 @@ function bindEvents() {
     toggleQuickSwitch();
   });
 
+  elements.commandPaletteBtn?.addEventListener("click", () => {
+    toggleCommandPalette();
+  });
+
   elements.graphBtn.addEventListener("click", () => {
     toggleGraph();
   });
@@ -2813,6 +2847,9 @@ function bindEvents() {
   elements.quickInput.addEventListener("input", renderQuickResults);
   elements.quickInput.addEventListener("keydown", handleQuickInputKey);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
+  elements.commandPaletteInput?.addEventListener("input", renderCommandPalette);
+  elements.commandPaletteInput?.addEventListener("keydown", handleCommandPaletteInputKey);
+  elements.commandPaletteCloseBtn?.addEventListener("click", closeCommandPalette);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
   elements.graphModeSelect.addEventListener("change", () => {
     state.settings.graph.mode = elements.graphModeSelect.value === "local" ? "local" : "global";
@@ -2909,6 +2946,7 @@ function bindEvents() {
   elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
   elements.webResetConfirmBtn?.addEventListener("click", handlePasswordResetConfirm);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
+  bindOverlayDismiss(elements.commandPaletteView, closeCommandPalette);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
   bindOverlayDismiss(elements.graphView, closeGraph);
   bindOverlayDismiss(elements.propertiesView, closePropertiesView);
@@ -5010,6 +5048,178 @@ function closeQuickSwitch() {
   elements.quickSwitchView.classList.add("hidden");
 }
 
+function openCommandPalette() {
+  closePopupLayers();
+  elements.commandPaletteView.classList.remove("hidden");
+  elements.commandPaletteInput.value = "";
+  renderCommandPalette();
+  elements.commandPaletteInput.focus();
+}
+
+function toggleCommandPalette() {
+  if (elements.commandPaletteView.classList.contains("hidden")) {
+    openCommandPalette();
+  } else {
+    closeCommandPalette();
+  }
+}
+
+function closeCommandPalette() {
+  elements.commandPaletteView.classList.add("hidden");
+}
+
+function commandCatalog() {
+  return [
+    {
+      id: "template-project",
+      label: "프로젝트 템플릿 메모",
+      group: "템플릿",
+      description: "목표, 범위, 다음 작업 섹션을 가진 메모를 만듭니다.",
+      keywords: "template project 템플릿 프로젝트",
+      run: () => createWritingTemplateNote("project"),
+    },
+    {
+      id: "template-meeting",
+      label: "회의 템플릿 메모",
+      group: "템플릿",
+      description: "안건, 결정, 후속 작업 섹션을 가진 메모를 만듭니다.",
+      keywords: "template meeting 템플릿 회의",
+      run: () => createWritingTemplateNote("meeting"),
+    },
+    {
+      id: "template-source",
+      label: "자료 템플릿 메모",
+      group: "템플릿",
+      description: "출처, 핵심 내용, 연결할 메모 섹션을 가진 메모를 만듭니다.",
+      keywords: "template source 템플릿 자료",
+      run: () => createWritingTemplateNote("source"),
+    },
+    {
+      id: "unique-note",
+      label: "고유 메모 생성",
+      group: "생성",
+      description: "시각 기반 ID가 들어간 새 메모를 만듭니다.",
+      keywords: "unique note id 고유 시각",
+      run: createUniqueNote,
+    },
+    {
+      id: "random-note",
+      label: "랜덤 메모 열기",
+      group: "탐색",
+      description: "지식 점검용으로 임의의 메모를 엽니다.",
+      keywords: "random note 랜덤",
+      run: openRandomNote,
+    },
+    {
+      id: "merge-children",
+      label: "하위 메모 내용 병합",
+      group: "정리",
+      description: "선택 메모의 하위 메모 내용을 본문 아래에 추가합니다.",
+      keywords: "merge composer 합치기 병합",
+      run: mergeSelectedNoteChildren,
+    },
+    {
+      id: "split-heading",
+      label: "제목 섹션으로 나누기",
+      group: "정리",
+      description: "현재 메모의 ## 섹션을 하위 메모로 분리합니다.",
+      keywords: "split composer 나누기 heading 제목",
+      run: splitSelectedNoteByHeading,
+    },
+    {
+      id: "quick-switch",
+      label: "빠른 전환 열기",
+      group: "탐색",
+      description: "제목과 경로로 메모를 바로 엽니다.",
+      keywords: "quick switch open 빠른 전환",
+      run: openQuickSwitch,
+    },
+    {
+      id: "insert-time",
+      label: "현재 시간 삽입",
+      group: "작성",
+      description: "선택 메모 커서 위치에 현재 시간을 넣습니다.",
+      keywords: "time now insert 시간",
+      run: insertCurrentTimeIntoTreeNote,
+    },
+    {
+      id: "insert-checklist",
+      label: "체크리스트 삽입",
+      group: "작성",
+      description: "선택 메모 커서 위치에 체크리스트를 넣습니다.",
+      keywords: "check checklist todo 체크리스트",
+      run: insertChecklistIntoTreeContent,
+    },
+  ];
+}
+
+function renderCommandPalette() {
+  const query = elements.commandPaletteInput.value.trim().toLowerCase();
+  const commands = commandCatalog().filter((command) => {
+    const text = `${command.label} ${command.group} ${command.description} ${command.keywords}`.toLowerCase();
+    return !query || text.includes(query);
+  });
+  elements.commandPaletteSummary.textContent = query
+    ? `${commands.length}개 명령`
+    : "작성 보조 명령을 바로 실행할 수 있습니다.";
+  if (!commands.length) {
+    elements.commandPaletteList.innerHTML = `<div class="empty-compact">실행할 명령이 없습니다.</div>`;
+    return;
+  }
+  elements.commandPaletteList.replaceChildren(...commands.map(commandPaletteItem));
+}
+
+function commandPaletteItem(command) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "command-item";
+  button.dataset.commandId = command.id;
+  button.innerHTML = [
+    `<span>${escapeHtml(command.group)}</span>`,
+    `<strong>${escapeHtml(command.label)}</strong>`,
+    `<small>${escapeHtml(command.description)}</small>`,
+  ].join("");
+  button.addEventListener("click", () => executeCommand(command.id));
+  button.addEventListener("keydown", (event) => handleCommandPaletteResultKey(event, button));
+  return button;
+}
+
+function handleCommandPaletteInputKey(event) {
+  if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  const first = elements.commandPaletteList.querySelector(".command-item");
+  if (!first) return;
+  event.preventDefault();
+  if (event.key === "Enter") {
+    first.click();
+  } else {
+    first.focus();
+  }
+}
+
+function handleCommandPaletteResultKey(event, button) {
+  if (!["Enter", "ArrowDown", "ArrowUp", "Escape"].includes(event.key)) return;
+  event.preventDefault();
+  const items = Array.from(elements.commandPaletteList.querySelectorAll(".command-item"));
+  const index = items.indexOf(button);
+  if (event.key === "Enter") {
+    button.click();
+  } else if (event.key === "ArrowDown") {
+    (items[index + 1] || items[0] || button).focus();
+  } else if (event.key === "ArrowUp") {
+    (items[index - 1] || items.at(-1) || button).focus();
+  } else {
+    elements.commandPaletteInput.focus();
+  }
+}
+
+function executeCommand(commandId) {
+  const command = commandCatalog().find((item) => item.id === commandId);
+  if (!command) return false;
+  const result = command.run();
+  if (result !== false) closeCommandPalette();
+  return result !== false;
+}
+
 function toggleSearchPopover() {
   if (elements.searchPopoverView.classList.contains("hidden")) {
     openSearchPopover();
@@ -5191,6 +5401,10 @@ function handleShortcuts(event) {
     event.preventDefault();
     openQuickSwitch();
   }
+  if (shortcutMatches(event, "commandPalette")) {
+    event.preventDefault();
+    openCommandPalette();
+  }
   if (shortcutMatches(event, "search")) {
     if (!featureEnabled("search")) return;
     event.preventDefault();
@@ -5286,7 +5500,167 @@ function insertCurrentTimeIntoTreeNote() {
   syncTreeContentFromEditor();
 }
 
+function insertTextIntoTreeContent(text) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return false;
+  const start = elements.treeContent.selectionStart ?? elements.treeContent.value.length;
+  const end = elements.treeContent.selectionEnd ?? start;
+  const value = elements.treeContent.value;
+  const before = value.slice(0, start);
+  const after = value.slice(end);
+  const spacerBefore = before && !before.endsWith("\n") ? "\n" : "";
+  const spacerAfter = after && !String(text).endsWith("\n") ? "\n" : "";
+  elements.treeContent.value = `${before}${spacerBefore}${text}${spacerAfter}${after}`;
+  const nextCursor = before.length + spacerBefore.length + String(text).length;
+  elements.treeContent.focus();
+  elements.treeContent.setSelectionRange(nextCursor, nextCursor);
+  syncTreeContentFromEditor();
+  return true;
+}
+
+function createWritingTemplateNote(templateId = "project") {
+  const template = writingTemplate(templateId);
+  const parent = getSelectedTreeNode();
+  const parentId = parent && parent.level < 3 ? parent.id : null;
+  const level = parent && parent.level < 3 ? parent.level + 1 : 1;
+  const node = createNode(template.title, template.content, parentId, level);
+  node.properties = normalizeNoteProperties(template.properties);
+  if (parentId) {
+    parent.children.push(node);
+    state.expandedTreeIds.add(parent.id);
+  } else {
+    state.data.tree.push(node);
+  }
+  state.selectedTreeId = node.id;
+  persist();
+  renderTree();
+  showSaved(elements.treeSavedLabel);
+  return node;
+}
+
+function insertWritingTemplateIntoCurrentNote(templateId = "project") {
+  const selected = getSelectedTreeNode();
+  if (!selected || isEncryptedContent(selected.content)) return false;
+  const template = writingTemplate(templateId);
+  insertTextIntoTreeContent(template.content);
+  selected.properties = normalizeNoteProperties({ ...selected.properties, ...template.properties });
+  markTreeNodeChanged(selected);
+  persist();
+  renderTree();
+  return true;
+}
+
+function writingTemplate(templateId = "project") {
+  return WRITING_TEMPLATES[templateId] || WRITING_TEMPLATES.project;
+}
+
+function createUniqueNote() {
+  const stamp = uniqueNoteStamp(new Date());
+  const node = createNode(`메모 ${stamp}`, `# 메모 ${stamp}\n\n`, null, 1);
+  node.properties = normalizeNoteProperties({ status: "idea", priority: "normal", type: "빠른 메모" });
+  state.data.tree.push(node);
+  state.selectedTreeId = node.id;
+  state.expandedTreeIds.add(node.id);
+  persist();
+  renderTree();
+  return node;
+}
+
+function uniqueNoteStamp(date) {
+  const pad = (value) => String(value).padStart(2, "0");
+  return [
+    date.getFullYear(),
+    pad(date.getMonth() + 1),
+    pad(date.getDate()),
+    "-",
+    pad(date.getHours()),
+    pad(date.getMinutes()),
+    pad(date.getSeconds()),
+  ].join("");
+}
+
+function openRandomNote() {
+  const nodes = flattenTree(state.data.tree).filter((node) => node.status !== "deleted");
+  if (!nodes.length) {
+    showNotice(t("quick.empty"), "info");
+    return false;
+  }
+  const node = nodes[Math.floor(Math.random() * nodes.length)];
+  selectTreeNode(node.id);
+  return true;
+}
+
+function mergeSelectedNoteChildren() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isEncryptedContent(selected.content) || !selected.children.length) return false;
+  const sections = selected.children.map((child) => [
+    `## ${noteTitle(child.title)}`,
+    "",
+    visibleContentForNode(child).trim(),
+  ].join("\n").trim());
+  selected.content = [selected.content || "", "## 하위 메모 병합", ...sections]
+    .filter((part) => part.trim())
+    .join("\n\n");
+  selected.tags = extractTags(selected.content);
+  markTreeNodeChanged(selected);
+  elements.treeContent.value = editableContentForNode(selected);
+  persist();
+  renderTree();
+  return true;
+}
+
+function splitSelectedNoteByHeading() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isEncryptedContent(selected.content) || selected.level >= 3) return false;
+  const sections = splitContentBySecondLevelHeading(selected.content);
+  if (!sections.parts.length) return false;
+  selected.content = sections.intro.trim();
+  selected.tags = extractTags(selected.content);
+  sections.parts.slice(0, 20).forEach((part) => {
+    const child = createNode(part.title, part.content, selected.id, selected.level + 1);
+    child.properties = normalizeNoteProperties({ ...selected.properties });
+    selected.children.push(child);
+  });
+  state.expandedTreeIds.add(selected.id);
+  markTreeNodeChanged(selected);
+  elements.treeContent.value = editableContentForNode(selected);
+  persist();
+  renderTree();
+  return true;
+}
+
+function splitContentBySecondLevelHeading(content) {
+  const lines = String(content || "").split(/\r?\n/);
+  const intro = [];
+  const parts = [];
+  let current = null;
+  lines.forEach((line) => {
+    const heading = line.match(/^##\s+(.+)$/);
+    if (heading) {
+      if (current) parts.push(current);
+      current = { title: heading[1].trim().slice(0, 80) || t("note.newNote"), lines: [] };
+      return;
+    }
+    if (current) {
+      current.lines.push(line);
+    } else {
+      intro.push(line);
+    }
+  });
+  if (current) parts.push(current);
+  return {
+    intro: intro.join("\n"),
+    parts: parts
+      .map((part) => ({ title: part.title, content: part.lines.join("\n").trim() }))
+      .filter((part) => part.title || part.content),
+  };
+}
+
 function handleTreeContentShortcut(event) {
+  if (event.key === "Enter" && executeSlashCommandFromEditor()) {
+    consumeTreeContentShortcut(event);
+    return;
+  }
   if (event.key === "Enter" && !event.shiftKey && continueMarkdownLineOnEnter()) {
     consumeTreeContentShortcut(event);
     return;
@@ -5334,6 +5708,44 @@ function handleTreeContentShortcut(event) {
     const level = shortcutMatches(event, "heading1") ? 1 : shortcutMatches(event, "heading2") ? 2 : 3;
     applyHeadingToTreeContent(level);
   }
+}
+
+function executeSlashCommandFromEditor() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isEncryptedContent(selected.content)) return false;
+  const cursor = elements.treeContent.selectionStart ?? 0;
+  const value = elements.treeContent.value;
+  const lineStart = value.lastIndexOf("\n", cursor - 1) + 1;
+  const lineEndIndex = value.indexOf("\n", cursor);
+  const lineEnd = lineEndIndex === -1 ? value.length : lineEndIndex;
+  const commandText = value.slice(lineStart, lineEnd).trim();
+  if (!commandText.startsWith("/")) return false;
+  const [name, ...args] = commandText.slice(1).split(/\s+/).filter(Boolean);
+  if (!name) return false;
+  const before = value.slice(0, lineStart);
+  const after = value.slice(lineEndIndex === -1 ? lineEnd : lineEnd + 1);
+  elements.treeContent.value = `${before}${after}`;
+  elements.treeContent.setSelectionRange(lineStart, lineStart);
+  syncTreeContentFromEditor();
+  const normalized = name.toLowerCase();
+  if (normalized === "time") {
+    insertCurrentTimeIntoTreeNote();
+  } else if (normalized === "check" || normalized === "todo") {
+    insertChecklistIntoTreeContent();
+  } else if (normalized === "template") {
+    insertWritingTemplateIntoCurrentNote(args[0] || "project");
+  } else if (normalized === "unique") {
+    createUniqueNote();
+  } else if (normalized === "random") {
+    openRandomNote();
+  } else if (normalized === "split") {
+    splitSelectedNoteByHeading();
+  } else if (normalized === "merge") {
+    mergeSelectedNoteChildren();
+  } else {
+    showNotice("알 수 없는 작성 명령입니다.", "error");
+  }
+  return true;
 }
 
 function consumeTreeContentShortcut(event) {
@@ -6921,6 +7333,7 @@ function closePopupLayers() {
   cancelShortcutCapture();
   closeDailyPopup();
   closeQuickSwitch();
+  closeCommandPalette();
   closeSearchPopover();
   closeGraph();
   closePropertiesView();
