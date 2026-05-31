@@ -1,9 +1,75 @@
-const { app, BrowserWindow, Menu, shell } = require("electron");
+const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const fs = require("fs");
 const path = require("path");
 
 const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
+const DESKTOP_STORE_VERSION = 1;
+
+if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
+  app.setPath("userData", path.resolve(process.env.NOWNOTE_DESKTOP_USER_DATA_DIR));
+}
+
+function desktopStorePath() {
+  return path.join(app.getPath("userData"), "nownote-desktop-store.json");
+}
+
+function defaultDesktopStore() {
+  return {
+    version: DESKTOP_STORE_VERSION,
+    updatedAt: null,
+    values: {},
+  };
+}
+
+function readDesktopStore() {
+  const storePath = desktopStorePath();
+  try {
+    if (!fs.existsSync(storePath)) {
+      return defaultDesktopStore();
+    }
+    const parsed = JSON.parse(fs.readFileSync(storePath, "utf8"));
+    return {
+      ...defaultDesktopStore(),
+      ...parsed,
+      values: parsed && typeof parsed.values === "object" && parsed.values ? parsed.values : {},
+    };
+  } catch {
+    return defaultDesktopStore();
+  }
+}
+
+function writeDesktopStore(store) {
+  const storePath = desktopStorePath();
+  fs.mkdirSync(path.dirname(storePath), { recursive: true });
+  fs.writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+}
+
+function registerDesktopStorageHandlers() {
+  ipcMain.handle("nownote:desktop-store-info", () => {
+    const store = readDesktopStore();
+    return {
+      path: desktopStorePath(),
+      version: DESKTOP_STORE_VERSION,
+      updatedAt: store.updatedAt,
+      keys: Object.keys(store.values),
+    };
+  });
+
+  ipcMain.handle("nownote:desktop-store-read", (_event, key) => {
+    const store = readDesktopStore();
+    return store.values[key] ?? null;
+  });
+
+  ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
+    const store = readDesktopStore();
+    store.values[key] = value;
+    store.updatedAt = new Date().toISOString();
+    writeDesktopStore(store);
+    return { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+  });
+}
 
 function loadAppFile(filePath) {
   const [window] = BrowserWindow.getAllWindows();
@@ -94,6 +160,7 @@ function createMenu() {
 }
 
 app.whenReady().then(() => {
+  registerDesktopStorageHandlers();
   Menu.setApplicationMenu(createMenu());
   createMainWindow();
 

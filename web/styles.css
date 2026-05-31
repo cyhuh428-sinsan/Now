@@ -687,6 +687,30 @@ body.resizing {
   line-height: 1.45;
 }
 
+.desktop-storage-box {
+  display: grid;
+  gap: 5px;
+  min-width: min(360px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.desktop-storage-box strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.desktop-storage-path {
+  overflow: hidden;
+  color: var(--muted);
+  font-family: Consolas, "Liberation Mono", monospace;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .settings-select {
   min-height: 32px;
   border: 1px solid var(--line);
@@ -765,6 +789,26 @@ body.resizing {
 
 .switch input:checked + span::after {
   transform: translateX(18px);
+}
+
+.toggle-line {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.toggle-line > span:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.toggle-line strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.toggle-line small {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .feature-row {
@@ -2082,6 +2126,48 @@ kbd {
   border: 1px solid var(--line);
   border-radius: 999px;
   background: color-mix(in srgb, var(--panel) 82%, var(--bg));
+}
+
+.server-conflict-box {
+  display: grid;
+  gap: 10px;
+  border: 1px solid var(--amber);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--amber) 8%, var(--panel));
+  padding: 10px;
+}
+
+.server-conflict-box strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.server-conflict-box p {
+  margin: 3px 0 0;
+}
+
+.server-conflict-list {
+  display: grid;
+  gap: 8px;
+}
+
+.server-conflict-item {
+  display: grid;
+  gap: 8px;
+  border-top: 1px solid var(--line);
+  padding-top: 8px;
+}
+
+.server-conflict-item > span {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.server-conflict-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .server-analysis-list {
