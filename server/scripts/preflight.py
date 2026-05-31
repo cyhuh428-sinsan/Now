@@ -910,7 +910,7 @@ def main() -> None:
                 ("같은 메모장에 이어서 저장", "Web runtime checklist covers daily append model", "web daily append"),
                 ("Markdown 내보내기", "Web runtime checklist covers Markdown export", "web Markdown export"),
                 ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "Web runtime checklist covers JSON restore safeguard", "web JSON restore"),
-                ("PWA 설치형 점검", "Web runtime checklist covers PWA install", "web PWA install"),
+                ("PWA 보조 설치 점검", "Web runtime checklist covers PWA install", "web PWA install"),
                 ("독립 창으로 NowNote가 열린다", "Web runtime checklist covers standalone window", "web standalone"),
                 ("서버 capability", "Web runtime checklist covers server capabilities", "web server capabilities"),
                 ("Failed to fetch", "Web runtime checklist covers fetch troubleshooting", "web fetch troubleshooting"),
@@ -1669,7 +1669,7 @@ def main() -> None:
                 ("6자리 인증 코드", "Korean help explains two-factor verification code", "2FA verification help ko"),
                 ("메모 단위로 암호화할 수 있습니다", "Korean help documents note encryption", "encryption help ko"),
                 ("같은 키를 입력해야 합니다", "Korean help documents shared encryption key", "encryption key help ko"),
-                ("사용자별 접속 토큰 강제 설정", "Korean help documents public token enforcement", "public token enforcement help ko"),
+                ("Web 로그인, 앱/설치형 연결 토큰", "Korean help documents public token enforcement", "public token enforcement help ko"),
             ],
             failures,
         )
@@ -1690,7 +1690,7 @@ def main() -> None:
                 ("six-digit verification code", "English help explains two-factor verification code", "2FA verification help en"),
                 ("Knowledge notes can be encrypted note by note", "English help documents note encryption", "encryption help en"),
                 ("enter the same key", "English help documents shared encryption key", "encryption key help en"),
-                ("per-user token enforcement", "English help documents public token enforcement", "public token enforcement help en"),
+                ("app/installed-app connection tokens", "English help documents public token enforcement", "public token enforcement help en"),
             ],
             failures,
         )
@@ -1708,8 +1708,8 @@ def main() -> None:
             [
                 ("메모 단위로 암호화할 수 있습니다", "Web help documents note encryption", "web encryption"),
                 ("Knowledge notes can be encrypted note by note", "Web English help documents note encryption", "web encryption en"),
-                ("사용자별 접속 토큰 강제 설정", "Web help documents public token enforcement", "web public token enforcement"),
-                ("per-user token enforcement", "Web English help documents public token enforcement", "web public token enforcement en"),
+                ("Web 직접 가입, 앱/설치형 연결 토큰 발급", "Web help documents public token enforcement", "web public token enforcement"),
+                ("Web self-registration", "Web English help documents public token enforcement", "web public token enforcement en"),
             ],
             failures,
         )
@@ -1728,7 +1728,7 @@ def main() -> None:
                 ("메모 단위로 암호화할 수 있습니다", "Mobile help documents note encryption", "mobile encryption"),
                 ("서버 주소, API 토큰, 사용자 ID, 기기 ID", "Mobile help documents server connection values", "mobile server connection values"),
                 ("사용자별 접속 토큰과 2단계 인증 코드", "Mobile help documents public token and two-factor code", "mobile public token and 2FA help"),
-                ("사용자별 접속 토큰 강제 설정", "Mobile help documents public token enforcement", "mobile public token enforcement"),
+                ("사용자 직접 가입", "Mobile help documents public token enforcement", "mobile public token enforcement"),
                 ("공개 HTTPS, reverse proxy 환경", "Mobile help documents current public server blocker", "mobile public server HTTPS reverse proxy"),
             ],
             failures,

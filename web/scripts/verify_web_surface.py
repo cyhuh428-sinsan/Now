@@ -260,7 +260,7 @@ def main() -> None:
         ("Markdown 가져오기", "runtime checklist Markdown import"),
         ("JSON 내보내기", "runtime checklist JSON export"),
         ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "runtime checklist JSON restore safeguard"),
-        ("PWA 설치형 점검", "runtime checklist PWA install section"),
+        ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
         ("서버 capability", "runtime checklist server capability display"),
         ("Failed to fetch", "runtime checklist fetch troubleshooting"),

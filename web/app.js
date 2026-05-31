@@ -1245,6 +1245,8 @@ function defaultServerSettings() {
     lastSyncedAt: null,
     lastStatus: "idle",
     lastMessage: "",
+    lastMessageKey: "",
+    lastMessageParams: null,
   };
 }
 
@@ -2452,7 +2454,7 @@ function renderDeviceTokenList(items = []) {
   elements.deviceTokenText.textContent = t("settings.server.deviceToken.help");
 }
 
-function saveServerSettingsFromForm(message = t("settings.server.saved")) {
+function saveServerSettingsFromForm(message = t("settings.server.saved"), messageKey = "settings.server.saved", messageParams = null) {
   const previous = state.settings.server || defaultServerSettings();
   if (isHostedWebClient()) {
     state.settings.server = {
@@ -2471,6 +2473,8 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
       },
       lastStatus: "saved",
       lastMessage: message,
+      lastMessageKey: messageKey,
+      lastMessageParams: messageParams,
     };
     persistSettings();
     renderServerSettings();
@@ -2502,6 +2506,8 @@ function saveServerSettingsFromForm(message = t("settings.server.saved")) {
     publicServerReadiness: connectionChanged ? null : previous.publicServerReadiness,
     lastStatus: "saved",
     lastMessage: message,
+    lastMessageKey: messageKey,
+    lastMessageParams: messageParams,
   };
   persistSettings();
   renderServerSettings();
@@ -2515,18 +2521,72 @@ async function syncAllWebNotesToServer() {
   server.lastSyncedAt = null;
   persistSettings();
   renderServerSettings();
-  syncWebNotesToServer(t("settings.server.fullSyncing"));
+  syncWebNotesToServer(t("settings.server.fullSyncing"), { messageKey: "settings.server.fullSyncing" });
 }
 
 function renderServerStatus(status, message) {
   const server = state.settings.server || defaultServerSettings();
   const fallback = server.mode === "server" ? t("settings.server.saved") : t("settings.server.local");
-  const text = message || fallback;
+  const text = translatedServerStatusMessage(server, message) || fallback;
   elements.serverStatusText.textContent = text;
   elements.serverStatusText.classList.remove("ok", "warn", "bad");
   if (status === "ok") elements.serverStatusText.classList.add("ok");
   if (status === "saved" || status === "testing") elements.serverStatusText.classList.add("warn");
   if (status === "bad") elements.serverStatusText.classList.add("bad");
+}
+
+function translatedServerStatusMessage(server, message) {
+  if (server.lastMessageKey) {
+    return t(server.lastMessageKey, server.lastMessageParams || {});
+  }
+  const legacyKey = legacyServerMessageKey(message);
+  if (legacyKey) return t(legacyKey);
+  return message || "";
+}
+
+function legacyServerMessageKey(message) {
+  const text = String(message || "").trim();
+  const legacy = {
+    "저장했습니다.": "settings.server.saved",
+    "Saved.": "settings.server.saved",
+    "서버 연결을 사용하지 않습니다.": "settings.server.local",
+    "Server connection is disabled.": "settings.server.local",
+    "서버 주소를 입력하세요.": "settings.server.noUrl",
+    "Enter a server URL.": "settings.server.noUrl",
+    "서버 연결 정상": "settings.server.ok",
+    "Server connection is healthy": "settings.server.ok",
+    "서버 동기화 완료": "settings.server.syncOk",
+    "Server sync complete": "settings.server.syncOk",
+    "동기화할 메모가 없습니다.": "settings.server.syncEmpty",
+    "There are no notes to sync.": "settings.server.syncEmpty",
+    "프로필을 불러왔습니다.": "settings.server.profile.loaded",
+    "Profile loaded.": "settings.server.profile.loaded",
+    "프로필을 저장했습니다.": "settings.server.profile.saved",
+    "Profile saved.": "settings.server.profile.saved",
+    "선택한 메모가 없습니다.": "settings.server.analysis.noNote",
+    "No note is selected.": "settings.server.analysis.noNote",
+    "분석할 메모 내용이 없습니다.": "settings.server.analysis.emptyNote",
+    "There is no note content to analyze.": "settings.server.analysis.emptyNote",
+    "분석 작업을 등록했습니다.": "settings.server.analysis.created",
+    "Analysis job created.": "settings.server.analysis.created",
+    "분석 작업을 불러왔습니다.": "settings.server.analysis.loaded",
+    "Analysis jobs loaded.": "settings.server.analysis.loaded",
+  };
+  return legacy[text] || "";
+}
+
+function setServerMessage(server, status, key, params = null) {
+  server.lastStatus = status;
+  server.lastMessageKey = key;
+  server.lastMessageParams = params;
+  server.lastMessage = t(key, params || {});
+}
+
+function setServerRawMessage(server, status, message) {
+  server.lastStatus = status;
+  server.lastMessageKey = "";
+  server.lastMessageParams = null;
+  server.lastMessage = message;
 }
 
 function renderServerMeta() {
@@ -2675,8 +2735,7 @@ function appendAnalysisResultToNote(job) {
   const node = findTreeNode(state.data.tree, job.note_local_id);
   const resultText = extractServerAnalysisResultText(job.result_json);
   if (!node || !resultText) {
-    state.settings.server.lastStatus = "bad";
-    state.settings.server.lastMessage = t("settings.server.analysis.applyMissing");
+    setServerMessage(state.settings.server, "bad", "settings.server.analysis.applyMissing");
     persistSettings();
     renderServerSettings();
     return;
@@ -2699,8 +2758,7 @@ function appendAnalysisResultToNote(job) {
   node.tags = extractTags(node.content);
   markTreeNodeChanged(node);
   state.selectedTreeId = node.id;
-  state.settings.server.lastStatus = "ok";
-  state.settings.server.lastMessage = t("settings.server.analysis.applied");
+  setServerMessage(state.settings.server, "ok", "settings.server.analysis.applied");
   persist();
   renderTree();
   renderServerSettings();
@@ -2760,18 +2818,16 @@ function countPendingSyncNotes() {
 }
 
 async function testServerConnection() {
-  saveServerSettingsFromForm(t("settings.server.testing"));
+  saveServerSettingsFromForm(t("settings.server.testing"), "settings.server.testing");
   const server = state.settings.server;
   if (server.mode !== "server") {
-    server.lastStatus = "idle";
-    server.lastMessage = t("settings.server.local");
+    setServerMessage(server, "idle", "settings.server.local");
     persistSettings();
     renderServerSettings();
     return;
   }
   if (!server.url) {
-    server.lastStatus = "bad";
-    server.lastMessage = t("settings.server.noUrl");
+    setServerMessage(server, "bad", "settings.server.noUrl");
     persistSettings();
     renderServerSettings();
     return;
@@ -2786,7 +2842,6 @@ async function testServerConnection() {
     const payload = await response.json();
     const serverName = payload.server || "NowNote";
     const apiVersion = payload.api_version ? ` · API ${payload.api_version}` : "";
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = payload.capabilities || null;
     server.publicServerReadiness = payload.public_server_readiness || null;
@@ -2800,13 +2855,12 @@ async function testServerConnection() {
       applyServerUserProfile(tokenPayload.user);
       tokenMessage = ` · ${t("settings.server.userTokenOk")}`;
     }
-    server.lastMessage = `${t("settings.server.ok")}: ${serverName}${apiVersion}${tokenMessage}`;
+    setServerRawMessage(server, "ok", `${t("settings.server.ok")}: ${serverName}${apiVersion}${tokenMessage}`);
   } catch (error) {
-    server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = null;
     server.publicServerReadiness = null;
-    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
   }
   persistSettings();
   renderServerSettings();
@@ -2866,10 +2920,9 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
     }
     const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
     markServerSyncedNotes();
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
-    server.lastMessage = t("settings.server.syncOk");
+    setServerMessage(server, "ok", "settings.server.syncOk");
     persist();
     persistSettings();
     render();
@@ -2881,7 +2934,7 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
 }
 
 async function loadServerUserProfile() {
-  saveServerSettingsFromForm(t("settings.server.profile.loading"));
+  saveServerSettingsFromForm(t("settings.server.profile.loading"), "settings.server.profile.loading");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
 
@@ -2892,20 +2945,18 @@ async function loadServerUserProfile() {
       `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
     applyServerUserProfile(payload.user);
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = t("settings.server.profile.loaded");
+    setServerMessage(server, "ok", "settings.server.profile.loaded");
   } catch (error) {
-    server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
   }
   persistSettings();
   renderServerSettings();
 }
 
 async function saveServerUserProfile() {
-  saveServerSettingsFromForm(t("settings.server.profile.saving"));
+  saveServerSettingsFromForm(t("settings.server.profile.saving"), "settings.server.profile.saving");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
 
@@ -2922,14 +2973,12 @@ async function saveServerUserProfile() {
       body: JSON.stringify(data),
     });
     applyServerUserProfile(payload.user);
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = t("settings.server.profile.saved");
+    setServerMessage(server, "ok", "settings.server.profile.saved");
   } catch (error) {
     if (!String(error.message).includes("404")) {
-      server.lastStatus = "bad";
       server.lastCheckedAt = new Date().toISOString();
-      server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+      setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
       persistSettings();
       renderServerSettings();
       return;
@@ -2941,13 +2990,11 @@ async function saveServerUserProfile() {
         body: JSON.stringify(data),
       });
       applyServerUserProfile(payload.user);
-      server.lastStatus = "ok";
       server.lastCheckedAt = new Date().toISOString();
-      server.lastMessage = t("settings.server.profile.saved");
+      setServerMessage(server, "ok", "settings.server.profile.saved");
     } catch (retryError) {
-      server.lastStatus = "bad";
       server.lastCheckedAt = new Date().toISOString();
-      server.lastMessage = `${t("settings.server.fail")}: ${retryError.message}`;
+      setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${retryError.message}`);
     }
   }
   persistSettings();
@@ -2955,22 +3002,20 @@ async function saveServerUserProfile() {
 }
 
 async function createSelectedNoteAnalysisJob() {
-  saveServerSettingsFromForm(t("settings.server.analysis.creating"));
+  saveServerSettingsFromForm(t("settings.server.analysis.creating"), "settings.server.analysis.creating");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
 
   const selected = getSelectedTreeNode();
   if (!selected) {
-    server.lastStatus = "bad";
-    server.lastMessage = t("settings.server.analysis.noNote");
+    setServerMessage(server, "bad", "settings.server.analysis.noNote");
     persistSettings();
     renderServerSettings();
     return;
   }
   const inputText = `${selected.title || ""}\n\n${selected.content || ""}`.trim();
   if (!inputText) {
-    server.lastStatus = "bad";
-    server.lastMessage = t("settings.server.analysis.emptyNote");
+    setServerMessage(server, "bad", "settings.server.analysis.emptyNote");
     persistSettings();
     renderServerSettings();
     return;
@@ -2988,20 +3033,18 @@ async function createSelectedNoteAnalysisJob() {
       }),
     });
     server.analysisJobs = [job, ...(server.analysisJobs || [])].slice(0, 5);
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = t("settings.server.analysis.created");
+    setServerMessage(server, "ok", "settings.server.analysis.created");
   } catch (error) {
-    server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
   }
   persistSettings();
   renderServerSettings();
 }
 
 async function refreshServerAnalysisJobs() {
-  saveServerSettingsFromForm(t("settings.server.analysis.loading"));
+  saveServerSettingsFromForm(t("settings.server.analysis.loading"), "settings.server.analysis.loading");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
 
@@ -3012,13 +3055,11 @@ async function refreshServerAnalysisJobs() {
       `/api/v1/analysis/jobs?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
     server.analysisJobs = Array.isArray(jobs) ? jobs.slice(0, 5) : [];
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = t("settings.server.analysis.loaded");
+    setServerMessage(server, "ok", "settings.server.analysis.loaded");
   } catch (error) {
-    server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
   }
   persistSettings();
   renderServerSettings();
@@ -3094,19 +3135,17 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
   serverSyncRunning = true;
   try {
     if (!options.skipFormSave) {
-      saveServerSettingsFromForm(message);
+      saveServerSettingsFromForm(message, options.messageKey || (message === t("settings.server.syncing") ? "settings.server.syncing" : ""));
     }
     const server = state.settings.server;
     if (server.mode !== "server") {
-      server.lastStatus = "idle";
-      server.lastMessage = t("settings.server.local");
+      setServerMessage(server, "idle", "settings.server.local");
       persistSettings();
       renderServerSettings();
       return;
     }
     if (!server.url) {
-      server.lastStatus = "bad";
-      server.lastMessage = t("settings.server.noUrl");
+      setServerMessage(server, "bad", "settings.server.noUrl");
       persistSettings();
       renderServerSettings();
       return;
@@ -3138,23 +3177,21 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
     const pushedCount = payload.pushed_notes?.length || 0;
     const pulledCount = (payload.pulled_notes || []).length;
     markServerSyncedNotes(payload.pushed_notes || []);
-    server.lastStatus = "ok";
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
     if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
-      server.lastMessage = t("settings.server.syncEmpty");
+      setServerMessage(server, "ok", "settings.server.syncEmpty");
     } else {
       const syncSummary = t("note.syncMessage", { sent: pushedCount, received: mergeResult.applied });
-      server.lastMessage = `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`;
+      setServerRawMessage(server, "ok", `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`);
     }
     persist();
     render();
     renderServerMeta();
   } catch (error) {
     const server = state.settings.server;
-    server.lastStatus = "bad";
     server.lastCheckedAt = new Date().toISOString();
-    server.lastMessage = `${t("settings.server.fail")}: ${error.message}`;
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
   } finally {
     persistSettings();
     renderServerSettings();
@@ -3172,15 +3209,13 @@ function prepareServerRequest(server) {
     return false;
   }
   if (server.mode !== "server") {
-    server.lastStatus = "idle";
-    server.lastMessage = t("settings.server.local");
+    setServerMessage(server, "idle", "settings.server.local");
     persistSettings();
     renderServerSettings();
     return false;
   }
   if (!server.url) {
-    server.lastStatus = "bad";
-    server.lastMessage = t("settings.server.noUrl");
+    setServerMessage(server, "bad", "settings.server.noUrl");
     persistSettings();
     renderServerSettings();
     return false;
@@ -6877,6 +6912,11 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
   normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
   normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
+  normalized.lastMessageKey = typeof normalized.lastMessageKey === "string" ? normalized.lastMessageKey : "";
+  normalized.lastMessageParams =
+    normalized.lastMessageParams && typeof normalized.lastMessageParams === "object"
+      ? normalized.lastMessageParams
+      : null;
   return normalized;
 }
 
