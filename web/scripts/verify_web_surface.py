@@ -14,6 +14,8 @@ RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
 PACKAGE_SCRIPT = ROOT / "scripts" / "package_web.py"
 IMPORT_EXPORT_CHECK = ROOT / "scripts" / "check_import_export.mjs"
 DESKTOP_POLICY_CHECK = ROOT / "scripts" / "check_desktop_client_policies.mjs"
+GRAPH_VIEW_CHECK = ROOT / "scripts" / "check_graph_view.mjs"
+GRAPH_DESIGN = ROOT.parent / "docs" / "NOW_1_2_GRAPH_VIEW_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -57,6 +59,8 @@ def main() -> None:
         PACKAGE_SCRIPT,
         IMPORT_EXPORT_CHECK,
         DESKTOP_POLICY_CHECK,
+        GRAPH_VIEW_CHECK,
+        GRAPH_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -81,6 +85,8 @@ def main() -> None:
     package_script = PACKAGE_SCRIPT.read_text(encoding="utf-8")
     import_export_check = IMPORT_EXPORT_CHECK.read_text(encoding="utf-8")
     desktop_policy_check = DESKTOP_POLICY_CHECK.read_text(encoding="utf-8")
+    graph_view_check = GRAPH_VIEW_CHECK.read_text(encoding="utf-8")
+    graph_design = GRAPH_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -151,6 +157,20 @@ def main() -> None:
         ("desktopStorageStatus", "desktop local storage status text"),
         ("desktopStoragePath", "desktop local storage path"),
         ("shareTreeBtn", "knowledge note share toggle"),
+        ("graphModeSelect", "graph mode selector"),
+        ("graphDepthSelect", "local graph depth selector"),
+        ("graphFilterInput", "graph search filter"),
+        ("graphTagSelect", "graph tag filter"),
+        ("graphGroupSelect", "graph group selector"),
+        ("graphBookmarkSaveBtn", "graph bookmark save button"),
+        ("graphBookmarkSelect", "graph bookmark selector"),
+        ("graphSummary", "graph summary"),
+        ("graphCanvas", "graph canvas"),
+        ("graphOutgoingList", "graph outgoing link list"),
+        ("graphBacklinkList", "graph backlink list"),
+        ("graphSuggestionsList", "graph unlinked mention list"),
+        ("graphIsolatedList", "graph isolated note list"),
+        ("graphHubList", "graph hub note list"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -228,6 +248,14 @@ def main() -> None:
         ("function renderDesktopStorageStatus", "desktop storage status renderer"),
         ("settings.desktopStorage.error", "desktop storage error status"),
         ("error: true", "desktop storage write failure marker"),
+        ("function graphModel", "1.2 graph model builder"),
+        ("function renderGraphCanvas", "1.2 graph canvas renderer"),
+        ("function localGraphNodeIds", "1.2 local graph depth traversal"),
+        ("function unlinkedMentionSuggestions", "1.2 unlinked mention suggestions"),
+        ("function applyLinkSuggestion", "1.2 suggested link apply action"),
+        ("function saveGraphBookmark", "1.2 graph bookmark save action"),
+        ("function applyGraphBookmark", "1.2 graph bookmark apply action"),
+        ("normalizeGraphSettings", "1.2 graph setting normalization"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -272,6 +300,10 @@ def main() -> None:
         (".server-settings-form", "server settings styling"),
         (".shortcut-groups", "shortcut settings styling"),
         (".deleted-toolbar", "deleted bin toolbar styling"),
+        (".graph-toolbar", "graph toolbar styling"),
+        (".graph-canvas", "graph canvas styling"),
+        (".graph-node", "graph node styling"),
+        (".graph-insights", "graph insight panel styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -288,6 +320,8 @@ def main() -> None:
         ("서버 연결", "server connection documented"),
         ("서버 공유 문서가 원본", "hosted Web server source documented"),
         ("사용자 ID와 비밀번호", "hosted Web password login documented"),
+        ("1.2 관계 탐색과 그래프뷰", "1.2 graph view documented"),
+        ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
         ("PWA 설치", "PWA install direction documented"),
@@ -307,6 +341,8 @@ def main() -> None:
         ("Markdown 가져오기", "runtime checklist Markdown import"),
         ("JSON 내보내기", "runtime checklist JSON export"),
         ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "runtime checklist JSON restore safeguard"),
+        ("관계 탐색과 그래프뷰", "runtime checklist graph section"),
+        ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
         ("서버 capability", "runtime checklist server capability display"),
@@ -435,6 +471,28 @@ def main() -> None:
     ]
     for needle, label in desktop_readme_requirements:
         check(needle in desktop_readme, f"Desktop README has {label}", needle, failures)
+
+    graph_view_check_requirements = [
+        ("graphModel()", "graph model execution"),
+        ("#graphCanvas .graph-node", "graph node render assertion"),
+        ("unlinkedMentionSuggestions", "unlinked mention assertion"),
+        ("applyLinkSuggestion", "suggested link assertion"),
+        ("saveGraphBookmark", "bookmark assertion"),
+    ]
+    for needle, label in graph_view_check_requirements:
+        check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
+
+    graph_design_requirements = [
+        ("NowNote 1.2 관계 탐색과 그래프뷰 설계서", "1.2 graph design title"),
+        ("전체 그래프뷰", "global graph scope"),
+        ("선택 메모 중심 로컬 그래프", "local graph scope"),
+        ("고립 메모 목록", "isolated notes scope"),
+        ("허브 메모 목록", "hub notes scope"),
+        ("연결 후보", "unlinked mention scope"),
+        ("그래프 필터 북마크", "graph bookmark scope"),
+    ]
+    for needle, label in graph_design_requirements:
+        check(needle in graph_design, f"1.2 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),

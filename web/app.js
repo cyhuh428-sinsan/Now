@@ -1547,6 +1547,18 @@ function defaultSettings() {
     openTreeTabs: [],
     closedTreeTabs: [],
     pinnedTreeTabs: [],
+    graph: defaultGraphSettings(),
+  };
+}
+
+function defaultGraphSettings() {
+  return {
+    mode: "global",
+    depth: 2,
+    filter: "",
+    tag: "",
+    group: "topic",
+    bookmarks: [],
   };
 }
 
@@ -1858,7 +1870,21 @@ const elements = {
   searchHelpContent: $("#searchHelpContent"),
   searchPopoverCloseBtn: $("#searchPopoverCloseBtn"),
   graphView: $("#graphView"),
+  graphModeSelect: $("#graphModeSelect"),
+  graphDepthSelect: $("#graphDepthSelect"),
+  graphTagSelect: $("#graphTagSelect"),
+  graphGroupSelect: $("#graphGroupSelect"),
+  graphFilterInput: $("#graphFilterInput"),
+  graphBookmarkSaveBtn: $("#graphBookmarkSaveBtn"),
+  graphBookmarkSelect: $("#graphBookmarkSelect"),
+  graphSummary: $("#graphSummary"),
+  graphCanvas: $("#graphCanvas"),
   graphList: $("#graphList"),
+  graphOutgoingList: $("#graphOutgoingList"),
+  graphBacklinkList: $("#graphBacklinkList"),
+  graphSuggestionsList: $("#graphSuggestionsList"),
+  graphIsolatedList: $("#graphIsolatedList"),
+  graphHubList: $("#graphHubList"),
   graphCloseBtn: $("#graphCloseBtn"),
   confirmDialog: $("#confirmDialog"),
   confirmTitle: $("#confirmTitle"),
@@ -2713,6 +2739,35 @@ function bindEvents() {
   elements.quickInput.addEventListener("keydown", handleQuickInputKey);
   elements.quickCloseBtn.addEventListener("click", closeQuickSwitch);
   elements.graphCloseBtn.addEventListener("click", closeGraph);
+  elements.graphModeSelect.addEventListener("change", () => {
+    state.settings.graph.mode = elements.graphModeSelect.value === "local" ? "local" : "global";
+    persistSettings();
+    renderGraph();
+  });
+  elements.graphDepthSelect.addEventListener("change", () => {
+    state.settings.graph.depth = Math.min(3, Math.max(1, Number(elements.graphDepthSelect.value) || 2));
+    persistSettings();
+    renderGraph();
+  });
+  elements.graphTagSelect.addEventListener("change", () => {
+    state.settings.graph.tag = elements.graphTagSelect.value;
+    persistSettings();
+    renderGraph();
+  });
+  elements.graphGroupSelect.addEventListener("change", () => {
+    state.settings.graph.group = ["topic", "tag", "share", "analysis"].includes(elements.graphGroupSelect.value)
+      ? elements.graphGroupSelect.value
+      : "topic";
+    persistSettings();
+    renderGraph();
+  });
+  elements.graphFilterInput.addEventListener("input", () => {
+    state.settings.graph.filter = elements.graphFilterInput.value.trim();
+    persistSettings();
+    renderGraph();
+  });
+  elements.graphBookmarkSaveBtn.addEventListener("click", saveGraphBookmark);
+  elements.graphBookmarkSelect.addEventListener("change", applyGraphBookmark);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
   elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
@@ -5408,13 +5463,208 @@ function insertOrderedListIntoTreeContent() {
 }
 
 function renderGraph() {
-  const links = graphLinks();
-  if (links.length === 0) {
+  syncGraphControls();
+  const model = graphModel();
+  const selected = getSelectedTreeNode();
+  elements.graphSummary.innerHTML = graphSummaryHtml(model);
+  renderGraphCanvas(model);
+  renderGraphEdges(model);
+  renderGraphMiniList(elements.graphOutgoingList, selected ? outgoingLinksFor({ ...selected, content: visibleContentForNode(selected) }) : [], graphOutgoingItem);
+  renderGraphMiniList(elements.graphBacklinkList, selected ? backlinksFor(selected) : [], graphNodeButton);
+  renderGraphMiniList(elements.graphSuggestionsList, selected ? unlinkedMentionSuggestions(selected) : [], graphSuggestionButton);
+  renderGraphMiniList(elements.graphIsolatedList, model.isolated.slice(0, 12), graphNodeButton);
+  renderGraphMiniList(elements.graphHubList, model.hubs.slice(0, 12), graphHubButton);
+}
+
+function syncGraphControls() {
+  state.settings.graph = normalizeGraphSettings(state.settings.graph);
+  const graph = state.settings.graph;
+  elements.graphModeSelect.value = graph.mode;
+  elements.graphDepthSelect.value = String(graph.depth);
+  elements.graphGroupSelect.value = graph.group;
+  elements.graphFilterInput.value = graph.filter;
+  const tags = tagSummary().map((tag) => tag.name);
+  elements.graphTagSelect.replaceChildren(
+    optionElement("", "전체 태그"),
+    ...tags.map((tag) => optionElement(tag, `#${tag}`)),
+  );
+  elements.graphTagSelect.value = tags.includes(graph.tag) ? graph.tag : "";
+  if (graph.tag && !tags.includes(graph.tag)) {
+    graph.tag = "";
+    persistSettings();
+  }
+  elements.graphBookmarkSelect.replaceChildren(
+    optionElement("", "북마크"),
+    ...graph.bookmarks.map((bookmark, index) => optionElement(String(index), bookmark.name)),
+  );
+}
+
+function optionElement(value, label) {
+  const option = document.createElement("option");
+  option.value = value;
+  option.textContent = label;
+  return option;
+}
+
+function graphModel() {
+  const settings = state.settings.graph || defaultGraphSettings();
+  const allNodes = flattenTree(state.data.tree);
+  const byTitle = new Map(allNodes.map((node) => [noteTitle(node.title).toLowerCase(), node]));
+  const allEdges = allNodes.flatMap((from) => (
+    uniqueWikiLinks(graphNodeContent(from))
+      .map((title) => ({ from, to: byTitle.get(title.toLowerCase()), title }))
+      .filter((edge) => edge.to && edge.to.id !== from.id)
+  ));
+  const localIds = settings.mode === "local" && state.selectedTreeId
+    ? localGraphNodeIds(state.selectedTreeId, allEdges, settings.depth)
+    : null;
+  const visibleNodes = allNodes.filter((node) => graphNodeVisible(node, localIds));
+  const visibleIds = new Set(visibleNodes.map((node) => node.id));
+  const visibleEdges = allEdges.filter((edge) => visibleIds.has(edge.from.id) && visibleIds.has(edge.to.id));
+  const degree = new Map(visibleNodes.map((node) => [node.id, 0]));
+  visibleEdges.forEach((edge) => {
+    degree.set(edge.from.id, (degree.get(edge.from.id) || 0) + 1);
+    degree.set(edge.to.id, (degree.get(edge.to.id) || 0) + 1);
+  });
+  const isolated = visibleNodes.filter((node) => (degree.get(node.id) || 0) === 0);
+  const hubs = visibleNodes
+    .map((node) => ({ node, degree: degree.get(node.id) || 0 }))
+    .filter((item) => item.degree > 0)
+    .sort((a, b) => b.degree - a.degree || noteTitle(a.node.title).localeCompare(noteTitle(b.node.title)));
+  return { nodes: visibleNodes, edges: visibleEdges, isolated, hubs, degree };
+}
+
+function graphNodeVisible(node, localIds) {
+  if (localIds && !localIds.has(node.id)) return false;
+  const settings = state.settings.graph || defaultGraphSettings();
+  const tag = settings.tag.trim().toLowerCase();
+  if (tag && !node.tags?.some((item) => item.toLowerCase() === tag)) return false;
+  const filter = settings.filter.trim().toLowerCase();
+  if (!filter) return true;
+  const text = [
+    noteTitle(node.title),
+    graphNodeContent(node),
+    treePath(node.id).join(" / "),
+    node.tags?.join(" ") || "",
+    graphGroupLabel(node, settings.group),
+  ].join(" ").toLowerCase();
+  return text.includes(filter);
+}
+
+function localGraphNodeIds(rootId, edges, depth) {
+  const graph = new Map();
+  edges.forEach((edge) => {
+    if (!graph.has(edge.from.id)) graph.set(edge.from.id, new Set());
+    if (!graph.has(edge.to.id)) graph.set(edge.to.id, new Set());
+    graph.get(edge.from.id).add(edge.to.id);
+    graph.get(edge.to.id).add(edge.from.id);
+  });
+  const visited = new Set([rootId]);
+  const queue = [{ id: rootId, depth: 0 }];
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (current.depth >= depth) continue;
+    for (const nextId of graph.get(current.id) || []) {
+      if (visited.has(nextId)) continue;
+      visited.add(nextId);
+      queue.push({ id: nextId, depth: current.depth + 1 });
+    }
+  }
+  return visited;
+}
+
+function graphNodeContent(node) {
+  return isEncryptedContent(node.content) ? "" : (node.content || "");
+}
+
+function graphGroupLabel(node, group) {
+  if (group === "tag") return node.tags?.[0] ? `#${node.tags[0]}` : "태그 없음";
+  if (group === "share") return node.shared === false ? "로컬" : "공유";
+  if (group === "analysis") return node.analysisJobId || node.analysisStatus ? "분석 있음" : "분석 전";
+  return treePath(node.id)[0] || noteTitle(node.title);
+}
+
+function graphSummaryHtml(model) {
+  const settings = state.settings.graph || defaultGraphSettings();
+  const mode = settings.mode === "local" ? `로컬 깊이 ${settings.depth}` : "전체";
+  const filters = [settings.filter && `검색 ${settings.filter}`, settings.tag && `#${settings.tag}`, `그룹 ${graphGroupName(settings.group)}`]
+    .filter(Boolean)
+    .join(" · ");
+  return `
+    <span>${escapeHtml(mode)}</span>
+    <span>노드 ${model.nodes.length}</span>
+    <span>연결 ${model.edges.length}</span>
+    <span>고립 ${model.isolated.length}</span>
+    <span>허브 ${model.hubs.length}</span>
+    ${filters ? `<span>${escapeHtml(filters)}</span>` : ""}
+  `;
+}
+
+function graphGroupName(group) {
+  return { topic: "주제", tag: "태그", share: "공유", analysis: "분석" }[group] || "주제";
+}
+
+function renderGraphCanvas(model) {
+  if (model.nodes.length === 0) {
+    elements.graphCanvas.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.graphEmpty"))}</div>`;
+    return;
+  }
+  const width = 760;
+  const height = 300;
+  const centerX = width / 2;
+  const centerY = height / 2;
+  const radius = Math.min(280, 72 + model.nodes.length * 9);
+  const selectedId = state.selectedTreeId;
+  const settings = state.settings.graph || defaultGraphSettings();
+  const positions = new Map();
+  model.nodes.forEach((node, index) => {
+    const angle = (Math.PI * 2 * index) / Math.max(1, model.nodes.length) - Math.PI / 2;
+    const degree = model.degree.get(node.id) || 0;
+    const nodeRadius = Math.max(6, Math.min(14, 6 + degree * 2));
+    positions.set(node.id, {
+      x: centerX + Math.cos(angle) * radius,
+      y: centerY + Math.sin(angle) * Math.min(radius, 112),
+      r: nodeRadius,
+    });
+  });
+  const edgeSvg = model.edges.map((edge) => {
+    const from = positions.get(edge.from.id);
+    const to = positions.get(edge.to.id);
+    if (!from || !to) return "";
+    return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+  }).join("");
+  const nodeSvg = model.nodes.map((node) => {
+    const pos = positions.get(node.id);
+    const active = node.id === selectedId ? " active" : "";
+    const label = escapeHtml(noteTitle(node.title));
+    const group = escapeHtml(graphGroupLabel(node, settings.group));
+    return `
+      <button class="graph-node${active}" type="button" style="left:${(pos.x / width) * 100}%;top:${(pos.y / height) * 100}%" data-node-id="${escapeHtml(node.id)}">
+        <span class="dot" style="--node-size:${pos.r * 2}px"></span>
+        <strong>${label}</strong>
+        <small>${group}</small>
+      </button>
+    `;
+  }).join("");
+  elements.graphCanvas.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">${edgeSvg}</svg>
+    ${nodeSvg}
+  `;
+  elements.graphCanvas.querySelectorAll("[data-node-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectTreeNode(button.dataset.nodeId);
+      renderGraph();
+    });
+  });
+}
+
+function renderGraphEdges(model) {
+  if (model.edges.length === 0) {
     elements.graphList.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.graphEmpty"))}</div>`;
     return;
   }
   elements.graphList.replaceChildren(
-    ...links.map((link) => {
+    ...model.edges.slice(0, 80).map((link) => {
       const row = document.createElement("button");
       row.type = "button";
       row.className = "graph-link";
@@ -5423,11 +5673,115 @@ function renderGraph() {
       row.innerHTML = `<strong>${escapeHtml(fromTitle)}</strong><span>→</span><strong>${escapeHtml(toTitle)}</strong>`;
       row.addEventListener("click", () => {
         selectTreeNode(link.to.id);
-        closeGraph();
+        renderGraph();
       });
       return row;
     }),
   );
+}
+
+function renderGraphMiniList(container, items, renderer) {
+  if (!items || items.length === 0) {
+    container.innerHTML = `<div class="empty-compact">${escapeHtml(t("note.emptyState"))}</div>`;
+    return;
+  }
+  container.replaceChildren(...items.map(renderer));
+}
+
+function graphOutgoingItem(link) {
+  return linkButton(link.title, link.node, link.exists);
+}
+
+function graphNodeButton(node) {
+  const item = node.node ? node.node : node;
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "backlink-item";
+  button.innerHTML = `<strong>${escapeHtml(noteTitle(item.title))}</strong><span>${escapeHtml(snippet(graphNodeContent(item)))}</span>`;
+  button.addEventListener("click", () => {
+    selectTreeNode(item.id);
+    renderGraph();
+  });
+  return button;
+}
+
+function graphHubButton(item) {
+  const button = graphNodeButton(item.node);
+  button.querySelector("span").textContent = `연결 ${item.degree}개`;
+  return button;
+}
+
+function graphSuggestionButton(candidate) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "backlink-item suggestion-item";
+  button.innerHTML = `<strong>${escapeHtml(noteTitle(candidate.target.title))}</strong><span>${escapeHtml(candidate.preview)}</span>`;
+  button.addEventListener("click", () => applyLinkSuggestion(candidate));
+  return button;
+}
+
+function unlinkedMentionSuggestions(source) {
+  if (!source || isEncryptedContent(source.content)) return [];
+  const content = source.content || "";
+  const linkedTitles = new Set(uniqueWikiLinks(content).map((title) => title.toLowerCase()));
+  return flattenTree(state.data.tree)
+    .filter((target) => target.id !== source.id)
+    .filter((target) => {
+      const title = noteTitle(target.title);
+      return title && !linkedTitles.has(title.toLowerCase()) && content.toLowerCase().includes(title.toLowerCase());
+    })
+    .slice(0, 12)
+    .map((target) => ({ source, target, preview: `본문에 "${noteTitle(target.title)}" 언급` }));
+}
+
+function applyLinkSuggestion(candidate) {
+  const source = candidate.source;
+  const title = noteTitle(candidate.target.title);
+  const pattern = new RegExp(`(^|[^\\[])(${escapeRegExp(title)})(?!\\]\\])`, "i");
+  source.content = (source.content || "").replace(pattern, `$1[[${title}]]`);
+  source.updatedAt = new Date().toISOString();
+  source.syncState = "pending";
+  if (state.selectedTreeId === source.id) {
+    elements.treeContent.value = source.content;
+  }
+  persist();
+  renderTree();
+  renderGraph();
+}
+
+function saveGraphBookmark() {
+  const graph = normalizeGraphSettings(state.settings.graph);
+  const label = [
+    graph.mode === "local" ? `로컬${graph.depth}` : "전체",
+    graph.tag && `#${graph.tag}`,
+    graph.filter || "",
+    graphGroupName(graph.group),
+  ].filter(Boolean).join(" · ");
+  const bookmark = {
+    name: label || `그래프 ${new Date().toLocaleTimeString()}`,
+    mode: graph.mode,
+    depth: graph.depth,
+    filter: graph.filter,
+    tag: graph.tag,
+    group: graph.group,
+  };
+  graph.bookmarks = [bookmark, ...graph.bookmarks.filter((item) => item.name !== bookmark.name)].slice(0, 12);
+  state.settings.graph = graph;
+  persistSettings();
+  syncGraphControls();
+}
+
+function applyGraphBookmark() {
+  const index = Number(elements.graphBookmarkSelect.value);
+  const bookmark = state.settings.graph.bookmarks[index];
+  if (!bookmark) return;
+  state.settings.graph = normalizeGraphSettings({
+    ...state.settings.graph,
+    ...bookmark,
+    bookmarks: state.settings.graph.bookmarks,
+  });
+  persistSettings();
+  renderGraph();
 }
 
 function renderDeletedTreeList() {
@@ -7681,8 +8035,37 @@ function normalizeSettings(settings = {}) {
   normalized.openTreeTabs = normalizeIdList(normalized.openTreeTabs, 100);
   normalized.closedTreeTabs = normalizeIdList(normalized.closedTreeTabs, 10);
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
+  normalized.graph = normalizeGraphSettings(normalized.graph, defaults.graph);
   normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
+  return normalized;
+}
+
+function normalizeGraphSettings(graph = {}, defaults = defaultGraphSettings()) {
+  const source = graph && typeof graph === "object" ? graph : {};
+  const normalized = {
+    ...defaults,
+    ...source,
+  };
+  normalized.mode = normalized.mode === "local" ? "local" : "global";
+  normalized.depth = Math.min(3, Math.max(1, Number(normalized.depth) || defaults.depth));
+  normalized.filter = typeof normalized.filter === "string" ? normalized.filter : "";
+  normalized.tag = typeof normalized.tag === "string" ? normalized.tag : "";
+  normalized.group = ["topic", "tag", "share", "analysis"].includes(normalized.group) ? normalized.group : defaults.group;
+  normalized.bookmarks = Array.isArray(normalized.bookmarks)
+    ? normalized.bookmarks
+        .filter((bookmark) => bookmark && typeof bookmark === "object" && typeof bookmark.name === "string")
+        .map((bookmark) => ({
+          name: bookmark.name.trim().slice(0, 48),
+          mode: bookmark.mode === "local" ? "local" : "global",
+          depth: Math.min(3, Math.max(1, Number(bookmark.depth) || defaults.depth)),
+          filter: typeof bookmark.filter === "string" ? bookmark.filter.slice(0, 80) : "",
+          tag: typeof bookmark.tag === "string" ? bookmark.tag.slice(0, 40) : "",
+          group: ["topic", "tag", "share", "analysis"].includes(bookmark.group) ? bookmark.group : defaults.group,
+        }))
+        .filter((bookmark) => bookmark.name)
+        .slice(0, 12)
+    : [];
   return normalized;
 }
 

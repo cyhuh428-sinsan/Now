@@ -697,7 +697,56 @@
           </div>
           <button id="graphCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
         </header>
+        <div class="graph-toolbar" aria-label="그래프 필터">
+          <select id="graphModeSelect" class="settings-select" aria-label="그래프 범위">
+            <option value="global">전체 그래프</option>
+            <option value="local">선택 메모 중심</option>
+          </select>
+          <select id="graphDepthSelect" class="settings-select" aria-label="로컬 그래프 깊이">
+            <option value="1">깊이 1</option>
+            <option value="2">깊이 2</option>
+            <option value="3">깊이 3</option>
+          </select>
+          <select id="graphTagSelect" class="settings-select" aria-label="그래프 태그">
+            <option value="">전체 태그</option>
+          </select>
+          <select id="graphGroupSelect" class="settings-select" aria-label="그래프 그룹">
+            <option value="topic">주제</option>
+            <option value="tag">태그</option>
+            <option value="share">공유 상태</option>
+            <option value="analysis">분석 상태</option>
+          </select>
+          <input id="graphFilterInput" class="settings-input" type="search" placeholder="제목, 본문, 태그 필터">
+          <button id="graphBookmarkSaveBtn" class="secondary-btn" type="button">북마크 저장</button>
+          <select id="graphBookmarkSelect" class="settings-select" aria-label="그래프 북마크">
+            <option value="">북마크</option>
+          </select>
+        </div>
+        <div id="graphSummary" class="graph-summary"></div>
+        <div id="graphCanvas" class="graph-canvas" aria-label="전체 그래프"></div>
         <div id="graphList" class="graph-list"></div>
+        <div id="graphInsights" class="graph-insights">
+          <section>
+            <h3>나가는 링크</h3>
+            <div id="graphOutgoingList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>백링크</h3>
+            <div id="graphBacklinkList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>연결 후보</h3>
+            <div id="graphSuggestionsList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>고립 메모</h3>
+            <div id="graphIsolatedList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>허브 메모</h3>
+            <div id="graphHubList" class="graph-mini-list"></div>
+          </section>
+        </div>
       </div>
     </section>
 
