@@ -42,6 +42,7 @@ now_app/**/__pycache__/
 now_app/**/*.pyc
 
 # Editor/system
+.claude/
 .idea/
 .vscode/
 .DS_Store
