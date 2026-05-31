@@ -6803,3 +6803,23 @@
 - `web/scripts/verify_web_surface.py` 통과: 211/211.
 - `now_app/scripts/verify_mobile_surface.py` 통과: 128/128.
 - `node --check web/scripts/check_import_export.mjs` 통과.
+
+# 2026-05-31 10:21 KST
+
+## 작업 내용
+
+- `docs/PROJECT_STATUS.md`와 `docs/PHASE1_RELEASE_CHECKLIST.md`의 1차 진행 상태를 현재 기준으로 갱신.
+- 앱, Web, 설치형 사용자 안내에서 공용 서버 접속 흐름을 `Web 직접 가입 -> 앱/설치형 연결 토큰 발급 -> 앱/설치형에 토큰 입력` 기준으로 정리.
+- Web/설치형 서버 상태 메시지가 언어 변경 후에도 예전 한국어 문구로 남지 않도록 상태 메시지 키와 파라미터를 함께 저장하도록 수정.
+- 사용자가 입력한 메모 제목과 탭 제목은 번역하지 않고, 시스템 안내/상태 메시지만 번역 대상으로 유지.
+- Web 도움말과 모바일 도움말의 공용 서버 운영 전 점검 문구를 현재 구현 상태와 맞춤.
+- Web 변경 사항을 설치형 프로그램 정적 파일에 다시 동기화.
+
+## 검증
+
+- `node --check web/app.js` 통과.
+- `web/scripts/verify_web_surface.py` 통과: 211/211.
+- `now_app/scripts/verify_mobile_surface.py` 통과: 128/128.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
+- `scripts/verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.

@@ -1,6 +1,6 @@
 # NowNote 1차 마무리 체크리스트
 
-기준일: 2026-05-28
+기준일: 2026-05-31
 
 이 문서는 NowNote 1차 개발을 닫기 전에 실제로 확인해야 하는 항목을 모은 체크리스트입니다.
 자동 점검은 `server/scripts/preflight.py`와 `server/scripts/smoke_test.py`가 담당하고, 실제 기기/실제 서버/실제 Play Console 값이 필요한 항목은 사람이 최종 확인합니다.
@@ -31,7 +31,7 @@
 - [x] 검색과 본문 찾기 확인.
 - [x] 탭 편집과 단축키 설정 확인.
 - [x] 서버 연결 테스트 확인.
-- [x] 설치형 포장 방식 확정: 1차는 PWA 설치, 이후 Tauri/Electron 확장.
+- [x] 설치형 포장 방식 확정: 1차는 Windows `.exe`, PWA는 보조/검증용.
 - [x] Web/설치형 실제 실행 점검서 준비.
 - [x] 설치형 배포 파일 생성과 실행 확인.
 
@@ -53,9 +53,9 @@
 
 - [x] 실제 공개 도메인 확정.
 - [x] `NOW_PUBLIC_BASE_URL=https://도메인` 설정.
-- [ ] reverse proxy 적용.
+- [x] reverse proxy 적용.
 - [x] `NOW_BEHIND_REVERSE_PROXY=true` 설정.
-- [x] 사용자별 접속 토큰 발급.
+- [x] Web 사용자 직접 가입과 앱/설치형 연결 토큰 발급.
 - [x] `NOW_USER_TOKEN_REQUIRED=true` 설정.
 - [x] 공용 서버 기준 `python3 scripts/preflight.py --public-server` 통과.
 - [x] 사용자별 데이터 격리 smoke test 통과.
@@ -85,7 +85,7 @@
 ## 현재 보류 항목
 
 - 라이선스는 Apache License 2.0으로 확정했습니다.
-- 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용만 별도 완료 확인이 필요합니다.
+- 실제 도메인은 `nownote.sinsan.kr`로 확정했고, HTTPS/reverse proxy 운영 적용을 완료했습니다.
 - WSL/Docker 서버는 공용 모드 환경값과 사용자 토큰 필수 모드 smoke test까지 통과했습니다.
-- 정상 기준은 `https://nownote.sinsan.kr/`가 Web 프로그램, `https://nownote.sinsan.kr/privacy`가 개인정보처리방침, `https://nownote.sinsan.kr/api/v1/server`가 JSON을 반환하는 것입니다. 실제 Nginx Proxy Manager의 Proxy Host 대상을 NowNote 서버로 변경해야 합니다.
+- 정상 기준은 `https://nownote.sinsan.kr/`가 Web 프로그램, `https://nownote.sinsan.kr/privacy`가 개인정보처리방침, `https://nownote.sinsan.kr/api/v1/server`가 JSON을 반환하는 것입니다.
 - 실제 서명 키와 Play Console 내부 테스트 업로드 화면은 공개 저장소에 올리지 않고 로컬/콘솔에서만 관리합니다.

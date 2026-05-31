@@ -351,7 +351,7 @@ docker-compose logs now-worker --tail=80
 ```text
 서버 주소: http://서버주소:8750 또는 https://내도메인
 API 토큰: .env의 NOW_API_TOKEN
-사용자 ID: local_user, Web에서 가입한 사용자 ID, 또는 운영자가 만든 사용자 ID
+사용자 ID: local_user 또는 Web에서 가입한 사용자 ID
 기기 ID: 앱 또는 프로그램에서 자동 생성한 값
 사용자별 접속 토큰: 개인 서버 기본값에서는 비워둠
 ```
