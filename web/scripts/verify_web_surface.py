@@ -141,6 +141,13 @@ def main() -> None:
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
+    for option_value, label in [
+        ("zh", "Chinese language option"),
+        ("ja", "Japanese language option"),
+        ("vi", "Vietnamese language option"),
+        ("ar", "Arabic language option"),
+    ]:
+        check(f'value="{option_value}"' in html, f"Web surface has {label}", option_value, failures)
 
     app_requirements = [
         ("function exportMarkdown()", "Markdown export function"),
@@ -155,6 +162,12 @@ def main() -> None:
         ("async function loadServerSharedNotes", "hosted Web shared document loader"),
         ("async function createSelectedNoteAnalysisJob", "server analysis job function"),
         ('"app.title": "NowNote"', "app title translation without Web suffix"),
+        ("const LANGUAGES", "language metadata registry"),
+        ("zh-CN", "Chinese locale support"),
+        ("ja-JP", "Japanese locale support"),
+        ("vi-VN", "Vietnamese locale support"),
+        ('dir: "rtl"', "Arabic RTL support"),
+        ("LANGUAGE_PACKS", "extra language packs"),
         ("settings.server.guide.issue", "server token issue translation"),
         ("/api/v1/auth/web-login", "hosted Web password login API"),
         ("/api/v1/auth/register", "hosted Web self-registration API"),

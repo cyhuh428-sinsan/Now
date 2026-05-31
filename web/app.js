@@ -4,6 +4,17 @@ const WEB_SESSION_KEY = "nownote.web.session.v1";
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
 
+const LANGUAGES = {
+  ko: { label: "한국어", locale: "ko-KR", dir: "ltr", fallback: "ko" },
+  en: { label: "English", locale: "en-US", dir: "ltr", fallback: "en" },
+  zh: { label: "中文", locale: "zh-CN", dir: "ltr", fallback: "en" },
+  ja: { label: "日本語", locale: "ja-JP", dir: "ltr", fallback: "en" },
+  vi: { label: "Tiếng Việt", locale: "vi-VN", dir: "ltr", fallback: "en" },
+  ar: { label: "العربية", locale: "ar", dir: "rtl", fallback: "en" },
+};
+
+const SUPPORTED_LANGUAGES = Object.keys(LANGUAGES);
+
 const ACCENTS = [
   { id: "blue", labelKey: "accent.blue", label: "파랑", value: "#2563eb" },
   { id: "purple", labelKey: "accent.purple", label: "보라", value: "#8b5cf6" },
@@ -1124,6 +1135,272 @@ const I18N = {
   },
 };
 
+const LANGUAGE_PACKS = {
+  zh: {
+    "aria.language": "语言",
+    "app.title": "NowNote",
+    "brand.subtitle": "知识笔记",
+    "search.label": "搜索",
+    "search.placeholder": "搜索标题和内容",
+    "today.label": "今日笔记",
+    "nav.tree": "知识笔记",
+    "side.quick": "快速切换",
+    "side.graph": "链接视图",
+    "side.file": "文件",
+    "side.mdExport": "导出 Markdown",
+    "side.mdImport": "导入 Markdown",
+    "side.manage": "管理",
+    "side.trash": "回收站",
+    "side.settings": "显示设置",
+    "side.help": "帮助",
+    "tree.eyebrow": "主题 / 分类 / 笔记",
+    "tree.title": "知识笔记",
+    "tree.addRoot": "添加主题",
+    "tree.titlePlaceholder": "标题",
+    "tree.contentPlaceholder": "请输入笔记内容。",
+    "tree.delete": "删除",
+    "editor.favorite": "收藏",
+    "editor.unfavorite": "取消收藏",
+    "editor.share": "共享",
+    "editor.unshare": "不共享",
+    "editor.copyLink": "复制链接",
+    "editor.find": "在笔记中查找",
+    "editor.outline": "大纲",
+    "editor.insertTime": "插入时间",
+    "editor.openLink": "打开链接",
+    "editor.preview": "Markdown 预览",
+    "editor.encrypt": "加密",
+    "editor.unlock": "解密",
+    "editor.decrypt": "取消加密",
+    "editor.lock": "锁定",
+    "settings.title": "显示设置",
+    "settings.language.title": "语言",
+    "settings.language.desc": "选择应用界面语言。",
+    "settings.theme.title": "默认主题",
+    "settings.theme.system": "跟随系统",
+    "settings.theme.light": "浅色主题",
+    "settings.theme.dark": "深色主题",
+    "settings.font.title": "字体大小",
+    "settings.font.small": "小",
+    "settings.font.medium": "普通",
+    "settings.font.large": "大",
+    "settings.server.title": "服务器连接",
+    "settings.server.desc": "选择单机使用或连接个人/公共 NowNote 服务器。",
+    "settings.server.save": "保存连接",
+    "settings.server.test": "测试连接",
+    "settings.server.sync": "同步到服务器",
+    "settings.server.fullSync": "全部重新同步",
+    "settings.server.syncOk": "服务器同步完成",
+    "settings.server.syncEmpty": "没有需要同步的笔记。",
+    "web.login.owner": "用户 ID",
+    "web.login.password": "密码",
+    "web.login.submit": "登录",
+    "web.login.register": "创建账户",
+    "web.login.resetRequest": "发送重置邮件",
+    "web.login.resetConfirm": "重置密码",
+    "saved": "已保存",
+  },
+  ja: {
+    "aria.language": "言語",
+    "app.title": "NowNote",
+    "brand.subtitle": "知識メモ",
+    "search.label": "検索",
+    "search.placeholder": "タイトル、内容を検索",
+    "today.label": "今日のメモ",
+    "nav.tree": "知識メモ",
+    "side.quick": "クイック切替",
+    "side.graph": "リンク表示",
+    "side.file": "ファイル",
+    "side.mdExport": "Markdown 書き出し",
+    "side.mdImport": "Markdown 読み込み",
+    "side.manage": "管理",
+    "side.trash": "削除保管箱",
+    "side.settings": "画面設定",
+    "side.help": "ヘルプ",
+    "tree.eyebrow": "トピック / 分類 / メモ",
+    "tree.title": "知識メモ",
+    "tree.addRoot": "トピック追加",
+    "tree.titlePlaceholder": "タイトル",
+    "tree.contentPlaceholder": "メモ内容を入力してください。",
+    "tree.delete": "削除",
+    "editor.favorite": "お気に入り",
+    "editor.unfavorite": "お気に入り解除",
+    "editor.share": "共有",
+    "editor.unshare": "共有しない",
+    "editor.copyLink": "リンクをコピー",
+    "editor.find": "本文検索",
+    "editor.outline": "概要",
+    "editor.insertTime": "時刻を挿入",
+    "editor.openLink": "リンクを開く",
+    "editor.preview": "Markdown 表示",
+    "editor.encrypt": "暗号化",
+    "editor.unlock": "復号",
+    "editor.decrypt": "暗号化解除",
+    "editor.lock": "ロック",
+    "settings.title": "画面設定",
+    "settings.language.title": "言語",
+    "settings.language.desc": "アプリ画面で使う言語を選択します。",
+    "settings.theme.title": "基本テーマ",
+    "settings.theme.system": "システム設定を使用",
+    "settings.theme.light": "ライトテーマ",
+    "settings.theme.dark": "ダークテーマ",
+    "settings.font.title": "文字サイズ",
+    "settings.font.small": "小",
+    "settings.font.medium": "標準",
+    "settings.font.large": "大",
+    "settings.server.title": "サーバー接続",
+    "settings.server.desc": "単独使用または個人/公開 NowNote サーバー接続を選択します。",
+    "settings.server.save": "接続設定を保存",
+    "settings.server.test": "接続テスト",
+    "settings.server.sync": "サーバー同期",
+    "settings.server.fullSync": "全体再同期",
+    "settings.server.syncOk": "サーバー同期完了",
+    "settings.server.syncEmpty": "同期するメモがありません。",
+    "web.login.owner": "ユーザー ID",
+    "web.login.password": "パスワード",
+    "web.login.submit": "ログイン",
+    "web.login.register": "アカウント作成",
+    "web.login.resetRequest": "再設定メール",
+    "web.login.resetConfirm": "パスワード再設定",
+    "saved": "保存済み",
+  },
+  vi: {
+    "aria.language": "Ngôn ngữ",
+    "app.title": "NowNote",
+    "brand.subtitle": "Ghi chú tri thức",
+    "search.label": "Tìm kiếm",
+    "search.placeholder": "Tìm tiêu đề, nội dung",
+    "today.label": "Ghi chú hôm nay",
+    "nav.tree": "Ghi chú tri thức",
+    "side.quick": "Chuyển nhanh",
+    "side.graph": "Xem liên kết",
+    "side.file": "Tệp",
+    "side.mdExport": "Xuất Markdown",
+    "side.mdImport": "Nhập Markdown",
+    "side.manage": "Quản lý",
+    "side.trash": "Thùng rác",
+    "side.settings": "Cài đặt hiển thị",
+    "side.help": "Trợ giúp",
+    "tree.eyebrow": "Chủ đề / Phân loại / Ghi chú",
+    "tree.title": "Ghi chú tri thức",
+    "tree.addRoot": "Thêm chủ đề",
+    "tree.titlePlaceholder": "Tiêu đề",
+    "tree.contentPlaceholder": "Nhập nội dung ghi chú.",
+    "tree.delete": "Xóa",
+    "editor.favorite": "Yêu thích",
+    "editor.unfavorite": "Bỏ yêu thích",
+    "editor.share": "Chia sẻ",
+    "editor.unshare": "Không chia sẻ",
+    "editor.copyLink": "Sao chép liên kết",
+    "editor.find": "Tìm trong ghi chú",
+    "editor.outline": "Dàn ý",
+    "editor.insertTime": "Chèn thời gian",
+    "editor.openLink": "Mở liên kết",
+    "editor.preview": "Xem Markdown",
+    "editor.encrypt": "Mã hóa",
+    "editor.unlock": "Giải mã",
+    "editor.decrypt": "Bỏ mã hóa",
+    "editor.lock": "Khóa",
+    "settings.title": "Cài đặt hiển thị",
+    "settings.language.title": "Ngôn ngữ",
+    "settings.language.desc": "Chọn ngôn ngữ dùng trong ứng dụng.",
+    "settings.theme.title": "Giao diện mặc định",
+    "settings.theme.system": "Theo hệ thống",
+    "settings.theme.light": "Giao diện sáng",
+    "settings.theme.dark": "Giao diện tối",
+    "settings.font.title": "Cỡ chữ",
+    "settings.font.small": "Nhỏ",
+    "settings.font.medium": "Vừa",
+    "settings.font.large": "Lớn",
+    "settings.server.title": "Kết nối máy chủ",
+    "settings.server.desc": "Chọn dùng độc lập hoặc kết nối máy chủ NowNote cá nhân/công cộng.",
+    "settings.server.save": "Lưu kết nối",
+    "settings.server.test": "Kiểm tra kết nối",
+    "settings.server.sync": "Đồng bộ máy chủ",
+    "settings.server.fullSync": "Đồng bộ lại toàn bộ",
+    "settings.server.syncOk": "Đồng bộ máy chủ hoàn tất",
+    "settings.server.syncEmpty": "Không có ghi chú để đồng bộ.",
+    "web.login.owner": "ID người dùng",
+    "web.login.password": "Mật khẩu",
+    "web.login.submit": "Đăng nhập",
+    "web.login.register": "Tạo tài khoản",
+    "web.login.resetRequest": "Gửi email đặt lại",
+    "web.login.resetConfirm": "Đặt lại mật khẩu",
+    "saved": "Đã lưu",
+  },
+  ar: {
+    "aria.language": "اللغة",
+    "app.title": "NowNote",
+    "brand.subtitle": "ملاحظات معرفية",
+    "search.label": "بحث",
+    "search.placeholder": "ابحث في العنوان والمحتوى",
+    "today.label": "ملاحظة اليوم",
+    "nav.tree": "ملاحظات معرفية",
+    "side.quick": "انتقال سريع",
+    "side.graph": "عرض الروابط",
+    "side.file": "ملفات",
+    "side.mdExport": "تصدير Markdown",
+    "side.mdImport": "استيراد Markdown",
+    "side.manage": "إدارة",
+    "side.trash": "سلة المحذوفات",
+    "side.settings": "إعدادات العرض",
+    "side.help": "مساعدة",
+    "tree.eyebrow": "موضوع / تصنيف / ملاحظة",
+    "tree.title": "ملاحظات معرفية",
+    "tree.addRoot": "إضافة موضوع",
+    "tree.titlePlaceholder": "العنوان",
+    "tree.contentPlaceholder": "اكتب محتوى الملاحظة.",
+    "tree.delete": "حذف",
+    "editor.favorite": "مفضلة",
+    "editor.unfavorite": "إزالة من المفضلة",
+    "editor.share": "مشاركة",
+    "editor.unshare": "غير مشتركة",
+    "editor.copyLink": "نسخ الرابط",
+    "editor.find": "بحث داخل الملاحظة",
+    "editor.outline": "مخطط",
+    "editor.insertTime": "إدراج الوقت",
+    "editor.openLink": "فتح الرابط",
+    "editor.preview": "معاينة Markdown",
+    "editor.encrypt": "تشفير",
+    "editor.unlock": "فك التشفير",
+    "editor.decrypt": "إزالة التشفير",
+    "editor.lock": "قفل",
+    "settings.title": "إعدادات العرض",
+    "settings.language.title": "اللغة",
+    "settings.language.desc": "اختر لغة واجهة التطبيق.",
+    "settings.theme.title": "السمة الافتراضية",
+    "settings.theme.system": "استخدام سمة النظام",
+    "settings.theme.light": "سمة فاتحة",
+    "settings.theme.dark": "سمة داكنة",
+    "settings.font.title": "حجم الخط",
+    "settings.font.small": "صغير",
+    "settings.font.medium": "عادي",
+    "settings.font.large": "كبير",
+    "settings.server.title": "اتصال الخادم",
+    "settings.server.desc": "اختر الاستخدام المستقل أو الاتصال بخادم NowNote شخصي/عام.",
+    "settings.server.save": "حفظ الاتصال",
+    "settings.server.test": "اختبار الاتصال",
+    "settings.server.sync": "المزامنة مع الخادم",
+    "settings.server.fullSync": "إعادة مزامنة كاملة",
+    "settings.server.syncOk": "اكتملت مزامنة الخادم",
+    "settings.server.syncEmpty": "لا توجد ملاحظات للمزامنة.",
+    "web.login.owner": "معرّف المستخدم",
+    "web.login.password": "كلمة المرور",
+    "web.login.submit": "تسجيل الدخول",
+    "web.login.register": "إنشاء حساب",
+    "web.login.resetRequest": "إرسال بريد إعادة التعيين",
+    "web.login.resetConfirm": "إعادة تعيين كلمة المرور",
+    "saved": "تم الحفظ",
+  },
+};
+
+Object.entries(LANGUAGE_PACKS).forEach(([language, pack]) => {
+  I18N[language] = {
+    ...I18N.en,
+    ...pack,
+  };
+});
+
 const SHORTCUT_ACTIONS = [
   { id: "addRoot", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addRoot", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" }, group: "창과 탭" },
   { id: "addChild", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addChild", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" }, group: "창과 탭" },
@@ -1280,14 +1557,23 @@ function defaultServerUserProfile() {
 const $ = (selector) => document.querySelector(selector);
 
 function t(key, vars = null) {
-  const lang = state.settings.language || "ko";
-  const value = I18N[lang]?.[key] || I18N.ko[key];
+  const lang = normalizeLanguage(state.settings.language);
+  const fallbackLanguage = LANGUAGES[lang]?.fallback || "en";
+  const value = I18N[lang]?.[key] || I18N[fallbackLanguage]?.[key] || I18N.ko[key];
   if (typeof value !== "string") return key;
   if (!vars) return value;
   return value.replace(/\{([a-zA-Z0-9_]+)\}/g, (_, token) => {
     const resolved = vars[token];
     return resolved === undefined ? `{${token}}` : String(resolved);
   });
+}
+
+function normalizeLanguage(language) {
+  return SUPPORTED_LANGUAGES.includes(language) ? language : "ko";
+}
+
+function currentLanguageMeta() {
+  return LANGUAGES[normalizeLanguage(state.settings.language)] || LANGUAGES.ko;
 }
 
 function noteTitle(value) {
@@ -2357,6 +2643,7 @@ function toggleSettings() {
 }
 
 function renderSettings() {
+  renderLanguageOptions();
   elements.languageSelect.value = state.settings.language;
   elements.themeSelect.value = state.settings.theme;
   elements.wideEditorToggle.checked = state.settings.wideEditor;
@@ -2386,6 +2673,19 @@ function renderSettings() {
       });
       return button;
     }),
+  );
+}
+
+function renderLanguageOptions() {
+  const selectedLanguage = normalizeLanguage(state.settings.language);
+  elements.languageSelect.replaceChildren(
+    ...SUPPORTED_LANGUAGES.map((id) => {
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = LANGUAGES[id].label;
+      option.selected = id === selectedLanguage;
+      return option;
+    })
   );
 }
 
@@ -2593,7 +2893,7 @@ function renderServerMeta() {
   const server = state.settings.server || defaultServerSettings();
   const pendingCount = countPendingSyncNotes();
   const lastSyncedAt = server.lastSyncedAt
-    ? new Date(server.lastSyncedAt).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR")
+    ? new Date(server.lastSyncedAt).toLocaleString(currentLocale())
     : t("settings.server.never");
   elements.serverMetaText.textContent = t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt });
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
@@ -2662,7 +2962,7 @@ function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
     ? t("settings.server.profile.active")
     : t("settings.server.profile.inactive");
   const lastSeen = profile.lastSeenAt
-    ? new Date(profile.lastSeenAt).toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR")
+    ? new Date(profile.lastSeenAt).toLocaleString(currentLocale())
     : t("settings.server.profile.lastSeenNone");
   elements.serverProfileText.textContent = t("settings.server.profile.summary", {
     group: profile.groupName || "-",
@@ -2806,7 +3106,7 @@ function formatServerJobTime(value) {
   if (!value) return "-";
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString(document.documentElement.lang === "en" ? "en-US" : "ko-KR");
+  return date.toLocaleString(currentLocale());
 }
 
 function countPendingSyncNotes() {
@@ -3815,7 +4115,11 @@ function applySettings() {
 }
 
 function applyLanguage() {
-  document.documentElement.lang = state.settings.language === "en" ? "en" : "ko";
+  state.settings.language = normalizeLanguage(state.settings.language);
+  const languageMeta = currentLanguageMeta();
+  document.documentElement.lang = state.settings.language;
+  document.documentElement.dir = languageMeta.dir;
+  document.documentElement.dataset.direction = languageMeta.dir;
   document.title = t("app.title");
   updateHelpLinks();
   setIconLabel($("#appRail"), t("aria.quickMenu"));
@@ -4107,7 +4411,7 @@ function applyLanguage() {
 }
 
 function updateHelpLinks() {
-  const language = state.settings.language === "en" ? "en" : "ko";
+  const language = normalizeLanguage(state.settings.language);
   const helpUrl = `./help.html?lang=${encodeURIComponent(language)}`;
   [elements.helpBtn, elements.settingsHelpBtn].forEach((link) => {
     if (!link) return;
@@ -6841,7 +7145,7 @@ function applyLanguageQueryOverride() {
 
 function getLanguageFromQuery() {
   const language = new URLSearchParams(window.location.search).get("lang");
-  return ["ko", "en"].includes(language) ? language : "";
+  return SUPPORTED_LANGUAGES.includes(language) ? language : "";
 }
 
 function syncLanguageQueryParam(language) {
@@ -6857,7 +7161,7 @@ function normalizeSettings(settings = {}) {
     ...defaults,
     ...settings,
   };
-  normalized.language = ["ko", "en"].includes(normalized.language) ? normalized.language : defaults.language;
+  normalized.language = normalizeLanguage(normalized.language || defaults.language);
   normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
   normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
   normalized.railMode = ["icon", "letter"].includes(normalized.railMode) ? normalized.railMode : defaults.railMode;
@@ -7226,7 +7530,7 @@ function archivedDailyToMarkdown() {
 }
 
 function markdownDateHeading(dateKey) {
-  if (state.settings.language === "en") return `${dateKey} · ${longDateLabel(dateKey)}`;
+  if (normalizeLanguage(state.settings.language) !== "ko") return `${dateKey} · ${longDateLabel(dateKey)}`;
   return longDateLabel(dateKey);
 }
 
@@ -7712,7 +8016,7 @@ function isDateKey(value) {
 }
 
 function currentLocale() {
-  return state.settings.language === "en" ? "en-US" : "ko-KR";
+  return currentLanguageMeta().locale;
 }
 
 function monthLabel(date) {

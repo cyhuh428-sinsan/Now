@@ -37,6 +37,22 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Apple SD Gothic Neo", sans-serif;
 }
 
+:root[dir="rtl"] body {
+  direction: rtl;
+}
+
+:root[dir="rtl"] input,
+:root[dir="rtl"] textarea {
+  text-align: right;
+}
+
+:root[dir="rtl"] .markdown-preview,
+:root[dir="rtl"] code,
+:root[dir="rtl"] pre {
+  direction: ltr;
+  text-align: left;
+}
+
 button,
 input,
 textarea {
