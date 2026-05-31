@@ -306,6 +306,32 @@ async function runOnce() {
         state.settings.graph.tag = "core";
         saveGraphBookmark();
         const bookmarkSaved = state.settings.graph.bookmarks.length === 1 && state.settings.graph.bookmarks[0].tag === "core";
+        renderTree();
+        elements.propertyStatusSelect.value = "active";
+        elements.propertyPrioritySelect.value = "high";
+        elements.propertyTypeInput.value = "자료";
+        elements.propertyProjectInput.value = "NowNote";
+        elements.propertySourceInput.value = "설계서";
+        elements.propertyAuthorInput.value = "신산";
+        elements.propertyDueInput.value = "2026-06-15";
+        updateSelectedNoteProperties();
+        const propertiesSaved = getSelectedTreeNode().properties.status === "active"
+          && getSelectedTreeNode().properties.priority === "high"
+          && getSelectedTreeNode().properties.project === "NowNote";
+        openPropertiesView();
+        const propertiesRendered = document.querySelectorAll("#propertiesList .properties-row").length >= 1;
+        state.settings.properties.search = "NowNote";
+        state.settings.properties.status = "active";
+        state.settings.properties.priority = "high";
+        state.settings.properties.group = "project";
+        savePropertyFilter();
+        const propertyFilterSaved = state.settings.properties.savedFilters.length === 1
+          && state.settings.properties.savedFilters[0].group === "project";
+        const missingRendered = document.querySelectorAll("#propertiesMissingList .backlink-item").length >= 1;
+        elements.propertyTemplateSelect.value = "meeting";
+        createNoteFromPropertyTemplate();
+        const templateCreated = getSelectedTreeNode().properties.type === "회의"
+          && getSelectedTreeNode().content.includes("## 결정");
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -317,6 +343,11 @@ async function runOnce() {
           suggestionsBefore,
           appliedLink,
           bookmarkSaved,
+          propertiesSaved,
+          propertiesRendered,
+          propertyFilterSaved,
+          missingRendered,
+          templateCreated,
         };
       })()
     `);
@@ -331,10 +362,16 @@ async function runOnce() {
     assert(result.suggestionsBefore >= 1, "연결 후보가 표시되지 않습니다.");
     assert(result.appliedLink, "연결 후보가 [[링크]]로 반영되지 않았습니다.");
     assert(result.bookmarkSaved, "그래프 북마크가 저장되지 않았습니다.");
+    assert(result.propertiesSaved, "메모 속성이 저장되지 않았습니다.");
+    assert(result.propertiesRendered, "속성 목록이 렌더링되지 않았습니다.");
+    assert(result.propertyFilterSaved, "속성 필터가 저장되지 않았습니다.");
+    assert(result.missingRendered, "누락 속성 목록이 렌더링되지 않았습니다.");
+    assert(result.templateCreated, "속성 템플릿 메모가 생성되지 않았습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
     console.log("- Suggested links and graph filter bookmarks work");
+    console.log("- Note properties, saved filters, missing checks, and templates work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);
