@@ -19,6 +19,7 @@ GRAPH_DESIGN = ROOT.parent / "docs" / "NOW_1_2_GRAPH_VIEW_DESIGN.md"
 PROPERTIES_DESIGN = ROOT.parent / "docs" / "NOW_1_3_PROPERTIES_DESIGN.md"
 CANVAS_DESIGN = ROOT.parent / "docs" / "NOW_1_4_CANVAS_DESIGN.md"
 CAPTURE_DESIGN = ROOT.parent / "docs" / "NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md"
+COMMAND_DESIGN = ROOT.parent / "docs" / "NOW_1_6_WRITING_COMMAND_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -67,6 +68,7 @@ def main() -> None:
         PROPERTIES_DESIGN,
         CANVAS_DESIGN,
         CAPTURE_DESIGN,
+        COMMAND_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -96,6 +98,7 @@ def main() -> None:
     properties_design = PROPERTIES_DESIGN.read_text(encoding="utf-8")
     canvas_design = CANVAS_DESIGN.read_text(encoding="utf-8")
     capture_design = CAPTURE_DESIGN.read_text(encoding="utf-8")
+    command_design = COMMAND_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -229,6 +232,12 @@ def main() -> None:
         ("captureSearchInput", "quick capture search input"),
         ("captureSummary", "quick capture summary"),
         ("captureList", "quick capture list"),
+        ("commandPaletteBtn", "command palette button"),
+        ("commandPaletteView", "command palette view"),
+        ("commandPaletteInput", "command palette search input"),
+        ("commandPaletteSummary", "command palette summary"),
+        ("commandPaletteList", "command palette list"),
+        ("commandPaletteCloseBtn", "command palette close button"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -332,6 +341,16 @@ def main() -> None:
         ("function toggleCapturePin", "1.5 quick capture pin action"),
         ("function toggleCaptureArchive", "1.5 quick capture archive action"),
         ("function clearCaptureSketch", "1.5 quick capture sketch action"),
+        ("function commandCatalog", "1.6 command catalog"),
+        ("function openCommandPalette", "1.6 command palette open action"),
+        ("function executeCommand", "1.6 command execution"),
+        ("function executeSlashCommandFromEditor", "1.6 slash command execution"),
+        ("function createWritingTemplateNote", "1.6 writing template note action"),
+        ("function createUniqueNote", "1.6 unique note action"),
+        ("function openRandomNote", "1.6 random note action"),
+        ("function mergeSelectedNoteChildren", "1.6 note composer merge action"),
+        ("function splitSelectedNoteByHeading", "1.6 note composer split action"),
+        ("WRITING_TEMPLATES", "1.6 writing templates"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -392,6 +411,9 @@ def main() -> None:
         (".capture-sketch-canvas", "quick capture sketch styling"),
         (".capture-list", "quick capture list styling"),
         (".capture-item", "quick capture card styling"),
+        (".command-card", "command palette card styling"),
+        (".command-list", "command palette list styling"),
+        (".command-item", "command palette item styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -412,6 +434,7 @@ def main() -> None:
         ("1.3 속성 기반 지식 관리", "1.3 properties documented"),
         ("1.4 Canvas와 시각적 사고 정리", "1.4 Canvas documented"),
         ("1.5 첨부/미디어/빠른 기록", "1.5 quick capture documented"),
+        ("1.6 작성 보조와 명령 체계", "1.6 command palette documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -436,6 +459,7 @@ def main() -> None:
         ("속성 기반 지식 관리", "runtime checklist properties section"),
         ("Canvas와 시각적 사고 정리", "runtime checklist Canvas section"),
         ("첨부/미디어/빠른 기록", "runtime checklist quick capture section"),
+        ("작성 보조와 명령 체계", "runtime checklist writing command section"),
         ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
@@ -580,6 +604,10 @@ def main() -> None:
         ("createCanvasDraftFromGraph", "Canvas graph draft assertion"),
         ("saveQuickCapture", "quick capture save assertion"),
         ("toggleCaptureArchive", "quick capture archive assertion"),
+        ("openCommandPalette", "command palette assertion"),
+        ("executeSlashCommandFromEditor", "slash command assertion"),
+        ("splitSelectedNoteByHeading", "note split assertion"),
+        ("mergeSelectedNoteChildren", "note merge assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
@@ -630,6 +658,19 @@ def main() -> None:
     ]
     for needle, label in capture_design_requirements:
         check(needle in capture_design, f"1.5 design has {label}", needle, failures)
+
+    command_design_requirements = [
+        ("NowNote 1.6 작성 보조와 명령 체계 설계서", "1.6 command design title"),
+        ("명령 팔레트", "command palette scope"),
+        ("Slash command", "slash command scope"),
+        ("기본 템플릿 메모 생성", "template note scope"),
+        ("고유 ID/시각 기반 메모 생성", "unique note scope"),
+        ("하위 메모 내용 병합", "merge scope"),
+        ("제목 섹션 기준 메모 나누기", "split scope"),
+        ("랜덤 메모 열기", "random note scope"),
+    ]
+    for needle, label in command_design_requirements:
+        check(needle in command_design, f"1.6 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),

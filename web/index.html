@@ -114,6 +114,7 @@
         <section id="exploreActionGroup" class="side-action-group" aria-label="탐색">
           <h2 id="exploreActionTitle">탐색</h2>
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
+          <button id="commandPaletteBtn" class="ghost-btn" type="button">명령 팔레트</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
           <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
           <button id="canvasBtn" class="ghost-btn" type="button">Canvas</button>
@@ -693,6 +694,21 @@
         <input id="quickInput" class="quick-input" type="search" placeholder="제목 또는 경로 검색">
         <div id="quickCount" class="search-count">전체 메모를 표시합니다.</div>
         <div id="quickResults" class="quick-results"></div>
+      </div>
+    </section>
+
+    <section id="commandPaletteView" class="quick-popover hidden" aria-labelledby="commandPaletteTitle">
+      <div class="quick-card command-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">작성 / 생성 / 정리 명령</p>
+            <h2 id="commandPaletteTitle">명령 팔레트</h2>
+          </div>
+          <button id="commandPaletteCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <input id="commandPaletteInput" class="quick-input" type="search" placeholder="명령, 템플릿, 랜덤, 합치기 검색">
+        <div id="commandPaletteSummary" class="search-count">명령을 검색하거나 바로 실행하세요.</div>
+        <div id="commandPaletteList" class="command-list"></div>
       </div>
     </section>
 

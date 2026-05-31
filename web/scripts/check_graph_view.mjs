@@ -387,6 +387,35 @@ async function runOnce() {
         renderCaptures();
         const captureArchived = state.data.captures[0].archived
           && document.querySelectorAll("#captureList .capture-item").length === 1;
+        state.selectedTreeId = "a";
+        openCommandPalette();
+        const commandPaletteRendered = document.querySelectorAll("#commandPaletteList .command-item").length >= 6;
+        executeCommand("template-meeting");
+        const commandTemplate = getSelectedTreeNode();
+        const commandTemplateCreated = commandTemplate?.properties?.type === "회의"
+          && commandTemplate.content.includes("## 결정");
+        createUniqueNote();
+        const uniqueCreated = /^메모 \\d{8}-\\d{6}$/.test(getSelectedTreeNode().title);
+        const randomOpened = openRandomNote() !== false && Boolean(getSelectedTreeNode());
+        const splitNode = node("split", "Split Source", "Intro\\n\\n## First\\nOne\\n\\n## Second\\nTwo", { shared: false });
+        state.data.tree.push(splitNode);
+        state.selectedTreeId = "split";
+        renderTree();
+        const splitDone = splitSelectedNoteByHeading()
+          && getSelectedTreeNode().children.length === 2
+          && getSelectedTreeNode().content.trim() === "Intro";
+        const mergeDone = mergeSelectedNoteChildren()
+          && getSelectedTreeNode().content.includes("## 하위 메모 병합")
+          && getSelectedTreeNode().children.length === 2;
+        const slashNode = node("slash", "Slash Note", "/template source", { shared: false });
+        state.data.tree.push(slashNode);
+        state.selectedTreeId = "slash";
+        renderTree();
+        elements.treeContent.value = "/template source";
+        elements.treeContent.setSelectionRange(elements.treeContent.value.length, elements.treeContent.value.length);
+        const slashDone = executeSlashCommandFromEditor()
+          && getSelectedTreeNode().content.includes("## 출처")
+          && getSelectedTreeNode().properties.type === "자료";
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -407,6 +436,13 @@ async function runOnce() {
           graphDraft,
           captureSaved,
           captureArchived,
+          commandPaletteRendered,
+          commandTemplateCreated,
+          uniqueCreated,
+          randomOpened,
+          splitDone,
+          mergeDone,
+          slashDone,
         };
       })()
     `);
@@ -430,6 +466,13 @@ async function runOnce() {
     assert(result.graphDraft, "그래프 주변 메모 Canvas 초안이 생성되지 않았습니다.");
     assert(result.captureSaved, "빠른 기록 카드가 저장되지 않았습니다.");
     assert(result.captureArchived, "빠른 기록 보관함 흐름이 동작하지 않습니다.");
+    assert(result.commandPaletteRendered, "명령 팔레트가 렌더링되지 않았습니다.");
+    assert(result.commandTemplateCreated, "명령 팔레트 템플릿 생성이 동작하지 않습니다.");
+    assert(result.uniqueCreated, "고유 메모 생성이 동작하지 않습니다.");
+    assert(result.randomOpened, "랜덤 메모 열기가 동작하지 않습니다.");
+    assert(result.splitDone, "제목 섹션 기준 메모 나누기가 동작하지 않습니다.");
+    assert(result.mergeDone, "하위 메모 병합이 동작하지 않습니다.");
+    assert(result.slashDone, "Slash command가 동작하지 않습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
@@ -437,6 +480,7 @@ async function runOnce() {
     console.log("- Note properties, saved filters, missing checks, and templates work");
     console.log("- Canvas cards, edges, zoom, movement, and graph drafts work");
     console.log("- Quick capture pins, colors, checklists, reminders, attachments, sketches, and archive work");
+    console.log("- Command palette, slash commands, templates, unique notes, random notes, merge, and split work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);
