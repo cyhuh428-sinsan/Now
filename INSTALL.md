@@ -538,3 +538,377 @@ DB 볼륨이 이미 만들어진 뒤 `NOW_POSTGRES_PASSWORD`만 바꾸면 기존
 - 배포와 갱신: `server/DEPLOY.md`
 - 공용 서버 오픈: `server/PUBLIC_SERVER.md`
 - 복구 절차: `server/RECOVERY.md`
+
+---
+
+# NowNote Install Guide English
+
+Language: 한국어 | English | 中文 | 日本語 | Tiếng Việt | العربية
+
+This guide explains how a first-time user installs or connects to NowNote.
+
+NowNote has three user-facing surfaces.
+
+```text
+1. Desktop program: Windows program for a home PC
+2. Mobile app: Android app for a phone
+3. Web program: browser program for external PCs
+```
+
+The desktop program and mobile app sync daily notes and user-shared documents when connected to a server. Without a server, data stays only on the current device.
+
+The Web program belongs to the server. It is not for standalone local storage. It only shows and edits the user's shared documents on the server.
+
+Public server:
+
+```text
+Web: https://nownote.sinsan.kr
+Privacy: https://nownote.sinsan.kr/privacy
+```
+
+Private server:
+
+```text
+Web: https://your-domain
+Privacy: https://your-domain/privacy
+Temporary direct access: http://server-ip:8750
+```
+
+## Choose a Mode
+
+- Desktop only: install `NowNote-Setup-0.1.0-x64.exe`, leave server settings empty, and keep notes on the PC.
+- Mobile only: install the Android app, leave server settings empty, and keep notes on the phone.
+- Public server: use `https://nownote.sinsan.kr`, register from Web, then issue an app/desktop connection token from Web.
+- Private server: install the Docker server on a Linux server and manage backup, update, domain, and HTTPS yourself.
+
+WSL server installation is for development/testing and is not the normal user install path.
+
+## Desktop
+
+```text
+Run NowNote-Setup-0.1.0-x64.exe -> choose install location -> install
+```
+
+To build from source:
+
+```bash
+cd desktop
+npm install
+npm run dist:win
+```
+
+Output:
+
+```text
+desktop/dist/NowNote-Setup-0.1.0-x64.exe
+```
+
+## Mobile
+
+After release, install NowNote from Google Play. During internal testing, use the test link provided by the operator.
+
+## Web
+
+Use the browser address of the public or private server. Do not use `D:\Project\Now\web\index.html` as a user Web program; that file is only for development and verification.
+
+## Private Server Quick Start
+
+```bash
+mkdir -p ~/deploy
+cd ~/deploy
+git clone https://github.com/cyhuh428-sinsan/Now.git
+cd Now/server
+cp .env.example .env
+nano .env
+```
+
+Change at least:
+
+```env
+NOW_API_TOKEN=change-this-api-token
+NOW_POSTGRES_PASSWORD=change-this-postgres-password
+```
+
+Run:
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
+Check:
+
+```bash
+curl http://localhost:8750/health
+curl http://localhost:8750/health/ready
+curl http://localhost:8750/api/v1/server
+```
+
+For other PCs or phones, use the server IP or domain, not `localhost`.
+
+## Public Server User Flow
+
+```text
+https://domain -> sign up -> log in -> settings -> server connection -> issue app/desktop token
+```
+
+Web uses user ID and password. Desktop and mobile use server address, user ID, and app/desktop connection token.
+
+---
+
+# NowNote 安装指南 中文
+
+本指南说明第一次使用 NowNote 时应如何安装和连接。
+
+NowNote 有三种使用入口。
+
+```text
+1. 安装版程序: 在家用 PC 使用的 Windows 程序
+2. 移动应用: 在 Android 手机上使用的应用
+3. Web 程序: 在外部 PC 用浏览器访问的程序
+```
+
+安装版和移动应用连接服务器后，会同步日记笔记和用户选择共享的文档。不连接服务器时，数据只保存在当前设备。
+
+Web 程序是服务器附属画面，不是单独的本地记事本。它只显示和编辑服务器中本人共享的文档。
+
+公共服务器:
+
+```text
+Web: https://nownote.sinsan.kr
+隐私政策: https://nownote.sinsan.kr/privacy
+```
+
+个人服务器:
+
+```text
+Web: https://你的域名
+临时直接访问: http://服务器IP:8750
+```
+
+## 选择使用方式
+
+- 仅桌面: 安装 `NowNote-Setup-0.1.0-x64.exe`，服务器设置留空，笔记只保存在 PC。
+- 仅手机: 安装 Android 应用，服务器设置留空，笔记只保存在手机。
+- 公共服务器: 使用 `https://nownote.sinsan.kr`，在 Web 中直接注册，然后从 Web 发行应用/安装版连接 token。
+- 个人服务器: 在 Linux 服务器上安装 Docker 服务器，并自行管理备份、更新、域名和 HTTPS。
+
+## 个人服务器快速启动
+
+```bash
+mkdir -p ~/deploy
+cd ~/deploy
+git clone https://github.com/cyhuh428-sinsan/Now.git
+cd Now/server
+cp .env.example .env
+nano .env
+```
+
+至少修改:
+
+```env
+NOW_API_TOKEN=change-this-api-token
+NOW_POSTGRES_PASSWORD=change-this-postgres-password
+```
+
+运行:
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
+其他 PC 或手机访问时不要使用 `localhost`，请使用服务器 IP 或域名。
+
+---
+
+# NowNote インストールガイド 日本語
+
+このガイドは、NowNote を初めて使う人がどのようにインストールし接続するかを説明します。
+
+NowNote の利用画面は 3 つです。
+
+```text
+1. インストール版プログラム: 自宅 PC で使う Windows プログラム
+2. モバイルアプリ: Android スマートフォンで使うアプリ
+3. Web プログラム: 外部 PC からブラウザで接続するプログラム
+```
+
+インストール版とモバイルアプリは、サーバーに接続すると日付別メモとユーザーが共有にした文書を同期します。サーバーに接続しない場合、データは現在の端末内だけに保存されます。
+
+Web プログラムはサーバー付属の画面です。単独ローカル保存用ではなく、サーバーに共有された自分の文書だけを表示/編集します。
+
+公共サーバー:
+
+```text
+Web: https://nownote.sinsan.kr
+プライバシーポリシー: https://nownote.sinsan.kr/privacy
+```
+
+個人サーバー:
+
+```text
+Web: https://自分のドメイン
+一時直接接続: http://サーバーIP:8750
+```
+
+## 使用方式を選ぶ
+
+- デスクトップのみ: `NowNote-Setup-0.1.0-x64.exe` をインストールし、サーバー設定を空にします。
+- モバイルのみ: Android アプリをインストールし、サーバー設定を空にします。
+- 公共サーバー: `https://nownote.sinsan.kr` を使い、Web で登録してアプリ/インストール版接続 token を発行します。
+- 個人サーバー: Linux サーバーに Docker サーバーをインストールし、バックアップ、更新、ドメイン、HTTPS を自分で管理します。
+
+## 個人サーバーの簡単な起動
+
+```bash
+mkdir -p ~/deploy
+cd ~/deploy
+git clone https://github.com/cyhuh428-sinsan/Now.git
+cd Now/server
+cp .env.example .env
+nano .env
+```
+
+少なくとも次を変更します。
+
+```env
+NOW_API_TOKEN=change-this-api-token
+NOW_POSTGRES_PASSWORD=change-this-postgres-password
+```
+
+実行:
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
+他の PC やスマートフォンから接続するときは `localhost` ではなくサーバー IP またはドメインを使います。
+
+---
+
+# Hướng dẫn cài đặt NowNote Tiếng Việt
+
+Tài liệu này giải thích cách người dùng mới cài đặt và kết nối NowNote.
+
+NowNote có ba bề mặt sử dụng.
+
+```text
+1. Chương trình desktop: chương trình Windows dùng trên PC ở nhà
+2. Ứng dụng di động: ứng dụng Android dùng trên điện thoại
+3. Chương trình Web: chương trình truy cập bằng trình duyệt từ PC bên ngoài
+```
+
+Desktop và mobile sẽ đồng bộ ghi chú theo ngày và tài liệu được người dùng chọn chia sẻ khi kết nối server. Nếu không kết nối server, dữ liệu chỉ nằm trong thiết bị hiện tại.
+
+Web là màn hình thuộc server. Nó không dùng để lưu local độc lập mà chỉ xem/sửa tài liệu của chính người dùng đã chia sẻ lên server.
+
+Server công cộng:
+
+```text
+Web: https://nownote.sinsan.kr
+Quyền riêng tư: https://nownote.sinsan.kr/privacy
+```
+
+Server cá nhân:
+
+```text
+Web: https://ten-mien-cua-ban
+Truy cập tạm: http://server-ip:8750
+```
+
+## Chọn cách dùng
+
+- Chỉ desktop: cài `NowNote-Setup-0.1.0-x64.exe`, để trống cấu hình server.
+- Chỉ mobile: cài app Android, để trống cấu hình server.
+- Server công cộng: dùng `https://nownote.sinsan.kr`, đăng ký trên Web, rồi phát hành token kết nối app/desktop từ Web.
+- Server cá nhân: cài Docker server trên Linux và tự quản lý backup, cập nhật, domain, HTTPS.
+
+## Khởi động nhanh server cá nhân
+
+```bash
+mkdir -p ~/deploy
+cd ~/deploy
+git clone https://github.com/cyhuh428-sinsan/Now.git
+cd Now/server
+cp .env.example .env
+nano .env
+```
+
+Ít nhất cần đổi:
+
+```env
+NOW_API_TOKEN=change-this-api-token
+NOW_POSTGRES_PASSWORD=change-this-postgres-password
+```
+
+Chạy:
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
+Khi truy cập từ PC hoặc điện thoại khác, không dùng `localhost`; hãy dùng IP server hoặc domain.
+
+---
+
+# دليل تثبيت NowNote العربية
+
+يشرح هذا الدليل كيف يقوم المستخدم الجديد بتثبيت NowNote أو الاتصال به.
+
+لدى NowNote ثلاث واجهات استخدام.
+
+```text
+1. برنامج سطح المكتب: برنامج Windows للاستخدام على كمبيوتر المنزل
+2. تطبيق الهاتف: تطبيق Android للهاتف
+3. برنامج Web: برنامج متصفح للاستخدام من كمبيوتر خارجي
+```
+
+يقوم برنامج سطح المكتب وتطبيق الهاتف بمزامنة الملاحظات اليومية والمستندات التي يختار المستخدم مشاركتها عند الاتصال بالخادم. دون خادم، تبقى البيانات داخل الجهاز الحالي فقط.
+
+برنامج Web تابع للخادم. ليس للتخزين المحلي المستقل، بل لعرض وتحرير مستندات المستخدم المشتركة على الخادم فقط.
+
+الخادم العام:
+
+```text
+Web: https://nownote.sinsan.kr
+الخصوصية: https://nownote.sinsan.kr/privacy
+```
+
+الخادم الشخصي:
+
+```text
+Web: https://your-domain
+وصول مؤقت: http://server-ip:8750
+```
+
+## اختيار طريقة الاستخدام
+
+- سطح المكتب فقط: ثبت `NowNote-Setup-0.1.0-x64.exe` واترك إعدادات الخادم فارغة.
+- الهاتف فقط: ثبت تطبيق Android واترك إعدادات الخادم فارغة.
+- الخادم العام: استخدم `https://nownote.sinsan.kr`، سجل من Web، ثم أصدر token اتصال app/desktop من Web.
+- الخادم الشخصي: ثبت خادم Docker على Linux وأدر النسخ الاحتياطي والتحديث والدومين و HTTPS بنفسك.
+
+## تشغيل سريع للخادم الشخصي
+
+```bash
+mkdir -p ~/deploy
+cd ~/deploy
+git clone https://github.com/cyhuh428-sinsan/Now.git
+cd Now/server
+cp .env.example .env
+nano .env
+```
+
+غيّر على الأقل:
+
+```env
+NOW_API_TOKEN=change-this-api-token
+NOW_POSTGRES_PASSWORD=change-this-postgres-password
+```
+
+تشغيل:
+
+```bash
+sh scripts/deploy_local.sh --base-url http://localhost:8750
+```
+
+عند الاتصال من كمبيوتر أو هاتف آخر، لا تستخدم `localhost`؛ استخدم IP الخادم أو الدومين.
