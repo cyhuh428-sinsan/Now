@@ -10,6 +10,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from uuid import uuid4
 
 
@@ -21,11 +22,24 @@ API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
+CHECKBOX_RE = re.compile(r"^-\s+\[[ xX]\]\s+")
 
 
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise AssertionError(message)
+
+
+def expected_phase_one_checklist_total() -> int:
+    script_path = Path(__file__).resolve()
+    candidates = [
+        script_path.parents[2] / "docs" / "PHASE1_RELEASE_CHECKLIST.md",
+        Path("/docs/PHASE1_RELEASE_CHECKLIST.md"),
+    ]
+    for path in candidates:
+        if path.exists():
+            return sum(1 for line in path.read_text(encoding="utf-8").splitlines() if CHECKBOX_RE.match(line))
+    raise AssertionError("docs/PHASE1_RELEASE_CHECKLIST.md 파일을 찾을 수 없습니다")
 
 
 def ascii_url(url: str) -> str:
@@ -559,7 +573,11 @@ def main() -> None:
 
     status, data = request("GET", f"{base_url}/api/v1/admin/release-readiness", args.token)
     require(data.get("name") == "phase_one_release_readiness", "릴리스 준비 API 이름이 예상과 다릅니다")
-    require(data.get("summary", {}).get("total") == 57, "릴리스 준비 API의 전체 항목 수가 예상과 다릅니다")
+    expected_total = expected_phase_one_checklist_total()
+    require(
+        data.get("summary", {}).get("total") == expected_total,
+        f"릴리스 준비 API의 전체 항목 수가 체크리스트와 다릅니다: expected={expected_total}",
+    )
     require(data.get("summary", {}).get("remaining", 0) >= 0, "릴리스 준비 API의 남은 항목 수가 없습니다")
     require("evidence_done" in data.get("summary", {}), "릴리스 준비 API에 수동 증빙 완료 집계가 없습니다")
     require(data.get("blockers") is not None, "릴리스 준비 API에 남은 항목 유형이 없습니다")
