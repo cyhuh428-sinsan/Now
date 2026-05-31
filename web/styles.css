@@ -1501,6 +1501,28 @@ kbd {
   outline: none;
 }
 
+.live-memo-editor {
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.live-memo-editor:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  pointer-events: none;
+}
+
+.live-editor-link {
+  color: var(--blue);
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.live-editor-link:hover {
+  color: var(--blue-strong);
+}
+
 .memo-editor.readonly,
 .memo-editor.locked {
   background: color-mix(in srgb, var(--panel) 82%, var(--bg));
