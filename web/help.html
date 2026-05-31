@@ -163,6 +163,10 @@
         <select id="languageSelect" class="language-select" aria-label="언어">
           <option value="ko">한국어</option>
           <option value="en">English</option>
+          <option value="zh">中文</option>
+          <option value="ja">日本語</option>
+          <option value="vi">Tiếng Việt</option>
+          <option value="ar">العربية</option>
         </select>
         <a class="back" href="./index.html" data-i18n="back">NowNote로 돌아가기</a>
       </div>
@@ -290,6 +294,15 @@
   </main>
   <script>
     const SETTINGS_KEY = "nownote.web.settings.v1";
+    const LANGUAGES = {
+      ko: { label: "한국어", dir: "ltr", fallback: "ko", aria: "언어" },
+      en: { label: "English", dir: "ltr", fallback: "en", aria: "Language" },
+      zh: { label: "中文", dir: "ltr", fallback: "en", aria: "语言" },
+      ja: { label: "日本語", dir: "ltr", fallback: "en", aria: "言語" },
+      vi: { label: "Tiếng Việt", dir: "ltr", fallback: "en", aria: "Ngôn ngữ" },
+      ar: { label: "العربية", dir: "rtl", fallback: "en", aria: "اللغة" },
+    };
+    const SUPPORTED_LANGUAGES = Object.keys(LANGUAGES);
     const TRANSLATIONS = {
       ko: {
         title: "NowNote 도움말",
@@ -370,12 +383,106 @@
       },
     };
 
+    const LANGUAGE_PACKS = {
+      zh: {
+        title: "NowNote 帮助",
+        "page.title": "NowNote 帮助",
+        "page.subtitle": "先了解单机使用和服务器连接使用的区别。",
+        "back": "返回 NowNote",
+        "standalone.badge": "仅本地",
+        "standalone.title": "单机用户",
+        "server.badge": "使用同步",
+        "server.title": "服务器连接用户",
+        "platform.title": "平台指南",
+        "platform.mobile.title": "移动应用",
+        "platform.web.title": "Web / 安装程序",
+        "connection.title": "服务器连接设置",
+        "profile.title": "用户资料",
+        "backup.title": "备份和导入",
+        "backup.markdown.title": "Markdown 导入",
+        "backup.markdownExport.title": "Markdown 导出",
+        "encryption.title": "加密存储",
+        "start.title": "推荐开始方式",
+      },
+      ja: {
+        title: "NowNote ヘルプ",
+        "page.title": "NowNote ヘルプ",
+        "page.subtitle": "単独使用とサーバー接続使用の違いを先に整理します。",
+        "back": "NowNote に戻る",
+        "standalone.badge": "ローカル専用",
+        "standalone.title": "単独ユーザー",
+        "server.badge": "同期使用",
+        "server.title": "サーバー接続ユーザー",
+        "platform.title": "プラットフォーム基準",
+        "platform.mobile.title": "モバイルアプリ",
+        "platform.web.title": "Web / インストール版",
+        "connection.title": "サーバー接続設定",
+        "profile.title": "ユーザープロフィール",
+        "backup.title": "バックアップと読み込み",
+        "backup.markdown.title": "Markdown 読み込み",
+        "backup.markdownExport.title": "Markdown 書き出し",
+        "encryption.title": "暗号化保存",
+        "start.title": "おすすめの始め方",
+      },
+      vi: {
+        title: "Trợ giúp NowNote",
+        "page.title": "Trợ giúp NowNote",
+        "page.subtitle": "Trước tiên hãy phân biệt dùng độc lập và dùng có máy chủ.",
+        "back": "Quay lại NowNote",
+        "standalone.badge": "Chỉ cục bộ",
+        "standalone.title": "Người dùng độc lập",
+        "server.badge": "Có đồng bộ",
+        "server.title": "Người dùng kết nối máy chủ",
+        "platform.title": "Tiêu chuẩn theo nền tảng",
+        "platform.mobile.title": "Ứng dụng di động",
+        "platform.web.title": "Web / Chương trình cài đặt",
+        "connection.title": "Cài đặt kết nối máy chủ",
+        "profile.title": "Hồ sơ người dùng",
+        "backup.title": "Sao lưu và nhập",
+        "backup.markdown.title": "Nhập Markdown",
+        "backup.markdownExport.title": "Xuất Markdown",
+        "encryption.title": "Lưu trữ mã hóa",
+        "start.title": "Cách bắt đầu khuyến nghị",
+      },
+      ar: {
+        title: "مساعدة NowNote",
+        "page.title": "مساعدة NowNote",
+        "page.subtitle": "ابدأ بفهم الفرق بين الاستخدام المستقل والاستخدام المتصل بالخادم.",
+        "back": "العودة إلى NowNote",
+        "standalone.badge": "محلي فقط",
+        "standalone.title": "مستخدم مستقل",
+        "server.badge": "المزامنة مفعّلة",
+        "server.title": "مستخدم متصل بالخادم",
+        "platform.title": "إرشادات المنصات",
+        "platform.mobile.title": "تطبيق الهاتف",
+        "platform.web.title": "Web / التطبيق المثبت",
+        "connection.title": "إعدادات اتصال الخادم",
+        "profile.title": "ملف المستخدم",
+        "backup.title": "النسخ الاحتياطي والاستيراد",
+        "backup.markdown.title": "استيراد Markdown",
+        "backup.markdownExport.title": "تصدير Markdown",
+        "encryption.title": "تخزين مشفر",
+        "start.title": "طريقة البدء الموصى بها",
+      },
+    };
+
+    Object.entries(LANGUAGE_PACKS).forEach(([language, pack]) => {
+      TRANSLATIONS[language] = {
+        ...TRANSLATIONS.en,
+        ...pack,
+      };
+    });
+
+    function normalizeLanguage(language) {
+      return SUPPORTED_LANGUAGES.includes(language) ? language : "ko";
+    }
+
     function readLanguage() {
       const queryLanguage = new URLSearchParams(location.search).get("lang");
-      if (queryLanguage === "en" || queryLanguage === "ko") return queryLanguage;
+      if (SUPPORTED_LANGUAGES.includes(queryLanguage)) return queryLanguage;
       try {
         const settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}");
-        return settings.language === "en" ? "en" : "ko";
+        return normalizeLanguage(settings.language);
       } catch {
         return "ko";
       }
@@ -392,9 +499,11 @@
     }
 
     function translateTextNodes(root, language) {
+      const fallbackLanguage = LANGUAGES[language]?.fallback || "en";
       const map = TRANSLATIONS[language] || {};
+      const fallbackMap = TRANSLATIONS[fallbackLanguage] || {};
       root.querySelectorAll("[data-i18n]").forEach((element) => {
-        const value = map[element.dataset.i18n];
+        const value = map[element.dataset.i18n] || fallbackMap[element.dataset.i18n];
         if (!value) return;
         if (value.includes("<")) {
           element.innerHTML = value;
@@ -405,12 +514,15 @@
     }
 
     function applyLanguage(language) {
+      language = normalizeLanguage(language);
+      const meta = LANGUAGES[language] || LANGUAGES.ko;
       document.documentElement.lang = language;
+      document.documentElement.dir = meta.dir;
       document.title = TRANSLATIONS[language]?.title || TRANSLATIONS.ko.title;
       document.getElementById("languageSelect").value = language;
-      document.getElementById("languageSelect").setAttribute("aria-label", language === "en" ? "Language" : "언어");
+      document.getElementById("languageSelect").setAttribute("aria-label", meta.aria);
       document.querySelector(".back").setAttribute("href", `./index.html?lang=${encodeURIComponent(language)}`);
-      if (language === "en") translateTextNodes(document.body, language);
+      if (language !== "ko") translateTextNodes(document.body, language);
     }
 
     const languageSelect = document.getElementById("languageSelect");

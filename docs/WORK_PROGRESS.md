@@ -6823,3 +6823,27 @@
 - `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
 - `scripts/verify_public_repo_safety.py` 통과: 8/8.
 - `git diff --check` 통과.
+
+# 2026-05-31 11:18 KST
+
+## 작업 내용
+
+- Web/설치형 화면 언어 선택을 한국어, 영어, 중국어, 일본어, 베트남어, 아랍어로 확장.
+- 언어 메타데이터를 한곳에서 관리하도록 정리하고, 중국어/일본어/베트남어는 LTR, 아랍어는 RTL 방향을 적용.
+- 추가 언어는 1.0 기준 핵심 화면 문구를 우선 번역하고, 빠진 세부 문구는 한국어가 아니라 영어 fallback으로 표시하도록 처리.
+- 날짜/시각 표시는 선택 언어의 locale을 사용하도록 보정.
+- Web 도움말도 같은 언어 선택 구조와 fallback 기준을 사용하도록 수정.
+- Web README, 1차 체크리스트, 프로젝트 상태 문서를 현재 다국어 지원 범위에 맞게 갱신.
+
+## 검증
+
+- `node --check web/app.js` 통과.
+- `node --check web/scripts/check_import_export.mjs` 통과.
+- `web/scripts/verify_web_surface.py` 통과: 221/221.
+- `now_app/scripts/verify_mobile_surface.py` 통과: 128/128.
+- `server/scripts/preflight.py --env-file .env.example --allow-example` 통과: 1126/1126.
+- `scripts/verify_public_repo_safety.py` 통과: 8/8.
+- `git diff --check` 통과.
+- 설치형 정적 파일 동기화 `npm run sync:web` 통과.
+- Windows 설치형 생성 `npm run dist:win` 통과: `desktop/dist/NowNote-Setup-0.1.0-x64.exe`.
+- Browser 직접 검증은 현재 Codex 브라우저 제어 런타임이 `windows sandbox failed: spawn setup refresh`로 종료되어 진행하지 못함.
