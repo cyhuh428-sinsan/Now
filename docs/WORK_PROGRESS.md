@@ -3,6 +3,50 @@
 이 파일은 작업 중 오류나 대화 중단에 대비해 현재 진행 상태를 남기는 기록입니다.
 새 기능을 시작하거나, 중간 판단이 바뀌거나, 검증/커밋이 끝날 때 갱신합니다.
 
+## 2026-06-01 KST
+
+### NowNote 1.1 설치형 PC 클라이언트 시작
+
+- `main`의 1.0 수정 완료 상태인 `35be9ee`를 기준으로 `codex/desktop-client-1.1` 브랜치를 다시 맞춤.
+- 기존에 1.0 URL 표시 작업이 섞여 있던 브랜치는 `codex/desktop-client-1.1-old-url-work`로 백업.
+- 1.1 기준 문서 `docs/NOW_1_1_DESKTOP_CLIENT_DESIGN.md`와 향후 업그레이드 전략 문서 `docs/NOW_UPGRADE_STRATEGY_NOTES_APP_REVIEW.md`를 기준 문서로 유지.
+- Electron main process에 `nownote-desktop-store.json` 기반 설치형 로컬 저장소 IPC 추가.
+- Electron preload에 `window.nownoteDesktop.storage.info/read/write` 브리지를 추가.
+- 설치형 실행 시 Web renderer가 브라우저 localStorage보다 설치형 파일 저장소를 우선 사용하도록 변경.
+- 설치형 파일 저장소가 비어 있으면 기존 localStorage 값을 파일 저장소로 1회 복사하고, 기존 localStorage 값은 삭제하지 않도록 처리.
+- 설정 화면에 PC 로컬 저장소 상태, 저장 경로, 최근 저장 시각 표시를 추가.
+- 서버 설정에 자동 동기화 켜기/끄기 옵션을 추가하고, 자동 예약 동기화는 이 설정을 따르도록 변경. 수동 동기화 버튼은 유지.
+- 서버에서 내려온 문서가 로컬 pending 변경과 충돌하면 자동 덮어쓰지 않고 설정 화면의 충돌 문서 목록에 표시.
+- 충돌 문서는 `로컬 유지`, `서버 적용`, `나중에` 선택지를 제공. 암호화 메모 충돌은 평문 미리보기 없이 암호화 메모로만 표시.
+- 암호화 메모는 서버 분석 작업 등록 전에 차단해 분석 입력으로 넘어가지 않도록 보강.
+- 새 PC 로컬 지식 메모는 서버 공유 대상과 동기화 대기 개수에서 제외하고, 이미 서버에 공유된 메모를 공유 해제할 때만 서버 삭제 신호를 보내도록 공유 상태를 분리.
+- 삭제 보관함 항목은 로컬 보관 상태로 유지하고 서버 동기화 대기 개수에 포함하지 않는 기준을 검증 스크립트에 추가.
+- Web은 로그인 후 서버 공유 문서로 화면을 교체하고, Web 화면에서는 공유 토글을 비활성화하는 기준을 검증 스크립트에 추가.
+- Windows NSIS 설치 파일 `desktop\dist\NowNote-Setup-0.1.0-x64.exe` 생성 통과.
+- `desktop\dist\win-unpacked\NowNote.exe` 실행 smoke 점검 통과: 6초 실행 후 종료.
+- `desktop\dist\NowNote-Setup-0.1.0-x64.exe`를 테스트 전용 Temp 폴더에 silent 설치하고, 설치된 `NowNote.exe` 실행 후 언인스톨러로 제거하는 설치 파일 smoke 점검 통과.
+- `desktop\README.md`, `web\README.md`, `web\help.html`, `docs\PROJECT_STATUS.md`에 설치형 로컬 저장소, 공유 문서 기준, 자동 동기화/충돌/삭제 보관함 기준을 보강.
+- 설치형 로컬 저장 실패 시 토스트 경고와 함께 설정 화면의 PC 로컬 저장소 상태에 실패 상태가 남도록 보강.
+- 테스트 전용 `NOWNOTE_DESKTOP_USER_DATA_DIR` 경로와 `npm run check:storage` 검증 스크립트를 추가.
+- 설치형 앱에서 메모 작성, `nownote-desktop-store.json` 저장, 앱 재시작 후 메모 목록 재로드까지 자동 점검 통과.
+- `web\scripts\check_desktop_client_policies.mjs`를 추가해 공유 제외, 공유/공유해제 동기화 대상, 삭제 보관함 제외, 충돌 기록, 암호화 메모 분석 차단 정책을 브라우저에서 직접 검증.
+- 블로그 관련 미추적 파일은 `.git/info/exclude`에만 등록해 push 대상에서 제외.
+
+### 검증
+
+- `node --check desktop\main.cjs` 통과.
+- `node --check desktop\preload.cjs` 통과.
+- `node --check desktop\scripts\check-desktop-storage.mjs` 통과.
+- `node --check web\app.js` 통과.
+- `uv run python web\scripts\verify_web_surface.py` 통과: 271/271.
+- `NOWNOTE_DEBUG_POLICY_CHECK=1 node web\scripts\check_desktop_client_policies.mjs` 통과.
+- `npm run check:storage` 통과: 테스트 전용 저장소에서 작성 후 재시작 보존 확인.
+- `node web\scripts\check_import_export.mjs` 통과: Markdown 가져오기/내보내기, JSON 내보내기, JSON 가져오기 전 자동 백업과 복원 확인.
+- `git diff --check` 통과.
+- 설치형 정적 파일 동기화 `npm run sync:web` 통과.
+- Windows 설치형 생성 `npm run dist:win` 통과.
+- 설치 파일 silent 설치/실행/제거 smoke 통과.
+
 ## 2026-05-30 16:05 KST
 
 ### 공용 서버 smoke 사용자 토큰 자동 발급

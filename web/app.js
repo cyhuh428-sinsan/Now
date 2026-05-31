@@ -1,6 +1,7 @@
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
 const WEB_SESSION_KEY = "nownote.web.session.v1";
+const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
 
@@ -87,6 +88,7 @@ const I18N = {
     "note.emptyContent": "내용 없음",
     "note.mergeChildrenMarker": "하위 메모 병합",
     "note.storageFail": "브라우저 저장소에 저장할 수 없습니다. 중요한 내용은 JSON 내보내기로 백업해 주세요.",
+    "note.desktopStorageFail": "PC 로컬 저장소에 저장할 수 없습니다. 중요한 내용은 JSON 내보내기로 백업해 주세요.",
     "note.backupImportError": "NowNote 백업 JSON 형식이 아닙니다.",
     "note.backupReplaceConfirm": "JSON 백업을 가져오면 현재 메모와 설정이 백업 내용으로 교체됩니다.\n\n백업 파일: {file}\n백업 시각: {time}\n백업 내용: 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개{restoredArchivedDaily}, 지식 메모 {tree}개, 삭제 보관 {deletedTree}개\n\n계속할까요?",
     "note.unknownDate": "확인 안 됨",
@@ -359,6 +361,14 @@ const I18N = {
     "settings.shortcutGuide.desc": "자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.",
     "settings.features.title": "지식 기능",
     "settings.features.desc": "사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.",
+    "settings.desktopStorage.title": "PC 로컬 저장소",
+    "settings.desktopStorage.desc": "설치형 프로그램은 이 PC의 로컬 파일에 원본 메모와 설정을 저장합니다.",
+    "settings.desktopStorage.web": "Web은 서버 공유 문서만 사용합니다.",
+    "settings.desktopStorage.local": "브라우저 로컬 저장소 사용 중",
+    "settings.desktopStorage.ready": "로컬 파일 저장 준비됨",
+    "settings.desktopStorage.unknown": "저장 위치 확인 중",
+    "settings.desktopStorage.error": "로컬 파일 저장 실패",
+    "settings.desktopStorage.updated": "최근 저장 {time}",
     "settings.server.title": "서버 연결",
     "settings.server.desc": "단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.",
     "settings.server.desc.hosted": "Web은 사용자 ID와 비밀번호로 로그인하고 서버의 공유 문서만 사용합니다.",
@@ -379,6 +389,10 @@ const I18N = {
     "settings.server.twoFactorCode.hint": "2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
+    "settings.server.autoSync": "자동 동기화",
+    "settings.server.autoSync.hint": "변경된 공유 문서를 서버에 자동으로 보냅니다.",
+    "settings.server.autoSync.on": "자동 동기화 켜짐",
+    "settings.server.autoSync.off": "자동 동기화 꺼짐",
     "settings.server.guide.title": "입력 기준",
     "settings.server.guide.local": "단독 사용: 서버 없이 이 기기에만 저장합니다.",
     "settings.server.guide.personal": "설치형/앱: 서버 주소, 사용자 ID, 앱/설치형 접속 토큰을 입력합니다.",
@@ -421,6 +435,14 @@ const I18N = {
     "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
     "settings.server.mergeSkipped": "로컬 변경 보존",
     "settings.server.mergeSkippedCount": "로컬 변경 보존 {count}개",
+    "settings.server.conflict.title": "충돌 문서",
+    "settings.server.conflict.desc": "로컬과 서버가 모두 바뀐 문서는 자동으로 덮어쓰지 않습니다.",
+    "settings.server.conflict.none": "충돌 문서가 없습니다.",
+    "settings.server.conflict.item": "{title} · {type} · 로컬 {localTime} / 서버 {remoteTime}",
+    "settings.server.conflict.encrypted": "암호화 메모",
+    "settings.server.conflict.keepLocal": "로컬 유지",
+    "settings.server.conflict.useServer": "서버 적용",
+    "settings.server.conflict.later": "나중에",
     "settings.server.pending": "보류 변경",
     "settings.server.lastSync": "마지막 동기화",
     "settings.server.pendingMeta": "보류 변경 {count}개 · 마지막 동기화 {time}",
@@ -448,6 +470,7 @@ const I18N = {
     "settings.server.analysis.none": "분석 작업을 불러오지 않았습니다.",
     "settings.server.analysis.noNote": "분석할 지식 메모를 먼저 선택해야 합니다.",
     "settings.server.analysis.emptyNote": "선택한 메모에 분석할 내용이 없습니다.",
+    "settings.server.analysis.encryptedNote": "암호화 메모는 서버 분석 대상에서 제외됩니다.",
     "settings.server.analysis.creating": "분석 작업을 서버에 등록하는 중입니다.",
     "settings.server.analysis.created": "분석 작업을 등록했습니다.",
     "settings.server.analysis.loading": "분석 작업을 불러오는 중입니다.",
@@ -642,6 +665,7 @@ const I18N = {
     "note.emptyContent": "No content",
     "note.mergeChildrenMarker": "Merged child notes",
     "note.storageFail": "Failed to save to browser storage. Please back up in JSON now.",
+    "note.desktopStorageFail": "Failed to save to PC local storage. Please back up in JSON now.",
     "note.backupImportError": "Not a NowNote backup JSON file.",
     "note.backupReplaceConfirm": "Importing JSON backup will replace current notes and settings.\n\nBackup file: {file}\nBackup time: {time}\nBackup summary: daily {daily}, archived daily {archivedDaily}{restoredArchivedDaily}, notes {tree}, deleted {deletedTree}\n\nContinue?",
     "note.unknownDate": "Unknown",
@@ -914,6 +938,14 @@ const I18N = {
     "settings.shortcutGuide.desc": "Run common windows, tabs, and editing actions from the keyboard.",
     "settings.features.title": "Knowledge features",
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
+    "settings.desktopStorage.title": "PC local storage",
+    "settings.desktopStorage.desc": "The installed desktop client saves original notes and settings to a local file on this PC.",
+    "settings.desktopStorage.web": "Web uses only server-shared notes.",
+    "settings.desktopStorage.local": "Using browser local storage",
+    "settings.desktopStorage.ready": "Local file storage ready",
+    "settings.desktopStorage.unknown": "Checking storage location",
+    "settings.desktopStorage.error": "Local file save failed",
+    "settings.desktopStorage.updated": "Last saved {time}",
     "settings.server.title": "Server connection",
     "settings.server.desc": "Choose standalone use or connect to a personal/public NowNote server.",
     "settings.server.desc.hosted": "The Web client signs in with a user ID and password and uses only shared server notes.",
@@ -934,6 +966,10 @@ const I18N = {
     "settings.server.twoFactorCode.hint": "Enter the six-digit code only when your account uses two-factor authentication.",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
+    "settings.server.autoSync": "Auto sync",
+    "settings.server.autoSync.hint": "Automatically send changed shared notes to the server.",
+    "settings.server.autoSync.on": "Auto sync on",
+    "settings.server.autoSync.off": "Auto sync off",
     "settings.server.guide.title": "Connection guide",
     "settings.server.guide.local": "Standalone: save only on this device without a server.",
     "settings.server.guide.personal": "Desktop/app: enter the server URL, user ID, and app/desktop access token.",
@@ -976,6 +1012,14 @@ const I18N = {
     "settings.server.syncEmpty": "There are no notes to sync.",
     "settings.server.mergeSkipped": "Local changes kept",
     "settings.server.mergeSkippedCount": "Local changes kept {count}",
+    "settings.server.conflict.title": "Conflicted notes",
+    "settings.server.conflict.desc": "Notes changed locally and on the server are not overwritten automatically.",
+    "settings.server.conflict.none": "No conflicted notes.",
+    "settings.server.conflict.item": "{title} · {type} · local {localTime} / server {remoteTime}",
+    "settings.server.conflict.encrypted": "Encrypted note",
+    "settings.server.conflict.keepLocal": "Keep local",
+    "settings.server.conflict.useServer": "Use server",
+    "settings.server.conflict.later": "Later",
     "settings.server.pending": "Pending changes",
     "settings.server.lastSync": "Last sync",
     "settings.server.pendingMeta": "Pending changes {count} · Last sync {time}",
@@ -1003,6 +1047,7 @@ const I18N = {
     "settings.server.analysis.none": "Analysis jobs have not been loaded.",
     "settings.server.analysis.noNote": "Select a knowledge note to analyze first.",
     "settings.server.analysis.emptyNote": "The selected note has no content to analyze.",
+    "settings.server.analysis.encryptedNote": "Encrypted notes are excluded from server analysis.",
     "settings.server.analysis.creating": "Creating an analysis job on the server.",
     "settings.server.analysis.created": "Analysis job created.",
     "settings.server.analysis.loading": "Loading analysis jobs.",
@@ -1466,6 +1511,7 @@ let serverSyncTimer = null;
 let serverSyncRunning = false;
 let serverSyncQueued = false;
 let hostedWebSyncSuspended = false;
+let desktopStorageInfo = null;
 let webLoginMode = "login";
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
@@ -1512,12 +1558,14 @@ function defaultServerSettings() {
     token: "",
     userToken: "",
     webSessionToken: "",
+    autoSync: true,
     ownerId: "local_user",
     deviceId: isHostedWebClient() ? "web-client" : "web-desktop",
     userProfile: defaultServerUserProfile(),
     capabilities: null,
     publicServerReadiness: null,
     analysisJobs: [],
+    conflicts: [],
     lastCheckedAt: null,
     lastSyncedAt: null,
     lastStatus: "idle",
@@ -1539,6 +1587,10 @@ function defaultHostedServerUrl() {
 
 function isHostedWebClient() {
   return Boolean(defaultHostedServerUrl());
+}
+
+function isDesktopClient() {
+  return Boolean(window.nownoteDesktop?.storage);
 }
 
 function defaultServerUserProfile() {
@@ -1753,6 +1805,7 @@ const elements = {
   serverTokenInput: $("#serverTokenInput"),
   serverUserTokenInput: $("#serverUserTokenInput"),
   serverTwoFactorCodeInput: $("#serverTwoFactorCodeInput"),
+  serverAutoSyncToggle: $("#serverAutoSyncToggle"),
   ownerIdInput: $("#ownerIdInput"),
   deviceIdInput: $("#deviceIdInput"),
   serverDisplayNameInput: $("#serverDisplayNameInput"),
@@ -1778,6 +1831,11 @@ const elements = {
   serverStatusText: $("#serverStatusText"),
   serverMetaText: $("#serverMetaText"),
   serverCapabilitiesText: $("#serverCapabilitiesText"),
+  serverConflictBox: $("#serverConflictBox"),
+  serverConflictList: $("#serverConflictList"),
+  desktopStorageRow: $("#desktopStorageRow"),
+  desktopStorageStatus: $("#desktopStorageStatus"),
+  desktopStoragePath: $("#desktopStoragePath"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
@@ -2207,16 +2265,21 @@ async function handleWebLogout() {
   }
 }
 
-load();
-loadSettings();
-applyLanguageQueryOverride();
-initializeLiveMemoEditor();
-bindEvents();
-renderSettings();
-applySettings();
-render();
-initializeHostedWebClient();
-scheduleServerSync({ force: true, delay: 1600 });
+async function initializeApp() {
+  await load();
+  await loadSettings();
+  applyLanguageQueryOverride();
+  initializeLiveMemoEditor();
+  bindEvents();
+  await refreshDesktopStorageInfo();
+  renderSettings();
+  applySettings();
+  render();
+  initializeHostedWebClient();
+  scheduleServerSync({ force: true, delay: 1600 });
+}
+
+initializeApp();
 
 function initializeLiveMemoEditor() {
   const editor = elements.treeContent;
@@ -2469,6 +2532,11 @@ function bindEvents() {
     scheduleServerSync({ force: true, delay: 800 });
   });
 
+  elements.serverAutoSyncToggle.addEventListener("change", () => {
+    saveServerSettingsFromForm();
+    scheduleServerSync({ force: true, delay: 800 });
+  });
+
   elements.serverTestBtn.addEventListener("click", testServerConnection);
 
   elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
@@ -2478,6 +2546,7 @@ function bindEvents() {
   elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
   elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
+  elements.serverConflictList.addEventListener("click", handleServerConflictListClick);
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webLogoutBtn.addEventListener("click", handleWebLogout);
 
@@ -2557,9 +2626,15 @@ function bindEvents() {
   elements.shareTreeBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
     if (!selected || isHostedWebClient()) return;
-    selected.shared = selected.shared === false;
-    selected.unsharedAt = selected.shared === false ? new Date().toISOString() : null;
-    markTreeNodeChanged(selected);
+    const nextShared = selected.shared === false;
+    selected.shared = nextShared;
+    selected.unsharedAt = nextShared ? null : new Date().toISOString();
+    if (nextShared || selected.serverShared === true) {
+      markTreeNodeChanged(selected);
+    } else {
+      selected.updatedAt = new Date().toISOString();
+      selected.syncState = "local";
+    }
     persist();
     renderTree();
   });
@@ -2695,6 +2770,39 @@ function toggleSettings() {
   }
 }
 
+async function refreshDesktopStorageInfo() {
+  if (!isDesktopClient()) {
+    desktopStorageInfo = null;
+    return;
+  }
+  try {
+    desktopStorageInfo = await window.nownoteDesktop.storage.info();
+  } catch {
+    desktopStorageInfo = null;
+  }
+}
+
+function renderDesktopStorageStatus() {
+  if (!elements.desktopStorageRow) return;
+  const visible = isDesktopClient() || isHostedWebClient();
+  elements.desktopStorageRow.classList.toggle("hidden", !visible);
+  if (!visible) return;
+  if (isHostedWebClient()) {
+    elements.desktopStorageStatus.textContent = t("settings.desktopStorage.web");
+    elements.desktopStoragePath.textContent = "";
+    return;
+  }
+  elements.desktopStorageStatus.textContent = desktopStorageInfo?.error
+    ? t("settings.desktopStorage.error")
+    : desktopStorageInfo
+    ? t("settings.desktopStorage.ready")
+    : t("settings.desktopStorage.unknown");
+  const updatedText = desktopStorageInfo?.updatedAt
+    ? ` · ${t("settings.desktopStorage.updated", { time: formatDateTime(desktopStorageInfo.updatedAt) })}`
+    : "";
+  elements.desktopStoragePath.textContent = `${desktopStorageInfo?.path || ""}${updatedText}`;
+}
+
 function renderSettings() {
   renderLanguageOptions();
   elements.languageSelect.value = state.settings.language;
@@ -2708,6 +2816,7 @@ function renderSettings() {
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.sidebarAssistToggle.checked = state.settings.showSidebarAssist;
   renderServerSettings();
+  renderDesktopStorageStatus();
   renderShortcutEditor();
   renderFeatureSettings();
   elements.accentChoices.replaceChildren(
@@ -2760,6 +2869,7 @@ function renderServerSettings() {
   elements.serverUrlInput.value = server.url;
   elements.serverTokenInput.value = server.token;
   elements.serverUserTokenInput.value = server.userToken || "";
+  elements.serverAutoSyncToggle.checked = server.autoSync !== false;
   elements.ownerIdInput.value = server.ownerId;
   elements.deviceIdInput.value = server.deviceId;
   const profile = normalizeServerUserProfile(server.userProfile);
@@ -2771,6 +2881,7 @@ function renderServerSettings() {
   elements.serverTestBtn.disabled = !isServerMode;
   elements.serverSyncBtn.disabled = !isServerMode;
   elements.serverFullSyncBtn.disabled = !isServerMode;
+  elements.serverAutoSyncToggle.disabled = !isServerMode;
   elements.serverProfileLoadBtn.disabled = !isServerMode;
   elements.serverProfileSaveBtn.disabled = !isServerMode;
   elements.serverAnalysisCreateBtn.disabled = !isServerMode;
@@ -2779,6 +2890,7 @@ function renderServerSettings() {
   renderServerMeta();
   renderServerCapabilities(server.capabilities, server.publicServerReadiness);
   renderServerAnalysisJobs(server.analysisJobs);
+  renderServerConflicts(server.conflicts);
   renderServerProfileMeta(profile);
 }
 
@@ -2816,6 +2928,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved"), messag
       url: defaultHostedServerUrl(),
       token: "",
       userToken: "",
+      autoSync: true,
       ownerId: normalizeOwnerId(previous.ownerId),
       deviceId: previous.deviceId || "web-client",
       userProfile: {
@@ -2847,6 +2960,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved"), messag
     url: nextUrl,
     token: nextToken,
     userToken: nextUserToken,
+    autoSync: elements.serverAutoSyncToggle.checked,
     ownerId: normalizeOwnerId(elements.ownerIdInput.value),
     deviceId: elements.deviceIdInput.value.trim() || "web-desktop",
     userProfile: {
@@ -2948,7 +3062,8 @@ function renderServerMeta() {
   const lastSyncedAt = server.lastSyncedAt
     ? new Date(server.lastSyncedAt).toLocaleString(currentLocale())
     : t("settings.server.never");
-  elements.serverMetaText.textContent = t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt });
+  const autoSyncText = server.autoSync === false ? t("settings.server.autoSync.off") : t("settings.server.autoSync.on");
+  elements.serverMetaText.textContent = `${t("settings.server.pendingMeta", { count: pendingCount, time: lastSyncedAt })} · ${autoSyncText}`;
   elements.serverMetaText.classList.toggle("has-pending", pendingCount > 0);
 }
 
@@ -2968,6 +3083,47 @@ function renderServerCapabilities(capabilities, publicServerReadiness = null) {
     return;
   }
   elements.serverCapabilitiesText.replaceChildren(...chips);
+}
+
+function renderServerConflicts(conflicts = []) {
+  if (!elements.serverConflictBox || !elements.serverConflictList) return;
+  const items = Array.isArray(conflicts) ? conflicts : [];
+  elements.serverConflictBox.classList.toggle("hidden", items.length === 0);
+  if (items.length === 0) {
+    elements.serverConflictList.textContent = t("settings.server.conflict.none");
+    return;
+  }
+  elements.serverConflictList.replaceChildren(...items.map(renderServerConflictItem));
+}
+
+function renderServerConflictItem(conflict) {
+  const item = document.createElement("div");
+  item.className = "server-conflict-item";
+  const text = document.createElement("span");
+  const type = conflict.encrypted ? t("settings.server.conflict.encrypted") : conflict.noteType;
+  text.textContent = t("settings.server.conflict.item", {
+    title: noteTitle(conflict.title),
+    type,
+    localTime: formatDateTime(conflict.localUpdatedAt),
+    remoteTime: formatDateTime(conflict.remoteUpdatedAt),
+  });
+  const actions = document.createElement("div");
+  actions.className = "server-conflict-actions";
+  [
+    ["keep-local", t("settings.server.conflict.keepLocal")],
+    ["use-server", t("settings.server.conflict.useServer")],
+    ["later", t("settings.server.conflict.later")],
+  ].forEach(([action, label]) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "secondary-btn";
+    button.dataset.conflictAction = action;
+    button.dataset.conflictId = conflict.id;
+    button.textContent = label;
+    actions.append(button);
+  });
+  item.append(text, actions);
+  return item;
 }
 
 function serverCapabilityLabels(capabilities) {
@@ -3084,6 +3240,24 @@ function handleServerAnalysisListClick(event) {
   appendAnalysisResultToNote(job);
 }
 
+function handleServerConflictListClick(event) {
+  const button = event.target.closest("[data-conflict-action]");
+  if (!button) return;
+  const action = button.dataset.conflictAction;
+  const conflictId = button.dataset.conflictId;
+  if (action === "later") return;
+  if (action === "keep-local") {
+    removeServerConflict(conflictId);
+    persistSettings();
+    renderServerSettings();
+    scheduleServerSync({ force: true, delay: 800 });
+    return;
+  }
+  if (action === "use-server") {
+    applyServerConflictRemote(conflictId);
+  }
+}
+
 function appendAnalysisResultToNote(job) {
   const node = findTreeNode(state.data.tree, job.note_local_id);
   const resultText = extractServerAnalysisResultText(job.result_json);
@@ -3166,8 +3340,8 @@ function countPendingSyncNotes() {
   return [
     ...Object.values(state.data.daily),
     ...state.data.archivedDaily,
-    ...flattenTree(state.data.tree),
-  ].filter((item) => item?.syncState === "pending").length;
+  ].filter((item) => item?.syncState === "pending").length
+    + flattenTree(state.data.tree).filter(shouldCountPendingTreeSync).length;
 }
 
 async function testServerConnection() {
@@ -3362,6 +3536,12 @@ async function createSelectedNoteAnalysisJob() {
   const selected = getSelectedTreeNode();
   if (!selected) {
     setServerMessage(server, "bad", "settings.server.analysis.noNote");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+  if (isEncryptedContent(selected.content)) {
+    setServerMessage(server, "bad", "settings.server.analysis.encryptedNote");
     persistSettings();
     renderServerSettings();
     return;
@@ -3658,6 +3838,66 @@ function applyPulledServerNotes(serverNotes) {
   return result;
 }
 
+function serverConflictId(note) {
+  return `${note?.note_type || "note"}:${note?.local_id || ""}`;
+}
+
+function recordServerConflict(local, note) {
+  const server = state.settings.server || defaultServerSettings();
+  const id = serverConflictId(note);
+  const conflicts = Array.isArray(server.conflicts) ? server.conflicts.filter((item) => item.id !== id) : [];
+  conflicts.unshift({
+    id,
+    noteType: note.note_type || "note",
+    localId: note.local_id || "",
+    title: note.title || local?.title || note.local_id || "",
+    localUpdatedAt: localNoteTime(local) || "",
+    remoteUpdatedAt: serverNoteTime(note) || "",
+    encrypted: isEncryptedContent(local?.content) || isEncryptedContent(note?.content),
+    remoteNote: note,
+  });
+  server.conflicts = conflicts.slice(0, 20);
+}
+
+function removeServerConflict(id) {
+  const server = state.settings.server || defaultServerSettings();
+  server.conflicts = (server.conflicts || []).filter((conflict) => conflict.id !== id);
+}
+
+function clearServerConflictForNote(noteType, localId) {
+  removeServerConflict(`${noteType}:${localId}`);
+}
+
+function applyServerConflictRemote(id) {
+  const server = state.settings.server || defaultServerSettings();
+  const conflict = (server.conflicts || []).find((item) => item.id === id);
+  if (!conflict?.remoteNote) return;
+  const local = findLocalNoteForServerNote(conflict.remoteNote);
+  if (local) local.syncState = "synced";
+  removeServerConflict(id);
+  applyPulledServerNotes([conflict.remoteNote]);
+  persist();
+  persistSettings();
+  render();
+  renderServerSettings();
+}
+
+function findLocalNoteForServerNote(note) {
+  if (note.note_type === "daily") {
+    const date = dailyDateFromServerNote(note);
+    if (!date) return null;
+    if (note.source === "web-daily-archive" || String(note.local_id || "").startsWith("daily-archive:")) {
+      const id = String(note.local_id || "").replace(/^daily-archive:/, "");
+      return state.data.archivedDaily.find((item) => item.id === id) || null;
+    }
+    return state.data.daily[date] || null;
+  }
+  if (note.note_type === "tree") {
+    return findTreeNode(state.data.tree, note.local_id);
+  }
+  return null;
+}
+
 function serverNoteTime(note) {
   return note?.client_updated_at || note?.updated_at || note?.deleted_at || note?.created_at || "";
 }
@@ -3703,7 +3943,11 @@ function applyPulledDailyNote(note) {
     return applyPulledArchivedDailyNote(note, date);
   }
   const current = state.data.daily[date];
-  if (!shouldApplyPulledNote(current, note)) return false;
+  if (!shouldApplyPulledNote(current, note)) {
+    recordServerConflict(current, note);
+    return false;
+  }
+  clearServerConflictForNote("daily", note.local_id);
   state.data.daily[date] = {
     ...(current || {}),
     date,
@@ -3731,7 +3975,11 @@ function applyPulledDailyNote(note) {
 function applyPulledArchivedDailyNote(note, date) {
   const id = note.local_id.replace(/^daily-archive:/, "") || note.local_id;
   const current = state.data.archivedDaily.find((item) => item.id === id);
-  if (!shouldApplyPulledNote(current, note)) return false;
+  if (!shouldApplyPulledNote(current, note)) {
+    recordServerConflict(current, note);
+    return false;
+  }
+  clearServerConflictForNote("daily", note.local_id);
   const next = {
     ...(current || {}),
     id,
@@ -3753,7 +4001,11 @@ function applyPulledArchivedDailyNote(note, date) {
 
 function applyPulledTreeNote(note) {
   const current = findTreeNode(state.data.tree, note.local_id);
-  if (!shouldApplyPulledNote(current, note)) return false;
+  if (!shouldApplyPulledNote(current, note)) {
+    recordServerConflict(current, note);
+    return false;
+  }
+  clearServerConflictForNote("tree", note.local_id);
   const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
   if (deleted) return false;
   removePulledDeletedTreeNote(note.local_id);
@@ -3768,6 +4020,9 @@ function applyPulledTreeNote(note) {
     current.level = nextLevel;
     current.status = "active";
     current.syncState = "synced";
+    current.shared = true;
+    current.serverShared = true;
+    current.unsharedAt = null;
     current.tags = tagsFromServerNote(note);
     current.updatedAt = note.client_updated_at || note.updated_at || new Date().toISOString();
     return true;
@@ -3785,7 +4040,17 @@ function applyPulledTreeNote(note) {
 
 function applyPulledDeletedTreeNote(note) {
   const current = findTreeNode(state.data.tree, note.local_id);
-  if (!shouldApplyPulledNote(current, note)) return false;
+  if (current?.shared === false) {
+    current.serverShared = false;
+    current.syncState = "local";
+    clearServerConflictForNote("tree", note.local_id);
+    return true;
+  }
+  if (!shouldApplyPulledNote(current, note)) {
+    recordServerConflict(current, note);
+    return false;
+  }
+  clearServerConflictForNote("tree", note.local_id);
   if (current) {
     clearUnlockedEncryptionState(note.local_id);
     detachTreeNode(note.local_id);
@@ -3806,6 +4071,7 @@ function createPulledTreeNode(note, parentId, level) {
     status: note.deleted_at ? "deleted" : "active",
     syncState: "synced",
     shared: true,
+    serverShared: true,
     unsharedAt: null,
     favorite: false,
     tags: tagsFromServerNote(note),
@@ -3852,11 +4118,11 @@ function buildServerSyncNotes(server) {
       .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => archivedDailyNoteToServerNote(note, server)),
     ...flattenTree(state.data.tree)
-      .filter((node) => shouldSendServerNote(node, changedOnly))
+      .filter((node) => shouldTreeNodeSyncWithServer(node, changedOnly))
       .map((node) => treeNodeToServerNote(
         node,
         server,
-        isTreeNodeSharedForServer(node) ? null : node.unsharedAt || node.updatedAt || new Date().toISOString(),
+        treeNodeDeletedAtForServer(node),
       )),
   ];
   return notes.filter(Boolean);
@@ -3864,6 +4130,22 @@ function buildServerSyncNotes(server) {
 
 function shouldSendServerNote(item, changedOnly) {
   return !changedOnly || item.syncState === "pending";
+}
+
+function shouldCountPendingTreeSync(node) {
+  if (node?.syncState !== "pending") return false;
+  return isTreeNodeSharedForServer(node) || node.serverShared === true;
+}
+
+function shouldTreeNodeSyncWithServer(node, changedOnly) {
+  if (!shouldSendServerNote(node, changedOnly)) return false;
+  return isTreeNodeSharedForServer(node) || node.serverShared === true;
+}
+
+function treeNodeDeletedAtForServer(node) {
+  return isTreeNodeSharedForServer(node)
+    ? null
+    : node.unsharedAt || node.updatedAt || new Date().toISOString();
 }
 
 function isTreeNodeSharedForServer(node) {
@@ -3931,13 +4213,24 @@ function markServerSyncedNotes(pushedNotes = null) {
   if (Array.isArray(pushedNotes)) {
     const syncedIds = new Set(pushedNotes.map((note) => `${note.note_type}:${note.local_id}`));
     Object.values(state.data.daily).forEach((note) => {
-      if (syncedIds.has(`daily:daily:${note.date}`)) note.syncState = "synced";
+      if (syncedIds.has(`daily:daily:${note.date}`)) {
+        note.syncState = "synced";
+        clearServerConflictForNote("daily", `daily:${note.date}`);
+      }
     });
     state.data.archivedDaily.forEach((note) => {
-      if (syncedIds.has(`daily:daily-archive:${note.id}`)) note.syncState = "synced";
+      if (syncedIds.has(`daily:daily-archive:${note.id}`)) {
+        note.syncState = "synced";
+        clearServerConflictForNote("daily", `daily-archive:${note.id}`);
+      }
     });
     flattenTree(state.data.tree).forEach((node) => {
-      if (syncedIds.has(`tree:${node.id}`)) node.syncState = "synced";
+      const syncedNote = pushedNotes.find((note) => note.note_type === "tree" && note.local_id === node.id);
+      if (syncedNote) {
+        node.syncState = syncedNote.deleted_at ? "local" : "synced";
+        node.serverShared = !syncedNote.deleted_at;
+        clearServerConflictForNote("tree", node.id);
+      }
     });
     return;
   }
@@ -3949,7 +4242,9 @@ function markServerSyncedNotes(pushedNotes = null) {
   });
   flattenTree(state.data.tree).forEach((node) => {
     node.syncState = "synced";
+    if (isTreeNodeSharedForServer(node)) node.serverShared = true;
   });
+  state.settings.server.conflicts = [];
 }
 
 function normalizeServerUrl(value) {
@@ -4149,7 +4444,7 @@ function applySettings() {
     : state.settings.theme;
   const accent = ACCENTS.find((item) => item.id === state.settings.accent) || ACCENTS[0];
   document.documentElement.dataset.theme = resolvedTheme;
-  document.documentElement.dataset.client = isHostedWebClient() ? "hosted" : "local";
+  document.documentElement.dataset.client = isHostedWebClient() ? "hosted" : isDesktopClient() ? "desktop" : "local";
   document.documentElement.dataset.editor = state.settings.wideEditor ? "wide" : "normal";
   document.documentElement.dataset.treePanel = state.settings.treePanelCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
@@ -4356,6 +4651,8 @@ function applyLanguage() {
   setText("#serverTokenLabel", t("settings.server.token"));
   setText("#serverUserTokenLabel", t("settings.server.userToken"));
   setText("#serverTwoFactorCodeLabel", t("settings.server.twoFactorCode"));
+  setText("#serverAutoSyncLabel", t("settings.server.autoSync"));
+  setText("#serverAutoSyncHint", t("settings.server.autoSync.hint"));
   setText("#serverUrlHint", t("settings.server.url.hint"));
   setText("#serverTokenHint", t("settings.server.token.hint"));
   setText("#serverUserTokenHint", t("settings.server.userToken.hint"));
@@ -4379,10 +4676,14 @@ function applyLanguage() {
   setText("#serverAnalysisDesc", t("settings.server.analysis.desc"));
   setText("#serverAnalysisCreateBtn", t("settings.server.analysis.create"));
   setText("#serverAnalysisRefreshBtn", t("settings.server.analysis.refresh"));
+  setText("#serverConflictTitle", t("settings.server.conflict.title"));
+  setText("#serverConflictDesc", t("settings.server.conflict.desc"));
   setText("#serverSaveBtn", t("settings.server.save"));
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
+  setText("#desktopStorageTitle", t("settings.desktopStorage.title"));
+  setText("#desktopStorageDesc", t(isHostedWebClient() ? "settings.desktopStorage.web" : "settings.desktopStorage.desc"));
   setText("#webLogoutBtn", t("web.login.logout"));
   setPlaceholder(elements.serverUrlInput, t("settings.server.url.placeholder"));
   setPlaceholder(elements.serverTokenInput, t("settings.server.token.placeholder"));
@@ -7149,6 +7450,7 @@ function createNode(title, content, parentId, level) {
     status: "active",
     syncState: "pending",
     shared: isHostedWebClient(),
+    serverShared: isHostedWebClient(),
     unsharedAt: null,
     favorite: false,
     tags: extractTags(content),
@@ -7300,15 +7602,15 @@ function flattenTree(nodes) {
     .flatMap((node) => [node, ...flattenTree(node.children)]);
 }
 
-function load() {
+async function load() {
   if (isHostedWebClient()) {
     state.data = defaultData();
     return;
   }
-  const raw = localStorage.getItem(STORAGE_KEY);
+  const raw = await readStorage(STORAGE_KEY);
   if (!raw) return;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     state.data.daily = parsed.daily || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
@@ -7316,19 +7618,19 @@ function load() {
     normalizeData();
     persist();
   } catch {
-    localStorage.removeItem(STORAGE_KEY);
+    clearStorage(STORAGE_KEY);
   }
 }
 
-function loadSettings() {
-  const raw = localStorage.getItem(SETTINGS_KEY);
+async function loadSettings() {
+  const raw = await readStorage(SETTINGS_KEY);
   if (!raw) return;
   try {
-    const parsed = JSON.parse(raw);
+    const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     state.settings = normalizeSettings(parsed);
     persistSettings();
   } catch {
-    localStorage.removeItem(SETTINGS_KEY);
+    clearStorage(SETTINGS_KEY);
   }
 }
 
@@ -7394,6 +7696,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
   normalized.token = typeof normalized.token === "string" ? normalized.token : "";
   normalized.userToken = typeof normalized.userToken === "string" ? normalized.userToken : "";
   normalized.webSessionToken = typeof normalized.webSessionToken === "string" ? normalized.webSessionToken : "";
+  normalized.autoSync = normalizeToggle(normalized.autoSync, defaults.autoSync);
   normalized.ownerId = normalizeOwnerId(normalized.ownerId || defaults.ownerId);
   normalized.deviceId = typeof normalized.deviceId === "string" && normalized.deviceId.trim() ? normalized.deviceId.trim() : defaults.deviceId;
   normalized.userProfile = normalizeServerUserProfile(normalized.userProfile, defaults.userProfile);
@@ -7408,6 +7711,11 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
         }
       : null;
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
+  normalized.conflicts = Array.isArray(normalized.conflicts)
+    ? normalized.conflicts
+        .filter((conflict) => conflict && typeof conflict === "object" && typeof conflict.id === "string")
+        .slice(0, 20)
+    : [];
   normalized.lastCheckedAt = typeof normalized.lastCheckedAt === "string" ? normalized.lastCheckedAt : null;
   normalized.lastSyncedAt = typeof normalized.lastSyncedAt === "string" ? normalized.lastSyncedAt : null;
   normalized.lastStatus = ["idle", "saved", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
@@ -7584,6 +7892,7 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.status = node.status || "active";
     node.syncState = node.syncState || "synced";
     node.shared = node.shared !== false;
+    node.serverShared = node.serverShared === true;
     node.unsharedAt = node.shared === false ? (node.unsharedAt || node.updatedAt || null) : null;
     node.favorite = Boolean(node.favorite);
     node.tags = isEncryptedContent(node.content) ? [] : (Array.isArray(node.tags) ? node.tags : extractTags(node.content));
@@ -7618,6 +7927,7 @@ function scheduleServerSync(options = {}) {
   const server = state.settings.server || defaultServerSettings();
   if (server.mode !== "server" || !server.url) return;
   if (isHostedWebClient() && !server.webSessionToken) return;
+  if (server.autoSync === false) return;
   if (!options.force && countPendingSyncNotes() === 0) return;
   window.clearTimeout(serverSyncTimer);
   serverSyncTimer = window.setTimeout(() => {
@@ -7625,7 +7935,62 @@ function scheduleServerSync(options = {}) {
   }, options.delay ?? 1200);
 }
 
+async function readStorage(key) {
+  if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
+    const desktopValue = await window.nownoteDesktop.storage.read(key);
+    if (desktopValue !== null && desktopValue !== undefined) return desktopValue;
+    return migrateLocalStorageToDesktopStore(key);
+  }
+  return localStorage.getItem(key);
+}
+
+function clearStorage(key) {
+  if (!isDesktopClient()) {
+    localStorage.removeItem(key);
+  }
+}
+
+async function migrateLocalStorageToDesktopStore(key) {
+  const raw = localStorage.getItem(key);
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    const result = await window.nownoteDesktop.storage.write(key, parsed);
+    desktopStorageInfo = {
+      ...(desktopStorageInfo || {}),
+      ...result,
+      error: false,
+    };
+    return parsed;
+  } catch {
+    return raw;
+  }
+}
+
 function writeStorage(key, value) {
+  if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
+    window.nownoteDesktop.storage.write(key, value)
+      .then((result) => {
+        desktopStorageInfo = {
+          ...(desktopStorageInfo || {}),
+          ...result,
+          error: false,
+        };
+        renderDesktopStorageStatus();
+      })
+      .catch(() => {
+        desktopStorageInfo = {
+          ...(desktopStorageInfo || {}),
+          error: true,
+        };
+        renderDesktopStorageStatus();
+        if (!storageWarningShown) {
+          storageWarningShown = true;
+          showNotice(t("note.desktopStorageFail"), "error");
+        }
+      });
+    return true;
+  }
   try {
     localStorage.setItem(key, JSON.stringify(value));
     return true;

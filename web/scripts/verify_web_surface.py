@@ -13,11 +13,13 @@ ICON = ROOT / "icons" / "nownote-icon.svg"
 RUNTIME_CHECKLIST = ROOT / "runtime_checklist_ko.md"
 PACKAGE_SCRIPT = ROOT / "scripts" / "package_web.py"
 IMPORT_EXPORT_CHECK = ROOT / "scripts" / "check_import_export.mjs"
+DESKTOP_POLICY_CHECK = ROOT / "scripts" / "check_desktop_client_policies.mjs"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
 DESKTOP_PRELOAD = DESKTOP / "preload.cjs"
 DESKTOP_SYNC_SCRIPT = DESKTOP / "scripts" / "sync-web-assets.mjs"
+DESKTOP_STORAGE_CHECK = DESKTOP / "scripts" / "check-desktop-storage.mjs"
 DESKTOP_README = DESKTOP / "README.md"
 DESKTOP_ICON = DESKTOP / "build" / "icon.ico"
 
@@ -54,10 +56,12 @@ def main() -> None:
         RUNTIME_CHECKLIST,
         PACKAGE_SCRIPT,
         IMPORT_EXPORT_CHECK,
+        DESKTOP_POLICY_CHECK,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
         DESKTOP_SYNC_SCRIPT,
+        DESKTOP_STORAGE_CHECK,
         DESKTOP_README,
         DESKTOP_ICON,
     ]:
@@ -76,9 +80,12 @@ def main() -> None:
     runtime_checklist = RUNTIME_CHECKLIST.read_text(encoding="utf-8")
     package_script = PACKAGE_SCRIPT.read_text(encoding="utf-8")
     import_export_check = IMPORT_EXPORT_CHECK.read_text(encoding="utf-8")
+    desktop_policy_check = DESKTOP_POLICY_CHECK.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
+    desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
     desktop_sync_script = DESKTOP_SYNC_SCRIPT.read_text(encoding="utf-8")
+    desktop_storage_check = DESKTOP_STORAGE_CHECK.read_text(encoding="utf-8")
     desktop_readme = DESKTOP_README.read_text(encoding="utf-8")
 
     html_requirements = [
@@ -117,6 +124,9 @@ def main() -> None:
         ("serverModeSelect", "server mode selector"),
         ("serverGuideIssue", "server token issue guide"),
         ("serverUserTokenHint", "per-user token hint"),
+        ("serverAutoSyncToggle", "desktop auto sync toggle"),
+        ("serverConflictBox", "server conflict box"),
+        ("serverConflictList", "server conflict list"),
         ("serverTestBtn", "server test button"),
         ("serverSyncBtn", "server sync button"),
         ("serverFullSyncBtn", "full server sync button"),
@@ -137,6 +147,9 @@ def main() -> None:
         ("hostedDeviceTokenBox", "hosted Web device token box"),
         ("deviceTokenIssueBtn", "hosted Web device token issue button"),
         ("deviceTokenText", "hosted Web device token output"),
+        ("desktopStorageRow", "desktop local storage status row"),
+        ("desktopStorageStatus", "desktop local storage status text"),
+        ("desktopStoragePath", "desktop local storage path"),
         ("shareTreeBtn", "knowledge note share toggle"),
     ]
     for element_id, label in required_ids:
@@ -160,7 +173,12 @@ def main() -> None:
         ("async function handleWebLoginSubmit", "hosted Web login function"),
         ("async function handleWebLogout", "hosted Web logout function"),
         ("async function loadServerSharedNotes", "hosted Web shared document loader"),
+        ("await loadServerSharedNotes({ replace: true", "hosted Web replaces local view with server-shared notes"),
+        ("elements.shareTreeBtn.disabled = isHostedWebClient()", "hosted Web share toggle disabled"),
+        ('document.documentElement.dataset.client = isHostedWebClient() ? "hosted"', "hosted Web client mode marker"),
         ("async function createSelectedNoteAnalysisJob", "server analysis job function"),
+        ("settings.server.analysis.encryptedNote", "encrypted note analysis guard translation"),
+        ("if (isEncryptedContent(selected.content))", "encrypted note analysis guard"),
         ('"app.title": "NowNote"', "app title translation without Web suffix"),
         ("const LANGUAGES", "language metadata registry"),
         ("zh-CN", "Chinese locale support"),
@@ -191,9 +209,25 @@ def main() -> None:
         ("archivedDaily", "daily archive state"),
         ("selected.level >= 3", "tree depth guard"),
         ("serverUserTokenInput", "public server user token input"),
+        ("settings.server.autoSync", "auto sync setting translation"),
+        ("settings.server.conflict.keepLocal", "server conflict action translation"),
+        ("function recordServerConflict", "server conflict recorder"),
+        ("function applyServerConflictRemote", "server conflict server apply action"),
         ("function isTreeNodeSharedForServer", "knowledge share filter"),
+        ("function shouldTreeNodeSyncWithServer", "knowledge server sync gate"),
+        ("function shouldCountPendingTreeSync", "knowledge pending sync counter"),
+        ("serverShared", "knowledge server share state"),
+        ('syncState: "local"', "deleted/private notes stay local"),
+        ("function archiveDeletedTreeNode", "deleted tree archive function"),
+        ("function restoreDeletedTreeNode", "deleted tree restore function"),
         ("if (parent.shared === false) return false", "ancestor share guard before server sync"),
         ("function confirmAction", "internal confirm dialog function"),
+        ("function isDesktopClient", "desktop client detection"),
+        ("async function readStorage", "desktop-aware storage reader"),
+        ("migrateLocalStorageToDesktopStore", "desktop localStorage migration"),
+        ("function renderDesktopStorageStatus", "desktop storage status renderer"),
+        ("settings.desktopStorage.error", "desktop storage error status"),
+        ("error: true", "desktop storage write failure marker"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -324,10 +358,22 @@ def main() -> None:
     for needle, label in import_export_requirements:
         check(needle in import_export_check, f"Web import/export check has {label}", needle, failures)
 
+    desktop_policy_requirements = [
+        ("buildServerSyncNotes(server)", "server sync note policy execution"),
+        ("localExcluded", "private local exclusion assertion"),
+        ("unshareTombstone", "unshare tombstone assertion"),
+        ("deletedExcluded", "deleted trash exclusion assertion"),
+        ("conflictRecorded", "server conflict assertion"),
+        ("encryptedAnalysisBlocked", "encrypted analysis guard assertion"),
+    ]
+    for needle, label in desktop_policy_requirements:
+        check(needle in desktop_policy_check, f"Desktop client policy check has {label}", needle, failures)
+
     desktop_package_requirements = [
         ('"electron"', "Electron dependency"),
         ('"electron-builder"', "electron-builder dependency"),
         ('"dist:win"', "Windows installer build script"),
+        ('"check:storage"', "desktop storage check script"),
         ('"target": "nsis"', "NSIS installer target"),
         ("NowNote-Setup", "installer artifact name"),
         ('"icon": "build/icon.ico"', "Windows installer icon"),
@@ -341,9 +387,23 @@ def main() -> None:
         ("index.html", "Web entry file loading"),
         ("setWindowOpenHandler", "external link handler"),
         ("Menu.setApplicationMenu", "desktop menu"),
+        ("nownote:desktop-store-read", "desktop local store read IPC"),
+        ("nownote:desktop-store-write", "desktop local store write IPC"),
+        ("NOWNOTE_DESKTOP_USER_DATA_DIR", "desktop test userData override"),
+        ("nownote-desktop-store.json", "desktop local store file"),
+        ("updatedAt: store.updatedAt", "desktop local store metadata"),
     ]
     for needle, label in desktop_main_requirements:
         check(needle in desktop_main, f"Desktop main has {label}", needle, failures)
+
+    desktop_preload_requirements = [
+        ("contextBridge", "secure preload bridge"),
+        ("ipcRenderer.invoke", "desktop IPC invoke"),
+        ("nownoteDesktop", "desktop bridge namespace"),
+        ("storage", "desktop storage bridge"),
+    ]
+    for needle, label in desktop_preload_requirements:
+        check(needle in desktop_preload, f"Desktop preload has {label}", needle, failures)
 
     desktop_sync_requirements = [
         ("webRoot", "Web source root"),
@@ -356,6 +416,16 @@ def main() -> None:
     ]
     for needle, label in desktop_sync_requirements:
         check(needle in desktop_sync_script, f"Desktop sync script has {label}", needle, failures)
+
+    desktop_storage_check_requirements = [
+        ("NOWNOTE_DESKTOP_USER_DATA_DIR", "isolated desktop userData"),
+        ("--remote-debugging-port", "desktop CDP launch"),
+        ("nownote-desktop-store.json", "desktop store file check"),
+        ("#addRootBtn", "desktop note creation check"),
+        ("desktop store reload", "desktop restart reload assertion"),
+    ]
+    for needle, label in desktop_storage_check_requirements:
+        check(needle in desktop_storage_check, f"Desktop storage check has {label}", needle, failures)
 
     desktop_readme_requirements = [
         (".exe", "exe installer documentation"),
