@@ -5221,7 +5221,7 @@ def _release_action_cards(blockers: list[dict]) -> str:
             <li>Forward Port: <code>8080</code></li>
             <li>확인 URL: <code>https://nownote.sinsan.kr/api/v1/server</code></li>
           </ul>
-          <p>루트 주소는 Web 프로그램으로 열고, 개인정보처리방침은 <code>/privacy</code>에서 제공합니다.</p>
+          <p>NowNote Web을 루트 주소에서 엽니다. 루트 주소는 Web 프로그램으로 열고, 개인정보처리방침은 <code>/privacy</code>에서 제공합니다.</p>
           <a href="/admin/public">공용 서버 화면</a>
           <a href="/api/v1/admin/public-route">경로 점검 API</a>
         </div>
