@@ -5210,58 +5210,56 @@ def _admin_release_html(request: Request) -> str:
 
 
 def _release_action_cards(blockers: list[dict]) -> str:
+    cards = [
+        """
+        <div class="action-card">
+          <strong>Nginx Proxy Manager</strong>
+          <p>Proxy Host <code>nownote.sinsan.kr</code>의 Forward 값을 NowNote API 컨테이너로 유지합니다.</p>
+          <ul>
+            <li>Scheme: <code>http</code></li>
+            <li>Forward Hostname/IP: <code>now-api</code></li>
+            <li>Forward Port: <code>8080</code></li>
+            <li>확인 URL: <code>https://nownote.sinsan.kr/api/v1/server</code></li>
+          </ul>
+          <p>루트 주소는 Web 프로그램으로 열고, 개인정보처리방침은 <code>/privacy</code>에서 제공합니다.</p>
+          <a href="/admin/public">공용 서버 화면</a>
+          <a href="/api/v1/admin/public-route">경로 점검 API</a>
+        </div>
+        """,
+        """
+        <div class="action-card">
+          <strong>Play Console 내부 테스트</strong>
+          <p>서명된 AAB를 내부 테스트 트랙에 업로드하고 Play Console 화면에서 최종 저장 상태를 확인합니다.</p>
+          <ul>
+            <li>AAB: <code>now_app/build/app/outputs/bundle/release/app-release.aab</code></li>
+            <li>출시 노트: <code>now_app/docs/google_play_paste_ready_ko.md</code></li>
+          </ul>
+          <a href="/admin/play">Play 등록 화면</a>
+        </div>
+        """,
+        """
+        <div class="action-card">
+          <strong>GitHub Actions Preflight</strong>
+          <p>GitHub 화면에서 <code>NowNote Preflight</code>를 실행하거나 권한 토큰이 있는 환경에서 스크립트로 실행합니다.</p>
+          <ul>
+            <li><code>python scripts/dispatch_github_actions.py --ref main</code></li>
+            <li><code>python scripts/check_github_actions_status.py --branch main</code></li>
+          </ul>
+          <a href="https://github.com/cyhuh428-sinsan/Now/actions/workflows/preflight.yml">Actions 화면</a>
+          <a href="/admin/open-source">공개 준비 화면</a>
+        </div>
+        """,
+    ]
     if not blockers:
-        return '<div class="action-grid"><div class="action-card"><strong>마무리 완료</strong><p>남은 외부 작업이 없습니다.</p></div></div>'
-    blocker_names = {blocker.get("name") for blocker in blockers}
-    cards = []
-    if "공용 서버 운영 적용" in blocker_names:
         cards.append(
             """
             <div class="action-card">
-              <strong>Nginx Proxy Manager</strong>
-              <p>Proxy Host <code>nownote.sinsan.kr</code>의 Forward 값을 NowNote API 컨테이너로 변경합니다.</p>
-              <ul>
-                <li>Scheme: <code>http</code></li>
-                <li>Forward Hostname/IP: <code>now-api</code></li>
-                <li>Forward Port: <code>8080</code></li>
-                <li>확인 URL: <code>https://nownote.sinsan.kr/api/v1/server</code></li>
-              </ul>
-              <p>NowNote Web을 루트 주소로 쓰기 위해 도메인 전체를 NowNote 서버로 연결합니다. 개인정보처리방침은 <code>/privacy</code>에서 제공합니다.</p>
-              <a href="/admin/public">공용 서버 화면</a>
-              <a href="/api/v1/admin/public-route">경로 점검 API</a>
+              <strong>마무리 완료</strong>
+              <p>남은 외부 작업이 없습니다. 운영 입력값은 재배포나 장애 대응 때 확인할 수 있도록 계속 표시합니다.</p>
             </div>
             """
         )
-    if "Google Play Console" in blocker_names:
-        cards.append(
-            """
-            <div class="action-card">
-              <strong>Play Console 내부 테스트</strong>
-              <p>서명된 AAB를 내부 테스트 트랙에 업로드하고 Play Console 화면에서 최종 저장 상태를 확인합니다.</p>
-              <ul>
-                <li>AAB: <code>now_app/build/app/outputs/bundle/release/app-release.aab</code></li>
-                <li>출시 노트: <code>now_app/docs/google_play_paste_ready_ko.md</code></li>
-              </ul>
-              <a href="/admin/play">Play 등록 화면</a>
-            </div>
-            """
-        )
-    if "GitHub Actions" in blocker_names:
-        cards.append(
-            """
-            <div class="action-card">
-              <strong>GitHub Actions Preflight</strong>
-              <p>GitHub 화면에서 <code>NowNote Preflight</code>를 실행하거나 권한 토큰이 있는 환경에서 스크립트로 실행합니다.</p>
-              <ul>
-                <li><code>python scripts/dispatch_github_actions.py --ref main</code></li>
-                <li><code>python scripts/check_github_actions_status.py --branch main</code></li>
-              </ul>
-              <a href="https://github.com/cyhuh428-sinsan/Now/actions/workflows/preflight.yml">Actions 화면</a>
-              <a href="/admin/open-source">공개 준비 화면</a>
-            </div>
-            """
-        )
-    if not cards:
+    else:
         cards.append(
             """
             <div class="action-card">
