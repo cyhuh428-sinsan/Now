@@ -441,6 +441,17 @@
             <div id="featureSettings" class="feature-toggle-list"></div>
           </section>
 
+          <section id="desktopStorageRow" class="settings-row hidden">
+            <div>
+              <h3 id="desktopStorageTitle">PC 로컬 저장소</h3>
+              <p id="desktopStorageDesc">설치형 프로그램은 이 PC의 로컬 파일에 원본 메모와 설정을 저장합니다.</p>
+            </div>
+            <div class="desktop-storage-box">
+              <strong id="desktopStorageStatus">저장 위치 확인 중</strong>
+              <span id="desktopStoragePath" class="desktop-storage-path"></span>
+            </div>
+          </section>
+
           <section class="settings-row server-settings-row">
             <div>
               <h3 id="serverSettingTitle">서버 연결</h3>
@@ -493,6 +504,16 @@
                   <input id="deviceIdInput" class="settings-input" type="text" autocomplete="off" placeholder="web-desktop">
                 </label>
               </div>
+              <label class="toggle-line desktop-server-only">
+                <span>
+                  <strong id="serverAutoSyncLabel">자동 동기화</strong>
+                  <small id="serverAutoSyncHint">변경된 공유 문서를 서버에 자동으로 보냅니다.</small>
+                </span>
+                <span class="switch">
+                  <input id="serverAutoSyncToggle" type="checkbox" checked>
+                  <span></span>
+                </span>
+              </label>
               <div class="server-profile-box">
                 <div>
                   <strong id="serverProfileTitle">사용자 프로필</strong>
@@ -560,6 +581,13 @@
               <p id="serverStatusText" class="server-status-text">서버 연결을 사용하지 않습니다.</p>
               <div id="serverMetaText" class="server-meta-text">보류 변경 0개 · 마지막 동기화 없음</div>
               <div id="serverCapabilitiesText" class="server-capabilities-text">서버 기능 확인 전</div>
+              <div id="serverConflictBox" class="server-conflict-box hidden">
+                <div>
+                  <strong id="serverConflictTitle">충돌 문서</strong>
+                  <p id="serverConflictDesc">로컬과 서버가 모두 바뀐 문서는 자동으로 덮어쓰지 않습니다.</p>
+                </div>
+                <div id="serverConflictList" class="server-conflict-list">충돌 문서가 없습니다.</div>
+              </div>
             </div>
           </section>
 

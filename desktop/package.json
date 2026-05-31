@@ -8,7 +8,8 @@
   "scripts": {
     "sync:web": "node scripts/sync-web-assets.mjs",
     "start": "npm run sync:web && electron .",
-    "dist:win": "npm run sync:web && electron-builder --win nsis"
+    "dist:win": "npm run sync:web && electron-builder --win nsis",
+    "check:storage": "node scripts/check-desktop-storage.mjs"
   },
   "devDependencies": {
     "electron": "^42.3.0",
