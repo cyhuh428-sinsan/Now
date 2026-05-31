@@ -117,6 +117,7 @@
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
           <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
           <button id="canvasBtn" class="ghost-btn" type="button">Canvas</button>
+          <button id="captureBtn" class="ghost-btn" type="button">빠른 기록</button>
         </section>
         <section id="fileActionGroup" class="side-action-group" aria-label="파일">
           <h2 id="fileActionTitle">파일</h2>
@@ -883,6 +884,56 @@
             <button id="canvasMoveRightBtn" class="icon-btn" type="button" aria-label="오른쪽">→</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="captureView" class="quick-popover hidden" aria-labelledby="captureTitle">
+      <div class="quick-card capture-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">빠른 캡처 / 핀 / 리마인더</p>
+            <h2 id="captureTitle">빠른 기록</h2>
+          </div>
+          <button id="captureCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="capture-composer" aria-label="빠른 기록 작성">
+          <textarea id="captureContentInput" class="settings-input" placeholder="제목 없이 바로 기록"></textarea>
+          <div class="capture-options">
+            <select id="captureColorSelect" class="settings-select" aria-label="기록 색상">
+              <option value="plain">기본</option>
+              <option value="blue">파랑</option>
+              <option value="green">초록</option>
+              <option value="amber">노랑</option>
+              <option value="red">빨강</option>
+            </select>
+            <input id="captureLabelInput" class="settings-input" type="text" placeholder="라벨, 쉼표로 구분">
+            <input id="captureReminderInput" class="settings-input" type="datetime-local" aria-label="리마인더">
+            <label class="capture-check-toggle"><input id="captureChecklistToggle" type="checkbox"> 체크리스트</label>
+            <label class="capture-check-toggle"><input id="capturePinToggle" type="checkbox"> 핀</label>
+          </div>
+          <div class="capture-media-row">
+            <input id="captureAttachmentInput" type="file" aria-label="첨부 선택">
+            <span id="captureAttachmentLabel" class="path-label">첨부 없음</span>
+          </div>
+          <div class="capture-sketch-tools">
+            <button id="captureSketchClearBtn" class="secondary-btn" type="button">그림 지우기</button>
+            <span class="path-label">간단한 그림은 카드에 PNG 미리보기로 저장됩니다.</span>
+          </div>
+          <canvas id="captureSketchCanvas" class="capture-sketch-canvas" width="640" height="220" aria-label="간단한 그림판"></canvas>
+          <button id="captureSaveBtn" class="primary-btn" type="button">기록 저장</button>
+        </div>
+        <div class="capture-toolbar" aria-label="빠른 기록 필터">
+          <select id="captureFilterSelect" class="settings-select">
+            <option value="active">활성 기록</option>
+            <option value="pinned">핀</option>
+            <option value="reminders">리마인더</option>
+            <option value="archived">보관함</option>
+            <option value="all">전체</option>
+          </select>
+          <input id="captureSearchInput" class="settings-input" type="search" placeholder="내용, 라벨 검색">
+          <div id="captureSummary" class="graph-summary"></div>
+        </div>
+        <div id="captureList" class="capture-list"></div>
       </div>
     </section>
 

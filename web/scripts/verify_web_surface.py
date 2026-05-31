@@ -18,6 +18,7 @@ GRAPH_VIEW_CHECK = ROOT / "scripts" / "check_graph_view.mjs"
 GRAPH_DESIGN = ROOT.parent / "docs" / "NOW_1_2_GRAPH_VIEW_DESIGN.md"
 PROPERTIES_DESIGN = ROOT.parent / "docs" / "NOW_1_3_PROPERTIES_DESIGN.md"
 CANVAS_DESIGN = ROOT.parent / "docs" / "NOW_1_4_CANVAS_DESIGN.md"
+CAPTURE_DESIGN = ROOT.parent / "docs" / "NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -65,6 +66,7 @@ def main() -> None:
         GRAPH_DESIGN,
         PROPERTIES_DESIGN,
         CANVAS_DESIGN,
+        CAPTURE_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -93,6 +95,7 @@ def main() -> None:
     graph_design = GRAPH_DESIGN.read_text(encoding="utf-8")
     properties_design = PROPERTIES_DESIGN.read_text(encoding="utf-8")
     canvas_design = CANVAS_DESIGN.read_text(encoding="utf-8")
+    capture_design = CAPTURE_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -210,6 +213,22 @@ def main() -> None:
         ("canvasSummary", "Canvas summary"),
         ("canvasBoard", "Canvas board"),
         ("canvasSelectionLabel", "Canvas selection label"),
+        ("captureBtn", "quick capture button"),
+        ("captureView", "quick capture view"),
+        ("captureContentInput", "quick capture content input"),
+        ("captureColorSelect", "quick capture color selector"),
+        ("captureLabelInput", "quick capture label input"),
+        ("captureReminderInput", "quick capture reminder input"),
+        ("captureChecklistToggle", "quick capture checklist toggle"),
+        ("capturePinToggle", "quick capture pin toggle"),
+        ("captureAttachmentInput", "quick capture attachment input"),
+        ("captureAttachmentLabel", "quick capture attachment label"),
+        ("captureSketchCanvas", "quick capture sketch canvas"),
+        ("captureSaveBtn", "quick capture save button"),
+        ("captureFilterSelect", "quick capture filter selector"),
+        ("captureSearchInput", "quick capture search input"),
+        ("captureSummary", "quick capture summary"),
+        ("captureList", "quick capture list"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -307,6 +326,12 @@ def main() -> None:
         ("function addTextCanvasCard", "1.4 Canvas text card action"),
         ("function connectSelectedCanvasCards", "1.4 Canvas edge action"),
         ("function createCanvasDraftFromGraph", "1.4 Canvas graph draft action"),
+        ("function normalizeCaptureCard", "1.5 quick capture normalization"),
+        ("function saveQuickCapture", "1.5 quick capture save action"),
+        ("function renderCaptures", "1.5 quick capture renderer"),
+        ("function toggleCapturePin", "1.5 quick capture pin action"),
+        ("function toggleCaptureArchive", "1.5 quick capture archive action"),
+        ("function clearCaptureSketch", "1.5 quick capture sketch action"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -363,6 +388,10 @@ def main() -> None:
         (".canvas-board", "Canvas board styling"),
         (".canvas-board-card", "Canvas card styling"),
         (".canvas-edges", "Canvas edge styling"),
+        (".capture-composer", "quick capture composer styling"),
+        (".capture-sketch-canvas", "quick capture sketch styling"),
+        (".capture-list", "quick capture list styling"),
+        (".capture-item", "quick capture card styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -382,6 +411,7 @@ def main() -> None:
         ("1.2 관계 탐색과 그래프뷰", "1.2 graph view documented"),
         ("1.3 속성 기반 지식 관리", "1.3 properties documented"),
         ("1.4 Canvas와 시각적 사고 정리", "1.4 Canvas documented"),
+        ("1.5 첨부/미디어/빠른 기록", "1.5 quick capture documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -405,6 +435,7 @@ def main() -> None:
         ("관계 탐색과 그래프뷰", "runtime checklist graph section"),
         ("속성 기반 지식 관리", "runtime checklist properties section"),
         ("Canvas와 시각적 사고 정리", "runtime checklist Canvas section"),
+        ("첨부/미디어/빠른 기록", "runtime checklist quick capture section"),
         ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
@@ -547,6 +578,8 @@ def main() -> None:
         ("openCanvasView", "Canvas open assertion"),
         ("connectSelectedCanvasCards", "Canvas connection assertion"),
         ("createCanvasDraftFromGraph", "Canvas graph draft assertion"),
+        ("saveQuickCapture", "quick capture save assertion"),
+        ("toggleCaptureArchive", "quick capture archive assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
@@ -584,6 +617,19 @@ def main() -> None:
     ]
     for needle, label in canvas_design_requirements:
         check(needle in canvas_design, f"1.4 design has {label}", needle, failures)
+
+    capture_design_requirements = [
+        ("NowNote 1.5 첨부/미디어/빠른 기록 설계서", "1.5 quick capture design title"),
+        ("빠른 캡처 카드", "quick capture card scope"),
+        ("핀 고정", "pin scope"),
+        ("색상 표시", "color scope"),
+        ("체크리스트 카드", "checklist scope"),
+        ("시간 기반 리마인더", "reminder scope"),
+        ("첨부 파일 메타데이터 기록", "attachment metadata scope"),
+        ("간단한 그림 카드 저장", "sketch scope"),
+    ]
+    for needle, label in capture_design_requirements:
+        check(needle in capture_design, f"1.5 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),

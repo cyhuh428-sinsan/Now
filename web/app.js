@@ -1514,6 +1514,8 @@ let serverSyncQueued = false;
 let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
 let webLoginMode = "login";
+let pendingCaptureAttachment = null;
+let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
 
@@ -1523,6 +1525,7 @@ function defaultData() {
     archivedDaily: [],
     deletedTree: [],
     canvases: [],
+    captures: [],
     tree: [],
   };
 }
@@ -1939,6 +1942,24 @@ const elements = {
   canvasMoveUpBtn: $("#canvasMoveUpBtn"),
   canvasMoveDownBtn: $("#canvasMoveDownBtn"),
   canvasMoveRightBtn: $("#canvasMoveRightBtn"),
+  captureBtn: $("#captureBtn"),
+  captureView: $("#captureView"),
+  captureCloseBtn: $("#captureCloseBtn"),
+  captureContentInput: $("#captureContentInput"),
+  captureColorSelect: $("#captureColorSelect"),
+  captureLabelInput: $("#captureLabelInput"),
+  captureReminderInput: $("#captureReminderInput"),
+  captureChecklistToggle: $("#captureChecklistToggle"),
+  capturePinToggle: $("#capturePinToggle"),
+  captureAttachmentInput: $("#captureAttachmentInput"),
+  captureAttachmentLabel: $("#captureAttachmentLabel"),
+  captureSketchClearBtn: $("#captureSketchClearBtn"),
+  captureSketchCanvas: $("#captureSketchCanvas"),
+  captureSaveBtn: $("#captureSaveBtn"),
+  captureFilterSelect: $("#captureFilterSelect"),
+  captureSearchInput: $("#captureSearchInput"),
+  captureSummary: $("#captureSummary"),
+  captureList: $("#captureList"),
   confirmDialog: $("#confirmDialog"),
   confirmTitle: $("#confirmTitle"),
   confirmMessage: $("#confirmMessage"),
@@ -2350,6 +2371,7 @@ async function initializeApp() {
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
   bindEvents();
+  initializeCaptureSketch();
   await refreshDesktopStorageInfo();
   renderSettings();
   applySettings();
@@ -2875,6 +2897,13 @@ function bindEvents() {
   elements.canvasMoveUpBtn?.addEventListener("click", () => moveSelectedCanvasCard(0, -40));
   elements.canvasMoveDownBtn?.addEventListener("click", () => moveSelectedCanvasCard(0, 40));
   elements.canvasMoveRightBtn?.addEventListener("click", () => moveSelectedCanvasCard(40, 0));
+  elements.captureBtn?.addEventListener("click", openCaptureView);
+  elements.captureCloseBtn?.addEventListener("click", closeCaptureView);
+  elements.captureSaveBtn?.addEventListener("click", saveQuickCapture);
+  elements.captureSketchClearBtn?.addEventListener("click", clearCaptureSketch);
+  elements.captureAttachmentInput?.addEventListener("change", handleCaptureAttachmentChange);
+  elements.captureFilterSelect?.addEventListener("change", renderCaptures);
+  elements.captureSearchInput?.addEventListener("input", renderCaptures);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
   elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
@@ -2884,6 +2913,7 @@ function bindEvents() {
   bindOverlayDismiss(elements.graphView, closeGraph);
   bindOverlayDismiss(elements.propertiesView, closePropertiesView);
   bindOverlayDismiss(elements.canvasView, closeCanvasView);
+  bindOverlayDismiss(elements.captureView, closeCaptureView);
   bindOverlayDismiss(elements.deletedTreeView, closeDeletedTreeBox);
   bindOverlayDismiss(elements.dailyView, closeDailyPopup);
   bindOverlayDismiss(elements.settingsView, closeSettingsPopup);
@@ -6456,6 +6486,280 @@ function createCanvasDraftFromGraph() {
   renderCanvas();
 }
 
+function defaultCaptureCard() {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    content: "",
+    checklist: [],
+    labels: [],
+    color: "plain",
+    pinned: false,
+    reminderAt: "",
+    archived: false,
+    attachments: [],
+    sketchData: "",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function normalizeCaptureCard(capture = {}) {
+  const source = capture && typeof capture === "object" ? capture : {};
+  const card = {
+    ...defaultCaptureCard(),
+    ...source,
+  };
+  card.id = typeof card.id === "string" && card.id ? card.id : crypto.randomUUID();
+  card.content = normalizeText(card.content).slice(0, 2000);
+  card.checklist = Array.isArray(card.checklist)
+    ? card.checklist
+        .filter(isPlainObject)
+        .map((item) => ({
+          id: typeof item.id === "string" && item.id ? item.id : crypto.randomUUID(),
+          text: normalizeText(item.text).slice(0, 200),
+          done: Boolean(item.done),
+        }))
+        .filter((item) => item.text)
+        .slice(0, 40)
+    : [];
+  card.labels = Array.isArray(card.labels)
+    ? card.labels.map((label) => normalizeText(label).replace(/^#/, "").slice(0, 32)).filter(Boolean).slice(0, 12)
+    : [];
+  card.color = ["plain", "blue", "green", "amber", "red"].includes(card.color) ? card.color : "plain";
+  card.pinned = Boolean(card.pinned);
+  card.reminderAt = typeof card.reminderAt === "string" && !Number.isNaN(new Date(card.reminderAt).getTime()) ? card.reminderAt : "";
+  card.archived = Boolean(card.archived);
+  card.attachments = Array.isArray(card.attachments)
+    ? card.attachments.filter(isPlainObject).map(normalizeCaptureAttachment).filter(Boolean).slice(0, 8)
+    : [];
+  card.sketchData = typeof card.sketchData === "string" && card.sketchData.startsWith("data:image/png") ? card.sketchData : "";
+  card.createdAt = card.createdAt || new Date().toISOString();
+  card.updatedAt = card.updatedAt || card.createdAt;
+  return card;
+}
+
+function normalizeCaptureAttachment(file = {}) {
+  const name = normalizeText(file.name).slice(0, 160);
+  if (!name) return null;
+  return {
+    id: typeof file.id === "string" && file.id ? file.id : crypto.randomUUID(),
+    name,
+    type: normalizeText(file.type).slice(0, 80),
+    size: Math.max(0, Number(file.size) || 0),
+    dataUrl: typeof file.dataUrl === "string" && file.dataUrl.startsWith("data:") ? file.dataUrl : "",
+    addedAt: file.addedAt || new Date().toISOString(),
+  };
+}
+
+function initializeCaptureSketch() {
+  const canvas = elements.captureSketchCanvas;
+  if (!canvas) return;
+  clearCaptureSketch();
+  let drawing = false;
+  const draw = (event) => {
+    if (!drawing) return;
+    const rect = canvas.getBoundingClientRect();
+    const context = canvas.getContext("2d");
+    context.lineWidth = 3;
+    context.lineCap = "round";
+    context.strokeStyle = "#2563eb";
+    context.lineTo(event.clientX - rect.left, event.clientY - rect.top);
+    context.stroke();
+    captureSketchDirty = true;
+  };
+  canvas.addEventListener("pointerdown", (event) => {
+    drawing = true;
+    const rect = canvas.getBoundingClientRect();
+    const context = canvas.getContext("2d");
+    context.beginPath();
+    context.moveTo(event.clientX - rect.left, event.clientY - rect.top);
+  });
+  canvas.addEventListener("pointermove", draw);
+  window.addEventListener("pointerup", () => {
+    drawing = false;
+  });
+}
+
+function clearCaptureSketch() {
+  const canvas = elements.captureSketchCanvas;
+  if (!canvas) return;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, canvas.width, canvas.height);
+  captureSketchDirty = false;
+}
+
+async function handleCaptureAttachmentChange() {
+  const file = elements.captureAttachmentInput.files?.[0];
+  if (!file) {
+    pendingCaptureAttachment = null;
+    elements.captureAttachmentLabel.textContent = "첨부 없음";
+    return;
+  }
+  const dataUrl = await readFileAsDataUrl(file).catch(() => "");
+  pendingCaptureAttachment = normalizeCaptureAttachment({
+    name: file.name,
+    type: file.type || "application/octet-stream",
+    size: file.size,
+    dataUrl,
+  });
+  elements.captureAttachmentLabel.textContent = `${file.name} · ${formatBytes(file.size)}`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+function openCaptureView() {
+  closePopupLayers();
+  renderCaptures();
+  elements.captureView.classList.remove("hidden");
+  elements.captureContentInput.focus();
+}
+
+function closeCaptureView() {
+  elements.captureView.classList.add("hidden");
+}
+
+function saveQuickCapture() {
+  const content = normalizeText(elements.captureContentInput.value);
+  const checklistMode = elements.captureChecklistToggle.checked;
+  const checklist = checklistMode
+    ? content.split(/\r?\n/).map((line) => ({ id: crypto.randomUUID(), text: line.replace(/^[-*]\s*\[[ x]\]\s*/i, "").trim(), done: /\[[x]\]/i.test(line) })).filter((item) => item.text)
+    : [];
+  if (!content.trim() && !pendingCaptureAttachment && !captureSketchDirty) {
+    showNotice("저장할 기록이 없습니다.", "error");
+    return;
+  }
+  const canvas = elements.captureSketchCanvas;
+  const capture = normalizeCaptureCard({
+    content,
+    checklist,
+    labels: labelsFromInput(elements.captureLabelInput.value),
+    color: elements.captureColorSelect.value,
+    pinned: elements.capturePinToggle.checked,
+    reminderAt: elements.captureReminderInput.value ? new Date(elements.captureReminderInput.value).toISOString() : "",
+    archived: false,
+    attachments: pendingCaptureAttachment ? [pendingCaptureAttachment] : [],
+    sketchData: captureSketchDirty && canvas ? canvas.toDataURL("image/png") : "",
+  });
+  state.data.captures.unshift(capture);
+  resetCaptureComposer();
+  persist();
+  renderCaptures();
+}
+
+function resetCaptureComposer() {
+  elements.captureContentInput.value = "";
+  elements.captureColorSelect.value = "plain";
+  elements.captureLabelInput.value = "";
+  elements.captureReminderInput.value = "";
+  elements.captureChecklistToggle.checked = false;
+  elements.capturePinToggle.checked = false;
+  elements.captureAttachmentInput.value = "";
+  elements.captureAttachmentLabel.textContent = "첨부 없음";
+  pendingCaptureAttachment = null;
+  clearCaptureSketch();
+}
+
+function labelsFromInput(value) {
+  return normalizeText(value).split(/[,\s]+/).map((label) => label.replace(/^#/, "").trim()).filter(Boolean);
+}
+
+function renderCaptures() {
+  state.data.captures = Array.isArray(state.data.captures) ? state.data.captures.map(normalizeCaptureCard) : [];
+  const filter = elements.captureFilterSelect.value || "active";
+  const query = normalizeText(elements.captureSearchInput.value).toLowerCase();
+  const cards = state.data.captures
+    .filter((card) => captureMatchesFilter(card, filter))
+    .filter((card) => !query || [card.content, card.labels.join(" "), card.attachments.map((file) => file.name).join(" ")].join(" ").toLowerCase().includes(query))
+    .sort(captureSort);
+  elements.captureSummary.innerHTML = [
+    `<span>전체 <strong>${state.data.captures.length}</strong></span>`,
+    `<span>표시 <strong>${cards.length}</strong></span>`,
+    `<span>리마인더 <strong>${state.data.captures.filter((card) => card.reminderAt && !card.archived).length}</strong></span>`,
+  ].join("");
+  if (cards.length === 0) {
+    elements.captureList.innerHTML = `<div class="empty-compact">표시할 빠른 기록이 없습니다.</div>`;
+    return;
+  }
+  elements.captureList.replaceChildren(...cards.map(captureCardElement));
+}
+
+function captureMatchesFilter(card, filter) {
+  if (filter === "all") return true;
+  if (filter === "pinned") return card.pinned && !card.archived;
+  if (filter === "reminders") return Boolean(card.reminderAt) && !card.archived;
+  if (filter === "archived") return card.archived;
+  return !card.archived;
+}
+
+function captureSort(a, b) {
+  if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+  return (b.updatedAt || "").localeCompare(a.updatedAt || "");
+}
+
+function captureCardElement(card) {
+  const article = document.createElement("article");
+  article.className = `capture-item capture-${card.color}`;
+  const checklist = card.checklist.length
+    ? `<ul>${card.checklist.map((item) => `<li>${item.done ? "✓" : "□"} ${escapeHtml(item.text)}</li>`).join("")}</ul>`
+    : "";
+  const attachments = card.attachments.length
+    ? `<div class="capture-attachments">${card.attachments.map((file) => `<span>${escapeHtml(file.name)} · ${escapeHtml(formatBytes(file.size))}</span>`).join("")}</div>`
+    : "";
+  const sketch = card.sketchData ? `<img src="${escapeHtml(card.sketchData)}" alt="그림 기록">` : "";
+  article.innerHTML = `
+    <header>
+      <strong>${card.pinned ? "핀 · " : ""}${escapeHtml(card.labels.map((label) => `#${label}`).join(" ") || "빠른 기록")}</strong>
+      <span>${escapeHtml(formatArchivedAt(card.updatedAt))}</span>
+    </header>
+    ${card.content ? `<p>${escapeHtml(card.content)}</p>` : ""}
+    ${checklist}
+    ${attachments}
+    ${sketch}
+    ${card.reminderAt ? `<div class="capture-reminder">리마인더 ${escapeHtml(formatArchivedAt(card.reminderAt))}</div>` : ""}
+    <div class="capture-actions">
+      <button class="secondary-btn" type="button" data-action="pin">${card.pinned ? "핀 해제" : "핀"}</button>
+      <button class="secondary-btn" type="button" data-action="archive">${card.archived ? "복원" : "보관"}</button>
+    </div>
+  `;
+  article.querySelector('[data-action="pin"]').addEventListener("click", () => toggleCapturePin(card.id));
+  article.querySelector('[data-action="archive"]').addEventListener("click", () => toggleCaptureArchive(card.id));
+  return article;
+}
+
+function toggleCapturePin(id) {
+  const card = state.data.captures.find((item) => item.id === id);
+  if (!card) return;
+  card.pinned = !card.pinned;
+  card.updatedAt = new Date().toISOString();
+  persist();
+  renderCaptures();
+}
+
+function toggleCaptureArchive(id) {
+  const card = state.data.captures.find((item) => item.id === id);
+  if (!card) return;
+  card.archived = !card.archived;
+  card.updatedAt = new Date().toISOString();
+  persist();
+  renderCaptures();
+}
+
+function formatBytes(size) {
+  const bytes = Number(size) || 0;
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 function renderDeletedTreeList() {
   const deleted = state.data.deletedTree || [];
   renderDeletedTreeButton();
@@ -6621,6 +6925,7 @@ function closePopupLayers() {
   closeGraph();
   closePropertiesView();
   closeCanvasView();
+  closeCaptureView();
   closeDeletedTreeBox();
   closeSettingsPopup();
 }
@@ -6657,6 +6962,7 @@ function render() {
   renderDeletedTreeButton();
   if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
   if (!elements.canvasView.classList.contains("hidden")) renderCanvas();
+  if (!elements.captureView.classList.contains("hidden")) renderCaptures();
 }
 
 function renderDeletedTreeButton() {
@@ -8647,6 +8953,7 @@ async function load() {
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
     state.data.canvases = parsed.canvases || [];
+    state.data.captures = parsed.captures || [];
     state.data.tree = parsed.tree || [];
     normalizeData();
     persist();
@@ -8902,12 +9209,14 @@ function normalizeData() {
   state.data.archivedDaily = Array.isArray(state.data.archivedDaily) ? state.data.archivedDaily : [];
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
   state.data.canvases = Array.isArray(state.data.canvases) ? state.data.canvases : [];
+  state.data.captures = Array.isArray(state.data.captures) ? state.data.captures : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
   state.data.daily = normalizeDailyNotes(state.data.daily);
   state.data.archivedDaily = state.data.archivedDaily.filter((note) => isPlainObject(note) && isDateKey(note.date));
   state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
   state.data.canvases = state.data.canvases.filter(isPlainObject).map(normalizeCanvas).slice(0, 12);
+  state.data.captures = state.data.captures.filter(isPlainObject).map(normalizeCaptureCard).slice(0, 500);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
   Object.values(state.data.daily).forEach((note) => {
@@ -9576,6 +9885,7 @@ function backupDataShape(data) {
     archivedDaily: data.archivedDaily,
     deletedTree: data.deletedTree,
     canvases: data.canvases,
+    captures: data.captures,
     tree: data.tree,
   };
 }
@@ -9599,6 +9909,7 @@ function isBackupData(data) {
     || Array.isArray(data.archivedDaily)
     || Array.isArray(data.deletedTree)
     || Array.isArray(data.canvases)
+    || Array.isArray(data.captures)
   ));
 }
 
