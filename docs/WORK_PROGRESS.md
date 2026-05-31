@@ -5,6 +5,18 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.2 관계 탐색과 그래프뷰 시작
+
+- `main`의 1.1 병합 완료 상태를 기준으로 `codex/graph-view-1.2` 브랜치 생성.
+- `docs/NOW_1_2_GRAPH_VIEW_DESIGN.md`를 추가해 1.2 완료 기준 문서로 확정.
+- Web/설치형 공통 연결 보기 팝업을 전체 그래프, 선택 메모 중심 로컬 그래프, 깊이 1-3, 검색/태그/그룹 필터 구조로 확장.
+- 그래프 화면에 고립 메모, 허브 메모, 현재 메모의 outgoing links, backlinks, 연결 후보 패널을 추가.
+- 본문에 제목은 등장하지만 `[[제목]]` 링크가 없는 후보를 누르면 현재 메모에 위키 링크로 반영되도록 처리.
+- 그래프 필터 조합을 설정 저장소의 `settings.graph.bookmarks`에 저장하고 다시 적용할 수 있게 함.
+- `web/scripts/check_graph_view.mjs`를 추가해 headless 브라우저에서 전체/로컬 그래프, 고립/허브, 연결 후보, 북마크 저장 흐름을 검증.
+- `web/scripts/verify_web_surface.py`가 1.2 설계서, 그래프 UI 요소, 그래프 함수, 브라우저 스모크 스크립트를 확인하도록 보강.
+- `web/README.md`, `web/runtime_checklist_ko.md`, `web/help.html`, `docs/PROJECT_STATUS.md`, 업그레이드 전략 문서를 1.2 기준으로 갱신.
+
 ### NowNote 1.1 설치형 PC 클라이언트 시작
 
 - `main`의 1.0 수정 완료 상태인 `35be9ee`를 기준으로 `codex/desktop-client-1.1` 브랜치를 다시 맞춤.
