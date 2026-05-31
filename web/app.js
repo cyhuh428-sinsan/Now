@@ -1498,6 +1498,7 @@ const state = {
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
+  selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
   selectedDeletedTreeIds: new Set(),
   capturingShortcutId: null,
@@ -1521,6 +1522,7 @@ function defaultData() {
     daily: {},
     archivedDaily: [],
     deletedTree: [],
+    canvases: [],
     tree: [],
   };
 }
@@ -1919,6 +1921,24 @@ const elements = {
   propertiesMissingList: $("#propertiesMissingList"),
   propertyTemplateSelect: $("#propertyTemplateSelect"),
   propertyTemplateCreateBtn: $("#propertyTemplateCreateBtn"),
+  canvasBtn: $("#canvasBtn"),
+  canvasView: $("#canvasView"),
+  canvasCloseBtn: $("#canvasCloseBtn"),
+  canvasTitleInput: $("#canvasTitleInput"),
+  canvasAddNoteBtn: $("#canvasAddNoteBtn"),
+  canvasAddTextBtn: $("#canvasAddTextBtn"),
+  canvasConnectBtn: $("#canvasConnectBtn"),
+  canvasDraftFromGraphBtn: $("#canvasDraftFromGraphBtn"),
+  canvasZoomOutBtn: $("#canvasZoomOutBtn"),
+  canvasZoomInBtn: $("#canvasZoomInBtn"),
+  canvasFitBtn: $("#canvasFitBtn"),
+  canvasSummary: $("#canvasSummary"),
+  canvasBoard: $("#canvasBoard"),
+  canvasSelectionLabel: $("#canvasSelectionLabel"),
+  canvasMoveLeftBtn: $("#canvasMoveLeftBtn"),
+  canvasMoveUpBtn: $("#canvasMoveUpBtn"),
+  canvasMoveDownBtn: $("#canvasMoveDownBtn"),
+  canvasMoveRightBtn: $("#canvasMoveRightBtn"),
   confirmDialog: $("#confirmDialog"),
   confirmTitle: $("#confirmTitle"),
   confirmMessage: $("#confirmMessage"),
@@ -2841,6 +2861,20 @@ function bindEvents() {
   elements.propertiesFilterSaveBtn?.addEventListener("click", savePropertyFilter);
   elements.propertiesSavedFilterSelect?.addEventListener("change", applyPropertyFilter);
   elements.propertyTemplateCreateBtn?.addEventListener("click", createNoteFromPropertyTemplate);
+  elements.canvasBtn?.addEventListener("click", openCanvasView);
+  elements.canvasCloseBtn?.addEventListener("click", closeCanvasView);
+  elements.canvasTitleInput?.addEventListener("input", updateCanvasTitle);
+  elements.canvasAddNoteBtn?.addEventListener("click", addSelectedNoteCanvasCard);
+  elements.canvasAddTextBtn?.addEventListener("click", addTextCanvasCard);
+  elements.canvasConnectBtn?.addEventListener("click", connectSelectedCanvasCards);
+  elements.canvasDraftFromGraphBtn?.addEventListener("click", createCanvasDraftFromGraph);
+  elements.canvasZoomOutBtn?.addEventListener("click", () => adjustCanvasZoom(-0.1));
+  elements.canvasZoomInBtn?.addEventListener("click", () => adjustCanvasZoom(0.1));
+  elements.canvasFitBtn?.addEventListener("click", fitCanvasView);
+  elements.canvasMoveLeftBtn?.addEventListener("click", () => moveSelectedCanvasCard(-40, 0));
+  elements.canvasMoveUpBtn?.addEventListener("click", () => moveSelectedCanvasCard(0, -40));
+  elements.canvasMoveDownBtn?.addEventListener("click", () => moveSelectedCanvasCard(0, 40));
+  elements.canvasMoveRightBtn?.addEventListener("click", () => moveSelectedCanvasCard(40, 0));
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
   elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
@@ -2849,6 +2883,7 @@ function bindEvents() {
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
   bindOverlayDismiss(elements.graphView, closeGraph);
   bindOverlayDismiss(elements.propertiesView, closePropertiesView);
+  bindOverlayDismiss(elements.canvasView, closeCanvasView);
   bindOverlayDismiss(elements.deletedTreeView, closeDeletedTreeBox);
   bindOverlayDismiss(elements.dailyView, closeDailyPopup);
   bindOverlayDismiss(elements.settingsView, closeSettingsPopup);
@@ -6143,6 +6178,284 @@ function groupBy(items, selector) {
   }, new Map());
 }
 
+function defaultCanvas() {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    title: "생각 Canvas",
+    cards: [],
+    edges: [],
+    zoom: 1,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function normalizeCanvas(canvas = {}) {
+  const now = new Date().toISOString();
+  const source = canvas && typeof canvas === "object" ? canvas : {};
+  const cards = Array.isArray(source.cards) ? source.cards.filter(isPlainObject) : [];
+  const cardIds = new Set(cards.map((card) => card.id).filter(Boolean));
+  return {
+    id: typeof source.id === "string" && source.id ? source.id : crypto.randomUUID(),
+    title: normalizeText(source.title || "생각 Canvas").slice(0, 80),
+    cards: cards.map((card) => normalizeCanvasCard(card)),
+    edges: (Array.isArray(source.edges) ? source.edges : [])
+      .filter(isPlainObject)
+      .map((edge) => ({
+        id: typeof edge.id === "string" && edge.id ? edge.id : crypto.randomUUID(),
+        from: typeof edge.from === "string" ? edge.from : "",
+        to: typeof edge.to === "string" ? edge.to : "",
+        label: normalizeText(edge.label).slice(0, 60),
+      }))
+      .filter((edge) => edge.from && edge.to && edge.from !== edge.to && cardIds.has(edge.from) && cardIds.has(edge.to))
+      .slice(0, 80),
+    zoom: Math.min(1.8, Math.max(0.6, Number(source.zoom) || 1)),
+    createdAt: source.createdAt || now,
+    updatedAt: source.updatedAt || source.createdAt || now,
+  };
+}
+
+function normalizeCanvasCard(card = {}) {
+  const type = card.type === "text" ? "text" : "note";
+  return {
+    id: typeof card.id === "string" && card.id ? card.id : crypto.randomUUID(),
+    type,
+    noteId: type === "note" && typeof card.noteId === "string" ? card.noteId : "",
+    text: normalizeText(card.text).slice(0, 600),
+    x: Math.min(1800, Math.max(0, Number(card.x) || 80)),
+    y: Math.min(1200, Math.max(0, Number(card.y) || 80)),
+    width: Math.min(360, Math.max(180, Number(card.width) || 240)),
+    color: normalizeText(card.color || "blue").slice(0, 24),
+  };
+}
+
+function activeCanvas() {
+  if (!Array.isArray(state.data.canvases)) state.data.canvases = [];
+  if (state.data.canvases.length === 0) {
+    state.data.canvases.push(defaultCanvas());
+    persist();
+  }
+  state.data.canvases[0] = normalizeCanvas(state.data.canvases[0]);
+  return state.data.canvases[0];
+}
+
+function markCanvasChanged(canvas = activeCanvas()) {
+  canvas.updatedAt = new Date().toISOString();
+  persist();
+}
+
+function openCanvasView() {
+  closePopupLayers();
+  renderCanvas();
+  elements.canvasView.classList.remove("hidden");
+}
+
+function closeCanvasView() {
+  elements.canvasView.classList.add("hidden");
+}
+
+function updateCanvasTitle() {
+  const canvas = activeCanvas();
+  canvas.title = normalizeText(elements.canvasTitleInput.value).slice(0, 80) || "생각 Canvas";
+  markCanvasChanged(canvas);
+  renderCanvasSummary(canvas);
+}
+
+function renderCanvas() {
+  const canvas = activeCanvas();
+  elements.canvasTitleInput.value = canvas.title;
+  renderCanvasSummary(canvas);
+  renderCanvasBoard(canvas);
+}
+
+function renderCanvasSummary(canvas) {
+  elements.canvasSummary.innerHTML = [
+    `<span>카드 <strong>${canvas.cards.length}</strong></span>`,
+    `<span>연결 <strong>${canvas.edges.length}</strong></span>`,
+    `<span>확대 <strong>${Math.round(canvas.zoom * 100)}%</strong></span>`,
+  ].join("");
+  const selected = state.selectedCanvasCardIds
+    .map((id) => canvas.cards.find((card) => card.id === id))
+    .filter(Boolean);
+  elements.canvasSelectionLabel.textContent = selected.length
+    ? selected.map(canvasCardTitle).join(" + ")
+    : "카드를 선택하세요.";
+}
+
+function renderCanvasBoard(canvas) {
+  if (canvas.cards.length === 0) {
+    elements.canvasBoard.innerHTML = `<div class="empty-compact">메모 카드나 텍스트 카드를 추가하세요.</div>`;
+    return;
+  }
+  const cardById = new Map(canvas.cards.map((card) => [card.id, card]));
+  const edgeSvg = canvas.edges.map((edge) => {
+    const from = cardById.get(edge.from);
+    const to = cardById.get(edge.to);
+    if (!from || !to) return "";
+    const x1 = (from.x + from.width / 2) * canvas.zoom;
+    const y1 = (from.y + 50) * canvas.zoom;
+    const x2 = (to.x + to.width / 2) * canvas.zoom;
+    const y2 = (to.y + 50) * canvas.zoom;
+    const lx = (x1 + x2) / 2;
+    const ly = (y1 + y2) / 2;
+    return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"></line><text x="${lx}" y="${ly}">${escapeHtml(edge.label || "연결")}</text>`;
+  }).join("");
+  elements.canvasBoard.innerHTML = `
+    <svg class="canvas-edges" viewBox="0 0 2200 1500" aria-hidden="true">${edgeSvg}</svg>
+    ${canvas.cards.map((card) => canvasCardHtml(card, canvas.zoom)).join("")}
+  `;
+  elements.canvasBoard.querySelectorAll("[data-canvas-card-id]").forEach((cardEl) => {
+    cardEl.addEventListener("click", () => toggleCanvasCardSelection(cardEl.dataset.canvasCardId));
+    cardEl.querySelector("[data-action='open-note']")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      const card = canvas.cards.find((item) => item.id === cardEl.dataset.canvasCardId);
+      if (card?.noteId && findTreeNode(state.data.tree, card.noteId)) selectTreeNode(card.noteId);
+    });
+    cardEl.querySelector("[data-action='text']")?.addEventListener("input", (event) => {
+      const card = canvas.cards.find((item) => item.id === cardEl.dataset.canvasCardId);
+      if (!card) return;
+      card.text = normalizeText(event.target.value).slice(0, 600);
+      markCanvasChanged(canvas);
+    });
+  });
+}
+
+function canvasCardHtml(card, zoom) {
+  const note = card.noteId ? findTreeNode(state.data.tree, card.noteId) : null;
+  const selected = state.selectedCanvasCardIds.includes(card.id);
+  const title = canvasCardTitle(card);
+  const body = card.type === "text"
+    ? `<textarea data-action="text" aria-label="텍스트 카드">${escapeHtml(card.text)}</textarea>`
+    : `<p>${escapeHtml(note ? snippet(note.content || "") : "원본 메모 없음")}</p>`;
+  const openButton = card.type === "note" && note
+    ? `<button class="small-btn" type="button" data-action="open-note">열기</button>`
+    : "";
+  return `
+    <article class="canvas-board-card ${selected ? "selected" : ""}" data-canvas-card-id="${escapeHtml(card.id)}" style="left:${card.x * zoom}px; top:${card.y * zoom}px; width:${card.width * zoom}px;">
+      <header><strong>${escapeHtml(title)}</strong>${openButton}</header>
+      ${body}
+    </article>
+  `;
+}
+
+function canvasCardTitle(card) {
+  if (card.type === "text") return card.text.split(/\r?\n/).find(Boolean)?.slice(0, 28) || "텍스트 카드";
+  const note = card.noteId ? findTreeNode(state.data.tree, card.noteId) : null;
+  return note ? noteTitle(note.title) : "누락 메모";
+}
+
+function addSelectedNoteCanvasCard() {
+  const selected = getSelectedTreeNode();
+  if (!selected) {
+    showNotice("선택한 메모가 없습니다.", "error");
+    return;
+  }
+  const canvas = activeCanvas();
+  const offset = canvas.cards.length * 24;
+  canvas.cards.push(normalizeCanvasCard({
+    type: "note",
+    noteId: selected.id,
+    x: 80 + offset,
+    y: 80 + offset,
+  }));
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function addTextCanvasCard() {
+  const canvas = activeCanvas();
+  const offset = canvas.cards.length * 24;
+  const card = normalizeCanvasCard({
+    type: "text",
+    text: "새 생각",
+    x: 120 + offset,
+    y: 120 + offset,
+  });
+  canvas.cards.push(card);
+  state.selectedCanvasCardIds = [card.id];
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function toggleCanvasCardSelection(id) {
+  if (!id) return;
+  const selected = state.selectedCanvasCardIds.includes(id)
+    ? state.selectedCanvasCardIds.filter((item) => item !== id)
+    : [...state.selectedCanvasCardIds.slice(-1), id];
+  state.selectedCanvasCardIds = selected.slice(-2);
+  renderCanvas();
+}
+
+function moveSelectedCanvasCard(dx, dy) {
+  const canvas = activeCanvas();
+  const id = state.selectedCanvasCardIds[state.selectedCanvasCardIds.length - 1];
+  const card = canvas.cards.find((item) => item.id === id);
+  if (!card) return;
+  card.x = Math.min(1800, Math.max(0, card.x + dx));
+  card.y = Math.min(1200, Math.max(0, card.y + dy));
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function connectSelectedCanvasCards() {
+  const canvas = activeCanvas();
+  const [from, to] = state.selectedCanvasCardIds;
+  if (!from || !to || from === to) {
+    showNotice("연결할 카드 2개를 선택하세요.", "error");
+    return;
+  }
+  const exists = canvas.edges.some((edge) => edge.from === from && edge.to === to);
+  if (!exists) {
+    canvas.edges.push({ id: crypto.randomUUID(), from, to, label: "연결" });
+    markCanvasChanged(canvas);
+  }
+  renderCanvas();
+}
+
+function adjustCanvasZoom(delta) {
+  const canvas = activeCanvas();
+  canvas.zoom = Math.min(1.8, Math.max(0.6, Math.round((canvas.zoom + delta) * 10) / 10));
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function fitCanvasView() {
+  const canvas = activeCanvas();
+  canvas.zoom = 1;
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function createCanvasDraftFromGraph() {
+  const canvas = activeCanvas();
+  const model = graphModel();
+  const candidates = model.nodes.slice(0, 6);
+  if (candidates.length === 0) {
+    showNotice("Canvas로 보낼 그래프 메모가 없습니다.", "error");
+    return;
+  }
+  canvas.cards = candidates.map((node, index) => normalizeCanvasCard({
+    type: "note",
+    noteId: node.id,
+    x: 90 + (index % 3) * 280,
+    y: 90 + Math.floor(index / 3) * 190,
+  }));
+  const cardByNoteId = new Map(canvas.cards.map((card) => [card.noteId, card.id]));
+  canvas.edges = model.edges
+    .filter((edge) => cardByNoteId.has(edge.from.id) && cardByNoteId.has(edge.to.id))
+    .map((edge) => ({
+      id: crypto.randomUUID(),
+      from: cardByNoteId.get(edge.from.id),
+      to: cardByNoteId.get(edge.to.id),
+      label: edge.title || "연결",
+    }))
+    .slice(0, 12);
+  state.selectedCanvasCardIds = [];
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
 function renderDeletedTreeList() {
   const deleted = state.data.deletedTree || [];
   renderDeletedTreeButton();
@@ -6307,6 +6620,7 @@ function closePopupLayers() {
   closeSearchPopover();
   closeGraph();
   closePropertiesView();
+  closeCanvasView();
   closeDeletedTreeBox();
   closeSettingsPopup();
 }
@@ -6342,6 +6656,7 @@ function render() {
   renderSidebarKnowledge();
   renderDeletedTreeButton();
   if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
+  if (!elements.canvasView.classList.contains("hidden")) renderCanvas();
 }
 
 function renderDeletedTreeButton() {
@@ -8331,6 +8646,7 @@ async function load() {
     state.data.daily = parsed.daily || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
+    state.data.canvases = parsed.canvases || [];
     state.data.tree = parsed.tree || [];
     normalizeData();
     persist();
@@ -8585,11 +8901,13 @@ function normalizeData() {
     : {};
   state.data.archivedDaily = Array.isArray(state.data.archivedDaily) ? state.data.archivedDaily : [];
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
+  state.data.canvases = Array.isArray(state.data.canvases) ? state.data.canvases : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
   state.data.daily = normalizeDailyNotes(state.data.daily);
   state.data.archivedDaily = state.data.archivedDaily.filter((note) => isPlainObject(note) && isDateKey(note.date));
   state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
+  state.data.canvases = state.data.canvases.filter(isPlainObject).map(normalizeCanvas).slice(0, 12);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
   Object.values(state.data.daily).forEach((note) => {
@@ -9257,6 +9575,7 @@ function backupDataShape(data) {
     daily: data.daily,
     archivedDaily: data.archivedDaily,
     deletedTree: data.deletedTree,
+    canvases: data.canvases,
     tree: data.tree,
   };
 }
@@ -9279,6 +9598,7 @@ function isBackupData(data) {
     || Array.isArray(data.tree)
     || Array.isArray(data.archivedDaily)
     || Array.isArray(data.deletedTree)
+    || Array.isArray(data.canvases)
   ));
 }
 

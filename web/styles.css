@@ -2552,6 +2552,105 @@ kbd {
   background: var(--panel);
 }
 
+.canvas-card {
+  width: min(1180px, calc(100vw - 32px));
+  max-height: min(880px, calc(100vh - 32px));
+}
+
+.canvas-toolbar {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) repeat(4, auto) 40px 40px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.canvas-board {
+  position: relative;
+  min-height: 560px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    linear-gradient(rgba(148, 163, 184, 0.12) 1px, transparent 1px),
+    var(--bg);
+  background-size: 32px 32px;
+}
+
+.canvas-edges {
+  position: absolute;
+  inset: 0;
+  width: 2200px;
+  height: 1500px;
+  pointer-events: none;
+}
+
+.canvas-edges line {
+  stroke: var(--blue);
+  stroke-width: 2;
+}
+
+.canvas-edges text {
+  fill: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.canvas-board-card {
+  position: absolute;
+  display: grid;
+  gap: 8px;
+  min-height: 120px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+}
+
+.canvas-board-card.selected {
+  border-color: var(--blue);
+  outline: 2px solid rgba(37, 99, 235, 0.2);
+}
+
+.canvas-board-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.canvas-board-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.canvas-board-card textarea {
+  width: 100%;
+  min-height: 74px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px;
+  resize: vertical;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.canvas-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.canvas-move-controls {
+  display: flex;
+  gap: 6px;
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;
@@ -2846,8 +2945,14 @@ kbd {
   .properties-grid,
   .properties-toolbar,
   .properties-insights,
-  .properties-row {
+  .properties-row,
+  .canvas-toolbar,
+  .canvas-footer {
     grid-template-columns: 1fr;
+  }
+
+  .canvas-footer {
+    display: grid;
   }
 
   .graph-canvas {

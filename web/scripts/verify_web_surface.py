@@ -17,6 +17,7 @@ DESKTOP_POLICY_CHECK = ROOT / "scripts" / "check_desktop_client_policies.mjs"
 GRAPH_VIEW_CHECK = ROOT / "scripts" / "check_graph_view.mjs"
 GRAPH_DESIGN = ROOT.parent / "docs" / "NOW_1_2_GRAPH_VIEW_DESIGN.md"
 PROPERTIES_DESIGN = ROOT.parent / "docs" / "NOW_1_3_PROPERTIES_DESIGN.md"
+CANVAS_DESIGN = ROOT.parent / "docs" / "NOW_1_4_CANVAS_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -63,6 +64,7 @@ def main() -> None:
         GRAPH_VIEW_CHECK,
         GRAPH_DESIGN,
         PROPERTIES_DESIGN,
+        CANVAS_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -90,6 +92,7 @@ def main() -> None:
     graph_view_check = GRAPH_VIEW_CHECK.read_text(encoding="utf-8")
     graph_design = GRAPH_DESIGN.read_text(encoding="utf-8")
     properties_design = PROPERTIES_DESIGN.read_text(encoding="utf-8")
+    canvas_design = CANVAS_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -194,6 +197,19 @@ def main() -> None:
         ("propertiesMissingList", "missing properties list"),
         ("propertyTemplateSelect", "property template selector"),
         ("propertyTemplateCreateBtn", "property template create button"),
+        ("canvasBtn", "Canvas view button"),
+        ("canvasView", "Canvas view"),
+        ("canvasTitleInput", "Canvas title input"),
+        ("canvasAddNoteBtn", "Canvas note card button"),
+        ("canvasAddTextBtn", "Canvas text card button"),
+        ("canvasConnectBtn", "Canvas connect button"),
+        ("canvasDraftFromGraphBtn", "Canvas graph draft button"),
+        ("canvasZoomOutBtn", "Canvas zoom out button"),
+        ("canvasZoomInBtn", "Canvas zoom in button"),
+        ("canvasFitBtn", "Canvas fit button"),
+        ("canvasSummary", "Canvas summary"),
+        ("canvasBoard", "Canvas board"),
+        ("canvasSelectionLabel", "Canvas selection label"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -285,6 +301,12 @@ def main() -> None:
         ("function savePropertyFilter", "1.3 property saved filter action"),
         ("function createNoteFromPropertyTemplate", "1.3 property template note action"),
         ("normalizePropertyViewSettings", "1.3 property view setting normalization"),
+        ("function normalizeCanvas", "1.4 Canvas normalization"),
+        ("function renderCanvas", "1.4 Canvas renderer"),
+        ("function addSelectedNoteCanvasCard", "1.4 Canvas note card action"),
+        ("function addTextCanvasCard", "1.4 Canvas text card action"),
+        ("function connectSelectedCanvasCards", "1.4 Canvas edge action"),
+        ("function createCanvasDraftFromGraph", "1.4 Canvas graph draft action"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -337,6 +359,10 @@ def main() -> None:
         (".properties-toolbar", "properties toolbar styling"),
         (".properties-row", "properties row styling"),
         (".properties-insights", "properties insight panel styling"),
+        (".canvas-toolbar", "Canvas toolbar styling"),
+        (".canvas-board", "Canvas board styling"),
+        (".canvas-board-card", "Canvas card styling"),
+        (".canvas-edges", "Canvas edge styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -355,6 +381,7 @@ def main() -> None:
         ("사용자 ID와 비밀번호", "hosted Web password login documented"),
         ("1.2 관계 탐색과 그래프뷰", "1.2 graph view documented"),
         ("1.3 속성 기반 지식 관리", "1.3 properties documented"),
+        ("1.4 Canvas와 시각적 사고 정리", "1.4 Canvas documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -377,6 +404,7 @@ def main() -> None:
         ("JSON 가져오기는 현재 상태를 먼저 자동 백업", "runtime checklist JSON restore safeguard"),
         ("관계 탐색과 그래프뷰", "runtime checklist graph section"),
         ("속성 기반 지식 관리", "runtime checklist properties section"),
+        ("Canvas와 시각적 사고 정리", "runtime checklist Canvas section"),
         ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
@@ -516,6 +544,9 @@ def main() -> None:
         ("updateSelectedNoteProperties", "properties editor assertion"),
         ("savePropertyFilter", "properties saved filter assertion"),
         ("createNoteFromPropertyTemplate", "properties template assertion"),
+        ("openCanvasView", "Canvas open assertion"),
+        ("connectSelectedCanvasCards", "Canvas connection assertion"),
+        ("createCanvasDraftFromGraph", "Canvas graph draft assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
@@ -542,6 +573,17 @@ def main() -> None:
     ]
     for needle, label in properties_design_requirements:
         check(needle in properties_design, f"1.3 design has {label}", needle, failures)
+
+    canvas_design_requirements = [
+        ("NowNote 1.4 Canvas와 시각적 사고 정리 설계서", "1.4 Canvas design title"),
+        ("메모 카드 추가", "Canvas note card scope"),
+        ("텍스트 카드 추가", "Canvas text card scope"),
+        ("카드 간 연결선 추가", "Canvas edge scope"),
+        ("그래프 주변 메모를 Canvas 초안", "Canvas graph draft scope"),
+        ("Canvas 저장 구조", "Canvas storage scope"),
+    ]
+    for needle, label in canvas_design_requirements:
+        check(needle in canvas_design, f"1.4 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
