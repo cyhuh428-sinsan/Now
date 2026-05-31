@@ -2325,9 +2325,53 @@ kbd {
 }
 
 .quick-results,
+.command-list,
 .graph-list {
   display: grid;
   gap: 8px;
+}
+
+.command-card {
+  width: min(760px, calc(100vw - 32px));
+}
+
+.command-list {
+  max-height: 520px;
+  overflow: auto;
+}
+
+.command-item {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: left;
+}
+
+.command-item:hover,
+.command-item:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.command-item span {
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.command-item strong {
+  font-size: 14px;
+}
+
+.command-item small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .graph-card {

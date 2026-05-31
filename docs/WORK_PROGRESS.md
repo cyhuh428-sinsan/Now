@@ -5,6 +5,14 @@
 
 ## 2026-06-01 KST
 
+### NowNote 1.6 작성 보조와 명령 체계 시작
+
+- `main`의 1.5 병합 완료 상태를 기준으로 `codex/writing-command-1.6` 브랜치 생성.
+- `docs/NOW_1_6_WRITING_COMMAND_DESIGN.md`를 추가해 1.6 완료 기준 문서로 확정.
+- Web/설치형 공통 화면에 명령 팔레트를 추가해 템플릿, 고유 메모, 랜덤 메모, 합치기/나누기, 빠른 전환, 작성 삽입 명령을 실행하도록 구현.
+- 본문 편집 중 `/time`, `/check`, `/template`, `/unique`, `/random`, `/split`, `/merge` Slash command를 Enter로 실행하는 1차 흐름을 추가.
+- 합치기는 하위 메모를 삭제하지 않고 본문 아래에 추가하는 안전 방식으로 구현.
+
 ### NowNote 1.5 첨부/미디어/빠른 기록 시작
 
 - `main`의 1.4 병합 완료 상태를 기준으로 `codex/quick-capture-1.5` 브랜치 생성.
