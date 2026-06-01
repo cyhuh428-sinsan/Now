@@ -34,6 +34,10 @@ def run_once() -> int:
             db.refresh(job)
             try:
                 result_json = process_analysis_job(job)
+                db.refresh(job)
+                if job.status == "cancelled":
+                    logger.info("analysis job %s cancelled before completion", job.id)
+                    continue
                 job.status = "done"
                 job.result_json = result_json
                 job.error_message = None

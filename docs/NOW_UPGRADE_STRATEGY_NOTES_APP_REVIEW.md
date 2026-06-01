@@ -118,7 +118,7 @@ NowNote 1.x는 한 번에 1.5나 2.0으로 뛰지 않고 아래 순서로 단계
 | 1.7 | 복구/가져오기/마이그레이션 | `docs/NOW_1_7_RECOVERY_IMPORT_DESIGN.md` |
 | 1.8 | 출판/발표/공개 지식 묶음 | `docs/NOW_1_8_PUBLISH_SLIDES_DESIGN.md` |
 | 1.9 | 작업공간/운영형 지식 관리 완성 | `docs/NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md` |
-| 2.0 | Obsidian 유용 기능 흡수 완료와 LLM 지식화 | 별도 2.0 설계서 작성 예정 |
+| 2.0 | Obsidian 유용 기능 흡수 완료와 LLM 지식화 | `docs/NOW_2_0_LLM_KNOWLEDGE_DESIGN.md` |
 
 ### 1.1: 설치형 PC 클라이언트 분리 우선
 
