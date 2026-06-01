@@ -162,6 +162,22 @@ class GroupMessage(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
 
 
+class GroupMessageRead(Base):
+    __tablename__ = "group_message_reads"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "group_name", name="uq_group_message_read_owner_group"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    group_name: Mapped[str] = mapped_column(String(80), index=True)
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
+    read_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 
