@@ -29,6 +29,7 @@ def get_db() -> Generator[Session, None, None]:
 def create_tables() -> None:
     from app.models.note import (  # noqa: F401
         AnalysisJob,
+        GroupMessage,
         Note,
         Recording,
         ReleaseEvidenceRecord,

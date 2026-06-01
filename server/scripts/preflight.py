@@ -129,6 +129,7 @@ def main() -> None:
     users_api_path = server_dir / "app" / "api" / "users.py"
     notes_api_path = server_dir / "app" / "api" / "notes.py"
     sync_api_path = server_dir / "app" / "api" / "sync.py"
+    group_messages_api_path = server_dir / "app" / "api" / "group_messages.py"
     note_sync_service_path = server_dir / "app" / "services" / "note_sync.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
@@ -816,6 +817,7 @@ def main() -> None:
                 ("self_registration", "Capabilities marks self-registration support", "self registration capability"),
                 ("device_access_tokens", "Capabilities marks device access token support", "device access tokens capability"),
                 ("group_readonly_sharing", "Capabilities marks group read-only sharing support", "group read-only sharing"),
+                ("group_messenger", "Capabilities marks group messenger support", "group messenger"),
                 ("password_reset_email", "Capabilities marks password reset email support", "password reset email capability"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
@@ -882,6 +884,38 @@ def main() -> None:
             ],
             failures,
         )
+    if main_app_path.exists():
+        main_app_source = main_app_path.read_text(encoding="utf-8")
+        check_text_contains(
+            main_app_source,
+            [
+                ("group_messages_router", "Main app includes group messenger router", "group messenger router"),
+            ],
+            failures,
+        )
+    if models_path.exists():
+        models_source = models_path.read_text(encoding="utf-8")
+        check_text_contains(
+            models_source,
+            [
+                ("class GroupMessage", "Models define group messages", "GroupMessage model"),
+                ('__tablename__ = "group_messages"', "Models define group_messages table", "group_messages table"),
+                ("sender_owner_id", "Group messages store sender owner", "sender owner"),
+            ],
+            failures,
+        )
+    if group_messages_api_path.exists():
+        group_messages_source = group_messages_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            group_messages_source,
+            [
+                ('APIRouter(prefix="/api/v1/group-messages"', "Group messenger API route prefix", "group messenger route"),
+                ("require_web_session_access", "Group messenger requires Web session", "web session required"),
+                ("GroupMessage.group_name == group_name", "Group messenger limits messages to same group", "same group filter"),
+                ("sender_display_name", "Group messenger exposes sender display name", "sender display name"),
+            ],
+            failures,
+        )
     server_info_path = server_dir / "app" / "api" / "server.py"
     check(server_info_path.exists(), "Server info API source exists", str(server_info_path), failures)
     if server_info_path.exists():
@@ -910,6 +944,7 @@ def main() -> None:
                 ("/api/v1/auth/web-login", "Hosted Web uses password login", "web hosted password login API"),
                 ("X-Now-Web-Session", "Hosted Web sends session header", "web hosted session header"),
                 ("loadServerSharedNotes", "Hosted Web loads server shared notes", "web hosted shared notes"),
+                ("/api/v1/group-messages", "Hosted Web uses group messenger API", "web group messenger API"),
                 ("isTreeNodeSharedForServer", "Web filters knowledge notes by share flag", "web shared tree filter"),
                 ("serverTwoFactorCodeInput", "Web exposes two-factor code input", "web two factor input"),
                 (
