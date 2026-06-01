@@ -22,6 +22,7 @@ CAPTURE_DESIGN = ROOT.parent / "docs" / "NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md"
 COMMAND_DESIGN = ROOT.parent / "docs" / "NOW_1_6_WRITING_COMMAND_DESIGN.md"
 RECOVERY_IMPORT_DESIGN = ROOT.parent / "docs" / "NOW_1_7_RECOVERY_IMPORT_DESIGN.md"
 PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md"
+WORKSPACE_OPERATIONS_DESIGN = ROOT.parent / "docs" / "NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -73,6 +74,7 @@ def main() -> None:
         COMMAND_DESIGN,
         RECOVERY_IMPORT_DESIGN,
         PUBLISH_SLIDES_DESIGN,
+        WORKSPACE_OPERATIONS_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -259,6 +261,13 @@ def main() -> None:
         ("publishSensitiveList", "publish sensitive warning list"),
         ("publishNodeList", "publish node checklist"),
         ("publishPreview", "publish preview"),
+        ("workspaceNameInput", "workspace name input"),
+        ("workspaceSelect", "workspace selector"),
+        ("workspaceSaveBtn", "workspace save button"),
+        ("workspaceApplyBtn", "workspace apply button"),
+        ("workspaceHealthSummary", "workspace health summary"),
+        ("workspaceHealthList", "workspace health list"),
+        ("workspaceExternalLinks", "workspace external links"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -391,6 +400,11 @@ def main() -> None:
         ("function buildPublicHtmlDocument", "1.8 public HTML builder"),
         ("function buildSlidesHtmlDocument", "1.8 slides HTML builder"),
         ("publishBundles", "1.8 publish bundle data shape"),
+        ("function saveCurrentWorkspace", "1.9 workspace save action"),
+        ("function applySelectedWorkspace", "1.9 workspace apply action"),
+        ("function knowledgeHealthReport", "1.9 knowledge health report"),
+        ("function externalLinksForText", "1.9 external link list"),
+        ("workspaces: defaultWorkspaceSettings()", "1.9 workspace setting data shape"),
         ("function isGroupSharedServerNote", "group shared note detector"),
         ("function serverTreeNodeLocalId", "group shared local ID mapper"),
         ("function isReadOnlyTreeNode", "group shared read-only guard"),
@@ -466,6 +480,8 @@ def main() -> None:
         (".publish-node-list", "publish node list styling"),
         (".publish-sensitive-list", "publish sensitive list styling"),
         (".publish-preview", "publish preview styling"),
+        (".workspace-panel", "workspace panel styling"),
+        (".workspace-health-item", "workspace health item styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -489,6 +505,7 @@ def main() -> None:
         ("1.6 작성 보조와 명령 체계", "1.6 command palette documented"),
         ("1.7 복구/가져오기/마이그레이션", "1.7 recovery import documented"),
         ("1.8 출판/발표/공개 지식 묶음", "1.8 publish slides documented"),
+        ("1.9 작업공간과 운영형 지식 관리", "1.9 workspace operations documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -761,6 +778,17 @@ def main() -> None:
     ]
     for needle, label in publish_slides_design_requirements:
         check(needle in publish_slides_design, f"1.8 design has {label}", needle, failures)
+
+    workspace_operations_design = WORKSPACE_OPERATIONS_DESIGN.read_text(encoding="utf-8")
+    workspace_operations_design_requirements = [
+        ("NowNote 1.9 작업공간과 운영형 지식 관리 설계서", "1.9 workspace design title"),
+        ("작업공간 저장", "workspace save scope"),
+        ("작업공간 적용", "workspace apply scope"),
+        ("지식 건강 점검", "knowledge health scope"),
+        ("외부 링크", "external link scope"),
+    ]
+    for needle, label in workspace_operations_design_requirements:
+        check(needle in workspace_operations_design, f"1.9 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
