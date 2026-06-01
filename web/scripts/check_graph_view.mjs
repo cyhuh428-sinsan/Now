@@ -484,6 +484,56 @@ async function runOnce() {
           && (slidesHtml.match(/class="slide"/g) || []).length >= 2
           && typeof exportPublishHtml === "function"
           && typeof exportPublishSlides === "function";
+        const staleDate = "2025-01-01T00:00:00.000Z";
+        const workspaceA = node("workspace-a", "Workspace Alpha", "## 정리\\nhttps://sinsan.kr\\n[[Workspace Beta]] #ops", {
+          updatedAt: now,
+          properties: { status: "active", priority: "high", type: "운영", project: "NowNote" },
+        });
+        const workspaceB = node("workspace-b", "Workspace Beta", "Back to [[Workspace Alpha]]\\n[[Workspace Gamma]]\\n[[Workspace Delta]]\\n[[Workspace Epsilon]]\\n[[Workspace Zeta]]", {
+          updatedAt: now,
+          properties: { status: "active", priority: "normal", type: "운영", project: "NowNote" },
+        });
+        const workspaceC = node("workspace-c", "Workspace Old", "오래된 고립 메모", {
+          updatedAt: staleDate,
+          properties: {},
+        });
+        const workspaceD = node("workspace-d", "Workspace Delta", "[[Workspace Beta]]", { updatedAt: now });
+        const workspaceE = node("workspace-e", "Workspace Epsilon", "[[Workspace Beta]]", { updatedAt: now });
+        const workspaceZ = node("workspace-z", "Workspace Zeta", "[[Workspace Beta]]", { updatedAt: now });
+        state.data.tree = [workspaceA, workspaceB, workspaceC, workspaceD, workspaceE, workspaceZ];
+        state.selectedTreeId = "workspace-a";
+        state.search = "ops";
+        state.settings.openTreeTabs = ["workspace-a", "workspace-b"];
+        state.settings.pinnedTreeTabs = ["workspace-a"];
+        state.settings.graph = normalizeGraphSettings({ mode: "local", depth: 2, filter: "Workspace", tag: "ops", group: "tag" });
+        state.settings.properties = normalizePropertyViewSettings({ search: "NowNote", status: "active", priority: "high", group: "project" });
+        state.settings.workspaces = defaultWorkspaceSettings();
+        renderTree();
+        renderSettings();
+        elements.workspaceNameInput.value = "운영 점검";
+        saveCurrentWorkspace();
+        state.selectedTreeId = "workspace-c";
+        state.search = "";
+        state.settings.openTreeTabs = ["workspace-c"];
+        state.settings.graph = normalizeGraphSettings({ mode: "global", depth: 1, filter: "", tag: "", group: "topic" });
+        elements.workspaceSelect.value = state.settings.workspaces.items[0].id;
+        applySelectedWorkspace();
+        renderSettings();
+        const workspaceSaved = state.settings.workspaces.items.length === 1
+          && state.settings.workspaces.items[0].state.graph.tag === "ops";
+        const workspaceApplied = state.selectedTreeId === "workspace-a"
+          && state.search === "ops"
+          && state.settings.openTreeTabs.includes("workspace-b")
+          && state.settings.graph.mode === "local"
+          && state.settings.properties.group === "project";
+        const healthReport = knowledgeHealthReport();
+        const workspaceHealth = healthReport.summary.isolated >= 1
+          && healthReport.summary.stale >= 1
+          && healthReport.summary.hubs >= 1
+          && healthReport.summary.missing >= 1
+          && document.querySelectorAll("#workspaceHealthList .workspace-health-item").length >= 1;
+        const workspaceLinks = externalLinksForText(getSelectedTreeNode().content).includes("https://sinsan.kr")
+          && document.querySelectorAll("#workspaceExternalLinks .workspace-link-item").length === 1;
         state.settings.server.ownerId = "alice";
         state.settings.server.deviceId = "web-client";
         state.data.tree = [];
@@ -550,6 +600,10 @@ async function runOnce() {
           sensitiveWarning,
           publishHtmlExported,
           publishSlidesExported,
+          workspaceSaved,
+          workspaceApplied,
+          workspaceHealth,
+          workspaceLinks,
           groupSharedReadOnly,
           groupSharedNotPushed,
         };
@@ -590,6 +644,10 @@ async function runOnce() {
     assert(result.sensitiveWarning, "출판 전 민감정보 후보가 표시되지 않았습니다.");
     assert(result.publishHtmlExported, "공개 HTML 내보내기 생성이 동작하지 않습니다.");
     assert(result.publishSlidesExported, "발표 HTML 내보내기 생성이 동작하지 않습니다.");
+    assert(result.workspaceSaved, "작업공간 저장이 동작하지 않습니다.");
+    assert(result.workspaceApplied, "작업공간 복원이 동작하지 않습니다.");
+    assert(result.workspaceHealth, "지식 건강 점검이 렌더링되지 않습니다.");
+    assert(result.workspaceLinks, "현재 메모 외부 링크 목록이 표시되지 않습니다.");
     assert(result.groupSharedReadOnly, "그룹 공유 메모가 읽기 전용으로 표시되지 않습니다.");
     assert(result.groupSharedNotPushed, "그룹 공유 읽기 전용 메모가 동기화 업로드 대상에 포함됩니다.");
     console.log("NowNote graph view check passed");
@@ -602,6 +660,7 @@ async function runOnce() {
     console.log("- Command palette, slash commands, templates, unique notes, random notes, merge, and split work");
     console.log("- Recovery snapshots, frontmatter mapping, Obsidian import conversion, and import reports work");
     console.log("- Publish bundles, sensitive checks, public HTML, and slides HTML export work");
+    console.log("- Workspaces, knowledge health checks, and external link lists work");
     console.log("- Group-shared notes are rendered read-only and excluded from upload");
   } finally {
     browserClient?.close();
