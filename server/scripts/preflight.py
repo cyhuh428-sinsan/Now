@@ -841,8 +841,9 @@ def main() -> None:
         check_text_contains(
             notes_api_source,
             [
-                ("include_group_shared=True", "Notes list includes group shared notes", "notes group shared list"),
+                ("include_group_shared=bool(web_session_token)", "Notes list limits group shared notes to web sessions", "web-only notes group shared list"),
                 ("group_shared_owner_ids", "Notes search includes group shared owners", "notes group shared search"),
+                ("if web_session_token else []", "Notes search limits group shared owners to web sessions", "web-only notes group shared search"),
             ],
             failures,
         )
@@ -851,7 +852,7 @@ def main() -> None:
         check_text_contains(
             sync_api_source,
             [
-                ("include_group_shared=True", "Sync pull includes group shared notes", "sync group shared pull"),
+                ("include_group_shared=bool(web_session_token)", "Sync pull limits group shared notes to web sessions", "web-only sync group shared pull"),
             ],
             failures,
         )
