@@ -539,6 +539,22 @@ async function runOnce() {
         state.data.tree = [];
         applyPulledServerNotes([
           {
+            owner_id: "alice",
+            device_id: "web-client",
+            local_id: "alice-root",
+            note_type: "tree",
+            title: "Alice Shared",
+            content: "내 공유 메모",
+            parent_local_id: null,
+            level: 1,
+            tags: "mine",
+            source: "web-tree",
+            client_updated_at: "2026-06-01T00:00:00",
+            deleted_at: null,
+            created_at: "2026-06-01T00:00:00",
+            updated_at: "2026-06-01T00:00:00",
+          },
+          {
             owner_id: "bob",
             device_id: "pc",
             local_id: "shared-root",
@@ -555,7 +571,22 @@ async function runOnce() {
             updated_at: "2026-06-01T00:00:00",
           },
         ]);
-        const groupNode = flattenTree(state.data.tree)[0];
+        state.sharedView = "mine";
+        renderTreeListOnly();
+        const mineSharedView = document.querySelectorAll("#treeList .tree-node").length === 1
+          && document.querySelector("#treeList")?.textContent.includes("Alice Shared")
+          && !document.querySelector("#treeList")?.textContent.includes("Bob Shared");
+        state.sharedView = "group-tree";
+        renderTreeListOnly();
+        const groupTreeSharedView = document.querySelectorAll("#treeList .tree-node").length === 2
+          && document.querySelector("#treeList")?.textContent.includes("Alice Shared")
+          && document.querySelector("#treeList")?.textContent.includes("Bob Shared");
+        state.sharedView = "member";
+        renderTreeListOnly();
+        const memberSharedView = document.querySelectorAll("#treeList .member-shared-section").length === 2
+          && document.querySelector("#treeList")?.textContent.includes("alice")
+          && document.querySelector("#treeList")?.textContent.includes("bob");
+        const groupNode = flattenTree(state.data.tree).find((node) => node.groupSharedReadOnly);
         state.selectedTreeId = groupNode.id;
         renderTree();
         const groupSharedReadOnly = groupNode.id === "group:bob:shared-root"
@@ -564,7 +595,8 @@ async function runOnce() {
           && elements.treeTitleInput.disabled
           && elements.treeContent.readOnly;
         groupNode.syncState = "pending";
-        const groupSharedNotPushed = buildServerSyncNotes(state.settings.server).length === 0;
+        const groupSharedNotPushed = !buildServerSyncNotes(state.settings.server)
+          .some((note) => note.local_id === "shared-root" || note.title === "Bob Shared");
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -604,6 +636,9 @@ async function runOnce() {
           workspaceApplied,
           workspaceHealth,
           workspaceLinks,
+          mineSharedView,
+          groupTreeSharedView,
+          memberSharedView,
           groupSharedReadOnly,
           groupSharedNotPushed,
         };
@@ -648,6 +683,9 @@ async function runOnce() {
     assert(result.workspaceApplied, "작업공간 복원이 동작하지 않습니다.");
     assert(result.workspaceHealth, "지식 건강 점검이 렌더링되지 않습니다.");
     assert(result.workspaceLinks, "현재 메모 외부 링크 목록이 표시되지 않습니다.");
+    assert(result.mineSharedView, "내 공유메모 조회가 내 공유 문서만 표시하지 않습니다.");
+    assert(result.groupTreeSharedView, "그룹 지식체계 조회가 그룹 공유 문서를 함께 표시하지 않습니다.");
+    assert(result.memberSharedView, "구성원별 공유문서 조회가 소유자별로 묶이지 않습니다.");
     assert(result.groupSharedReadOnly, "그룹 공유 메모가 읽기 전용으로 표시되지 않습니다.");
     assert(result.groupSharedNotPushed, "그룹 공유 읽기 전용 메모가 동기화 업로드 대상에 포함됩니다.");
     console.log("NowNote graph view check passed");
@@ -661,6 +699,7 @@ async function runOnce() {
     console.log("- Recovery snapshots, frontmatter mapping, Obsidian import conversion, and import reports work");
     console.log("- Publish bundles, sensitive checks, public HTML, and slides HTML export work");
     console.log("- Workspaces, knowledge health checks, and external link lists work");
+    console.log("- Web group shared views split mine, group tree, and member sections");
     console.log("- Group-shared notes are rendered read-only and excluded from upload");
   } finally {
     browserClient?.close();

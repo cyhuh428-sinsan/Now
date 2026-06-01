@@ -23,6 +23,7 @@ COMMAND_DESIGN = ROOT.parent / "docs" / "NOW_1_6_WRITING_COMMAND_DESIGN.md"
 RECOVERY_IMPORT_DESIGN = ROOT.parent / "docs" / "NOW_1_7_RECOVERY_IMPORT_DESIGN.md"
 PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md"
 WORKSPACE_OPERATIONS_DESIGN = ROOT.parent / "docs" / "NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md"
+GROUP_SHARED_VIEWS_DESIGN = ROOT.parent / "docs" / "NOW_2_1_WEB_GROUP_SHARED_VIEWS_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -75,6 +76,7 @@ def main() -> None:
         RECOVERY_IMPORT_DESIGN,
         PUBLISH_SLIDES_DESIGN,
         WORKSPACE_OPERATIONS_DESIGN,
+        GROUP_SHARED_VIEWS_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -119,6 +121,7 @@ def main() -> None:
         ('rel="manifest"', "PWA manifest link"),
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
+        ("hosted-web-only hidden", "group shared view menu hosted Web visibility guard"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
@@ -144,6 +147,9 @@ def main() -> None:
         ("markdownPreview", "Markdown preview"),
         ("searchInput", "global search input"),
         ("resultsList", "search result list"),
+        ("sharedMineNavBtn", "my shared notes view button"),
+        ("sharedGroupTreeNavBtn", "group knowledge tree view button"),
+        ("sharedMemberNavBtn", "member shared documents view button"),
         ("noteFindInput", "in-note search input"),
         ("openTabs", "open tabs list"),
         ("shortcutEditor", "shortcut editor"),
@@ -331,6 +337,9 @@ def main() -> None:
         ("function renderTodayMemoState", "daily chip refresh function"),
         ("archivedDaily", "daily archive state"),
         ("selected.level >= 3", "tree depth guard"),
+        ("function normalizeSharedView", "shared view mode normalization"),
+        ("function renderMemberSharedTreeList", "member shared tree renderer"),
+        ("function isOwnSharedTreeNode", "my shared notes filter"),
         ("serverUserTokenInput", "public server user token input"),
         ("settings.server.autoSync", "auto sync setting translation"),
         ("settings.server.conflict.keepLocal", "server conflict action translation"),
@@ -454,6 +463,7 @@ def main() -> None:
     style_requirements = [
         (".daily-popover", "daily popover styling"),
         (".open-tabs-bar", "open tabs styling"),
+        (".member-shared-section", "member shared section styling"),
         (".note-find-bar", "in-note search styling"),
         (".markdown-preview", "Markdown preview styling"),
         (".server-settings-form", "server settings styling"),
@@ -512,6 +522,7 @@ def main() -> None:
         ("1.7 복구/가져오기/마이그레이션", "1.7 recovery import documented"),
         ("1.8 출판/발표/공개 지식 묶음", "1.8 publish slides documented"),
         ("1.9 작업공간과 운영형 지식 관리", "1.9 workspace operations documented"),
+        ("2.1 Web 그룹 공유 조회", "2.1 group shared views documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
