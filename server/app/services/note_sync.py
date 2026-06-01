@@ -1,10 +1,10 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.models.note import Note
+from app.models.note import Note, UserAccount
 from app.schemas.note import NoteIn
 
 
@@ -86,9 +86,18 @@ def list_changed_notes(
     owner_id: str,
     updated_after: datetime | None,
     include_deleted: bool,
+    include_group_shared: bool = False,
 ) -> list[Note]:
     updated_after = as_naive_utc(updated_after)
-    stmt = select(Note).where(Note.owner_id == owner_id)
+    owner_ids = [owner_id]
+    if include_group_shared:
+        owner_ids.extend(group_shared_owner_ids(db, owner_id=owner_id))
+    stmt = select(Note).where(
+        or_(
+            Note.owner_id == owner_id,
+            Note.owner_id.in_(owner_ids[1:]) & (Note.note_type == "tree"),
+        )
+    )
     if updated_after is not None:
         stmt = stmt.where(Note.updated_at > updated_after)
     if not include_deleted:
@@ -97,10 +106,27 @@ def list_changed_notes(
     return _dedupe_notes_by_local_id(list(db.scalars(stmt).all()))
 
 
+def group_shared_owner_ids(db: Session, *, owner_id: str) -> list[str]:
+    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+    group_name = (user.group_name if user else "").strip()
+    if not group_name:
+        return []
+    rows = db.scalars(
+        select(UserAccount.owner_id)
+        .where(
+            UserAccount.group_name == group_name,
+            UserAccount.owner_id != owner_id,
+            UserAccount.is_active == 1,
+        )
+        .order_by(UserAccount.owner_id.asc())
+    )
+    return list(rows.all())
+
+
 def _dedupe_notes_by_local_id(notes: list[Note]) -> list[Note]:
     latest: dict[tuple[str, str], Note] = {}
     for note in notes:
-        key = (note.note_type, note.local_id)
+        key = (note.owner_id, note.note_type, note.local_id)
         current = latest.get(key)
         if current is None or _note_sort_key(note) > _note_sort_key(current):
             latest[key] = note
