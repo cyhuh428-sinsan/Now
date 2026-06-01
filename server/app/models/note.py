@@ -152,6 +152,16 @@ class WebSession(Base):
     )
 
 
+class GroupMessage(Base):
+    __tablename__ = "group_messages"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_name: Mapped[str] = mapped_column(String(80), index=True)
+    sender_owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    body: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 

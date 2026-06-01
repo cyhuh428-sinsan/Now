@@ -24,6 +24,7 @@ RECOVERY_IMPORT_DESIGN = ROOT.parent / "docs" / "NOW_1_7_RECOVERY_IMPORT_DESIGN.
 PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md"
 WORKSPACE_OPERATIONS_DESIGN = ROOT.parent / "docs" / "NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md"
 GROUP_SHARED_VIEWS_DESIGN = ROOT.parent / "docs" / "NOW_2_1_WEB_GROUP_SHARED_VIEWS_DESIGN.md"
+GROUP_MESSENGER_DESIGN = ROOT.parent / "docs" / "NOW_2_2_GROUP_MESSENGER_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -77,6 +78,7 @@ def main() -> None:
         PUBLISH_SLIDES_DESIGN,
         WORKSPACE_OPERATIONS_DESIGN,
         GROUP_SHARED_VIEWS_DESIGN,
+        GROUP_MESSENGER_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -150,6 +152,11 @@ def main() -> None:
         ("sharedMineNavBtn", "my shared notes view button"),
         ("sharedGroupTreeNavBtn", "group knowledge tree view button"),
         ("sharedMemberNavBtn", "member shared documents view button"),
+        ("groupMessengerBtn", "group messenger button"),
+        ("groupMessengerView", "group messenger view"),
+        ("groupMessengerList", "group messenger list"),
+        ("groupMessengerInput", "group messenger input"),
+        ("groupMessengerSendBtn", "group messenger send button"),
         ("noteFindInput", "in-note search input"),
         ("openTabs", "open tabs list"),
         ("shortcutEditor", "shortcut editor"),
@@ -340,6 +347,9 @@ def main() -> None:
         ("function normalizeSharedView", "shared view mode normalization"),
         ("function renderMemberSharedTreeList", "member shared tree renderer"),
         ("function isOwnSharedTreeNode", "my shared notes filter"),
+        ("async function refreshGroupMessages", "group messenger refresh"),
+        ("async function sendGroupMessage", "group messenger send"),
+        ("/api/v1/group-messages", "group messenger API path"),
         ("serverUserTokenInput", "public server user token input"),
         ("settings.server.autoSync", "auto sync setting translation"),
         ("settings.server.conflict.keepLocal", "server conflict action translation"),
@@ -464,6 +474,7 @@ def main() -> None:
         (".daily-popover", "daily popover styling"),
         (".open-tabs-bar", "open tabs styling"),
         (".member-shared-section", "member shared section styling"),
+        (".messenger-list", "group messenger list styling"),
         (".note-find-bar", "in-note search styling"),
         (".markdown-preview", "Markdown preview styling"),
         (".server-settings-form", "server settings styling"),
@@ -523,6 +534,7 @@ def main() -> None:
         ("1.8 출판/발표/공개 지식 묶음", "1.8 publish slides documented"),
         ("1.9 작업공간과 운영형 지식 관리", "1.9 workspace operations documented"),
         ("2.1 Web 그룹 공유 조회", "2.1 group shared views documented"),
+        ("2.2 Web 그룹 메신저", "2.2 group messenger documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),

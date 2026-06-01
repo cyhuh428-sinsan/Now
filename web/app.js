@@ -217,6 +217,15 @@ const I18N = {
     "side.trash": "삭제 보관함",
     "side.settings": "화면 설정",
     "side.help": "도움말",
+    "messenger.eyebrow": "같은 그룹 안의 짧은 대화",
+    "messenger.title": "그룹 메신저",
+    "messenger.refresh": "새로고침",
+    "messenger.send": "보내기",
+    "messenger.placeholder": "그룹원에게 보낼 메시지",
+    "messenger.group": "그룹: {group}",
+    "messenger.empty": "아직 메시지가 없습니다.",
+    "messenger.loadFailed": "메시지를 불러오지 못했습니다",
+    "messenger.sendFailed": "메시지를 보내지 못했습니다",
     "rail.sidebar.open": "목록 펼치기",
     "rail.sidebar.close": "목록 접기",
     "rail.knowledge": "지식 메모",
@@ -838,6 +847,15 @@ const I18N = {
     "side.trash": "Trash",
     "side.settings": "Display settings",
     "side.help": "Help",
+    "messenger.eyebrow": "Short messages inside the same group",
+    "messenger.title": "Group messenger",
+    "messenger.refresh": "Refresh",
+    "messenger.send": "Send",
+    "messenger.placeholder": "Message your group",
+    "messenger.group": "Group: {group}",
+    "messenger.empty": "No messages yet.",
+    "messenger.loadFailed": "Could not load messages",
+    "messenger.sendFailed": "Could not send message",
     "rail.sidebar.open": "Open list",
     "rail.sidebar.close": "Close list",
     "rail.knowledge": "Knowledge notes",
@@ -1716,6 +1734,8 @@ function defaultServerSettings() {
     capabilities: null,
     publicServerReadiness: null,
     analysisJobs: [],
+    groupMessages: [],
+    groupMessagesLoadedAt: null,
     conflicts: [],
     lastCheckedAt: null,
     lastSyncedAt: null,
@@ -1996,6 +2016,15 @@ const elements = {
   serverAnalysisRefreshBtn: $("#serverAnalysisRefreshBtn"),
   serverAnalysisTypeSelect: $("#serverAnalysisTypeSelect"),
   serverAnalysisList: $("#serverAnalysisList"),
+  groupMessengerBtn: $("#groupMessengerBtn"),
+  groupMessengerView: $("#groupMessengerView"),
+  groupMessengerCloseBtn: $("#groupMessengerCloseBtn"),
+  groupMessengerRefreshBtn: $("#groupMessengerRefreshBtn"),
+  groupMessengerForm: $("#groupMessengerForm"),
+  groupMessengerInput: $("#groupMessengerInput"),
+  groupMessengerSendBtn: $("#groupMessengerSendBtn"),
+  groupMessengerList: $("#groupMessengerList"),
+  groupMessengerGroupLabel: $("#groupMessengerGroupLabel"),
   hostedDeviceTokenBox: $("#hostedDeviceTokenBox"),
   deviceTokenNameInput: $("#deviceTokenNameInput"),
   deviceTokenIdInput: $("#deviceTokenIdInput"),
@@ -2241,6 +2270,7 @@ async function initializeHostedWebClient() {
     await verifyWebSession();
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
+    await refreshGroupMessages({ silent: true });
     hideWebLogin();
   } catch (error) {
     clearWebSession();
@@ -2349,6 +2379,7 @@ async function handleWebLoginSubmit(event) {
     applyServerUserProfile(payload.user);
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
+    await refreshGroupMessages({ silent: true });
     hideWebLogin();
     showNotice(t("web.login.ok"));
   } catch (error) {
@@ -2824,6 +2855,10 @@ function bindEvents() {
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
   elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
   elements.serverConflictList.addEventListener("click", handleServerConflictListClick);
+  elements.groupMessengerBtn?.addEventListener("click", openGroupMessenger);
+  elements.groupMessengerCloseBtn?.addEventListener("click", closeGroupMessenger);
+  elements.groupMessengerRefreshBtn?.addEventListener("click", () => refreshGroupMessages());
+  elements.groupMessengerForm?.addEventListener("submit", sendGroupMessage);
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webLogoutBtn.addEventListener("click", handleWebLogout);
 
@@ -4553,6 +4588,102 @@ function applyServerUserProfile(user) {
   });
 }
 
+function openGroupMessenger() {
+  if (!isHostedWebClient()) return;
+  closePopupLayers();
+  elements.groupMessengerView?.classList.remove("hidden");
+  renderGroupMessenger();
+  refreshGroupMessages({ silent: true });
+  window.setTimeout(() => elements.groupMessengerInput?.focus(), 0);
+}
+
+function closeGroupMessenger() {
+  elements.groupMessengerView?.classList.add("hidden");
+}
+
+async function refreshGroupMessages({ silent = false } = {}) {
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  try {
+    const payload = await requestServerJson(
+      server,
+      `/api/v1/group-messages?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+    );
+    server.groupMessages = Array.isArray(payload.items) ? payload.items : [];
+    server.groupMessagesLoadedAt = new Date().toISOString();
+    if (payload.group_name) {
+      server.userProfile = normalizeServerUserProfile({
+        ...server.userProfile,
+        groupName: payload.group_name,
+      });
+    }
+    persistSettings();
+    renderGroupMessenger();
+  } catch (error) {
+    if (!silent) showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
+  }
+}
+
+async function sendGroupMessage(event) {
+  event?.preventDefault();
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  const body = elements.groupMessengerInput?.value.trim() || "";
+  if (!body) return;
+  elements.groupMessengerSendBtn.disabled = true;
+  try {
+    const payload = await requestServerJson(server, "/api/v1/group-messages", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        body,
+      }),
+    });
+    const messages = Array.isArray(server.groupMessages) ? server.groupMessages.slice() : [];
+    if (payload.item) messages.push(payload.item);
+    server.groupMessages = messages.slice(-100);
+    server.groupMessagesLoadedAt = new Date().toISOString();
+    elements.groupMessengerInput.value = "";
+    persistSettings();
+    renderGroupMessenger();
+  } catch (error) {
+    showNotice(`${t("messenger.sendFailed")}: ${error.message}`, "error");
+  } finally {
+    elements.groupMessengerSendBtn.disabled = false;
+  }
+}
+
+function renderGroupMessenger() {
+  if (!elements.groupMessengerList) return;
+  const server = state.settings.server || defaultServerSettings();
+  const profile = normalizeServerUserProfile(server.userProfile);
+  elements.groupMessengerGroupLabel.textContent = t("messenger.group", {
+    group: profile.groupName || "-",
+  });
+  const messages = Array.isArray(server.groupMessages) ? server.groupMessages : [];
+  if (!messages.length) {
+    elements.groupMessengerList.innerHTML = `<div class="side-empty">${escapeHtml(t("messenger.empty"))}</div>`;
+    return;
+  }
+  elements.groupMessengerList.replaceChildren(
+    ...messages.map((message) => groupMessageElement(message, server.ownerId)),
+  );
+  elements.groupMessengerList.scrollTop = elements.groupMessengerList.scrollHeight;
+}
+
+function groupMessageElement(message, currentOwnerId) {
+  const item = document.createElement("article");
+  const mine = message.sender_owner_id === normalizeOwnerId(currentOwnerId);
+  item.className = `messenger-item${mine ? " mine" : ""}`;
+  const sender = message.sender_display_name || message.sender_owner_id || "-";
+  const time = message.created_at ? relativeTime(message.created_at) : "";
+  item.innerHTML = [
+    `<div class="messenger-meta"><span>${escapeHtml(sender)}</span><time>${escapeHtml(time)}</time></div>`,
+    `<p class="messenger-body">${escapeHtml(message.body || "")}</p>`,
+  ].join("");
+  return item;
+}
+
 async function serverResponseError(response) {
   const statusPart = `HTTP ${response.status}`;
   try {
@@ -5303,6 +5434,7 @@ function applyLanguage() {
   setText("#exportMarkdownBtn", t("side.mdExport"));
   setText("#importMarkdownBtn", t("side.mdImport"));
   setText("#deletedTreeBtnLabel", t("side.trash"));
+  setText("#groupMessengerBtn", t("messenger.title"));
   setText("#settingsBtn", t("side.settings"));
   setText("#helpBtn", t("side.help"));
   setText("#treeEyebrow", t("tree.eyebrow"));
@@ -5318,6 +5450,12 @@ function applyLanguage() {
   setText("#webRegisterSubmitBtn", t("web.login.register"));
   setText("#webResetRequestBtn", t("web.login.resetRequest"));
   setText("#webResetConfirmBtn", t("web.login.resetConfirm"));
+  setText("#groupMessengerEyebrow", t("messenger.eyebrow"));
+  setText("#groupMessengerTitle", t("messenger.title"));
+  setText("#groupMessengerRefreshBtn", t("messenger.refresh"));
+  setText("#groupMessengerSendBtn", t("messenger.send"));
+  setPlaceholder(elements.groupMessengerInput, t("messenger.placeholder"));
+  setIconLabel(elements.groupMessengerCloseBtn, t("aria.close"));
   setPlaceholder(elements.webRegisterEmailInput, t("web.login.emailPlaceholder"));
   setPlaceholder(elements.webLoginTwoFactorInput, t("web.login.twoFactorPlaceholder"));
   setPlaceholder(elements.webResetCodeInput, t("web.login.resetCodePlaceholder"));
@@ -7923,6 +8061,7 @@ function closePopupLayers() {
   closePropertiesView();
   closeCanvasView();
   closeCaptureView();
+  closeGroupMessenger();
   closeDeletedTreeBox();
   closeSettingsPopup();
 }
@@ -7960,6 +8099,7 @@ function render() {
   if (!elements.propertiesView.classList.contains("hidden")) renderPropertiesView();
   if (!elements.canvasView.classList.contains("hidden")) renderCanvas();
   if (!elements.captureView.classList.contains("hidden")) renderCaptures();
+  if (!elements.groupMessengerView?.classList.contains("hidden")) renderGroupMessenger();
   renderRecoveryPanel();
   renderPublishPanel();
 }
@@ -10269,6 +10409,8 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
         }
       : null;
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
+  normalized.groupMessages = Array.isArray(normalized.groupMessages) ? normalized.groupMessages.slice(-100) : [];
+  normalized.groupMessagesLoadedAt = typeof normalized.groupMessagesLoadedAt === "string" ? normalized.groupMessagesLoadedAt : null;
   normalized.conflicts = Array.isArray(normalized.conflicts)
     ? normalized.conflicts
         .filter((conflict) => conflict && typeof conflict === "object" && typeof conflict.id === "string")
