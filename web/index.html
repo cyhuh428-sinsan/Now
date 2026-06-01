@@ -620,6 +620,18 @@
                   <p id="serverAnalysisDesc">선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.</p>
                 </div>
                 <div class="settings-actions">
+                  <label class="server-analysis-type">
+                    <span id="serverAnalysisTypeLabel">작업 유형</span>
+                    <select id="serverAnalysisTypeSelect" class="settings-input">
+                      <option value="memo_summary">선택 메모 요약</option>
+                      <option value="knowledge_2_0_review">2.0 지식화 점검</option>
+                      <option value="similar_notes">유사 메모 후보</option>
+                      <option value="duplicate_candidates">중복 후보</option>
+                      <option value="relation_suggestions">관계 후보</option>
+                      <option value="tag_property_suggestions">태그/속성 후보</option>
+                      <option value="knowledge_health">지식 건강 점검</option>
+                    </select>
+                  </label>
                   <button id="serverAnalysisCreateBtn" class="secondary-btn" type="button">선택 메모 분석</button>
                   <button id="serverAnalysisRefreshBtn" class="secondary-btn" type="button">작업 새로고침</button>
                 </div>
