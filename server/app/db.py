@@ -30,6 +30,7 @@ def create_tables() -> None:
     from app.models.note import (  # noqa: F401
         AnalysisJob,
         GroupMessage,
+        GroupMessageRead,
         Note,
         Recording,
         ReleaseEvidenceRecord,
