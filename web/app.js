@@ -45,6 +45,7 @@ const I18N = {
     "note.stats.edit": "편집",
     "note.stats.words": "{count}개 단어",
     "note.stats.chars": "{count}개 문자",
+    "note.stats.reading": "읽기 {count}분",
     "note.stats.lines": "{count}줄",
     "note.stats.links": "{count}개 링크",
     "note.stats.tags": "{count}개 태그",
@@ -572,6 +573,25 @@ const I18N = {
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
+    "settings.workspace.title": "작업공간 / 지식 건강",
+    "settings.workspace.desc": "반복 작업 상태를 저장하고 정리 우선순위를 확인합니다.",
+    "settings.workspace.placeholder": "작업공간 이름",
+    "settings.workspace.empty": "저장된 작업공간이 없습니다.",
+    "settings.workspace.saved": "작업공간을 저장했습니다.",
+    "settings.workspace.applied": "작업공간을 열었습니다.",
+    "settings.workspace.save": "작업공간 저장",
+    "settings.workspace.apply": "작업공간 열기",
+    "settings.workspace.select": "저장된 작업공간",
+    "settings.workspace.summary": "{count}개 작업공간 · 현재 {current}",
+    "settings.workspace.current": "현재 화면",
+    "settings.workspace.health": "전체 {total}개 · 고립 {isolated}개 · 오래됨 {stale}개 · 허브 {hubs}개 · 속성 누락 {missing}개",
+    "settings.workspace.noHealth": "정리 우선순위가 높은 메모가 없습니다.",
+    "settings.workspace.health.isolated": "고립 메모",
+    "settings.workspace.health.stale": "오래된 메모",
+    "settings.workspace.health.hub": "과도 연결",
+    "settings.workspace.health.missing": "속성 누락",
+    "settings.workspace.links.none": "현재 메모의 외부 링크가 없습니다.",
+    "settings.workspace.links.title": "현재 메모 외부 링크",
     "quick.count.all": "전체 메모를 표시합니다.",
     "graph.eyebrow": "[[제목]] 연결 기준",
     "graph.title": "연결 보기",
@@ -626,6 +646,7 @@ const I18N = {
     "note.stats.edit": "Edit",
     "note.stats.words": "{count} words",
     "note.stats.chars": "{count} chars",
+    "note.stats.reading": "{count} min read",
     "note.stats.lines": "{count} lines",
     "note.stats.links": "{count} links",
     "note.stats.tags": "{count} tags",
@@ -1153,6 +1174,25 @@ const I18N = {
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
+    "settings.workspace.title": "Workspaces / Knowledge Health",
+    "settings.workspace.desc": "Save repeated work states and review cleanup priorities.",
+    "settings.workspace.placeholder": "Workspace name",
+    "settings.workspace.empty": "No saved workspaces.",
+    "settings.workspace.saved": "Workspace saved.",
+    "settings.workspace.applied": "Workspace opened.",
+    "settings.workspace.save": "Save workspace",
+    "settings.workspace.apply": "Open workspace",
+    "settings.workspace.select": "Saved workspaces",
+    "settings.workspace.summary": "{count} workspaces · Current {current}",
+    "settings.workspace.current": "Current screen",
+    "settings.workspace.health": "Total {total} · isolated {isolated} · stale {stale} · hubs {hubs} · missing properties {missing}",
+    "settings.workspace.noHealth": "No high-priority cleanup items.",
+    "settings.workspace.health.isolated": "Isolated note",
+    "settings.workspace.health.stale": "Stale note",
+    "settings.workspace.health.hub": "Overlinked",
+    "settings.workspace.health.missing": "Missing properties",
+    "settings.workspace.links.none": "No external links in the current note.",
+    "settings.workspace.links.title": "External links in current note",
     "quick.count.all": "Showing all notes.",
     "graph.eyebrow": "Based on [[title]] links",
     "graph.title": "Linked notes",
@@ -1588,6 +1628,7 @@ function defaultSettings() {
     pinnedTreeTabs: [],
     graph: defaultGraphSettings(),
     properties: defaultPropertyViewSettings(),
+    workspaces: defaultWorkspaceSettings(),
   };
 }
 
@@ -1609,6 +1650,13 @@ function defaultPropertyViewSettings() {
     priority: "",
     group: "status",
     savedFilters: [],
+  };
+}
+
+function defaultWorkspaceSettings() {
+  return {
+    activeId: "",
+    items: [],
   };
 }
 
@@ -1853,6 +1901,14 @@ const elements = {
   publishSensitiveList: $("#publishSensitiveList"),
   publishNodeList: $("#publishNodeList"),
   publishPreview: $("#publishPreview"),
+  workspaceNameInput: $("#workspaceNameInput"),
+  workspaceSelect: $("#workspaceSelect"),
+  workspaceSaveBtn: $("#workspaceSaveBtn"),
+  workspaceApplyBtn: $("#workspaceApplyBtn"),
+  workspaceSummary: $("#workspaceSummary"),
+  workspaceHealthSummary: $("#workspaceHealthSummary"),
+  workspaceHealthList: $("#workspaceHealthList"),
+  workspaceExternalLinks: $("#workspaceExternalLinks"),
   quickSwitchBtn: $("#quickSwitchBtn"),
   commandPaletteBtn: $("#commandPaletteBtn"),
   graphBtn: $("#graphBtn"),
@@ -2618,6 +2674,9 @@ function bindEvents() {
   elements.publishSaveBtn.addEventListener("click", savePublishBundle);
   elements.publishHtmlExportBtn.addEventListener("click", exportPublishHtml);
   elements.publishSlidesExportBtn.addEventListener("click", exportPublishSlides);
+  elements.workspaceSaveBtn?.addEventListener("click", saveCurrentWorkspace);
+  elements.workspaceApplyBtn?.addEventListener("click", applySelectedWorkspace);
+  elements.workspaceSelect?.addEventListener("change", renderWorkspacePanel);
 
   elements.settingsBtn.addEventListener("click", () => {
     toggleSettings();
@@ -3107,6 +3166,7 @@ function renderSettings() {
   renderDesktopStorageStatus();
   renderShortcutEditor();
   renderFeatureSettings();
+  renderWorkspacePanel();
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
       const button = document.createElement("button");
@@ -3124,6 +3184,191 @@ function renderSettings() {
       return button;
     }),
   );
+}
+
+function renderWorkspacePanel() {
+  if (!elements.workspaceSelect || !elements.workspaceSummary || !elements.workspaceHealthList) return;
+  state.settings.workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
+  const workspaces = state.settings.workspaces.items;
+  const previousSelectedId = elements.workspaceSelect.value;
+  elements.workspaceSelect.replaceChildren(
+    optionElement("", t("settings.workspace.select")),
+    ...workspaces.map((workspace) => optionElement(workspace.id, `${workspace.name} · ${formatDateTime(workspace.savedAt)}`)),
+  );
+  const selectedId = previousSelectedId || state.settings.workspaces.activeId || "";
+  elements.workspaceSelect.value = workspaces.some((workspace) => workspace.id === selectedId) ? selectedId : "";
+  const current = currentWorkspaceName() || t("settings.workspace.current");
+  elements.workspaceSummary.textContent = workspaces.length
+    ? t("settings.workspace.summary", { count: workspaces.length, current })
+    : t("settings.workspace.empty");
+  renderKnowledgeHealthPanel();
+  renderCurrentExternalLinks();
+}
+
+function saveCurrentWorkspace() {
+  const now = new Date().toISOString();
+  const current = getSelectedTreeNode();
+  const name = normalizeText(elements.workspaceNameInput.value).trim()
+    || current?.title
+    || `${t("settings.workspace.current")} ${new Date().toLocaleDateString(currentLocale())}`;
+  const workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
+  const selectedId = elements.workspaceSelect.value;
+  const id = selectedId || crypto.randomUUID();
+  const workspace = {
+    id,
+    name: name.slice(0, 48),
+    savedAt: now,
+    state: currentWorkspaceState(),
+  };
+  workspaces.items = [workspace, ...workspaces.items.filter((item) => item.id !== id)].slice(0, 12);
+  workspaces.activeId = id;
+  state.settings.workspaces = workspaces;
+  persistSettings();
+  renderWorkspacePanel();
+  showNotice(t("settings.workspace.saved"), "success");
+}
+
+function applySelectedWorkspace() {
+  const workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
+  const workspace = workspaces.items.find((item) => item.id === elements.workspaceSelect.value);
+  if (!workspace) return;
+  applyWorkspaceState(workspace.state);
+  workspaces.activeId = workspace.id;
+  state.settings.workspaces = workspaces;
+  persistSettings();
+  applySettings();
+  render();
+  renderSettings();
+  showNotice(t("settings.workspace.applied"), "success");
+}
+
+function currentWorkspaceName() {
+  const workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
+  return workspaces.items.find((item) => item.id === workspaces.activeId)?.name || "";
+}
+
+function currentWorkspaceState() {
+  return normalizeWorkspaceState({
+    selectedTreeId: state.selectedTreeId || "",
+    search: state.search || "",
+    openTreeTabs: state.settings.openTreeTabs,
+    pinnedTreeTabs: state.settings.pinnedTreeTabs,
+    graph: state.settings.graph,
+    properties: state.settings.properties,
+    treePanelCollapsed: state.settings.treePanelCollapsed,
+    sidebarCollapsed: state.settings.sidebarCollapsed,
+    wideEditor: state.settings.wideEditor,
+    treeListWidth: state.settings.treeListWidth,
+  });
+}
+
+function applyWorkspaceState(workspaceState = {}) {
+  const restored = normalizeWorkspaceState(workspaceState);
+  const exists = (id) => Boolean(id && findTreeNode(state.data.tree, id));
+  state.selectedTreeId = exists(restored.selectedTreeId) ? restored.selectedTreeId : firstTreeNodeId(state.data.tree);
+  state.search = restored.search;
+  state.settings.openTreeTabs = limitOpenTreeTabs(restored.openTreeTabs.filter(exists), 10, restored.pinnedTreeTabs);
+  state.settings.pinnedTreeTabs = restored.pinnedTreeTabs.filter((id) => state.settings.openTreeTabs.includes(id));
+  state.settings.graph = normalizeGraphSettings(restored.graph);
+  state.settings.properties = normalizePropertyViewSettings(restored.properties);
+  state.settings.treePanelCollapsed = restored.treePanelCollapsed;
+  state.settings.sidebarCollapsed = restored.sidebarCollapsed;
+  state.settings.wideEditor = restored.wideEditor;
+  state.settings.treeListWidth = restored.treeListWidth;
+  if (elements.searchInput) elements.searchInput.value = state.search;
+}
+
+function firstTreeNodeId(nodes = state.data.tree) {
+  for (const node of nodes || []) {
+    if (node?.id) return node.id;
+    const childId = firstTreeNodeId(node?.children || []);
+    if (childId) return childId;
+  }
+  return null;
+}
+
+function renderKnowledgeHealthPanel() {
+  const report = knowledgeHealthReport();
+  elements.workspaceHealthSummary.textContent = t("settings.workspace.health", report.summary);
+  if (!report.items.length) {
+    elements.workspaceHealthList.innerHTML = `<div class="empty-compact">${escapeHtml(t("settings.workspace.noHealth"))}</div>`;
+    return;
+  }
+  elements.workspaceHealthList.replaceChildren(
+    ...report.items.map((item) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `workspace-health-item ${item.kind}`;
+      button.innerHTML = `<span>${escapeHtml(item.label)}</span><strong>${escapeHtml(noteTitle(item.node.title))}</strong><small>${escapeHtml(item.reason)}</small>`;
+      button.addEventListener("click", () => {
+        selectTreeNode(item.node.id);
+        closeSettingsPopup();
+      });
+      return button;
+    }),
+  );
+}
+
+function knowledgeHealthReport() {
+  const nodes = flattenTree(state.data.tree).filter((node) => !node.deletedAt);
+  const now = Date.now();
+  const summary = { total: nodes.length, isolated: 0, stale: 0, hubs: 0, missing: 0 };
+  const items = [];
+  nodes.forEach((node) => {
+    const contentNode = { ...node, content: visibleContentForNode(node) };
+    const outgoing = outgoingLinksFor(contentNode);
+    const backlinks = backlinksFor(node);
+    const linkCount = outgoing.length + backlinks.length;
+    const updatedTime = new Date(node.updatedAt || node.createdAt || 0).getTime();
+    const stale = updatedTime && now - updatedTime > 1000 * 60 * 60 * 24 * 45;
+    const properties = normalizeNoteProperties(node.properties);
+    const missingProperties = ["status", "priority", "type", "project"].filter((key) => !properties[key]);
+    if (linkCount === 0) {
+      summary.isolated += 1;
+      items.push({ kind: "isolated", label: t("settings.workspace.health.isolated"), reason: "연결 없음", node });
+    }
+    if (stale) {
+      summary.stale += 1;
+      items.push({ kind: "stale", label: t("settings.workspace.health.stale"), reason: relativeTime(node.updatedAt || node.createdAt), node });
+    }
+    if (linkCount >= 5) {
+      summary.hubs += 1;
+      items.push({ kind: "hub", label: t("settings.workspace.health.hub"), reason: `${linkCount} links`, node });
+    }
+    if (missingProperties.length >= 2) {
+      summary.missing += 1;
+      items.push({ kind: "missing", label: t("settings.workspace.health.missing"), reason: missingProperties.join(", "), node });
+    }
+  });
+  return { summary, items: items.slice(0, 24) };
+}
+
+function renderCurrentExternalLinks() {
+  if (!elements.workspaceExternalLinks) return;
+  const selected = getSelectedTreeNode();
+  const links = selected ? externalLinksForText(visibleContentForNode(selected)) : [];
+  if (!links.length) {
+    elements.workspaceExternalLinks.textContent = t("settings.workspace.links.none");
+    return;
+  }
+  const title = document.createElement("strong");
+  title.textContent = t("settings.workspace.links.title");
+  const list = document.createElement("div");
+  list.className = "workspace-link-list";
+  links.forEach((link) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "workspace-link-item";
+    button.textContent = link;
+    button.addEventListener("click", () => window.open(link, "_blank", "noopener,noreferrer"));
+    list.append(button);
+  });
+  elements.workspaceExternalLinks.replaceChildren(title, list);
+}
+
+function externalLinksForText(text) {
+  const matches = String(text || "").match(/(?:https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})/gi) || [];
+  return Array.from(new Set(matches.map(normalizeDetectedLinkTarget))).slice(0, 12);
 }
 
 function renderLanguageOptions() {
@@ -5016,6 +5261,12 @@ function applyLanguage() {
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
+  setText("#workspaceSettingTitle", t("settings.workspace.title"));
+  setText("#workspaceSettingDesc", t("settings.workspace.desc"));
+  setPlaceholder(elements.workspaceNameInput, t("settings.workspace.placeholder"));
+  setText("#workspaceSaveBtn", t("settings.workspace.save"));
+  setText("#workspaceApplyBtn", t("settings.workspace.apply"));
+  setIconLabel(elements.workspaceSelect, t("settings.workspace.select"));
   setOptionLabels(elements.searchScopeSelect, {
     all: t("search.scope.all"),
     title: t("search.scope.title"),
@@ -5073,6 +5324,7 @@ function applyLanguage() {
   renderOpenTreeTabs();
   renderDeletedTreeList();
   renderSearchPopoverResults();
+  renderWorkspacePanel();
   if (getSelectedTreeNode()) {
     renderLinkPanel();
     renderNoteStats(getSelectedTreeNode());
@@ -8165,6 +8417,7 @@ function renderTags() {
 function renderNoteStats(node) {
   const text = visibleContentForNode(node);
   const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const readingMinutes = Math.max(1, Math.ceil(words / 300));
   const chars = text.replace(/\s/g, "").length;
   const lines = text ? text.split("\n").length : 0;
   const outgoing = outgoingLinksFor({ ...node, content: text });
@@ -8177,6 +8430,7 @@ function renderNoteStats(node) {
     `<span>${escapeHtml(t("note.stats.edit"))}</span>`,
     `<span>${escapeHtml(t("note.stats.words", { count: words }))}</span>`,
     `<span>${escapeHtml(t("note.stats.chars", { count: chars }))}</span>`,
+    `<span>${escapeHtml(t("note.stats.reading", { count: readingMinutes }))}</span>`,
     `<span>${escapeHtml(t("note.stats.lines", { count: lines }))}</span>`,
     `<span>${escapeHtml(t("note.stats.links", { count: links }))}</span>`,
     `<span>${escapeHtml(t("note.stats.tags", { count: tags }))}</span>`,
@@ -9559,6 +9813,7 @@ function normalizeSettings(settings = {}) {
   normalized.pinnedTreeTabs = normalizeIdList(normalized.pinnedTreeTabs, 10);
   normalized.graph = normalizeGraphSettings(normalized.graph, defaults.graph);
   normalized.properties = normalizePropertyViewSettings(normalized.properties, defaults.properties);
+  normalized.workspaces = normalizeWorkspaceSettings(normalized.workspaces, defaults.workspaces);
   normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
   normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
   return normalized;
@@ -9616,6 +9871,40 @@ function normalizePropertyViewSettings(properties = {}, defaults = defaultProper
         .slice(0, 12)
     : [];
   return normalized;
+}
+
+function normalizeWorkspaceSettings(workspaces = {}, defaults = defaultWorkspaceSettings()) {
+  const source = workspaces && typeof workspaces === "object" ? workspaces : {};
+  const items = Array.isArray(source.items)
+    ? source.items
+        .filter((item) => item && typeof item === "object")
+        .map((item) => ({
+          id: typeof item.id === "string" && item.id ? item.id : crypto.randomUUID(),
+          name: normalizeText(item.name || "작업공간").slice(0, 48),
+          savedAt: typeof item.savedAt === "string" ? item.savedAt : new Date().toISOString(),
+          state: normalizeWorkspaceState(item.state),
+        }))
+        .filter((item) => item.name)
+        .slice(0, 12)
+    : defaults.items;
+  const activeId = items.some((item) => item.id === source.activeId) ? source.activeId : "";
+  return { activeId, items };
+}
+
+function normalizeWorkspaceState(value = {}) {
+  const source = value && typeof value === "object" ? value : {};
+  return {
+    selectedTreeId: typeof source.selectedTreeId === "string" ? source.selectedTreeId : "",
+    search: typeof source.search === "string" ? source.search.slice(0, 120) : "",
+    openTreeTabs: normalizeIdList(source.openTreeTabs, 10),
+    pinnedTreeTabs: normalizeIdList(source.pinnedTreeTabs, 10),
+    graph: normalizeGraphSettings(source.graph),
+    properties: normalizePropertyViewSettings(source.properties),
+    treePanelCollapsed: Boolean(source.treePanelCollapsed),
+    sidebarCollapsed: Boolean(source.sidebarCollapsed),
+    wideEditor: source.wideEditor !== false,
+    treeListWidth: Math.min(460, Math.max(180, Number(source.treeListWidth) || 280)),
+  };
 }
 
 function normalizeServerSettings(server = {}, defaults = defaultServerSettings()) {
