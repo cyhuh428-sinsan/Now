@@ -133,6 +133,7 @@
             <span id="deletedTreeBtnLabel">삭제 보관함</span>
             <strong id="deletedTreeCount">0</strong>
           </button>
+          <button id="groupMessengerBtn" class="ghost-btn hosted-web-only hidden" type="button">그룹 메신저</button>
           <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
           <a id="helpBtn" class="ghost-btn help-link" href="./help.html">도움말</a>
         </section>
@@ -1058,6 +1059,27 @@
           </div>
         </div>
         <div id="deletedTreeList" class="archive-list"></div>
+      </div>
+    </section>
+
+    <section id="groupMessengerView" class="quick-popover hidden" aria-labelledby="groupMessengerTitle">
+      <div class="quick-card messenger-card">
+        <header class="view-header">
+          <div>
+            <p id="groupMessengerEyebrow" class="eyebrow">같은 그룹 안의 짧은 대화</p>
+            <h2 id="groupMessengerTitle">그룹 메신저</h2>
+          </div>
+          <button id="groupMessengerCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="messenger-toolbar">
+          <strong id="groupMessengerGroupLabel">그룹: -</strong>
+          <button id="groupMessengerRefreshBtn" class="secondary-btn" type="button">새로고침</button>
+        </div>
+        <div id="groupMessengerList" class="messenger-list" aria-live="polite"></div>
+        <form id="groupMessengerForm" class="messenger-form">
+          <textarea id="groupMessengerInput" class="settings-input" maxlength="2000" placeholder="그룹원에게 보낼 메시지"></textarea>
+          <button id="groupMessengerSendBtn" class="primary-btn" type="submit">보내기</button>
+        </form>
       </div>
     </section>
   </div>

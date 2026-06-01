@@ -77,6 +77,7 @@ SERVER_CAPABILITIES = {
     "two_factor_auth": TWO_FACTOR_AUTH_STATUS,
     "user_groups": True,
     "group_readonly_sharing": True,
+    "group_messenger": True,
     "user_access_tokens": True,
     "self_registration": True,
     "device_access_tokens": True,
