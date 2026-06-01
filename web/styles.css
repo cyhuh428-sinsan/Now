@@ -2827,6 +2827,42 @@ kbd {
   background: rgba(220, 38, 38, 0.08);
 }
 
+.recovery-settings-row {
+  align-items: start;
+}
+
+.recovery-panel {
+  display: grid;
+  gap: 10px;
+  min-width: min(520px, 100%);
+}
+
+.import-report-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.import-report-item {
+  display: grid;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 10px;
+}
+
+.import-report-item strong {
+  color: var(--text);
+}
+
+.import-report-item small {
+  color: var(--muted);
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;

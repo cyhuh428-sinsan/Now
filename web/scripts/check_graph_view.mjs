@@ -416,6 +416,46 @@ async function runOnce() {
         const slashDone = executeSlashCommandFromEditor()
           && getSelectedTreeNode().content.includes("## 출처")
           && getSelectedTreeNode().properties.type === "자료";
+        state.data.snapshots = [];
+        state.data.importReports = [];
+        state.selectedTreeId = "a";
+        createRecoverySnapshot("manual");
+        const snapshotCreated = state.data.snapshots.length === 1
+          && state.data.snapshots[0].summary.tree >= 1;
+        const convertedImport = markdownFileToImportNode("obsidian.md", [
+          "---",
+          "title: Obsidian Imported",
+          "status: active",
+          "priority: high",
+          "type: 자료",
+          "project: NowNote",
+          "tags: [imported, obsidian]",
+          "---",
+          "본문 [[Alpha|알파]]",
+          "![[image.png]]",
+        ].join("\\n"));
+        const frontmatterMapped = convertedImport.node.properties.priority === "high"
+          && convertedImport.node.properties.project === "NowNote"
+          && convertedImport.node.tags.includes("obsidian")
+          && convertedImport.node.content.includes("[[Alpha]]")
+          && convertedImport.node.content.includes("[첨부: image.png]");
+        recordImportReport("Markdown 가져오기", [{ nodes: [convertedImport.node], report: convertedImport.report }]);
+        renderRecoveryPanel();
+        const reportRendered = document.querySelectorAll("#importReportList .import-report-item").length === 1;
+        state.data.tree = [convertedImport.node];
+        state.selectedTreeId = convertedImport.node.id;
+        const restoreOk = (() => {
+          const beforeTitle = getSelectedTreeNode().title;
+          const snapshotId = state.data.snapshots[0].id;
+          elements.snapshotSelect.value = snapshotId;
+          const preserved = state.data.snapshots;
+          const reports = state.data.importReports;
+          state.data = backupDataShape(state.data.snapshots[0].data);
+          state.data.snapshots = preserved;
+          state.data.importReports = reports;
+          normalizeData();
+          return flattenTree(state.data.tree).some((node) => node.title !== beforeTitle);
+        })();
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -443,6 +483,10 @@ async function runOnce() {
           splitDone,
           mergeDone,
           slashDone,
+          snapshotCreated,
+          frontmatterMapped,
+          reportRendered,
+          restoreOk,
         };
       })()
     `);
@@ -473,6 +517,10 @@ async function runOnce() {
     assert(result.splitDone, "제목 섹션 기준 메모 나누기가 동작하지 않습니다.");
     assert(result.mergeDone, "하위 메모 병합이 동작하지 않습니다.");
     assert(result.slashDone, "Slash command가 동작하지 않습니다.");
+    assert(result.snapshotCreated, "복구 스냅샷이 생성되지 않았습니다.");
+    assert(result.frontmatterMapped, "Markdown frontmatter와 Obsidian 표기 보정이 동작하지 않습니다.");
+    assert(result.reportRendered, "가져오기 진단 목록이 렌더링되지 않았습니다.");
+    assert(result.restoreOk, "스냅샷 복구 데이터 적용이 동작하지 않습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
@@ -481,6 +529,7 @@ async function runOnce() {
     console.log("- Canvas cards, edges, zoom, movement, and graph drafts work");
     console.log("- Quick capture pins, colors, checklists, reminders, attachments, sketches, and archive work");
     console.log("- Command palette, slash commands, templates, unique notes, random notes, merge, and split work");
+    console.log("- Recovery snapshots, frontmatter mapping, Obsidian import conversion, and import reports work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);

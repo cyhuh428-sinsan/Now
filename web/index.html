@@ -663,6 +663,24 @@
             </div>
           </section>
 
+          <section class="settings-row recovery-settings-row">
+            <div>
+              <h3>복구 / 가져오기 점검</h3>
+              <p>가져오기 전후 상태와 최근 스냅샷을 화면에서 확인합니다.</p>
+            </div>
+            <div class="recovery-panel">
+              <div class="settings-actions">
+                <button id="snapshotCreateBtn" class="secondary-btn" type="button">스냅샷 만들기</button>
+                <select id="snapshotSelect" class="settings-select" aria-label="복구 스냅샷">
+                  <option value="">스냅샷 선택</option>
+                </select>
+                <button id="snapshotRestoreBtn" class="danger-btn" type="button">선택 복구</button>
+              </div>
+              <div id="snapshotSummary" class="path-label">스냅샷이 없습니다.</div>
+              <div id="importReportList" class="import-report-list">가져오기 진단이 없습니다.</div>
+            </div>
+          </section>
+
           <section class="settings-row">
             <div>
               <h3 id="resetSettingTitle">화면 설정 초기화</h3>
