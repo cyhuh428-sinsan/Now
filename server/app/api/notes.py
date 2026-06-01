@@ -8,7 +8,7 @@ from app.core.security import require_client_api_access
 from app.db import get_db
 from app.models.note import Note
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
-from app.services.note_sync import list_changed_notes, sort_notes_for_upsert, upsert_note as save_note
+from app.services.note_sync import group_shared_owner_ids, list_changed_notes, sort_notes_for_upsert, upsert_note as save_note
 from app.services.user_accounts import require_user_api_access
 from app.services.user_devices import require_active_user_device
 
@@ -39,6 +39,7 @@ def list_notes(
         owner_id=owner_id,
         updated_after=updated_after,
         include_deleted=include_deleted,
+        include_group_shared=True,
     )
 
 
@@ -78,9 +79,15 @@ def search_notes(
         web_session_token=web_session_token,
     )
     keyword = f"%{q}%"
+    group_owner_ids = group_shared_owner_ids(db, owner_id=owner_id)
     stmt = (
         select(Note)
-        .where(Note.owner_id == owner_id)
+        .where(
+            or_(
+                Note.owner_id == owner_id,
+                Note.owner_id.in_(group_owner_ids) & (Note.note_type == "tree"),
+            )
+        )
         .where(Note.deleted_at.is_(None))
         .where(or_(Note.title.ilike(keyword), Note.content.ilike(keyword)))
     )

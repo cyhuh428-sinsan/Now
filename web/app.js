@@ -2767,6 +2767,10 @@ function bindEvents() {
   elements.treeTitleInput.addEventListener("input", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
+    if (isReadOnlyTreeNode(selected)) {
+      elements.treeTitleInput.value = selected.title;
+      return;
+    }
     selected.title = elements.treeTitleInput.value;
     markTreeNodeChanged(selected);
     persist();
@@ -2783,6 +2787,10 @@ function bindEvents() {
   elements.treeContent.addEventListener("input", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
+    if (isReadOnlyTreeNode(selected)) {
+      elements.treeContent.value = visibleContentForNode(selected);
+      return;
+    }
     syncTreeContentFromEditor();
   });
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
@@ -2790,6 +2798,7 @@ function bindEvents() {
   elements.favoriteBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
+    if (isReadOnlyTreeNode(selected)) return;
     selected.favorite = !selected.favorite;
     markTreeNodeChanged(selected);
     persist();
@@ -2798,7 +2807,7 @@ function bindEvents() {
 
   elements.shareTreeBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
-    if (!selected || isHostedWebClient()) return;
+    if (!selected || isReadOnlyTreeNode(selected) || isHostedWebClient()) return;
     const nextShared = selected.shared === false;
     selected.shared = nextShared;
     selected.unsharedAt = nextShared ? null : new Date().toISOString();
@@ -2857,6 +2866,7 @@ function bindEvents() {
   elements.deleteTreeBtn.addEventListener("click", async () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
+    if (isReadOnlyTreeNode(selected)) return;
     if (selected.children.length > 0) {
       showNotice(t("note.nodeDelete.childrenBlocked"), "error");
       return;
@@ -4278,16 +4288,18 @@ function applyPulledArchivedDailyNote(note, date) {
 }
 
 function applyPulledTreeNote(note) {
-  const current = findTreeNode(state.data.tree, note.local_id);
+  const localId = serverTreeNodeLocalId(note);
+  const current = findTreeNode(state.data.tree, localId);
   if (!shouldApplyPulledNote(current, note)) {
     recordServerConflict(current, note);
     return false;
   }
-  clearServerConflictForNote("tree", note.local_id);
-  const deleted = state.data.deletedTree.find((node) => node.id === note.local_id);
+  clearServerConflictForNote("tree", localId);
+  const deleted = state.data.deletedTree.find((node) => node.id === localId);
   if (deleted) return false;
   removePulledDeletedTreeNote(note.local_id);
-  const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
+  const parentId = serverTreeParentLocalId(note);
+  const parent = parentId ? findTreeNode(state.data.tree, parentId) : null;
   const nextLevel = Math.min(3, Math.max(1, note.level || (parent ? parent.level + 1 : 1)));
   const nextParentId = parent && nextLevel > 1 ? parent.id : null;
   if (current) {
@@ -4300,6 +4312,9 @@ function applyPulledTreeNote(note) {
     current.syncState = "synced";
     current.shared = true;
     current.serverShared = true;
+    current.groupSharedReadOnly = isGroupSharedServerNote(note);
+    current.remoteOwnerId = note.owner_id || "";
+    current.remoteLocalId = note.local_id || "";
     current.unsharedAt = null;
     current.tags = tagsFromServerNote(note);
     current.updatedAt = note.client_updated_at || note.updated_at || new Date().toISOString();
@@ -4317,30 +4332,32 @@ function applyPulledTreeNote(note) {
 }
 
 function applyPulledDeletedTreeNote(note) {
-  const current = findTreeNode(state.data.tree, note.local_id);
+  const localId = serverTreeNodeLocalId(note);
+  const current = findTreeNode(state.data.tree, localId);
   if (current?.shared === false) {
     current.serverShared = false;
     current.syncState = "local";
-    clearServerConflictForNote("tree", note.local_id);
+    clearServerConflictForNote("tree", localId);
     return true;
   }
   if (!shouldApplyPulledNote(current, note)) {
     recordServerConflict(current, note);
     return false;
   }
-  clearServerConflictForNote("tree", note.local_id);
+  clearServerConflictForNote("tree", localId);
   if (current) {
-    clearUnlockedEncryptionState(note.local_id);
-    detachTreeNode(note.local_id);
-    removeTreeTabReferences(note.local_id);
+    clearUnlockedEncryptionState(localId);
+    detachTreeNode(localId);
+    removeTreeTabReferences(localId);
     return true;
   }
   return false;
 }
 
 function createPulledTreeNode(note, parentId, level) {
+  const groupShared = isGroupSharedServerNote(note);
   return {
-    id: note.local_id,
+    id: serverTreeNodeLocalId(note),
     title: noteTitle(note.title),
     content: note.content || "",
     parentId,
@@ -4350,12 +4367,31 @@ function createPulledTreeNode(note, parentId, level) {
     syncState: "synced",
     shared: true,
     serverShared: true,
+    groupSharedReadOnly: groupShared,
+    remoteOwnerId: note.owner_id || "",
+    remoteLocalId: note.local_id || "",
     unsharedAt: null,
     favorite: false,
     tags: tagsFromServerNote(note),
     createdAt: note.created_at || note.client_updated_at || note.updated_at || new Date().toISOString(),
     updatedAt: note.client_updated_at || note.updated_at || new Date().toISOString(),
   };
+}
+
+function isGroupSharedServerNote(note) {
+  const ownerId = normalizeOwnerId(state.settings.server?.ownerId || "");
+  return Boolean(note?.owner_id && ownerId && note.owner_id !== ownerId);
+}
+
+function serverTreeNodeLocalId(note) {
+  if (!isGroupSharedServerNote(note)) return note.local_id;
+  return `group:${note.owner_id}:${note.local_id}`;
+}
+
+function serverTreeParentLocalId(note) {
+  if (!note.parent_local_id) return null;
+  if (!isGroupSharedServerNote(note)) return note.parent_local_id;
+  return `group:${note.owner_id}:${note.parent_local_id}`;
 }
 
 function dailyDateFromLocalId(localId) {
@@ -4381,7 +4417,7 @@ function tagsFromServerNote(note) {
 }
 
 function removePulledDeletedTreeNote(id) {
-  state.data.deletedTree = state.data.deletedTree.filter((node) => node.id !== id);
+  state.data.deletedTree = state.data.deletedTree.filter((node) => node.id !== id && node.remoteLocalId !== id);
 }
 
 function buildServerSyncNotes(server) {
@@ -4411,11 +4447,13 @@ function shouldSendServerNote(item, changedOnly) {
 }
 
 function shouldCountPendingTreeSync(node) {
+  if (isReadOnlyTreeNode(node)) return false;
   if (node?.syncState !== "pending") return false;
   return isTreeNodeSharedForServer(node) || node.serverShared === true;
 }
 
 function shouldTreeNodeSyncWithServer(node, changedOnly) {
+  if (isReadOnlyTreeNode(node)) return false;
   if (!shouldSendServerNote(node, changedOnly)) return false;
   return isTreeNodeSharedForServer(node) || node.serverShared === true;
 }
@@ -6444,6 +6482,7 @@ function renderNoteProperties(node) {
 function updateSelectedNoteProperties() {
   const selected = getSelectedTreeNode();
   if (!selected) return;
+  if (isReadOnlyTreeNode(selected)) return;
   selected.properties = normalizeNoteProperties({
     status: elements.propertyStatusSelect.value,
     priority: elements.propertyPrioritySelect.value,
@@ -7695,6 +7734,7 @@ function addChildToSelectedTreeNode() {
     addRootNote();
     return;
   }
+  if (isReadOnlyTreeNode(selected)) return;
   if (selected.level >= 3) {
     showNotice(t("note.treeDepthLimit"), "error");
     return;
@@ -7751,6 +7791,7 @@ function treeNodeElement(node) {
 
   const metaParts = [
     levelName(node.level),
+    isReadOnlyTreeNode(node) ? `읽기 전용 ${node.remoteOwnerId || ""}`.trim() : "",
     node.children.length > 0 ? t("note.childCount", { count: node.children.length }) : "",
     node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
   ].filter(Boolean);
@@ -7762,9 +7803,10 @@ function treeNodeElement(node) {
   addButton.className = "small-btn";
   addButton.textContent = "+";
   addButton.title = t("note.addChild");
-  addButton.disabled = node.level >= 3;
+  addButton.disabled = node.level >= 3 || isReadOnlyTreeNode(node);
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
+    if (isReadOnlyTreeNode(node)) return;
     if (node.level >= 3) return;
     const child = createNode(defaultTitleForLevel(node.level + 1), "", node.id, node.level + 1);
     node.children.push(child);
@@ -7842,6 +7884,38 @@ function renderTreeEditor() {
   renderLinkPanel();
   elements.addChildBtn.disabled = selected.level >= 3;
   renderTreeMoveButtons(selected);
+  renderReadOnlyTreeState(selected);
+}
+
+function renderReadOnlyTreeState(node) {
+  const readOnly = isReadOnlyTreeNode(node);
+  elements.treeTitleInput.disabled = readOnly;
+  elements.treeContent.readOnly = readOnly || elements.treeContent.readOnly;
+  elements.treeContent.classList.toggle("readonly", readOnly || elements.treeContent.readOnly);
+  elements.addChildBtn.disabled = readOnly || node.level >= 3;
+  elements.deleteTreeBtn.disabled = readOnly;
+  elements.moveUpBtn.disabled = readOnly || elements.moveUpBtn.disabled;
+  elements.moveDownBtn.disabled = readOnly || elements.moveDownBtn.disabled;
+  elements.favoriteBtn.disabled = readOnly;
+  elements.shareTreeBtn.disabled = readOnly || isHostedWebClient();
+  elements.encryptNoteBtn.disabled = readOnly;
+  elements.decryptNoteBtn.disabled = readOnly;
+  elements.unlockNoteBtn.disabled = false;
+  elements.lockNoteBtn.disabled = false;
+  elements.propertyStatusSelect.disabled = readOnly;
+  elements.propertyPrioritySelect.disabled = readOnly;
+  elements.propertyTypeInput.disabled = readOnly;
+  elements.propertyProjectInput.disabled = readOnly;
+  elements.propertySourceInput.disabled = readOnly;
+  elements.propertyAuthorInput.disabled = readOnly;
+  elements.propertyDueInput.disabled = readOnly;
+  elements.treeSavedLabel.textContent = readOnly
+    ? `읽기 전용 · ${node.remoteOwnerId || "그룹 공유"}`
+    : t("saved");
+}
+
+function isReadOnlyTreeNode(node) {
+  return Boolean(node?.groupSharedReadOnly);
 }
 
 function renderTreeMoveButtons(node) {
@@ -9271,6 +9345,7 @@ function levelName(level) {
 }
 
 function markTreeNodeChanged(node) {
+  if (isReadOnlyTreeNode(node)) return;
   node.updatedAt = new Date().toISOString();
   node.status = node.status || "active";
   node.syncState = "pending";
@@ -9796,6 +9871,9 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.syncState = node.syncState || "synced";
     node.shared = node.shared !== false;
     node.serverShared = node.serverShared === true;
+    node.groupSharedReadOnly = Boolean(node.groupSharedReadOnly);
+    node.remoteOwnerId = normalizeText(node.remoteOwnerId).slice(0, 80);
+    node.remoteLocalId = normalizeText(node.remoteLocalId).slice(0, 120);
     node.unsharedAt = node.shared === false ? (node.unsharedAt || node.updatedAt || null) : null;
     node.favorite = Boolean(node.favorite);
     node.tags = isEncryptedContent(node.content) ? [] : (Array.isArray(node.tags) ? node.tags : extractTags(node.content));

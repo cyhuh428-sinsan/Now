@@ -391,6 +391,10 @@ def main() -> None:
         ("function buildPublicHtmlDocument", "1.8 public HTML builder"),
         ("function buildSlidesHtmlDocument", "1.8 slides HTML builder"),
         ("publishBundles", "1.8 publish bundle data shape"),
+        ("function isGroupSharedServerNote", "group shared note detector"),
+        ("function serverTreeNodeLocalId", "group shared local ID mapper"),
+        ("function isReadOnlyTreeNode", "group shared read-only guard"),
+        ("groupSharedReadOnly", "group shared read-only data shape"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -668,6 +672,8 @@ def main() -> None:
         ("exportPublishSlides", "publish slides export assertion"),
         ("publishExcluded", "publish exclusion assertion"),
         ("sensitiveWarning", "publish sensitive warning assertion"),
+        ("groupSharedReadOnly", "group shared read-only assertion"),
+        ("groupSharedNotPushed", "group shared upload exclusion assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
