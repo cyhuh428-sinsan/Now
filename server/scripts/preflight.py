@@ -127,6 +127,9 @@ def main() -> None:
     auth_api_path = server_dir / "app" / "api" / "auth.py"
     capabilities_path = server_dir / "app" / "core" / "capabilities.py"
     users_api_path = server_dir / "app" / "api" / "users.py"
+    notes_api_path = server_dir / "app" / "api" / "notes.py"
+    sync_api_path = server_dir / "app" / "api" / "sync.py"
+    note_sync_service_path = server_dir / "app" / "services" / "note_sync.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
     release_evidence_service_path = server_dir / "app" / "services" / "release_evidence.py"
@@ -812,11 +815,43 @@ def main() -> None:
                 ("login_or_token_delivery", "Capabilities marks token login ready item", "login_or_token_delivery"),
                 ("self_registration", "Capabilities marks self-registration support", "self registration capability"),
                 ("device_access_tokens", "Capabilities marks device access token support", "device access tokens capability"),
+                ("group_readonly_sharing", "Capabilities marks group read-only sharing support", "group read-only sharing"),
                 ("password_reset_email", "Capabilities marks password reset email support", "password reset email capability"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
                 ('"ready": ready', "Capabilities returns public server ready list", "public readiness ready list"),
                 ('"items": [', "Capabilities returns public server readiness details", "public readiness details"),
+            ],
+            failures,
+        )
+    if note_sync_service_path.exists():
+        note_sync_source = note_sync_service_path.read_text(encoding="utf-8")
+        check_text_contains(
+            note_sync_source,
+            [
+                ("include_group_shared", "Note sync supports group shared pull option", "include_group_shared"),
+                ("group_shared_owner_ids", "Note sync resolves same-group owners", "group shared owners"),
+                ('Note.note_type == "tree"', "Group sharing is limited to tree notes", "tree-only group sharing"),
+                ("UserAccount.group_name", "Group sharing uses user account group name", "user group name"),
+            ],
+            failures,
+        )
+    if notes_api_path.exists():
+        notes_api_source = notes_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            notes_api_source,
+            [
+                ("include_group_shared=True", "Notes list includes group shared notes", "notes group shared list"),
+                ("group_shared_owner_ids", "Notes search includes group shared owners", "notes group shared search"),
+            ],
+            failures,
+        )
+    if sync_api_path.exists():
+        sync_api_source = sync_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            sync_api_source,
+            [
+                ("include_group_shared=True", "Sync pull includes group shared notes", "sync group shared pull"),
             ],
             failures,
         )

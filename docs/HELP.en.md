@@ -247,6 +247,8 @@ User information:
 Apps and installed programs can edit the user's own email, display name, and time zone.
 In the mobile app and installed program, open server settings, enter the user ID, then load or save the user profile.
 The Web program uses the logged-in user and server-shared documents.
+Knowledge notes shared by other users in the same user group are shown as read-only.
+Group-shared notes cannot be edited or deleted and are excluded from uploads from your account.
 
 Administrators manage user groups, two-factor authentication status, and active status in the server admin screen.
 Public server operators normally monitor users and service status. Admin-created users are reserved for tests, pre-registration, or recovery support.

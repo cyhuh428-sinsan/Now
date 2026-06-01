@@ -484,6 +484,37 @@ async function runOnce() {
           && (slidesHtml.match(/class="slide"/g) || []).length >= 2
           && typeof exportPublishHtml === "function"
           && typeof exportPublishSlides === "function";
+        state.settings.server.ownerId = "alice";
+        state.settings.server.deviceId = "web-client";
+        state.data.tree = [];
+        applyPulledServerNotes([
+          {
+            owner_id: "bob",
+            device_id: "pc",
+            local_id: "shared-root",
+            note_type: "tree",
+            title: "Bob Shared",
+            content: "조회만 가능",
+            parent_local_id: null,
+            level: 1,
+            tags: "group",
+            source: "web-tree",
+            client_updated_at: "2026-06-01T00:00:00",
+            deleted_at: null,
+            created_at: "2026-06-01T00:00:00",
+            updated_at: "2026-06-01T00:00:00",
+          },
+        ]);
+        const groupNode = flattenTree(state.data.tree)[0];
+        state.selectedTreeId = groupNode.id;
+        renderTree();
+        const groupSharedReadOnly = groupNode.id === "group:bob:shared-root"
+          && groupNode.groupSharedReadOnly
+          && groupNode.remoteOwnerId === "bob"
+          && elements.treeTitleInput.disabled
+          && elements.treeContent.readOnly;
+        groupNode.syncState = "pending";
+        const groupSharedNotPushed = buildServerSyncNotes(state.settings.server).length === 0;
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -519,6 +550,8 @@ async function runOnce() {
           sensitiveWarning,
           publishHtmlExported,
           publishSlidesExported,
+          groupSharedReadOnly,
+          groupSharedNotPushed,
         };
       })()
     `);
@@ -557,6 +590,8 @@ async function runOnce() {
     assert(result.sensitiveWarning, "출판 전 민감정보 후보가 표시되지 않았습니다.");
     assert(result.publishHtmlExported, "공개 HTML 내보내기 생성이 동작하지 않습니다.");
     assert(result.publishSlidesExported, "발표 HTML 내보내기 생성이 동작하지 않습니다.");
+    assert(result.groupSharedReadOnly, "그룹 공유 메모가 읽기 전용으로 표시되지 않습니다.");
+    assert(result.groupSharedNotPushed, "그룹 공유 읽기 전용 메모가 동기화 업로드 대상에 포함됩니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
@@ -567,6 +602,7 @@ async function runOnce() {
     console.log("- Command palette, slash commands, templates, unique notes, random notes, merge, and split work");
     console.log("- Recovery snapshots, frontmatter mapping, Obsidian import conversion, and import reports work");
     console.log("- Publish bundles, sensitive checks, public HTML, and slides HTML export work");
+    console.log("- Group-shared notes are rendered read-only and excluded from upload");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);
