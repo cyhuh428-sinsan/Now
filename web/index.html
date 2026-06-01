@@ -681,6 +681,40 @@
             </div>
           </section>
 
+          <section class="settings-row publish-settings-row">
+            <div>
+              <h3>출판 / 발표</h3>
+              <p>공개할 지식 묶음을 고르고 HTML 문서나 발표 자료로 내보냅니다.</p>
+            </div>
+            <div class="publish-panel">
+              <div class="publish-toolbar">
+                <select id="publishBundleSelect" class="settings-select" aria-label="공개 묶음">
+                  <option value="">새 공개 묶음</option>
+                </select>
+                <button id="publishSaveBtn" class="secondary-btn" type="button">묶음 저장</button>
+                <button id="publishHtmlExportBtn" class="secondary-btn" type="button">HTML 내보내기</button>
+                <button id="publishSlidesExportBtn" class="secondary-btn" type="button">발표 HTML</button>
+              </div>
+              <div class="publish-fields">
+                <label>
+                  <span>제목</span>
+                  <input id="publishTitleInput" class="settings-input" type="text" placeholder="공개 묶음 제목">
+                </label>
+                <label>
+                  <span>permalink</span>
+                  <input id="publishPermalinkInput" class="settings-input" type="text" placeholder="my-public-notes">
+                </label>
+                <label>
+                  <span>설명</span>
+                  <input id="publishDescriptionInput" class="settings-input" type="text" placeholder="공개할 지식 묶음 설명">
+                </label>
+              </div>
+              <div id="publishSensitiveList" class="publish-sensitive-list">민감정보 후보가 없습니다.</div>
+              <div id="publishNodeList" class="publish-node-list">공개 가능한 메모가 없습니다.</div>
+              <article id="publishPreview" class="publish-preview">공개 묶음을 선택하거나 저장하세요.</article>
+            </div>
+          </section>
+
           <section class="settings-row">
             <div>
               <h3 id="resetSettingTitle">화면 설정 초기화</h3>
