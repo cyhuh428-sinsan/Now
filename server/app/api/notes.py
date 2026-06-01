@@ -39,7 +39,7 @@ def list_notes(
         owner_id=owner_id,
         updated_after=updated_after,
         include_deleted=include_deleted,
-        include_group_shared=True,
+        include_group_shared=bool(web_session_token),
     )
 
 
@@ -79,7 +79,7 @@ def search_notes(
         web_session_token=web_session_token,
     )
     keyword = f"%{q}%"
-    group_owner_ids = group_shared_owner_ids(db, owner_id=owner_id)
+    group_owner_ids = group_shared_owner_ids(db, owner_id=owner_id) if web_session_token else []
     stmt = (
         select(Note)
         .where(

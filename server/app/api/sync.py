@@ -42,7 +42,7 @@ def sync(
         owner_id=payload.owner_id,
         updated_after=payload.updated_after,
         include_deleted=payload.include_deleted,
-        include_group_shared=True,
+        include_group_shared=bool(web_session_token),
     )
     db.add(
         SyncLog(
