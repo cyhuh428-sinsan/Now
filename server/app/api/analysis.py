@@ -14,8 +14,21 @@ router = APIRouter(
     dependencies=[Depends(require_client_api_access)],
 )
 
-ALLOWED_JOB_TYPES = {"memo_summary", "daily_briefing", "tree_note_index", "recording_summary"}
+ALLOWED_JOB_TYPES = {
+    "memo_summary",
+    "daily_briefing",
+    "tree_note_index",
+    "recording_summary",
+    "knowledge_2_0_review",
+    "embedding_index",
+    "similar_notes",
+    "duplicate_candidates",
+    "relation_suggestions",
+    "tag_property_suggestions",
+    "knowledge_health",
+}
 ALLOWED_STATUSES = {"queued", "running", "done", "failed", "cancelled"}
+RESTARTABLE_STATUSES = {"failed", "cancelled", "done"}
 
 
 @router.get("/jobs", response_model=list[AnalysisJobOut])
@@ -102,6 +115,57 @@ def update_job(
     job.status = payload.status
     job.result_json = payload.result_json
     job.error_message = payload.error_message
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/jobs/{job_id}/cancel", response_model=AnalysisJobOut)
+def cancel_job(
+    job_id: int,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> AnalysisJob:
+    job = db.get(AnalysisJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
+    require_user_api_access(
+        db,
+        owner_id=job.owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    if job.status not in {"queued", "running"}:
+        raise HTTPException(status_code=400, detail="analysis job cannot be cancelled")
+    job.status = "cancelled"
+    job.error_message = "cancelled by user"
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+@router.post("/jobs/{job_id}/retry", response_model=AnalysisJobOut)
+def retry_job(
+    job_id: int,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> AnalysisJob:
+    job = db.get(AnalysisJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
+    require_user_api_access(
+        db,
+        owner_id=job.owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    if job.status not in RESTARTABLE_STATUSES:
+        raise HTTPException(status_code=400, detail="analysis job cannot be retried")
+    job.status = "queued"
+    job.result_json = None
+    job.error_message = None
     db.commit()
     db.refresh(job)
     return job

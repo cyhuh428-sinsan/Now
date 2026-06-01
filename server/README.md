@@ -588,6 +588,13 @@ Web 프로그램이 현재 Web 세션이 유효한지 확인합니다.
 - `daily_briefing`
 - `tree_note_index`
 - `recording_summary`
+- `knowledge_2_0_review`
+- `embedding_index`
+- `similar_notes`
+- `duplicate_candidates`
+- `relation_suggestions`
+- `tag_property_suggestions`
+- `knowledge_health`
 
 `GET /api/v1/analysis/jobs?owner_id=local_user`
 
@@ -601,12 +608,20 @@ Web 프로그램이 현재 Web 세션이 유효한지 확인합니다.
 
 작업 상태와 결과를 갱신합니다. 실제 LLM 워커를 붙이기 전까지는 운영자/워커 프로세스가 이 API로 상태를 갱신하는 구조입니다.
 
+`POST /api/v1/analysis/jobs/{job_id}/cancel`
+
+대기 중이거나 실행 중인 분석 작업을 사용자 요청으로 중단 처리합니다.
+
+`POST /api/v1/analysis/jobs/{job_id}/retry`
+
+실패, 중단, 완료된 분석 작업을 다시 `queued` 상태로 넣습니다.
+
 현재 `now-worker`는 외부 LLM 연결 전에도 동작하는 기본 로컬 처리기를 사용합니다.
 
 - `queued` 작업 조회
 - `running`으로 상태 변경
 - LLM 설정이 있으면 외부 LLM 호출
-- LLM 설정이 없으면 작업 타입별 기본 요약/키워드 JSON 생성
+- LLM 설정이 없으면 작업 타입별 기본 요약/키워드/지식화 후보 JSON 생성
 - 성공 시 `done`, 실패 시 `failed` 저장
 
 워커 단독 실행:

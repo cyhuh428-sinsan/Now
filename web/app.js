@@ -468,11 +468,13 @@ const I18N = {
     "settings.server.publicReadiness.ready": "공용 서버 준비 완료",
     "settings.server.publicReadiness.planned": "공용 서버 준비 중 · 남은 항목 {count}개",
     "settings.server.analysis.title": "분석 작업",
-    "settings.server.analysis.desc": "선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.",
-    "settings.server.analysis.create": "선택 메모 분석",
+    "settings.server.analysis.desc": "선택 메모 요약부터 2.0 지식화 점검까지 서버 큐에 등록하고 승인 대기 결과를 검토합니다.",
+    "settings.server.analysis.type": "작업 유형",
+    "settings.server.analysis.create": "작업 등록",
     "settings.server.analysis.refresh": "작업 새로고침",
     "settings.server.analysis.none": "분석 작업을 불러오지 않았습니다.",
     "settings.server.analysis.noNote": "분석할 지식 메모를 먼저 선택해야 합니다.",
+    "settings.server.analysis.noKnowledgeNotes": "분석할 지식 메모가 없습니다.",
     "settings.server.analysis.emptyNote": "선택한 메모에 분석할 내용이 없습니다.",
     "settings.server.analysis.encryptedNote": "암호화 메모는 서버 분석 대상에서 제외됩니다.",
     "settings.server.analysis.creating": "분석 작업을 서버에 등록하는 중입니다.",
@@ -485,9 +487,24 @@ const I18N = {
     "settings.server.analysis.errorPreview": "오류: {text}",
     "settings.server.analysis.doneNoResult": "완료됐지만 표시할 결과가 없습니다.",
     "settings.server.analysis.apply": "메모에 추가",
+    "settings.server.analysis.approve": "승인 반영",
+    "settings.server.analysis.reject": "반려",
+    "settings.server.analysis.retry": "재시도",
+    "settings.server.analysis.cancel": "중단",
     "settings.server.analysis.applied": "분석 결과를 메모에 추가했습니다.",
+    "settings.server.analysis.rejected": "분석 결과를 반려했습니다.",
+    "settings.server.analysis.retried": "분석 작업을 다시 대기열에 넣었습니다.",
+    "settings.server.analysis.cancelled": "분석 작업을 중단했습니다.",
     "settings.server.analysis.applyMissing": "연결된 메모를 찾을 수 없습니다.",
     "settings.server.analysis.sectionTitle": "서버 분석 결과",
+    "settings.server.analysis.approvalSectionTitle": "2.0 지식화 승인 결과",
+    "settings.server.analysis.job.memo_summary": "선택 메모 요약",
+    "settings.server.analysis.job.knowledge_2_0_review": "2.0 지식화 점검",
+    "settings.server.analysis.job.similar_notes": "유사 메모 후보",
+    "settings.server.analysis.job.duplicate_candidates": "중복 후보",
+    "settings.server.analysis.job.relation_suggestions": "관계 후보",
+    "settings.server.analysis.job.tag_property_suggestions": "태그/속성 후보",
+    "settings.server.analysis.job.knowledge_health": "지식 건강 점검",
     "settings.server.deviceToken.title": "앱/설치형 연결 토큰",
     "settings.server.deviceToken.desc": "앱이나 설치형 프로그램을 공용 서버에 연결할 때 여기서 토큰을 직접 발급하고 다시 확인합니다.",
     "settings.server.deviceToken.name": "기기 이름",
@@ -1069,11 +1086,13 @@ const I18N = {
     "settings.server.publicReadiness.ready": "Public server ready",
     "settings.server.publicReadiness.planned": "Public readiness planned · {count} remaining",
     "settings.server.analysis.title": "Analysis jobs",
-    "settings.server.analysis.desc": "Queue the selected knowledge note for server analysis and check recent status.",
-    "settings.server.analysis.create": "Analyze selected note",
+    "settings.server.analysis.desc": "Queue selected-note analysis and 2.0 knowledge review jobs, then review approval-ready results.",
+    "settings.server.analysis.type": "Job type",
+    "settings.server.analysis.create": "Create job",
     "settings.server.analysis.refresh": "Refresh jobs",
     "settings.server.analysis.none": "Analysis jobs have not been loaded.",
     "settings.server.analysis.noNote": "Select a knowledge note to analyze first.",
+    "settings.server.analysis.noKnowledgeNotes": "There are no knowledge notes to analyze.",
     "settings.server.analysis.emptyNote": "The selected note has no content to analyze.",
     "settings.server.analysis.encryptedNote": "Encrypted notes are excluded from server analysis.",
     "settings.server.analysis.creating": "Creating an analysis job on the server.",
@@ -1086,9 +1105,24 @@ const I18N = {
     "settings.server.analysis.errorPreview": "Error: {text}",
     "settings.server.analysis.doneNoResult": "Done, but no displayable result.",
     "settings.server.analysis.apply": "Add to note",
+    "settings.server.analysis.approve": "Approve",
+    "settings.server.analysis.reject": "Reject",
+    "settings.server.analysis.retry": "Retry",
+    "settings.server.analysis.cancel": "Cancel",
     "settings.server.analysis.applied": "Analysis result was added to the note.",
+    "settings.server.analysis.rejected": "Analysis result rejected.",
+    "settings.server.analysis.retried": "Analysis job queued again.",
+    "settings.server.analysis.cancelled": "Analysis job cancelled.",
     "settings.server.analysis.applyMissing": "The linked note could not be found.",
     "settings.server.analysis.sectionTitle": "Server analysis result",
+    "settings.server.analysis.approvalSectionTitle": "2.0 knowledge approval result",
+    "settings.server.analysis.job.memo_summary": "Selected note summary",
+    "settings.server.analysis.job.knowledge_2_0_review": "2.0 knowledge review",
+    "settings.server.analysis.job.similar_notes": "Similar note candidates",
+    "settings.server.analysis.job.duplicate_candidates": "Duplicate candidates",
+    "settings.server.analysis.job.relation_suggestions": "Relation suggestions",
+    "settings.server.analysis.job.tag_property_suggestions": "Tag/property suggestions",
+    "settings.server.analysis.job.knowledge_health": "Knowledge health",
     "settings.server.deviceToken.title": "App/desktop connection token",
     "settings.server.deviceToken.desc": "Issue and review the token used to connect the mobile app or installed desktop client to this public server.",
     "settings.server.deviceToken.name": "Device name",
@@ -1953,6 +1987,7 @@ const elements = {
   serverProfileText: $("#serverProfileText"),
   serverAnalysisCreateBtn: $("#serverAnalysisCreateBtn"),
   serverAnalysisRefreshBtn: $("#serverAnalysisRefreshBtn"),
+  serverAnalysisTypeSelect: $("#serverAnalysisTypeSelect"),
   serverAnalysisList: $("#serverAnalysisList"),
   hostedDeviceTokenBox: $("#hostedDeviceTokenBox"),
   deviceTokenNameInput: $("#deviceTokenNameInput"),
@@ -3419,6 +3454,7 @@ function renderServerSettings() {
   elements.serverProfileSaveBtn.disabled = !isServerMode;
   elements.serverAnalysisCreateBtn.disabled = !isServerMode;
   elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
+  if (elements.serverAnalysisTypeSelect) elements.serverAnalysisTypeSelect.disabled = !isServerMode;
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
   renderServerCapabilities(server.capabilities, server.publicServerReadiness);
@@ -3730,7 +3766,7 @@ function renderServerAnalysisJobs(jobs = []) {
       const time = job.updated_at || job.created_at || "";
       title.textContent = t("settings.server.analysis.item", {
         id: job.id || "-",
-        type: job.job_type || "-",
+        type: serverAnalysisJobLabel(job.job_type),
         time: formatServerJobTime(time),
       });
       const note = document.createElement("span");
@@ -3742,7 +3778,8 @@ function renderServerAnalysisJobs(jobs = []) {
       const side = document.createElement("div");
       side.className = "server-analysis-side";
       side.append(status);
-      if (job.note_local_id && extractServerAnalysisResultText(job.result_json)) {
+      const resultText = extractServerAnalysisResultText(job.result_json);
+      if (job.note_local_id && resultText) {
         const applyButton = document.createElement("button");
         applyButton.className = "server-analysis-apply";
         applyButton.type = "button";
@@ -3750,6 +3787,40 @@ function renderServerAnalysisJobs(jobs = []) {
         applyButton.dataset.analysisId = String(job.id);
         applyButton.textContent = t("settings.server.analysis.apply");
         side.append(applyButton);
+      }
+      if (job.status === "done" && resultText) {
+        const approveButton = document.createElement("button");
+        approveButton.className = "server-analysis-apply";
+        approveButton.type = "button";
+        approveButton.dataset.analysisAction = "approve";
+        approveButton.dataset.analysisId = String(job.id);
+        approveButton.textContent = t("settings.server.analysis.approve");
+        side.append(approveButton);
+        const rejectButton = document.createElement("button");
+        rejectButton.className = "server-analysis-apply";
+        rejectButton.type = "button";
+        rejectButton.dataset.analysisAction = "reject";
+        rejectButton.dataset.analysisId = String(job.id);
+        rejectButton.textContent = t("settings.server.analysis.reject");
+        side.append(rejectButton);
+      }
+      if (["failed", "cancelled", "done"].includes(job.status)) {
+        const retryButton = document.createElement("button");
+        retryButton.className = "server-analysis-apply";
+        retryButton.type = "button";
+        retryButton.dataset.analysisAction = "retry";
+        retryButton.dataset.analysisId = String(job.id);
+        retryButton.textContent = t("settings.server.analysis.retry");
+        side.append(retryButton);
+      }
+      if (["queued", "running"].includes(job.status)) {
+        const cancelButton = document.createElement("button");
+        cancelButton.className = "server-analysis-apply";
+        cancelButton.type = "button";
+        cancelButton.dataset.analysisAction = "cancel";
+        cancelButton.dataset.analysisId = String(job.id);
+        cancelButton.textContent = t("settings.server.analysis.cancel");
+        side.append(cancelButton);
       }
       item.append(info, side);
       const previewText = getServerAnalysisPreview(job);
@@ -3765,12 +3836,17 @@ function renderServerAnalysisJobs(jobs = []) {
 }
 
 function handleServerAnalysisListClick(event) {
-  const button = event.target.closest("[data-analysis-action='append']");
+  const button = event.target.closest("[data-analysis-action]");
   if (!button) return;
+  const action = button.dataset.analysisAction;
   const id = Number(button.dataset.analysisId);
   const job = (state.settings.server.analysisJobs || []).find((item) => Number(item.id) === id);
   if (!job) return;
-  appendAnalysisResultToNote(job);
+  if (action === "append") appendAnalysisResultToNote(job);
+  if (action === "approve") approveAnalysisResult(job);
+  if (action === "reject") rejectAnalysisResult(job);
+  if (action === "retry") retryAnalysisJob(job);
+  if (action === "cancel") cancelAnalysisJob(job);
 }
 
 function handleServerConflictListClick(event) {
@@ -3825,6 +3901,103 @@ function appendAnalysisResultToNote(job) {
   showSaved(elements.treeSavedLabel);
 }
 
+function approveAnalysisResult(job) {
+  const resultText = extractServerAnalysisResultText(job.result_json);
+  if (!resultText) {
+    setServerMessage(state.settings.server, "bad", "settings.server.analysis.applyMissing");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+  createRecoverySnapshot("before-analysis-approval");
+  const node = job.note_local_id
+    ? findTreeNode(state.data.tree, job.note_local_id)
+    : null;
+  if (node) {
+    appendAnalysisResultToNote(job);
+    return;
+  }
+  const title = `${t("settings.server.analysis.approvalSectionTitle")} ${formatServerJobTime(job.updated_at || job.created_at || new Date().toISOString())}`;
+  const content = [
+    `# ${title}`,
+    "",
+    resultText,
+  ].join("\n");
+  const created = createNode(title, content, null, 1);
+  created.tags = extractTags(content);
+  state.data.tree.unshift(created);
+  state.selectedTreeId = created.id;
+  setServerMessage(state.settings.server, "ok", "settings.server.analysis.applied");
+  persist();
+  persistSettings();
+  renderTree();
+  renderServerSettings();
+  showSaved(elements.treeSavedLabel);
+}
+
+async function rejectAnalysisResult(job) {
+  await updateAnalysisJob(job, {
+    status: "cancelled",
+    result_json: job.result_json || null,
+    error_message: "rejected by user",
+  }, "settings.server.analysis.rejected");
+}
+
+async function retryAnalysisJob(job) {
+  await analysisJobCommand(job, "retry", "settings.server.analysis.retried");
+}
+
+async function cancelAnalysisJob(job) {
+  await analysisJobCommand(job, "cancel", "settings.server.analysis.cancelled");
+}
+
+async function analysisJobCommand(job, command, messageKey) {
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+  try {
+    const updated = await requestServerJson(server, `/api/v1/analysis/jobs/${job.id}/${command}`, {
+      method: "POST",
+    });
+    replaceServerAnalysisJob(updated);
+    server.lastCheckedAt = new Date().toISOString();
+    setServerMessage(server, "ok", messageKey);
+  } catch (error) {
+    server.lastCheckedAt = new Date().toISOString();
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+async function updateAnalysisJob(job, payload, messageKey) {
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+  try {
+    const updated = await requestServerJson(server, `/api/v1/analysis/jobs/${job.id}`, {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    });
+    replaceServerAnalysisJob(updated);
+    server.lastCheckedAt = new Date().toISOString();
+    setServerMessage(server, "ok", messageKey);
+  } catch (error) {
+    server.lastCheckedAt = new Date().toISOString();
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
+  }
+  persistSettings();
+  renderServerSettings();
+}
+
+function replaceServerAnalysisJob(updated) {
+  const jobs = Array.isArray(state.settings.server.analysisJobs)
+    ? state.settings.server.analysisJobs.slice()
+    : [];
+  const index = jobs.findIndex((job) => Number(job.id) === Number(updated.id));
+  if (index >= 0) jobs[index] = updated;
+  else jobs.unshift(updated);
+  state.settings.server.analysisJobs = jobs.slice(0, 5);
+}
+
 function getServerAnalysisPreview(job) {
   if (job.status === "failed" && job.error_message) {
     return t("settings.server.analysis.errorPreview", { text: compactText(job.error_message, 160) });
@@ -3846,6 +4019,16 @@ function extractServerAnalysisResultText(resultJson) {
     const parsed = typeof resultJson === "string" ? JSON.parse(resultJson) : resultJson;
     if (typeof parsed === "string") return parsed;
     if (parsed && typeof parsed.summary === "string") return parsed.summary;
+    if (parsed && Array.isArray(parsed.suggestions) && parsed.suggestions.length) {
+      return parsed.suggestions
+        .map((item) => [item.title, item.preview].filter(Boolean).join(": "))
+        .filter(Boolean)
+        .slice(0, 8)
+        .join("\n");
+    }
+    if (parsed && Array.isArray(parsed.logs) && parsed.logs.length) {
+      return parsed.logs.filter(Boolean).join("\n");
+    }
     if (parsed && Array.isArray(parsed.keywords) && parsed.keywords.length) {
       return parsed.keywords.filter(Boolean).join(", ");
     }
@@ -3854,6 +4037,11 @@ function extractServerAnalysisResultText(resultJson) {
     return String(resultJson);
   }
   return "";
+}
+
+function serverAnalysisJobLabel(jobType) {
+  const key = `settings.server.analysis.job.${jobType}`;
+  return I18N.ko[key] || I18N.en[key] ? t(key) : jobType || "-";
 }
 
 function compactText(value, maxLength = 160) {
@@ -4061,27 +4249,58 @@ async function saveServerUserProfile() {
   renderServerSettings();
 }
 
+function buildKnowledgeAnalysisPayload(jobType = "knowledge_2_0_review") {
+  const notes = flattenTree(state.data.tree)
+    .filter((node) => !isEncryptedContent(node.content) && node.status !== "deleted")
+    .slice(0, 300)
+    .map((node) => ({
+      id: node.id,
+      title: node.title || "",
+      content: node.content || "",
+      tags: Array.isArray(node.tags) ? node.tags.join(" ") : String(node.tags || ""),
+      level: node.level || 1,
+      parentId: node.parentId || null,
+      properties: node.properties || {},
+    }))
+    .filter((node) => `${node.title}\n${node.content}`.trim());
+  if (!notes.length) return "";
+  return JSON.stringify({
+    version: "2.0",
+    jobType,
+    createdAt: new Date().toISOString(),
+    notes,
+  });
+}
+
 async function createSelectedNoteAnalysisJob() {
   saveServerSettingsFromForm(t("settings.server.analysis.creating"), "settings.server.analysis.creating");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
 
   const selected = getSelectedTreeNode();
-  if (!selected) {
+  const jobType = elements.serverAnalysisTypeSelect?.value || "memo_summary";
+  const requiresSelectedNote = jobType === "memo_summary" || jobType === "tree_note_index";
+  if (requiresSelectedNote && !selected) {
     setServerMessage(server, "bad", "settings.server.analysis.noNote");
     persistSettings();
     renderServerSettings();
     return;
   }
-  if (isEncryptedContent(selected.content)) {
+  if (requiresSelectedNote && isEncryptedContent(selected.content)) {
     setServerMessage(server, "bad", "settings.server.analysis.encryptedNote");
     persistSettings();
     renderServerSettings();
     return;
   }
-  const inputText = `${selected.title || ""}\n\n${selected.content || ""}`.trim();
+  const inputText = requiresSelectedNote
+    ? `${selected.title || ""}\n\n${selected.content || ""}`.trim()
+    : buildKnowledgeAnalysisPayload(jobType);
   if (!inputText) {
-    setServerMessage(server, "bad", "settings.server.analysis.emptyNote");
+    setServerMessage(
+      server,
+      "bad",
+      requiresSelectedNote ? "settings.server.analysis.emptyNote" : "settings.server.analysis.noKnowledgeNotes",
+    );
     persistSettings();
     renderServerSettings();
     return;
@@ -4093,8 +4312,8 @@ async function createSelectedNoteAnalysisJob() {
       method: "POST",
       body: JSON.stringify({
         owner_id: normalizeOwnerId(server.ownerId),
-        job_type: "memo_summary",
-        note_local_id: selected.id,
+        job_type: jobType,
+        note_local_id: requiresSelectedNote ? selected.id : null,
         input_text: inputText,
       }),
     });
@@ -5235,8 +5454,18 @@ function applyLanguage() {
   setPlaceholder(elements.deviceTokenOutput, t("settings.server.deviceToken.placeholder"));
   setText("#serverAnalysisTitle", t("settings.server.analysis.title"));
   setText("#serverAnalysisDesc", t("settings.server.analysis.desc"));
+  setText("#serverAnalysisTypeLabel", t("settings.server.analysis.type"));
   setText("#serverAnalysisCreateBtn", t("settings.server.analysis.create"));
   setText("#serverAnalysisRefreshBtn", t("settings.server.analysis.refresh"));
+  setOptionLabels(elements.serverAnalysisTypeSelect, {
+    memo_summary: t("settings.server.analysis.job.memo_summary"),
+    knowledge_2_0_review: t("settings.server.analysis.job.knowledge_2_0_review"),
+    similar_notes: t("settings.server.analysis.job.similar_notes"),
+    duplicate_candidates: t("settings.server.analysis.job.duplicate_candidates"),
+    relation_suggestions: t("settings.server.analysis.job.relation_suggestions"),
+    tag_property_suggestions: t("settings.server.analysis.job.tag_property_suggestions"),
+    knowledge_health: t("settings.server.analysis.job.knowledge_health"),
+  });
   setText("#serverConflictTitle", t("settings.server.conflict.title"));
   setText("#serverConflictDesc", t("settings.server.conflict.desc"));
   setText("#serverSaveBtn", t("settings.server.save"));
