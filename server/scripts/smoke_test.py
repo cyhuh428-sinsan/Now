@@ -1952,6 +1952,48 @@ def main() -> None:
         {"id": data.get("id"), "status": data.get("status")},
     )
 
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/analysis/jobs",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "job_type": "knowledge_2_0_review",
+            "input_text": '{"version":"2.0","notes":[{"id":"smoke_note_001","title":"Smoke","content":"NowNote 지식화 점검"}]}',
+        },
+    )
+    knowledge_job_id = data.get("id")
+    require(knowledge_job_id is not None, "2.0 지식화 분석 작업 ID가 반환되지 않았습니다")
+    print(
+        "POST /api/v1/analysis/jobs(knowledge_2_0_review):",
+        status,
+        {"id": knowledge_job_id, "job_type": data.get("job_type")},
+    )
+
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/analysis/jobs/{knowledge_job_id}/cancel",
+        args.token,
+    )
+    require(data.get("status") == "cancelled", "분석 작업 중단 상태가 예상과 다릅니다")
+    print(
+        "POST /api/v1/analysis/jobs/{id}/cancel:",
+        status,
+        {"id": knowledge_job_id, "status": data.get("status")},
+    )
+
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/analysis/jobs/{knowledge_job_id}/retry",
+        args.token,
+    )
+    require(data.get("status") == "queued", "분석 작업 재시도 상태가 예상과 다릅니다")
+    print(
+        "POST /api/v1/analysis/jobs/{id}/retry:",
+        status,
+        {"id": knowledge_job_id, "status": data.get("status")},
+    )
+
     inactive_payload = {
         "email": "local_user@example.com",
         "display_name": "Local User",
