@@ -168,6 +168,9 @@ const I18N = {
     "search.popoverHelp.content": "내용",
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
+    "nav.shared.mine": "내 공유메모",
+    "nav.shared.groupTree": "그룹 지식체계",
+    "nav.shared.member": "구성원별 공유문서",
     "aria.quickMenu": "빠른 메뉴",
     "aria.sidebar": "NowNote 메뉴",
     "aria.noteView": "메모 보기",
@@ -786,6 +789,9 @@ const I18N = {
     "search.popoverHelp.content": "Content",
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
+    "nav.shared.mine": "My shared notes",
+    "nav.shared.groupTree": "Group knowledge tree",
+    "nav.shared.member": "Shared by member",
     "aria.quickMenu": "Quick menu",
     "aria.sidebar": "NowNote menu",
     "aria.noteView": "Note view",
@@ -1581,6 +1587,7 @@ const state = {
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
+  sharedView: "mine",
   selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
   selectedDeletedTreeIds: new Set(),
@@ -2581,6 +2588,9 @@ function initializeLiveMemoEditor() {
 function bindEvents() {
   elements.navTabs.forEach((button) => {
     button.addEventListener("click", () => {
+      if (button.dataset.sharedView) {
+        state.sharedView = normalizeSharedView(button.dataset.sharedView);
+      }
       setView(button.dataset.view);
     });
   });
@@ -5279,7 +5289,9 @@ function applyLanguage() {
   setText("#brandSubtitle", t("brand.subtitle"));
   setText("#searchLabel", t("search.label"));
   setText("#todayChipLabel", t("today.label"));
-  setText("#treeNavBtn", t("nav.tree"));
+  setText("#sharedMineNavBtn", t("nav.shared.mine"));
+  setText("#sharedGroupTreeNavBtn", t("nav.shared.groupTree"));
+  setText("#sharedMemberNavBtn", t("nav.shared.member"));
   setText("#favoriteTitle", t("side.favorite"));
   setText("#recentTitle", t("side.recent"));
   setText("#tagTitle", t("side.tags"));
@@ -7877,11 +7889,17 @@ function setView(view) {
   closePopupLayers();
   state.view = view;
   elements.navTabs.forEach((button) => {
-    button.classList.toggle("active", button.dataset.view === view);
+    const sameView = button.dataset.view === view;
+    const sameSharedView = !button.dataset.sharedView || button.dataset.sharedView === state.sharedView;
+    button.classList.toggle("active", sameView && sameSharedView);
   });
   elements.treeView.classList.toggle("active", view === "tree");
   elements.resultsView.classList.toggle("active", view === "results");
   render();
+}
+
+function normalizeSharedView(value) {
+  return ["mine", "group-tree", "member"].includes(value) ? value : "mine";
 }
 
 function selectTreeNode(id) {
@@ -8229,17 +8247,107 @@ function addChildToSelectedTreeNode() {
 }
 
 function renderTreeListOnly() {
-  if (state.data.tree.length === 0) {
+  state.sharedView = normalizeSharedView(state.sharedView);
+  const roots = sharedViewTreeRoots();
+  if (roots.length === 0) {
     const empty = document.createElement("div");
     empty.className = "empty-state";
     empty.innerHTML = `<strong>${escapeHtml(t("note.emptyTitle"))}</strong><span>${escapeHtml(t("note.emptyDescription"))}</span>`;
     elements.treeList.replaceChildren(empty);
     return;
   }
-  elements.treeList.replaceChildren(...state.data.tree.map((node) => treeNodeElement(node)));
+  if (state.sharedView === "member") {
+    renderMemberSharedTreeList(roots);
+    return;
+  }
+  elements.treeList.replaceChildren(...roots.map((node) => treeNodeElement(node)));
+}
+
+function sharedViewTreeRoots() {
+  if (!isHostedWebClient() && !hasGroupSharedTreeNodes()) return state.data.tree;
+  if (state.sharedView === "mine") {
+    return filterTreeForSharedView(state.data.tree, (node) => isOwnSharedTreeNode(node));
+  }
+  return filterTreeForSharedView(state.data.tree, (node) => isSharedTreeVisibleToGroup(node));
+}
+
+function hasGroupSharedTreeNodes() {
+  return flattenTree(state.data.tree).some((node) => node.groupSharedReadOnly);
+}
+
+function isOwnSharedTreeNode(node) {
+  if (node.groupSharedReadOnly) return false;
+  if (!isHostedWebClient()) return true;
+  return node.shared !== false;
+}
+
+function isSharedTreeVisibleToGroup(node) {
+  return node.groupSharedReadOnly || isOwnSharedTreeNode(node);
+}
+
+function filterTreeForSharedView(nodes, predicate) {
+  return (nodes || [])
+    .map((node) => filterTreeNodeForSharedView(node, predicate))
+    .filter(Boolean);
+}
+
+function filterTreeNodeForSharedView(node, predicate) {
+  const children = filterTreeForSharedView(node.children || [], predicate);
+  if (!predicate(node) && children.length === 0) return null;
+  return {
+    ...node,
+    children,
+  };
+}
+
+function renderMemberSharedTreeList(roots) {
+  const groups = groupSharedRootsByOwner(roots);
+  if (groups.length === 0) {
+    elements.treeList.innerHTML = `<div class="empty-state"><strong>${escapeHtml(t("note.emptyTitle"))}</strong><span>${escapeHtml(t("note.emptyDescription"))}</span></div>`;
+    return;
+  }
+  elements.treeList.replaceChildren(
+    ...groups.map((group) => {
+      const section = document.createElement("section");
+      section.className = "member-shared-section";
+      const title = document.createElement("h3");
+      title.textContent = group.ownerLabel;
+      const list = document.createElement("div");
+      list.className = "member-shared-list";
+      list.append(...group.nodes.map((node) => treeNodeElement(node)));
+      section.append(title, list);
+      return section;
+    }),
+  );
+}
+
+function groupSharedRootsByOwner(roots) {
+  const groups = new Map();
+  roots.forEach((root) => {
+    const ownerKey = ownerKeyForTreeNode(root);
+    if (!groups.has(ownerKey)) {
+      groups.set(ownerKey, {
+        ownerLabel: ownerLabelForTreeNode(root),
+        nodes: [],
+      });
+    }
+    groups.get(ownerKey).nodes.push(root);
+  });
+  return Array.from(groups.values()).sort((a, b) => a.ownerLabel.localeCompare(b.ownerLabel, "ko"));
+}
+
+function ownerKeyForTreeNode(node) {
+  if (node.groupSharedReadOnly) return node.remoteOwnerId || "group";
+  return state.settings.server?.ownerId || "mine";
+}
+
+function ownerLabelForTreeNode(node) {
+  if (node.groupSharedReadOnly) return node.remoteOwnerId || "그룹 구성원";
+  return `${state.settings.server?.ownerId || "내 계정"} · 내 공유`;
 }
 
 function treeNodeElement(node) {
+  const sourceNode = findTreeNode(state.data.tree, node.id) || node;
   const wrapper = document.createElement("div");
   wrapper.className = "tree-node";
   const expanded = state.expandedTreeIds.has(node.id);
@@ -8287,12 +8395,12 @@ function treeNodeElement(node) {
   addButton.disabled = node.level >= 3 || isReadOnlyTreeNode(node);
   addButton.addEventListener("click", (event) => {
     event.stopPropagation();
-    if (isReadOnlyTreeNode(node)) return;
-    if (node.level >= 3) return;
-    const child = createNode(defaultTitleForLevel(node.level + 1), "", node.id, node.level + 1);
-    node.children.push(child);
+    if (isReadOnlyTreeNode(sourceNode)) return;
+    if (sourceNode.level >= 3) return;
+    const child = createNode(defaultTitleForLevel(sourceNode.level + 1), "", sourceNode.id, sourceNode.level + 1);
+    sourceNode.children.push(child);
     state.selectedTreeId = child.id;
-    state.expandedTreeIds.add(node.id);
+    state.expandedTreeIds.add(sourceNode.id);
     persist();
     renderTree();
   });

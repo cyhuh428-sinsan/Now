@@ -321,6 +321,27 @@ button {
   color: var(--blue);
 }
 
+.member-shared-section {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.member-shared-section h3 {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.member-shared-list {
+  display: grid;
+  gap: 4px;
+}
+
 .side-section {
   display: grid;
   gap: 8px;
