@@ -2863,6 +2863,97 @@ kbd {
   color: var(--muted);
 }
 
+.publish-settings-row {
+  align-items: start;
+}
+
+.publish-panel {
+  display: grid;
+  gap: 12px;
+  width: min(100%, 760px);
+}
+
+.publish-toolbar,
+.publish-fields {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.publish-fields {
+  grid-template-columns: minmax(160px, 1fr) minmax(140px, 0.7fr) minmax(180px, 1fr);
+}
+
+.publish-fields label {
+  display: grid;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.publish-node-list,
+.publish-sensitive-list,
+.publish-preview {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--panel-soft);
+}
+
+.publish-node-list {
+  display: grid;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.publish-node-option {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.publish-node-option:last-child {
+  border-bottom: 0;
+}
+
+.publish-node-option input:disabled + span {
+  color: var(--muted);
+}
+
+.publish-sensitive-list {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.publish-sensitive-item {
+  color: var(--danger);
+}
+
+.publish-sensitive-ok {
+  color: var(--muted);
+}
+
+.publish-preview {
+  padding: 12px;
+  color: var(--text);
+}
+
+.publish-preview h4 {
+  margin: 0 0 6px;
+}
+
+.publish-preview p,
+.publish-preview ul {
+  margin: 6px 0;
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;
@@ -3163,7 +3254,9 @@ kbd {
   .capture-options,
   .capture-media-row,
   .capture-sketch-tools,
-  .capture-toolbar {
+  .capture-toolbar,
+  .publish-toolbar,
+  .publish-fields {
     grid-template-columns: 1fr;
   }
 

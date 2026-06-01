@@ -1510,6 +1510,7 @@ const state = {
   selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
   selectedDeletedTreeIds: new Set(),
+  selectedPublishBundleId: "",
   capturingShortcutId: null,
   search: "",
   data: defaultData(),
@@ -1558,6 +1559,7 @@ function defaultData() {
     captures: [],
     snapshots: [],
     importReports: [],
+    publishBundles: [],
     tree: [],
   };
 }
@@ -1841,6 +1843,16 @@ const elements = {
   importInput: $("#importInput"),
   importMarkdownBtn: $("#importMarkdownBtn"),
   importMarkdownInput: $("#importMarkdownInput"),
+  publishBundleSelect: $("#publishBundleSelect"),
+  publishTitleInput: $("#publishTitleInput"),
+  publishDescriptionInput: $("#publishDescriptionInput"),
+  publishPermalinkInput: $("#publishPermalinkInput"),
+  publishSaveBtn: $("#publishSaveBtn"),
+  publishHtmlExportBtn: $("#publishHtmlExportBtn"),
+  publishSlidesExportBtn: $("#publishSlidesExportBtn"),
+  publishSensitiveList: $("#publishSensitiveList"),
+  publishNodeList: $("#publishNodeList"),
+  publishPreview: $("#publishPreview"),
   quickSwitchBtn: $("#quickSwitchBtn"),
   commandPaletteBtn: $("#commandPaletteBtn"),
   graphBtn: $("#graphBtn"),
@@ -2593,6 +2605,19 @@ function bindEvents() {
   elements.importMarkdownBtn.addEventListener("click", () => {
     elements.importMarkdownInput.click();
   });
+
+  elements.publishBundleSelect.addEventListener("change", () => {
+    state.selectedPublishBundleId = elements.publishBundleSelect.value;
+    renderPublishPanel();
+  });
+
+  [elements.publishTitleInput, elements.publishDescriptionInput, elements.publishPermalinkInput].forEach((input) => {
+    input.addEventListener("input", renderPublishPreview);
+  });
+
+  elements.publishSaveBtn.addEventListener("click", savePublishBundle);
+  elements.publishHtmlExportBtn.addEventListener("click", exportPublishHtml);
+  elements.publishSlidesExportBtn.addEventListener("click", exportPublishSlides);
 
   elements.settingsBtn.addEventListener("click", () => {
     toggleSettings();
@@ -7398,6 +7423,7 @@ function render() {
   if (!elements.canvasView.classList.contains("hidden")) renderCanvas();
   if (!elements.captureView.classList.contains("hidden")) renderCaptures();
   renderRecoveryPanel();
+  renderPublishPanel();
 }
 
 function renderDeletedTreeButton() {
@@ -9647,6 +9673,7 @@ function normalizeData() {
   state.data.captures = Array.isArray(state.data.captures) ? state.data.captures : [];
   state.data.snapshots = Array.isArray(state.data.snapshots) ? state.data.snapshots : [];
   state.data.importReports = Array.isArray(state.data.importReports) ? state.data.importReports : [];
+  state.data.publishBundles = Array.isArray(state.data.publishBundles) ? state.data.publishBundles : [];
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
   state.data.daily = normalizeDailyNotes(state.data.daily);
@@ -9656,6 +9683,7 @@ function normalizeData() {
   state.data.captures = state.data.captures.filter(isPlainObject).map(normalizeCaptureCard).slice(0, 500);
   state.data.snapshots = state.data.snapshots.filter(isPlainObject).map(normalizeRecoverySnapshot).slice(0, 12);
   state.data.importReports = state.data.importReports.filter(isPlainObject).map(normalizeImportReport).slice(0, 20);
+  state.data.publishBundles = state.data.publishBundles.filter(isPlainObject).map(normalizePublishBundle).slice(0, 30);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
   Object.values(state.data.daily).forEach((note) => {
@@ -9707,6 +9735,20 @@ function normalizeImportReport(report = {}) {
     fixes: Math.max(0, Number(report.fixes) || 0),
     warnings: Math.max(0, Number(report.warnings) || 0),
     messages: Array.isArray(report.messages) ? report.messages.map((message) => normalizeText(message).slice(0, 180)).slice(0, 20) : [],
+  };
+}
+
+function normalizePublishBundle(bundle = {}) {
+  const now = new Date().toISOString();
+  return {
+    id: typeof bundle.id === "string" && bundle.id ? bundle.id : crypto.randomUUID(),
+    title: normalizeText(bundle.title).slice(0, 80) || "공개 지식 묶음",
+    description: normalizeText(bundle.description).slice(0, 220),
+    permalink: slugifyPermalink(bundle.permalink || bundle.title || "nownote-public"),
+    cover: normalizeText(bundle.cover).slice(0, 240),
+    includeNodeIds: Array.isArray(bundle.includeNodeIds) ? bundle.includeNodeIds.filter((id) => typeof id === "string") : [],
+    createdAt: bundle.createdAt || now,
+    updatedAt: bundle.updatedAt || now,
   };
 }
 
@@ -10297,6 +10339,241 @@ function importReportElement(report) {
   return item;
 }
 
+function renderPublishPanel() {
+  if (!elements.publishBundleSelect || !elements.publishNodeList || !elements.publishPreview) return;
+  const bundles = state.data.publishBundles || [];
+  if (!state.selectedPublishBundleId && bundles[0]) state.selectedPublishBundleId = bundles[0].id;
+  elements.publishBundleSelect.replaceChildren(
+    optionElement("", "새 공개 묶음"),
+    ...bundles.map((bundle) => optionElement(bundle.id, bundle.title)),
+  );
+  elements.publishBundleSelect.value = state.selectedPublishBundleId || "";
+  const bundle = selectedPublishBundle();
+  elements.publishTitleInput.value = bundle?.title || "공개 지식 묶음";
+  elements.publishDescriptionInput.value = bundle?.description || "";
+  elements.publishPermalinkInput.value = bundle?.permalink || "nownote-public";
+  renderPublishNodeList(bundle);
+  renderPublishPreview();
+}
+
+function renderPublishNodeList(bundle = selectedPublishBundle()) {
+  const nodes = flattenTree(state.data.tree);
+  const includeIds = new Set(bundle?.includeNodeIds?.length ? bundle.includeNodeIds : publishableTreeNodes().map((node) => node.id));
+  if (!nodes.length) {
+    elements.publishNodeList.textContent = "공개 가능한 메모가 없습니다.";
+    return;
+  }
+  elements.publishNodeList.replaceChildren(...nodes.map((node) => {
+    const excludedReason = publishExclusionReason(node);
+    const label = document.createElement("label");
+    label.className = "publish-node-option";
+    const input = document.createElement("input");
+    input.type = "checkbox";
+    input.value = node.id;
+    input.checked = includeIds.has(node.id) && !excludedReason;
+    input.disabled = Boolean(excludedReason);
+    input.addEventListener("change", renderPublishPreview);
+    const text = document.createElement("span");
+    text.textContent = excludedReason
+      ? `${treePath(node.id).join(" / ")} · 제외: ${excludedReason}`
+      : treePath(node.id).join(" / ");
+    label.append(input, text);
+    return label;
+  }));
+}
+
+function renderPublishPreview() {
+  if (!elements.publishPreview) return;
+  const draft = publishBundleFromInputs();
+  const content = buildPublishBundleContent(draft);
+  const warnings = scanPublishSensitiveContent(content.nodes);
+  elements.publishSensitiveList.replaceChildren(...sensitiveWarningElements(warnings));
+  if (!content.nodes.length) {
+    elements.publishPreview.textContent = "공개 묶음에 포함할 메모가 없습니다.";
+    return;
+  }
+  const previewItems = content.nodes.slice(0, 6)
+    .map((node) => `<li>${escapeHtml(treePath(node.id).join(" / "))}</li>`)
+    .join("");
+  elements.publishPreview.innerHTML = [
+    `<h4>${escapeHtml(draft.title)}</h4>`,
+    draft.description ? `<p>${escapeHtml(draft.description)}</p>` : "",
+    `<p>${escapeHtml(String(content.nodes.length))}개 문서 · permalink: ${escapeHtml(draft.permalink)}</p>`,
+    `<ul>${previewItems}</ul>`,
+  ].join("");
+}
+
+function selectedPublishBundle() {
+  return (state.data.publishBundles || []).find((bundle) => bundle.id === state.selectedPublishBundleId) || null;
+}
+
+function publishBundleFromInputs() {
+  return normalizePublishBundle({
+    id: state.selectedPublishBundleId || crypto.randomUUID(),
+    title: elements.publishTitleInput?.value,
+    description: elements.publishDescriptionInput?.value,
+    permalink: elements.publishPermalinkInput?.value,
+    includeNodeIds: selectedPublishNodeIds(),
+    createdAt: selectedPublishBundle()?.createdAt,
+  });
+}
+
+function selectedPublishNodeIds() {
+  return Array.from(elements.publishNodeList?.querySelectorAll("input[type='checkbox']:checked") || [])
+    .map((input) => input.value);
+}
+
+function savePublishBundle() {
+  const bundle = publishBundleFromInputs();
+  const bundles = state.data.publishBundles || [];
+  const index = bundles.findIndex((item) => item.id === bundle.id);
+  if (index >= 0) {
+    bundles[index] = { ...bundles[index], ...bundle, updatedAt: new Date().toISOString() };
+  } else {
+    bundles.unshift(bundle);
+  }
+  state.data.publishBundles = bundles;
+  state.selectedPublishBundleId = bundle.id;
+  persist();
+  renderPublishPanel();
+  showNotice("공개 묶음을 저장했습니다.", "success");
+}
+
+function publishableTreeNodes() {
+  return flattenTree(state.data.tree).filter((node) => !publishExclusionReason(node));
+}
+
+function publishExclusionReason(node) {
+  if (node.shared === false) return "공유 안 함";
+  if (isEncryptedContent(node.content)) return "암호화 메모";
+  const properties = node.properties || {};
+  if (truthyPublishFlag(properties.publicExclude) || truthyPublishFlag(properties.private) || truthyPublishFlag(properties.excludeFromPublish)) {
+    return "공개 제외 속성";
+  }
+  const tags = Array.isArray(node.tags) ? node.tags.map((tag) => normalizeText(tag).toLowerCase()) : [];
+  if (tags.some((tag) => ["private", "비공개", "no-publish"].includes(tag))) return "비공개 태그";
+  return "";
+}
+
+function truthyPublishFlag(value) {
+  return value === true || ["true", "yes", "1", "exclude", "private"].includes(normalizeText(value).toLowerCase());
+}
+
+function buildPublishBundleContent(bundle) {
+  const includeIds = new Set(bundle.includeNodeIds?.length ? bundle.includeNodeIds : publishableTreeNodes().map((node) => node.id));
+  const nodes = flattenTree(state.data.tree).filter((node) => includeIds.has(node.id) && !publishExclusionReason(node));
+  return { bundle, nodes };
+}
+
+function scanPublishSensitiveContent(nodes) {
+  const patterns = [
+    [/[\w.+-]+@[\w.-]+\.[A-Za-z]{2,}/, "이메일"],
+    [/(?:\+?\d{1,3}[-.\s]?)?(?:0\d{1,2}[-.\s]?)?\d{3,4}[-.\s]?\d{4}/, "전화번호 후보"],
+    [/\b(password|passwd|token|api[_-]?key|secret)\b/i, "비밀번호/토큰 단어"],
+    [/\b\d{6}[-\s]?[1-4]\d{6}\b/, "주민등록번호 후보"],
+  ];
+  return nodes.flatMap((node) => patterns
+    .filter(([pattern]) => pattern.test(`${node.title}\n${node.content}`))
+    .map(([, label]) => ({ node, label })));
+}
+
+function sensitiveWarningElements(warnings) {
+  if (!warnings.length) {
+    const empty = document.createElement("div");
+    empty.className = "publish-sensitive-ok";
+    empty.textContent = "민감정보 후보가 없습니다.";
+    return [empty];
+  }
+  return warnings.slice(0, 12).map((warning) => {
+    const item = document.createElement("div");
+    item.className = "publish-sensitive-item";
+    item.textContent = `${warning.label}: ${treePath(warning.node.id).join(" / ")}`;
+    return item;
+  });
+}
+
+function exportPublishHtml() {
+  const content = buildPublishBundleContent(publishBundleFromInputs());
+  if (!content.nodes.length) {
+    showNotice("내보낼 공개 문서가 없습니다.", "error");
+    return;
+  }
+  downloadText(`${content.bundle.permalink || "nownote-public"}.html`, buildPublicHtmlDocument(content), "text/html");
+}
+
+function exportPublishSlides() {
+  const content = buildPublishBundleContent(publishBundleFromInputs());
+  if (!content.nodes.length) {
+    showNotice("내보낼 발표 문서가 없습니다.", "error");
+    return;
+  }
+  downloadText(`${content.bundle.permalink || "nownote-slides"}-slides.html`, buildSlidesHtmlDocument(content), "text/html");
+}
+
+function buildPublicHtmlDocument({ bundle, nodes }) {
+  const items = nodes.map((node) => [
+    '<article class="note">',
+    `<p class="path">${escapeHtml(treePath(node.id).join(" / "))}</p>`,
+    `<h2>${escapeHtml(noteTitle(node.title))}</h2>`,
+    markdownToHtml(node.content || ""),
+    "</article>",
+  ].join("\n")).join("\n");
+  return htmlDocumentShell(bundle, `<main class="public-notes">${items}</main>`);
+}
+
+function buildSlidesHtmlDocument({ bundle, nodes }) {
+  const slides = nodes.flatMap((node) => {
+    const parts = String(node.content || "").split(/\n---+\n/).map((part) => part.trim()).filter(Boolean);
+    const bodyParts = parts.length ? parts : [node.content || ""];
+    return bodyParts.map((body, index) => [
+      '<section class="slide">',
+      `<p class="path">${escapeHtml(treePath(node.id).join(" / "))}</p>`,
+      `<h2>${escapeHtml(index === 0 ? noteTitle(node.title) : `${noteTitle(node.title)} ${index + 1}`)}</h2>`,
+      markdownToHtml(body),
+      "</section>",
+    ].join("\n"));
+  }).join("\n");
+  return htmlDocumentShell(bundle, `<main class="slides">${slides}</main>`);
+}
+
+function htmlDocumentShell(bundle, body) {
+  return [
+    "<!doctype html>",
+    '<html lang="ko">',
+    "<head>",
+    '<meta charset="utf-8">',
+    '<meta name="viewport" content="width=device-width, initial-scale=1">',
+    `<title>${escapeHtml(bundle.title)}</title>`,
+    `<meta name="description" content="${escapeHtml(bundle.description)}">`,
+    "<style>",
+    "body{margin:0;font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f7faf8;color:#17211d;line-height:1.7}",
+    "header{padding:48px 7vw 28px;border-bottom:1px solid #d7e2dc;background:#fff}",
+    "main{max-width:920px;margin:0 auto;padding:28px 7vw 60px}",
+    ".note,.slide{padding:28px 0;border-bottom:1px solid #d7e2dc}",
+    ".slide{min-height:78vh;display:flex;flex-direction:column;justify-content:center}",
+    ".path{color:#66756f;font-size:13px}",
+    "pre{white-space:pre-wrap;background:#edf3f0;padding:14px;border-radius:8px;overflow:auto}",
+    "code{background:#edf3f0;padding:2px 5px;border-radius:5px}",
+    "blockquote{border-left:4px solid #89a99b;margin-left:0;padding-left:14px;color:#465b52}",
+    "</style>",
+    "</head>",
+    "<body>",
+    `<header><h1>${escapeHtml(bundle.title)}</h1>${bundle.description ? `<p>${escapeHtml(bundle.description)}</p>` : ""}</header>`,
+    body,
+    "</body>",
+    "</html>",
+  ].join("\n");
+}
+
+function slugifyPermalink(value) {
+  return normalizeText(value)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣_-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "nownote-public";
+}
+
 function recordImportReport(source, imports) {
   const messages = imports.flatMap((item) => item.report?.messages || []);
   const report = {
@@ -10533,6 +10810,7 @@ function backupDataShape(data, options = {}) {
     deletedTree: data.deletedTree,
     canvases: data.canvases,
     captures: data.captures,
+    publishBundles: data.publishBundles,
     tree: data.tree,
   };
   if (options.includeRecoveryMeta !== false) {
@@ -10564,6 +10842,7 @@ function isBackupData(data) {
     || Array.isArray(data.captures)
     || Array.isArray(data.snapshots)
     || Array.isArray(data.importReports)
+    || Array.isArray(data.publishBundles)
   ));
 }
 
