@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.db import get_db
-from app.models.note import AnalysisJob, GroupMessage, Note, Recording, SyncLog, UserAccount, UserDevice, WebSession
+from app.models.note import AnalysisJob, GroupMessage, GroupMessageRead, Note, Recording, SyncLog, UserAccount, UserDevice, WebSession
 from app.services.user_accounts import (
     create_user_account,
     hash_access_token,
@@ -505,6 +505,7 @@ def _delete_user_data(db: Session, *, owner_id: str) -> None:
     for model in (Note, Recording, AnalysisJob, SyncLog, UserDevice, WebSession):
         db.execute(delete(model).where(model.owner_id == owner_id))
     db.execute(delete(GroupMessage).where(GroupMessage.sender_owner_id == owner_id))
+    db.execute(delete(GroupMessageRead).where(GroupMessageRead.owner_id == owner_id))
     db.execute(delete(UserAccount).where(UserAccount.owner_id == owner_id))
 
 

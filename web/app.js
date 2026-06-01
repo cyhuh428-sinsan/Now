@@ -226,6 +226,7 @@ const I18N = {
     "messenger.empty": "아직 메시지가 없습니다.",
     "messenger.loadFailed": "메시지를 불러오지 못했습니다",
     "messenger.sendFailed": "메시지를 보내지 못했습니다",
+    "messenger.readFailed": "읽음 상태를 저장하지 못했습니다",
     "rail.sidebar.open": "목록 펼치기",
     "rail.sidebar.close": "목록 접기",
     "rail.knowledge": "지식 메모",
@@ -856,6 +857,7 @@ const I18N = {
     "messenger.empty": "No messages yet.",
     "messenger.loadFailed": "Could not load messages",
     "messenger.sendFailed": "Could not send message",
+    "messenger.readFailed": "Could not save read state",
     "rail.sidebar.open": "Open list",
     "rail.sidebar.close": "Close list",
     "rail.knowledge": "Knowledge notes",
@@ -1735,6 +1737,8 @@ function defaultServerSettings() {
     publicServerReadiness: null,
     analysisJobs: [],
     groupMessages: [],
+    groupMessengerUnreadCount: 0,
+    groupMessengerLastReadId: 0,
     groupMessagesLoadedAt: null,
     conflicts: [],
     lastCheckedAt: null,
@@ -2017,6 +2021,7 @@ const elements = {
   serverAnalysisTypeSelect: $("#serverAnalysisTypeSelect"),
   serverAnalysisList: $("#serverAnalysisList"),
   groupMessengerBtn: $("#groupMessengerBtn"),
+  groupMessengerUnreadCount: $("#groupMessengerUnreadCount"),
   groupMessengerView: $("#groupMessengerView"),
   groupMessengerCloseBtn: $("#groupMessengerCloseBtn"),
   groupMessengerRefreshBtn: $("#groupMessengerRefreshBtn"),
@@ -4588,12 +4593,13 @@ function applyServerUserProfile(user) {
   });
 }
 
-function openGroupMessenger() {
+async function openGroupMessenger() {
   if (!isHostedWebClient()) return;
   closePopupLayers();
   elements.groupMessengerView?.classList.remove("hidden");
   renderGroupMessenger();
-  refreshGroupMessages({ silent: true });
+  await refreshGroupMessages({ silent: true });
+  await markGroupMessagesRead();
   window.setTimeout(() => elements.groupMessengerInput?.focus(), 0);
 }
 
@@ -4610,6 +4616,8 @@ async function refreshGroupMessages({ silent = false } = {}) {
       `/api/v1/group-messages?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
     server.groupMessages = Array.isArray(payload.items) ? payload.items : [];
+    server.groupMessengerUnreadCount = Number(payload.unread_count) || 0;
+    server.groupMessengerLastReadId = Number(payload.last_read_message_id) || 0;
     server.groupMessagesLoadedAt = new Date().toISOString();
     if (payload.group_name) {
       server.userProfile = normalizeServerUserProfile({
@@ -4619,6 +4627,7 @@ async function refreshGroupMessages({ silent = false } = {}) {
     }
     persistSettings();
     renderGroupMessenger();
+    renderGroupMessengerButton();
   } catch (error) {
     if (!silent) showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
   }
@@ -4642,10 +4651,12 @@ async function sendGroupMessage(event) {
     const messages = Array.isArray(server.groupMessages) ? server.groupMessages.slice() : [];
     if (payload.item) messages.push(payload.item);
     server.groupMessages = messages.slice(-100);
+    server.groupMessengerUnreadCount = 0;
     server.groupMessagesLoadedAt = new Date().toISOString();
     elements.groupMessengerInput.value = "";
     persistSettings();
     renderGroupMessenger();
+    renderGroupMessengerButton();
   } catch (error) {
     showNotice(`${t("messenger.sendFailed")}: ${error.message}`, "error");
   } finally {
@@ -4653,8 +4664,42 @@ async function sendGroupMessage(event) {
   }
 }
 
+async function markGroupMessagesRead() {
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  const latestId = Math.max(0, ...((server.groupMessages || []).map((message) => Number(message.id) || 0)));
+  if (!latestId) {
+    server.groupMessengerUnreadCount = 0;
+    renderGroupMessengerButton();
+    return;
+  }
+  try {
+    const payload = await requestServerJson(server, "/api/v1/group-messages/read", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        last_read_message_id: latestId,
+      }),
+    });
+    server.groupMessengerUnreadCount = Number(payload.unread_count) || 0;
+    server.groupMessengerLastReadId = Number(payload.last_read_message_id) || latestId;
+    persistSettings();
+    renderGroupMessengerButton();
+  } catch (error) {
+    showNotice(`${t("messenger.readFailed")}: ${error.message}`, "error");
+  }
+}
+
+function renderGroupMessengerButton() {
+  if (!elements.groupMessengerUnreadCount) return;
+  const count = Number(state.settings.server?.groupMessengerUnreadCount) || 0;
+  elements.groupMessengerUnreadCount.textContent = String(count);
+  elements.groupMessengerBtn?.classList.toggle("has-items", count > 0);
+}
+
 function renderGroupMessenger() {
   if (!elements.groupMessengerList) return;
+  renderGroupMessengerButton();
   const server = state.settings.server || defaultServerSettings();
   const profile = normalizeServerUserProfile(server.userProfile);
   elements.groupMessengerGroupLabel.textContent = t("messenger.group", {
@@ -5434,7 +5479,7 @@ function applyLanguage() {
   setText("#exportMarkdownBtn", t("side.mdExport"));
   setText("#importMarkdownBtn", t("side.mdImport"));
   setText("#deletedTreeBtnLabel", t("side.trash"));
-  setText("#groupMessengerBtn", t("messenger.title"));
+  setText("#groupMessengerBtnLabel", t("messenger.title"));
   setText("#settingsBtn", t("side.settings"));
   setText("#helpBtn", t("side.help"));
   setText("#treeEyebrow", t("tree.eyebrow"));
@@ -10410,6 +10455,8 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
       : null;
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
   normalized.groupMessages = Array.isArray(normalized.groupMessages) ? normalized.groupMessages.slice(-100) : [];
+  normalized.groupMessengerUnreadCount = Math.max(0, Number(normalized.groupMessengerUnreadCount) || 0);
+  normalized.groupMessengerLastReadId = Math.max(0, Number(normalized.groupMessengerLastReadId) || 0);
   normalized.groupMessagesLoadedAt = typeof normalized.groupMessagesLoadedAt === "string" ? normalized.groupMessagesLoadedAt : null;
   normalized.conflicts = Array.isArray(normalized.conflicts)
     ? normalized.conflicts
