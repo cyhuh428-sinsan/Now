@@ -2954,6 +2954,79 @@ kbd {
   margin: 6px 0;
 }
 
+.workspace-settings-row {
+  align-items: start;
+}
+
+.workspace-panel {
+  display: grid;
+  gap: 10px;
+  width: min(100%, 760px);
+}
+
+.workspace-toolbar {
+  display: grid;
+  grid-template-columns: minmax(140px, 1fr) minmax(160px, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.workspace-summary,
+.workspace-external-links {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.workspace-health-list,
+.workspace-link-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.workspace-health-item,
+.workspace-link-item {
+  width: 100%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+}
+
+.workspace-health-item {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  gap: 4px 10px;
+}
+
+.workspace-health-item span {
+  color: var(--blue);
+  font-weight: 800;
+}
+
+.workspace-health-item strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-health-item small {
+  grid-column: 2;
+  color: var(--muted);
+}
+
+.workspace-health-item:hover,
+.workspace-health-item:focus-visible,
+.workspace-link-item:hover,
+.workspace-link-item:focus-visible {
+  border-color: var(--blue);
+  outline: none;
+}
+
 .graph-mini-list {
   display: grid;
   gap: 6px;
@@ -3256,8 +3329,14 @@ kbd {
   .capture-sketch-tools,
   .capture-toolbar,
   .publish-toolbar,
-  .publish-fields {
+  .publish-fields,
+  .workspace-toolbar,
+  .workspace-health-item {
     grid-template-columns: 1fr;
+  }
+
+  .workspace-health-item small {
+    grid-column: 1;
   }
 
   .canvas-footer {
