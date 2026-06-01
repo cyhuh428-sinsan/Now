@@ -21,6 +21,7 @@ CANVAS_DESIGN = ROOT.parent / "docs" / "NOW_1_4_CANVAS_DESIGN.md"
 CAPTURE_DESIGN = ROOT.parent / "docs" / "NOW_1_5_QUICK_CAPTURE_MEDIA_DESIGN.md"
 COMMAND_DESIGN = ROOT.parent / "docs" / "NOW_1_6_WRITING_COMMAND_DESIGN.md"
 RECOVERY_IMPORT_DESIGN = ROOT.parent / "docs" / "NOW_1_7_RECOVERY_IMPORT_DESIGN.md"
+PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -71,6 +72,7 @@ def main() -> None:
         CAPTURE_DESIGN,
         COMMAND_DESIGN,
         RECOVERY_IMPORT_DESIGN,
+        PUBLISH_SLIDES_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -102,6 +104,7 @@ def main() -> None:
     capture_design = CAPTURE_DESIGN.read_text(encoding="utf-8")
     command_design = COMMAND_DESIGN.read_text(encoding="utf-8")
     recovery_import_design = RECOVERY_IMPORT_DESIGN.read_text(encoding="utf-8")
+    publish_slides_design = PUBLISH_SLIDES_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -246,6 +249,16 @@ def main() -> None:
         ("snapshotRestoreBtn", "recovery snapshot restore button"),
         ("snapshotSummary", "recovery snapshot summary"),
         ("importReportList", "import report list"),
+        ("publishBundleSelect", "publish bundle selector"),
+        ("publishTitleInput", "publish title input"),
+        ("publishDescriptionInput", "publish description input"),
+        ("publishPermalinkInput", "publish permalink input"),
+        ("publishSaveBtn", "publish save button"),
+        ("publishHtmlExportBtn", "publish HTML export button"),
+        ("publishSlidesExportBtn", "publish slides export button"),
+        ("publishSensitiveList", "publish sensitive warning list"),
+        ("publishNodeList", "publish node checklist"),
+        ("publishPreview", "publish preview"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -368,6 +381,16 @@ def main() -> None:
         ("function convertObsidianMarkdown", "1.7 Obsidian markdown converter"),
         ("snapshots", "1.7 snapshot data shape"),
         ("importReports", "1.7 import report data shape"),
+        ("function normalizePublishBundle", "1.8 publish bundle normalization"),
+        ("function renderPublishPanel", "1.8 publish panel renderer"),
+        ("function savePublishBundle", "1.8 publish bundle save action"),
+        ("function publishExclusionReason", "1.8 publish exclusion policy"),
+        ("function scanPublishSensitiveContent", "1.8 sensitive content scan"),
+        ("function exportPublishHtml", "1.8 public HTML export action"),
+        ("function exportPublishSlides", "1.8 slides export action"),
+        ("function buildPublicHtmlDocument", "1.8 public HTML builder"),
+        ("function buildSlidesHtmlDocument", "1.8 slides HTML builder"),
+        ("publishBundles", "1.8 publish bundle data shape"),
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
@@ -434,6 +457,11 @@ def main() -> None:
         (".recovery-panel", "recovery panel styling"),
         (".import-report-list", "import report list styling"),
         (".import-report-item", "import report item styling"),
+        (".publish-panel", "publish panel styling"),
+        (".publish-toolbar", "publish toolbar styling"),
+        (".publish-node-list", "publish node list styling"),
+        (".publish-sensitive-list", "publish sensitive list styling"),
+        (".publish-preview", "publish preview styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
     ]
@@ -456,6 +484,7 @@ def main() -> None:
         ("1.5 첨부/미디어/빠른 기록", "1.5 quick capture documented"),
         ("1.6 작성 보조와 명령 체계", "1.6 command palette documented"),
         ("1.7 복구/가져오기/마이그레이션", "1.7 recovery import documented"),
+        ("1.8 출판/발표/공개 지식 묶음", "1.8 publish slides documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
@@ -482,6 +511,7 @@ def main() -> None:
         ("첨부/미디어/빠른 기록", "runtime checklist quick capture section"),
         ("작성 보조와 명령 체계", "runtime checklist writing command section"),
         ("복구/가져오기/마이그레이션", "runtime checklist recovery import section"),
+        ("출판/발표/공개 지식 묶음", "runtime checklist publish slides section"),
         ("node scripts/check_graph_view.mjs", "runtime checklist graph browser check"),
         ("PWA 보조 설치 점검", "runtime checklist PWA install section"),
         ("독립 창으로 NowNote가 열린다", "runtime checklist standalone window"),
@@ -633,6 +663,11 @@ def main() -> None:
         ("createRecoverySnapshot", "recovery snapshot assertion"),
         ("markdownFileToImportNode", "frontmatter import assertion"),
         ("restoreOk", "snapshot restore assertion"),
+        ("savePublishBundle", "publish bundle assertion"),
+        ("exportPublishHtml", "publish HTML export assertion"),
+        ("exportPublishSlides", "publish slides export assertion"),
+        ("publishExcluded", "publish exclusion assertion"),
+        ("sensitiveWarning", "publish sensitive warning assertion"),
     ]
     for needle, label in graph_view_check_requirements:
         check(needle in graph_view_check, f"Graph view check has {label}", needle, failures)
@@ -708,6 +743,18 @@ def main() -> None:
     ]
     for needle, label in recovery_import_design_requirements:
         check(needle in recovery_import_design, f"1.7 design has {label}", needle, failures)
+
+    publish_slides_design_requirements = [
+        ("NowNote 1.8 출판, 발표, 공개 지식 묶음 설계서", "1.8 publish slides design title"),
+        ("공개 묶음 제목, 설명, permalink", "publish bundle metadata scope"),
+        ("공개 묶음에 포함할 지식 메모", "publish include notes scope"),
+        ("공유 안 함, 암호화 메모, 공개 제외 속성", "publish exclusion scope"),
+        ("민감정보 후보", "sensitive scan scope"),
+        ("HTML 문서", "public HTML export scope"),
+        ("슬라이드형 HTML 문서", "slides HTML export scope"),
+    ]
+    for needle, label in publish_slides_design_requirements:
+        check(needle in publish_slides_design, f"1.8 design has {label}", needle, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),

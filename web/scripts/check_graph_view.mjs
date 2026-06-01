@@ -456,6 +456,34 @@ async function runOnce() {
           normalizeData();
           return flattenTree(state.data.tree).some((node) => node.title !== beforeTitle);
         })();
+        const publicNode = createNode("Public Publish", "공개 본문\\n---\\n두 번째 슬라이드", null, 1);
+        publicNode.shared = true;
+        const privateNode = createNode("Private Publish", "password: hidden", null, 1);
+        privateNode.shared = false;
+        const sensitiveNode = createNode("Sensitive Publish", "연락처 test@example.com", null, 1);
+        sensitiveNode.shared = true;
+        state.data.tree = [publicNode, privateNode, sensitiveNode];
+        state.data.publishBundles = [];
+        state.selectedPublishBundleId = "";
+        renderPublishPanel();
+        elements.publishTitleInput.value = "NowNote 공개 묶음";
+        elements.publishDescriptionInput.value = "공개 설명";
+        elements.publishPermalinkInput.value = "nownote-public";
+        savePublishBundle();
+        const savedBundle = state.data.publishBundles[0];
+        const publishExcluded = publishExclusionReason(privateNode) === "공유 안 함"
+          && !buildPublishBundleContent(savedBundle).nodes.some((item) => item.id === privateNode.id);
+        const sensitiveWarning = scanPublishSensitiveContent(buildPublishBundleContent(savedBundle).nodes).length === 1
+          && document.querySelectorAll("#publishSensitiveList .publish-sensitive-item").length === 1;
+        const publicHtml = buildPublicHtmlDocument(buildPublishBundleContent(savedBundle));
+        const slidesHtml = buildSlidesHtmlDocument(buildPublishBundleContent(savedBundle));
+        const publishHtmlExported = publicHtml.includes("Public Publish")
+          && !publicHtml.includes("Private Publish")
+          && publicHtml.includes("test@example.com");
+        const publishSlidesExported = slidesHtml.includes('class="slide"')
+          && (slidesHtml.match(/class="slide"/g) || []).length >= 2
+          && typeof exportPublishHtml === "function"
+          && typeof exportPublishSlides === "function";
         return {
           globalNodes: global.nodes.length,
           globalEdges: global.edges.length,
@@ -487,6 +515,10 @@ async function runOnce() {
           frontmatterMapped,
           reportRendered,
           restoreOk,
+          publishExcluded,
+          sensitiveWarning,
+          publishHtmlExported,
+          publishSlidesExported,
         };
       })()
     `);
@@ -521,6 +553,10 @@ async function runOnce() {
     assert(result.frontmatterMapped, "Markdown frontmatter와 Obsidian 표기 보정이 동작하지 않습니다.");
     assert(result.reportRendered, "가져오기 진단 목록이 렌더링되지 않았습니다.");
     assert(result.restoreOk, "스냅샷 복구 데이터 적용이 동작하지 않습니다.");
+    assert(result.publishExcluded, "공개 제외 문서가 출판 묶음에서 제외되지 않았습니다.");
+    assert(result.sensitiveWarning, "출판 전 민감정보 후보가 표시되지 않았습니다.");
+    assert(result.publishHtmlExported, "공개 HTML 내보내기 생성이 동작하지 않습니다.");
+    assert(result.publishSlidesExported, "발표 HTML 내보내기 생성이 동작하지 않습니다.");
     console.log("NowNote graph view check passed");
     console.log("- Global and local graph rendering works");
     console.log("- Isolated notes, hub notes, and unlinked mention suggestions work");
@@ -530,6 +566,7 @@ async function runOnce() {
     console.log("- Quick capture pins, colors, checklists, reminders, attachments, sketches, and archive work");
     console.log("- Command palette, slash commands, templates, unique notes, random notes, merge, and split work");
     console.log("- Recovery snapshots, frontmatter mapping, Obsidian import conversion, and import reports work");
+    console.log("- Publish bundles, sensitive checks, public HTML, and slides HTML export work");
   } finally {
     browserClient?.close();
     stopBrowserProcess(browser);
