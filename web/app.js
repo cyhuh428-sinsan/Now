@@ -1,6 +1,7 @@
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
 const WEB_SESSION_KEY = "nownote.web.session.v1";
+const WEB_LOGOUT_KEY = "nownote.web.logout.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
@@ -2279,7 +2280,8 @@ async function initializeHostedWebClient() {
     return;
   }
   const session = loadWebSession();
-  if (!session?.ownerId || !session?.token) {
+  if (!session?.ownerId || !session?.token || isWebSessionInvalidated(session)) {
+    clearWebSession();
     showWebLogin(t("web.login.ready"));
     return;
   }
@@ -2306,12 +2308,38 @@ function loadWebSession() {
   }
 }
 
+function webLogoutTimestamp() {
+  try {
+    return Number(localStorage.getItem(WEB_LOGOUT_KEY) || 0);
+  } catch {
+    return 0;
+  }
+}
+
+function isWebSessionInvalidated(session) {
+  const loggedOutAt = webLogoutTimestamp();
+  if (!loggedOutAt) return false;
+  const savedAt = Number(session?.savedAt || 0);
+  return !savedAt || savedAt <= loggedOutAt;
+}
+
 function saveWebSession(session) {
-  sessionStorage.setItem(WEB_SESSION_KEY, JSON.stringify(session));
+  sessionStorage.setItem(WEB_SESSION_KEY, JSON.stringify({
+    ...session,
+    savedAt: Date.now(),
+  }));
 }
 
 function clearWebSession() {
   sessionStorage.removeItem(WEB_SESSION_KEY);
+}
+
+function markWebLoggedOut() {
+  try {
+    localStorage.setItem(WEB_LOGOUT_KEY, String(Date.now()));
+  } catch {
+    // 로그아웃 마커 저장 실패 시에도 현재 탭 세션 삭제는 계속 진행한다.
+  }
 }
 
 function closeWebAccountMenu() {
@@ -2328,6 +2356,7 @@ function toggleWebAccountMenu() {
 
 async function clearHostedWebLogoutCache() {
   if (!isHostedWebClient()) return;
+  markWebLoggedOut();
   clearWebSession();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SETTINGS_KEY);
@@ -2970,6 +2999,12 @@ function bindEvents() {
 
   window.addEventListener("online", () => {
     scheduleServerSync({ force: true, delay: 800 });
+  });
+
+  window.addEventListener("storage", (event) => {
+    if (!isHostedWebClient() || event.key !== WEB_LOGOUT_KEY) return;
+    clearWebSession();
+    showWebLogin(t("web.login.ready"));
   });
 
   document.addEventListener("visibilitychange", () => {
