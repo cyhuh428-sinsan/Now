@@ -2744,7 +2744,11 @@ async function confirmPasswordReset() {
       }),
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
+    setWebLoginMode("login");
+    elements.webLoginPasswordInput.value = "";
+    elements.webResetCodeInput.value = "";
     showWebLogin(t("web.login.resetConfirmed"), "ok");
+    elements.webLoginPasswordInput.focus();
   } catch (error) {
     showWebLogin(t("web.login.resetFailed", { message: error.message }), "bad");
   } finally {
