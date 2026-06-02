@@ -104,8 +104,23 @@ button {
 
 .web-login-actions {
   display: grid;
-  grid-template-columns: 1fr 1fr;
   gap: 8px;
+}
+
+.web-login-actions .primary-btn {
+  width: 100%;
+}
+
+.web-login-actions.single-action .primary-btn {
+  justify-self: center;
+  width: min(100%, 280px);
+}
+
+.web-login-actions .secondary-btn {
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+  color: var(--blue);
 }
 
 .web-login-status {
