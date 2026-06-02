@@ -297,6 +297,7 @@ const I18N = {
     "web.login.failed": "로그인 실패: {message}",
     "web.login.registering": "계정을 만드는 중입니다.",
     "web.login.registerFailed": "계정 생성 실패: {message}",
+    "web.login.passwordRule": "비밀번호는 문자, 숫자, 기호를 모두 포함한 10자 이상이어야 합니다.",
     "web.login.registerOk": "계정을 만들고 로그인했습니다.",
     "web.login.resetRequesting": "비밀번호 재설정 메일을 요청하는 중입니다.",
     "web.login.resetRequested": "등록 이메일로 재설정 코드를 보냈습니다.",
@@ -934,6 +935,7 @@ const I18N = {
     "web.login.failed": "Login failed: {message}",
     "web.login.registering": "Creating account.",
     "web.login.registerFailed": "Account creation failed: {message}",
+    "web.login.passwordRule": "Password must be at least 10 characters and include letters, numbers, and symbols.",
     "web.login.registerOk": "Account created and signed in.",
     "web.login.resetRequesting": "Requesting password reset email.",
     "web.login.resetRequested": "Password reset code sent to the registered email.",
@@ -2445,10 +2447,10 @@ function renderWebLoginMode() {
     node.classList.toggle("hidden", !modes.includes(webLoginMode));
   });
   const buttonModes = new Map([
-    [elements.webLoginSubmitBtn, ["login", "register", "reset-request", "reset-confirm"]],
-    [elements.webRegisterSubmitBtn, ["login"]],
-    [elements.webResetRequestBtn, ["login"]],
-    [elements.webResetConfirmBtn, []],
+    [elements.webLoginSubmitBtn, ["login"]],
+    [elements.webRegisterSubmitBtn, ["login", "register"]],
+    [elements.webResetRequestBtn, ["login", "reset-request"]],
+    [elements.webResetConfirmBtn, ["reset-confirm"]],
   ]);
   buttonModes.forEach((modes, button) => {
     button?.classList.toggle("hidden", !modes.includes(webLoginMode));
@@ -2462,12 +2464,6 @@ function renderWebLoginMode() {
     "reset-request": "web.login.desc.resetRequest",
     "reset-confirm": "web.login.desc.resetConfirm",
   }[webLoginMode] || "web.login.desc.login";
-  const submitKey = {
-    login: "web.login.submit",
-    register: "web.login.register",
-    "reset-request": "web.login.resetRequest",
-    "reset-confirm": "web.login.resetConfirm",
-  }[webLoginMode] || "web.login.submit";
   elements.webLoginDesc.textContent = t(descKey);
   elements.webLoginPasswordLabel.textContent = webLoginMode === "reset-confirm"
     ? t("web.login.newPassword")
@@ -2476,15 +2472,19 @@ function renderWebLoginMode() {
     ? "new-password"
     : "current-password";
   elements.webLoginPasswordInput.required = ["login", "register", "reset-confirm"].includes(webLoginMode);
-  elements.webLoginSubmitBtn.textContent = t(submitKey);
+  elements.webLoginSubmitBtn.textContent = t("web.login.submit");
   elements.webRegisterSubmitBtn.textContent = t("web.login.register");
   elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
-  elements.webLoginSubmitBtn.classList.add("primary-btn");
-  elements.webLoginSubmitBtn.classList.remove("secondary-btn");
-  elements.webRegisterSubmitBtn.classList.add("secondary-btn");
-  elements.webRegisterSubmitBtn.classList.remove("primary-btn");
-  elements.webResetRequestBtn.classList.add("secondary-btn");
-  elements.webResetRequestBtn.classList.remove("primary-btn");
+  elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
+  [
+    [elements.webLoginSubmitBtn, webLoginMode === "login"],
+    [elements.webRegisterSubmitBtn, webLoginMode === "register"],
+    [elements.webResetRequestBtn, webLoginMode === "reset-request"],
+    [elements.webResetConfirmBtn, webLoginMode === "reset-confirm"],
+  ].forEach(([button, primary]) => {
+    button?.classList.toggle("primary-btn", primary);
+    button?.classList.toggle("secondary-btn", !primary);
+  });
 }
 
 async function handleWebLoginSubmit(event) {
@@ -2549,9 +2549,15 @@ async function handleWebRegisterSubmit() {
     elements.webRegisterEmailInput.focus();
     return;
   }
-  setWebLoginMode("login");
-  showWebLogin(t("web.login.ready"));
-  elements.webLoginOwnerInput.focus();
+  await createWebAccount();
+}
+
+function validWebPassword(password) {
+  const value = (password || "").trim();
+  return value.length >= 10
+    && /[A-Za-z]/.test(value)
+    && /\d/.test(value)
+    && /[^A-Za-z0-9]/.test(value);
 }
 
 async function createWebAccount() {
@@ -2565,6 +2571,10 @@ async function createWebAccount() {
   }
   if (!email || !email.includes("@")) {
     showWebLogin(t("web.login.registerFailed", { message: "등록 이메일을 입력하세요." }), "bad");
+    return;
+  }
+  if (!validWebPassword(password)) {
+    showWebLogin(t("web.login.registerFailed", { message: t("web.login.passwordRule") }), "bad");
     return;
   }
   showWebLogin(t("web.login.registering"), "ok");
@@ -2657,6 +2667,10 @@ async function confirmPasswordReset() {
   const newPassword = elements.webLoginPasswordInput.value;
   if (!ownerId || !resetCode || !newPassword) {
     showWebLogin(t("web.login.resetFailed", { message: "사용자 ID, 새 비밀번호, 재설정 코드를 입력하세요." }), "bad");
+    return;
+  }
+  if (!validWebPassword(newPassword)) {
+    showWebLogin(t("web.login.resetFailed", { message: t("web.login.passwordRule") }), "bad");
     return;
   }
   showWebLogin(t("web.login.resetConfirming"), "ok");
