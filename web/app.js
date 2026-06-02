@@ -2476,6 +2476,10 @@ function renderWebLoginMode() {
   elements.webRegisterSubmitBtn.textContent = t("web.login.register");
   elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
   elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
+  elements.webLoginSubmitBtn.type = "submit";
+  elements.webRegisterSubmitBtn.type = webLoginMode === "register" ? "submit" : "button";
+  elements.webResetRequestBtn.type = webLoginMode === "reset-request" ? "submit" : "button";
+  elements.webResetConfirmBtn.type = webLoginMode === "reset-confirm" ? "submit" : "button";
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
@@ -2541,15 +2545,15 @@ async function handleWebLoginSubmit(event) {
   }
 }
 
-async function handleWebRegisterSubmit() {
+async function handleWebRegisterSubmit(event) {
   if (!isHostedWebClient()) return;
   if (webLoginMode === "login") {
+    event?.preventDefault();
     setWebLoginMode("register");
     showWebLogin(t("web.login.desc.register"));
     elements.webRegisterEmailInput.focus();
     return;
   }
-  await createWebAccount();
 }
 
 function validWebPassword(password) {
@@ -2616,15 +2620,15 @@ async function createWebAccount() {
   }
 }
 
-async function handlePasswordResetRequest() {
+async function handlePasswordResetRequest(event) {
   if (!isHostedWebClient()) return;
   if (webLoginMode !== "reset-request") {
+    event?.preventDefault();
     setWebLoginMode("reset-request");
     showWebLogin(t("web.login.desc.resetRequest"));
     elements.webRegisterEmailInput.focus();
     return;
   }
-  await requestPasswordReset();
 }
 
 async function requestPasswordReset() {
@@ -2654,10 +2658,12 @@ async function requestPasswordReset() {
   }
 }
 
-async function handlePasswordResetConfirm() {
+async function handlePasswordResetConfirm(event) {
   if (!isHostedWebClient()) return;
-  setWebLoginMode("reset-confirm");
-  await confirmPasswordReset();
+  if (webLoginMode !== "reset-confirm") {
+    event?.preventDefault();
+    setWebLoginMode("reset-confirm");
+  }
 }
 
 async function confirmPasswordReset() {
