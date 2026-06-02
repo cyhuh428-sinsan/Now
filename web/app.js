@@ -2588,17 +2588,15 @@ async function handleWebLoginSubmit(event) {
 }
 
 async function handleWebRegisterSubmit(event) {
-  if (!isHostedWebClient()) return;
   event?.preventDefault();
-  if (webLoginMode === "login") {
+  if (!isHostedWebClient()) return;
+  if (webLoginMode !== "register") {
     setWebLoginMode("register");
     showWebLogin(t("web.login.desc.register"));
     elements.webRegisterEmailInput.focus();
     return;
   }
-  if (webLoginMode === "register") {
-    await createWebAccount();
-  }
+  await createWebAccount();
 }
 
 function validWebPassword(password) {
@@ -2818,6 +2816,7 @@ initializeApp();
 function bindHostedAuthEvents() {
   if (elements.webLoginForm?.dataset.authEventsBound === "true") return;
   elements.webLoginForm?.addEventListener("submit", handleWebLoginSubmit);
+  elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
   if (elements.webLoginForm) {
     elements.webLoginForm.dataset.authEventsBound = "true";
   }
