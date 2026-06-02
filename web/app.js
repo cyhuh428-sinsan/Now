@@ -2,6 +2,7 @@ const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
 const WEB_SESSION_KEY = "nownote.web.session.v1";
 const WEB_LOGOUT_KEY = "nownote.web.logout.v1";
+const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
@@ -2317,13 +2318,31 @@ function webLogoutTimestamp() {
 }
 
 function isWebSessionInvalidated(session) {
+  if (!isWebAuthActive()) return true;
   const loggedOutAt = webLogoutTimestamp();
   if (!loggedOutAt) return false;
   const savedAt = Number(session?.savedAt || 0);
   return !savedAt || savedAt <= loggedOutAt;
 }
 
+function isWebAuthActive() {
+  try {
+    return localStorage.getItem(WEB_AUTH_ACTIVE_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markWebAuthActive() {
+  try {
+    localStorage.setItem(WEB_AUTH_ACTIVE_KEY, "1");
+  } catch {
+    // 자동 로그인 허용 상태 저장에 실패하면 다음 진입은 로그인 화면으로 보낸다.
+  }
+}
+
 function saveWebSession(session) {
+  markWebAuthActive();
   sessionStorage.setItem(WEB_SESSION_KEY, JSON.stringify({
     ...session,
     savedAt: Date.now(),
@@ -2336,6 +2355,7 @@ function clearWebSession() {
 
 function markWebLoggedOut() {
   try {
+    localStorage.removeItem(WEB_AUTH_ACTIVE_KEY);
     localStorage.setItem(WEB_LOGOUT_KEY, String(Date.now()));
   } catch {
     // 로그아웃 마커 저장 실패 시에도 현재 탭 세션 삭제는 계속 진행한다.
@@ -2360,6 +2380,7 @@ async function clearHostedWebLogoutCache() {
   clearWebSession();
   localStorage.removeItem(STORAGE_KEY);
   localStorage.removeItem(SETTINGS_KEY);
+  localStorage.removeItem(WEB_AUTH_ACTIVE_KEY);
   sessionStorage.clear();
   if ("caches" in window) {
     try {
