@@ -51,9 +51,9 @@
       </label>
       <div class="web-login-actions">
         <button id="webLoginSubmitBtn" class="primary-btn" type="submit">로그인</button>
-        <button id="webRegisterSubmitBtn" class="secondary-btn" type="button">계정 만들기</button>
-        <button id="webResetRequestBtn" class="secondary-btn" type="button">재설정 메일</button>
-        <button id="webResetConfirmBtn" class="secondary-btn" type="button">비밀번호 재설정</button>
+        <button id="webRegisterSubmitBtn" class="secondary-btn" type="submit">계정 만들기</button>
+        <button id="webResetRequestBtn" class="secondary-btn" type="submit">재설정 메일</button>
+        <button id="webResetConfirmBtn" class="secondary-btn" type="submit">비밀번호 재설정</button>
       </div>
       <p id="webLoginStatus" class="web-login-status">서버에 저장된 공유 문서만 표시됩니다.</p>
     </form>
@@ -1126,7 +1126,7 @@
   </section>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js?v=20260602-auth-form-validation-v18"></script>
+  <script src="./app.js?v=20260603-auth-submit-router-v19"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       window.addEventListener("load", () => {

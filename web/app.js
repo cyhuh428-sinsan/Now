@@ -2476,10 +2476,14 @@ function renderWebLoginMode() {
   elements.webRegisterSubmitBtn.textContent = t("web.login.register");
   elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
   elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
-  elements.webLoginSubmitBtn.type = webLoginMode === "login" ? "submit" : "button";
-  elements.webRegisterSubmitBtn.type = webLoginMode === "register" ? "submit" : "button";
-  elements.webResetRequestBtn.type = webLoginMode === "reset-request" ? "submit" : "button";
-  elements.webResetConfirmBtn.type = webLoginMode === "reset-confirm" ? "submit" : "button";
+  [
+    elements.webLoginSubmitBtn,
+    elements.webRegisterSubmitBtn,
+    elements.webResetRequestBtn,
+    elements.webResetConfirmBtn,
+  ].forEach((button) => {
+    if (button) button.type = "submit";
+  });
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
@@ -2493,6 +2497,44 @@ function renderWebLoginMode() {
 
 async function handleWebLoginSubmit(event) {
   event.preventDefault();
+  const submitter = event.submitter || document.activeElement;
+  const action = submitter === elements.webRegisterSubmitBtn
+    ? "register"
+    : submitter === elements.webResetRequestBtn
+      ? "reset-request"
+      : submitter === elements.webResetConfirmBtn
+        ? "reset-confirm"
+        : "login";
+  if (action === "register") {
+    if (webLoginMode !== "register") {
+      setWebLoginMode("register");
+      showWebLogin(t("web.login.desc.register"));
+      elements.webRegisterEmailInput.focus();
+      return;
+    }
+    await createWebAccount();
+    return;
+  }
+  if (action === "reset-request") {
+    if (webLoginMode !== "reset-request") {
+      setWebLoginMode("reset-request");
+      showWebLogin(t("web.login.desc.resetRequest"));
+      elements.webRegisterEmailInput.focus();
+      return;
+    }
+    await requestPasswordReset();
+    return;
+  }
+  if (action === "reset-confirm") {
+    if (webLoginMode !== "reset-confirm") {
+      setWebLoginMode("reset-confirm");
+      showWebLogin(t("web.login.desc.resetConfirm"));
+      elements.webResetCodeInput.focus();
+      return;
+    }
+    await confirmPasswordReset();
+    return;
+  }
   if (webLoginMode === "register") {
     await createWebAccount();
     return;
@@ -2776,20 +2818,6 @@ initializeApp();
 function bindHostedAuthEvents() {
   if (elements.webLoginForm?.dataset.authEventsBound === "true") return;
   elements.webLoginForm?.addEventListener("submit", handleWebLoginSubmit);
-  elements.webLoginForm?.addEventListener("click", (event) => {
-    const button = event.target?.closest?.("button");
-    if (button === elements.webRegisterSubmitBtn) {
-      handleWebRegisterSubmit(event);
-      return;
-    }
-    if (button === elements.webResetRequestBtn) {
-      handlePasswordResetRequest(event);
-      return;
-    }
-    if (button === elements.webResetConfirmBtn) {
-      handlePasswordResetConfirm(event);
-    }
-  });
   if (elements.webLoginForm) {
     elements.webLoginForm.dataset.authEventsBound = "true";
   }
