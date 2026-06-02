@@ -635,6 +635,43 @@ button {
   line-height: 1;
 }
 
+.web-account-menu-wrap {
+  position: relative;
+}
+
+.web-account-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: grid;
+  min-width: 136px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.web-account-menu-item {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.web-account-menu-item:hover,
+.web-account-menu-item:focus {
+  background: var(--blue-soft);
+  color: var(--blue);
+  outline: none;
+}
+
 .results-header-actions {
   display: flex;
   align-items: center;

@@ -2052,6 +2052,8 @@ const elements = {
   serverTestBtn: $("#serverTestBtn"),
   serverSyncBtn: $("#serverSyncBtn"),
   serverFullSyncBtn: $("#serverFullSyncBtn"),
+  webAccountMenuBtn: $("#webAccountMenuBtn"),
+  webAccountMenu: $("#webAccountMenu"),
   webLogoutBtn: $("#webLogoutBtn"),
   serverStatusText: $("#serverStatusText"),
   serverMetaText: $("#serverMetaText"),
@@ -2310,6 +2312,18 @@ function saveWebSession(session) {
 
 function clearWebSession() {
   sessionStorage.removeItem(WEB_SESSION_KEY);
+}
+
+function closeWebAccountMenu() {
+  elements.webAccountMenu?.classList.add("hidden");
+  elements.webAccountMenuBtn?.setAttribute("aria-expanded", "false");
+}
+
+function toggleWebAccountMenu() {
+  if (!elements.webAccountMenu || !elements.webAccountMenuBtn) return;
+  const willOpen = elements.webAccountMenu.classList.contains("hidden");
+  elements.webAccountMenu.classList.toggle("hidden", !willOpen);
+  elements.webAccountMenuBtn.setAttribute("aria-expanded", String(willOpen));
 }
 
 async function clearHostedWebLogoutCache() {
@@ -2598,6 +2612,7 @@ async function confirmPasswordReset() {
 
 async function handleWebLogout() {
   if (!isHostedWebClient()) return;
+  closeWebAccountMenu();
   const server = state.settings.server || defaultServerSettings();
   try {
     if (server.webSessionToken) {
@@ -2946,7 +2961,11 @@ function bindEvents() {
   elements.groupMessengerRefreshBtn?.addEventListener("click", () => refreshGroupMessages());
   elements.groupMessengerForm?.addEventListener("submit", sendGroupMessage);
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
-  elements.webLogoutBtn.addEventListener("click", handleWebLogout);
+  elements.webAccountMenuBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleWebAccountMenu();
+  });
+  elements.webLogoutBtn?.addEventListener("click", handleWebLogout);
 
   window.addEventListener("online", () => {
     scheduleServerSync({ force: true, delay: 800 });
@@ -3248,6 +3267,12 @@ function bindEvents() {
   });
   window.addEventListener("keydown", handleShortcuts);
   window.addEventListener("mousedown", (event) => {
+    if (elements.webAccountMenu && !elements.webAccountMenu.classList.contains("hidden")) {
+      const target = event.target;
+      if (!elements.webAccountMenu.contains(target) && !elements.webAccountMenuBtn?.contains(target)) {
+        closeWebAccountMenu();
+      }
+    }
     if (!state.capturingShortcutId) return;
     const editor = elements.shortcutEditor;
     if (editor && !editor.contains(event.target)) {
@@ -3601,6 +3626,7 @@ function applyHostedServerSettingsVisibility() {
   Array.from(document.querySelectorAll(".hosted-web-only"))
     .forEach((node) => node?.classList.toggle("hidden", !hosted));
   elements.webLogoutBtn?.classList.toggle("hidden", !hosted);
+  if (!hosted) closeWebAccountMenu();
 }
 
 function renderDeviceTokenList(items = []) {

@@ -151,6 +151,12 @@
             <h2 id="treeTitle">지식 메모</h2>
           </div>
           <div class="header-actions">
+            <div id="webAccountMenuWrap" class="web-account-menu-wrap hosted-web-only hidden">
+              <button id="webAccountMenuBtn" class="header-icon-btn secondary-btn" type="button" aria-label="Web 메뉴" title="Web 메뉴" aria-haspopup="true" aria-expanded="false">☰</button>
+              <div id="webAccountMenu" class="web-account-menu hidden" role="menu" aria-label="Web 메뉴">
+                <button id="webLogoutBtn" class="web-account-menu-item" type="button" role="menuitem">로그아웃</button>
+              </div>
+            </div>
             <button id="toggleTreePanelBtn" class="header-icon-btn secondary-btn" type="button" aria-label="목록 접기" title="목록 접기">⇤</button>
             <button id="expandAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 펼치기" title="모두 펼치기">⇲</button>
             <button id="collapseAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 접기" title="모두 접기">⇱</button>
@@ -618,7 +624,6 @@
                 <button id="serverTestBtn" class="secondary-btn desktop-server-only" type="button">연결 테스트</button>
                 <button id="serverSyncBtn" class="secondary-btn desktop-server-only" type="button">서버로 동기화</button>
                 <button id="serverFullSyncBtn" class="secondary-btn desktop-server-only" type="button">전체 다시 동기화</button>
-                <button id="webLogoutBtn" class="secondary-btn hidden" type="button">로그아웃</button>
               </div>
               <div class="server-analysis-box">
                 <div>
@@ -1111,7 +1116,7 @@
   </section>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js?v=20260602-account-flow"></script>
+  <script src="./app.js?v=20260602-login-reset-v2"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       window.addEventListener("load", () => {
