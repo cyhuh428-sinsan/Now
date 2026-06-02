@@ -2614,17 +2614,26 @@ async function handleWebLogout() {
   if (!isHostedWebClient()) return;
   closeWebAccountMenu();
   const server = state.settings.server || defaultServerSettings();
+  const logoutHeaders = server.webSessionToken ? serverAuthHeaders(server) : null;
+  await clearHostedWebLogoutCache();
+  state.settings.server = {
+    ...defaultServerSettings(),
+    mode: "server",
+    url: defaultHostedServerUrl(),
+    deviceId: "web-client",
+    lastStatus: "idle",
+    lastMessage: t("web.login.loggedOut"),
+  };
   try {
-    if (server.webSessionToken) {
+    if (logoutHeaders) {
       await fetch(`${defaultHostedServerUrl()}/api/v1/auth/web-logout`, {
         method: "POST",
-        headers: serverAuthHeaders(server),
+        headers: logoutHeaders,
       });
     }
   } catch {
     // 로그아웃은 로컬 세션 폐기를 우선한다.
   }
-  await clearHostedWebLogoutCache();
   hostedWebSyncSuspended = true;
   try {
     state.data = defaultData();
@@ -2632,14 +2641,6 @@ async function handleWebLogout() {
     state.selectedDate = toDateKey(new Date());
     state.expandedTreeIds.clear();
     state.selectedDeletedTreeIds.clear();
-    state.settings.server = {
-      ...defaultServerSettings(),
-      mode: "server",
-      url: defaultHostedServerUrl(),
-      deviceId: "web-client",
-      lastStatus: "idle",
-      lastMessage: t("web.login.loggedOut"),
-    };
     persistSettings();
     render();
     renderSettings();
