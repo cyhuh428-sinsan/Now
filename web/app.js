@@ -2545,6 +2545,22 @@ async function handleWebLoginSubmit(event) {
   }
 }
 
+async function handleWebLoginActionClick(event) {
+  const button = event.target?.closest?.("button");
+  if (!button) return;
+  if (button === elements.webRegisterSubmitBtn) {
+    await handleWebRegisterSubmit(event);
+    return;
+  }
+  if (button === elements.webResetRequestBtn) {
+    await handlePasswordResetRequest(event);
+    return;
+  }
+  if (button === elements.webResetConfirmBtn) {
+    await handlePasswordResetConfirm(event);
+  }
+}
+
 async function handleWebRegisterSubmit(event) {
   if (!isHostedWebClient()) return;
   event?.preventDefault();
@@ -3348,9 +3364,7 @@ function bindEvents() {
   elements.captureFilterSelect?.addEventListener("change", renderCaptures);
   elements.captureSearchInput?.addEventListener("input", renderCaptures);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
-  elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
-  elements.webResetRequestBtn?.addEventListener("click", handlePasswordResetRequest);
-  elements.webResetConfirmBtn?.addEventListener("click", handlePasswordResetConfirm);
+  elements.webLoginForm.addEventListener("click", handleWebLoginActionClick);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.commandPaletteView, closeCommandPalette);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
