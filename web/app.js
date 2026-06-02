@@ -437,6 +437,15 @@ const I18N = {
     "settings.server.profile.loaded": "사용자 프로필을 불러왔습니다.",
     "settings.server.profile.saved": "사용자 프로필을 저장했습니다.",
     "settings.server.profile.summary": "그룹 {group} · {twoFactor} · {active} · 최근 접속 {lastSeen}",
+    "settings.server.profile.groupJoin.title": "그룹 참가",
+    "settings.server.profile.groupJoin.desc": "관리자가 알려준 그룹 이름과 초대코드로 그룹에 참가합니다.",
+    "settings.server.profile.groupJoin.groupName": "그룹 이름",
+    "settings.server.profile.groupJoin.inviteCode": "초대코드",
+    "settings.server.profile.groupJoin.join": "그룹 참가",
+    "settings.server.profile.groupJoin.current": "현재 그룹: {group}",
+    "settings.server.profile.groupJoin.empty": "그룹 이름과 초대코드를 입력하세요.",
+    "settings.server.profile.groupJoin.joining": "그룹 참가를 확인하는 중입니다.",
+    "settings.server.profile.groupJoin.joined": "그룹에 참가했습니다.",
     "settings.server.profile.twoFactorOn": "2단계 사용",
     "settings.server.profile.twoFactorOff": "2단계 미사용",
     "settings.server.profile.active": "활성",
@@ -1075,6 +1084,15 @@ const I18N = {
     "settings.server.profile.loaded": "User profile loaded.",
     "settings.server.profile.saved": "User profile saved.",
     "settings.server.profile.summary": "Group {group} · {twoFactor} · {active} · Last seen {lastSeen}",
+    "settings.server.profile.groupJoin.title": "Join group",
+    "settings.server.profile.groupJoin.desc": "Join a group with the group name and invite code from an administrator.",
+    "settings.server.profile.groupJoin.groupName": "Group name",
+    "settings.server.profile.groupJoin.inviteCode": "Invite code",
+    "settings.server.profile.groupJoin.join": "Join group",
+    "settings.server.profile.groupJoin.current": "Current group: {group}",
+    "settings.server.profile.groupJoin.empty": "Enter the group name and invite code.",
+    "settings.server.profile.groupJoin.joining": "Checking the group invite.",
+    "settings.server.profile.groupJoin.joined": "Joined the group.",
     "settings.server.profile.twoFactorOn": "2FA on",
     "settings.server.profile.twoFactorOff": "2FA off",
     "settings.server.profile.active": "Active",
@@ -2032,6 +2050,14 @@ const elements = {
   serverProfileLoadBtn: $("#serverProfileLoadBtn"),
   serverProfileSaveBtn: $("#serverProfileSaveBtn"),
   serverProfileText: $("#serverProfileText"),
+  serverGroupJoinTitle: $("#serverGroupJoinTitle"),
+  serverGroupJoinDesc: $("#serverGroupJoinDesc"),
+  serverGroupNameLabel: $("#serverGroupNameLabel"),
+  serverGroupNameInput: $("#serverGroupNameInput"),
+  serverGroupInviteCodeLabel: $("#serverGroupInviteCodeLabel"),
+  serverGroupInviteCodeInput: $("#serverGroupInviteCodeInput"),
+  serverGroupJoinBtn: $("#serverGroupJoinBtn"),
+  serverGroupJoinText: $("#serverGroupJoinText"),
   serverAnalysisCreateBtn: $("#serverAnalysisCreateBtn"),
   serverAnalysisRefreshBtn: $("#serverAnalysisRefreshBtn"),
   serverAnalysisTypeSelect: $("#serverAnalysisTypeSelect"),
@@ -3121,6 +3147,7 @@ function bindEvents() {
   elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
   elements.serverProfileLoadBtn.addEventListener("click", loadServerUserProfile);
   elements.serverProfileSaveBtn.addEventListener("click", saveServerUserProfile);
+  elements.serverGroupJoinBtn?.addEventListener("click", joinServerGroupByInvite);
   elements.serverAnalysisCreateBtn.addEventListener("click", createSelectedNoteAnalysisJob);
   elements.serverAnalysisRefreshBtn.addEventListener("click", refreshServerAnalysisJobs);
   elements.serverAnalysisList.addEventListener("click", handleServerAnalysisListClick);
@@ -3771,6 +3798,7 @@ function renderServerSettings() {
   elements.serverDisplayNameInput.value = profile.displayName;
   elements.serverEmailInput.value = profile.email;
   elements.serverTimezoneInput.value = profile.timezone;
+  if (elements.serverGroupNameInput) elements.serverGroupNameInput.value = profile.groupName || "";
   const isServerMode = server.mode === "server";
   applyHostedServerSettingsVisibility();
   elements.serverTestBtn.disabled = !isServerMode;
@@ -3779,6 +3807,7 @@ function renderServerSettings() {
   elements.serverAutoSyncToggle.disabled = !isServerMode;
   elements.serverProfileLoadBtn.disabled = !isServerMode;
   elements.serverProfileSaveBtn.disabled = !isServerMode;
+  if (elements.serverGroupJoinBtn) elements.serverGroupJoinBtn.disabled = !isServerMode || !isHostedWebClient();
   elements.serverAnalysisCreateBtn.disabled = !isServerMode;
   elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
   if (elements.serverAnalysisTypeSelect) elements.serverAnalysisTypeSelect.disabled = !isServerMode;
@@ -3788,6 +3817,7 @@ function renderServerSettings() {
   renderServerAnalysisJobs(server.analysisJobs);
   renderServerConflicts(server.conflicts);
   renderServerProfileMeta(profile);
+  renderServerGroupJoinMeta(profile);
 }
 
 function applyHostedServerSettingsVisibility() {
@@ -4075,6 +4105,13 @@ function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
     twoFactor,
     active,
     lastSeen,
+  });
+}
+
+function renderServerGroupJoinMeta(profile = normalizeServerUserProfile()) {
+  if (!elements.serverGroupJoinText) return;
+  elements.serverGroupJoinText.textContent = t("settings.server.profile.groupJoin.current", {
+    group: profile.groupName || "-",
   });
 }
 
@@ -4575,6 +4612,57 @@ async function saveServerUserProfile() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+async function joinServerGroupByInvite() {
+  const groupName = elements.serverGroupNameInput?.value.trim() || "";
+  const inviteCode = elements.serverGroupInviteCodeInput?.value.trim() || "";
+  saveServerSettingsFromForm(t("settings.server.profile.groupJoin.joining"), "settings.server.profile.groupJoin.joining");
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+
+  if (!groupName || !inviteCode) {
+    setServerMessage(server, "bad", "settings.server.profile.groupJoin.empty");
+    persistSettings();
+    renderServerSettings();
+    return;
+  }
+
+  const path = `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}/group-join`;
+  renderServerStatus("testing", t("settings.server.profile.groupJoin.joining"));
+  if (elements.serverGroupJoinBtn) elements.serverGroupJoinBtn.disabled = true;
+  try {
+    const payload = await requestServerJson(server, path, {
+      method: "POST",
+      body: JSON.stringify({
+        group_name: groupName,
+        invite_code: inviteCode,
+      }),
+    });
+    applyServerUserProfile(payload.user);
+    if (elements.serverGroupInviteCodeInput) elements.serverGroupInviteCodeInput.value = "";
+    server.groupMessages = [];
+    server.groupMessengerUnreadCount = 0;
+    server.groupMessengerLastReadId = 0;
+    server.groupMessagesLoadedAt = null;
+    server.lastCheckedAt = new Date().toISOString();
+    setServerMessage(server, "ok", "settings.server.profile.groupJoin.joined");
+    persistSettings();
+    renderServerSettings();
+    if (isHostedWebClient()) {
+      await loadServerSharedNotes({ replace: true }).catch((error) => {
+        showNotice(`${t("settings.server.fail")}: ${error.message}`, "error");
+      });
+      await refreshGroupMessages({ silent: true });
+    }
+  } catch (error) {
+    server.lastCheckedAt = new Date().toISOString();
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
+    persistSettings();
+    renderServerSettings();
+  } finally {
+    if (elements.serverGroupJoinBtn) elements.serverGroupJoinBtn.disabled = server.mode !== "server" || !isHostedWebClient();
+  }
 }
 
 function buildKnowledgeAnalysisPayload(jobType = "knowledge_2_0_review") {
@@ -5920,6 +6008,11 @@ function applyLanguage() {
   setText("#serverTimezoneLabel", t("settings.server.profile.timezone"));
   setText("#serverProfileLoadBtn", t("settings.server.profile.load"));
   setText("#serverProfileSaveBtn", t("settings.server.profile.save"));
+  setText("#serverGroupJoinTitle", t("settings.server.profile.groupJoin.title"));
+  setText("#serverGroupJoinDesc", t("settings.server.profile.groupJoin.desc"));
+  setText("#serverGroupNameLabel", t("settings.server.profile.groupJoin.groupName"));
+  setText("#serverGroupInviteCodeLabel", t("settings.server.profile.groupJoin.inviteCode"));
+  setText("#serverGroupJoinBtn", t("settings.server.profile.groupJoin.join"));
   setText("#deviceTokenTitle", t("settings.server.deviceToken.title"));
   setText("#deviceTokenDesc", t("settings.server.deviceToken.desc"));
   setText("#deviceTokenNameLabel", t("settings.server.deviceToken.name"));

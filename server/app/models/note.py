@@ -104,6 +104,8 @@ class UserGroup(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(80), unique=True, index=True)
     description: Mapped[str] = mapped_column(String(240), default="")
+    invite_code_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    invite_code_updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
     sort_order: Mapped[int] = mapped_column(Integer, default=100, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

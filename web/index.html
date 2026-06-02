@@ -607,6 +607,26 @@
                   <button id="serverProfileSaveBtn" class="secondary-btn" type="button">프로필 저장</button>
                 </div>
                 <p id="serverProfileText" class="server-meta-text">프로필을 불러오지 않았습니다.</p>
+                <div id="serverGroupJoinBox" class="server-group-join hosted-web-only hidden">
+                  <div>
+                    <strong id="serverGroupJoinTitle">그룹 참가</strong>
+                    <p id="serverGroupJoinDesc">관리자가 알려준 그룹 이름과 초대코드로 그룹에 참가합니다.</p>
+                  </div>
+                  <div class="server-profile-grid">
+                    <label>
+                      <span id="serverGroupNameLabel">그룹 이름</span>
+                      <input id="serverGroupNameInput" class="settings-input" type="text" autocomplete="off" placeholder="사용자">
+                    </label>
+                    <label>
+                      <span id="serverGroupInviteCodeLabel">초대코드</span>
+                      <input id="serverGroupInviteCodeInput" class="settings-input" type="password" autocomplete="off">
+                    </label>
+                  </div>
+                  <div class="settings-actions">
+                    <button id="serverGroupJoinBtn" class="secondary-btn" type="button">그룹 참가</button>
+                  </div>
+                  <p id="serverGroupJoinText" class="server-meta-text">현재 그룹: -</p>
+                </div>
               </div>
               <div id="hostedDeviceTokenBox" class="server-profile-box hosted-web-only hidden">
                 <div>
@@ -1126,7 +1146,7 @@
   </section>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js?v=20260603-reset-login-v24"></script>
+  <script src="./app.js?v=20260603-group-invite-v25"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       window.addEventListener("load", () => {

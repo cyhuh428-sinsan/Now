@@ -2224,6 +2224,12 @@ kbd {
   gap: 8px;
 }
 
+.server-group-join {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 12px;
+}
+
 .server-status-text {
   margin: 0;
   color: var(--muted);

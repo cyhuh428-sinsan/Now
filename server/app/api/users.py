@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from app.core.security import require_client_api_access
 from app.db import get_db
 from app.models.note import UserAccount, UserDevice
-from app.services.user_accounts import require_user_api_access, update_user_account
+from app.services.user_accounts import join_user_group_by_invite, require_user_api_access, update_user_account
 from app.services.user_devices import set_user_device_active
 
 router = APIRouter(
@@ -20,6 +20,11 @@ class UserProfileUpdate(BaseModel):
     email: str | None = Field(default=None, max_length=240)
     display_name: str | None = Field(default=None, max_length=120)
     timezone: str = Field(default="Asia/Seoul", max_length=80)
+
+
+class UserGroupJoinRequest(BaseModel):
+    group_name: str = Field(max_length=80)
+    invite_code: str = Field(max_length=240)
 
 
 class UserDeviceUpdate(BaseModel):
@@ -65,6 +70,31 @@ def update_user_profile(
         group_name=user.group_name,
         two_factor_enabled=bool(user.two_factor_enabled),
         is_active=bool(user.is_active),
+    )
+    db.commit()
+    db.refresh(updated)
+    return {"status": "ok", "user": _user_payload(updated)}
+
+
+@router.post("/{owner_id}/group-join")
+def join_user_group(
+    owner_id: str,
+    payload: UserGroupJoinRequest,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    updated = join_user_group_by_invite(
+        db,
+        user=user,
+        group_name=payload.group_name,
+        invite_code=payload.invite_code,
     )
     db.commit()
     db.refresh(updated)
