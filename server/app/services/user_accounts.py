@@ -26,6 +26,10 @@ def hash_access_token(token: str) -> str:
     return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
+def hash_group_invite_code(invite_code: str) -> str:
+    return hash_access_token(invite_code.strip())
+
+
 def hash_password(password: str) -> str:
     salt = secrets.token_bytes(16)
     digest = hashlib.pbkdf2_hmac(
@@ -311,6 +315,7 @@ def ensure_user_group(
     description: str = "",
     sort_order: int = 100,
     is_active: bool = True,
+    invite_code: str | None = None,
 ) -> UserGroup:
     cleaned_name = _clean_required(name, "사용자", 80)
     group = db.scalar(select(UserGroup).where(UserGroup.name == cleaned_name))
@@ -321,6 +326,7 @@ def ensure_user_group(
             sort_order=sort_order,
             is_active=1 if is_active else 0,
         )
+        set_user_group_invite_code(group, invite_code)
         db.add(group)
         db.flush()
         return group
@@ -328,6 +334,7 @@ def ensure_user_group(
         group.description = _clean_required(description, "", 240)
     if sort_order != 100 and group.sort_order == 100:
         group.sort_order = sort_order
+    set_user_group_invite_code(group, invite_code)
     return group
 
 
@@ -347,6 +354,7 @@ def update_user_group(
     description: str = "",
     sort_order: int = 100,
     is_active: bool = True,
+    invite_code: str | None = None,
 ) -> UserGroup | None:
     group = db.scalar(select(UserGroup).where(UserGroup.id == group_id))
     if group is None:
@@ -365,11 +373,51 @@ def update_user_group(
     group.description = _clean_required(description, "", 240)
     group.sort_order = max(0, min(int(sort_order), 9999))
     group.is_active = 1 if is_active else 0
+    set_user_group_invite_code(group, invite_code)
     if old_name != cleaned_name:
         users = list(db.scalars(select(UserAccount).where(UserAccount.group_name == old_name)).all())
         for user in users:
             user.group_name = cleaned_name
     return group
+
+
+def set_user_group_invite_code(group: UserGroup, invite_code: str | None) -> bool:
+    cleaned_code = (invite_code or "").strip()
+    if not cleaned_code:
+        return False
+    group.invite_code_hash = hash_group_invite_code(cleaned_code)
+    group.invite_code_updated_at = datetime.utcnow()
+    return True
+
+
+def join_user_group_by_invite(
+    db: Session,
+    *,
+    user: UserAccount,
+    group_name: str,
+    invite_code: str,
+) -> UserAccount:
+    cleaned_group_name = _clean_required(group_name, "", 80)
+    cleaned_code = (invite_code or "").strip()
+    if not cleaned_group_name or not cleaned_code:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="group name and invite code are required",
+        )
+    group = db.scalar(select(UserGroup).where(UserGroup.name == cleaned_group_name))
+    if group is None or not bool(group.is_active) or not group.invite_code_hash:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="invalid group invite",
+        )
+    if not compare_digest(hash_group_invite_code(cleaned_code), group.invite_code_hash):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="invalid group invite",
+        )
+    user.group_name = group.name
+    user.updated_at = datetime.utcnow()
+    return user
 
 
 def ensure_default_user_groups_only(db: Session) -> None:

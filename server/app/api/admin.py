@@ -54,6 +54,7 @@ class UserAccountCreate(UserAccountUpdate):
 class UserGroupCreate(BaseModel):
     name: str = Field(max_length=80)
     description: str = Field(default="", max_length=240)
+    invite_code: str | None = Field(default=None, max_length=240)
     sort_order: int = Field(default=100, ge=0, le=9999)
     is_active: bool = True
 
@@ -380,6 +381,7 @@ def create_group(
         description=payload.description,
         sort_order=payload.sort_order,
         is_active=payload.is_active,
+        invite_code=payload.invite_code,
     )
     db.commit()
     db.refresh(group)
@@ -399,6 +401,7 @@ def patch_group(
         description=payload.description,
         sort_order=payload.sort_order,
         is_active=payload.is_active,
+        invite_code=payload.invite_code,
     )
     if group is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="group not found")
@@ -1080,7 +1083,9 @@ def _model_to_dict(row) -> dict:
         data["is_active"] = bool(row.is_active)
         data["access_token_configured"] = bool(row.access_token_hash)
     if isinstance(row, UserGroup):
+        data.pop("invite_code_hash", None)
         data["is_active"] = bool(row.is_active)
+        data["invite_code_enabled"] = bool(row.invite_code_hash)
     return data
 
 

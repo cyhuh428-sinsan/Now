@@ -533,6 +533,7 @@ def main() -> None:
             require("그룹 관리" in text, "그룹 관리 화면 제목이 없습니다")
             require("/admin/groups/new" in text, "그룹 관리 화면에 그룹 추가 폼이 없습니다")
             require("/api/v1/admin/groups" in text, "그룹 관리 화면에 JSON API 링크가 없습니다")
+            require("초대코드" in text, "그룹 관리 화면에 초대코드 입력이 없습니다")
         if path.startswith("/admin/analysis"):
             require("현재 조건 JSON" in text, "분석 관리 화면에 현재 조건 JSON 링크가 없습니다")
             require("Owner ID" in text and "작업 유형" in text, "분석 관리 화면에 필터가 없습니다")
@@ -982,6 +983,7 @@ def main() -> None:
     group_names = {item.get("name") for item in data.get("items", [])}
     require("사용자" in group_names, "그룹 API에 기본 사용자 그룹이 없습니다")
     require("user_count" in (data.get("items", [{}])[0] if data.get("items") else {}), "그룹 API에 사용자 수가 없습니다")
+    require("invite_code_enabled" in (data.get("items", [{}])[0] if data.get("items") else {}), "그룹 API에 초대코드 설정 여부가 없습니다")
     print(
         "GET /api/v1/admin/groups:",
         status,

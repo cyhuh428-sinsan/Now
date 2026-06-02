@@ -56,23 +56,23 @@ def migrate_schema(conn: Connection | None = None) -> None:
     bind = conn or engine
     inspector = inspect(bind)
     table_names = inspector.get_table_names()
-    if "user_accounts" not in table_names:
-        return
-    account_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
-    account_migrations = {
-        "password_hash": "VARCHAR(240)",
-        "password_updated_at": "TIMESTAMP",
-        "password_recovery_hash": "VARCHAR(128)",
-        "password_recovery_issued_at": "TIMESTAMP",
-        "access_token_hash": "VARCHAR(128)",
-        "access_token_issued_at": "TIMESTAMP",
-        "access_token_last_used_at": "TIMESTAMP",
-    }
-    migrations = [
-        ("user_accounts", name, definition)
-        for name, definition in account_migrations.items()
-        if name not in account_columns
-    ]
+    migrations = []
+    if "user_accounts" in table_names:
+        account_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
+        account_migrations = {
+            "password_hash": "VARCHAR(240)",
+            "password_updated_at": "TIMESTAMP",
+            "password_recovery_hash": "VARCHAR(128)",
+            "password_recovery_issued_at": "TIMESTAMP",
+            "access_token_hash": "VARCHAR(128)",
+            "access_token_issued_at": "TIMESTAMP",
+            "access_token_last_used_at": "TIMESTAMP",
+        }
+        migrations.extend(
+            ("user_accounts", name, definition)
+            for name, definition in account_migrations.items()
+            if name not in account_columns
+        )
     if "user_devices" in table_names:
         device_columns = {column["name"] for column in inspector.get_columns("user_devices")}
         device_migrations = {
@@ -85,6 +85,17 @@ def migrate_schema(conn: Connection | None = None) -> None:
             ("user_devices", name, definition)
             for name, definition in device_migrations.items()
             if name not in device_columns
+        )
+    if "user_groups" in table_names:
+        group_columns = {column["name"] for column in inspector.get_columns("user_groups")}
+        group_migrations = {
+            "invite_code_hash": "VARCHAR(128)",
+            "invite_code_updated_at": "TIMESTAMP",
+        }
+        migrations.extend(
+            ("user_groups", name, definition)
+            for name, definition in group_migrations.items()
+            if name not in group_columns
         )
     if not migrations:
         return

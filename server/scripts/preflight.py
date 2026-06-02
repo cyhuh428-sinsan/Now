@@ -1344,6 +1344,9 @@ def main() -> None:
             user_accounts_source,
             [
                 ("is_active=1", "Auto-created users are active", "new users start active"),
+                ("hash_group_invite_code", "User group invite codes are hashed", "group invite code hash"),
+                ("join_user_group_by_invite", "Users can join groups by invite code", "group invite join service"),
+                ("invalid group invite", "Invalid group invites are rejected", "invalid group invite"),
             ],
             failures,
         )
@@ -1354,6 +1357,8 @@ def main() -> None:
             [
                 ('@router.get("/{owner_id}/devices")', "User API lists user devices", "user devices list API"),
                 ('@router.patch("/{owner_id}/devices/{device_id}")', "User API updates user device status", "user device update API"),
+                ('@router.post("/{owner_id}/group-join")', "User API joins a group by invite code", "group invite join API"),
+                ("join_user_group_by_invite", "User API delegates group invite validation", "group invite validation"),
                 ("set_user_device_active", "User API changes device active state", "set_user_device_active"),
                 ("_device_payload", "User API serializes device payload", "_device_payload"),
             ],

@@ -298,6 +298,7 @@ def admin_groups(_: None = Depends(_require_monitor_access)) -> HTMLResponse:
 def admin_group_create(
     name: str = Form(),
     description: str = Form(default=""),
+    invite_code: str = Form(default=""),
     sort_order: int = Form(default=100),
     is_active: str | None = Form(default=None),
     _: None = Depends(_require_monitor_access),
@@ -309,6 +310,7 @@ def admin_group_create(
             description=description,
             sort_order=sort_order,
             is_active=is_active == "on",
+            invite_code=invite_code,
         )
         db.commit()
     return RedirectResponse(url="/admin/groups", status_code=status.HTTP_303_SEE_OTHER)
@@ -319,6 +321,7 @@ def admin_group_update(
     group_id: int = Form(),
     name: str = Form(),
     description: str = Form(default=""),
+    invite_code: str = Form(default=""),
     sort_order: int = Form(default=100),
     is_active: str | None = Form(default=None),
     _: None = Depends(_require_monitor_access),
@@ -331,6 +334,7 @@ def admin_group_update(
             description=description,
             sort_order=sort_order,
             is_active=is_active == "on",
+            invite_code=invite_code,
         )
         db.commit()
     return RedirectResponse(url="/admin/groups", status_code=status.HTTP_303_SEE_OTHER)
@@ -3001,6 +3005,7 @@ def _admin_groups_html() -> str:
                     "id": group.id,
                     "name": group.name,
                     "description": group.description or "",
+                    "invite_code_enabled": bool(group.invite_code_hash),
                     "is_active": bool(group.is_active),
                     "sort_order": group.sort_order,
                 }
@@ -3042,7 +3047,7 @@ def _admin_groups_html() -> str:
     th, td {{ padding: 13px 18px; border-bottom: 1px solid var(--line); text-align: left; font-size: 14px; vertical-align: top; }}
     th {{ color: var(--muted); font-weight: 600; background: #fafafa; }}
     input[type="text"], input[type="number"] {{ width: 100%; min-height: 36px; border: 1px solid var(--line); border-radius: 8px; padding: 0 10px; }}
-    .inline-form {{ display: grid; grid-template-columns: 160px minmax(180px, 1fr) 90px 80px auto; gap: 8px; align-items: center; }}
+    .inline-form {{ display: grid; grid-template-columns: 150px minmax(170px, 1fr) 150px 72px 76px auto; gap: 8px; align-items: center; }}
     button {{ min-height: 36px; padding: 0 12px; border: 1px solid var(--blue); border-radius: 8px; background: var(--blue); color: #fff; font-weight: 750; cursor: pointer; }}
     .badge {{ display: inline-flex; align-items: center; min-height: 26px; padding: 0 9px; border-radius: 999px; font-size: 12px; font-weight: 800; }}
     .ok {{ background: #dcfce7; color: #166534; }}
@@ -3074,6 +3079,7 @@ def _admin_groups_html() -> str:
       <form class="inline-form" method="post" action="/admin/groups/new" style="padding:14px 18px;">
         <input type="text" name="name" required placeholder="그룹 이름">
         <input type="text" name="description" placeholder="설명">
+        <input type="text" name="invite_code" placeholder="초대코드">
         <input type="number" name="sort_order" value="100" min="0" max="9999" aria-label="정렬">
         <label><input type="checkbox" name="is_active" checked> 활성</label>
         <button type="submit">추가</button>
@@ -3083,7 +3089,7 @@ def _admin_groups_html() -> str:
     <section>
       <div class="section-head"><span>그룹 목록</span><span><a href="/api/v1/admin/groups">JSON</a></span></div>
       <table>
-        <tr><th>그룹</th><th>설명</th><th>사용자</th><th>상태</th><th>정렬</th><th>관리</th></tr>
+        <tr><th>그룹</th><th>설명</th><th>초대코드</th><th>사용자</th><th>상태</th><th>정렬</th><th>관리</th></tr>
         {_group_rows(groups, user_counts)}
       </table>
     </section>
@@ -3096,21 +3102,23 @@ def _admin_groups_html() -> str:
 
 def _group_rows(groups: list[dict[str, object]], user_counts: dict[str, int]) -> str:
     if not groups:
-        return '<tr><td colspan="6">등록된 그룹이 없습니다.</td></tr>'
+        return '<tr><td colspan="7">등록된 그룹이 없습니다.</td></tr>'
     rows = []
     for group in groups:
         group_id = int(group["id"])
         group_name = str(group["name"])
         description = str(group["description"])
+        invite_code_enabled = bool(group.get("invite_code_enabled"))
         is_active = bool(group["is_active"])
         sort_order = int(group["sort_order"])
         rows.append(
             "<tr>"
-            '<td colspan="6">'
+            '<td colspan="7">'
             f'<form class="inline-form" method="post" action="/admin/groups/edit">'
             f'<input type="hidden" name="group_id" value="{group_id}">'
             f'<input type="text" name="name" value="{escape(group_name, quote=True)}" required>'
             f'<input type="text" name="description" value="{escape(description, quote=True)}">'
+            f'<input type="text" name="invite_code" placeholder="{"새 코드 입력" if invite_code_enabled else "초대코드"}">'
             f'<span>{int(user_counts.get(group_name, 0))}명</span>'
             f'<label>{_simple_badge("ok" if is_active else "bad", "활성" if is_active else "비활성")} <input type="checkbox" name="is_active" {"checked" if is_active else ""}> 사용</label>'
             f'<input type="number" name="sort_order" value="{sort_order}" min="0" max="9999" aria-label="정렬">'
