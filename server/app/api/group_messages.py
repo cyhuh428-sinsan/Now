@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -30,7 +30,7 @@ def _message_payload(message: GroupMessage, users: dict[str, UserAccount]) -> di
         "sender_owner_id": message.sender_owner_id,
         "sender_display_name": user.display_name if user else None,
         "body": message.body,
-        "created_at": message.created_at,
+        "created_at": _utc_iso(message.created_at),
     }
 
 
@@ -184,3 +184,11 @@ def _unread_message_count(
             )
         ) or 0
     )
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).isoformat().replace("+00:00", "Z")

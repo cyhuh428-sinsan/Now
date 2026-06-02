@@ -615,7 +615,9 @@
                   <div class="server-profile-grid">
                     <label>
                       <span id="serverGroupNameLabel">그룹 이름</span>
-                      <input id="serverGroupNameInput" class="settings-input" type="text" autocomplete="off" placeholder="사용자">
+                      <select id="serverGroupNameInput" class="settings-select">
+                        <option value="사용자">사용자</option>
+                      </select>
                     </label>
                     <label>
                       <span id="serverGroupInviteCodeLabel">초대코드</span>
@@ -1146,7 +1148,7 @@
   </section>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js?v=20260603-group-invite-v25"></script>
+  <script src="./app.js?v=20260603-group-list-v26"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       window.addEventListener("load", () => {
