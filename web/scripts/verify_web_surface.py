@@ -347,6 +347,8 @@ def main() -> None:
         ("async function refreshDeviceTokens", "hosted Web device token refresh function"),
         ("async function handlePasswordResetRequest", "hosted Web password reset request function"),
         ("async function handlePasswordResetConfirm", "hosted Web password reset confirm function"),
+        ('setWebLoginMode("login");', "hosted Web password reset returns to login mode"),
+        ('elements.webResetCodeInput.value = "";', "hosted Web password reset clears reset code after success"),
         ("function noteFindMatches", "in-note search function"),
         ("function renderOpenTreeTabs", "tab rendering function"),
         ("function normalizeShortcutSettings", "shortcut normalization"),
