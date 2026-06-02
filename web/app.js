@@ -2547,12 +2547,15 @@ async function handleWebLoginSubmit(event) {
 
 async function handleWebRegisterSubmit(event) {
   if (!isHostedWebClient()) return;
+  event?.preventDefault();
   if (webLoginMode === "login") {
-    event?.preventDefault();
     setWebLoginMode("register");
     showWebLogin(t("web.login.desc.register"));
     elements.webRegisterEmailInput.focus();
     return;
+  }
+  if (webLoginMode === "register") {
+    await createWebAccount();
   }
 }
 
