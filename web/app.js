@@ -2278,13 +2278,13 @@ function showNotice(message, type = "info") {
 
 async function initializeHostedWebClient() {
   if (!isHostedWebClient()) {
-    return;
+    return true;
   }
   const session = loadWebSession();
   if (!session?.ownerId || !session?.token || isWebSessionInvalidated(session)) {
     clearWebSession();
     showWebLogin(t("web.login.ready"));
-    return;
+    return false;
   }
   applyWebSession(session);
   showWebLogin(t("web.login.loading"), "ok");
@@ -2294,9 +2294,11 @@ async function initializeHostedWebClient() {
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
     hideWebLogin();
+    return true;
   } catch (error) {
     clearWebSession();
     showWebLogin(t("web.login.failed", { message: error.message }), "bad");
+    return false;
   }
 }
 
@@ -2408,8 +2410,15 @@ function applyWebSession(session) {
   renderSettings();
 }
 
+function setHostedAppShellVisible(visible) {
+  if (!isHostedWebClient()) return;
+  document.documentElement.dataset.auth = visible ? "unlocked" : "locked";
+  document.querySelector(".app-shell")?.classList.toggle("hidden", !visible);
+}
+
 function showWebLogin(message = t("web.login.ready"), status = "") {
   if (!elements.webLoginView) return;
+  setHostedAppShellVisible(false);
   elements.webLoginView.classList.remove("hidden");
   renderWebLoginMode();
   elements.webLoginStatus.textContent = message;
@@ -2418,6 +2427,7 @@ function showWebLogin(message = t("web.login.ready"), status = "") {
 }
 
 function hideWebLogin() {
+  setHostedAppShellVisible(true);
   elements.webLoginView?.classList.add("hidden");
 }
 
@@ -2711,8 +2721,14 @@ async function initializeApp() {
   await refreshDesktopStorageInfo();
   renderSettings();
   applySettings();
+  if (isHostedWebClient()) {
+    const authenticated = await initializeHostedWebClient();
+    if (!authenticated) return;
+    render();
+    scheduleServerSync({ force: true, delay: 1600 });
+    return;
+  }
   render();
-  initializeHostedWebClient();
   scheduleServerSync({ force: true, delay: 1600 });
 }
 

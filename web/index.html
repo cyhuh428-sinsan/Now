@@ -8,6 +8,16 @@
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/nownote-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    (() => {
+      if (!["http:", "https:"].includes(window.location.protocol)) return;
+      if (["127.0.0.1", "localhost", "::1"].includes(window.location.hostname)) return;
+      const path = window.location.pathname.replace(/\/+$/, "");
+      if (path === "" || path === "/index.html" || path === "/app" || path.startsWith("/app/")) {
+        document.documentElement.dataset.auth = "locked";
+      }
+    })();
+  </script>
 </head>
 <body>
   <section id="webLoginView" class="web-login-view hidden" aria-labelledby="webLoginTitle">
@@ -1116,7 +1126,7 @@
   </section>
 
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js?v=20260602-auth-active-v5"></script>
+  <script src="./app.js?v=20260602-auth-gate-v6"></script>
   <script>
     if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
       window.addEventListener("load", () => {
