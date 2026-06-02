@@ -2182,6 +2182,7 @@ const elements = {
   webRegisterEmailInput: $("#webRegisterEmailInput"),
   webLoginTwoFactorInput: $("#webLoginTwoFactorInput"),
   webResetCodeInput: $("#webResetCodeInput"),
+  webLoginActions: $(".web-login-actions"),
   webLoginSubmitBtn: $("#webLoginSubmitBtn"),
   webRegisterSubmitBtn: $("#webRegisterSubmitBtn"),
   webResetRequestBtn: $("#webResetRequestBtn"),
@@ -2438,19 +2439,23 @@ function setWebLoginMode(mode) {
 
 function renderWebLoginMode() {
   if (!elements.webLoginView) return;
+  elements.webLoginView.dataset.mode = webLoginMode;
   document.querySelectorAll("[data-login-mode]").forEach((node) => {
     const modes = String(node.dataset.loginMode || "").split(/\s+/);
     node.classList.toggle("hidden", !modes.includes(webLoginMode));
   });
   const buttonModes = new Map([
     [elements.webLoginSubmitBtn, ["login", "register", "reset-request", "reset-confirm"]],
-    [elements.webRegisterSubmitBtn, ["login", "register", "reset-confirm"]],
+    [elements.webRegisterSubmitBtn, ["login"]],
     [elements.webResetRequestBtn, ["login"]],
     [elements.webResetConfirmBtn, []],
   ]);
   buttonModes.forEach((modes, button) => {
     button?.classList.toggle("hidden", !modes.includes(webLoginMode));
   });
+  const visibleActionCount = Array.from(elements.webLoginActions?.querySelectorAll("button") || [])
+    .filter((button) => !button.classList.contains("hidden")).length;
+  elements.webLoginActions?.classList.toggle("single-action", visibleActionCount === 1);
   const descKey = {
     login: "web.login.desc.login",
     register: "web.login.desc.register",
@@ -2472,9 +2477,14 @@ function renderWebLoginMode() {
     : "current-password";
   elements.webLoginPasswordInput.required = ["login", "register", "reset-confirm"].includes(webLoginMode);
   elements.webLoginSubmitBtn.textContent = t(submitKey);
-  elements.webRegisterSubmitBtn.textContent = webLoginMode === "login"
-    ? t("web.login.register")
-    : t("web.login.backToLogin");
+  elements.webRegisterSubmitBtn.textContent = t("web.login.register");
+  elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
+  elements.webLoginSubmitBtn.classList.add("primary-btn");
+  elements.webLoginSubmitBtn.classList.remove("secondary-btn");
+  elements.webRegisterSubmitBtn.classList.add("secondary-btn");
+  elements.webRegisterSubmitBtn.classList.remove("primary-btn");
+  elements.webResetRequestBtn.classList.add("secondary-btn");
+  elements.webResetRequestBtn.classList.remove("primary-btn");
 }
 
 async function handleWebLoginSubmit(event) {
