@@ -2179,7 +2179,9 @@ const elements = {
   toastRegion: $("#toastRegion"),
   webLoginView: $("#webLoginView"),
   webLoginForm: $("#webLoginForm"),
+  webLoginDesc: $("#webLoginDesc"),
   webLoginOwnerInput: $("#webLoginOwnerInput"),
+  webLoginPasswordLabel: $("#webLoginPasswordLabel"),
   webLoginPasswordInput: $("#webLoginPasswordInput"),
   webRegisterEmailInput: $("#webRegisterEmailInput"),
   webLoginTwoFactorInput: $("#webLoginTwoFactorInput"),
@@ -2478,12 +2480,14 @@ function renderWebLoginMode() {
   elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
   [
     elements.webLoginSubmitBtn,
-    elements.webRegisterSubmitBtn,
     elements.webResetRequestBtn,
     elements.webResetConfirmBtn,
   ].forEach((button) => {
     if (button) button.type = "submit";
   });
+  if (elements.webRegisterSubmitBtn) {
+    elements.webRegisterSubmitBtn.type = "button";
+  }
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
@@ -2814,11 +2818,17 @@ async function initializeApp() {
 initializeApp();
 
 function bindHostedAuthEvents() {
-  if (elements.webLoginForm?.dataset.authEventsBound === "true") return;
-  elements.webLoginForm?.addEventListener("submit", handleWebLoginSubmit);
-  elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
-  if (elements.webLoginForm) {
-    elements.webLoginForm.dataset.authEventsBound = "true";
+  if (elements.webLoginForm?.dataset.authSubmitEventsBound !== "true") {
+    elements.webLoginForm?.addEventListener("submit", handleWebLoginSubmit);
+    if (elements.webLoginForm) {
+      elements.webLoginForm.dataset.authSubmitEventsBound = "true";
+    }
+  }
+  if (elements.webRegisterSubmitBtn?.dataset.authClickEventsBound !== "true") {
+    elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit);
+    if (elements.webRegisterSubmitBtn) {
+      elements.webRegisterSubmitBtn.dataset.authClickEventsBound = "true";
+    }
   }
 }
 
