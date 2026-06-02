@@ -1,4 +1,4 @@
-const CACHE_NAME = "nownote-web-v14";
+const CACHE_NAME = "nownote-web-v15";
 const APP_SHELL = [
   "./",
   "./index.html",

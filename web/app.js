@@ -2567,17 +2567,22 @@ function validWebPassword(password) {
     && /[^A-Za-z0-9]/.test(value);
 }
 
+function validWebEmail(email) {
+  const value = (email || "").trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 async function createWebAccount() {
   if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const password = elements.webLoginPasswordInput.value;
   const email = elements.webRegisterEmailInput.value.trim();
   if (!ownerId || !password) {
-    showWebLogin(t("web.login.registerFailed", { message: t("settings.server.noUrl") }), "bad");
+    showWebLogin(t("web.login.registerFailed", { message: "사용자 ID와 비밀번호를 입력하세요." }), "bad");
     return;
   }
-  if (!email || !email.includes("@")) {
-    showWebLogin(t("web.login.registerFailed", { message: "등록 이메일을 입력하세요." }), "bad");
+  if (!validWebEmail(email)) {
+    showWebLogin(t("web.login.registerFailed", { message: "올바른 등록 이메일을 입력하세요." }), "bad");
     return;
   }
   if (!validWebPassword(password)) {
@@ -2638,8 +2643,8 @@ async function requestPasswordReset() {
   if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const email = elements.webRegisterEmailInput.value.trim();
-  if (!ownerId || !email) {
-    showWebLogin(t("web.login.resetFailed", { message: "사용자 ID와 등록 이메일을 입력하세요." }), "bad");
+  if (!ownerId || !validWebEmail(email)) {
+    showWebLogin(t("web.login.resetFailed", { message: "사용자 ID와 올바른 등록 이메일을 입력하세요." }), "bad");
     return;
   }
   showWebLogin(t("web.login.resetRequesting"), "ok");
