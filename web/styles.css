@@ -131,6 +131,10 @@ button {
   overflow: hidden;
 }
 
+:root[data-auth="locked"] .app-shell {
+  display: none;
+}
+
 :root[data-sidebar="collapsed"] .app-shell {
   grid-template-columns: 48px 0 minmax(0, 1fr);
 }
