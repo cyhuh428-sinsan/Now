@@ -336,6 +336,7 @@ def main() -> None:
         ("/api/v1/auth/web-logout", "hosted Web logout API"),
         ("X-Now-Web-Session", "hosted Web session header"),
         ("async function handleWebRegisterSubmit", "hosted Web self-registration function"),
+        ('elements.webRegisterSubmitBtn?.addEventListener("click", handleWebRegisterSubmit)', "hosted Web self-registration click binding"),
         ("async function issueDeviceToken", "hosted Web device token issue function"),
         ("async function refreshDeviceTokens", "hosted Web device token refresh function"),
         ("async function handlePasswordResetRequest", "hosted Web password reset request function"),
