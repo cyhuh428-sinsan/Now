@@ -2745,11 +2745,11 @@ async function handleWebLogout() {
 }
 
 async function initializeApp() {
+  bindHostedAuthEvents();
   await load();
   await loadSettings();
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
-  bindHostedAuthEvents();
   bindEvents();
   initializeCaptureSketch();
   await refreshDesktopStorageInfo();
