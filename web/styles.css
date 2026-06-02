@@ -209,10 +209,11 @@ button {
   position: sticky;
   top: 0;
   height: 100vh;
-  padding: 16px 14px;
+  padding: 14px 10px;
   border-right: 1px solid var(--line);
   background: var(--panel);
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   transition: padding 160ms ease, border-color 160ms ease;
 }
 
@@ -254,8 +255,8 @@ button {
 
 .search-box {
   display: grid;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 6px;
+  margin-bottom: 10px;
   color: var(--muted);
   font-size: 13px;
   font-weight: 700;
@@ -285,16 +286,16 @@ button {
 
 .nav-tabs {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .today-chip {
   display: grid;
   gap: 2px;
   width: 100%;
-  min-height: 42px;
-  margin-bottom: 12px;
-  padding: 8px 10px;
+  min-height: 38px;
+  margin-bottom: 10px;
+  padding: 7px 10px;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
   background: var(--blue-soft);
@@ -428,6 +429,11 @@ button {
   resize: vertical;
 }
 
+.messenger-form .primary-btn {
+  flex: 0 0 72px;
+  white-space: nowrap;
+}
+
 .side-section {
   display: grid;
   gap: 8px;
@@ -506,13 +512,13 @@ button {
 
 .side-actions {
   display: grid;
-  gap: 12px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
 .side-action-group {
   display: grid;
-  gap: 6px;
+  gap: 4px;
 }
 
 .side-action-group h2 {
@@ -526,8 +532,8 @@ button {
 .sidebar .file-btn {
   display: flex;
   align-items: center;
-  min-height: 34px;
-  padding: 0 10px;
+  min-height: 30px;
+  padding: 0 9px;
   font-size: 13px;
   font-weight: 700;
   justify-content: flex-start;

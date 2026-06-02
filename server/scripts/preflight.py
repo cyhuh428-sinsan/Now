@@ -1358,6 +1358,8 @@ def main() -> None:
                 ('@router.get("/{owner_id}/devices")', "User API lists user devices", "user devices list API"),
                 ('@router.patch("/{owner_id}/devices/{device_id}")', "User API updates user device status", "user device update API"),
                 ('@router.post("/{owner_id}/group-join")', "User API joins a group by invite code", "group invite join API"),
+                ('@router.get("/{owner_id}/groups")', "User API lists joinable groups", "user group list API"),
+                ("_group_payload", "User API serializes safe group payload", "safe group payload"),
                 ("join_user_group_by_invite", "User API delegates group invite validation", "group invite validation"),
                 ("set_user_device_active", "User API changes device active state", "set_user_device_active"),
                 ("_device_payload", "User API serializes device payload", "_device_payload"),

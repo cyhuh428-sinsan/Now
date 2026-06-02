@@ -5,8 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_client_api_access
 from app.db import get_db
-from app.models.note import UserAccount, UserDevice
-from app.services.user_accounts import join_user_group_by_invite, require_user_api_access, update_user_account
+from app.models.note import UserAccount, UserDevice, UserGroup
+from app.services.user_accounts import ensure_user_groups, join_user_group_by_invite, require_user_api_access, update_user_account
 from app.services.user_devices import set_user_device_active
 
 router = APIRouter(
@@ -101,6 +101,27 @@ def join_user_group(
     return {"status": "ok", "user": _user_payload(updated)}
 
 
+@router.get("/{owner_id}/groups")
+def user_group_options(
+    owner_id: str,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    groups = [group for group in ensure_user_groups(db) if bool(group.is_active)]
+    db.commit()
+    return {
+        "status": "ok",
+        "items": [_group_payload(group) for group in groups],
+    }
+
+
 @router.get("/{owner_id}/devices")
 def user_devices(
     owner_id: str,
@@ -184,6 +205,14 @@ def _user_payload(user: UserAccount) -> dict:
         "last_seen_at": user.last_seen_at,
         "created_at": user.created_at,
         "updated_at": user.updated_at,
+    }
+
+
+def _group_payload(group: UserGroup) -> dict:
+    return {
+        "name": group.name,
+        "description": group.description or "",
+        "invite_code_enabled": bool(group.invite_code_hash),
     }
 
 

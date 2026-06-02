@@ -446,6 +446,8 @@ const I18N = {
     "settings.server.profile.groupJoin.empty": "그룹 이름과 초대코드를 입력하세요.",
     "settings.server.profile.groupJoin.joining": "그룹 참가를 확인하는 중입니다.",
     "settings.server.profile.groupJoin.joined": "그룹에 참가했습니다.",
+    "settings.server.profile.groupJoin.noGroups": "그룹 목록을 불러오면 선택할 수 있습니다.",
+    "settings.server.profile.groupJoin.count": "선택 가능 {count}개",
     "settings.server.profile.twoFactorOn": "2단계 사용",
     "settings.server.profile.twoFactorOff": "2단계 미사용",
     "settings.server.profile.active": "활성",
@@ -1093,6 +1095,8 @@ const I18N = {
     "settings.server.profile.groupJoin.empty": "Enter the group name and invite code.",
     "settings.server.profile.groupJoin.joining": "Checking the group invite.",
     "settings.server.profile.groupJoin.joined": "Joined the group.",
+    "settings.server.profile.groupJoin.noGroups": "Load the group list to choose one.",
+    "settings.server.profile.groupJoin.count": "{count} available",
     "settings.server.profile.twoFactorOn": "2FA on",
     "settings.server.profile.twoFactorOff": "2FA off",
     "settings.server.profile.active": "Active",
@@ -1656,6 +1660,8 @@ let storageWarningShown = false;
 let serverSyncTimer = null;
 let serverSyncRunning = false;
 let serverSyncQueued = false;
+let groupMessengerRefreshTimer = null;
+let groupMessengerRefreshRunning = false;
 let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
 let webLoginMode = "login";
@@ -1770,6 +1776,7 @@ function defaultServerSettings() {
     capabilities: null,
     publicServerReadiness: null,
     analysisJobs: [],
+    userGroups: [],
     groupMessages: [],
     groupMessengerUnreadCount: 0,
     groupMessengerLastReadId: 0,
@@ -2321,12 +2328,15 @@ async function initializeHostedWebClient() {
   showWebLogin(t("web.login.loading"), "ok");
   try {
     await verifyWebSession();
+    await loadServerGroupOptions({ silent: true });
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
+    startGroupMessengerAutoRefresh();
     hideWebLogin();
     return true;
   } catch (error) {
+    stopGroupMessengerAutoRefresh();
     clearWebSession();
     showWebLogin(t("web.login.failed", { message: error.message }), "bad");
     return false;
@@ -2605,9 +2615,11 @@ async function handleWebLoginSubmit(event) {
     saveWebSession(session);
     applyWebSession(session);
     applyServerUserProfile(payload.user);
+    await loadServerGroupOptions({ silent: true });
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
+    startGroupMessengerAutoRefresh();
     hideWebLogin();
     showNotice(t("web.login.ok"));
   } catch (error) {
@@ -2686,8 +2698,11 @@ async function createWebAccount() {
     saveWebSession(session);
     applyWebSession(session);
     applyServerUserProfile(payload.user);
+    await loadServerGroupOptions({ silent: true });
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
+    await refreshGroupMessages({ silent: true });
+    startGroupMessengerAutoRefresh();
     hideWebLogin();
     showNotice(t("web.login.registerOk"));
   } catch (error) {
@@ -2785,6 +2800,7 @@ async function confirmPasswordReset() {
 async function handleWebLogout() {
   if (!isHostedWebClient()) return;
   closeWebAccountMenu();
+  stopGroupMessengerAutoRefresh();
   const server = state.settings.server || defaultServerSettings();
   const logoutHeaders = server.webSessionToken ? serverAuthHeaders(server) : null;
   await clearHostedWebLogoutCache();
@@ -3154,7 +3170,10 @@ function bindEvents() {
   elements.serverConflictList.addEventListener("click", handleServerConflictListClick);
   elements.groupMessengerBtn?.addEventListener("click", openGroupMessenger);
   elements.groupMessengerCloseBtn?.addEventListener("click", closeGroupMessenger);
-  elements.groupMessengerRefreshBtn?.addEventListener("click", () => refreshGroupMessages());
+  elements.groupMessengerRefreshBtn?.addEventListener("click", async () => {
+    await refreshGroupMessages();
+    await markGroupMessagesRead({ silent: true });
+  });
   elements.groupMessengerForm?.addEventListener("submit", sendGroupMessage);
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webAccountMenuBtn?.addEventListener("click", (event) => {
@@ -3169,6 +3188,7 @@ function bindEvents() {
 
   window.addEventListener("storage", (event) => {
     if (!isHostedWebClient() || event.key !== WEB_LOGOUT_KEY) return;
+    stopGroupMessengerAutoRefresh();
     clearWebSession();
     showWebLogin(t("web.login.ready"));
   });
@@ -3176,6 +3196,7 @@ function bindEvents() {
   document.addEventListener("visibilitychange", () => {
     if (!document.hidden) {
       scheduleServerSync({ force: true, delay: 800 });
+      refreshOpenGroupMessenger();
     }
   });
 
@@ -3798,7 +3819,7 @@ function renderServerSettings() {
   elements.serverDisplayNameInput.value = profile.displayName;
   elements.serverEmailInput.value = profile.email;
   elements.serverTimezoneInput.value = profile.timezone;
-  if (elements.serverGroupNameInput) elements.serverGroupNameInput.value = profile.groupName || "";
+  renderServerGroupOptions(server, profile);
   const isServerMode = server.mode === "server";
   applyHostedServerSettingsVisibility();
   elements.serverTestBtn.disabled = !isServerMode;
@@ -4098,7 +4119,7 @@ function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
     ? t("settings.server.profile.active")
     : t("settings.server.profile.inactive");
   const lastSeen = profile.lastSeenAt
-    ? new Date(profile.lastSeenAt).toLocaleString(currentLocale())
+    ? parseServerDate(profile.lastSeenAt).toLocaleString(currentLocale())
     : t("settings.server.profile.lastSeenNone");
   elements.serverProfileText.textContent = t("settings.server.profile.summary", {
     group: profile.groupName || "-",
@@ -4110,9 +4131,33 @@ function renderServerProfileMeta(profile = normalizeServerUserProfile()) {
 
 function renderServerGroupJoinMeta(profile = normalizeServerUserProfile()) {
   if (!elements.serverGroupJoinText) return;
+  const groups = normalizeServerGroups(state.settings.server?.userGroups);
+  const groupCountText = groups.length ? ` · ${t("settings.server.profile.groupJoin.count", { count: groups.length })}` : "";
   elements.serverGroupJoinText.textContent = t("settings.server.profile.groupJoin.current", {
     group: profile.groupName || "-",
-  });
+  }) + groupCountText;
+}
+
+function renderServerGroupOptions(server, profile = normalizeServerUserProfile()) {
+  if (!elements.serverGroupNameInput) return;
+  const groups = normalizeServerGroups(server.userGroups);
+  const currentGroup = profile.groupName || "";
+  const groupNames = new Set(groups.map((group) => group.name));
+  const options = [];
+  if (currentGroup && !groupNames.has(currentGroup)) {
+    options.push(optionElement(currentGroup, currentGroup));
+  }
+  options.push(...groups.map((group) => {
+    const suffix = group.description ? ` · ${group.description}` : "";
+    return optionElement(group.name, `${group.name}${suffix}`);
+  }));
+  if (!options.length) {
+    options.push(optionElement(currentGroup || "", currentGroup || t("settings.server.profile.groupJoin.noGroups")));
+  }
+  elements.serverGroupNameInput.replaceChildren(...options);
+  elements.serverGroupNameInput.value = currentGroup && options.some((option) => option.value === currentGroup)
+    ? currentGroup
+    : (options[0]?.value || "");
 }
 
 function renderServerAnalysisJobs(jobs = []) {
@@ -4417,7 +4462,7 @@ function compactText(value, maxLength = 160) {
 
 function formatServerJobTime(value) {
   if (!value) return "-";
-  const date = new Date(value);
+  const date = parseServerDate(value);
   if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString(currentLocale());
 }
@@ -4462,6 +4507,7 @@ async function testServerConnection() {
     if ((server.webSessionToken || "").trim()) {
       const sessionPayload = await verifyWebSession();
       applyServerUserProfile(sessionPayload.user);
+      await loadServerGroupOptions({ silent: true });
       tokenMessage = ` · ${t("web.login.ok")}`;
     } else if ((server.userToken || "").trim()) {
       const tokenPayload = await verifyServerUserToken(server);
@@ -4558,6 +4604,7 @@ async function loadServerUserProfile() {
       `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
     applyServerUserProfile(payload.user);
+    await loadServerGroupOptions({ silent: true });
     server.lastCheckedAt = new Date().toISOString();
     setServerMessage(server, "ok", "settings.server.profile.loaded");
   } catch (error) {
@@ -4566,6 +4613,22 @@ async function loadServerUserProfile() {
   }
   persistSettings();
   renderServerSettings();
+}
+
+async function loadServerGroupOptions({ silent = false } = {}) {
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  try {
+    const payload = await requestServerJson(
+      server,
+      `/api/v1/users/${encodeURIComponent(normalizeOwnerId(server.ownerId))}/groups`,
+    );
+    server.userGroups = normalizeServerGroups(payload.items);
+    persistSettings();
+    renderServerSettings();
+  } catch (error) {
+    if (!silent) showNotice(`${t("settings.server.fail")}: ${error.message}`, "error");
+  }
 }
 
 async function saveServerUserProfile() {
@@ -4640,6 +4703,7 @@ async function joinServerGroupByInvite() {
       }),
     });
     applyServerUserProfile(payload.user);
+    await loadServerGroupOptions({ silent: true });
     if (elements.serverGroupInviteCodeInput) elements.serverGroupInviteCodeInput.value = "";
     server.groupMessages = [];
     server.groupMessengerUnreadCount = 0;
@@ -4965,12 +5029,46 @@ async function openGroupMessenger() {
   elements.groupMessengerView?.classList.remove("hidden");
   renderGroupMessenger();
   await refreshGroupMessages({ silent: true });
-  await markGroupMessagesRead();
+  await markGroupMessagesRead({ silent: true });
+  startGroupMessengerAutoRefresh();
   window.setTimeout(() => elements.groupMessengerInput?.focus(), 0);
 }
 
 function closeGroupMessenger() {
   elements.groupMessengerView?.classList.add("hidden");
+}
+
+function isGroupMessengerOpen() {
+  return Boolean(elements.groupMessengerView && !elements.groupMessengerView.classList.contains("hidden"));
+}
+
+function startGroupMessengerAutoRefresh() {
+  stopGroupMessengerAutoRefresh();
+  groupMessengerRefreshTimer = window.setInterval(refreshOpenGroupMessenger, 5000);
+}
+
+function stopGroupMessengerAutoRefresh() {
+  if (!groupMessengerRefreshTimer) return;
+  window.clearInterval(groupMessengerRefreshTimer);
+  groupMessengerRefreshTimer = null;
+}
+
+async function refreshOpenGroupMessenger() {
+  const server = state.settings.server || defaultServerSettings();
+  if (!isHostedWebClient() || !server.webSessionToken) {
+    stopGroupMessengerAutoRefresh();
+    return;
+  }
+  if (document.visibilityState === "hidden" || groupMessengerRefreshRunning) return;
+  groupMessengerRefreshRunning = true;
+  try {
+    await refreshGroupMessages({ silent: true });
+    if (isGroupMessengerOpen()) {
+      await markGroupMessagesRead({ silent: true });
+    }
+  } finally {
+    groupMessengerRefreshRunning = false;
+  }
 }
 
 async function refreshGroupMessages({ silent = false } = {}) {
@@ -5030,7 +5128,7 @@ async function sendGroupMessage(event) {
   }
 }
 
-async function markGroupMessagesRead() {
+async function markGroupMessagesRead({ silent = false } = {}) {
   const server = state.settings.server;
   if (!isHostedWebClient() || !prepareServerRequest(server)) return;
   const latestId = Math.max(0, ...((server.groupMessages || []).map((message) => Number(message.id) || 0)));
@@ -5052,7 +5150,7 @@ async function markGroupMessagesRead() {
     persistSettings();
     renderGroupMessengerButton();
   } catch (error) {
-    showNotice(`${t("messenger.readFailed")}: ${error.message}`, "error");
+    if (!silent) showNotice(`${t("messenger.readFailed")}: ${error.message}`, "error");
   }
 }
 
@@ -10826,6 +10924,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
         }
       : null;
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
+  normalized.userGroups = normalizeServerGroups(normalized.userGroups);
   normalized.groupMessages = Array.isArray(normalized.groupMessages) ? normalized.groupMessages.slice(-100) : [];
   normalized.groupMessengerUnreadCount = Math.max(0, Number(normalized.groupMessengerUnreadCount) || 0);
   normalized.groupMessengerLastReadId = Math.max(0, Number(normalized.groupMessengerLastReadId) || 0);
@@ -10845,6 +10944,23 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
       ? normalized.lastMessageParams
       : null;
   return normalized;
+}
+
+function normalizeServerGroups(groups = []) {
+  if (!Array.isArray(groups)) return [];
+  const seen = new Set();
+  return groups
+    .map((group) => ({
+      name: typeof group?.name === "string" ? group.name.trim() : "",
+      description: typeof group?.description === "string" ? group.description.trim() : "",
+      inviteCodeEnabled: group?.invite_code_enabled === true || group?.inviteCodeEnabled === true,
+    }))
+    .filter((group) => {
+      if (!group.name || seen.has(group.name)) return false;
+      seen.add(group.name);
+      return true;
+    })
+    .slice(0, 50);
 }
 
 function normalizeServerUserProfile(profile = {}, defaults = defaultServerUserProfile()) {
@@ -12214,7 +12330,7 @@ function formatArchivedAt(value) {
     year: "numeric",
     month: "short",
     day: "numeric",
-  }).format(new Date(value));
+  }).format(parseServerDate(value));
 }
 
 function formatDateTime(value) {
@@ -12225,12 +12341,15 @@ function formatDateTime(value) {
     day: "2-digit",
     hour: "2-digit",
     minute: "2-digit",
-  }).format(new Date(value));
+  }).format(parseServerDate(value));
 }
 
 function relativeTime(value) {
   if (!value) return t("note.dateMissing");
-  const diffMs = Date.now() - new Date(value).getTime();
+  const date = parseServerDate(value);
+  const time = date.getTime();
+  if (Number.isNaN(time)) return t("note.dateMissing");
+  const diffMs = Date.now() - time;
   const minute = 60 * 1000;
   const hour = 60 * minute;
   const day = 24 * hour;
@@ -12241,7 +12360,16 @@ function relativeTime(value) {
   return new Intl.DateTimeFormat(currentLocale(), {
     month: "short",
     day: "numeric",
-  }).format(new Date(value));
+  }).format(date);
+}
+
+function parseServerDate(value) {
+  if (value instanceof Date) return value;
+  const text = String(value || "").trim();
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/.test(text)) {
+    return new Date(`${text}Z`);
+  }
+  return new Date(value);
 }
 
 function snippet(text, query = "") {
