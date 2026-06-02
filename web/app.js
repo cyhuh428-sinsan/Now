@@ -272,8 +272,13 @@ const I18N = {
     "editor.unshare": "공유 안 함",
     "editor.copyLink": "링크 복사",
     "web.login.desc": "서버 공유 문서에 접속합니다.",
+    "web.login.desc.login": "서버 공유 문서에 접속합니다.",
+    "web.login.desc.register": "새 계정을 만들려면 사용자 ID, 비밀번호, 등록 이메일을 입력하세요.",
+    "web.login.desc.resetRequest": "비밀번호 재설정 메일을 받으려면 사용자 ID와 등록 이메일을 입력하세요.",
+    "web.login.desc.resetConfirm": "메일로 받은 코드와 새 비밀번호를 입력하세요.",
     "web.login.owner": "사용자 ID",
     "web.login.password": "비밀번호",
+    "web.login.newPassword": "새 비밀번호",
     "web.login.email": "등록 이메일",
     "web.login.emailPlaceholder": "계정 만들기와 비밀번호 재설정에 사용",
     "web.login.twoFactor": "2단계 인증 코드",
@@ -281,6 +286,7 @@ const I18N = {
     "web.login.resetCode": "비밀번호 재설정 코드",
     "web.login.resetCodePlaceholder": "메일로 받은 코드",
     "web.login.submit": "로그인",
+    "web.login.backToLogin": "로그인으로 돌아가기",
     "web.login.register": "계정 만들기",
     "web.login.resetRequest": "재설정 메일",
     "web.login.resetConfirm": "비밀번호 재설정",
@@ -903,8 +909,13 @@ const I18N = {
     "editor.unshare": "Not shared",
     "editor.copyLink": "Copy link",
     "web.login.desc": "Open shared documents from the server.",
+    "web.login.desc.login": "Open shared documents from the server.",
+    "web.login.desc.register": "Enter a user ID, password, and registered email to create an account.",
+    "web.login.desc.resetRequest": "Enter your user ID and registered email to receive a reset code.",
+    "web.login.desc.resetConfirm": "Enter the code from email and your new password.",
     "web.login.owner": "User ID",
     "web.login.password": "Password",
+    "web.login.newPassword": "New password",
     "web.login.email": "Registered email",
     "web.login.emailPlaceholder": "Used for account creation and password reset",
     "web.login.twoFactor": "Two-factor code",
@@ -912,6 +923,7 @@ const I18N = {
     "web.login.resetCode": "Password reset code",
     "web.login.resetCodePlaceholder": "Code from email",
     "web.login.submit": "Log in",
+    "web.login.backToLogin": "Back to login",
     "web.login.register": "Create account",
     "web.login.resetRequest": "Send reset email",
     "web.login.resetConfirm": "Reset password",
@@ -2342,18 +2354,53 @@ function renderWebLoginMode() {
   });
   const buttonModes = new Map([
     [elements.webLoginSubmitBtn, ["login", "register", "reset-request", "reset-confirm"]],
-    [elements.webRegisterSubmitBtn, ["login", "register"]],
-    [elements.webResetRequestBtn, ["login", "reset-request"]],
-    [elements.webResetConfirmBtn, ["reset-confirm"]],
+    [elements.webRegisterSubmitBtn, ["login", "register", "reset-confirm"]],
+    [elements.webResetRequestBtn, ["login"]],
+    [elements.webResetConfirmBtn, []],
   ]);
   buttonModes.forEach((modes, button) => {
     button?.classList.toggle("hidden", !modes.includes(webLoginMode));
   });
+  const descKey = {
+    login: "web.login.desc.login",
+    register: "web.login.desc.register",
+    "reset-request": "web.login.desc.resetRequest",
+    "reset-confirm": "web.login.desc.resetConfirm",
+  }[webLoginMode] || "web.login.desc.login";
+  const submitKey = {
+    login: "web.login.submit",
+    register: "web.login.register",
+    "reset-request": "web.login.resetRequest",
+    "reset-confirm": "web.login.resetConfirm",
+  }[webLoginMode] || "web.login.submit";
+  elements.webLoginDesc.textContent = t(descKey);
+  elements.webLoginPasswordLabel.textContent = webLoginMode === "reset-confirm"
+    ? t("web.login.newPassword")
+    : t("web.login.password");
+  elements.webLoginPasswordInput.autocomplete = webLoginMode === "reset-confirm"
+    ? "new-password"
+    : "current-password";
+  elements.webLoginPasswordInput.required = ["login", "register", "reset-confirm"].includes(webLoginMode);
+  elements.webLoginSubmitBtn.textContent = t(submitKey);
+  elements.webRegisterSubmitBtn.textContent = webLoginMode === "login"
+    ? t("web.login.register")
+    : t("web.login.backToLogin");
 }
 
 async function handleWebLoginSubmit(event) {
   event.preventDefault();
-  setWebLoginMode("login");
+  if (webLoginMode === "register") {
+    await createWebAccount();
+    return;
+  }
+  if (webLoginMode === "reset-request") {
+    await requestPasswordReset();
+    return;
+  }
+  if (webLoginMode === "reset-confirm") {
+    await confirmPasswordReset();
+    return;
+  }
   if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const password = elements.webLoginPasswordInput.value;
@@ -2396,12 +2443,19 @@ async function handleWebLoginSubmit(event) {
 
 async function handleWebRegisterSubmit() {
   if (!isHostedWebClient()) return;
-  if (webLoginMode !== "register") {
+  if (webLoginMode === "login") {
     setWebLoginMode("register");
-    showWebLogin(t("web.login.emailPlaceholder"));
+    showWebLogin(t("web.login.desc.register"));
     elements.webRegisterEmailInput.focus();
     return;
   }
+  setWebLoginMode("login");
+  showWebLogin(t("web.login.ready"));
+  elements.webLoginOwnerInput.focus();
+}
+
+async function createWebAccount() {
+  if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const password = elements.webLoginPasswordInput.value;
   const email = elements.webRegisterEmailInput.value.trim();
@@ -2456,10 +2510,15 @@ async function handlePasswordResetRequest() {
   if (!isHostedWebClient()) return;
   if (webLoginMode !== "reset-request") {
     setWebLoginMode("reset-request");
-    showWebLogin(t("web.login.resetRequest"));
+    showWebLogin(t("web.login.desc.resetRequest"));
     elements.webRegisterEmailInput.focus();
     return;
   }
+  await requestPasswordReset();
+}
+
+async function requestPasswordReset() {
+  if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const email = elements.webRegisterEmailInput.value.trim();
   if (!ownerId || !email) {
@@ -2488,6 +2547,11 @@ async function handlePasswordResetRequest() {
 async function handlePasswordResetConfirm() {
   if (!isHostedWebClient()) return;
   setWebLoginMode("reset-confirm");
+  await confirmPasswordReset();
+}
+
+async function confirmPasswordReset() {
+  if (!isHostedWebClient()) return;
   const ownerId = normalizeOwnerId(elements.webLoginOwnerInput.value);
   const resetCode = elements.webResetCodeInput.value.trim();
   const newPassword = elements.webLoginPasswordInput.value;
@@ -5504,6 +5568,7 @@ function applyLanguage() {
   setPlaceholder(elements.webRegisterEmailInput, t("web.login.emailPlaceholder"));
   setPlaceholder(elements.webLoginTwoFactorInput, t("web.login.twoFactorPlaceholder"));
   setPlaceholder(elements.webResetCodeInput, t("web.login.resetCodePlaceholder"));
+  renderWebLoginMode();
   renderTreePanelToggle();
   setIconLabel(elements.expandAllBtn, t("tree.expandAll"));
   setIconLabel(elements.collapseAllBtn, t("tree.collapseAll"));
