@@ -54,7 +54,7 @@ class ClientLoginRequest(BaseModel):
 
 class RegisterRequest(BaseModel):
     owner_id: str = Field(max_length=80)
-    password: str = Field(min_length=8, max_length=200)
+    password: str = Field(min_length=10, max_length=200)
     email: str = Field(min_length=3, max_length=240)
     display_name: str | None = Field(default=None, max_length=120)
     timezone: str = Field(default="Asia/Seoul", max_length=80)
@@ -81,7 +81,7 @@ class PasswordResetRequest(BaseModel):
 class PasswordResetConfirmRequest(BaseModel):
     owner_id: str = Field(max_length=80)
     reset_code: str = Field(min_length=1, max_length=200)
-    new_password: str = Field(min_length=8, max_length=200)
+    new_password: str = Field(min_length=10, max_length=200)
 
 
 @api_router.post("/token-login")

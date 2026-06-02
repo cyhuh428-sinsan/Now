@@ -13,6 +13,7 @@ from app.models.note import UserAccount, UserDevice, UserGroup, WebSession
 
 PASSWORD_HASH_ALGORITHM = "pbkdf2_sha256"
 PASSWORD_HASH_ITERATIONS = 210_000
+PASSWORD_POLICY_MESSAGE = "password must be at least 10 characters and include letters, numbers, and symbols"
 WEB_SESSION_DAYS = 1
 DEFAULT_USER_GROUPS: tuple[tuple[str, str, int], ...] = (
     ("관리자", "서버 운영과 사용자 상태를 확인하는 운영자 그룹", 10),
@@ -41,6 +42,15 @@ def hash_password(password: str) -> str:
             digest.hex(),
         ]
     )
+
+
+def validate_password_policy(password: str) -> None:
+    cleaned = (password or "").strip()
+    has_letter = any(character.isalpha() for character in cleaned)
+    has_number = any(character.isdigit() for character in cleaned)
+    has_symbol = any(not character.isalnum() for character in cleaned)
+    if len(cleaned) < 10 or not has_letter or not has_number or not has_symbol:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=PASSWORD_POLICY_MESSAGE)
 
 
 def verify_password(password: str, password_hash: str | None) -> bool:
@@ -437,6 +447,7 @@ def set_user_password(user: UserAccount, password: str | None) -> None:
     cleaned = (password or "").strip()
     if not cleaned:
         return
+    validate_password_policy(cleaned)
     user.password_hash = hash_password(cleaned)
     user.password_updated_at = datetime.utcnow()
 
