@@ -2477,9 +2477,12 @@ function renderWebLoginMode() {
   elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
   elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
   elements.webLoginSubmitBtn.type = "submit";
-  elements.webRegisterSubmitBtn.type = webLoginMode === "register" ? "submit" : "button";
-  elements.webResetRequestBtn.type = webLoginMode === "reset-request" ? "submit" : "button";
-  elements.webResetConfirmBtn.type = webLoginMode === "reset-confirm" ? "submit" : "button";
+  elements.webRegisterSubmitBtn.type = "button";
+  elements.webResetRequestBtn.type = "button";
+  elements.webResetConfirmBtn.type = "button";
+  elements.webRegisterSubmitBtn.onclick = handleWebRegisterSubmit;
+  elements.webResetRequestBtn.onclick = handlePasswordResetRequest;
+  elements.webResetConfirmBtn.onclick = handlePasswordResetConfirm;
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
@@ -2542,22 +2545,6 @@ async function handleWebLoginSubmit(event) {
     showWebLogin(t("web.login.failed", { message: error.message }), "bad");
   } finally {
     elements.webLoginSubmitBtn.disabled = false;
-  }
-}
-
-async function handleWebLoginActionClick(event) {
-  const button = event.target?.closest?.("button");
-  if (!button) return;
-  if (button === elements.webRegisterSubmitBtn) {
-    await handleWebRegisterSubmit(event);
-    return;
-  }
-  if (button === elements.webResetRequestBtn) {
-    await handlePasswordResetRequest(event);
-    return;
-  }
-  if (button === elements.webResetConfirmBtn) {
-    await handlePasswordResetConfirm(event);
   }
 }
 
@@ -3364,7 +3351,6 @@ function bindEvents() {
   elements.captureFilterSelect?.addEventListener("change", renderCaptures);
   elements.captureSearchInput?.addEventListener("input", renderCaptures);
   elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
-  elements.webLoginForm.addEventListener("click", handleWebLoginActionClick);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.commandPaletteView, closeCommandPalette);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
