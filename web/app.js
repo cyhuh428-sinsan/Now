@@ -2476,10 +2476,10 @@ function renderWebLoginMode() {
   elements.webRegisterSubmitBtn.textContent = t("web.login.register");
   elements.webResetRequestBtn.textContent = t("web.login.resetRequest");
   elements.webResetConfirmBtn.textContent = t("web.login.resetConfirm");
-  elements.webLoginSubmitBtn.type = "submit";
-  elements.webRegisterSubmitBtn.type = "button";
-  elements.webResetRequestBtn.type = "button";
-  elements.webResetConfirmBtn.type = "button";
+  elements.webLoginSubmitBtn.type = webLoginMode === "login" ? "submit" : "button";
+  elements.webRegisterSubmitBtn.type = webLoginMode === "register" ? "submit" : "button";
+  elements.webResetRequestBtn.type = webLoginMode === "reset-request" ? "submit" : "button";
+  elements.webResetConfirmBtn.type = webLoginMode === "reset-confirm" ? "submit" : "button";
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
