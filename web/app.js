@@ -2312,6 +2312,22 @@ function clearWebSession() {
   sessionStorage.removeItem(WEB_SESSION_KEY);
 }
 
+async function clearHostedWebLogoutCache() {
+  if (!isHostedWebClient()) return;
+  clearWebSession();
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(SETTINGS_KEY);
+  sessionStorage.clear();
+  if ("caches" in window) {
+    try {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((key) => caches.delete(key)));
+    } catch {
+      // 캐시 정리는 브라우저 권한/상태에 따라 실패할 수 있으므로 화면 전환을 우선한다.
+    }
+  }
+}
+
 function applyWebSession(session) {
   const server = state.settings.server || defaultServerSettings();
   state.settings.server = {
@@ -2593,7 +2609,7 @@ async function handleWebLogout() {
   } catch {
     // 로그아웃은 로컬 세션 폐기를 우선한다.
   }
-  clearWebSession();
+  await clearHostedWebLogoutCache();
   hostedWebSyncSuspended = true;
   try {
     state.data = defaultData();
@@ -2613,6 +2629,7 @@ async function handleWebLogout() {
     render();
     renderSettings();
     showWebLogin(t("web.login.loggedOut"), "ok");
+    window.location.replace(defaultHostedServerUrl());
   } finally {
     hostedWebSyncSuspended = false;
   }
