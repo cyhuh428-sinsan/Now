@@ -2480,9 +2480,6 @@ function renderWebLoginMode() {
   elements.webRegisterSubmitBtn.type = "button";
   elements.webResetRequestBtn.type = "button";
   elements.webResetConfirmBtn.type = "button";
-  elements.webRegisterSubmitBtn.onclick = handleWebRegisterSubmit;
-  elements.webResetRequestBtn.onclick = handlePasswordResetRequest;
-  elements.webResetConfirmBtn.onclick = handlePasswordResetConfirm;
   [
     [elements.webLoginSubmitBtn, webLoginMode === "login"],
     [elements.webRegisterSubmitBtn, webLoginMode === "register"],
@@ -2752,6 +2749,7 @@ async function initializeApp() {
   await loadSettings();
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
+  bindHostedAuthEvents();
   bindEvents();
   initializeCaptureSketch();
   await refreshDesktopStorageInfo();
@@ -2769,6 +2767,28 @@ async function initializeApp() {
 }
 
 initializeApp();
+
+function bindHostedAuthEvents() {
+  if (elements.webLoginForm?.dataset.authEventsBound === "true") return;
+  elements.webLoginForm?.addEventListener("submit", handleWebLoginSubmit);
+  elements.webLoginForm?.addEventListener("click", (event) => {
+    const button = event.target?.closest?.("button");
+    if (button === elements.webRegisterSubmitBtn) {
+      handleWebRegisterSubmit(event);
+      return;
+    }
+    if (button === elements.webResetRequestBtn) {
+      handlePasswordResetRequest(event);
+      return;
+    }
+    if (button === elements.webResetConfirmBtn) {
+      handlePasswordResetConfirm(event);
+    }
+  });
+  if (elements.webLoginForm) {
+    elements.webLoginForm.dataset.authEventsBound = "true";
+  }
+}
 
 function initializeLiveMemoEditor() {
   const editor = elements.treeContent;
@@ -3350,7 +3370,6 @@ function bindEvents() {
   elements.captureAttachmentInput?.addEventListener("change", handleCaptureAttachmentChange);
   elements.captureFilterSelect?.addEventListener("change", renderCaptures);
   elements.captureSearchInput?.addEventListener("input", renderCaptures);
-  elements.webLoginForm.addEventListener("submit", handleWebLoginSubmit);
   bindOverlayDismiss(elements.quickSwitchView, closeQuickSwitch);
   bindOverlayDismiss(elements.commandPaletteView, closeCommandPalette);
   bindOverlayDismiss(elements.searchPopoverView, closeSearchPopover);
