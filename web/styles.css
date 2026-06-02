@@ -3213,6 +3213,10 @@ kbd {
   display: none;
 }
 
+:root[data-auth="locked"] #webLoginView {
+  display: grid;
+}
+
 .toast-region {
   position: fixed;
   right: 22px;
