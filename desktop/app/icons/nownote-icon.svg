@@ -1,4 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-label="NowNote">
-  <rect width="128" height="128" rx="28" fill="#2f6df6"/>
-  <path d="M36 91V37h16l25 31V37h15v54H77L52 60v31H36z" fill="#fff"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">NowNote</title>
+  <desc id="desc">시계와 메모장을 결합한 NowNote 설치 아이콘</desc>
+  <rect width="512" height="512" rx="96" fill="#f6f3ec"/>
+  <path d="M128 108h210c30 0 54 24 54 54v238H128z" fill="#fffdf7" stroke="#263446" stroke-width="24" stroke-linejoin="round"/>
+  <path d="M170 180h132M170 238h172M170 296h142" stroke="#315f73" stroke-width="24" stroke-linecap="round"/>
+  <circle cx="352" cy="342" r="86" fill="#d69751" stroke="#263446" stroke-width="22"/>
+  <path d="M352 290v58l42 24" fill="none" stroke="#fffdf7" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M128 108l42-48h164l58 48" fill="#315f73"/>
 </svg>
