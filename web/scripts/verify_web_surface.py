@@ -711,16 +711,26 @@ def main() -> None:
         ('id="treeContent"', "desktop content editor"),
         ('id="treeList"', "desktop tree list"),
         ('id="openTabs"', "desktop open tabs"),
+        ('id="graphCanvas"', "desktop graph view"),
+        ('id="notePropertiesPanel"', "desktop properties panel"),
+        ('id="canvasView"', "desktop Canvas view"),
+        ('id="captureView"', "desktop quick capture view"),
+        ('id="commandPaletteView"', "desktop command palette"),
+        ('id="workspaceHealthSummary"', "desktop workspace operations"),
+        ('class="nav-tabs hosted-web-only hidden"', "hosted Web-only views hidden by default"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
 
     desktop_app_script_requirements = [
-        ('const STORAGE_KEY = "nownote.desktop.v1"', "standalone desktop storage key"),
-        ("LEGACY_WEB_STORAGE_KEY", "legacy wrapped Web storage migration"),
+        ('const STORAGE_KEY = "nownote.web.v1"', "Web-compatible desktop storage key"),
+        ("DESKTOP_STORAGE_KEYS", "desktop file storage key allowlist"),
         ("function addRootNote", "desktop note creation"),
-        ("function updateSelectedTitle", "desktop title editing"),
-        ("function updateSelectedContent", "desktop content editing"),
+        ("elements.treeTitleInput.addEventListener(\"input\"", "desktop title editing"),
+        ("elements.treeContent.addEventListener(\"input\"", "desktop content editing"),
+        ("function isDesktopClient", "desktop runtime detection"),
+        ("function isHostedWebClient", "hosted Web-only runtime detection"),
+        ("document.querySelectorAll(\".hosted-web-only\")", "hosted Web-only UI visibility guard"),
         ("window.nownoteDesktop.storage", "desktop storage bridge usage"),
     ]
     for needle, label in desktop_app_script_requirements:
@@ -729,15 +739,19 @@ def main() -> None:
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
         (".sidebar", "desktop sidebar"),
-        (".open-tabs", "desktop tabs"),
+        (".open-tabs-bar", "desktop tabs"),
         (".memo-editor", "desktop editor"),
+        (".graph-canvas", "desktop graph style"),
+        (".canvas-board", "desktop Canvas style"),
+        (".capture-composer", "desktop quick capture style"),
+        (".command-card", "desktop command palette style"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
 
     desktop_app_help_requirements = [
-        ("NowNote 설치형", "desktop help title"),
-        ("PC 로컬", "desktop local note help"),
+        ("NowNote", "desktop help title"),
+        ("서버 연결", "desktop server connection help"),
     ]
     for needle, label in desktop_app_help_requirements:
         check(needle in desktop_app_help, f"Desktop help has {label}", needle, failures)
@@ -756,7 +770,7 @@ def main() -> None:
         (".exe", "exe installer documentation"),
         ("npm run dist:win", "Windows build command documentation"),
         ("NowNote-Setup-0.1.0-x64.exe", "installer output documentation"),
-        ("공용 서버", "public server connection documentation"),
+        ("Web 전용", "hosted Web-only exclusion documentation"),
     ]
     for needle, label in desktop_readme_requirements:
         check(needle in desktop_readme, f"Desktop README has {label}", needle, failures)

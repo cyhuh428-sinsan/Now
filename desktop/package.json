@@ -2,7 +2,7 @@
   "name": "nownote-desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "NowNote standalone Windows desktop client.",
+  "description": "NowNote Windows desktop client with the Web-equivalent surface.",
   "author": "Sinsan",
   "main": "main.cjs",
   "scripts": {

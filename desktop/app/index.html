@@ -4,103 +4,1157 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>NowNote</title>
+  <meta name="theme-color" content="#315f73">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/nownote-icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="./styles.css">
+  <script>
+    (() => {
+      if (!["http:", "https:"].includes(window.location.protocol)) return;
+      if (["127.0.0.1", "localhost", "::1"].includes(window.location.hostname)) return;
+      const path = window.location.pathname.replace(/\/+$/, "");
+      if (path === "" || path === "/index.html" || path === "/app" || path.startsWith("/app/")) {
+        document.documentElement.dataset.auth = "locked";
+      }
+    })();
+  </script>
 </head>
 <body>
+  <section id="webLoginView" class="web-login-view hidden" aria-labelledby="webLoginTitle">
+    <form id="webLoginForm" class="web-login-card" novalidate>
+      <div class="brand login-brand">
+        <div class="brand-mark">N</div>
+        <div>
+          <h1 id="webLoginTitle">NowNote</h1>
+          <p id="webLoginDesc">서버 공유 문서에 접속합니다.</p>
+        </div>
+      </div>
+      <label>
+        <span id="webLoginOwnerLabel">사용자 ID</span>
+        <input id="webLoginOwnerInput" class="settings-input" type="text" autocomplete="username" required>
+      </label>
+      <label id="webLoginPasswordField" data-login-mode="login register reset-confirm">
+        <span id="webLoginPasswordLabel">비밀번호</span>
+        <input id="webLoginPasswordInput" class="settings-input" type="password" autocomplete="current-password" required>
+      </label>
+      <label class="web-login-extra" data-login-mode="register reset-request reset-confirm">
+        <span id="webRegisterEmailLabel">등록 이메일</span>
+        <input id="webRegisterEmailInput" class="settings-input" type="email" autocomplete="email" placeholder="계정 만들기와 비밀번호 재설정에 사용">
+      </label>
+      <label class="web-login-extra" data-login-mode="login">
+        <span id="webLoginTwoFactorLabel">2단계 인증 코드</span>
+        <input id="webLoginTwoFactorInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="사용 중일 때만 입력">
+      </label>
+      <label class="web-login-extra" data-login-mode="reset-confirm">
+        <span id="webResetCodeLabel">비밀번호 재설정 코드</span>
+        <input id="webResetCodeInput" class="settings-input" type="text" autocomplete="one-time-code" placeholder="메일로 받은 코드">
+      </label>
+      <div class="web-login-actions">
+        <button id="webLoginSubmitBtn" class="primary-btn" type="submit">로그인</button>
+        <button id="webRegisterSubmitBtn" class="secondary-btn" type="submit">계정 만들기</button>
+        <button id="webResetRequestBtn" class="secondary-btn" type="submit">재설정 메일</button>
+        <button id="webResetConfirmBtn" class="secondary-btn" type="submit">비밀번호 재설정</button>
+      </div>
+      <p id="webLoginStatus" class="web-login-status">서버에 저장된 공유 문서만 표시됩니다.</p>
+    </form>
+  </section>
   <div class="app-shell">
-    <aside class="sidebar" aria-label="NowNote 설치형 메뉴">
-      <div class="brand-row">
+    <nav id="appRail" class="app-rail" aria-label="빠른 메뉴">
+      <button id="railSidebarBtn" class="rail-btn" type="button" title="목록 접기" data-rail-letter="목" data-rail-icon="☰">목</button>
+      <button class="rail-btn active" type="button" title="지식 메모" data-rail-letter="지" data-rail-icon="◫">지</button>
+      <button id="railDailyBtn" class="rail-btn" type="button" title="오늘 메모" data-rail-letter="일" data-rail-icon="◷">일</button>
+      <button id="railSearchBtn" class="rail-btn" type="button" title="검색" data-rail-letter="검" data-rail-icon="⌕">검</button>
+      <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환" data-rail-letter="전" data-rail-icon="⇄">전</button>
+      <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기" data-rail-letter="연" data-rail-icon="⛓">연</button>
+      <button id="railMarkdownExportBtn" class="rail-btn" type="button" title="Markdown 내보내기" data-rail-letter="내" data-rail-icon="⇩">내</button>
+      <button id="railMarkdownImportBtn" class="rail-btn" type="button" title="Markdown 가져오기" data-rail-letter="가" data-rail-icon="⇧">가</button>
+      <button id="railDeletedTreeBtn" class="rail-btn" type="button" title="삭제 보관함" data-rail-letter="삭" data-rail-icon="♻">삭</button>
+      <button id="railSettingsBtn" class="rail-btn" type="button" title="화면 설정" data-rail-letter="설" data-rail-icon="⚙">설</button>
+      <input id="importMarkdownInput" class="hidden-file-input" type="file" accept=".md,.markdown,.txt,text/markdown,text/plain" multiple>
+    </nav>
+
+    <aside id="sidebarMenu" class="sidebar" aria-label="NowNote 메뉴">
+      <div class="brand">
         <div class="brand-mark">N</div>
         <div>
           <h1>NowNote</h1>
-          <p>PC 로컬 문서</p>
+          <p id="brandSubtitle">지식 메모</p>
         </div>
       </div>
 
       <label class="search-box">
-        <span>검색</span>
-        <input id="searchInput" type="search" placeholder="제목, 본문 검색">
+        <span id="searchLabel">검색</span>
+        <input id="searchInput" type="search" placeholder="제목, 내용 검색">
       </label>
 
-      <section class="side-section">
-        <h2>문서</h2>
-        <button id="addRootBtn" class="side-btn primary" type="button">새 주제</button>
-        <button id="addChildBtn" class="side-btn" type="button">하위 메모</button>
-        <button id="deleteTreeBtn" class="side-btn danger" type="button">삭제 보관함</button>
+      <button id="dailyToggleBtn" class="today-chip" type="button">
+        <span id="todayChipLabel">오늘 메모</span>
+        <strong id="todayMemoState">비어 있음</strong>
+      </button>
+
+      <nav id="noteViewNav" class="nav-tabs hosted-web-only hidden" aria-label="메모 보기">
+        <button id="sharedMineNavBtn" class="nav-tab active" data-view="tree" data-shared-view="mine" type="button">내 공유메모</button>
+        <button id="sharedGroupTreeNavBtn" class="nav-tab" data-view="tree" data-shared-view="group-tree" type="button">그룹 지식체계</button>
+        <button id="sharedMemberNavBtn" class="nav-tab" data-view="tree" data-shared-view="member" type="button">구성원별 공유문서</button>
+      </nav>
+
+      <section class="side-section side-knowledge-section" aria-labelledby="favoriteTitle">
+        <div class="side-section-head">
+          <h2 id="favoriteTitle">즐겨찾기</h2>
+          <span id="favoriteCount">0</span>
+        </div>
+        <div id="favoriteList" class="side-list"></div>
       </section>
 
-      <section class="side-section">
-        <h2>파일</h2>
-        <button id="exportMarkdownBtn" class="side-btn" type="button">Markdown 내보내기</button>
-        <label class="side-btn file-btn">
-          Markdown 가져오기
-          <input id="importMarkdownInput" type="file" accept=".md,.txt,text/markdown,text/plain" hidden>
-        </label>
+      <section class="side-section side-knowledge-section" aria-labelledby="recentTitle">
+        <div class="side-section-head">
+          <h2 id="recentTitle">최근 수정</h2>
+          <span id="recentCount">0</span>
+        </div>
+        <div id="recentList" class="side-list"></div>
       </section>
 
-      <section class="side-section">
-        <h2>저장소</h2>
-        <button id="saveNowBtn" class="side-btn" type="button">바로 저장</button>
-        <p id="storageStatus" class="storage-status">저장소 확인 중</p>
+      <section class="side-section side-knowledge-section" aria-labelledby="tagTitle">
+        <div class="side-section-head">
+          <h2 id="tagTitle">태그</h2>
+          <span id="tagCount">0</span>
+        </div>
+        <div id="sideTagList" class="side-tag-list"></div>
       </section>
+
+      <div class="side-actions">
+        <section id="exploreActionGroup" class="side-action-group" aria-label="탐색">
+          <h2 id="exploreActionTitle">탐색</h2>
+          <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
+          <button id="commandPaletteBtn" class="ghost-btn" type="button">명령 팔레트</button>
+          <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
+          <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
+          <button id="canvasBtn" class="ghost-btn" type="button">Canvas</button>
+          <button id="captureBtn" class="ghost-btn" type="button">빠른 기록</button>
+        </section>
+        <section id="fileActionGroup" class="side-action-group" aria-label="파일">
+          <h2 id="fileActionTitle">파일</h2>
+          <button id="exportMarkdownBtn" class="ghost-btn" type="button">Markdown 내보내기</button>
+          <button id="importMarkdownBtn" class="ghost-btn" type="button">Markdown 가져오기</button>
+        </section>
+        <section id="manageActionGroup" class="side-action-group" aria-label="관리">
+          <h2 id="manageActionTitle">관리</h2>
+          <button id="deletedTreeBtn" class="ghost-btn count-btn" type="button">
+            <span id="deletedTreeBtnLabel">삭제 보관함</span>
+            <strong id="deletedTreeCount">0</strong>
+          </button>
+          <button id="groupMessengerBtn" class="ghost-btn count-btn hosted-web-only hidden" type="button">
+            <span id="groupMessengerBtnLabel">그룹 메신저</span>
+            <strong id="groupMessengerUnreadCount">0</strong>
+          </button>
+          <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
+          <a id="helpBtn" class="ghost-btn help-link" href="./help.html">도움말</a>
+        </section>
+      </div>
     </aside>
 
     <main class="workspace">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">설치형 프로그램</p>
-          <h2>지식 메모</h2>
-        </div>
-        <div class="top-actions">
-          <button id="reopenClosedTabBtn" class="secondary-btn" type="button">다시 열기</button>
-          <button id="closeOtherTabsBtn" class="secondary-btn" type="button">다른 탭 닫기</button>
-          <button id="closeAllTabsBtn" class="secondary-btn" type="button">모두 닫기</button>
-        </div>
-      </header>
-
-      <nav id="openTabs" class="open-tabs" aria-label="열린 메모 탭"></nav>
-
-      <section class="content-grid">
-        <aside class="tree-panel">
-          <div class="panel-title">
-            <strong>지식 체계</strong>
-            <span id="treeCount">0</span>
+      <section id="treeView" class="view active" aria-labelledby="treeTitle">
+        <header class="view-header">
+          <div>
+            <p id="treeEyebrow" class="eyebrow">주제 / 분류 / 메모</p>
+            <h2 id="treeTitle">지식 메모</h2>
           </div>
-          <div id="treeList" class="tree-list"></div>
-        </aside>
-
-        <section id="treeEditor" class="editor-panel">
-          <div class="editor-header">
-            <label class="title-row">
-              <span>주제</span>
-              <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
-            </label>
-            <div class="editor-actions">
-              <button id="favoriteBtn" class="secondary-btn" type="button">즐겨찾기</button>
-              <button id="copyLinkBtn" class="secondary-btn" type="button">링크 복사</button>
-              <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+          <div class="header-actions">
+            <div id="webAccountMenuWrap" class="web-account-menu-wrap hosted-web-only hidden">
+              <button id="webAccountMenuBtn" class="header-icon-btn secondary-btn" type="button" aria-label="Web 메뉴" title="Web 메뉴" aria-haspopup="true" aria-expanded="false">☰</button>
+              <div id="webAccountMenu" class="web-account-menu hidden" role="menu" aria-label="Web 메뉴">
+                <button id="webLogoutBtn" class="web-account-menu-item" type="button" role="menuitem">로그아웃</button>
+              </div>
             </div>
+            <button id="toggleTreePanelBtn" class="header-icon-btn secondary-btn" type="button" aria-label="목록 접기" title="목록 접기">⇤</button>
+            <button id="expandAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 펼치기" title="모두 펼치기">⇲</button>
+            <button id="collapseAllBtn" class="header-icon-btn secondary-btn" type="button" aria-label="모두 접기" title="모두 접기">⇱</button>
+            <button id="addRootBtn" class="header-icon-btn primary-btn" type="button" aria-label="주제 추가" title="주제 추가">+</button>
           </div>
+        </header>
 
-          <div id="treePathLabel" class="path-label"></div>
-          <div id="noteStats" class="note-stats"></div>
-          <div id="treeContent" class="memo-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="메모 내용을 입력하세요."></div>
-          <article id="markdownPreview" class="markdown-preview hidden"></article>
-          <footer class="editor-footer">
-            <span id="treeSavedLabel">저장됨</span>
-            <span>PC 로컬 저장소에 저장됩니다.</span>
-          </footer>
-        </section>
+        <div class="tree-layout">
+          <section id="treePanel" class="panel tree-panel" aria-label="지식 목록">
+            <div id="treeList" class="tree-list"></div>
+          </section>
 
-        <section id="emptyTreeEditor" class="empty-editor hidden">
-          <strong>메모를 선택하세요.</strong>
-          <span>왼쪽 지식 체계에서 메모를 열거나 새 주제를 만드세요.</span>
+          <div id="treeResizeHandle" class="resize-handle" role="separator" aria-label="목록 폭 조정"></div>
+
+          <section id="treeEditorPanel" class="panel editor-panel" aria-label="지식 메모 편집">
+            <div id="openTabsBar" class="open-tabs-bar hidden">
+              <div id="openTabs" class="open-tabs" aria-label="열린 메모"></div>
+              <div class="open-tab-actions">
+                <button id="pinTabBtn" class="secondary-btn" type="button">탭 고정</button>
+                <button id="reopenClosedTabBtn" class="secondary-btn" type="button">다시 열기</button>
+                <button id="closeOtherTabsBtn" class="secondary-btn" type="button">다른 탭 닫기</button>
+                <button id="closeAllTabsBtn" class="secondary-btn" type="button">모두 닫기</button>
+              </div>
+            </div>
+            <div id="emptyTreeEditor" class="empty-state">
+              <strong id="emptyTreeEditorTitle">메모를 선택하세요</strong>
+              <span id="emptyTreeEditorDesc">왼쪽에서 주제, 분류, 메모를 선택하면 내용을 편집할 수 있습니다.</span>
+              <button id="emptyAddRootBtn" class="primary-btn" type="button">주제 만들기</button>
+            </div>
+            <div id="treeEditor" class="tree-editor hidden">
+              <div class="editor-head">
+                <div>
+                  <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
+                </div>
+                <div class="editor-status">
+                  <button id="favoriteBtn" class="icon-text-btn" type="button">즐겨찾기</button>
+                  <button id="shareTreeBtn" class="icon-text-btn" type="button">공유</button>
+                  <button id="copyLinkBtn" class="icon-text-btn" type="button">링크 복사</button>
+                  <span id="treeSavedLabel" class="save-state">저장됨</span>
+                  <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
+                  <button id="outlineToggleBtn" class="secondary-btn" type="button">개요</button>
+                  <button id="insertTimeBtn" class="secondary-btn" type="button">시간 넣기</button>
+                  <button id="openDetectedLinkBtn" class="secondary-btn" type="button">링크 열기</button>
+                  <button id="encryptNoteBtn" class="secondary-btn" type="button">암호화</button>
+                  <button id="unlockNoteBtn" class="secondary-btn hidden" type="button">복호화</button>
+                  <button id="decryptNoteBtn" class="secondary-btn hidden" type="button">암호화 해제</button>
+                  <button id="lockNoteBtn" class="secondary-btn hidden" type="button">잠금</button>
+                  <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+                </div>
+              </div>
+              <span id="treePathLabel" class="path-label hidden"></span>
+              <div id="noteFindBar" class="note-find-bar hidden" aria-label="현재 메모에서 찾기">
+                <label class="note-find-input-wrap">
+                  <span aria-hidden="true">⌕</span>
+                  <input id="noteFindInput" type="search" placeholder="본문에서 검색" title="Enter 다음, Shift+Enter 이전">
+                </label>
+                <span id="noteFindCount" class="note-find-count">0 / 0</span>
+                <button id="noteFindPrevBtn" class="icon-btn" type="button" title="이전 결과" aria-label="이전 결과">↑</button>
+                <button id="noteFindNextBtn" class="icon-btn" type="button" title="다음 결과" aria-label="다음 결과">↓</button>
+                <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+              </div>
+              <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
+              <div id="tagList" class="tag-list" aria-label="태그"></div>
+              <section id="notePropertiesPanel" class="note-properties-panel hidden" aria-label="메모 속성">
+                <div class="properties-grid">
+                  <label>
+                    <span>상태</span>
+                    <select id="propertyStatusSelect" class="settings-select">
+                      <option value="">미지정</option>
+                      <option value="idea">아이디어</option>
+                      <option value="active">진행</option>
+                      <option value="waiting">대기</option>
+                      <option value="done">완료</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>중요도</span>
+                    <select id="propertyPrioritySelect" class="settings-select">
+                      <option value="">미지정</option>
+                      <option value="low">낮음</option>
+                      <option value="normal">보통</option>
+                      <option value="high">높음</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span>유형</span>
+                    <input id="propertyTypeInput" class="settings-input" type="text" placeholder="예: 회의, 자료, 아이디어">
+                  </label>
+                  <label>
+                    <span>프로젝트</span>
+                    <input id="propertyProjectInput" class="settings-input" type="text" placeholder="관련 프로젝트">
+                  </label>
+                  <label>
+                    <span>출처</span>
+                    <input id="propertySourceInput" class="settings-input" type="text" placeholder="URL, 책, 사람">
+                  </label>
+                  <label>
+                    <span>작성자</span>
+                    <input id="propertyAuthorInput" class="settings-input" type="text" placeholder="작성자">
+                  </label>
+                  <label>
+                    <span>마감일</span>
+                    <input id="propertyDueInput" class="settings-input" type="date">
+                  </label>
+                </div>
+              </section>
+              <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
+              <div
+                id="treeContent"
+                class="memo-editor live-memo-editor"
+                contenteditable="true"
+                role="textbox"
+                aria-multiline="true"
+                spellcheck="true"
+                data-placeholder="메모 내용을 입력하세요."
+              ></div>
+              <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
+              <div class="editor-footer">
+                <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>
+                <div class="editor-actions">
+                  <button id="moveUpBtn" class="secondary-btn" type="button">위로</button>
+                  <button id="moveDownBtn" class="secondary-btn" type="button">아래로</button>
+                  <button id="addChildBtn" class="secondary-btn" type="button">아래에 추가</button>
+                  <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section id="resultsView" class="view" aria-labelledby="resultsTitle">
+        <header class="view-header">
+          <div>
+            <p id="resultsEyebrow" class="eyebrow">통합 검색</p>
+            <h2 id="resultsTitle">검색 결과</h2>
+          </div>
+          <div class="results-header-actions">
+            <span id="resultsCount" class="search-count header-count">검색어를 입력하세요.</span>
+            <button id="clearResultsBtn" class="secondary-btn compact-action" type="button">검색 닫기</button>
+          </div>
+        </header>
+        <section class="panel">
+          <div id="resultsList" class="results-list"></div>
         </section>
       </section>
     </main>
+
+    <section id="dailyView" class="daily-popover hidden" aria-labelledby="dailyTitle">
+      <div class="daily-card">
+        <header class="view-header">
+          <div>
+            <p id="dailyEyebrow" class="eyebrow">필요할 때 잠깐 여는 날짜 기록</p>
+            <h2 id="dailyTitle">일자별 메모</h2>
+          </div>
+          <div class="header-actions">
+            <button id="todayBtn" class="secondary-btn" type="button">오늘</button>
+            <button id="appendTimeBtn" class="primary-btn" type="button">시간 추가</button>
+            <button id="archiveSelectedBtn" class="secondary-btn" type="button">보관</button>
+            <button id="archiveToggleBtn" class="secondary-btn" type="button">보관함</button>
+            <button id="dailyCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+          </div>
+        </header>
+
+        <div class="daily-layout compact">
+          <section id="calendarPanel" class="panel calendar-panel" aria-label="달력">
+            <div class="month-bar">
+              <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
+              <strong id="monthLabel"></strong>
+              <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
+            </div>
+            <div class="calendar-weekdays">
+              <span id="weekdaySun">일</span><span id="weekdayMon">월</span><span id="weekdayTue">화</span><span id="weekdayWed">수</span><span id="weekdayThu">목</span><span id="weekdayFri">금</span><span id="weekdaySat">토</span>
+            </div>
+            <div id="calendarGrid" class="calendar-grid"></div>
+          </section>
+
+          <section id="dailyEditorPanel" class="panel editor-panel" aria-label="선택한 날짜 메모">
+            <div class="editor-head">
+              <div>
+                <p id="selectedDateLabel" class="eyebrow"></p>
+                <h3 id="dailyMemoTitle">하루 하나의 메모장</h3>
+              </div>
+              <span id="dailySavedLabel" class="save-state">저장됨</span>
+            </div>
+            <textarea id="dailyContent" class="memo-editor daily-editor" placeholder="이 날짜의 메모장 하나에 계속 추가해서 적어두세요."></textarea>
+          </section>
+        </div>
+
+        <section id="archivePanel" class="panel archive-panel hidden" aria-label="일자별 메모 보관함">
+          <div class="archive-head">
+            <div>
+              <p id="dailyArchiveEyebrow" class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
+              <h3 id="dailyArchiveTitle">보관함</h3>
+            </div>
+            <span id="archiveCountLabel" class="save-state">0개</span>
+          </div>
+          <div id="archiveList" class="archive-list"></div>
+        </section>
+      </div>
+    </section>
+
+    <section id="settingsView" class="settings-popover hidden" aria-labelledby="settingsTitle">
+      <div class="settings-card">
+        <header class="view-header">
+          <div>
+            <p id="settingsEyebrow" class="eyebrow">사용자 취향에 맞게 조정</p>
+            <h2 id="settingsTitle">화면 설정</h2>
+          </div>
+          <button id="settingsCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+
+        <div class="settings-list">
+          <section class="settings-row">
+            <div>
+              <h3 id="languageSettingTitle">언어</h3>
+              <p id="languageSettingDesc">앱 화면에 사용할 언어를 선택합니다.</p>
+            </div>
+            <select id="languageSelect" class="settings-select" aria-label="언어">
+              <option value="ko">한국어</option>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+              <option value="ja">日本語</option>
+              <option value="vi">Tiếng Việt</option>
+              <option value="ar">العربية</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="themeSettingTitle">기본 테마</h3>
+              <p id="themeSettingDesc">앱의 밝기 테마를 선택합니다.</p>
+            </div>
+            <select id="themeSelect" class="settings-select" aria-label="기본 테마">
+              <option value="system">시스템 테마 적용</option>
+              <option value="light">밝은 테마</option>
+              <option value="dark">어두운 테마</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="accentSettingTitle">강조 색상</h3>
+              <p id="accentSettingDesc">버튼과 선택 상태에 사용할 색상을 선택합니다.</p>
+            </div>
+            <div id="accentChoices" class="accent-choices" aria-label="강조 색상"></div>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="wideEditorSettingTitle">넓은 작성 공간</h3>
+              <p id="wideEditorSettingDesc">목록 폭을 줄여 메모 작성 공간을 넓게 사용합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="wideEditorToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="railModeSettingTitle">빠른 메뉴 표시</h3>
+              <p id="railModeSettingDesc">왼쪽 빠른 메뉴를 아이콘 또는 첫 글자로 표시합니다.</p>
+            </div>
+            <select id="railModeSelect" class="settings-select" aria-label="빠른 메뉴 표시">
+              <option id="railModeIconOption" value="icon">아이콘</option>
+              <option id="railModeLetterOption" value="letter">첫 글자</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="fontSizeSettingTitle">글자 크기</h3>
+              <p id="fontSizeSettingDesc">메모 작성 화면의 글자 크기를 조정합니다.</p>
+            </div>
+            <select id="fontSizeSelect" class="settings-select" aria-label="글자 크기">
+              <option value="small">작게</option>
+              <option value="medium">보통</option>
+              <option value="large">크게</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="lineHeightSettingTitle">줄 간격</h3>
+              <p id="lineHeightSettingDesc">긴 메모를 읽기 편한 간격으로 조정합니다.</p>
+            </div>
+            <select id="lineHeightSelect" class="settings-select" aria-label="줄 간격">
+              <option value="compact">좁게</option>
+              <option value="normal">보통</option>
+              <option value="relaxed">넓게</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="backlinksSettingTitle">백링크 표시</h3>
+              <p id="backlinksSettingDesc">현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="backlinksToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="tagsSettingTitle">태그 표시</h3>
+              <p id="tagsSettingDesc">본문의 #태그를 인식해 편집 화면과 검색에서 사용합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="tagsToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="shortcutsSettingTitle">단축키 사용</h3>
+              <p id="shortcutsSettingDesc">빠른 전환, 새 주제 만들기 같은 기본 단축키를 사용합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="shortcutsToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row shortcuts-row">
+            <div>
+              <h3 id="shortcutGuideSettingTitle">단축키 안내</h3>
+              <p id="shortcutGuideSettingDesc">자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.</p>
+            </div>
+            <div id="shortcutEditor" class="shortcut-groups"></div>
+          </section>
+
+          <section class="settings-row feature-row">
+            <div>
+              <h3 id="featuresSettingTitle">지식 기능</h3>
+              <p id="featuresSettingDesc">사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.</p>
+            </div>
+            <div id="featureSettings" class="feature-toggle-list"></div>
+          </section>
+
+          <section id="desktopStorageRow" class="settings-row hidden">
+            <div>
+              <h3 id="desktopStorageTitle">PC 로컬 저장소</h3>
+              <p id="desktopStorageDesc">설치형 프로그램은 이 PC의 로컬 파일에 원본 메모와 설정을 저장합니다.</p>
+            </div>
+            <div class="desktop-storage-box">
+              <strong id="desktopStorageStatus">저장 위치 확인 중</strong>
+              <span id="desktopStoragePath" class="desktop-storage-path"></span>
+            </div>
+          </section>
+
+          <section class="settings-row server-settings-row">
+            <div>
+              <h3 id="serverSettingTitle">서버 연결</h3>
+              <p id="serverSettingDesc">단독 사용 또는 개인/공용 NowNote 서버 연결 방식을 선택합니다.</p>
+            </div>
+            <div class="server-settings-form">
+              <div class="server-guide-box desktop-server-only">
+                <strong id="serverGuideTitle">입력 기준</strong>
+                <ul>
+                  <li id="serverGuideLocal">단독 사용: 서버 없이 이 기기에만 저장합니다.</li>
+                  <li id="serverGuidePersonal">설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.</li>
+                  <li id="serverGuidePublic">Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.</li>
+                  <li id="serverGuideIssue">앱/설치형 접속 토큰은 Web 로그인 후 내 연결 토큰 화면에서 직접 발급합니다.</li>
+                </ul>
+              </div>
+              <label class="desktop-server-only">
+                <span id="serverModeLabel">사용 방식</span>
+                <select id="serverModeSelect" class="settings-select">
+                  <option id="serverModeLocalOption" value="local">단독 사용</option>
+                  <option id="serverModeServerOption" value="server">서버 연결</option>
+                </select>
+              </label>
+              <label class="desktop-server-only">
+                <span id="serverUrlLabel">서버 주소</span>
+                <input id="serverUrlInput" class="settings-input" type="url" placeholder="https://nownote.sinsan.kr">
+                <small id="serverUrlHint" class="field-hint">공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.</small>
+              </label>
+              <label class="desktop-server-only">
+                <span id="serverTokenLabel">API 토큰</span>
+                <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="운영자가 제공한 경우 입력">
+                <small id="serverTokenHint" class="field-hint">개인 서버 관리자용 토큰입니다. 운영자가 안내한 경우에만 입력합니다.</small>
+              </label>
+              <label class="desktop-server-only">
+                <span id="serverUserTokenLabel">사용자별 접속 토큰</span>
+                <input id="serverUserTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="사용자별 접속 토큰">
+                <small id="serverUserTokenHint" class="field-hint">공용 서버나 사용자별 토큰 필수 서버에서 내 계정을 확인하는 개인 접속 토큰입니다.</small>
+              </label>
+              <label class="desktop-server-only">
+                <span id="serverTwoFactorCodeLabel">2단계 인증 코드</span>
+                <input id="serverTwoFactorCodeInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="필요한 경우 6자리 코드">
+                <small id="serverTwoFactorCodeHint" class="field-hint">2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.</small>
+              </label>
+              <div class="server-identity-grid desktop-server-only">
+                <label>
+                  <span id="ownerIdLabel">사용자 ID</span>
+                  <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local_user">
+                </label>
+                <label>
+                  <span id="deviceIdLabel">기기 ID</span>
+                  <input id="deviceIdInput" class="settings-input" type="text" autocomplete="off" placeholder="web-desktop">
+                </label>
+              </div>
+              <label class="toggle-line desktop-server-only">
+                <span>
+                  <strong id="serverAutoSyncLabel">자동 동기화</strong>
+                  <small id="serverAutoSyncHint">변경된 공유 문서를 서버에 자동으로 보냅니다.</small>
+                </span>
+                <span class="switch">
+                  <input id="serverAutoSyncToggle" type="checkbox" checked>
+                  <span></span>
+                </span>
+              </label>
+              <div class="server-profile-box">
+                <div>
+                  <strong id="serverProfileTitle">사용자 프로필</strong>
+                  <p id="serverProfileDesc">표시 이름, 이메일, 시간대를 서버 사용자 정보로 저장합니다.</p>
+                </div>
+                <div class="server-profile-grid">
+                  <label>
+                    <span id="serverDisplayNameLabel">표시 이름</span>
+                    <input id="serverDisplayNameInput" class="settings-input" type="text" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="serverEmailLabel">이메일</span>
+                    <input id="serverEmailInput" class="settings-input" type="email" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="serverTimezoneLabel">시간대</span>
+                    <input id="serverTimezoneInput" class="settings-input" type="text" autocomplete="off" placeholder="Asia/Seoul">
+                  </label>
+                </div>
+                <div class="settings-actions">
+                  <button id="serverProfileLoadBtn" class="secondary-btn" type="button">프로필 불러오기</button>
+                  <button id="serverProfileSaveBtn" class="secondary-btn" type="button">프로필 저장</button>
+                </div>
+                <p id="serverProfileText" class="server-meta-text">프로필을 불러오지 않았습니다.</p>
+                <div id="serverGroupJoinBox" class="server-group-join hosted-web-only hidden">
+                  <div>
+                    <strong id="serverGroupJoinTitle">그룹 참가</strong>
+                    <p id="serverGroupJoinDesc">관리자가 알려준 그룹 이름과 초대코드로 그룹에 참가합니다.</p>
+                  </div>
+                  <div class="server-profile-grid">
+                    <label>
+                      <span id="serverGroupNameLabel">그룹 이름</span>
+                      <select id="serverGroupNameInput" class="settings-select">
+                        <option value="사용자">사용자</option>
+                      </select>
+                    </label>
+                    <label>
+                      <span id="serverGroupInviteCodeLabel">초대코드</span>
+                      <input id="serverGroupInviteCodeInput" class="settings-input" type="password" autocomplete="off">
+                    </label>
+                  </div>
+                  <div class="settings-actions">
+                    <button id="serverGroupJoinBtn" class="secondary-btn" type="button">그룹 참가</button>
+                  </div>
+                  <p id="serverGroupJoinText" class="server-meta-text">현재 그룹: -</p>
+                </div>
+              </div>
+              <div id="hostedDeviceTokenBox" class="server-profile-box hosted-web-only hidden">
+                <div>
+                  <strong id="deviceTokenTitle">앱/설치형 연결 토큰</strong>
+                  <p id="deviceTokenDesc">앱이나 설치형 프로그램을 공용 서버에 연결할 때 여기서 토큰을 직접 발급합니다. 발급된 값은 한 번만 보입니다.</p>
+                </div>
+                <div class="server-profile-grid">
+                  <label>
+                    <span id="deviceTokenNameLabel">기기 이름</span>
+                    <input id="deviceTokenNameInput" class="settings-input" type="text" autocomplete="off" placeholder="내 노트북">
+                  </label>
+                  <label>
+                    <span id="deviceTokenIdLabel">기기 ID</span>
+                    <input id="deviceTokenIdInput" class="settings-input" type="text" autocomplete="off" placeholder="desktop-main">
+                  </label>
+                </div>
+                <div class="settings-actions">
+                  <button id="deviceTokenIssueBtn" class="secondary-btn" type="button">연결 토큰 발급</button>
+                </div>
+                <textarea id="deviceTokenOutput" class="settings-textarea" rows="3" readonly placeholder="발급 후 이곳에 표시됩니다."></textarea>
+                <p id="deviceTokenText" class="server-meta-text">이 값은 앱/설치형의 서버 연결 설정에 붙여넣습니다.</p>
+              </div>
+              <div class="settings-actions">
+                <button id="serverSaveBtn" class="secondary-btn desktop-server-only" type="button">연결 설정 저장</button>
+                <button id="serverTestBtn" class="secondary-btn desktop-server-only" type="button">연결 테스트</button>
+                <button id="serverSyncBtn" class="secondary-btn desktop-server-only" type="button">서버로 동기화</button>
+                <button id="serverFullSyncBtn" class="secondary-btn desktop-server-only" type="button">전체 다시 동기화</button>
+              </div>
+              <div class="server-analysis-box">
+                <div>
+                  <strong id="serverAnalysisTitle">분석 작업</strong>
+                  <p id="serverAnalysisDesc">선택한 지식 메모를 서버 분석 큐에 등록하고 최근 상태를 확인합니다.</p>
+                </div>
+                <div class="settings-actions">
+                  <label class="server-analysis-type">
+                    <span id="serverAnalysisTypeLabel">작업 유형</span>
+                    <select id="serverAnalysisTypeSelect" class="settings-input">
+                      <option value="memo_summary">선택 메모 요약</option>
+                      <option value="knowledge_2_0_review">2.0 지식화 점검</option>
+                      <option value="similar_notes">유사 메모 후보</option>
+                      <option value="duplicate_candidates">중복 후보</option>
+                      <option value="relation_suggestions">관계 후보</option>
+                      <option value="tag_property_suggestions">태그/속성 후보</option>
+                      <option value="knowledge_health">지식 건강 점검</option>
+                    </select>
+                  </label>
+                  <button id="serverAnalysisCreateBtn" class="secondary-btn" type="button">선택 메모 분석</button>
+                  <button id="serverAnalysisRefreshBtn" class="secondary-btn" type="button">작업 새로고침</button>
+                </div>
+                <div id="serverAnalysisList" class="server-analysis-list">분석 작업을 불러오지 않았습니다.</div>
+              </div>
+              <p id="serverStatusText" class="server-status-text">서버 연결을 사용하지 않습니다.</p>
+              <div id="serverMetaText" class="server-meta-text">보류 변경 0개 · 마지막 동기화 없음</div>
+              <div id="serverCapabilitiesText" class="server-capabilities-text">서버 기능 확인 전</div>
+              <div id="serverConflictBox" class="server-conflict-box hidden">
+                <div>
+                  <strong id="serverConflictTitle">충돌 문서</strong>
+                  <p id="serverConflictDesc">로컬과 서버가 모두 바뀐 문서는 자동으로 덮어쓰지 않습니다.</p>
+                </div>
+                <div id="serverConflictList" class="server-conflict-list">충돌 문서가 없습니다.</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="sidebarAssistSettingTitle">보조 목록 표시</h3>
+              <p id="sidebarAssistSettingDesc">왼쪽에 즐겨찾기, 최근 수정, 태그 목록을 표시합니다.</p>
+            </div>
+            <label class="switch">
+              <input id="sidebarAssistToggle" type="checkbox">
+              <span></span>
+            </label>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="backupSettingTitle">백업 / 복원</h3>
+              <p id="backupSettingDesc">JSON은 NowNote 전체 데이터를 백업하거나 현재 데이터를 백업 파일로 교체할 때 사용합니다.</p>
+            </div>
+            <div class="settings-actions">
+              <button id="exportBtn" class="secondary-btn" type="button">JSON 내보내기</button>
+              <label class="secondary-btn file-btn">
+                <span id="importBtnLabel">JSON 가져오기</span>
+                <input id="importInput" type="file" accept="application/json">
+              </label>
+            </div>
+          </section>
+
+          <section class="settings-row recovery-settings-row">
+            <div>
+              <h3>복구 / 가져오기 점검</h3>
+              <p>가져오기 전후 상태와 최근 스냅샷을 화면에서 확인합니다.</p>
+            </div>
+            <div class="recovery-panel">
+              <div class="settings-actions">
+                <button id="snapshotCreateBtn" class="secondary-btn" type="button">스냅샷 만들기</button>
+                <select id="snapshotSelect" class="settings-select" aria-label="복구 스냅샷">
+                  <option value="">스냅샷 선택</option>
+                </select>
+                <button id="snapshotRestoreBtn" class="danger-btn" type="button">선택 복구</button>
+              </div>
+              <div id="snapshotSummary" class="path-label">스냅샷이 없습니다.</div>
+              <div id="importReportList" class="import-report-list">가져오기 진단이 없습니다.</div>
+            </div>
+          </section>
+
+          <section class="settings-row publish-settings-row">
+            <div>
+              <h3>출판 / 발표</h3>
+              <p>공개할 지식 묶음을 고르고 HTML 문서나 발표 자료로 내보냅니다.</p>
+            </div>
+            <div class="publish-panel">
+              <div class="publish-toolbar">
+                <select id="publishBundleSelect" class="settings-select" aria-label="공개 묶음">
+                  <option value="">새 공개 묶음</option>
+                </select>
+                <button id="publishSaveBtn" class="secondary-btn" type="button">묶음 저장</button>
+                <button id="publishHtmlExportBtn" class="secondary-btn" type="button">HTML 내보내기</button>
+                <button id="publishSlidesExportBtn" class="secondary-btn" type="button">발표 HTML</button>
+              </div>
+              <div class="publish-fields">
+                <label>
+                  <span>제목</span>
+                  <input id="publishTitleInput" class="settings-input" type="text" placeholder="공개 묶음 제목">
+                </label>
+                <label>
+                  <span>permalink</span>
+                  <input id="publishPermalinkInput" class="settings-input" type="text" placeholder="my-public-notes">
+                </label>
+                <label>
+                  <span>설명</span>
+                  <input id="publishDescriptionInput" class="settings-input" type="text" placeholder="공개할 지식 묶음 설명">
+                </label>
+              </div>
+              <div id="publishSensitiveList" class="publish-sensitive-list">민감정보 후보가 없습니다.</div>
+              <div id="publishNodeList" class="publish-node-list">공개 가능한 메모가 없습니다.</div>
+              <article id="publishPreview" class="publish-preview">공개 묶음을 선택하거나 저장하세요.</article>
+            </div>
+          </section>
+
+          <section class="settings-row workspace-settings-row">
+            <div>
+              <h3 id="workspaceSettingTitle">작업공간 / 지식 건강</h3>
+              <p id="workspaceSettingDesc">반복 작업 상태를 저장하고 정리 우선순위를 확인합니다.</p>
+            </div>
+            <div class="workspace-panel">
+              <div class="workspace-toolbar">
+                <input id="workspaceNameInput" class="settings-input" type="text" placeholder="작업공간 이름">
+                <select id="workspaceSelect" class="settings-select" aria-label="작업공간">
+                  <option value="">저장된 작업공간</option>
+                </select>
+                <button id="workspaceSaveBtn" class="secondary-btn" type="button">작업공간 저장</button>
+                <button id="workspaceApplyBtn" class="secondary-btn" type="button">작업공간 열기</button>
+              </div>
+              <div id="workspaceSummary" class="workspace-summary">저장된 작업공간이 없습니다.</div>
+              <div id="workspaceHealthSummary" class="graph-summary"></div>
+              <div id="workspaceHealthList" class="workspace-health-list"></div>
+              <div id="workspaceExternalLinks" class="workspace-external-links"></div>
+            </div>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="resetSettingTitle">화면 설정 초기화</h3>
+              <p id="resetSettingDesc">메모는 유지하고 테마, 폭, 글자 크기, 열린 탭 같은 화면 설정만 기본값으로 되돌립니다.</p>
+            </div>
+            <button id="resetSettingsBtn" class="danger-btn" type="button">기본값으로</button>
+          </section>
+
+          <section class="settings-row">
+            <div>
+              <h3 id="helpSettingTitle">도움말</h3>
+              <p id="helpSettingDesc">단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.</p>
+            </div>
+            <a id="settingsHelpBtn" class="secondary-btn help-link" href="./help.html">도움말 열기</a>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="quickSwitchView" class="quick-popover hidden" aria-labelledby="quickSwitchTitle">
+      <div class="quick-card">
+        <header class="view-header">
+          <div>
+            <p id="quickSwitchEyebrow" class="eyebrow">제목과 경로로 바로 이동</p>
+            <h2 id="quickSwitchTitle">빠른 전환</h2>
+          </div>
+          <button id="quickCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <input id="quickInput" class="quick-input" type="search" placeholder="제목 또는 경로 검색">
+        <div id="quickCount" class="search-count">전체 메모를 표시합니다.</div>
+        <div id="quickResults" class="quick-results"></div>
+      </div>
+    </section>
+
+    <section id="commandPaletteView" class="quick-popover hidden" aria-labelledby="commandPaletteTitle">
+      <div class="quick-card command-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">작성 / 생성 / 정리 명령</p>
+            <h2 id="commandPaletteTitle">명령 팔레트</h2>
+          </div>
+          <button id="commandPaletteCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <input id="commandPaletteInput" class="quick-input" type="search" placeholder="명령, 템플릿, 랜덤, 합치기 검색">
+        <div id="commandPaletteSummary" class="search-count">명령을 검색하거나 바로 실행하세요.</div>
+        <div id="commandPaletteList" class="command-list"></div>
+      </div>
+    </section>
+
+    <section id="searchPopoverView" class="quick-popover hidden" aria-labelledby="searchPopoverTitle">
+      <div class="quick-card">
+        <header class="view-header">
+          <div>
+            <p id="searchPopoverEyebrow" class="eyebrow">일자별 메모와 지식 메모 전체</p>
+            <h2 id="searchPopoverTitle">검색</h2>
+          </div>
+          <button id="searchPopoverCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="search-popover-toolbar">
+          <input id="searchPopoverInput" class="quick-input" type="search" placeholder="입력하여 검색하기...">
+          <select id="searchScopeSelect" class="compact-select" aria-label="검색 범위">
+            <option value="all">전체</option>
+            <option value="title">제목</option>
+            <option value="content">내용</option>
+            <option value="tag">태그</option>
+            <option value="path">경로</option>
+          </select>
+          <select id="searchSortSelect" class="compact-select" aria-label="검색 정렬">
+            <option value="updated-desc">수정일 최신순</option>
+            <option value="updated-asc">수정일 오래된 순</option>
+            <option value="created-desc">생성일 최신순</option>
+            <option value="created-asc">생성일 오래된 순</option>
+            <option value="title-asc">이름 가나다순</option>
+            <option value="title-desc">이름 가나다 역순</option>
+          </select>
+        </div>
+        <div id="searchPopoverCount" class="search-count">검색어를 입력하세요.</div>
+        <div class="search-option-help" aria-label="검색 옵션">
+          <span><strong>path:</strong> <span id="searchHelpPath">경로</span></span>
+          <span><strong>title: / file:</strong> <span id="searchHelpTitle">제목</span></span>
+          <span><strong>tag: / #</strong> <span id="searchHelpTag">태그</span></span>
+          <span><strong>content: / line:</strong> <span id="searchHelpContent">내용</span></span>
+        </div>
+        <div id="searchPopoverResults" class="quick-results"></div>
+      </div>
+    </section>
+
+    <section id="graphView" class="quick-popover hidden" aria-labelledby="graphTitle">
+      <div class="quick-card graph-card">
+        <header class="view-header">
+          <div>
+            <p id="graphEyebrow" class="eyebrow">[[제목]] 연결 기준</p>
+            <h2 id="graphTitle">연결 보기</h2>
+          </div>
+          <button id="graphCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="graph-toolbar" aria-label="그래프 필터">
+          <select id="graphModeSelect" class="settings-select" aria-label="그래프 범위">
+            <option value="global">전체 그래프</option>
+            <option value="local">선택 메모 중심</option>
+          </select>
+          <select id="graphDepthSelect" class="settings-select" aria-label="로컬 그래프 깊이">
+            <option value="1">깊이 1</option>
+            <option value="2">깊이 2</option>
+            <option value="3">깊이 3</option>
+          </select>
+          <select id="graphTagSelect" class="settings-select" aria-label="그래프 태그">
+            <option value="">전체 태그</option>
+          </select>
+          <select id="graphGroupSelect" class="settings-select" aria-label="그래프 그룹">
+            <option value="topic">주제</option>
+            <option value="tag">태그</option>
+            <option value="share">공유 상태</option>
+            <option value="analysis">분석 상태</option>
+          </select>
+          <input id="graphFilterInput" class="settings-input" type="search" placeholder="제목, 본문, 태그 필터">
+          <button id="graphBookmarkSaveBtn" class="secondary-btn" type="button">북마크 저장</button>
+          <select id="graphBookmarkSelect" class="settings-select" aria-label="그래프 북마크">
+            <option value="">북마크</option>
+          </select>
+        </div>
+        <div id="graphSummary" class="graph-summary"></div>
+        <div id="graphCanvas" class="graph-canvas" aria-label="전체 그래프"></div>
+        <div id="graphList" class="graph-list"></div>
+        <div id="graphInsights" class="graph-insights">
+          <section>
+            <h3>나가는 링크</h3>
+            <div id="graphOutgoingList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>백링크</h3>
+            <div id="graphBacklinkList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>연결 후보</h3>
+            <div id="graphSuggestionsList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>고립 메모</h3>
+            <div id="graphIsolatedList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>허브 메모</h3>
+            <div id="graphHubList" class="graph-mini-list"></div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="propertiesView" class="quick-popover hidden" aria-labelledby="propertiesTitle">
+      <div class="quick-card properties-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">속성 / 필터 / 점검</p>
+            <h2 id="propertiesTitle">속성 보기</h2>
+          </div>
+          <button id="propertiesCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="properties-toolbar" aria-label="속성 필터">
+          <input id="propertiesSearchInput" class="settings-input" type="search" placeholder="제목, 본문, 속성 검색">
+          <select id="propertiesStatusFilter" class="settings-select" aria-label="상태 필터">
+            <option value="">전체 상태</option>
+            <option value="idea">아이디어</option>
+            <option value="active">진행</option>
+            <option value="waiting">대기</option>
+            <option value="done">완료</option>
+          </select>
+          <select id="propertiesPriorityFilter" class="settings-select" aria-label="중요도 필터">
+            <option value="">전체 중요도</option>
+            <option value="low">낮음</option>
+            <option value="normal">보통</option>
+            <option value="high">높음</option>
+          </select>
+          <select id="propertiesGroupSelect" class="settings-select" aria-label="그룹 기준">
+            <option value="status">상태</option>
+            <option value="priority">중요도</option>
+            <option value="type">유형</option>
+            <option value="project">프로젝트</option>
+            <option value="share">공유</option>
+          </select>
+          <button id="propertiesFilterSaveBtn" class="secondary-btn" type="button">필터 저장</button>
+          <select id="propertiesSavedFilterSelect" class="settings-select" aria-label="저장된 속성 필터">
+            <option value="">저장 필터</option>
+          </select>
+        </div>
+        <div id="propertiesSummary" class="graph-summary"></div>
+        <div id="propertiesList" class="properties-list"></div>
+        <div class="properties-insights">
+          <section>
+            <h3>누락 속성</h3>
+            <div id="propertiesMissingList" class="graph-mini-list"></div>
+          </section>
+          <section>
+            <h3>템플릿</h3>
+            <div class="template-actions">
+              <select id="propertyTemplateSelect" class="settings-select" aria-label="메모 템플릿">
+                <option value="project">프로젝트 메모</option>
+                <option value="meeting">회의 메모</option>
+                <option value="source">자료 메모</option>
+              </select>
+              <button id="propertyTemplateCreateBtn" class="primary-btn" type="button">템플릿으로 만들기</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section id="canvasView" class="quick-popover hidden" aria-labelledby="canvasTitle">
+      <div class="quick-card canvas-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">카드 / 연결 / 배치</p>
+            <h2 id="canvasTitle">Canvas</h2>
+          </div>
+          <button id="canvasCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="canvas-toolbar" aria-label="Canvas 도구">
+          <input id="canvasTitleInput" class="settings-input" type="text" placeholder="Canvas 제목">
+          <button id="canvasAddNoteBtn" class="secondary-btn" type="button">메모 카드</button>
+          <button id="canvasAddTextBtn" class="secondary-btn" type="button">텍스트 카드</button>
+          <button id="canvasConnectBtn" class="secondary-btn" type="button">선 연결</button>
+          <button id="canvasDraftFromGraphBtn" class="secondary-btn" type="button">그래프 초안</button>
+          <button id="canvasZoomOutBtn" class="icon-btn" type="button" aria-label="축소">−</button>
+          <button id="canvasZoomInBtn" class="icon-btn" type="button" aria-label="확대">+</button>
+          <button id="canvasFitBtn" class="secondary-btn" type="button">전체 보기</button>
+        </div>
+        <div id="canvasSummary" class="graph-summary"></div>
+        <div id="canvasBoard" class="canvas-board" aria-label="Canvas 보드"></div>
+        <div class="canvas-footer">
+          <div id="canvasSelectionLabel" class="path-label">카드를 선택하세요.</div>
+          <div class="canvas-move-controls" aria-label="카드 이동">
+            <button id="canvasMoveLeftBtn" class="icon-btn" type="button" aria-label="왼쪽">←</button>
+            <button id="canvasMoveUpBtn" class="icon-btn" type="button" aria-label="위">↑</button>
+            <button id="canvasMoveDownBtn" class="icon-btn" type="button" aria-label="아래">↓</button>
+            <button id="canvasMoveRightBtn" class="icon-btn" type="button" aria-label="오른쪽">→</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="captureView" class="quick-popover hidden" aria-labelledby="captureTitle">
+      <div class="quick-card capture-card">
+        <header class="view-header">
+          <div>
+            <p class="eyebrow">빠른 캡처 / 핀 / 리마인더</p>
+            <h2 id="captureTitle">빠른 기록</h2>
+          </div>
+          <button id="captureCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="capture-composer" aria-label="빠른 기록 작성">
+          <textarea id="captureContentInput" class="settings-input" placeholder="제목 없이 바로 기록"></textarea>
+          <div class="capture-options">
+            <select id="captureColorSelect" class="settings-select" aria-label="기록 색상">
+              <option value="plain">기본</option>
+              <option value="blue">파랑</option>
+              <option value="green">초록</option>
+              <option value="amber">노랑</option>
+              <option value="red">빨강</option>
+            </select>
+            <input id="captureLabelInput" class="settings-input" type="text" placeholder="라벨, 쉼표로 구분">
+            <input id="captureReminderInput" class="settings-input" type="datetime-local" aria-label="리마인더">
+            <label class="capture-check-toggle"><input id="captureChecklistToggle" type="checkbox"> 체크리스트</label>
+            <label class="capture-check-toggle"><input id="capturePinToggle" type="checkbox"> 핀</label>
+          </div>
+          <div class="capture-media-row">
+            <input id="captureAttachmentInput" type="file" aria-label="첨부 선택">
+            <span id="captureAttachmentLabel" class="path-label">첨부 없음</span>
+          </div>
+          <div class="capture-sketch-tools">
+            <button id="captureSketchClearBtn" class="secondary-btn" type="button">그림 지우기</button>
+            <span class="path-label">간단한 그림은 카드에 PNG 미리보기로 저장됩니다.</span>
+          </div>
+          <canvas id="captureSketchCanvas" class="capture-sketch-canvas" width="640" height="220" aria-label="간단한 그림판"></canvas>
+          <button id="captureSaveBtn" class="primary-btn" type="button">기록 저장</button>
+        </div>
+        <div class="capture-toolbar" aria-label="빠른 기록 필터">
+          <select id="captureFilterSelect" class="settings-select">
+            <option value="active">활성 기록</option>
+            <option value="pinned">핀</option>
+            <option value="reminders">리마인더</option>
+            <option value="archived">보관함</option>
+            <option value="all">전체</option>
+          </select>
+          <input id="captureSearchInput" class="settings-input" type="search" placeholder="내용, 라벨 검색">
+          <div id="captureSummary" class="graph-summary"></div>
+        </div>
+        <div id="captureList" class="capture-list"></div>
+      </div>
+    </section>
+
+    <section id="deletedTreeView" class="quick-popover hidden" aria-labelledby="deletedTreeTitle">
+      <div class="quick-card">
+        <header class="view-header">
+          <div>
+            <p id="deletedTreeEyebrow" class="eyebrow">실수 삭제를 막기 위한 임시 보관</p>
+            <h2 id="deletedTreeTitle">삭제 보관함</h2>
+          </div>
+          <button id="deletedTreeCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="deleted-toolbar">
+          <strong id="deletedSelectionLabel">선택 0개 / 전체 0개</strong>
+          <div class="deleted-toolbar-actions">
+            <button id="deletedSelectAllBtn" class="secondary-btn" type="button">전체 선택</button>
+            <button id="deletedBulkDeleteBtn" class="danger-btn" type="button" disabled>선택 영구 삭제</button>
+            <button id="deletedDeleteAllBtn" class="danger-btn" type="button" disabled>전체 영구 삭제</button>
+          </div>
+        </div>
+        <div id="deletedTreeList" class="archive-list"></div>
+      </div>
+    </section>
+
+    <section id="groupMessengerView" class="quick-popover hidden" aria-labelledby="groupMessengerTitle">
+      <div class="quick-card messenger-card">
+        <header class="view-header">
+          <div>
+            <p id="groupMessengerEyebrow" class="eyebrow">같은 그룹 안의 짧은 대화</p>
+            <h2 id="groupMessengerTitle">그룹 메신저</h2>
+          </div>
+          <button id="groupMessengerCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="messenger-toolbar">
+          <strong id="groupMessengerGroupLabel">그룹: -</strong>
+          <button id="groupMessengerRefreshBtn" class="secondary-btn" type="button">새로고침</button>
+        </div>
+        <div id="groupMessengerList" class="messenger-list" aria-live="polite"></div>
+        <form id="groupMessengerForm" class="messenger-form">
+          <textarea id="groupMessengerInput" class="settings-input" maxlength="2000" placeholder="그룹원에게 보낼 메시지"></textarea>
+          <button id="groupMessengerSendBtn" class="primary-btn" type="submit">보내기</button>
+        </form>
+      </div>
+    </section>
   </div>
 
+  <section id="confirmDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="confirmTitle" aria-describedby="confirmMessage">
+    <div class="confirm-card">
+      <h2 id="confirmTitle">확인</h2>
+      <p id="confirmMessage"></p>
+      <div class="confirm-actions">
+        <button id="confirmCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="confirmOkBtn" class="danger-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="keyDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="keyDialogTitle" aria-describedby="keyDialogMessage">
+    <div class="confirm-card key-card">
+      <h2 id="keyDialogTitle">암호 키 입력</h2>
+      <p id="keyDialogMessage">이 메모에 사용할 키를 입력하세요.</p>
+      <input id="keyDialogInput" class="settings-input" type="password" autocomplete="current-password">
+      <div class="confirm-actions">
+        <button id="keyDialogCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="keyDialogOkBtn" class="primary-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
   <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
-  <script src="./app.js"></script>
+  <script src="./app.js?v=20260603-group-list-v26"></script>
+  <script>
+    if ("serviceWorker" in navigator && (location.protocol === "https:" || location.hostname === "localhost" || location.hostname === "127.0.0.1")) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js").catch(() => {});
+      });
+    }
+  </script>
 </body>
 </html>
