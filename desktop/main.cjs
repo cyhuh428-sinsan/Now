@@ -89,7 +89,7 @@ function createMainWindow(startFile = APP_INDEX) {
     height: 860,
     minWidth: 980,
     minHeight: 680,
-    backgroundColor: "#f6f3ec",
+    backgroundColor: "#0f1724",
     icon: iconPath,
     webPreferences: {
       contextIsolation: true,

@@ -30,7 +30,10 @@ DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
 DESKTOP_PRELOAD = DESKTOP / "preload.cjs"
-DESKTOP_SYNC_SCRIPT = DESKTOP / "scripts" / "sync-web-assets.mjs"
+DESKTOP_APP_INDEX = DESKTOP / "app" / "index.html"
+DESKTOP_APP_SCRIPT = DESKTOP / "app" / "app.js"
+DESKTOP_APP_STYLES = DESKTOP / "app" / "styles.css"
+DESKTOP_APP_HELP = DESKTOP / "app" / "help.html"
 DESKTOP_STORAGE_CHECK = DESKTOP / "scripts" / "check-desktop-storage.mjs"
 DESKTOP_README = DESKTOP / "README.md"
 DESKTOP_ICON = DESKTOP / "build" / "icon.ico"
@@ -84,7 +87,10 @@ def main() -> None:
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
-        DESKTOP_SYNC_SCRIPT,
+        DESKTOP_APP_INDEX,
+        DESKTOP_APP_SCRIPT,
+        DESKTOP_APP_STYLES,
+        DESKTOP_APP_HELP,
         DESKTOP_STORAGE_CHECK,
         DESKTOP_README,
         DESKTOP_ICON,
@@ -116,7 +122,10 @@ def main() -> None:
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
-    desktop_sync_script = DESKTOP_SYNC_SCRIPT.read_text(encoding="utf-8")
+    desktop_app_index = DESKTOP_APP_INDEX.read_text(encoding="utf-8")
+    desktop_app_script = DESKTOP_APP_SCRIPT.read_text(encoding="utf-8")
+    desktop_app_styles = DESKTOP_APP_STYLES.read_text(encoding="utf-8")
+    desktop_app_help = DESKTOP_APP_HELP.read_text(encoding="utf-8")
     desktop_storage_check = DESKTOP_STORAGE_CHECK.read_text(encoding="utf-8")
     desktop_readme = DESKTOP_README.read_text(encoding="utf-8")
 
@@ -674,8 +683,8 @@ def main() -> None:
 
     desktop_main_requirements = [
         ("BrowserWindow", "Electron BrowserWindow"),
-        ("loadFile", "local Web app loading"),
-        ("index.html", "Web entry file loading"),
+        ("loadFile", "local desktop app loading"),
+        ("index.html", "desktop entry file loading"),
         ("setWindowOpenHandler", "external link handler"),
         ("Menu.setApplicationMenu", "desktop menu"),
         ("nownote:desktop-store-read", "desktop local store read IPC"),
@@ -696,17 +705,42 @@ def main() -> None:
     for needle, label in desktop_preload_requirements:
         check(needle in desktop_preload, f"Desktop preload has {label}", needle, failures)
 
-    desktop_sync_requirements = [
-        ("webRoot", "Web source root"),
-        ("targetRoot", "desktop app target"),
-        ("index.html", "index asset copy"),
-        ("app.js", "app asset copy"),
-        ("styles.css", "style asset copy"),
-        ("help.html", "help asset copy"),
-        ("icons", "icon directory copy"),
+    desktop_app_index_requirements = [
+        ('id="addRootBtn"', "desktop root note button"),
+        ('id="treeTitleInput"', "desktop title editor"),
+        ('id="treeContent"', "desktop content editor"),
+        ('id="treeList"', "desktop tree list"),
+        ('id="openTabs"', "desktop open tabs"),
     ]
-    for needle, label in desktop_sync_requirements:
-        check(needle in desktop_sync_script, f"Desktop sync script has {label}", needle, failures)
+    for needle, label in desktop_app_index_requirements:
+        check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
+
+    desktop_app_script_requirements = [
+        ('const STORAGE_KEY = "nownote.desktop.v1"', "standalone desktop storage key"),
+        ("LEGACY_WEB_STORAGE_KEY", "legacy wrapped Web storage migration"),
+        ("function addRootNote", "desktop note creation"),
+        ("function updateSelectedTitle", "desktop title editing"),
+        ("function updateSelectedContent", "desktop content editing"),
+        ("window.nownoteDesktop.storage", "desktop storage bridge usage"),
+    ]
+    for needle, label in desktop_app_script_requirements:
+        check(needle in desktop_app_script, f"Desktop app script has {label}", needle, failures)
+
+    desktop_app_style_requirements = [
+        (".app-shell", "desktop app layout"),
+        (".sidebar", "desktop sidebar"),
+        (".open-tabs", "desktop tabs"),
+        (".memo-editor", "desktop editor"),
+    ]
+    for needle, label in desktop_app_style_requirements:
+        check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
+
+    desktop_app_help_requirements = [
+        ("NowNote 설치형", "desktop help title"),
+        ("PC 로컬", "desktop local note help"),
+    ]
+    for needle, label in desktop_app_help_requirements:
+        check(needle in desktop_app_help, f"Desktop help has {label}", needle, failures)
 
     desktop_storage_check_requirements = [
         ("NOWNOTE_DESKTOP_USER_DATA_DIR", "isolated desktop userData"),

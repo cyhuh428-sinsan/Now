@@ -29,7 +29,6 @@ web/**/__pycache__/
 web/**/*.pyc
 
 # Desktop installer artifacts
-desktop/app/
 desktop/dist/
 desktop/node_modules/
 
