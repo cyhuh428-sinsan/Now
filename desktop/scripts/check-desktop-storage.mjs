@@ -10,7 +10,7 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const EXE_PATH = path.join(ROOT, "dist", "win-unpacked", "NowNote.exe");
 const STORE_FILE = "nownote-desktop-store.json";
-const STORAGE_KEY = "nownote.web.v1";
+const STORAGE_KEY = "nownote.desktop.v1";
 const TIMEOUT_MS = 20_000;
 
 class CdpClient {

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NowNote</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="NowNote 설치형 메뉴">
+      <div class="brand-row">
+        <div class="brand-mark">N</div>
+        <div>
+          <h1>NowNote</h1>
+          <p>PC 로컬 문서</p>
+        </div>
+      </div>
+
+      <label class="search-box">
+        <span>검색</span>
+        <input id="searchInput" type="search" placeholder="제목, 본문 검색">
+      </label>
+
+      <section class="side-section">
+        <h2>문서</h2>
+        <button id="addRootBtn" class="side-btn primary" type="button">새 주제</button>
+        <button id="addChildBtn" class="side-btn" type="button">하위 메모</button>
+        <button id="deleteTreeBtn" class="side-btn danger" type="button">삭제 보관함</button>
+      </section>
+
+      <section class="side-section">
+        <h2>파일</h2>
+        <button id="exportMarkdownBtn" class="side-btn" type="button">Markdown 내보내기</button>
+        <label class="side-btn file-btn">
+          Markdown 가져오기
+          <input id="importMarkdownInput" type="file" accept=".md,.txt,text/markdown,text/plain" hidden>
+        </label>
+      </section>
+
+      <section class="side-section">
+        <h2>저장소</h2>
+        <button id="saveNowBtn" class="side-btn" type="button">바로 저장</button>
+        <p id="storageStatus" class="storage-status">저장소 확인 중</p>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">설치형 프로그램</p>
+          <h2>지식 메모</h2>
+        </div>
+        <div class="top-actions">
+          <button id="reopenClosedTabBtn" class="secondary-btn" type="button">다시 열기</button>
+          <button id="closeOtherTabsBtn" class="secondary-btn" type="button">다른 탭 닫기</button>
+          <button id="closeAllTabsBtn" class="secondary-btn" type="button">모두 닫기</button>
+        </div>
+      </header>
+
+      <nav id="openTabs" class="open-tabs" aria-label="열린 메모 탭"></nav>
+
+      <section class="content-grid">
+        <aside class="tree-panel">
+          <div class="panel-title">
+            <strong>지식 체계</strong>
+            <span id="treeCount">0</span>
+          </div>
+          <div id="treeList" class="tree-list"></div>
+        </aside>
+
+        <section id="treeEditor" class="editor-panel">
+          <div class="editor-header">
+            <label class="title-row">
+              <span>주제</span>
+              <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
+            </label>
+            <div class="editor-actions">
+              <button id="favoriteBtn" class="secondary-btn" type="button">즐겨찾기</button>
+              <button id="copyLinkBtn" class="secondary-btn" type="button">링크 복사</button>
+              <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+            </div>
+          </div>
+
+          <div id="treePathLabel" class="path-label"></div>
+          <div id="noteStats" class="note-stats"></div>
+          <div id="treeContent" class="memo-editor" contenteditable="true" role="textbox" aria-multiline="true" spellcheck="true" data-placeholder="메모 내용을 입력하세요."></div>
+          <article id="markdownPreview" class="markdown-preview hidden"></article>
+          <footer class="editor-footer">
+            <span id="treeSavedLabel">저장됨</span>
+            <span>PC 로컬 저장소에 저장됩니다.</span>
+          </footer>
+        </section>
+
+        <section id="emptyTreeEditor" class="empty-editor hidden">
+          <strong>메모를 선택하세요.</strong>
+          <span>왼쪽 지식 체계에서 메모를 열거나 새 주제를 만드세요.</span>
+        </section>
+      </section>
+    </main>
+  </div>
+
+  <div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
+  <script src="./app.js"></script>
+</body>
+</html>
