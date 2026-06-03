@@ -9133,9 +9133,12 @@ function renderTreeEditor() {
 
 function renderReadOnlyTreeState(node) {
   const readOnly = isReadOnlyTreeNode(node);
+  const encryptedLocked = isEncryptedTreeNodeLocked(node);
+  const contentReadOnly = readOnly || encryptedLocked;
   elements.treeTitleInput.disabled = readOnly;
-  elements.treeContent.readOnly = readOnly || elements.treeContent.readOnly;
-  elements.treeContent.classList.toggle("readonly", readOnly || elements.treeContent.readOnly);
+  elements.treeContent.readOnly = contentReadOnly;
+  elements.treeContent.classList.toggle("readonly", readOnly);
+  elements.treeContent.classList.toggle("locked", encryptedLocked);
   elements.addChildBtn.disabled = readOnly || node.level >= 3;
   elements.deleteTreeBtn.disabled = readOnly;
   elements.moveUpBtn.disabled = readOnly || elements.moveUpBtn.disabled;
@@ -9159,7 +9162,11 @@ function renderReadOnlyTreeState(node) {
 }
 
 function isReadOnlyTreeNode(node) {
-  return Boolean(node?.groupSharedReadOnly);
+  return node?.groupSharedReadOnly === true;
+}
+
+function isEncryptedTreeNodeLocked(node) {
+  return Boolean(node && isEncryptedContent(node.content) && !isEncryptedNodeUnlocked(node));
 }
 
 function renderTreeMoveButtons(node) {
@@ -9894,8 +9901,6 @@ function renderEncryptionControls(node) {
   elements.unlockNoteBtn.classList.toggle("hidden", !encrypted || unlocked);
   elements.decryptNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
   elements.lockNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
-  elements.treeContent.readOnly = encrypted && !unlocked;
-  elements.treeContent.classList.toggle("locked", encrypted && !unlocked);
 }
 
 async function encryptSelectedNote() {
@@ -11174,7 +11179,7 @@ function normalizeTreeNodes(nodes, parentId, level) {
     node.syncState = node.syncState || "synced";
     node.shared = node.shared !== false;
     node.serverShared = node.serverShared === true;
-    node.groupSharedReadOnly = Boolean(node.groupSharedReadOnly);
+    node.groupSharedReadOnly = node.groupSharedReadOnly === true;
     node.remoteOwnerId = normalizeText(node.remoteOwnerId).slice(0, 80);
     node.remoteLocalId = normalizeText(node.remoteLocalId).slice(0, 120);
     node.unsharedAt = node.shared === false ? (node.unsharedAt || node.updatedAt || null) : null;
