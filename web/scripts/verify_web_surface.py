@@ -25,7 +25,7 @@ PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md
 WORKSPACE_OPERATIONS_DESIGN = ROOT.parent / "docs" / "NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md"
 GROUP_SHARED_VIEWS_DESIGN = ROOT.parent / "docs" / "NOW_2_1_WEB_GROUP_SHARED_VIEWS_DESIGN.md"
 GROUP_MESSENGER_DESIGN = ROOT.parent / "docs" / "NOW_2_2_GROUP_MESSENGER_DESIGN.md"
-GROUP_MESSENGER_UNREAD_DESIGN = ROOT.parent / "docs" / "NOW_2_3_GROUP_MESSENGER_UNREAD_DESIGN.md"
+GROUP_MESSENGER_ADVANCED_DESIGN = ROOT.parent / "docs" / "NOW_2_3_GROUP_MESSENGER_ATTACHMENTS_AND_ROOMS_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
 DESKTOP_MAIN = DESKTOP / "main.cjs"
@@ -80,7 +80,7 @@ def main() -> None:
         WORKSPACE_OPERATIONS_DESIGN,
         GROUP_SHARED_VIEWS_DESIGN,
         GROUP_MESSENGER_DESIGN,
-        GROUP_MESSENGER_UNREAD_DESIGN,
+        GROUP_MESSENGER_ADVANCED_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -565,7 +565,7 @@ def main() -> None:
         ("1.9 작업공간과 운영형 지식 관리", "1.9 workspace operations documented"),
         ("2.1 Web 그룹 공유 조회", "2.1 group shared views documented"),
         ("2.2 Web 그룹 메신저", "2.2 group messenger documented"),
-        ("2.3 Web 그룹 메신저 미확인 표시", "2.3 group messenger unread documented"),
+        ("2.3 Web 그룹 메신저 첨부와 채팅방 후보", "2.3 group messenger attachments and rooms documented"),
         ("node scripts/check_graph_view.mjs", "graph view browser check documented"),
         ("중간 단계가 없는 손자 메모", "hierarchy guard documented"),
         ("설치형 프로그램", "desktop packaging direction documented"),
