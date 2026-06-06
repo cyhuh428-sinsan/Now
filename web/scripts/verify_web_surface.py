@@ -25,6 +25,7 @@ PUBLISH_SLIDES_DESIGN = ROOT.parent / "docs" / "NOW_1_8_PUBLISH_SLIDES_DESIGN.md
 WORKSPACE_OPERATIONS_DESIGN = ROOT.parent / "docs" / "NOW_1_9_WORKSPACE_OPERATIONS_DESIGN.md"
 GROUP_SHARED_VIEWS_DESIGN = ROOT.parent / "docs" / "NOW_2_1_WEB_GROUP_SHARED_VIEWS_DESIGN.md"
 GROUP_MESSENGER_DESIGN = ROOT.parent / "docs" / "NOW_2_2_GROUP_MESSENGER_DESIGN.md"
+LIGHTWEIGHT_RUNTIME_DESIGN = ROOT.parent / "docs" / "NOW_2_3_LIGHTWEIGHT_RUNTIME_REDESIGN.md"
 GROUP_MESSENGER_ADVANCED_DESIGN = ROOT.parent / "docs" / "NOW_2_3_GROUP_MESSENGER_ATTACHMENTS_AND_ROOMS_DESIGN.md"
 DESKTOP = ROOT.parent / "desktop"
 DESKTOP_PACKAGE = DESKTOP / "package.json"
@@ -83,6 +84,7 @@ def main() -> None:
         WORKSPACE_OPERATIONS_DESIGN,
         GROUP_SHARED_VIEWS_DESIGN,
         GROUP_MESSENGER_DESIGN,
+        LIGHTWEIGHT_RUNTIME_DESIGN,
         GROUP_MESSENGER_ADVANCED_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
@@ -362,6 +364,8 @@ def main() -> None:
         ('elements.webResetCodeInput.value = "";', "hosted Web password reset clears reset code after success"),
         ("function noteFindMatches", "in-note search function"),
         ("keepInputFocus", "in-note search keeps input focus"),
+        ("focusNoteFindInput", "in-note search input focus helper"),
+        ("focusSearchPopoverInput", "search popover input focus helper"),
         ("openSearchPopover();", "Ctrl+F opens app search directly"),
         ("function renderOpenTreeTabs", "tab rendering function"),
         ("function normalizeShortcutSettings", "shortcut normalization"),
@@ -396,7 +400,7 @@ def main() -> None:
         ("normalizeServerGroups", "hosted Web group list normalization"),
         ("function isEncryptedTreeNodeLocked", "tree editor encrypted lock helper"),
         ("elements.treeContent.readOnly = contentReadOnly", "tree editor read-only state reset"),
-        ("return node?.groupSharedReadOnly === true", "tree editor strict group read-only check"),
+        ("!isDesktopClient() && node?.groupSharedReadOnly === true", "tree editor hosted-only read-only check"),
         ("node.groupSharedReadOnly = node.groupSharedReadOnly === true", "tree node strict read-only normalization"),
         ('elements.serverGroupJoinBtn?.addEventListener("click", joinServerGroupByInvite)', "hosted Web group join click binding"),
         ("serverUserTokenInput", "public server user token input"),
@@ -748,7 +752,10 @@ def main() -> None:
         ("function isHostedWebClient", "hosted Web-only runtime detection"),
         ('window.addEventListener("nownote:menu-command"', "desktop menu command receiver"),
         ("toggleNoteActionMenu", "desktop note action menu toggle"),
+        ("focusNoteFindInput", "desktop note find input focus helper"),
+        ("focusSearchPopoverInput", "desktop search input focus helper"),
         ("keepInputFocus", "note find input focus retention"),
+        ("!isDesktopClient() && node?.groupSharedReadOnly === true", "desktop ignores hosted read-only marker"),
         ("document.querySelectorAll(\".hosted-web-only\")", "hosted Web-only UI visibility guard"),
         ("window.nownoteDesktop.storage", "desktop storage bridge usage"),
     ]

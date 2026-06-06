@@ -367,6 +367,8 @@ const I18N = {
     "settings.railMode.desc": "왼쪽 빠른 메뉴를 아이콘 또는 첫 글자로 표시합니다.",
     "settings.railMode.icon": "아이콘",
     "settings.railMode.letter": "첫 글자",
+    "settings.editorActionIcons.title": "메모 작업 아이콘 표시",
+    "settings.editorActionIcons.desc": "상단에 자주 쓰는 메모 작업 아이콘을 표시합니다. 끄면 메뉴 안에만 표시됩니다.",
     "settings.font.title": "글자 크기",
     "settings.font.desc": "메모 작성 화면의 글자 크기를 조정합니다.",
     "settings.font.small": "작게",
@@ -1016,6 +1018,8 @@ const I18N = {
     "settings.railMode.desc": "Show the left quick menu as icons or first letters.",
     "settings.railMode.icon": "Icons",
     "settings.railMode.letter": "First letters",
+    "settings.editorActionIcons.title": "Show note action icons",
+    "settings.editorActionIcons.desc": "Show common note actions as compact icons in the editor header. Turn it off to keep them inside the menu.",
     "settings.font.title": "Font size",
     "settings.font.desc": "Adjust the note editor font size.",
     "settings.font.small": "Small",
@@ -1716,6 +1720,7 @@ function defaultSettings() {
     treePanelCollapsed: false,
     sidebarCollapsed: false,
     railMode: "icon",
+    showEditorActionIcons: false,
     fontSize: "medium",
     lineHeight: "normal",
     showBacklinks: true,
@@ -2039,6 +2044,7 @@ const elements = {
   accentChoices: $("#accentChoices"),
   wideEditorToggle: $("#wideEditorToggle"),
   railModeSelect: $("#railModeSelect"),
+  editorActionIconsToggle: $("#editorActionIconsToggle"),
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
   backlinksToggle: $("#backlinksToggle"),
@@ -3110,6 +3116,12 @@ function bindEvents() {
     applySettings();
   });
 
+  elements.editorActionIconsToggle?.addEventListener("change", () => {
+    state.settings.showEditorActionIcons = elements.editorActionIconsToggle.checked;
+    persistSettings();
+    applySettings();
+  });
+
   elements.fontSizeSelect.addEventListener("change", () => {
     state.settings.fontSize = elements.fontSizeSelect.value;
     persistSettings();
@@ -3295,7 +3307,7 @@ function bindEvents() {
   });
 
   elements.noteFindToggleBtn.addEventListener("click", toggleNoteFind);
-  elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0));
+  elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0, { keepInputFocus: true }));
   elements.noteFindInput.addEventListener("keydown", handleNoteFindInputKey);
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
@@ -3369,7 +3381,10 @@ function bindEvents() {
   });
   elements.snapshotRestoreBtn?.addEventListener("click", restoreSelectedSnapshot);
   elements.snapshotSelect?.addEventListener("change", renderRecoveryPanel);
-  elements.searchPopoverInput.addEventListener("input", renderSearchPopoverResults);
+  elements.searchPopoverInput.addEventListener("input", () => {
+    renderSearchPopoverResults();
+    focusSearchPopoverInput({ select: false });
+  });
   elements.searchPopoverInput.addEventListener("keydown", handleSearchPopoverInputKey);
   elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
   elements.searchSortSelect.addEventListener("change", renderSearchPopoverResults);
@@ -3573,6 +3588,7 @@ function renderSettings() {
   elements.themeSelect.value = state.settings.theme;
   elements.wideEditorToggle.checked = state.settings.wideEditor;
   elements.railModeSelect.value = state.settings.railMode;
+  elements.editorActionIconsToggle.checked = state.settings.showEditorActionIcons;
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
@@ -5917,6 +5933,7 @@ function applySettings() {
   document.documentElement.dataset.treePanel = state.settings.treePanelCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.sidebar = state.settings.sidebarCollapsed ? "collapsed" : "open";
   document.documentElement.dataset.railMode = state.settings.railMode;
+  document.documentElement.dataset.editorActionIcons = state.settings.showEditorActionIcons ? "show" : "hide";
   document.documentElement.dataset.fontSize = state.settings.fontSize;
   document.documentElement.dataset.lineHeight = state.settings.lineHeight;
   document.documentElement.dataset.backlinks = state.settings.showBacklinks ? "show" : "hide";
@@ -6089,6 +6106,8 @@ function applyLanguage() {
   setIconLabel(elements.railModeSelect, t("aria.railMode"));
   setText("#railModeIconOption", t("settings.railMode.icon"));
   setText("#railModeLetterOption", t("settings.railMode.letter"));
+  setText("#editorActionIconsSettingTitle", t("settings.editorActionIcons.title"));
+  setText("#editorActionIconsSettingDesc", t("settings.editorActionIcons.desc"));
   setText("#fontSizeSettingTitle", t("settings.font.title"));
   setText("#fontSizeSettingDesc", t("settings.font.desc"));
   setIconLabel(elements.fontSizeSelect, t("aria.fontSize"));
@@ -6501,11 +6520,23 @@ function openSearchPopover() {
   elements.searchPopoverView.classList.remove("hidden");
   elements.searchPopoverInput.value = state.search;
   renderSearchPopoverResults();
-  elements.searchPopoverInput.focus();
+  focusSearchPopoverInput();
 }
 
 function closeSearchPopover() {
   elements.searchPopoverView.classList.add("hidden");
+}
+
+function focusSearchPopoverInput(options = {}) {
+  elements.searchPopoverInput.focus();
+  window.setTimeout(() => {
+    if (!elements.searchPopoverView.classList.contains("hidden")) {
+      elements.searchPopoverInput.focus();
+      if (options.select !== false) {
+        elements.searchPopoverInput.select();
+      }
+    }
+  }, 0);
 }
 
 function renderSearchPopoverResults() {
@@ -9216,7 +9247,7 @@ function renderReadOnlyTreeState(node) {
 }
 
 function isReadOnlyTreeNode(node) {
-  return node?.groupSharedReadOnly === true;
+  return !isDesktopClient() && node?.groupSharedReadOnly === true;
 }
 
 function isEncryptedTreeNodeLocked(node) {
@@ -9328,6 +9359,7 @@ function renderOpenTreeTabs() {
   const selectedPinned = state.settings.pinnedTreeTabs.includes(state.selectedTreeId);
   elements.pinTabBtn.disabled = !state.selectedTreeId || !state.settings.openTreeTabs.includes(state.selectedTreeId);
   elements.pinTabBtn.textContent = selectedPinned ? t("note.unpinTab") : t("note.pinTab");
+  setIconLabel(elements.pinTabBtn, selectedPinned ? t("note.unpinTab") : t("note.pinTab"));
   elements.reopenClosedTabBtn.disabled = !state.settings.closedTreeTabs.some((id) => findTreeNode(state.data.tree, id));
   persistSettings();
 }
@@ -9602,9 +9634,13 @@ function noteFindMatches() {
 function selectNoteFindMatch(index, options = {}) {
   const query = elements.noteFindInput.value.trim();
   const matches = noteFindMatches();
+  const shouldKeepInputFocus = options.keepInputFocus || document.activeElement === elements.noteFindInput;
   if (!query || matches.length === 0) {
     elements.noteFindInput.dataset.index = "0";
     updateNoteFindState(matches, query);
+    if (shouldKeepInputFocus) {
+      focusNoteFindInput();
+    }
     return;
   }
   const safeIndex = ((index % matches.length) + matches.length) % matches.length;
@@ -9616,13 +9652,18 @@ function selectNoteFindMatch(index, options = {}) {
   elements.previewToggleBtn.textContent = t("editor.preview");
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(start, start + query.length);
-  if (options.keepInputFocus || document.activeElement === elements.noteFindInput) {
-    window.setTimeout(() => {
-      elements.noteFindInput.focus();
-      const length = elements.noteFindInput.value.length;
-      elements.noteFindInput.setSelectionRange(length, length);
-    }, 0);
+  if (shouldKeepInputFocus) {
+    focusNoteFindInput();
   }
+}
+
+function focusNoteFindInput() {
+  window.setTimeout(() => {
+    if (elements.noteFindBar.classList.contains("hidden")) return;
+    elements.noteFindInput.focus();
+    const length = elements.noteFindInput.value.length;
+    elements.noteFindInput.setSelectionRange(length, length);
+  }, 0);
 }
 
 function moveNoteFindMatch(direction) {
@@ -10851,6 +10892,7 @@ function normalizeSettings(settings = {}) {
   normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
   normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
   normalized.railMode = ["icon", "letter"].includes(normalized.railMode) ? normalized.railMode : defaults.railMode;
+  normalized.showEditorActionIcons = normalizeToggle(normalized.showEditorActionIcons, defaults.showEditorActionIcons);
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);

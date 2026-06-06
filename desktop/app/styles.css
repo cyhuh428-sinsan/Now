@@ -1355,6 +1355,21 @@ kbd {
   font-size: 12px;
 }
 
+.open-tab-actions .tab-icon-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 34px;
+  min-width: 34px;
+  padding: 0;
+  font-size: 0;
+  font-weight: 900;
+}
+
+.open-tab-actions .tab-icon-btn::before {
+  content: attr(data-icon);
+  font-size: 12px;
+}
+
 .open-tab-actions .secondary-btn:disabled {
   opacity: 0.45;
   cursor: default;
@@ -1417,9 +1432,9 @@ kbd {
 }
 
 .editor-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin-bottom: 8px;
   min-width: 0;
@@ -1427,11 +1442,11 @@ kbd {
 
 .tree-editor .editor-head > div:first-child {
   display: grid;
-  grid-template-columns: auto minmax(96px, 340px);
+  grid-template-columns: auto minmax(120px, 1fr);
   align-items: center;
   gap: 8px;
   min-width: 0;
-  flex: 1 1 220px;
+  width: 100%;
 }
 
 .tree-editor .editor-head > div:first-child::before {
@@ -1530,6 +1545,52 @@ kbd {
 .note-action-menu .secondary-btn:hover {
   background: var(--blue-soft);
   color: var(--blue);
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu-btn {
+  display: none;
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu {
+  position: static;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu.hidden {
+  display: flex;
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu .icon-text-btn,
+:root[data-editor-action-icons="show"] .note-action-menu .secondary-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  min-height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  padding: 0;
+  color: var(--blue);
+  font-size: 0;
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu .icon-text-btn::before,
+:root[data-editor-action-icons="show"] .note-action-menu .secondary-btn::before {
+  content: attr(data-icon);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+:root[data-editor-action-icons="show"] .note-action-menu .hidden {
+  display: none;
 }
 
 .editor-head h3 {
@@ -2012,6 +2073,11 @@ kbd {
   .editor-status .save-state {
     display: none;
   }
+}
+
+:root[data-editor-action-icons="show"] .editor-status .note-action-menu .icon-text-btn::before,
+:root[data-editor-action-icons="show"] .editor-status .note-action-menu .secondary-btn::before {
+  content: attr(data-icon);
 }
 
 .tree-editor .tag-list {
