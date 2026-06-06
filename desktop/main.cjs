@@ -81,6 +81,15 @@ function loadAppFile(filePath) {
   }
 }
 
+function sendAppCommand(command) {
+  const [window] = BrowserWindow.getAllWindows();
+  if (!window) return;
+  window.webContents.executeJavaScript(
+    `window.dispatchEvent(new CustomEvent("nownote:menu-command", { detail: ${JSON.stringify(command)} }))`,
+  ).catch(() => {});
+  window.focus();
+}
+
 function createMainWindow(startFile = APP_INDEX) {
   const iconPath = path.join(__dirname, "app", "icons", "nownote-icon.svg");
   const window = new BrowserWindow({
@@ -125,6 +134,17 @@ function createMenu() {
       submenu: [
         { role: "undo", label: "실행 취소" },
         { role: "redo", label: "다시 실행" },
+        { type: "separator" },
+        {
+          label: "검색",
+          accelerator: "Ctrl+F",
+          click: () => sendAppCommand("search"),
+        },
+        {
+          label: "본문 찾기",
+          accelerator: "Ctrl+Shift+F",
+          click: () => sendAppCommand("noteFind"),
+        },
         { type: "separator" },
         { role: "cut", label: "잘라내기" },
         { role: "copy", label: "복사" },
