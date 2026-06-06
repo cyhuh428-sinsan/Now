@@ -11,6 +11,7 @@ from app.api.auth import api_router as auth_api_router
 from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
 from app.api.group_messages import router as group_messages_router
+from app.api.messenger import router as messenger_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
 from app.api.public_pages import router as public_pages_router
@@ -63,6 +64,7 @@ def create_app() -> FastAPI:
     app.include_router(sync_router)
     app.include_router(users_router)
     app.include_router(group_messages_router)
+    app.include_router(messenger_router)
     app.include_router(analysis_router)
     app.include_router(admin_router)
     if web_app_dir is not None:

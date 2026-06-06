@@ -79,6 +79,8 @@ SERVER_CAPABILITIES = {
     "group_readonly_sharing": True,
     "group_messenger": True,
     "group_messenger_unread": True,
+    "messenger_rooms": True,
+    "messenger_attachments": True,
     "user_access_tokens": True,
     "self_registration": True,
     "device_access_tokens": True,

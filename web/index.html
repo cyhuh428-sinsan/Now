@@ -1126,13 +1126,20 @@
         </header>
         <div class="messenger-toolbar">
           <strong id="groupMessengerGroupLabel">그룹: -</strong>
+          <button id="groupMessengerNewRoomBtn" class="secondary-btn" type="button">새 채팅방</button>
           <button id="groupMessengerRefreshBtn" class="secondary-btn" type="button">새로고침</button>
         </div>
-        <div id="groupMessengerList" class="messenger-list" aria-live="polite"></div>
+        <div class="messenger-layout">
+          <aside id="groupMessengerRoomList" class="messenger-room-list" aria-label="채팅방 목록"></aside>
+          <div id="groupMessengerList" class="messenger-list" aria-live="polite"></div>
+        </div>
         <form id="groupMessengerForm" class="messenger-form">
+          <input id="groupMessengerFileInput" class="hidden-file-input" type="file">
           <textarea id="groupMessengerInput" class="settings-input" maxlength="2000" placeholder="그룹원에게 보낼 메시지"></textarea>
+          <button id="groupMessengerAttachBtn" class="secondary-btn" type="button">첨부</button>
           <button id="groupMessengerSendBtn" class="primary-btn" type="submit">보내기</button>
         </form>
+        <div id="groupMessengerAttachmentLabel" class="path-label">첨부 없음</div>
       </div>
     </section>
   </div>

@@ -130,6 +130,7 @@ def main() -> None:
     notes_api_path = server_dir / "app" / "api" / "notes.py"
     sync_api_path = server_dir / "app" / "api" / "sync.py"
     group_messages_api_path = server_dir / "app" / "api" / "group_messages.py"
+    messenger_api_path = server_dir / "app" / "api" / "messenger.py"
     note_sync_service_path = server_dir / "app" / "services" / "note_sync.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
@@ -819,6 +820,8 @@ def main() -> None:
                 ("group_readonly_sharing", "Capabilities marks group read-only sharing support", "group read-only sharing"),
                 ("group_messenger", "Capabilities marks group messenger support", "group messenger"),
                 ("group_messenger_unread", "Capabilities marks group messenger unread support", "group messenger unread"),
+                ("messenger_rooms", "Capabilities marks 2.3 messenger rooms support", "2.3 messenger rooms"),
+                ("messenger_attachments", "Capabilities marks 2.3 messenger attachments support", "2.3 messenger attachments"),
                 ("password_reset_email", "Capabilities marks password reset email support", "password reset email capability"),
                 ("public_server_readiness", "Capabilities exposes public server readiness", "public_server_readiness"),
                 ("public_server_readiness_checks", "Capabilities exposes public server readiness checks", "public readiness checks"),
@@ -890,7 +893,8 @@ def main() -> None:
         check_text_contains(
             main_app_source,
             [
-                ("group_messages_router", "Main app includes group messenger router", "group messenger router"),
+                ("group_messages_router", "Main app includes legacy group messenger router", "group messenger router"),
+                ("messenger_router", "Main app includes 2.3 messenger router", "2.3 messenger router"),
             ],
             failures,
         )
@@ -901,8 +905,14 @@ def main() -> None:
             [
                 ("class GroupMessage", "Models define group messages", "GroupMessage model"),
                 ("class GroupMessageRead", "Models define group message reads", "GroupMessageRead model"),
+                ("class MessengerRoom", "Models define 2.3 messenger rooms", "MessengerRoom model"),
+                ("class MessengerRoomMember", "Models define 2.3 messenger room members", "MessengerRoomMember model"),
+                ("class MessengerMessage", "Models define 2.3 messenger messages", "MessengerMessage model"),
+                ("class MessengerAttachment", "Models define 2.3 messenger attachments", "MessengerAttachment model"),
                 ('__tablename__ = "group_messages"', "Models define group_messages table", "group_messages table"),
                 ('__tablename__ = "group_message_reads"', "Models define group_message_reads table", "group_message_reads table"),
+                ('__tablename__ = "messenger_rooms"', "Models define messenger_rooms table", "messenger_rooms table"),
+                ('__tablename__ = "messenger_attachments"', "Models define messenger_attachments table", "messenger_attachments table"),
                 ("sender_owner_id", "Group messages store sender owner", "sender owner"),
             ],
             failures,
@@ -1347,6 +1357,22 @@ def main() -> None:
                 ("hash_group_invite_code", "User group invite codes are hashed", "group invite code hash"),
                 ("join_user_group_by_invite", "Users can join groups by invite code", "group invite join service"),
                 ("invalid group invite", "Invalid group invites are rejected", "invalid group invite"),
+            ],
+            failures,
+        )
+    check(messenger_api_path.exists(), "2.3 messenger API source exists", str(messenger_api_path), failures)
+    if messenger_api_path.exists():
+        messenger_source = messenger_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            messenger_source,
+            [
+                ('APIRouter(prefix="/api/v1/messenger"', "2.3 messenger API route prefix", "2.3 messenger route"),
+                ("require_web_session_access", "2.3 messenger requires Web session", "web session required"),
+                ("_ensure_group_room", "2.3 messenger creates default group room", "default group room"),
+                ("_migrate_group_messages", "2.3 messenger preserves legacy messages", "legacy migration"),
+                ('@router.post("/rooms")', "2.3 messenger exposes room creation", "room creation API"),
+                ('@router.post("/rooms/{room_id}/attachments")', "2.3 messenger exposes attachment upload", "attachment upload API"),
+                ("save_messenger_attachment", "2.3 messenger stores attachments through safe storage", "safe attachment storage"),
             ],
             failures,
         )
