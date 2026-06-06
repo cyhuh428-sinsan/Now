@@ -185,9 +185,9 @@
             <div id="openTabsBar" class="open-tabs-bar hidden">
               <div id="openTabs" class="open-tabs" aria-label="열린 메모"></div>
               <div class="open-tab-actions">
-                <button id="pinTabBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="핀" title="탭 고정" aria-label="탭 고정">핀</button>
+                <button id="pinTabBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="📌" title="탭 고정" aria-label="탭 고정">탭 고정</button>
                 <button id="reopenClosedTabBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="↺" title="다시 열기" aria-label="다시 열기">↺</button>
-                <button id="closeOtherTabsBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="외" title="다른 탭 닫기" aria-label="다른 탭 닫기">외</button>
+                <button id="closeOtherTabsBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="⧉×" title="다른 탭 닫기" aria-label="다른 탭 닫기">다른 탭 닫기</button>
                 <button id="closeAllTabsBtn" class="secondary-btn tab-icon-btn" type="button" data-icon="×" title="모두 닫기" aria-label="모두 닫기">×</button>
               </div>
             </div>
@@ -279,15 +279,12 @@
                 </div>
               </section>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
-              <div
+              <textarea
                 id="treeContent"
                 class="memo-editor live-memo-editor"
-                contenteditable="true"
-                role="textbox"
-                aria-multiline="true"
                 spellcheck="true"
-                data-placeholder="메모 내용을 입력하세요."
-              ></div>
+                placeholder="메모 내용을 입력하세요."
+              ></textarea>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <div class="editor-footer">
                 <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>

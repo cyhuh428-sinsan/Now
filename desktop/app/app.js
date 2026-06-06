@@ -1599,8 +1599,8 @@ Object.entries(LANGUAGE_PACKS).forEach(([language, pack]) => {
 const SHORTCUT_ACTIONS = [
   { id: "addRoot", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addRoot", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" }, group: "창과 탭" },
   { id: "addChild", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addChild", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" }, group: "창과 탭" },
-  { id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, key: "f" }, group: "창과 탭" },
-  { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
+  { id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
+  { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, key: "f" }, group: "창과 탭" },
   { id: "quickSwitch", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickSwitch", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" }, group: "창과 탭" },
   { id: "quickOpen", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickOpen", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" }, group: "창과 탭" },
   { id: "commandPalette", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.commandPalette", label: "명령 팔레트", defaultShortcut: { ctrl: true, shift: true, key: "p" }, group: "창과 탭" },
@@ -3311,7 +3311,7 @@ function bindEvents() {
   });
 
   elements.noteFindToggleBtn.addEventListener("click", toggleNoteFind);
-  elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0, { keepInputFocus: true }));
+  elements.noteFindInput.addEventListener("input", () => selectNoteFindMatch(0, { previewOnly: true }));
   elements.noteFindInput.addEventListener("keydown", handleNoteFindInputKey);
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
@@ -3387,7 +3387,12 @@ function bindEvents() {
   elements.snapshotSelect?.addEventListener("change", renderRecoveryPanel);
   elements.searchPopoverInput.addEventListener("input", () => {
     renderSearchPopoverResults();
-    focusSearchPopoverInput({ select: false });
+  });
+  ["pointerdown", "mousedown", "click"].forEach((eventName) => {
+    elements.searchPopoverInput.addEventListener(eventName, (event) => {
+      event.stopPropagation();
+      focusSearchPopoverInput({ select: false });
+    });
   });
   elements.searchPopoverInput.addEventListener("keydown", handleSearchPopoverInputKey);
   elements.searchScopeSelect.addEventListener("change", renderSearchPopoverResults);
@@ -6693,6 +6698,17 @@ function closeDeletedTreeBox() {
 
 function handleShortcuts(event) {
   if (handleShortcutCapture(event)) return;
+  if (isPrimaryShortcut(event, "f") && !event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    openNoteFind();
+    return;
+  }
+  if (isPrimaryShortcut(event, "f") && event.shiftKey && !event.altKey) {
+    if (!featureEnabled("search")) return;
+    event.preventDefault();
+    openSearchPopover();
+    return;
+  }
   if (shortcutMatches(event, "search")) {
     if (!featureEnabled("search")) return;
     event.preventDefault();
@@ -8668,6 +8684,10 @@ function closePopupLayers() {
   closeSettingsPopup();
 }
 
+function isPrimaryShortcut(event, key) {
+  return (event.ctrlKey || event.metaKey) && normalizeShortcutKey(event.key) === key;
+}
+
 function toggleNoteActionMenu() {
   if (!elements.noteActionMenu || !elements.noteActionMenuBtn) return;
   const opening = elements.noteActionMenu.classList.contains("hidden");
@@ -9649,27 +9669,24 @@ function noteFindMatches() {
 function selectNoteFindMatch(index, options = {}) {
   const query = elements.noteFindInput.value.trim();
   const matches = noteFindMatches();
-  const shouldKeepInputFocus = options.keepInputFocus || document.activeElement === elements.noteFindInput;
+  const shouldKeepInputFocus = options.keepInputFocus || options.previewOnly || document.activeElement === elements.noteFindInput;
   if (!query || matches.length === 0) {
     elements.noteFindInput.dataset.index = "0";
     updateNoteFindState(matches, query);
-    if (shouldKeepInputFocus) {
-      focusNoteFindInput();
-    }
     return;
   }
   const safeIndex = ((index % matches.length) + matches.length) % matches.length;
   const start = matches[safeIndex];
   elements.noteFindInput.dataset.index = String(safeIndex);
   updateNoteFindState(matches, query, safeIndex);
+  if (shouldKeepInputFocus) {
+    return;
+  }
   elements.markdownPreview.classList.add("hidden");
   elements.treeContent.classList.remove("hidden");
   elements.previewToggleBtn.textContent = t("editor.preview");
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(start, start + query.length);
-  if (shouldKeepInputFocus) {
-    focusNoteFindInput();
-  }
 }
 
 function focusNoteFindInput() {
@@ -9683,7 +9700,7 @@ function focusNoteFindInput() {
 
 function moveNoteFindMatch(direction) {
   const current = Number(elements.noteFindInput.dataset.index || 0);
-  selectNoteFindMatch(current + direction);
+  selectNoteFindMatch(current + direction, { keepInputFocus: false });
 }
 
 function updateNoteFindState(matches, query, index = -1) {
