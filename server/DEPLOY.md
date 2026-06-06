@@ -130,10 +130,17 @@ Linux 서버 자체에서 점검할 때 `localhost:8750`은 서버 자신을 뜻
 python3 scripts/smoke_test.py --base-url http://localhost:8750 --token 긴-랜덤-토큰
 ```
 
+2.3 메신저의 채팅방, 메시지, 읽음 처리, 첨부 업로드/다운로드만 운영 DB를 건드리지 않는 임시 DB로 확인할 때는 아래 명령을 추가로 실행합니다.
+
+```bash
+python3 scripts/messenger_smoke_test.py
+```
+
 스모크 테스트의 기본 요청 대기 시간은 30초입니다. 컨테이너가 느리게 응답하는 환경에서는 `--timeout 60`처럼 요청 대기 시간을 늘릴 수 있습니다.
 컨테이너가 올라오는 중이면 기본적으로 최대 60회, 2초 간격으로 `/health/ready`를 기다립니다. 더 느린 서버에서는 `--ready-retries 120 --ready-delay 2`처럼 준비 대기를 늘릴 수 있습니다.
 
 성공하면 마지막에 `NowNote server smoke test passed`가 표시됩니다.
+메신저 단독 검증이 성공하면 마지막에 `NowNote 2.3 messenger smoke test passed`가 표시됩니다.
 검증 조건이 실패하면 `SMOKE TEST FAILED: 원인` 형식으로 실패 이유가 먼저 표시됩니다.
 `/api/v1/server` 응답에 최신 capability나 `public_server_readiness`가 없다는 메시지가 나오면 현재 컨테이너가 오래된 배포본일 수 있으므로 `git pull origin main`과 compose 재기동을 다시 확인합니다.
 

@@ -92,6 +92,7 @@ def main() -> None:
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
     public_pages_api_path = server_dir / "app" / "api" / "public_pages.py"
     smoke_path = server_dir / "scripts" / "smoke_test.py"
+    messenger_smoke_path = server_dir / "scripts" / "messenger_smoke_test.py"
     recovery_path = server_dir / "RECOVERY.md"
     deploy_path = server_dir / "DEPLOY.md"
     public_server_path = server_dir / "PUBLIC_SERVER.md"
@@ -673,6 +674,7 @@ def main() -> None:
             failures,
         )
     check(smoke_path.exists(), "Smoke test script exists", str(smoke_path), failures)
+    check(messenger_smoke_path.exists(), "Messenger smoke test script exists", str(messenger_smoke_path), failures)
     check(recovery_path.exists(), "Recovery procedure exists", str(recovery_path), failures)
     check(deploy_path.exists(), "Deploy checklist exists", str(deploy_path), failures)
     check(public_server_path.exists(), "Public server checklist exists", str(public_server_path), failures)
@@ -959,7 +961,8 @@ def main() -> None:
                 ("/api/v1/auth/web-login", "Hosted Web uses password login", "web hosted password login API"),
                 ("X-Now-Web-Session", "Hosted Web sends session header", "web hosted session header"),
                 ("loadServerSharedNotes", "Hosted Web loads server shared notes", "web hosted shared notes"),
-                ("/api/v1/group-messages", "Hosted Web uses group messenger API", "web group messenger API"),
+                ("/api/v1/messenger/rooms", "Hosted Web uses 2.3 messenger room API", "web messenger rooms API"),
+                ("/api/v1/messenger/attachments", "Hosted Web uses 2.3 messenger attachment API", "web messenger attachments API"),
                 ("isTreeNodeSharedForServer", "Web filters knowledge notes by share flag", "web shared tree filter"),
                 ("serverTwoFactorCodeInput", "Web exposes two-factor code input", "web two factor input"),
                 (
@@ -2265,6 +2268,20 @@ def main() -> None:
                 ("SMOKE TEST CONNECTION FAILED", "Smoke prints connection failure summary", "smoke connection failure summary"),
                 ("SMOKE TEST TIMEOUT FAILED", "Smoke prints timeout failure summary", "smoke timeout failure summary"),
                 ("SMOKE TEST JSON FAILED", "Smoke prints JSON failure summary", "smoke JSON failure summary"),
+            ],
+            failures,
+        )
+    if messenger_smoke_path.exists():
+        messenger_smoke = messenger_smoke_path.read_text(encoding="utf-8")
+        check_text_contains(
+            messenger_smoke,
+            [
+                ("/api/v1/messenger/rooms", "Messenger smoke checks room list and room creation", "messenger rooms"),
+                ("/messages", "Messenger smoke checks message send/read flow", "messenger messages"),
+                ("/attachments", "Messenger smoke checks attachment upload/download", "messenger attachments"),
+                ("NOW_MESSENGER_STORAGE_DIR", "Messenger smoke uses isolated attachment storage", "isolated storage"),
+                ("sqlite:///", "Messenger smoke uses isolated temporary database", "isolated database"),
+                ("NowNote 2.3 messenger smoke test passed", "Messenger smoke prints pass summary", "messenger smoke pass summary"),
             ],
             failures,
         )
