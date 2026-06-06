@@ -7,6 +7,9 @@ class Settings(BaseSettings):
     server_name: str = "NowNote Server"
     database_url: str = "sqlite:///./now_server.db"
     storage_dir: str = "./data/recordings"
+    messenger_storage_dir: str = "./data/messenger"
+    messenger_max_upload_mb: int = 10
+    messenger_allowed_extensions: str = "jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip"
     api_token: str | None = None
     user_token_required: bool = False
     worker_poll_seconds: int = 5

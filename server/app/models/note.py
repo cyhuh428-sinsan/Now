@@ -180,6 +180,77 @@ class GroupMessageRead(Base):
     )
 
 
+class MessengerRoom(Base):
+    __tablename__ = "messenger_rooms"
+    __table_args__ = (
+        UniqueConstraint("group_name", "room_type", "name", name="uq_messenger_room_group_type_name"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    group_name: Mapped[str] = mapped_column(String(80), index=True)
+    room_type: Mapped[str] = mapped_column(String(30), default="group", index=True)
+    name: Mapped[str] = mapped_column(String(120))
+    created_by: Mapped[str] = mapped_column(String(80), index=True)
+    is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class MessengerRoomMember(Base):
+    __tablename__ = "messenger_room_members"
+    __table_args__ = (
+        UniqueConstraint("room_id", "owner_id", name="uq_messenger_room_member"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    room_id: Mapped[int] = mapped_column(Integer, index=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    role: Mapped[str] = mapped_column(String(30), default="member")
+    last_read_message_id: Mapped[int] = mapped_column(Integer, default=0)
+    is_active: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    joined_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
+class MessengerMessage(Base):
+    __tablename__ = "messenger_messages"
+    __table_args__ = (
+        UniqueConstraint("legacy_group_message_id", name="uq_messenger_legacy_group_message"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    room_id: Mapped[int] = mapped_column(Integer, index=True)
+    sender_owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    body: Mapped[str] = mapped_column(Text, default="")
+    legacy_group_message_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class MessengerAttachment(Base):
+    __tablename__ = "messenger_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    message_id: Mapped[int] = mapped_column(Integer, index=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    storage_key: Mapped[str] = mapped_column(String(240), unique=True, index=True)
+    storage_path: Mapped[str] = mapped_column(Text)
+    original_name: Mapped[str] = mapped_column(String(240))
+    content_type: Mapped[str] = mapped_column(String(120))
+    extension: Mapped[str] = mapped_column(String(20), index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 

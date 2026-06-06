@@ -1671,6 +1671,7 @@ let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
 let webLoginMode = "login";
 let pendingCaptureAttachment = null;
+let pendingMessengerAttachment = null;
 let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
@@ -1784,6 +1785,9 @@ function defaultServerSettings() {
     analysisJobs: [],
     userGroups: [],
     groupMessages: [],
+    groupMessengerRooms: [],
+    groupMessengerActiveRoomId: null,
+    groupMessengerAttachmentPolicy: null,
     groupMessengerUnreadCount: 0,
     groupMessengerLastReadId: 0,
     groupMessagesLoadedAt: null,
@@ -2083,10 +2087,15 @@ const elements = {
   groupMessengerView: $("#groupMessengerView"),
   groupMessengerCloseBtn: $("#groupMessengerCloseBtn"),
   groupMessengerRefreshBtn: $("#groupMessengerRefreshBtn"),
+  groupMessengerNewRoomBtn: $("#groupMessengerNewRoomBtn"),
   groupMessengerForm: $("#groupMessengerForm"),
   groupMessengerInput: $("#groupMessengerInput"),
+  groupMessengerFileInput: $("#groupMessengerFileInput"),
+  groupMessengerAttachBtn: $("#groupMessengerAttachBtn"),
+  groupMessengerAttachmentLabel: $("#groupMessengerAttachmentLabel"),
   groupMessengerSendBtn: $("#groupMessengerSendBtn"),
   groupMessengerList: $("#groupMessengerList"),
+  groupMessengerRoomList: $("#groupMessengerRoomList"),
   groupMessengerGroupLabel: $("#groupMessengerGroupLabel"),
   hostedDeviceTokenBox: $("#hostedDeviceTokenBox"),
   deviceTokenNameInput: $("#deviceTokenNameInput"),
@@ -3186,7 +3195,11 @@ function bindEvents() {
     await refreshGroupMessages();
     await markGroupMessagesRead({ silent: true });
   });
+  elements.groupMessengerNewRoomBtn?.addEventListener("click", createMessengerRoomFromPrompt);
+  elements.groupMessengerAttachBtn?.addEventListener("click", () => elements.groupMessengerFileInput?.click());
+  elements.groupMessengerFileInput?.addEventListener("change", handleMessengerAttachmentChange);
   elements.groupMessengerForm?.addEventListener("submit", sendGroupMessage);
+  elements.groupMessengerList?.addEventListener("click", handleMessengerAttachmentClick);
   elements.deviceTokenIssueBtn?.addEventListener("click", issueDeviceToken);
   elements.webAccountMenuBtn?.addEventListener("click", (event) => {
     event.stopPropagation();
@@ -5020,7 +5033,7 @@ async function requestServerJson(server, path, options = {}) {
   const response = await fetch(`${server.url}${path}`, {
     ...options,
     headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.body && !options.skipJsonContentType ? { "Content-Type": "application/json" } : {}),
       ...serverAuthHeaders(server),
       ...(options.headers || {}),
     },
@@ -5056,6 +5069,7 @@ async function openGroupMessenger() {
   closePopupLayers();
   elements.groupMessengerView?.classList.remove("hidden");
   renderGroupMessenger();
+  await refreshMessengerRooms({ silent: true });
   await refreshGroupMessages({ silent: true });
   await markGroupMessagesRead({ silent: true });
   startGroupMessengerAutoRefresh();
@@ -5112,28 +5126,32 @@ async function refreshGroupMessages({ silent = false } = {}) {
   const server = state.settings.server;
   if (!isHostedWebClient() || !prepareServerRequest(server)) return;
   try {
+    if (!Array.isArray(server.groupMessengerRooms) || server.groupMessengerRooms.length === 0) {
+      await refreshMessengerRooms({ silent: true });
+    }
+    const roomId = activeMessengerRoomId(server);
+    if (!roomId) return;
     const payload = await requestServerJson(
       server,
-      `/api/v1/group-messages?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+      `/api/v1/messenger/rooms/${encodeURIComponent(roomId)}/messages?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
     const nextMessages = (Array.isArray(payload.items) ? payload.items : []).slice(-100);
-    const nextUnreadCount = Number(payload.unread_count) || 0;
-    const nextLastReadId = Number(payload.last_read_message_id) || 0;
     const messagesChanged = groupMessagesChanged(server.groupMessages, nextMessages)
-      || Number(server.groupMessengerUnreadCount) !== nextUnreadCount
-      || Number(server.groupMessengerLastReadId) !== nextLastReadId
-      || server.userProfile?.groupName !== payload.group_name;
+      || server.userProfile?.groupName !== payload.room?.group_name;
     if (!messagesChanged) return;
     server.groupMessages = nextMessages;
-    server.groupMessengerUnreadCount = nextUnreadCount;
-    server.groupMessengerLastReadId = nextLastReadId;
+    if (payload.room) {
+      upsertMessengerRoom(payload.room);
+      server.groupMessengerLastReadId = Number(payload.room.last_read_message_id) || 0;
+    }
     server.groupMessagesLoadedAt = new Date().toISOString();
-    if (payload.group_name) {
+    if (payload.room?.group_name) {
       server.userProfile = normalizeServerUserProfile({
         ...server.userProfile,
-        groupName: payload.group_name,
+        groupName: payload.room.group_name,
       });
     }
+    updateMessengerUnreadTotal();
     persistSettings();
     if (isGroupMessengerOpen()) {
       renderGroupMessenger();
@@ -5161,22 +5179,27 @@ async function sendGroupMessage(event) {
   const server = state.settings.server;
   if (!isHostedWebClient() || !prepareServerRequest(server)) return;
   const body = elements.groupMessengerInput?.value.trim() || "";
-  if (!body) return;
+  if (!body && !pendingMessengerAttachment) return;
+  const roomId = activeMessengerRoomId(server);
+  if (!roomId) return;
   elements.groupMessengerSendBtn.disabled = true;
   try {
-    const payload = await requestServerJson(server, "/api/v1/group-messages", {
-      method: "POST",
-      body: JSON.stringify({
-        owner_id: normalizeOwnerId(server.ownerId),
-        body,
-      }),
-    });
+    const payload = pendingMessengerAttachment
+      ? await uploadMessengerAttachment(server, roomId, body)
+      : await requestServerJson(server, `/api/v1/messenger/rooms/${encodeURIComponent(roomId)}/messages`, {
+        method: "POST",
+        body: JSON.stringify({
+          owner_id: normalizeOwnerId(server.ownerId),
+          body,
+        }),
+      });
     const messages = Array.isArray(server.groupMessages) ? server.groupMessages.slice() : [];
     if (payload.item) messages.push(payload.item);
     server.groupMessages = messages.slice(-100);
-    server.groupMessengerUnreadCount = 0;
     server.groupMessagesLoadedAt = new Date().toISOString();
     elements.groupMessengerInput.value = "";
+    clearMessengerAttachment();
+    await refreshMessengerRooms({ silent: true });
     persistSettings();
     renderGroupMessenger();
     renderGroupMessengerButton();
@@ -5190,21 +5213,28 @@ async function sendGroupMessage(event) {
 async function markGroupMessagesRead({ silent = false } = {}) {
   const server = state.settings.server;
   if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  const roomId = activeMessengerRoomId(server);
+  if (!roomId) return;
   const latestId = Math.max(0, ...((server.groupMessages || []).map((message) => Number(message.id) || 0)));
   if (!latestId) {
-    server.groupMessengerUnreadCount = 0;
+    updateMessengerUnreadTotal();
     renderGroupMessengerButton();
     return;
   }
   try {
-    const payload = await requestServerJson(server, "/api/v1/group-messages/read", {
+    const payload = await requestServerJson(server, `/api/v1/messenger/rooms/${encodeURIComponent(roomId)}/read`, {
       method: "POST",
       body: JSON.stringify({
         owner_id: normalizeOwnerId(server.ownerId),
         last_read_message_id: latestId,
       }),
     });
-    server.groupMessengerUnreadCount = Number(payload.unread_count) || 0;
+    const room = (server.groupMessengerRooms || []).find((item) => Number(item.id) === Number(roomId));
+    if (room) {
+      room.unread_count = Number(payload.unread_count) || 0;
+      room.last_read_message_id = Number(payload.last_read_message_id) || latestId;
+    }
+    updateMessengerUnreadTotal();
     server.groupMessengerLastReadId = Number(payload.last_read_message_id) || latestId;
     persistSettings();
     renderGroupMessengerButton();
@@ -5228,6 +5258,7 @@ function renderGroupMessenger() {
   elements.groupMessengerGroupLabel.textContent = t("messenger.group", {
     group: profile.groupName || "-",
   });
+  renderMessengerRooms();
   const messages = Array.isArray(server.groupMessages) ? server.groupMessages : [];
   if (!messages.length) {
     elements.groupMessengerList.innerHTML = `<div class="side-empty">${escapeHtml(t("messenger.empty"))}</div>`;
@@ -5248,8 +5279,180 @@ function groupMessageElement(message, currentOwnerId) {
   item.innerHTML = [
     `<div class="messenger-meta"><span>${escapeHtml(sender)}</span><time>${escapeHtml(time)}</time></div>`,
     `<p class="messenger-body">${escapeHtml(message.body || "")}</p>`,
+    messengerAttachmentsHtml(message.attachments || []),
   ].join("");
   return item;
+}
+
+async function refreshMessengerRooms({ silent = false } = {}) {
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  try {
+    const payload = await requestServerJson(
+      server,
+      `/api/v1/messenger/rooms?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+    );
+    server.groupMessengerRooms = Array.isArray(payload.rooms) ? payload.rooms : [];
+    if (!activeMessengerRoomId(server) && server.groupMessengerRooms.length) {
+      server.groupMessengerActiveRoomId = server.groupMessengerRooms[0].id;
+    }
+    if (payload.group_name) {
+      server.userProfile = normalizeServerUserProfile({
+        ...server.userProfile,
+        groupName: payload.group_name,
+      });
+    }
+    updateMessengerUnreadTotal();
+    persistSettings();
+    renderGroupMessengerButton();
+  } catch (error) {
+    if (!silent) showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
+  }
+}
+
+function activeMessengerRoomId(server = state.settings.server) {
+  const rooms = Array.isArray(server?.groupMessengerRooms) ? server.groupMessengerRooms : [];
+  const activeId = Number(server?.groupMessengerActiveRoomId) || 0;
+  if (rooms.some((room) => Number(room.id) === activeId)) return activeId;
+  return Number(rooms[0]?.id) || 0;
+}
+
+function upsertMessengerRoom(room) {
+  const server = state.settings.server;
+  const rooms = Array.isArray(server.groupMessengerRooms) ? server.groupMessengerRooms.slice() : [];
+  const index = rooms.findIndex((item) => Number(item.id) === Number(room.id));
+  if (index >= 0) rooms[index] = { ...rooms[index], ...room };
+  else rooms.push(room);
+  server.groupMessengerRooms = rooms;
+}
+
+function updateMessengerUnreadTotal() {
+  const server = state.settings.server;
+  server.groupMessengerUnreadCount = (server.groupMessengerRooms || [])
+    .reduce((sum, room) => sum + (Number(room.unread_count) || 0), 0);
+}
+
+function renderMessengerRooms() {
+  if (!elements.groupMessengerRoomList) return;
+  const server = state.settings.server || defaultServerSettings();
+  const rooms = Array.isArray(server.groupMessengerRooms) ? server.groupMessengerRooms : [];
+  const activeId = activeMessengerRoomId(server);
+  if (!rooms.length) {
+    elements.groupMessengerRoomList.innerHTML = `<div class="side-empty">${escapeHtml(t("messenger.empty"))}</div>`;
+    return;
+  }
+  elements.groupMessengerRoomList.replaceChildren(
+    ...rooms.map((room) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = `messenger-room-item${Number(room.id) === Number(activeId) ? " active" : ""}`;
+      const unread = Number(room.unread_count) || 0;
+      button.innerHTML = `<strong>${escapeHtml(room.name || "-")}</strong><span>${unread ? `${unread} unread` : room.room_type || ""}</span>`;
+      button.addEventListener("click", async () => {
+        server.groupMessengerActiveRoomId = room.id;
+        server.groupMessages = [];
+        persistSettings();
+        renderGroupMessenger();
+        await refreshGroupMessages({ silent: true });
+        await markGroupMessagesRead({ silent: true });
+      });
+      return button;
+    }),
+  );
+}
+
+async function createMessengerRoomFromPrompt() {
+  const server = state.settings.server;
+  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  const rawMembers = window.prompt("채팅방에 초대할 사용자 ID를 쉼표로 입력하세요.");
+  if (!rawMembers) return;
+  const memberOwnerIds = rawMembers.split(",").map((item) => item.trim()).filter(Boolean);
+  if (!memberOwnerIds.length) return;
+  const name = window.prompt("채팅방 이름을 입력하세요. 비워두면 참여자 이름으로 표시됩니다.") || "";
+  try {
+    const payload = await requestServerJson(server, "/api/v1/messenger/rooms", {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        name,
+        member_owner_ids: memberOwnerIds,
+      }),
+    });
+    if (payload.room) {
+      upsertMessengerRoom(payload.room);
+      server.groupMessengerActiveRoomId = payload.room.id;
+      server.groupMessages = [];
+      persistSettings();
+      renderGroupMessenger();
+    }
+  } catch (error) {
+    showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
+  }
+}
+
+function handleMessengerAttachmentChange() {
+  pendingMessengerAttachment = elements.groupMessengerFileInput?.files?.[0] || null;
+  renderMessengerAttachmentLabel();
+}
+
+function renderMessengerAttachmentLabel() {
+  if (!elements.groupMessengerAttachmentLabel) return;
+  elements.groupMessengerAttachmentLabel.textContent = pendingMessengerAttachment
+    ? `${pendingMessengerAttachment.name} · ${formatBytes(pendingMessengerAttachment.size)}`
+    : "첨부 없음";
+}
+
+function clearMessengerAttachment() {
+  pendingMessengerAttachment = null;
+  if (elements.groupMessengerFileInput) elements.groupMessengerFileInput.value = "";
+  renderMessengerAttachmentLabel();
+}
+
+async function uploadMessengerAttachment(server, roomId, body) {
+  const form = new FormData();
+  form.append("file", pendingMessengerAttachment);
+  const query = new URLSearchParams({
+    owner_id: normalizeOwnerId(server.ownerId),
+    body,
+  });
+  return requestServerJson(server, `/api/v1/messenger/rooms/${encodeURIComponent(roomId)}/attachments?${query.toString()}`, {
+    method: "POST",
+    body: form,
+    skipJsonContentType: true,
+  });
+}
+
+function messengerAttachmentsHtml(attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return "";
+  return `<div class="messenger-attachments">${attachments.map((attachment) => {
+    return `<button class="messenger-attachment" type="button" data-attachment-id="${escapeHtml(attachment.id)}" data-file-name="${escapeHtml(attachment.original_name || "attachment")}">${escapeHtml(attachment.original_name || "attachment")}</button>`;
+  }).join("")}</div>`;
+}
+
+async function handleMessengerAttachmentClick(event) {
+  const button = event.target.closest("[data-attachment-id]");
+  if (!button) return;
+  event.preventDefault();
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+  try {
+    const response = await fetch(
+      `${normalizeServerUrl(server.url)}/api/v1/messenger/attachments/${encodeURIComponent(button.dataset.attachmentId)}?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+      { headers: serverAuthHeaders(server) },
+    );
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = button.dataset.fileName || "attachment";
+    document.body.append(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (error) {
+    showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
+  }
 }
 
 async function serverResponseError(response) {
