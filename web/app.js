@@ -1662,6 +1662,7 @@ let serverSyncRunning = false;
 let serverSyncQueued = false;
 let groupMessengerRefreshTimer = null;
 let groupMessengerRefreshRunning = false;
+let groupMessengerLastRefreshAt = 0;
 let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
 let webLoginMode = "login";
@@ -1954,6 +1955,8 @@ const elements = {
   propertyAuthorInput: $("#propertyAuthorInput"),
   propertyDueInput: $("#propertyDueInput"),
   treeSavedLabel: $("#treeSavedLabel"),
+  noteActionMenuBtn: $("#noteActionMenuBtn"),
+  noteActionMenu: $("#noteActionMenu"),
   favoriteBtn: $("#favoriteBtn"),
   shareTreeBtn: $("#shareTreeBtn"),
   copyLinkBtn: $("#copyLinkBtn"),
@@ -2332,7 +2335,6 @@ async function initializeHostedWebClient() {
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
-    startGroupMessengerAutoRefresh();
     hideWebLogin();
     return true;
   } catch (error) {
@@ -2619,7 +2621,6 @@ async function handleWebLoginSubmit(event) {
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
-    startGroupMessengerAutoRefresh();
     hideWebLogin();
     showNotice(t("web.login.ok"));
   } catch (error) {
@@ -2702,7 +2703,6 @@ async function createWebAccount() {
     await loadServerSharedNotes({ replace: true, message: t("web.login.loading") });
     await refreshDeviceTokens({ silent: true });
     await refreshGroupMessages({ silent: true });
-    startGroupMessengerAutoRefresh();
     hideWebLogin();
     showNotice(t("web.login.registerOk"));
   } catch (error) {
@@ -3300,6 +3300,13 @@ function bindEvents() {
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
+  elements.noteActionMenuBtn?.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleNoteActionMenu();
+  });
+  elements.noteActionMenu?.addEventListener("click", (event) => {
+    if (event.target.closest("button")) closeNoteActionMenu();
+  });
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
   elements.insertTimeBtn.addEventListener("click", insertCurrentTimeIntoTreeNote);
   elements.openDetectedLinkBtn?.addEventListener("click", openDetectedLinkFromEditor);
@@ -5036,6 +5043,7 @@ async function openGroupMessenger() {
 
 function closeGroupMessenger() {
   elements.groupMessengerView?.classList.add("hidden");
+  stopGroupMessengerAutoRefresh();
 }
 
 function isGroupMessengerOpen() {
@@ -5059,7 +5067,15 @@ async function refreshOpenGroupMessenger() {
     stopGroupMessengerAutoRefresh();
     return;
   }
+  if (!isGroupMessengerOpen()) {
+    stopGroupMessengerAutoRefresh();
+    return;
+  }
   if (document.visibilityState === "hidden" || groupMessengerRefreshRunning) return;
+  const now = Date.now();
+  const refreshGap = 5000;
+  if (now - groupMessengerLastRefreshAt < refreshGap) return;
+  groupMessengerLastRefreshAt = now;
   groupMessengerRefreshRunning = true;
   try {
     await refreshGroupMessages({ silent: true });
@@ -5079,9 +5095,17 @@ async function refreshGroupMessages({ silent = false } = {}) {
       server,
       `/api/v1/group-messages?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
-    server.groupMessages = Array.isArray(payload.items) ? payload.items : [];
-    server.groupMessengerUnreadCount = Number(payload.unread_count) || 0;
-    server.groupMessengerLastReadId = Number(payload.last_read_message_id) || 0;
+    const nextMessages = (Array.isArray(payload.items) ? payload.items : []).slice(-100);
+    const nextUnreadCount = Number(payload.unread_count) || 0;
+    const nextLastReadId = Number(payload.last_read_message_id) || 0;
+    const messagesChanged = groupMessagesChanged(server.groupMessages, nextMessages)
+      || Number(server.groupMessengerUnreadCount) !== nextUnreadCount
+      || Number(server.groupMessengerLastReadId) !== nextLastReadId
+      || server.userProfile?.groupName !== payload.group_name;
+    if (!messagesChanged) return;
+    server.groupMessages = nextMessages;
+    server.groupMessengerUnreadCount = nextUnreadCount;
+    server.groupMessengerLastReadId = nextLastReadId;
     server.groupMessagesLoadedAt = new Date().toISOString();
     if (payload.group_name) {
       server.userProfile = normalizeServerUserProfile({
@@ -5090,11 +5114,25 @@ async function refreshGroupMessages({ silent = false } = {}) {
       });
     }
     persistSettings();
-    renderGroupMessenger();
-    renderGroupMessengerButton();
+    if (isGroupMessengerOpen()) {
+      renderGroupMessenger();
+    } else {
+      renderGroupMessengerButton();
+    }
   } catch (error) {
     if (!silent) showNotice(`${t("messenger.loadFailed")}: ${error.message}`, "error");
   }
+}
+
+function groupMessagesChanged(previous = [], next = []) {
+  if (!Array.isArray(previous) || previous.length !== next.length) return true;
+  return next.some((message, index) => {
+    const before = previous[index] || {};
+    return Number(before.id) !== Number(message.id)
+      || String(before.body || "") !== String(message.body || "")
+      || String(before.created_at || "") !== String(message.created_at || "")
+      || String(before.sender_id || "") !== String(message.sender_id || "");
+  });
 }
 
 async function sendGroupMessage(event) {
@@ -6609,6 +6647,17 @@ function closeDeletedTreeBox() {
 
 function handleShortcuts(event) {
   if (handleShortcutCapture(event)) return;
+  if (shortcutMatches(event, "search")) {
+    if (!featureEnabled("search")) return;
+    event.preventDefault();
+    openSearchPopover();
+    return;
+  }
+  if (shortcutMatches(event, "noteFind")) {
+    event.preventDefault();
+    openNoteFind();
+    return;
+  }
   if (!state.settings.enableShortcuts) return;
   if (shortcutMatches(event, "closePopup")) {
     if (!elements.noteFindBar.classList.contains("hidden")) {
@@ -6634,15 +6683,6 @@ function handleShortcuts(event) {
   if (shortcutMatches(event, "commandPalette")) {
     event.preventDefault();
     openCommandPalette();
-  }
-  if (shortcutMatches(event, "search")) {
-    if (!featureEnabled("search")) return;
-    event.preventDefault();
-    toggleSearchPopover();
-  }
-  if (shortcutMatches(event, "noteFind")) {
-    event.preventDefault();
-    openNoteFind();
   }
   if (shortcutMatches(event, "daily")) {
     if (!featureEnabled("daily")) return;
@@ -8568,6 +8608,7 @@ function closeSelectionOverlays() {
 
 function closePopupLayers() {
   cancelShortcutCapture();
+  closeNoteActionMenu();
   closeDailyPopup();
   closeQuickSwitch();
   closeCommandPalette();
@@ -8579,6 +8620,19 @@ function closePopupLayers() {
   closeGroupMessenger();
   closeDeletedTreeBox();
   closeSettingsPopup();
+}
+
+function toggleNoteActionMenu() {
+  if (!elements.noteActionMenu || !elements.noteActionMenuBtn) return;
+  const opening = elements.noteActionMenu.classList.contains("hidden");
+  elements.noteActionMenu.classList.toggle("hidden", !opening);
+  elements.noteActionMenuBtn.setAttribute("aria-expanded", opening ? "true" : "false");
+}
+
+function closeNoteActionMenu() {
+  if (!elements.noteActionMenu || !elements.noteActionMenuBtn) return;
+  elements.noteActionMenu.classList.add("hidden");
+  elements.noteActionMenuBtn.setAttribute("aria-expanded", "false");
 }
 
 function cancelShortcutCapture() {
@@ -9501,7 +9555,7 @@ function openNoteFind() {
   seedNoteFindFromSelection();
   elements.noteFindInput.focus();
   elements.noteFindInput.select();
-  selectNoteFindMatch(0);
+  selectNoteFindMatch(0, { keepInputFocus: true });
 }
 
 function closeNoteFind() {
@@ -9545,7 +9599,7 @@ function noteFindMatches() {
   return matches;
 }
 
-function selectNoteFindMatch(index) {
+function selectNoteFindMatch(index, options = {}) {
   const query = elements.noteFindInput.value.trim();
   const matches = noteFindMatches();
   if (!query || matches.length === 0) {
@@ -9562,6 +9616,13 @@ function selectNoteFindMatch(index) {
   elements.previewToggleBtn.textContent = t("editor.preview");
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(start, start + query.length);
+  if (options.keepInputFocus || document.activeElement === elements.noteFindInput) {
+    window.setTimeout(() => {
+      elements.noteFindInput.focus();
+      const length = elements.noteFindInput.value.length;
+      elements.noteFindInput.setSelectionRange(length, length);
+    }, 0);
+  }
 }
 
 function moveNoteFindMatch(direction) {

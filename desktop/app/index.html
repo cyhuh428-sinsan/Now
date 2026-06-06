@@ -202,19 +202,24 @@
                   <input id="treeTitleInput" class="title-input" type="text" placeholder="제목">
                 </div>
                 <div class="editor-status">
-                  <button id="favoriteBtn" class="icon-text-btn" type="button">즐겨찾기</button>
-                  <button id="shareTreeBtn" class="icon-text-btn" type="button">공유</button>
-                  <button id="copyLinkBtn" class="icon-text-btn" type="button">링크 복사</button>
                   <span id="treeSavedLabel" class="save-state">저장됨</span>
-                  <button id="noteFindToggleBtn" class="secondary-btn" type="button">본문 찾기</button>
-                  <button id="outlineToggleBtn" class="secondary-btn" type="button">개요</button>
-                  <button id="insertTimeBtn" class="secondary-btn" type="button">시간 넣기</button>
-                  <button id="openDetectedLinkBtn" class="secondary-btn" type="button">링크 열기</button>
-                  <button id="encryptNoteBtn" class="secondary-btn" type="button">암호화</button>
-                  <button id="unlockNoteBtn" class="secondary-btn hidden" type="button">복호화</button>
-                  <button id="decryptNoteBtn" class="secondary-btn hidden" type="button">암호화 해제</button>
-                  <button id="lockNoteBtn" class="secondary-btn hidden" type="button">잠금</button>
-                  <button id="previewToggleBtn" class="secondary-btn" type="button">Markdown 보기</button>
+                  <div class="note-action-menu-wrap">
+                    <button id="noteActionMenuBtn" class="icon-btn note-action-menu-btn" type="button" title="메모 메뉴" aria-label="메모 메뉴" aria-expanded="false">⋮</button>
+                    <div id="noteActionMenu" class="note-action-menu hidden" role="menu" aria-label="메모 메뉴">
+                      <button id="favoriteBtn" class="icon-text-btn" type="button" role="menuitem">즐겨찾기</button>
+                      <button id="shareTreeBtn" class="icon-text-btn" type="button" role="menuitem">공유</button>
+                      <button id="copyLinkBtn" class="icon-text-btn" type="button" role="menuitem">링크 복사</button>
+                      <button id="noteFindToggleBtn" class="secondary-btn" type="button" role="menuitem">본문 찾기</button>
+                      <button id="outlineToggleBtn" class="secondary-btn" type="button" role="menuitem">개요</button>
+                      <button id="insertTimeBtn" class="secondary-btn" type="button" role="menuitem">시간 넣기</button>
+                      <button id="openDetectedLinkBtn" class="secondary-btn" type="button" role="menuitem">링크 열기</button>
+                      <button id="encryptNoteBtn" class="secondary-btn" type="button" role="menuitem">암호화</button>
+                      <button id="unlockNoteBtn" class="secondary-btn hidden" type="button" role="menuitem">복호화</button>
+                      <button id="decryptNoteBtn" class="secondary-btn hidden" type="button" role="menuitem">암호화 해제</button>
+                      <button id="lockNoteBtn" class="secondary-btn hidden" type="button" role="menuitem">잠금</button>
+                      <button id="previewToggleBtn" class="secondary-btn" type="button" role="menuitem">Markdown 보기</button>
+                    </div>
+                  </div>
                 </div>
               </div>
               <span id="treePathLabel" class="path-label hidden"></span>
