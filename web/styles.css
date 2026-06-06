@@ -1823,18 +1823,15 @@ kbd {
   padding: 16px;
   line-height: 1.65;
   outline: none;
+  font-family: inherit;
+  background: color-mix(in srgb, var(--panel) 76%, var(--bg));
+  color: var(--text);
 }
 
 .live-memo-editor {
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.live-memo-editor:empty::before {
-  content: attr(data-placeholder);
-  color: var(--muted);
-  pointer-events: none;
 }
 
 .live-editor-link {
