@@ -198,6 +198,7 @@ const I18N = {
     "aria.railMode": "빠른 메뉴 표시",
     "aria.fontSize": "글자 크기",
     "aria.lineHeight": "줄 간격",
+    "aria.tabIndent": "Tab 들여쓰기",
     "aria.searchScope": "검색 범위",
     "aria.searchSort": "검색 정렬",
     "aria.searchOption": "검색 옵션",
@@ -379,6 +380,11 @@ const I18N = {
     "settings.line.compact": "좁게",
     "settings.line.normal": "보통",
     "settings.line.relaxed": "넓게",
+    "settings.tabIndent.title": "Tab 들여쓰기",
+    "settings.tabIndent.desc": "본문에서 Tab을 눌렀을 때 이동할 칸 수를 정합니다.",
+    "settings.tabIndent.2": "2칸",
+    "settings.tabIndent.4": "4칸",
+    "settings.tabIndent.8": "8칸",
     "settings.backlinks.title": "백링크 표시",
     "settings.backlinks.desc": "현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.",
     "settings.tags.title": "태그 표시",
@@ -834,6 +840,7 @@ const I18N = {
     "aria.treeResize": "Resize list width",
     "aria.treeEditor": "Knowledge note editor",
     "aria.openTabs": "Open notes",
+    "aria.tabIndent": "Tab indentation",
     "aria.treeTools": "Knowledge note tools",
     "aria.noteFind": "Find in current note",
     "aria.outline": "Current note outline",
@@ -1038,6 +1045,11 @@ const I18N = {
     "settings.shortcuts.desc": "Use default shortcuts such as quick switch and new topic.",
     "settings.shortcutGuide.title": "Shortcut guide",
     "settings.shortcutGuide.desc": "Run common windows, tabs, and editing actions from the keyboard.",
+    "settings.tabIndent.title": "Tab indentation",
+    "settings.tabIndent.desc": "Choose how many spaces Tab inserts in the note body.",
+    "settings.tabIndent.2": "2 spaces",
+    "settings.tabIndent.4": "4 spaces",
+    "settings.tabIndent.8": "8 spaces",
     "settings.features.title": "Knowledge features",
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
     "settings.desktopStorage.title": "PC local storage",
@@ -1724,6 +1736,7 @@ function defaultSettings() {
     showEditorActionIcons: false,
     fontSize: "medium",
     lineHeight: "normal",
+    tabIndentSize: 2,
     showBacklinks: true,
     enableShortcuts: true,
     showTags: true,
@@ -2051,6 +2064,7 @@ const elements = {
   editorActionIconsToggle: $("#editorActionIconsToggle"),
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
+  tabIndentSelect: $("#tabIndentSelect"),
   backlinksToggle: $("#backlinksToggle"),
   tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
@@ -3142,6 +3156,10 @@ function bindEvents() {
     persistSettings();
     applySettings();
   });
+  elements.tabIndentSelect.addEventListener("change", () => {
+    state.settings.tabIndentSize = normalizeTabIndentSize(elements.tabIndentSelect.value);
+    persistSettings();
+  });
 
   elements.backlinksToggle.addEventListener("change", () => {
     state.settings.showBacklinks = elements.backlinksToggle.checked;
@@ -3609,6 +3627,7 @@ function renderSettings() {
   elements.editorActionIconsToggle.checked = state.settings.showEditorActionIcons;
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
+  elements.tabIndentSelect.value = String(state.settings.tabIndentSize);
   elements.backlinksToggle.checked = state.settings.showBacklinks;
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
@@ -6336,6 +6355,14 @@ function applyLanguage() {
     normal: t("settings.line.normal"),
     relaxed: t("settings.line.relaxed"),
   });
+  setText("#tabIndentSettingTitle", t("settings.tabIndent.title"));
+  setText("#tabIndentSettingDesc", t("settings.tabIndent.desc"));
+  setIconLabel(elements.tabIndentSelect, t("aria.tabIndent"));
+  setOptionLabels(elements.tabIndentSelect, {
+    2: t("settings.tabIndent.2"),
+    4: t("settings.tabIndent.4"),
+    8: t("settings.tabIndent.8"),
+  });
   setText("#backlinksSettingTitle", t("settings.backlinks.title"));
   setText("#backlinksSettingDesc", t("settings.backlinks.desc"));
   setText("#tagsSettingTitle", t("settings.tags.title"));
@@ -7381,16 +7408,17 @@ function indentTreeContentSelection(direction) {
   const lineEnd = value.indexOf("\n", selectionEndForLine);
   const end = lineEnd === -1 ? value.length : lineEnd;
   const block = value.slice(lineStart, end);
+  const indent = " ".repeat(normalizeTabIndentSize(state.settings.tabIndentSize));
   const nextBlock = block
     .split("\n")
     .map((line) => {
-      if (direction > 0) return `  ${line}`;
-      return line.replace(/^ {1,2}/, "");
+      if (direction > 0) return `${indent}${line}`;
+      return line.replace(new RegExp(`^ {1,${indent.length}}`), "");
     })
     .join("\n");
   elements.treeContent.value = `${value.slice(0, lineStart)}${nextBlock}${value.slice(end)}`;
   const delta = nextBlock.length - block.length;
-  const nextStart = Math.max(lineStart, selectionStart + (direction > 0 ? 2 : Math.min(0, delta)));
+  const nextStart = Math.max(lineStart, selectionStart + (direction > 0 ? indent.length : Math.min(0, delta)));
   const nextEnd = Math.max(nextStart, selectionEnd + delta);
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(nextStart, nextEnd);
@@ -11127,6 +11155,7 @@ function normalizeSettings(settings = {}) {
   normalized.showEditorActionIcons = normalizeToggle(normalized.showEditorActionIcons, defaults.showEditorActionIcons);
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
+  normalized.tabIndentSize = normalizeTabIndentSize(normalized.tabIndentSize);
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
   normalized.treePanelCollapsed = normalizeToggle(normalized.treePanelCollapsed, defaults.treePanelCollapsed);
   normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);
@@ -11365,6 +11394,11 @@ function normalizeShortcutSettings(value, fallback) {
     normalized.pinTab = { ctrl: true, alt: true, key: "p" };
   }
   return normalized;
+}
+
+function normalizeTabIndentSize(value) {
+  const size = Number(value);
+  return [2, 4, 8].includes(size) ? size : 2;
 }
 
 function normalizeFeatureSettings(value, fallback) {
