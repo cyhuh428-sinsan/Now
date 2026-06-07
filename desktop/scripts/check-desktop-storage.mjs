@@ -146,6 +146,30 @@ async function waitForCondition(page, expression, label, timeoutMs = TIMEOUT_MS)
   throw new Error(`${label} timed out.`);
 }
 
+async function dispatchKey(page, key, options = {}) {
+  const modifiers =
+    (options.shift ? 8 : 0)
+    | (options.ctrl ? 2 : 0)
+    | (options.alt ? 1 : 0)
+    | (options.meta ? 4 : 0);
+  await page.send("Input.dispatchKeyEvent", {
+    type: "keyDown",
+    key,
+    code: key === "Tab" ? "Tab" : key,
+    windowsVirtualKeyCode: key === "Tab" ? 9 : 0,
+    nativeVirtualKeyCode: key === "Tab" ? 9 : 0,
+    modifiers,
+  });
+  await page.send("Input.dispatchKeyEvent", {
+    type: "keyUp",
+    key,
+    code: key === "Tab" ? "Tab" : key,
+    windowsVirtualKeyCode: key === "Tab" ? 9 : 0,
+    nativeVirtualKeyCode: key === "Tab" ? 9 : 0,
+    modifiers,
+  });
+}
+
 function stopProcess(proc) {
   if (!proc?.pid) return;
   if (process.platform === "win32") {
@@ -173,6 +197,55 @@ async function launchApp(userDataDir) {
   await waitForCondition(page, "document.readyState === 'complete'", "desktop app load");
   await waitForCondition(page, "Boolean(window.nownoteDesktop?.storage && document.querySelector('#addRootBtn'))", "desktop bridge");
   return { app, client, page };
+}
+
+async function verifyEditorTabIndent(page) {
+  await evaluate(page, `
+    (() => {
+      document.querySelector('#addRootBtn').click();
+      const title = document.querySelector('#treeTitleInput');
+      title.value = 'Desktop Tab indent check';
+      title.dispatchEvent(new Event('input', { bubbles: true }));
+      const content = document.querySelector('#treeContent');
+      content.focus();
+      content.value = 'alpha\\nbeta';
+      content.dispatchEvent(new Event('input', { bubbles: true }));
+      content.setSelectionRange(0, content.value.length);
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "Tab");
+  const defaultIndented = await evaluate(page, `document.querySelector('#treeContent').value`);
+  assert(defaultIndented === "  alpha\n  beta", "Plain Tab did not indent selected editor lines by the default 2 spaces.");
+
+  await evaluate(page, `
+    (() => {
+      const content = document.querySelector('#treeContent');
+      content.focus();
+      content.setSelectionRange(0, content.value.length);
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "Tab", { shift: true });
+  const outdented = await evaluate(page, `document.querySelector('#treeContent').value`);
+  assert(outdented === "alpha\nbeta", "Shift+Tab did not outdent selected editor lines.");
+
+  await evaluate(page, `
+    (() => {
+      const select = document.querySelector('#tabIndentSelect');
+      select.value = '4';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      const content = document.querySelector('#treeContent');
+      content.focus();
+      content.value = 'alpha\\nbeta';
+      content.dispatchEvent(new Event('input', { bubbles: true }));
+      content.setSelectionRange(0, content.value.length);
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "Tab");
+  const fourSpaceIndented = await evaluate(page, `document.querySelector('#treeContent').value`);
+  assert(fourSpaceIndented === "    alpha\n    beta", "Tab indent setting did not change editor indentation to 4 spaces.");
 }
 
 async function main() {
@@ -225,10 +298,12 @@ async function main() {
         return items.some((item) => item.includes(${JSON.stringify(title)}));
       })()
     `, "desktop store reload");
+    await verifyEditorTabIndent(second.page);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
     console.log(`- Reloaded note: ${title}`);
+    console.log("- Editor Tab/Shift+Tab indentation passed");
   } finally {
     first?.client?.close();
     second?.client?.close();
