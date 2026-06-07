@@ -1599,8 +1599,8 @@ Object.entries(LANGUAGE_PACKS).forEach(([language, pack]) => {
 const SHORTCUT_ACTIONS = [
   { id: "addRoot", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addRoot", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" }, group: "창과 탭" },
   { id: "addChild", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addChild", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" }, group: "창과 탭" },
-  { id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
-  { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, key: "f" }, group: "창과 탭" },
+  { id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, key: "f" }, group: "창과 탭" },
+  { id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" }, group: "창과 탭" },
   { id: "quickSwitch", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickSwitch", label: "빠른 전환", defaultShortcut: { ctrl: true, key: "k" }, group: "창과 탭" },
   { id: "quickOpen", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.quickOpen", label: "빠른 전환 보조", defaultShortcut: { ctrl: true, key: "o" }, group: "창과 탭" },
   { id: "commandPalette", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.commandPalette", label: "명령 팔레트", defaultShortcut: { ctrl: true, shift: true, key: "p" }, group: "창과 탭" },
@@ -1611,7 +1611,7 @@ const SHORTCUT_ACTIONS = [
   { id: "closeTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.closeTab", label: "현재 탭 닫기", defaultShortcut: { ctrl: true, key: "w" }, group: "창과 탭" },
   { id: "reopenTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.reopenTab", label: "닫은 탭 다시 열기", defaultShortcut: { ctrl: true, shift: true, key: "t" }, group: "창과 탭" },
   { id: "closeOtherTabs", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.closeOtherTabs", label: "다른 탭 닫기", defaultShortcut: { ctrl: true, shift: true, key: "w" }, group: "창과 탭" },
-  { id: "pinTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.pinTab", label: "현재 탭 고정", defaultShortcut: { ctrl: true, shift: true, key: "p" }, group: "창과 탭" },
+  { id: "pinTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.pinTab", label: "현재 탭 고정", defaultShortcut: { ctrl: true, alt: true, key: "p" }, group: "창과 탭" },
   { id: "leftTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.leftTab", label: "왼쪽 탭", defaultShortcut: { ctrl: true, key: "pageup" }, group: "창과 탭" },
   { id: "rightTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.rightTab", label: "오른쪽 탭", defaultShortcut: { ctrl: true, key: "pagedown" }, group: "창과 탭" },
   { id: "moveUp", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.moveUp", label: "위로 이동", defaultShortcut: { ctrl: true, alt: true, key: "arrowup" }, group: "창과 탭" },
@@ -6058,6 +6058,10 @@ function shortcutForAction(actionId) {
 
 function shortcutMatches(event, actionId) {
   return shortcutSignature(shortcutFromEvent(event)) === shortcutSignature(shortcutForAction(actionId));
+}
+
+function shortcutEquals(left, right) {
+  return shortcutSignature(left) === shortcutSignature(right);
 }
 
 function shortcutFromEvent(event) {
@@ -11354,6 +11358,19 @@ function normalizeShortcutSettings(value, fallback) {
   SHORTCUT_ACTIONS.forEach((action) => {
     normalized[action.id] = normalizeShortcut(source[action.id] || fallback[action.id] || action.defaultShortcut);
   });
+  if (
+    shortcutEquals(normalized.search, { ctrl: true, shift: true, key: "f" })
+    && shortcutEquals(normalized.noteFind, { ctrl: true, key: "f" })
+  ) {
+    normalized.search = { ctrl: true, key: "f" };
+    normalized.noteFind = { ctrl: true, shift: true, key: "f" };
+  }
+  if (
+    shortcutEquals(normalized.commandPalette, { ctrl: true, shift: true, key: "p" })
+    && shortcutEquals(normalized.pinTab, { ctrl: true, shift: true, key: "p" })
+  ) {
+    normalized.pinTab = { ctrl: true, alt: true, key: "p" };
+  }
   return normalized;
 }
 
