@@ -136,14 +136,14 @@ function createMenu() {
         { role: "redo", label: "다시 실행" },
         { type: "separator" },
         {
-          label: "본문 찾기",
+          label: "검색",
           accelerator: "Ctrl+F",
-          click: () => sendAppCommand("noteFind"),
+          click: () => sendAppCommand("search"),
         },
         {
-          label: "검색",
+          label: "본문 찾기",
           accelerator: "Ctrl+Shift+F",
-          click: () => sendAppCommand("search"),
+          click: () => sendAppCommand("noteFind"),
         },
         { type: "separator" },
         { role: "cut", label: "잘라내기" },
