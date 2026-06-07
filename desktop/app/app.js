@@ -7204,6 +7204,11 @@ function handleTreeContentShortcut(event) {
     consumeTreeContentShortcut(event);
     return;
   }
+  if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey) {
+    consumeTreeContentShortcut(event);
+    indentTreeContentSelection(event.shiftKey ? -1 : 1);
+    return;
+  }
   if (!state.settings.enableShortcuts) return;
   if (shortcutMatches(event, "indent") || shortcutMatches(event, "outdent")) {
     consumeTreeContentShortcut(event);
@@ -7385,7 +7390,10 @@ function indentTreeContentSelection(direction) {
   const selectionStart = elements.treeContent.selectionStart ?? 0;
   const selectionEnd = elements.treeContent.selectionEnd ?? selectionStart;
   const lineStart = value.lastIndexOf("\n", selectionStart - 1) + 1;
-  const lineEnd = value.indexOf("\n", selectionEnd);
+  const selectionEndForLine = selectionEnd > selectionStart && value[selectionEnd - 1] === "\n"
+    ? selectionEnd - 1
+    : selectionEnd;
+  const lineEnd = value.indexOf("\n", selectionEndForLine);
   const end = lineEnd === -1 ? value.length : lineEnd;
   const block = value.slice(lineStart, end);
   const nextBlock = block
