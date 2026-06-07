@@ -83,6 +83,7 @@ def main() -> None:
     issue_feature_template_path = repo_root / ".github" / "ISSUE_TEMPLATE" / "feature_request.md"
     pull_request_template_path = repo_root / ".github" / "PULL_REQUEST_TEMPLATE.md"
     github_preflight_workflow_path = repo_root / ".github" / "workflows" / "preflight.yml"
+    github_release_assets_workflow_path = repo_root / ".github" / "workflows" / "release-assets.yml"
     compose_path = server_dir / "docker-compose.yml"
     dockerfile_path = server_dir / "Dockerfile"
     main_app_path = server_dir / "app" / "main.py"
@@ -493,6 +494,12 @@ def main() -> None:
             failures,
         )
     check(github_preflight_workflow_path.exists(), "GitHub preflight workflow exists", str(github_preflight_workflow_path), failures)
+    check(
+        github_release_assets_workflow_path.exists(),
+        "GitHub release asset workflow exists",
+        str(github_release_assets_workflow_path),
+        failures,
+    )
     if github_preflight_workflow_path.exists():
         github_preflight_workflow = github_preflight_workflow_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -1360,6 +1367,22 @@ def main() -> None:
                 ("hash_group_invite_code", "User group invite codes are hashed", "group invite code hash"),
                 ("join_user_group_by_invite", "Users can join groups by invite code", "group invite join service"),
                 ("invalid group invite", "Invalid group invites are rejected", "invalid group invite"),
+            ],
+            failures,
+        )
+    if github_release_assets_workflow_path.exists():
+        github_release_assets_workflow = github_release_assets_workflow_path.read_text(encoding="utf-8")
+        check_text_contains(
+            github_release_assets_workflow,
+            [
+                ('tags:', "Release workflow runs for tags", "tag release trigger"),
+                ('"v*"', "Release workflow targets version tags", "version tag trigger"),
+                ("contents: write", "Release workflow can upload release assets", "release asset permission"),
+                ("npm run dist:win", "Release workflow builds Windows installer", "desktop installer build"),
+                ("flutter build apk --release", "Release workflow builds Android APK", "Android APK build"),
+                ("NowNote-Setup-${{ steps.version.outputs.version }}-x64.exe", "Release workflow names Windows installer asset", "installer release asset"),
+                ("NowNote-${{ steps.version.outputs.version }}.apk", "Release workflow names Android APK asset", "APK release asset"),
+                ("softprops/action-gh-release@v2", "Release workflow publishes GitHub Release assets", "GitHub Release upload"),
             ],
             failures,
         )
