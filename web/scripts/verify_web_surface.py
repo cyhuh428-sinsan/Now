@@ -379,6 +379,8 @@ def main() -> None:
         ("state.settings.tabIndentSize", "editor Tab indent uses settings"),
         ('id: "search", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.search", label: "검색", defaultShortcut: { ctrl: true, key: "f" }', "Ctrl+F opens global search directly"),
         ('id: "noteFind", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.noteFind", label: "본문 찾기", defaultShortcut: { ctrl: true, shift: true, key: "f" }', "Ctrl+Shift+F opens in-note search directly"),
+        ('if (isPrimaryShortcut(event, "f") && !event.shiftKey && !event.altKey) {\n    if (!featureEnabled("search")) return;\n    event.preventDefault();\n    openSearchPopover();', "Ctrl+F hard route opens global search"),
+        ('if (isPrimaryShortcut(event, "f") && event.shiftKey && !event.altKey) {\n    event.preventDefault();\n    openNoteFind();', "Ctrl+Shift+F hard route opens in-note search"),
         ('id: "commandPalette", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.commandPalette", label: "명령 팔레트", defaultShortcut: { ctrl: true, shift: true, key: "p" }', "Ctrl+Shift+P opens command palette"),
         ('id: "pinTab", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.pinTab", label: "현재 탭 고정", defaultShortcut: { ctrl: true, alt: true, key: "p" }', "Ctrl+Alt+P pins current tab"),
         ("function renderOpenTreeTabs", "tab rendering function"),
@@ -587,6 +589,16 @@ def main() -> None:
         (".workspace-health-item", "workspace health item styling"),
         (".confirm-backdrop", "internal confirm dialog styling"),
         (".confirm-backdrop.hidden", "internal confirm dialog hidden state"),
+        (".publish-preview h4 {\n  margin: 0 0 4px;\n  font-size: 12px;", "publish preview title is 12px"),
+        (".publish-node-option {\n  display: flex;", "publish node option style block"),
+        ("font-size: 11px;\n  line-height: 1.35;\n}\n\n.publish-node-option:last-child", "publish node list body is 11px"),
+        (".publish-sensitive-list {\n  display: grid;", "publish sensitive list style block"),
+        ("color: var(--muted);\n  font-size: 9px;\n  line-height: 1.35;\n}\n\n.publish-sensitive-item", "publish explanation text is 9px"),
+        (".workspace-panel .graph-summary {\n  color: var(--muted);\n  font-size: 10px;", "workspace summary body is 10px"),
+        (".workspace-health-item span {\n  color: var(--blue);\n  font-size: 11px;", "workspace item label is 11px"),
+        (".workspace-health-item strong {\n  min-width: 0;", "workspace item title style block"),
+        ("white-space: nowrap;\n  font-size: 11px;\n  font-weight: 800;\n}\n\n.workspace-health-item span,\n.workspace-health-item strong", "workspace item title is 11px"),
+        (".workspace-health-item small {\n  grid-column: 2;\n  color: var(--muted);\n  font-size: 9px;", "workspace item description is 9px"),
     ]
     for needle, label in style_requirements:
         check(needle in styles, f"Web style has {label}", needle, failures)

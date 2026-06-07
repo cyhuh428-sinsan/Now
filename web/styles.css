@@ -3348,10 +3348,11 @@ kbd {
   display: flex;
   gap: 8px;
   align-items: center;
-  padding: 8px 10px;
+  padding: 6px 8px;
   border-bottom: 1px solid var(--border);
   color: var(--text);
-  font-size: 13px;
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .publish-node-option:last-child {
@@ -3364,10 +3365,11 @@ kbd {
 
 .publish-sensitive-list {
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 4px;
+  padding: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .publish-sensitive-item {
@@ -3379,17 +3381,31 @@ kbd {
 }
 
 .publish-preview {
-  padding: 12px;
+  padding: 8px;
   color: var(--text);
+  font-size: 11px;
+  line-height: 1.35;
 }
 
 .publish-preview h4 {
-  margin: 0 0 6px;
+  margin: 0 0 4px;
+  font-size: 12px;
+  line-height: 1.3;
 }
 
 .publish-preview p,
 .publish-preview ul {
-  margin: 6px 0;
+  margin: 4px 0;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.publish-preview p {
+  font-size: 10px;
+}
+
+.publish-preview li {
+  font-size: 11px;
 }
 
 .workspace-settings-row {
@@ -3412,21 +3428,22 @@ kbd {
 .workspace-summary,
 .workspace-external-links {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 9px;
+  line-height: 1.35;
 }
 
 .workspace-panel .graph-summary {
   color: var(--muted);
-  font-size: 13px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 1.4;
-  margin-bottom: 8px;
+  line-height: 1.3;
+  margin-bottom: 6px;
 }
 
 .workspace-health-list,
 .workspace-link-list {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   max-height: 220px;
   overflow: auto;
 }
@@ -3438,20 +3455,20 @@ kbd {
   background: var(--panel);
   color: var(--text);
   border-radius: 8px;
-  padding: 8px 10px;
+  padding: 6px 8px;
   text-align: left;
 }
 
 .workspace-health-item {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
-  gap: 2px 10px;
-  line-height: 1.35;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 1px 8px;
+  line-height: 1.25;
 }
 
 .workspace-health-item span {
   color: var(--blue);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
 }
 
@@ -3460,14 +3477,19 @@ kbd {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
+}
+
+.workspace-health-item span,
+.workspace-health-item strong {
+  line-height: 1.3;
 }
 
 .workspace-health-item small {
   grid-column: 2;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 9px;
 }
 
 .workspace-health-item:hover,

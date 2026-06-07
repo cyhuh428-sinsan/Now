@@ -6933,14 +6933,14 @@ function closeDeletedTreeBox() {
 function handleShortcuts(event) {
   if (handleShortcutCapture(event)) return;
   if (isPrimaryShortcut(event, "f") && !event.shiftKey && !event.altKey) {
-    event.preventDefault();
-    openNoteFind();
-    return;
-  }
-  if (isPrimaryShortcut(event, "f") && event.shiftKey && !event.altKey) {
     if (!featureEnabled("search")) return;
     event.preventDefault();
     openSearchPopover();
+    return;
+  }
+  if (isPrimaryShortcut(event, "f") && event.shiftKey && !event.altKey) {
+    event.preventDefault();
+    openNoteFind();
     return;
   }
   if (shortcutMatches(event, "search")) {
