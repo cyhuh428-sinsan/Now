@@ -147,6 +147,11 @@ async function waitForCondition(page, expression, label, timeoutMs = TIMEOUT_MS)
 }
 
 async function dispatchKey(page, key, options = {}) {
+  const normalizedKey = String(key);
+  const lowerKey = normalizedKey.toLowerCase();
+  const isSingleLetter = /^[a-z]$/.test(lowerKey);
+  const code = normalizedKey === "Tab" ? "Tab" : isSingleLetter ? `Key${lowerKey.toUpperCase()}` : normalizedKey;
+  const virtualKeyCode = normalizedKey === "Tab" ? 9 : isSingleLetter ? lowerKey.toUpperCase().charCodeAt(0) : 0;
   const modifiers =
     (options.shift ? 8 : 0)
     | (options.ctrl ? 2 : 0)
@@ -154,18 +159,18 @@ async function dispatchKey(page, key, options = {}) {
     | (options.meta ? 4 : 0);
   await page.send("Input.dispatchKeyEvent", {
     type: "keyDown",
-    key,
-    code: key === "Tab" ? "Tab" : key,
-    windowsVirtualKeyCode: key === "Tab" ? 9 : 0,
-    nativeVirtualKeyCode: key === "Tab" ? 9 : 0,
+    key: normalizedKey,
+    code,
+    windowsVirtualKeyCode: virtualKeyCode,
+    nativeVirtualKeyCode: virtualKeyCode,
     modifiers,
   });
   await page.send("Input.dispatchKeyEvent", {
     type: "keyUp",
-    key,
-    code: key === "Tab" ? "Tab" : key,
-    windowsVirtualKeyCode: key === "Tab" ? 9 : 0,
-    nativeVirtualKeyCode: key === "Tab" ? 9 : 0,
+    key: normalizedKey,
+    code,
+    windowsVirtualKeyCode: virtualKeyCode,
+    nativeVirtualKeyCode: virtualKeyCode,
     modifiers,
   });
 }
@@ -248,6 +253,44 @@ async function verifyEditorTabIndent(page) {
   assert(fourSpaceIndented === "    alpha\n    beta", "Tab indent setting did not change editor indentation to 4 spaces.");
 }
 
+async function verifySearchShortcuts(page) {
+  await evaluate(page, `
+    (() => {
+      document.querySelector('#searchPopoverView')?.classList.add('hidden');
+      document.querySelector('#noteFindBar')?.classList.add('hidden');
+      document.querySelector('#treeContent')?.focus();
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "f", { ctrl: true });
+  const ctrlF = await evaluate(page, `
+    (() => ({
+      searchOpen: !document.querySelector('#searchPopoverView')?.classList.contains('hidden'),
+      noteFindOpen: !document.querySelector('#noteFindBar')?.classList.contains('hidden'),
+      activeId: document.activeElement?.id || ''
+    }))()
+  `);
+  assert(ctrlF.searchOpen && !ctrlF.noteFindOpen && ctrlF.activeId === "searchPopoverInput", "Ctrl+F did not open the global search popover.");
+
+  await evaluate(page, `
+    (() => {
+      document.querySelector('#searchPopoverView')?.classList.add('hidden');
+      document.querySelector('#noteFindBar')?.classList.add('hidden');
+      document.querySelector('#treeContent')?.focus();
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "f", { ctrl: true, shift: true });
+  const ctrlShiftF = await evaluate(page, `
+    (() => ({
+      searchOpen: !document.querySelector('#searchPopoverView')?.classList.contains('hidden'),
+      noteFindOpen: !document.querySelector('#noteFindBar')?.classList.contains('hidden'),
+      activeId: document.activeElement?.id || ''
+    }))()
+  `);
+  assert(!ctrlShiftF.searchOpen && ctrlShiftF.noteFindOpen && ctrlShiftF.activeId === "noteFindInput", "Ctrl+Shift+F did not open the in-note find bar.");
+}
+
 async function main() {
   assert(typeof WebSocket === "function", "Current Node.js runtime does not support WebSocket.");
   assert(await exists(EXE_PATH), `Desktop app is missing: ${EXE_PATH}`);
@@ -299,11 +342,13 @@ async function main() {
       })()
     `, "desktop store reload");
     await verifyEditorTabIndent(second.page);
+    await verifySearchShortcuts(second.page);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
     console.log(`- Reloaded note: ${title}`);
     console.log("- Editor Tab/Shift+Tab indentation passed");
+    console.log("- Ctrl+F and Ctrl+Shift+F shortcuts passed");
   } finally {
     first?.client?.close();
     second?.client?.close();
