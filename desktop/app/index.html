@@ -545,7 +545,7 @@
                 <strong id="serverGuideTitle">입력 기준</strong>
                 <ul>
                   <li id="serverGuideLocal">단독 사용: 서버 없이 이 기기에만 저장합니다.</li>
-                  <li id="serverGuidePersonal">설치형/앱: 서버 주소, 사용자 ID, 사용자별 접속 토큰을 입력합니다.</li>
+                  <li id="serverGuidePersonal">설치형/앱: 서버 주소, 사용자 ID, 앱/설치형 접속 토큰을 입력합니다.</li>
                   <li id="serverGuidePublic">Web: 서버 주소에서 사용자 ID와 비밀번호로 로그인합니다.</li>
                   <li id="serverGuideIssue">앱/설치형 접속 토큰은 Web 로그인 후 내 연결 토큰 화면에서 직접 발급합니다.</li>
                 </ul>
@@ -563,30 +563,32 @@
                 <small id="serverUrlHint" class="field-hint">공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.</small>
               </label>
               <label class="desktop-server-only">
-                <span id="serverTokenLabel">API 토큰</span>
-                <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="운영자가 제공한 경우 입력">
-                <small id="serverTokenHint" class="field-hint">개인 서버 관리자용 토큰입니다. 운영자가 안내한 경우에만 입력합니다.</small>
-              </label>
-              <label class="desktop-server-only">
-                <span id="serverUserTokenLabel">사용자별 접속 토큰</span>
-                <input id="serverUserTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="사용자별 접속 토큰">
-                <small id="serverUserTokenHint" class="field-hint">공용 서버나 사용자별 토큰 필수 서버에서 내 계정을 확인하는 개인 접속 토큰입니다.</small>
+                <span id="serverUserTokenLabel">앱/설치형 접속 토큰</span>
+                <input id="serverUserTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="앱/설치형 접속 토큰">
+                <small id="serverUserTokenHint" class="field-hint">설치형 프로그램이 서버와 동기화할 때 사용하는 개인 토큰입니다. Web 로그인에는 사용하지 않습니다.</small>
               </label>
               <label class="desktop-server-only">
                 <span id="serverTwoFactorCodeLabel">2단계 인증 코드</span>
                 <input id="serverTwoFactorCodeInput" class="settings-input" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="필요한 경우 6자리 코드">
                 <small id="serverTwoFactorCodeHint" class="field-hint">2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.</small>
               </label>
-              <div class="server-identity-grid desktop-server-only">
+              <label class="desktop-server-only">
+                <span id="ownerIdLabel">사용자 ID</span>
+                <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local_user">
+              </label>
+              <details class="server-advanced-box desktop-server-only">
+                <summary id="serverAdvancedSummary">구형 개인 서버 호환 설정</summary>
                 <label>
-                  <span id="ownerIdLabel">사용자 ID</span>
-                  <input id="ownerIdInput" class="settings-input" type="text" autocomplete="off" placeholder="local_user">
+                  <span id="serverTokenLabel">구형 개인 서버 API 토큰</span>
+                  <input id="serverTokenInput" class="settings-input" type="password" autocomplete="off" placeholder="구형 개인 서버에서 요구할 때만 입력">
+                  <small id="serverTokenHint" class="field-hint">2.3 기본 흐름에서는 필요 없습니다. 기존 개인 서버가 NOW_API_TOKEN 보호를 쓰는 경우에만 입력합니다.</small>
                 </label>
                 <label>
                   <span id="deviceIdLabel">기기 ID</span>
                   <input id="deviceIdInput" class="settings-input" type="text" autocomplete="off" placeholder="web-desktop">
+                  <small id="deviceIdHint" class="field-hint">기기 식별값을 직접 맞춰야 하는 기존 서버에서만 확인합니다.</small>
                 </label>
-              </div>
+              </details>
               <label class="toggle-line desktop-server-only">
                 <span>
                   <strong id="serverAutoSyncLabel">자동 동기화</strong>
@@ -646,7 +648,7 @@
               </div>
               <div id="hostedDeviceTokenBox" class="server-profile-box hosted-web-only hidden">
                 <div>
-                  <strong id="deviceTokenTitle">앱/설치형 연결 토큰</strong>
+                  <strong id="deviceTokenTitle">앱/설치형 접속 토큰</strong>
                   <p id="deviceTokenDesc">앱이나 설치형 프로그램을 공용 서버에 연결할 때 여기서 토큰을 직접 발급합니다. 발급된 값은 한 번만 보입니다.</p>
                 </div>
                 <div class="server-profile-grid">

@@ -184,6 +184,8 @@ def main() -> None:
         ("serverModeSelect", "server mode selector"),
         ("serverGuideIssue", "server token issue guide"),
         ("serverUserTokenHint", "per-user token hint"),
+        ("serverAdvancedSummary", "legacy personal server advanced summary"),
+        ("deviceIdHint", "advanced device ID hint"),
         ("serverAutoSyncToggle", "desktop auto sync toggle"),
         ("serverConflictBox", "server conflict box"),
         ("serverConflictList", "server conflict list"),
@@ -422,6 +424,10 @@ def main() -> None:
         ("node.groupSharedReadOnly = node.groupSharedReadOnly === true", "tree node strict read-only normalization"),
         ('elements.serverGroupJoinBtn?.addEventListener("click", joinServerGroupByInvite)', "hosted Web group join click binding"),
         ("serverUserTokenInput", "public server user token input"),
+        ("settings.server.advanced", "legacy personal server advanced translation"),
+        ("구형 개인 서버 API 토큰", "legacy personal server token label"),
+        ("앱/설치형 접속 토큰", "app/desktop access token label"),
+        ("X-Now-User-Token", "app/desktop user token header"),
         ("settings.server.autoSync", "auto sync setting translation"),
         ("settings.server.conflict.keepLocal", "server conflict action translation"),
         ("function recordServerConflict", "server conflict recorder"),
@@ -768,6 +774,10 @@ def main() -> None:
         ('id="noteActionMenu"', "desktop note action menu"),
         ('id="workspaceHealthSummary"', "desktop workspace operations"),
         ('class="nav-tabs hosted-web-only hidden"', "hosted Web-only views hidden by default"),
+        ('id="serverAdvancedSummary"', "desktop legacy personal server advanced summary"),
+        ('id="deviceIdHint"', "desktop advanced device ID hint"),
+        ("구형 개인 서버 API 토큰", "desktop legacy personal server token label"),
+        ("앱/설치형 접속 토큰", "desktop app access token label"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
@@ -788,6 +798,8 @@ def main() -> None:
         ("!isDesktopClient() && node?.groupSharedReadOnly === true", "desktop ignores hosted read-only marker"),
         ("document.querySelectorAll(\".hosted-web-only\")", "hosted Web-only UI visibility guard"),
         ("window.nownoteDesktop.storage", "desktop storage bridge usage"),
+        ("settings.server.advanced", "desktop legacy personal server advanced translation"),
+        ("X-Now-User-Token", "desktop app access token header"),
     ]
     for needle, label in desktop_app_script_requirements:
         check(needle in desktop_app_script, f"Desktop app script has {label}", needle, failures)

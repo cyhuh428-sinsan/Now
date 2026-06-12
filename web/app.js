@@ -412,17 +412,19 @@ const I18N = {
     "settings.server.url": "서버 주소",
     "settings.server.url.placeholder": "https://nownote.sinsan.kr",
     "settings.server.url.hint": "공용 서버는 https://nownote.sinsan.kr, 개인 서버는 본인 서버 주소를 입력합니다.",
-    "settings.server.token": "개인 서버 API 토큰",
-    "settings.server.token.placeholder": "개인 서버에서 요구할 때만 입력",
-    "settings.server.token.hint": "개인 서버 관리자 보호용입니다. 공용 Web 로그인에는 사용하지 않습니다.",
+    "settings.server.advanced": "구형 개인 서버 호환 설정",
+    "settings.server.token": "구형 개인 서버 API 토큰",
+    "settings.server.token.placeholder": "구형 개인 서버에서 요구할 때만 입력",
+    "settings.server.token.hint": "2.3 기본 흐름에서는 필요 없습니다. 기존 개인 서버가 NOW_API_TOKEN 보호를 쓰는 경우에만 입력합니다.",
     "settings.server.userToken": "앱/설치형 접속 토큰",
     "settings.server.userToken.placeholder": "앱/설치형 접속 토큰",
-    "settings.server.userToken.hint": "앱/설치형 프로그램이 서버와 동기화할 때 사용하는 개인 토큰입니다. Web 로그인에는 사용하지 않습니다.",
+    "settings.server.userToken.hint": "설치형 프로그램이 서버와 동기화할 때 사용하는 개인 토큰입니다. Web 로그인에는 사용하지 않습니다.",
     "settings.server.twoFactorCode": "2단계 인증 코드",
     "settings.server.twoFactorCode.placeholder": "필요한 경우 6자리 코드",
     "settings.server.twoFactorCode.hint": "2단계 인증을 사용하는 계정만 연결 테스트 때 6자리 코드를 입력합니다.",
     "settings.server.owner": "사용자 ID",
     "settings.server.device": "기기 ID",
+    "settings.server.device.hint": "기기 식별값을 직접 맞춰야 하는 기존 서버에서만 확인합니다.",
     "settings.server.autoSync": "자동 동기화",
     "settings.server.autoSync.hint": "변경된 공유 문서를 서버에 자동으로 보냅니다.",
     "settings.server.autoSync.on": "자동 동기화 켜짐",
@@ -470,7 +472,7 @@ const I18N = {
     "settings.server.local": "서버 연결을 사용하지 않습니다.",
     "settings.server.saved": "연결 설정을 저장했습니다.",
     "settings.server.testing": "서버 연결을 확인하는 중입니다.",
-    "settings.server.userTokenOk": "사용자 토큰 확인됨",
+    "settings.server.userTokenOk": "앱/설치형 접속 토큰 확인됨",
     "settings.server.fullSyncing": "서버와 전체 동기화를 진행합니다.",
     "settings.server.ok": "서버 연결 확인됨",
     "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
@@ -546,8 +548,8 @@ const I18N = {
     "settings.server.analysis.job.relation_suggestions": "관계 후보",
     "settings.server.analysis.job.tag_property_suggestions": "태그/속성 후보",
     "settings.server.analysis.job.knowledge_health": "지식 건강 점검",
-    "settings.server.deviceToken.title": "앱/설치형 연결 토큰",
-    "settings.server.deviceToken.desc": "앱이나 설치형 프로그램을 공용 서버에 연결할 때 여기서 토큰을 직접 발급하고 다시 확인합니다.",
+    "settings.server.deviceToken.title": "앱/설치형 접속 토큰",
+    "settings.server.deviceToken.desc": "앱이나 설치형 프로그램의 서버 연결 설정에 붙여넣을 토큰을 여기서 발급하고 다시 확인합니다.",
     "settings.server.deviceToken.name": "기기 이름",
     "settings.server.deviceToken.id": "기기 ID",
     "settings.server.deviceToken.issue": "연결 토큰 발급",
@@ -1069,9 +1071,10 @@ const I18N = {
     "settings.server.url": "Server URL",
     "settings.server.url.placeholder": "https://nownote.sinsan.kr",
     "settings.server.url.hint": "Use https://nownote.sinsan.kr for the public server, or your own server URL for a personal server.",
-    "settings.server.token": "Personal server API token",
-    "settings.server.token.placeholder": "Enter only when your personal server requires it",
-    "settings.server.token.hint": "This protects a personal server or administrator API. It is not used for public Web login.",
+    "settings.server.advanced": "Legacy personal server compatibility",
+    "settings.server.token": "Legacy personal server API token",
+    "settings.server.token.placeholder": "Enter only when a legacy personal server requires it",
+    "settings.server.token.hint": "Not needed in the 2.3 default flow. Use it only when an existing personal server still protects requests with NOW_API_TOKEN.",
     "settings.server.userToken": "App/desktop access token",
     "settings.server.userToken.placeholder": "App/desktop access token",
     "settings.server.userToken.hint": "This personal token is used by the mobile app or installed desktop client for server sync. It is not used for Web login.",
@@ -1080,6 +1083,7 @@ const I18N = {
     "settings.server.twoFactorCode.hint": "Enter the six-digit code only when your account uses two-factor authentication.",
     "settings.server.owner": "User ID",
     "settings.server.device": "Device ID",
+    "settings.server.device.hint": "Check this only when an existing server requires a specific device identifier.",
     "settings.server.autoSync": "Auto sync",
     "settings.server.autoSync.hint": "Automatically send changed shared notes to the server.",
     "settings.server.autoSync.on": "Auto sync on",
@@ -1127,7 +1131,7 @@ const I18N = {
     "settings.server.local": "Server connection is disabled.",
     "settings.server.saved": "Connection settings saved.",
     "settings.server.testing": "Checking server connection.",
-    "settings.server.userTokenOk": "User token verified",
+    "settings.server.userTokenOk": "App/desktop access token verified",
     "settings.server.fullSyncing": "Forcing full sync with server.",
     "settings.server.ok": "Server connection verified",
     "settings.server.noUrl": "Enter a server URL first.",
@@ -1203,8 +1207,8 @@ const I18N = {
     "settings.server.analysis.job.relation_suggestions": "Relation suggestions",
     "settings.server.analysis.job.tag_property_suggestions": "Tag/property suggestions",
     "settings.server.analysis.job.knowledge_health": "Knowledge health",
-    "settings.server.deviceToken.title": "App/desktop connection token",
-    "settings.server.deviceToken.desc": "Issue and review the token used to connect the mobile app or installed desktop client to this public server.",
+    "settings.server.deviceToken.title": "App/desktop access token",
+    "settings.server.deviceToken.desc": "Issue and review the token that you paste into the mobile app or installed desktop client's server connection settings.",
     "settings.server.deviceToken.name": "Device name",
     "settings.server.deviceToken.id": "Device ID",
     "settings.server.deviceToken.issue": "Issue connection token",
@@ -6380,6 +6384,7 @@ function applyLanguage() {
   setText("#serverGuidePersonal", t("settings.server.guide.personal"));
   setText("#serverGuidePublic", t("settings.server.guide.public"));
   setText("#serverGuideIssue", t("settings.server.guide.issue"));
+  setText("#serverAdvancedSummary", t("settings.server.advanced"));
   setText("#serverModeLocalOption", t("settings.server.mode.local"));
   setText("#serverModeServerOption", t("settings.server.mode.server"));
   setText("#serverModeLabel", t("settings.server.mode"));
@@ -6393,6 +6398,7 @@ function applyLanguage() {
   setText("#serverTokenHint", t("settings.server.token.hint"));
   setText("#serverUserTokenHint", t("settings.server.userToken.hint"));
   setText("#serverTwoFactorCodeHint", t("settings.server.twoFactorCode.hint"));
+  setText("#deviceIdHint", t("settings.server.device.hint"));
   setText("#ownerIdLabel", t("settings.server.owner"));
   setText("#deviceIdLabel", t("settings.server.device"));
   setText("#serverProfileTitle", t("settings.server.profile.title"));

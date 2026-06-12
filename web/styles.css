@@ -2469,6 +2469,30 @@ kbd {
   gap: 8px;
 }
 
+.server-advanced-box {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--bg));
+}
+
+.server-advanced-box summary {
+  cursor: pointer;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.server-advanced-box[open] summary {
+  margin-bottom: 10px;
+}
+
+.server-advanced-box label + label {
+  margin-top: 8px;
+}
+
 .server-profile-box,
 .server-analysis-box {
   display: grid;
