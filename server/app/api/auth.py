@@ -86,13 +86,13 @@ class PasswordResetConfirmRequest(BaseModel):
 
 @api_router.post("/token-login")
 def token_login(payload: TokenLoginRequest, db: Session = Depends(get_db)) -> dict:
-    user = _authenticate_user_token(
+    user, token_context = _authenticate_user_token_with_context(
         db,
         payload.owner_id,
         payload.access_token,
         two_factor_code=payload.two_factor_code,
     )
-    return {"status": "ok", "user": _user_payload(user)}
+    return {"status": "ok", "user": _user_payload(user), "token": token_context}
 
 
 @api_router.post("/client-login")
@@ -390,6 +390,22 @@ def _authenticate_user_token(
     *,
     two_factor_code: str | None = None,
 ) -> UserAccount:
+    user, _token_context = _authenticate_user_token_with_context(
+        db,
+        owner_id,
+        access_token,
+        two_factor_code=two_factor_code,
+    )
+    return user
+
+
+def _authenticate_user_token_with_context(
+    db: Session,
+    owner_id: str,
+    access_token: str,
+    *,
+    two_factor_code: str | None = None,
+) -> tuple[UserAccount, dict]:
     user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id.strip()))
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="user not found")
@@ -420,7 +436,9 @@ def _authenticate_user_token(
     user.last_seen_at = now
     db.commit()
     db.refresh(user)
-    return user
+    if device is not None:
+        db.refresh(device)
+    return user, _token_context_payload(user, device=device, legacy_token_ok=legacy_token_ok)
 
 
 def _authenticate_user_password(
@@ -522,6 +540,39 @@ def _user_payload(user: UserAccount) -> dict:
         "last_login_at": user.last_login_at,
         "access_token_issued_at": user.access_token_issued_at,
         "access_token_last_used_at": user.access_token_last_used_at,
+    }
+
+
+def _token_context_payload(
+    user: UserAccount,
+    *,
+    device: UserDevice | None,
+    legacy_token_ok: bool,
+) -> dict:
+    if device is not None:
+        return {
+            "auth_method": "device_access_token",
+            "label": "앱/설치형 접속 토큰",
+            "owner_id": user.owner_id,
+            "group_name": user.group_name,
+            "is_active": bool(user.is_active),
+            "device_id": device.device_id,
+            "device_name": device.display_name,
+            "device_active": bool(device.is_active),
+            "issued_at": device.access_token_issued_at,
+            "last_used_at": device.access_token_last_used_at,
+        }
+    return {
+        "auth_method": "legacy_user_access_token" if legacy_token_ok else "unknown",
+        "label": "구형 사용자별 접속 토큰",
+        "owner_id": user.owner_id,
+        "group_name": user.group_name,
+        "is_active": bool(user.is_active),
+        "device_id": None,
+        "device_name": None,
+        "device_active": None,
+        "issued_at": user.access_token_issued_at,
+        "last_used_at": user.access_token_last_used_at,
     }
 
 
