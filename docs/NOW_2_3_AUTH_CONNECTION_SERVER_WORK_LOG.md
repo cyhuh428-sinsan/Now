@@ -111,3 +111,56 @@
     - `Mobile help documents legacy API token`
   - 원인: 로컬 작업트리에 Web/모바일 담당 변경이 섞여 있어 서버 preflight의 전역 도움말 기대값과 일부 파일 문구가 일시적으로 불일치함
   - 판단: 모바일 앱 화면 파일은 서버 담당 범위 밖이므로 수정하지 않음
+
+## 통합 작업지시 서버/API 반영
+
+작성일: 2026-06-12
+
+- 기준 문서: `docs/NOW_2_3_INTEGRATED_WORK_ORDER.md`
+- 기준 서버: `https://nownote.sinsan.kr`
+
+### 운영 서버 확인
+
+- `GET https://nownote.sinsan.kr/health` 응답 확인
+  - 결과: `{"status":"ok","server":"NowNote Local Server"}`
+- `GET https://nownote.sinsan.kr/health/ready` 응답 확인
+  - 결과: `{"status":"ready"}`
+- `GET https://nownote.sinsan.kr/api/v1/server` 응답 확인
+  - `user_token_required=true`
+  - `public_server_readiness.status=ready`
+  - `web_login_auth`, `web_session_auth`, `app_installed_token_auth`, `legacy_api_token_auth` 확인
+  - `messenger_rooms=true`, `messenger_attachments=true` 확인
+- `POST https://nownote.sinsan.kr/api/v1/auth/web-login` 누락 사용자 실패 응답 확인
+  - 결과: `{"detail":"user not found"}`
+- `POST https://nownote.sinsan.kr/api/v1/auth/token-login` 누락 사용자 실패 응답 확인
+  - 결과: `{"detail":"user not found"}`
+- `GET https://nownote.sinsan.kr/api/v1/messenger/policy` 응답 확인
+  - 현재 운영 서버는 아직 이번 MIME 정책 커밋 배포 전이라 `allowed_mime_types`는 배포 후 재확인 대상
+
+### 메신저/첨부 보강
+
+- 메신저 첨부 정책에 허용 MIME 목록을 추가했다.
+- 첨부 업로드 시 확장자와 MIME을 함께 검증하도록 했다.
+- 메신저 첨부 저장소 설정을 추가했다.
+  - `NOW_MESSENGER_STORAGE_DIR`
+  - `NOW_MESSENGER_MAX_UPLOAD_MB`
+  - `NOW_MESSENGER_ALLOWED_EXTENSIONS`
+  - `NOW_MESSENGER_ALLOWED_MIME_TYPES`
+- Docker Compose에 `now_messenger_data` 볼륨을 추가했다.
+- 운영 점검 API와 `/admin/ops` 화면에 아래 항목을 추가했다.
+  - 메신저 첨부 저장소 상태
+  - 메신저 첨부 용량
+  - 누락 메신저 첨부
+
+### 검증
+
+- `C:\Users\cyhuh\anaconda3\python.exe -m compileall server\app server\scripts\preflight.py` 통과
+- `C:\Users\cyhuh\anaconda3\python.exe scripts\preflight.py --env-file .env.example --allow-example` 통과
+  - 결과: `NowNote server preflight passed (1208/1208 checks)`
+- `C:\Users\cyhuh\anaconda3\python.exe server\scripts\messenger_smoke_test.py` 통과
+  - 결과: `NowNote 2.3 messenger smoke test passed`
+
+### 남은 운영 확인
+
+- 운영 서버에서 `git pull origin main` 후 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr` 실행은 서버 쉘에서 수행해야 한다.
+- 운영 토큰과 실제 사용자/앱 토큰이 필요한 Web 로그인, Web 세션, token-login 성공 케이스는 운영 서버에서 별도 확인해야 한다.
