@@ -95,9 +95,13 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
           );
       ServerOpsResult? opsResult;
       if (result.ok) {
-        opsResult = await ref
-            .read(serverSyncServiceProvider)
-            .loadOpsStatus(settings);
+        try {
+          opsResult = await ref
+              .read(serverSyncServiceProvider)
+              .loadOpsStatus(settings);
+        } catch (_) {
+          opsResult = null;
+        }
       }
       if (mounted) {
         setState(() {
