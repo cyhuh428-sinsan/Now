@@ -321,3 +321,45 @@ Windows 작업 환경에서 운영 서버 쉘의 `~/deploy/Now` 경로는 직접
   - 운영 서버 pull/deploy를 이 환경에서 직접 실행하지 못함
   - 운영 `/api/v1/messenger/policy`에 `allowed_mime_types`가 아직 없음
   - 실제 사용자 Web login, Web session, token-login 성공 케이스는 실제 계정/토큰이 필요해 미확인
+
+## 다음 서버 작업자 인수인계
+
+작성일: 2026-06-12
+
+### 판정
+
+서버/API는 **로컬 구현 완료, 운영 확인 대기** 상태다. 운영 서버 배포 확인과 실제 성공 케이스 확인 전까지 서버/API 완료로 판정하지 않는다.
+
+현재 운영 URL 확인 결과:
+
+- `/health` 정상
+- `/health/ready` 정상
+- `/api/v1/server` 정상
+- `/api/v1/messenger/policy`는 `allowed_extensions`, `image_extensions`만 표시
+- `/api/v1/messenger/policy`에 `allowed_mime_types`가 아직 표시되지 않음
+
+### 다음 작업
+
+운영 서버에서 아래 순서로 확인한다.
+
+1. `~/deploy/Now`에서 `git pull origin main`
+2. `server/.env`에 메신저 설정 4개 반영
+   - `NOW_MESSENGER_STORAGE_DIR=/data/messenger`
+   - `NOW_MESSENGER_MAX_UPLOAD_MB=10`
+   - `NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip`
+   - `NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip`
+3. `server`에서 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr` 실행
+4. 운영 서버 `/api/v1/messenger/policy` 재확인
+5. `allowed_mime_types`가 표시되는지 확인
+6. `allowed_mime_types`에 `application/octet-stream`이 없는지 확인
+7. 실제 사용자 기준 Web login 성공 확인
+8. 실제 사용자 기준 Web session 성공 확인
+9. 실제 앱/설치형 접속 토큰 기준 `/api/v1/auth/token-login` 성공 확인
+
+### 주의
+
+현재 작업트리에 서버와 무관한 앱 문서 변경이 남아 있다. 서버 검토나 서버 커밋과 섞지 않는다.
+
+- `now_app/README.md`
+- `now_app/docs/mobile_runtime_checklist_ko.md`
+- `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`
