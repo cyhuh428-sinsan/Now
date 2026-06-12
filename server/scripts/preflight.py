@@ -1417,6 +1417,8 @@ def main() -> None:
                 ("require_web_session_access", "2.3 messenger requires Web session", "web session required"),
                 ("_ensure_group_room", "2.3 messenger creates default group room", "default group room"),
                 ("_migrate_group_messages", "2.3 messenger preserves legacy messages", "legacy migration"),
+                ('@router.get("/rooms/unread")', "2.3 messenger exposes lightweight unread API", "unread API"),
+                ("total_unread_count", "2.3 messenger unread API returns total count", "total unread count"),
                 ('@router.post("/rooms")', "2.3 messenger exposes room creation", "room creation API"),
                 ('@router.post("/rooms/{room_id}/attachments")', "2.3 messenger exposes attachment upload", "attachment upload API"),
                 ("save_messenger_attachment", "2.3 messenger stores attachments through safe storage", "safe attachment storage"),
@@ -2336,6 +2338,8 @@ def main() -> None:
             messenger_smoke,
             [
                 ("/api/v1/messenger/rooms", "Messenger smoke checks room list and room creation", "messenger rooms"),
+                ("/api/v1/messenger/rooms/unread", "Messenger smoke checks lightweight unread API", "messenger unread API"),
+                ("total_unread_count", "Messenger smoke checks unread total", "messenger unread total"),
                 ("/messages", "Messenger smoke checks message send/read flow", "messenger messages"),
                 ("/attachments", "Messenger smoke checks attachment upload/download", "messenger attachments"),
                 ("NOW_MESSENGER_STORAGE_DIR", "Messenger smoke uses isolated attachment storage", "isolated storage"),

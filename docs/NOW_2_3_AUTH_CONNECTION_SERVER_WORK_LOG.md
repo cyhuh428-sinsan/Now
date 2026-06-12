@@ -251,3 +251,73 @@ Windows 작업 환경에서 운영 서버 쉘의 `~/deploy/Now` 경로는 직접
 - 운영 서버 health/ready와 capability는 정상이다.
 - 운영 서버 메신저 policy 응답은 최신 MIME 정책 확인 기준을 아직 만족하지 않는다.
 - 운영 서버에서 최신 `main` pull 및 배포 후 `/api/v1/messenger/policy`를 다시 확인해야 한다.
+
+## NOW_2_3_WORK_ORDER_SERVER_API 반영
+
+작성일: 2026-06-12
+
+기준 문서:
+
+- `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`
+
+### 반영 내용
+
+- 메신저 unread count 경량 API를 추가했다.
+  - `GET /api/v1/messenger/rooms/unread?owner_id=...`
+  - Web 세션 사용자 기준으로 채팅방별 `unread_count`와 전체 `total_unread_count`를 반환한다.
+  - 메시지 본문과 첨부 목록을 내려받지 않아 닫힌 메신저 상태의 unread 갱신에 사용할 수 있다.
+- 기존 전체 그룹 채팅방 유지 기준은 그대로 둔다.
+  - unread API에서도 `_ensure_group_room`, `_migrate_group_messages`를 거쳐 기존 그룹 방과 기존 메시지 마이그레이션 기준을 유지한다.
+- 일부 그룹원 채팅방 권한 검증은 기존 `room member required` 기준을 유지했다.
+- `server/scripts/messenger_smoke_test.py`에 경량 unread API 검증을 추가했다.
+  - `member` 사용자의 Web 세션으로 `/api/v1/messenger/rooms/unread`를 호출한다.
+  - 일부 그룹원 채팅방의 unread count가 증가하는지 확인한다.
+- `server/scripts/preflight.py`가 경량 unread API와 smoke test 검증 문자열을 확인하도록 보강했다.
+- `server/README.md`에 2.3 Messenger API 계약을 추가했다.
+  - rooms
+  - rooms/unread
+  - room create
+  - messages
+  - attachments
+  - read
+  - policy
+- `docs/NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md` 서버 검증 항목에 `경량 unread API 검증 통과`를 추가했다.
+
+### 운영 URL 재확인
+
+- `GET https://nownote.sinsan.kr/health`
+  - 결과: `{"status":"ok","server":"NowNote Local Server"}`
+- `GET https://nownote.sinsan.kr/health/ready`
+  - 결과: `{"status":"ready"}`
+- `GET https://nownote.sinsan.kr/api/v1/server`
+  - 결과: `user_token_required=true`
+  - 결과: `messenger_rooms=true`
+  - 결과: `messenger_attachments=true`
+  - 결과: `public_server_readiness.status=ready`
+- `GET https://nownote.sinsan.kr/api/v1/messenger/policy`
+  - 결과: `max_size_bytes=10485760`
+  - 결과: `allowed_extensions`와 `image_extensions`는 표시됨
+  - 미충족: `allowed_mime_types`가 아직 응답에 표시되지 않음
+
+### 운영 서버 접근 확인
+
+- 시도: `wsl --cd ~/deploy/Now pwd`
+- 결과: `Wsl/ERROR_FILE_NOT_FOUND`
+- 판단: 현재 Windows 작업 환경에서는 운영 서버 `~/deploy/Now` 경로에 직접 접근되지 않아 `git pull origin main`과 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr`를 직접 실행하지 못했다.
+
+### 검증
+
+- `C:\Users\cyhuh\anaconda3\python.exe -m compileall server\app server\scripts\preflight.py` 통과
+- `C:\Users\cyhuh\anaconda3\python.exe scripts\preflight.py --env-file .env.example --allow-example` 통과
+  - 결과: `NowNote server preflight passed (1218/1218 checks)`
+- `C:\Users\cyhuh\anaconda3\python.exe server\scripts\messenger_smoke_test.py` 통과
+  - 결과: `NowNote 2.3 messenger smoke test passed`
+
+### 완료 판정
+
+- 로컬 서버/API 구현과 검증은 작업지시서 기준으로 보강 완료.
+- 운영 서버 완료 판정은 아직 보류.
+- 보류 사유:
+  - 운영 서버 pull/deploy를 이 환경에서 직접 실행하지 못함
+  - 운영 `/api/v1/messenger/policy`에 `allowed_mime_types`가 아직 없음
+  - 실제 사용자 Web login, Web session, token-login 성공 케이스는 실제 계정/토큰이 필요해 미확인
