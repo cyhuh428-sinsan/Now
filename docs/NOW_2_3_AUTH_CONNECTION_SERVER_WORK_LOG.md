@@ -179,3 +179,45 @@
 
 - 운영 서버에서 `git pull origin main` 후 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr` 실행은 서버 쉘에서 수행해야 한다.
 - 운영 토큰과 실제 사용자/앱 토큰이 필요한 Web 로그인, Web 세션, token-login 성공 케이스는 운영 서버에서 별도 확인해야 한다.
+
+## 완료 판정 전 보강
+
+작성일: 2026-06-12
+
+판정 기준:
+
+1. 운영 서버 `.env` 메신저 설정 추가
+2. `application/octet-stream` 기본 허용 여부 재검토
+3. messenger smoke test에 실패/권한 케이스 추가
+
+### 반영 내용
+
+- `server/DEPLOY.md`, `server/PUBLIC_SERVER.md`, `server/.env.example`, `server/.env.public.example`에 운영 서버 `.env` 메신저 설정 기준을 명시했다.
+  - `NOW_MESSENGER_STORAGE_DIR=/data/messenger`
+  - `NOW_MESSENGER_MAX_UPLOAD_MB=10`
+  - `NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip`
+  - `NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip`
+- 기본 허용 MIME에서 `application/octet-stream`을 제거했다.
+  - 실제 파일 형식을 확인할 수 없는 업로드는 기본 정책에서 거부한다.
+  - `server/scripts/preflight.py`가 기본 `.env`의 `application/octet-stream` 허용을 실패로 판정하도록 보강했다.
+- `server/scripts/messenger_smoke_test.py`에 실패/권한 케이스를 추가했다.
+  - Web 세션 누락: `web session required`
+  - 비참여 사용자 방 메시지 조회: `room member required`
+  - 비참여 사용자 첨부 다운로드: `room member required`
+  - 차단 확장자 업로드: `file extension not allowed`
+  - 차단 MIME 업로드: `file mime type not allowed`
+  - `application/octet-stream` 업로드: `file mime type not allowed`
+
+### 추가 검증
+
+- `C:\Users\cyhuh\anaconda3\python.exe -m compileall server\app server\scripts\preflight.py` 통과
+- `C:\Users\cyhuh\anaconda3\python.exe scripts\preflight.py --env-file .env.example --allow-example` 통과
+  - 결과: `NowNote server preflight passed (1214/1214 checks)`
+- `C:\Users\cyhuh\anaconda3\python.exe server\scripts\messenger_smoke_test.py` 통과
+  - 결과: `NowNote 2.3 messenger smoke test passed`
+
+### 남은 운영 확인
+
+- 운영 서버 실제 `.env`에 위 메신저 설정 4개가 반영되어야 한다.
+- 운영 서버에서 최신 `main` pull 후 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr`를 실행해야 한다.
+- 배포 후 `/api/v1/messenger/policy`의 `allowed_mime_types`에 `application/octet-stream`이 없는지 재확인해야 한다.

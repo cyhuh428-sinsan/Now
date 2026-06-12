@@ -16,7 +16,7 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
         "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
-        "application/zip,application/octet-stream"
+        "application/zip"
     )
     api_token: str | None = None
     user_token_required: bool = False

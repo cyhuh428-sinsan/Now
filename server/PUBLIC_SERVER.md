@@ -32,6 +32,10 @@ NOW_USER_TOKEN_REQUIRED=true
 NOW_SELF_REGISTRATION_ENABLED=true
 NOW_SMTP_HOST=smtp.example.com
 NOW_SMTP_FROM=noreply@nownote.sinsan.kr
+NOW_MESSENGER_STORAGE_DIR=/data/messenger
+NOW_MESSENGER_MAX_UPLOAD_MB=10
+NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip
+NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip
 ```
 
 예시 파일은 `server/.env.public.example`입니다.
@@ -40,6 +44,7 @@ NOW_SMTP_FROM=noreply@nownote.sinsan.kr
 Web 프로그램은 사용자 ID와 비밀번호로 로그인하고 서버가 발급한 `X-Now-Web-Session` 세션으로 공유 문서에 접근합니다.
 사용자는 Web에서 직접 가입하고, 로그인 후 앱/설치형 연결 토큰을 직접 발급하거나 다시 확인할 수 있습니다.
 비밀번호 재설정은 등록 이메일로 발송된 코드로 처리하므로 공용 오픈 전 SMTP 설정을 끝내야 합니다.
+메신저 첨부 저장소는 `NOW_MESSENGER_STORAGE_DIR` 기준으로 Docker 볼륨에 보관합니다. 공용 운영 기본값은 `application/octet-stream`을 허용하지 않으며, 실제 파일 형식을 확인할 수 없는 업로드는 거부합니다.
 
 ## 3. Reverse Proxy
 
