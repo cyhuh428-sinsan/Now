@@ -82,6 +82,44 @@ def list_rooms(
     }
 
 
+@router.get("/rooms/unread")
+def list_room_unread_counts(
+    owner_id: str = Query(max_length=80),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    group_room = _ensure_group_room(db, user)
+    _migrate_group_messages(db, room=group_room, group_name=user.group_name)
+    rooms = list(
+        db.scalars(
+            select(MessengerRoom)
+            .join(MessengerRoomMember, MessengerRoomMember.room_id == MessengerRoom.id)
+            .where(
+                MessengerRoom.group_name == user.group_name,
+                MessengerRoom.is_active == 1,
+                MessengerRoomMember.owner_id == user.owner_id,
+                MessengerRoomMember.is_active == 1,
+            )
+            .order_by(MessengerRoom.updated_at.desc(), MessengerRoom.id.asc())
+        ).all()
+    )
+    memberships = {
+        item.room_id: item
+        for item in db.scalars(
+            select(MessengerRoomMember).where(MessengerRoomMember.owner_id == user.owner_id)
+        ).all()
+    }
+    unread_rooms = [_room_payload(db, room, memberships.get(room.id), user.owner_id) for room in rooms]
+    db.commit()
+    return {
+        "status": "ok",
+        "group_name": user.group_name,
+        "total_unread_count": sum(int(room["unread_count"]) for room in unread_rooms),
+        "rooms": unread_rooms,
+    }
+
+
 @router.post("/rooms")
 def create_room(
     payload: MessengerRoomCreate,

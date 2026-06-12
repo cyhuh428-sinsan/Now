@@ -46,10 +46,12 @@ def main() -> None:
                 group_name="sinsan",
             )
             _session, token = issue_web_session(db, owner_id="sinsan")
+            _member_session, member_token = issue_web_session(db, owner_id="member")
             _outsider_session, outsider_token = issue_web_session(db, owner_id="outsider")
             db.commit()
 
         headers = {"X-Now-Web-Session": token}
+        member_headers = {"X-Now-Web-Session": member_token}
         outsider_headers = {"X-Now-Web-Session": outsider_token}
         client = TestClient(app)
 
@@ -130,6 +132,20 @@ def main() -> None:
         )
         assert upload_res.status_code == 200, upload_res.text
         attachment = upload_res.json()["item"]["attachments"][0]
+
+        unread_res = client.get(
+            "/api/v1/messenger/rooms/unread",
+            params={"owner_id": "member"},
+            headers=member_headers,
+        )
+        assert unread_res.status_code == 200, unread_res.text
+        unread_payload = unread_res.json()
+        assert unread_payload["total_unread_count"] >= 1, unread_payload
+        private_unread = [
+            item for item in unread_payload["rooms"]
+            if item["id"] == private_room_id
+        ]
+        assert private_unread and private_unread[0]["unread_count"] >= 1, unread_payload
 
         download_res = client.get(
             f"/api/v1/messenger/attachments/{attachment['id']}",
