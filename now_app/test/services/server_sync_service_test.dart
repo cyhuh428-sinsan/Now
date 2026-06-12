@@ -100,5 +100,21 @@ void main() {
       expect(memo.content, '비밀 메모\n$encrypted');
       expect(memo.source, 'note_tree');
     });
+
+    test('syncNotes keeps first pull request even when local notes are empty', () {
+      expect(shouldSkipServerSyncRequestForTest(const [], false, null), isFalse);
+      expect(
+        shouldSkipServerSyncRequestForTest(
+          const [],
+          false,
+          DateTime(2026, 6, 1),
+        ),
+        isTrue,
+      );
+      expect(
+        shouldSkipServerSyncRequestForTest(const [], true, DateTime(2026, 6, 1)),
+        isFalse,
+      );
+    });
   });
 }

@@ -49,6 +49,11 @@ def require_text(text: str, requirements: list[tuple[str, str]], source: str, fa
         check(needle in text, f"Mobile has {label}", f"{source}: {needle}", failures)
 
 
+def require_absent(text: str, requirements: list[tuple[str, str]], source: str, failures: list[str]) -> None:
+    for needle, label in requirements:
+        check(needle not in text, f"Mobile omits {label}", f"{source}: {needle}", failures)
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -86,7 +91,13 @@ def main() -> None:
     require_text(memo_tree, [("MemoTreePage", "tree memo screen"), ("note_tree", "tree memo source"), ("node.level < 3", "tree depth guard"), ("실시간 변환", "tree realtime voice option"), ("녹음 후 변환", "tree record-then-transcribe option"), ("uploadRecordingFile", "tree recording upload"), ("createAnalysisJob", "tree server analysis job"), ("삭제 보관함", "tree deleted bin")], "memo_tree", failures)
     require_text(meeting_progress, [("record_then_transcribe", "record-then-transcribe progress mode"), ("FlutterSoundRecorder", "recording support"), ("SpeechToText", "realtime speech support"), ("FilePicker.platform.pickFiles", "file import support"), ("메모 내용이 기록되었습니다", "memo end dialog wording"), ("메모 내용을 입력하세요", "memo input hint")], "meeting_progress", failures)
     require_text(server_settings, [("_twoFactorCodeCtrl", "request-only two-factor code input"), ("twoFactorCode: _twoFactorCodeCtrl.text", "two-factor code request forwarding"), ("메모 동기화", "server memo sync button"), ("전체 다시 동기화", "server full sync button"), ("사용자 프로필", "server user profile section"), ("분석 작업", "server analysis section"), ("녹음 목록 새로고침", "server recording list refresh")], "server_settings", failures)
-    require_text(server_sync, [("FlutterSecureStorage", "secure token storage"), ("testConnection", "server connection test"), ("_verifyUserToken", "per-user token verification"), ("syncNotes", "note sync"), ("_dailyMemoPayloads", "daily memo sync payload"), ("note_tree", "tree memo sync payload"), ("uploadRecordingFile", "recording upload"), ("createAnalysisJob", "analysis job API"), ("twoFactorCode.trim()", "request-only two-factor validation")], "server_sync", failures)
+    require_text(server_settings, [("사용 방식", "server connection usage mode"), ("앱/설치형 접속 토큰", "app and desktop access token wording"), ("구형 개인 서버 API 토큰", "legacy personal server token wording"), ("고급 설정", "advanced settings section"), ("2.3 기본 흐름에서는 필요 없고", "legacy token advanced-only guidance")], "server_settings", failures)
+    require_absent(server_settings, [("labelText: 'API 토큰'", "old API token label"), ("labelText: '사용자별 접속 토큰'", "old per-user token label")], "server_settings", failures)
+    legacy_index = server_settings.find("구형 개인 서버 API 토큰")
+    advanced_index = server_settings.find("고급 설정")
+    check(advanced_index >= 0 and legacy_index > advanced_index, "Mobile keeps legacy API token in advanced settings", "server_settings: legacy token label appears after advanced settings", failures)
+    require_text(server_sync, [("FlutterSecureStorage", "secure token storage"), ("testConnection", "server connection test"), ("_verifyUserToken", "per-user token verification"), ("syncNotes", "note sync"), ("_dailyMemoPayloads", "daily memo sync payload"), ("note_tree", "tree memo sync payload"), ("uploadRecordingFile", "recording upload"), ("createAnalysisJob", "analysis job API"), ("twoFactorCode.trim()", "request-only two-factor validation"), ("/api/v1/auth/token-login", "token login API"), ("X-Now-User-Token", "user token header"), ("Authorization", "legacy authorization header"), ("구형 개인 서버 호환용 NOW_API_TOKEN", "legacy authorization comment"), ("shouldSkipServerSyncRequestForTest", "first pull regression guard")], "server_sync", failures)
+    require_absent(server_sync, [("_serverTwoFactor", "stored two-factor setting")], "server_sync", failures)
     require_text(help_page, [("일자별 메모는 하루 한 개의 메모장", "daily memo help"), ("Markdown 가져오기는 외부 .md/.txt 파일", "Markdown import help"), ("공용 서버 운영 전", "public server help")], "help_page", failures)
     require_text(backup_service, [("NowNote 백업", "mobile backup subject"), ("FilePicker.platform.pickFiles", "mobile backup import")], "backup_service", failures)
     require_text(android_build, [('namespace = "com.sinsan.nownote"', "NowNote Android namespace"), ('applicationId = "com.sinsan.nownote"', "NowNote Android applicationId")], "android_build", failures)

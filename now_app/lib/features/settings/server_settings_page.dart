@@ -467,6 +467,24 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
               _ServerCard(
                 padding: const EdgeInsets.all(16),
                 children: [
+                  const Text(
+                    '사용 방식',
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                      color: Color(0xFF111827),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    '모바일 앱은 서버 주소, 사용자 ID, 앱/설치형 접속 토큰으로 서버에 연결합니다. 2단계 인증 코드는 연결 테스트 때만 입력합니다.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                      color: Color(0xFF6B7280),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   TextField(
                     controller: _baseUrlCtrl,
                     keyboardType: TextInputType.url,
@@ -478,23 +496,12 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   ),
                   const SizedBox(height: 12),
                   TextField(
-                    controller: _tokenCtrl,
-                    obscureText: true,
-                    decoration: const InputDecoration(
-                      labelText: 'API 토큰',
-                      hintText: '서버 NOW_API_TOKEN 값',
-                      helperText: '기기 보안 저장소에 저장합니다',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
                     controller: _userTokenCtrl,
                     obscureText: true,
                     decoration: const InputDecoration(
-                      labelText: '사용자별 접속 토큰',
-                      hintText: '공용 서버에서 발급한 사용자 토큰',
-                      helperText: '공용 서버가 요구할 때 입력합니다. 기기 보안 저장소에 저장합니다',
+                      labelText: '앱/설치형 접속 토큰',
+                      hintText: 'Web에서 발급한 앱/설치형 접속 토큰',
+                      helperText: '모바일 동기화용 개인 토큰입니다. 기기 보안 저장소에 저장합니다',
                       border: OutlineInputBorder(),
                     ),
                   ),
@@ -523,11 +530,51 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  TextField(
-                    controller: _deviceIdCtrl,
-                    decoration: const InputDecoration(
-                      labelText: '기기 ID',
-                      border: OutlineInputBorder(),
+                  Theme(
+                    data: Theme.of(context).copyWith(
+                      dividerColor: Colors.transparent,
+                    ),
+                    child: ExpansionTile(
+                      tilePadding: EdgeInsets.zero,
+                      childrenPadding: EdgeInsets.zero,
+                      title: const Text(
+                        '고급 설정',
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                          color: Color(0xFF111827),
+                        ),
+                      ),
+                      subtitle: const Text(
+                        '구형 개인 서버 호환용 항목',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: Color(0xFF6B7280),
+                        ),
+                      ),
+                      children: [
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: _tokenCtrl,
+                          obscureText: true,
+                          decoration: const InputDecoration(
+                            labelText: '구형 개인 서버 API 토큰',
+                            hintText: '서버 NOW_API_TOKEN 값',
+                            helperText:
+                                '2.3 기본 흐름에서는 필요 없고 기존 개인 서버 호환이 필요할 때만 사용합니다',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _deviceIdCtrl,
+                          decoration: const InputDecoration(
+                            labelText: '기기 ID',
+                            helperText: '기기 구분이 필요할 때만 확인합니다',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ],
