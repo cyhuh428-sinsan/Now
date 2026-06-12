@@ -82,10 +82,12 @@
 ## 7. GitHub Release Asset
 
 - 업로드 대상 파일: `NowNote-Setup-2.3.5-x64.exe`
-- 현재 로컬 환경 확인 결과 `gh` CLI가 없음
-- 현재 노출된 GitHub 도구에도 Release asset 업로드 기능이 없음
-- 따라서 실제 GitHub Release asset 업로드는 미수행
-- 업로드 가능 도구 또는 권한이 준비되면 위 exe 파일을 Release asset으로 등록해야 함
+- Release 태그: `v2.3.5`
+- Release URL: `https://github.com/cyhuh428-sinsan/Now/releases/tag/v2.3.5`
+- 업로드 결과: 완료
+- 업로드 asset 상태: `uploaded`
+- 업로드 asset 크기: `101,031,365 bytes`
+- 다운로드 URL: `https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe`
 
 ## 8. 완료 판단
 
@@ -94,4 +96,5 @@
 - 설치형 Web 전용 기능 숨김 기준 검증 통과
 - 설치형 `NowNote-Setup-2.3.5-x64.exe` 릴리즈 산출물 생성 완료
 - 설치형 저장/입력/단축키 재검증 통과
-- GitHub Release asset 실제 업로드만 외부 도구 부재로 보류
+- GitHub Release asset 업로드 완료
+- Web/설치형 최종 완료
