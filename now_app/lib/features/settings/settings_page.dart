@@ -156,7 +156,7 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.info_outline,
                 title: '버전',
                 trailing: Text(
-                  '1.0.0 (1차)',
+                  '2.3.5 (23005)',
                   style: TextStyle(fontSize: 13, color: Color(0xFF9CA3AF)),
                 ),
               ),
