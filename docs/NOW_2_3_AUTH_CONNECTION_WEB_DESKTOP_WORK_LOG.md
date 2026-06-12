@@ -117,9 +117,9 @@
 - 실행 명령: `npm run dist:win` in `desktop`
 - 결과: 통과
 - 생성 파일: `desktop/dist/NowNote-Setup-2.3.5-x64.exe`
-- 생성 시각: 2026-06-12 23:06
-- 파일 크기: 101,031,365 bytes
-- `desktop/dist/win-unpacked` 갱신 시각: 2026-06-12 23:05
+- 생성 시각: 2026-06-13 04:40
+- 파일 크기: 101,031,456 bytes
+- `desktop/dist/win-unpacked` 갱신 시각: 2026-06-13 04:39
 
 빌드 후 재검증:
 
