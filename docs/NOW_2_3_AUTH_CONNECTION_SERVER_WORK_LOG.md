@@ -221,3 +221,33 @@
 - 운영 서버 실제 `.env`에 위 메신저 설정 4개가 반영되어야 한다.
 - 운영 서버에서 최신 `main` pull 후 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr`를 실행해야 한다.
 - 배포 후 `/api/v1/messenger/policy`의 `allowed_mime_types`에 `application/octet-stream`이 없는지 재확인해야 한다.
+
+## 2026-06-12 운영 URL 직접 확인
+
+Windows 작업 환경에서 운영 서버 쉘의 `~/deploy/Now` 경로는 직접 접근되지 않았다.
+
+- 시도: `wsl --cd ~/deploy/Now pwd`
+- 결과: `WSL/ERROR_FILE_NOT_FOUND`
+- 판단: 이 환경에서는 운영 서버 pull/deploy 명령을 직접 실행하지 못했다.
+
+대신 운영 URL API 응답을 직접 확인했다.
+
+- `GET https://nownote.sinsan.kr/health`
+  - 결과: `{"status":"ok","server":"NowNote Local Server"}`
+- `GET https://nownote.sinsan.kr/health/ready`
+  - 결과: `{"status":"ready"}`
+- `GET https://nownote.sinsan.kr/api/v1/server`
+  - 결과: `user_token_required=true`
+  - 결과: `messenger_rooms=true`
+  - 결과: `messenger_attachments=true`
+  - 결과: `public_server_readiness.status=ready`
+- `GET https://nownote.sinsan.kr/api/v1/messenger/policy`
+  - 결과: `max_size_bytes=10485760`
+  - 결과: `allowed_extensions`와 `image_extensions`는 표시됨
+  - 확인 필요: `allowed_mime_types`가 아직 응답에 표시되지 않음
+
+판정:
+
+- 운영 서버 health/ready와 capability는 정상이다.
+- 운영 서버 메신저 policy 응답은 최신 MIME 정책 확인 기준을 아직 만족하지 않는다.
+- 운영 서버에서 최신 `main` pull 및 배포 후 `/api/v1/messenger/policy`를 다시 확인해야 한다.
