@@ -4,6 +4,21 @@
 담당: 어울
 범위: 서버/API
 
+## 현재 판정
+
+이 문서는 서버/API 2.3 작업의 완료 보고서가 아니다.
+
+현재 상태는 **서버 구현/로컬 검증 기록 + 운영 서버 최종 확인 대기**다. 서버 코드와 로컬 검증은 상당 부분 진행되었지만, 운영 서버에서 최신 `main`을 pull하고 실제 계정/토큰으로 성공 케이스를 확인하기 전까지 서버/API 완료로 판정하지 않는다.
+
+남은 서버 확인:
+
+- 운영 서버에서 최신 `main` pull
+- `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr` 실행
+- 운영 서버에서 `/api/v1/messenger/policy`의 `allowed_mime_types` 재확인
+- 실제 사용자로 Web login 성공 케이스 확인
+- 실제 Web session 확인
+- 실제 앱/설치형 접속 토큰으로 `/api/v1/auth/token-login` 성공 케이스 확인
+
 ## 기준 문서
 
 - `docs/NOW_2_3_AUTH_CONNECTION_WORK_ORDER.md`
