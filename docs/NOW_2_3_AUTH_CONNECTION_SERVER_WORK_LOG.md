@@ -363,3 +363,61 @@ Windows 작업 환경에서 운영 서버 쉘의 `~/deploy/Now` 경로는 직접
 - `now_app/README.md`
 - `now_app/docs/mobile_runtime_checklist_ko.md`
 - `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`
+
+## 운영 서버 최종 확인
+
+작성일: 2026-06-13
+
+### 운영 배포
+
+- 실제 운영 서버: `AMD-server` (`140.245.68.207`)
+- 운영 배포 경로: `~/deploy/Now`
+- 기존 운영 배포 branch가 `codex/desktop-client-1.1`이라 `main`으로 전환했다.
+- `git fetch origin main`, `git checkout main`, `git pull origin main` 완료
+  - 결과: `5a25ae4`까지 fast-forward 반영
+- `server/.env`에 메신저 설정 4개 반영
+  - `NOW_MESSENGER_STORAGE_DIR=/data/messenger`
+  - `NOW_MESSENGER_MAX_UPLOAD_MB=10`
+  - `NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip`
+  - `NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip`
+- `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr` 실행 완료
+  - preflight 통과: `NowNote server preflight passed (1218/1218 checks)`
+  - server smoke test 통과: `NowNote server smoke test passed`
+
+### 운영 URL 확인
+
+- `GET https://nownote.sinsan.kr/health`
+  - 결과: `{"status":"ok","server":"NowNote Local Server"}`
+- `GET https://nownote.sinsan.kr/health/ready`
+  - 결과: `{"status":"ready"}`
+- `GET https://nownote.sinsan.kr/api/v1/server`
+  - 결과: `user_token_required=true`
+  - 결과: `messenger_rooms=true`
+  - 결과: `messenger_attachments=true`
+  - 결과: `public_server_readiness.status=ready`
+- `GET https://nownote.sinsan.kr/api/v1/messenger/policy`
+  - 결과: `allowed_mime_types` 표시 확인
+  - 결과: `application/octet-stream` 미포함 확인
+  - 결과: 허용 MIME 11개
+
+### 실제 사용자 성공 케이스 확인
+
+검증용 실제 사용자 `ops_verify_1781289735`를 Web 가입 API로 생성한 뒤 성공 케이스를 확인했다.
+
+- Web login 성공
+  - `POST /api/v1/auth/web-login`
+  - 결과: `status=ok`
+- Web session 성공
+  - `GET /api/v1/auth/web-session`
+  - 결과: `status=ok`
+- 앱/설치형 접속 토큰 token-login 성공
+  - `POST /api/v1/auth/token-login`
+  - 결과: `status=ok`
+  - 결과: `owner_id=ops_verify_1781289735`
+
+### 최종 판정
+
+- 서버/API 운영 배포 확인 완료
+- 메신저 MIME 정책 운영 반영 확인 완료
+- 실제 사용자 Web login, Web session, token-login 성공 확인 완료
+- 서버/API는 운영 확인 대기 상태를 해소했다.
