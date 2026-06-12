@@ -840,7 +840,7 @@ def main() -> None:
     desktop_readme_requirements = [
         (".exe", "exe installer documentation"),
         ("npm run dist:win", "Windows build command documentation"),
-        ("NowNote-Setup-0.1.0-x64.exe", "installer output documentation"),
+        ("NowNote-Setup-2.3.5-x64.exe", "installer output documentation"),
         ("Web 전용", "hosted Web-only exclusion documentation"),
     ]
     for needle, label in desktop_readme_requirements:
