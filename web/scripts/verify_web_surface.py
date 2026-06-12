@@ -137,6 +137,7 @@ def main() -> None:
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
         ("hosted-web-only hidden", "group shared view menu hosted Web visibility guard"),
+        ("Web 2.3.5", "current Web version display"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
@@ -215,6 +216,7 @@ def main() -> None:
         ("desktopStorageRow", "desktop local storage status row"),
         ("desktopStorageStatus", "desktop local storage status text"),
         ("desktopStoragePath", "desktop local storage path"),
+        ("appVersionText", "current app version display"),
         ("shareTreeBtn", "knowledge note share toggle"),
         ("graphModeSelect", "graph mode selector"),
         ("graphDepthSelect", "local graph depth selector"),
@@ -778,6 +780,8 @@ def main() -> None:
         ('id="deviceIdHint"', "desktop advanced device ID hint"),
         ("구형 개인 서버 API 토큰", "desktop legacy personal server token label"),
         ("앱/설치형 접속 토큰", "desktop app access token label"),
+        ("현재 버전", "desktop current version label"),
+        ("Desktop 2.3.5", "desktop current version value"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
