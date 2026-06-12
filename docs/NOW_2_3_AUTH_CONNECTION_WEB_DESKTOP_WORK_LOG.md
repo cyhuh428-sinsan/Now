@@ -64,3 +64,63 @@
 - 실제 서버 계정과 앱/설치형 접속 토큰이 제공되면 설치형 연결 테스트를 실서버로 1회 확인해야 한다.
 - 이번 환경에서는 in-app Browser 조작 도구가 노출되지 않아 화면 스냅샷 검증은 수행하지 못했다.
 - `web/dist/`는 `.gitignore` 대상 생성 산출물이므로 원본 수정 후 별도 재패키징 시 갱신한다.
+
+## 2026-06-12 통합 작업지시서 line 85 기준 추가 검증
+
+기준 문서: `docs/NOW_2_3_INTEGRATED_WORK_ORDER.md`
+대상 범위: `Web 및 설치형 프로그램 작업지시`
+
+### 확인한 항목
+
+- 운영 서버 `https://nownote.sinsan.kr` 루트 응답: `200 OK`
+- 운영 서버 `/api/v1/server` 응답: `200 OK`
+- 운영 서버 capability 확인:
+  - `web_login_auth`: true
+  - `web_session_auth`: true
+  - `app_installed_token_auth`: true
+  - `messenger_rooms`: true
+  - `messenger_attachments`: true
+  - `public_server_readiness.status`: ready
+- 운영 서버 배포본 HTML에서 아래 UI 기준 확인:
+  - `앱/설치형 접속 토큰`
+  - `구형 개인 서버 API 토큰`
+  - `groupMessengerRoomList`
+  - `groupMessengerFileInput`
+- 더미 계정 기준 `/api/v1/auth/web-login`: `401 user not found`
+- 더미 계정 기준 `/api/v1/auth/token-login`: `401 user not found`
+- 기존 NowNote 실행 프로세스를 종료한 뒤 설치형 저장 검증 재실행
+
+### 검증 명령 결과
+
+- `node --check web\app.js`: 통과
+- `node --check desktop\app\app.js`: 통과
+- `C:\Users\cyhuh\anaconda3\python.exe web\scripts\verify_web_surface.py`: 통과, 720/720
+- `npm run check:storage` in `desktop`: 첫 실행은 기존 NowNote 프로세스 간섭으로 `fetch failed`, 기존 NowNote 프로세스 종료 후 재실행 통과
+- `node web\scripts\check_desktop_client_policies.mjs`: 통과
+- `node web\scripts\check_import_export.mjs`: 통과
+- `node web\scripts\check_graph_view.mjs`: 통과
+
+### 계정/토큰 필요로 미완료인 항목
+
+- 운영 서버 Web 실제 로그인 성공 확인
+- 계정 생성 성공 확인
+- 비밀번호 재설정 메일/코드 성공 확인
+- Web에서 앱/설치형 접속 토큰 실제 발급 확인
+- 설치형에서 `https://nownote.sinsan.kr` + 실제 사용자 ID + 실제 앱/설치형 접속 토큰 연결 테스트 성공 확인
+
+## 2026-06-12 설치형 최신 exe 빌드 추가 확인
+
+통합 작업지시서의 `설치형이 별도 exe 프로그램으로 동작한다` 조건을 확인하기 위해 현재 소스로 Windows 설치 파일을 다시 생성했다.
+
+- 실행 명령: `npm run dist:win` in `desktop`
+- 결과: 통과
+- 생성 파일: `desktop/dist/NowNote-Setup-0.1.0-x64.exe`
+- 생성 시각: 2026-06-12 20:25
+- 파일 크기: 101,031,444 bytes
+- `desktop/dist/win-unpacked` 갱신 시각: 2026-06-12 20:24
+
+빌드 후 재검증:
+
+- `npm run check:storage` in `desktop`: 통과
+- `node --check web\app.js`: 통과
+- `node --check desktop\app\app.js`: 통과
