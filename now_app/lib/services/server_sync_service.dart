@@ -468,7 +468,7 @@ class ServerSyncService {
         if (item['local_id'] is String) item['local_id'] as String,
     };
     notes.addAll(deletedTreeNotes);
-    if (notes.isEmpty && !fullSync && settings.lastSyncedAt == null) {
+    if (_shouldSkipServerSyncRequest(notes, fullSync, settings.lastSyncedAt)) {
       return const ServerSyncResult(uploaded: 0, message: '동기화할 메모가 없습니다');
     }
 
@@ -1051,6 +1051,7 @@ class ServerSyncService {
   Dio _dio(ServerSettings settings) {
     final dio = DioClient.create(baseUrl: _normalizeBaseUrl(settings.baseUrl));
     if (settings.token.trim().isNotEmpty) {
+      // 구형 개인 서버 호환용 NOW_API_TOKEN 흐름이다.
       dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
     }
     if (settings.userToken.trim().isNotEmpty) {
@@ -1062,10 +1063,29 @@ class ServerSyncService {
   Dio _dioWithoutUserToken(ServerSettings settings) {
     final dio = DioClient.create(baseUrl: _normalizeBaseUrl(settings.baseUrl));
     if (settings.token.trim().isNotEmpty) {
+      // 구형 개인 서버 호환용 NOW_API_TOKEN 흐름이다.
       dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
     }
     return dio;
   }
+}
+
+@visibleForTesting
+bool shouldSkipServerSyncRequestForTest(
+  List<Map<String, dynamic>> notes,
+  bool fullSync,
+  DateTime? lastSyncedAt,
+) {
+  return _shouldSkipServerSyncRequest(notes, fullSync, lastSyncedAt);
+}
+
+bool _shouldSkipServerSyncRequest(
+  List<Map<String, dynamic>> notes,
+  bool fullSync,
+  DateTime? lastSyncedAt,
+) {
+  if (fullSync || lastSyncedAt == null) return false;
+  return notes.isEmpty;
 }
 
 bool _isDeletedServerNote(Map<String, dynamic> note) {
