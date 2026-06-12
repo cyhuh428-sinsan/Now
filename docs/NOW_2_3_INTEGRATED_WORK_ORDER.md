@@ -4,7 +4,7 @@
 
 이 문서는 NowNote 2.3의 실행 기준 문서다.
 
-현재 상태는 **2.3 완료가 아니라 2.3 본 작업 진입 단계**다. 인증/서버 연결 정리는 1차 반영되었지만, 운영 서버 실사용 검증, 앱 잔여 변경 정리, 설치형 저장 검증 재확인, 메신저 2.3 확장 구현이 남아 있다.
+현재 상태는 **2.3 완료가 아니라 2.3 최종 작업 진행 단계**다. 인증/서버 연결 정리와 앱 운영 서버 연결 검증은 완료되었고, 운영 서버 배포 재확인, Web/설치형 최종 회귀 검증, 메신저 2.3 확장 완성, exe/apk 릴리즈 asset 업로드가 남아 있다.
 
 ### 현재 반영된 항목
 
@@ -15,28 +15,165 @@
 - 구형 개인 서버 API 토큰의 고급 설정 분리 1차 반영
 - Web/설치형 도움말 토큰 표현 정리
 - 서버 preflight 문서 검증 실패 2건 수정
+- 서버 메신저 첨부 정책, 저장소 설정, 운영 점검 항목 1차 반영
+- 앱 운영 서버 실제 토큰 연결 확인
+- 앱 운영 서버 메모 동기화 확인
 - 관련 변경 사항 GitHub `main` push 완료
 
 ### 아직 완료로 볼 수 없는 항목
 
-- 운영 서버 `https://nownote.sinsan.kr` 기준 Web 실제 동작 검증 미완료
-- 설치형 프로그램 실제 연결 테스트 미완료
-- 앱 실제 에뮬레이터/운영 서버 연결 검증 미완료
-- 앱 쪽 잔여 변경 정리 및 커밋 필요
-- 설치형 `npm run check:storage` 재검증 필요
+- 운영 서버 `https://nownote.sinsan.kr`에 최신 `main` pull 및 배포 재확인 필요
+- 운영 서버 `.env` 메신저 첨부 설정 반영 확인 필요
+- 운영 서버 `/api/v1/messenger/policy`에서 `application/octet-stream` 미허용 확인 필요
+- Web/설치형 입력, 단축키, 작은 창, 성능 최종 회귀 검증 필요
+- 설치형 최종 exe 파일명과 버전 정리 필요
 - 메신저 2.3 확장 기능 미구현
 - exe/apk 2.3 릴리즈 asset 업로드 미완료
 
 ### 현재 우선순위
 
-1. 앱 잔여 변경 검토, 테스트, 커밋, push
-2. 서버에서 `git pull` 후 `deploy_local.sh --base-url https://nownote.sinsan.kr` 재실행
-3. 운영 서버 Web 로그인, 계정, 토큰 발급, 공유 문서 조회 확인
-4. 설치형 프로그램 기존 실행 프로세스 종료 후 `npm run check:storage` 재검증
-5. 설치형에서 `https://nownote.sinsan.kr` + 사용자 ID + 앱/설치형 접속 토큰으로 연결 테스트
-6. 앱 에뮬레이터에서 `https://nownote.sinsan.kr` + 사용자 ID + 앱/설치형 접속 토큰으로 연결 테스트
-7. 메신저 2.3 확장 설계 확정 후 구현
-8. exe/apk 빌드 및 GitHub Release asset 업로드
+1. 운영 서버에서 최신 `main` pull 및 배포 재확인
+2. 운영 서버 메신저 첨부 설정과 정책 API 확인
+3. Web/설치형 메모 코어 입력, 검색, 단축키, 작은 창, idle 성능 최종 회귀 검증
+4. 메신저 2.3 확장 기능 구현 및 검증
+5. 문서/README/릴리즈 기준 정리
+6. exe/apk 최종 빌드
+7. GitHub Release asset 업로드
+8. 최종 태그 및 2.3 완료 판정
+
+## 2026-06-12 남은 작업 실행 지시
+
+이 장은 지금부터 실제로 진행할 2.3 잔여 작업 기준이다.
+
+### A. 서버 및 API
+
+목표:
+
+- 운영 서버가 최신 2.3 서버 코드와 메신저 첨부 정책으로 동작하는지 확인한다.
+
+작업:
+
+1. 운영 서버 `~/deploy/Now`에서 `git pull origin main`을 실행한다.
+2. 운영 서버 `server/.env`에 아래 값이 있는지 확인하고 없으면 추가한다.
+   - `NOW_MESSENGER_STORAGE_DIR=/data/messenger`
+   - `NOW_MESSENGER_MAX_UPLOAD_MB=10`
+   - `NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip`
+   - `NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip`
+3. `server`에서 `sh scripts/deploy_local.sh --base-url https://nownote.sinsan.kr`를 실행한다.
+4. 운영 서버에서 아래 API를 확인한다.
+   - `/health`
+   - `/health/ready`
+   - `/api/v1/server`
+   - `/api/v1/messenger/policy`
+5. `/api/v1/messenger/policy`의 `allowed_mime_types`에 `application/octet-stream`이 없는지 확인한다.
+6. 실제 사용자 기준 Web login, Web session, token-login 성공 케이스를 확인한다.
+
+완료 조건:
+
+- 운영 서버 health/ready가 정상이다.
+- 운영 서버 capability에 `messenger_rooms`, `messenger_attachments`가 표시된다.
+- 운영 서버 첨부 정책에 `application/octet-stream`이 없다.
+- 실제 사용자 로그인과 앱/설치형 접속 토큰 검증이 성공한다.
+
+### B. Web 및 설치형 프로그램
+
+목표:
+
+- Web과 설치형 프로그램의 메모 코어가 작고 가볍게 안정적으로 동작하는지 최종 확인한다.
+
+작업:
+
+1. Web에서 제목 입력, 본문 입력, 전체 검색, 본문찾기 입력을 확인한다.
+2. 설치형에서 제목 입력, 본문 입력, 전체 검색, 본문찾기 입력을 확인한다.
+3. Web/설치형에서 단축키를 확인한다.
+   - `Ctrl+F`: 전체 검색
+   - `Ctrl+Shift+F`: 현재 메모 본문찾기
+   - `Tab`: 설정된 칸 수만큼 들여쓰기
+   - `Shift+Tab`: 내어쓰기
+4. 작은 창에서 상단 버튼이 본문 편집 영역을 과도하게 차지하지 않는지 확인한다.
+5. Web idle 상태에서 반복 렌더링, 과도한 polling, 메신저 갱신이 시스템을 느리게 하지 않는지 확인한다.
+6. 설치형 최종 빌드 파일명을 `NowNote-Setup-2.3.x-x64.exe` 형식으로 맞춘다.
+7. 설치형 최종 빌드 후 `npm run check:storage`를 다시 실행한다.
+
+완료 조건:
+
+- Web/설치형 모두 입력 포커스가 끊기지 않는다.
+- 검색과 본문찾기가 한 글자만 입력되는 문제가 없다.
+- 단축키와 Tab 들여쓰기가 기준대로 동작한다.
+- 작은 창에서도 메모 편집이 가능하다.
+- 설치형 exe가 2.3.x 이름으로 생성된다.
+
+### C. 앱
+
+목표:
+
+- 앱은 2.3 인증/연결 기준이 실제 운영 서버에서 동작함을 유지하고, 릴리즈 APK 산출물만 최종 정리한다.
+
+확인 완료:
+
+- 에뮬레이터에서 `https://nownote.sinsan.kr` 연결 성공
+- 사용자 ID + 앱/설치형 접속 토큰 인증 성공
+- 사용자 프로필, 그룹, 이메일, 시간대, 2단계 상태 조회 성공
+- `전체 다시 동기화` 실행 성공
+- 서버 변경 5건 확인
+- `기록 > 메모 > 계층 메모`에서 서버 항목 표시 확인
+- 모바일 표면 검증 142/142 통과
+- `flutter test` 61개 통과
+
+남은 작업:
+
+1. APK 최종 빌드를 수행한다.
+2. APK 파일명을 `NowNote-2.3.x.apk` 형식으로 맞춘다.
+3. GitHub Release asset 업로드 대상에 포함한다.
+
+완료 조건:
+
+- APK가 2.3.x 이름으로 생성된다.
+- APK가 GitHub Release asset에 업로드된다.
+
+### D. 메신저 2.3 확장
+
+목표:
+
+- 2.2 전체 그룹 메신저를 유지하면서 2.3에서 파일/사진 첨부와 일부 그룹원 채팅방을 추가한다.
+
+작업:
+
+1. 기존 전체 그룹 채팅방을 기본 방으로 유지한다.
+2. 일부 그룹원 채팅방 생성 API와 UI를 구현한다.
+3. 채팅방 참여자 목록과 권한 검증을 구현한다.
+4. 메시지 unread count를 안정화한다.
+5. 메시지 자동 갱신을 가볍게 만든다.
+6. 파일/사진 첨부 업로드 UI를 구현한다.
+7. 이미지 미리보기와 첨부 다운로드를 구현한다.
+8. 서버 첨부 정책을 UI에 표시한다.
+9. 비참여자 접근 차단, 금지 확장자, 금지 MIME, 용량 초과 케이스를 검증한다.
+
+완료 조건:
+
+- 전체 그룹 메신저 기존 동작이 유지된다.
+- 일부 그룹원 채팅방을 만들 수 있다.
+- 참여자만 메시지와 첨부에 접근할 수 있다.
+- unread count가 표시된다.
+- 파일/사진 첨부가 정책 안에서 동작한다.
+- 메신저가 닫혀 있을 때 시스템 성능에 영향을 주지 않는다.
+
+### E. 문서와 릴리즈
+
+작업:
+
+1. README 변경 내용을 한국어, English, 中文, 日本語, Tiếng Việt, العربية로 반영한다.
+2. 서버, Web/설치형, 앱 작업 로그를 최종 상태로 정리한다.
+3. 2.3 릴리즈 체크리스트를 갱신한다.
+4. exe와 apk를 GitHub Release asset으로 업로드한다.
+5. 최종 버전 태그를 생성한다.
+
+완료 조건:
+
+- README 다국어 설명이 2.3 기준과 맞다.
+- 릴리즈 asset에 exe와 apk가 모두 있다.
+- 운영 서버, Web, 설치형, 앱 검증 결과가 문서에 남아 있다.
+- 신산님 테스트가 가능한 상태다.
 
 ### 작업 분리 기준
 
