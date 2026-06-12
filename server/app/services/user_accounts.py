@@ -111,13 +111,6 @@ def require_user_api_access(
     access_token: str | None = None,
     web_session_token: str | None = None,
 ) -> UserAccount:
-    user = touch_user_activity(db, owner_id=owner_id)
-    if not bool(user.is_active):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="user inactive",
-        )
-
     if web_session_token:
         session_user = require_web_session_access(
             db,
@@ -135,10 +128,22 @@ def require_user_api_access(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="user token required",
             )
+        cleaned_owner_id = owner_id.strip()
+        user = db.scalar(select(UserAccount).where(UserAccount.owner_id == cleaned_owner_id))
+        if user is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="user not found",
+            )
+        if not bool(user.is_active):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="user inactive",
+            )
         token_hash = hash_access_token(access_token.strip())
         device = db.scalar(
             select(UserDevice).where(
-                UserDevice.owner_id == owner_id,
+                UserDevice.owner_id == cleaned_owner_id,
                 UserDevice.access_token_hash == token_hash,
             )
         )
@@ -158,6 +163,14 @@ def require_user_api_access(
             device.last_seen_at = datetime.utcnow()
         if legacy_token_ok:
             user.access_token_last_used_at = datetime.utcnow()
+
+    else:
+        user = touch_user_activity(db, owner_id=owner_id)
+        if not bool(user.is_active):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="user inactive",
+            )
 
     db.commit()
     db.refresh(user)

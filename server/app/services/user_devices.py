@@ -47,9 +47,17 @@ def require_active_user_device(
     owner_id: str,
     device_id: str,
 ) -> UserDevice | None:
+    if not owner_id.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="owner_id required",
+        )
+    if not device_id.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="device_id required",
+        )
     device = touch_user_device(db, owner_id=owner_id, device_id=device_id)
-    if device is None:
-        return None
     if not bool(device.is_active):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
