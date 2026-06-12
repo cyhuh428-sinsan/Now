@@ -58,12 +58,24 @@ nano .env
 - `NOW_POSTGRES_PASSWORD`
 - `NOW_USER_TOKEN_REQUIRED`
 - `NOW_STORAGE_DIR`
+- `NOW_MESSENGER_STORAGE_DIR`
+- `NOW_MESSENGER_MAX_UPLOAD_MB`
+- `NOW_MESSENGER_ALLOWED_EXTENSIONS`
+- `NOW_MESSENGER_ALLOWED_MIME_TYPES`
 - `NOW_LLM_PROVIDER`
 - 공용 서버: `NOW_SELF_REGISTRATION_ENABLED`, `NOW_SMTP_HOST`, `NOW_SMTP_FROM`
 
 개인 Docker 서버는 `NOW_USER_TOKEN_REQUIRED=false`로 시작할 수 있습니다.
 공용 서버로 열기 전에는 사용자가 Web에서 직접 가입하고 앱/설치형 연결 토큰을 발급할 수 있도록 `NOW_SELF_REGISTRATION_ENABLED=true`, `NOW_USER_TOKEN_REQUIRED=true`를 사용합니다.
 비밀번호 재설정을 제공하려면 SMTP 설정도 완료합니다.
+2.3 메신저 첨부를 운영하려면 운영 서버 `.env`에도 아래 값을 추가합니다. 기본 허용 MIME에는 `application/octet-stream`을 넣지 않습니다.
+
+```env
+NOW_MESSENGER_STORAGE_DIR=/data/messenger
+NOW_MESSENGER_MAX_UPLOAD_MB=10
+NOW_MESSENGER_ALLOWED_EXTENSIONS=jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip
+NOW_MESSENGER_ALLOWED_MIME_TYPES=image/jpeg,image/png,image/webp,image/gif,application/pdf,text/plain,text/markdown,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/zip
+```
 
 ## 3. 배포 전 점검
 

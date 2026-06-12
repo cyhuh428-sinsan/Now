@@ -255,6 +255,12 @@ def main() -> None:
     check(messenger_max_upload_mb.isdigit() and int(messenger_max_upload_mb) > 0, "Messenger max upload MB valid", messenger_max_upload_mb, failures)
     check("jpg" in messenger_allowed_extensions and "zip" in messenger_allowed_extensions, "Messenger allowed extensions configured", "messenger allowed extensions", failures)
     check("image/jpeg" in messenger_allowed_mime_types and "application/pdf" in messenger_allowed_mime_types, "Messenger allowed MIME types configured", "messenger allowed MIME types", failures)
+    check(
+        "application/octet-stream" not in messenger_allowed_mime_types,
+        "Messenger default MIME policy rejects octet-stream",
+        "application/octet-stream is not allowed by default",
+        failures,
+    )
     check(user_token_required in {"true", "false"}, "User token required flag valid", "NOW_USER_TOKEN_REQUIRED true/false", failures)
     check(
         behind_reverse_proxy in {"true", "false"},
@@ -2333,6 +2339,11 @@ def main() -> None:
                 ("/messages", "Messenger smoke checks message send/read flow", "messenger messages"),
                 ("/attachments", "Messenger smoke checks attachment upload/download", "messenger attachments"),
                 ("NOW_MESSENGER_STORAGE_DIR", "Messenger smoke uses isolated attachment storage", "isolated storage"),
+                ("web session required", "Messenger smoke checks missing session failure", "missing session"),
+                ("room member required", "Messenger smoke checks room permission failure", "room permission"),
+                ("file extension not allowed", "Messenger smoke checks blocked extension failure", "extension rejection"),
+                ("file mime type not allowed", "Messenger smoke checks blocked MIME failure", "MIME rejection"),
+                ("application/octet-stream", "Messenger smoke checks octet-stream rejection", "octet-stream rejection"),
                 ("sqlite:///", "Messenger smoke uses isolated temporary database", "isolated database"),
                 ("NowNote 2.3 messenger smoke test passed", "Messenger smoke prints pass summary", "messenger smoke pass summary"),
             ],

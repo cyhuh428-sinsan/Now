@@ -38,11 +38,24 @@ def main() -> None:
                 email="member@example.com",
                 group_name="sinsan",
             )
+            create_user_account(
+                db,
+                owner_id="outsider",
+                password="Aa12345678!",
+                email="outsider@example.com",
+                group_name="sinsan",
+            )
             _session, token = issue_web_session(db, owner_id="sinsan")
+            _outsider_session, outsider_token = issue_web_session(db, owner_id="outsider")
             db.commit()
 
         headers = {"X-Now-Web-Session": token}
+        outsider_headers = {"X-Now-Web-Session": outsider_token}
         client = TestClient(app)
+
+        missing_session_res = client.get("/api/v1/messenger/rooms", params={"owner_id": "sinsan"})
+        assert missing_session_res.status_code == 401, missing_session_res.text
+        assert missing_session_res.json()["detail"] == "web session required"
 
         rooms_res = client.get("/api/v1/messenger/rooms", params={"owner_id": "sinsan"}, headers=headers)
         assert rooms_res.status_code == 200, rooms_res.text
@@ -74,6 +87,41 @@ def main() -> None:
         assert private_res.status_code == 200, private_res.text
         private_room_id = private_res.json()["room"]["id"]
 
+        outsider_messages_res = client.get(
+            f"/api/v1/messenger/rooms/{private_room_id}/messages",
+            params={"owner_id": "outsider"},
+            headers=outsider_headers,
+        )
+        assert outsider_messages_res.status_code == 403, outsider_messages_res.text
+        assert outsider_messages_res.json()["detail"] == "room member required"
+
+        bad_extension_res = client.post(
+            f"/api/v1/messenger/rooms/{private_room_id}/attachments",
+            params={"owner_id": "sinsan", "body": "확장자 거부"},
+            files={"file": ("blocked.exe", b"blocked", "text/plain")},
+            headers=headers,
+        )
+        assert bad_extension_res.status_code == 400, bad_extension_res.text
+        assert bad_extension_res.json()["detail"] == "file extension not allowed"
+
+        bad_mime_res = client.post(
+            f"/api/v1/messenger/rooms/{private_room_id}/attachments",
+            params={"owner_id": "sinsan", "body": "MIME 거부"},
+            files={"file": ("blocked.txt", b"blocked", "application/x-msdownload")},
+            headers=headers,
+        )
+        assert bad_mime_res.status_code == 400, bad_mime_res.text
+        assert bad_mime_res.json()["detail"] == "file mime type not allowed"
+
+        octet_stream_res = client.post(
+            f"/api/v1/messenger/rooms/{private_room_id}/attachments",
+            params={"owner_id": "sinsan", "body": "기본 MIME 거부"},
+            files={"file": ("unknown.txt", b"unknown", "application/octet-stream")},
+            headers=headers,
+        )
+        assert octet_stream_res.status_code == 400, octet_stream_res.text
+        assert octet_stream_res.json()["detail"] == "file mime type not allowed"
+
         upload_res = client.post(
             f"/api/v1/messenger/rooms/{private_room_id}/attachments",
             params={"owner_id": "sinsan", "body": "파일 확인"},
@@ -90,6 +138,14 @@ def main() -> None:
         )
         assert download_res.status_code == 200, download_res.text
         assert download_res.content == b"hello messenger"
+
+        outsider_download_res = client.get(
+            f"/api/v1/messenger/attachments/{attachment['id']}",
+            params={"owner_id": "outsider"},
+            headers=outsider_headers,
+        )
+        assert outsider_download_res.status_code == 403, outsider_download_res.text
+        assert outsider_download_res.json()["detail"] == "room member required"
         engine.dispose()
 
     print("NowNote 2.3 messenger smoke test passed")
