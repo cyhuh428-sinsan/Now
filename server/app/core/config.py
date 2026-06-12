@@ -10,6 +10,14 @@ class Settings(BaseSettings):
     messenger_storage_dir: str = "./data/messenger"
     messenger_max_upload_mb: int = 10
     messenger_allowed_extensions: str = "jpg,jpeg,png,webp,gif,pdf,txt,md,docx,xlsx,pptx,zip"
+    messenger_allowed_mime_types: str = (
+        "image/jpeg,image/png,image/webp,image/gif,"
+        "application/pdf,text/plain,text/markdown,"
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document,"
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,"
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
+        "application/zip,application/octet-stream"
+    )
     api_token: str | None = None
     user_token_required: bool = False
     worker_poll_seconds: int = 5

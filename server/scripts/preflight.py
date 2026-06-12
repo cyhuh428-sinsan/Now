@@ -133,6 +133,7 @@ def main() -> None:
     sync_api_path = server_dir / "app" / "api" / "sync.py"
     group_messages_api_path = server_dir / "app" / "api" / "group_messages.py"
     messenger_api_path = server_dir / "app" / "api" / "messenger.py"
+    messenger_storage_path = server_dir / "app" / "services" / "messenger_storage.py"
     note_sync_service_path = server_dir / "app" / "services" / "note_sync.py"
     user_accounts_service_path = server_dir / "app" / "services" / "user_accounts.py"
     user_devices_service_path = server_dir / "app" / "services" / "user_devices.py"
@@ -180,6 +181,10 @@ def main() -> None:
         "NOW_USER_TOKEN_REQUIRED",
         "NOW_POSTGRES_PASSWORD",
         "NOW_STORAGE_DIR",
+        "NOW_MESSENGER_STORAGE_DIR",
+        "NOW_MESSENGER_MAX_UPLOAD_MB",
+        "NOW_MESSENGER_ALLOWED_EXTENSIONS",
+        "NOW_MESSENGER_ALLOWED_MIME_TYPES",
         "NOW_WORKER_POLL_SECONDS",
         "NOW_WORKER_BATCH_SIZE",
         "NOW_LLM_PROVIDER",
@@ -201,6 +206,10 @@ def main() -> None:
     api_token = values.get("NOW_API_TOKEN", "")
     db_password = values.get("NOW_POSTGRES_PASSWORD", "")
     storage_dir = values.get("NOW_STORAGE_DIR", "")
+    messenger_storage_dir = values.get("NOW_MESSENGER_STORAGE_DIR", "")
+    messenger_max_upload_mb = values.get("NOW_MESSENGER_MAX_UPLOAD_MB", "")
+    messenger_allowed_extensions = values.get("NOW_MESSENGER_ALLOWED_EXTENSIONS", "")
+    messenger_allowed_mime_types = values.get("NOW_MESSENGER_ALLOWED_MIME_TYPES", "")
     poll_seconds = values.get("NOW_WORKER_POLL_SECONDS", "")
     batch_size = values.get("NOW_WORKER_BATCH_SIZE", "")
     user_token_required = values.get("NOW_USER_TOKEN_REQUIRED", "").lower()
@@ -242,6 +251,10 @@ def main() -> None:
         )
 
     check(storage_dir.startswith("/"), "Storage dir is container absolute path", storage_dir, failures)
+    check(messenger_storage_dir.startswith("/"), "Messenger storage dir is container absolute path", messenger_storage_dir, failures)
+    check(messenger_max_upload_mb.isdigit() and int(messenger_max_upload_mb) > 0, "Messenger max upload MB valid", messenger_max_upload_mb, failures)
+    check("jpg" in messenger_allowed_extensions and "zip" in messenger_allowed_extensions, "Messenger allowed extensions configured", "messenger allowed extensions", failures)
+    check("image/jpeg" in messenger_allowed_mime_types and "application/pdf" in messenger_allowed_mime_types, "Messenger allowed MIME types configured", "messenger allowed MIME types", failures)
     check(user_token_required in {"true", "false"}, "User token required flag valid", "NOW_USER_TOKEN_REQUIRED true/false", failures)
     check(
         behind_reverse_proxy in {"true", "false"},
@@ -574,6 +587,8 @@ def main() -> None:
     check("NOW_SMTP_HOST: ${NOW_SMTP_HOST:-}" in compose, "Compose reads SMTP host setting", "SMTP host", failures)
     check("NOW_SMTP_FROM: ${NOW_SMTP_FROM:-}" in compose, "Compose reads SMTP sender setting", "SMTP sender", failures)
     check("now_recording_data:${NOW_STORAGE_DIR:-/data/recordings}" in compose, "Compose storage volume follows NOW_STORAGE_DIR", "recording volume", failures)
+    check("NOW_MESSENGER_STORAGE_DIR: ${NOW_MESSENGER_STORAGE_DIR:-/data/messenger}" in compose, "Compose reads messenger storage dir", "messenger storage dir", failures)
+    check("now_messenger_data:${NOW_MESSENGER_STORAGE_DIR:-/data/messenger}" in compose, "Compose storage volume follows NOW_MESSENGER_STORAGE_DIR", "messenger volume", failures)
     check("restart: unless-stopped" in compose, "Compose restart policy set", "services restart unless stopped", failures)
     check(dockerfile_path.exists(), "Server Dockerfile exists", str(dockerfile_path), failures)
     if dockerfile_path.exists():
@@ -1399,6 +1414,21 @@ def main() -> None:
                 ('@router.post("/rooms")', "2.3 messenger exposes room creation", "room creation API"),
                 ('@router.post("/rooms/{room_id}/attachments")', "2.3 messenger exposes attachment upload", "attachment upload API"),
                 ("save_messenger_attachment", "2.3 messenger stores attachments through safe storage", "safe attachment storage"),
+                ("messenger_upload_policy", "2.3 messenger exposes upload policy", "messenger upload policy"),
+                ("resolve_messenger_attachment_path", "2.3 messenger validates download storage path", "messenger download path guard"),
+            ],
+            failures,
+        )
+    check(messenger_storage_path.exists(), "2.3 messenger storage service exists", str(messenger_storage_path), failures)
+    if messenger_storage_path.exists():
+        messenger_storage_source = messenger_storage_path.read_text(encoding="utf-8")
+        check_text_contains(
+            messenger_storage_source,
+            [
+                ("allowed_mime_types", "2.3 messenger policy exposes allowed MIME types", "messenger MIME policy"),
+                ("file mime type not allowed", "2.3 messenger validates MIME type", "messenger MIME validation"),
+                ("messenger_storage_state", "Ops can check messenger attachment storage state", "messenger storage state"),
+                ("messenger_storage_usage", "Ops can check messenger attachment storage usage", "messenger storage usage"),
             ],
             failures,
         )

@@ -12,7 +12,12 @@ from sqlalchemy import func, select, text
 from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
+from app.models.note import AnalysisJob, MessengerAttachment, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
+from app.services.messenger_storage import (
+    messenger_storage_state,
+    messenger_storage_usage,
+    resolve_messenger_attachment_path,
+)
 from app.services.open_source_release import open_source_release_summary
 from app.services.play_release import play_release_summary
 from app.services.public_route import public_route_ops_check, public_route_summary
@@ -3544,6 +3549,11 @@ def _admin_ops_html() -> str:
     inactive_devices = 0
     orphan_recording_files = 0
     missing_recording_files = 0
+    messenger_attachment_total = 0
+    messenger_attachment_bytes = 0
+    messenger_storage_files = 0
+    messenger_storage_bytes = 0
+    missing_messenger_attachments = 0
 
     try:
         with SessionLocal() as db:
@@ -3610,6 +3620,19 @@ def _admin_ops_html() -> str:
             )
             recording_rows = list(db.scalars(select(Recording)).all())
             missing_recording_files = len(_recording_missing_files(recording_rows))
+            messenger_attachment_total = db.scalar(select(func.count()).select_from(MessengerAttachment)) or 0
+            messenger_attachment_bytes = db.scalar(select(func.coalesce(func.sum(MessengerAttachment.size_bytes), 0))) or 0
+            messenger_storage = messenger_storage_usage()
+            messenger_storage_files = messenger_storage["files"]
+            messenger_storage_bytes = messenger_storage["bytes"]
+            attachment_rows = list(
+                db.scalars(
+                    select(MessengerAttachment).where(MessengerAttachment.deleted_at.is_(None))
+                ).all()
+            )
+            missing_messenger_attachments = len(
+                [item for item in attachment_rows if resolve_messenger_attachment_path(item.storage_path) is None]
+            )
     except Exception as exc:
         db_status = "bad"
         db_message = f"DB 연결 오류: {exc}"
@@ -3621,6 +3644,14 @@ def _admin_ops_html() -> str:
             "name": "녹음 저장소",
             "status": storage_status,
             "message": storage_message,
+        }
+    )
+    messenger_storage_status, messenger_storage_message = messenger_storage_state()
+    checks.append(
+        {
+            "name": "메신저 첨부 저장소",
+            "status": messenger_storage_status,
+            "message": messenger_storage_message,
         }
     )
     token_status, token_message = _api_token_state(settings.api_token)
@@ -3710,6 +3741,23 @@ def _admin_ops_html() -> str:
             "name": "누락 녹음 파일",
             "status": "bad" if missing_recording_files else "ok",
             "message": f"DB 메타데이터는 있지만 저장소에서 찾을 수 없는 파일 {missing_recording_files}건",
+        }
+    )
+    checks.append(
+        {
+            "name": "메신저 첨부 용량",
+            "status": "ok",
+            "message": (
+                f"DB 첨부 {messenger_attachment_total}건/{messenger_attachment_bytes} bytes, "
+                f"저장소 파일 {messenger_storage_files}건/{messenger_storage_bytes} bytes"
+            ),
+        }
+    )
+    checks.append(
+        {
+            "name": "누락 메신저 첨부",
+            "status": "bad" if missing_messenger_attachments else "ok",
+            "message": f"DB 메타데이터는 있지만 저장소에서 찾을 수 없는 메신저 첨부 {missing_messenger_attachments}건",
         }
     )
     checks.append(
