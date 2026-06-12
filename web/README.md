@@ -138,7 +138,7 @@ npm install
 npm run dist:win
 ```
 
-생성 결과는 `desktop/dist/NowNote-Setup-0.1.0-x64.exe`입니다.
+생성 결과는 `desktop/dist/NowNote-Setup-2.3.5-x64.exe`입니다.
 
 PWA 설치형 배포 묶음도 개발/검증용으로 아래 명령으로 생성할 수 있습니다.
 
