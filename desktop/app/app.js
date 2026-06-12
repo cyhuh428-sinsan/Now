@@ -6,6 +6,7 @@ const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
+const APP_VERSION = "2.3.5";
 
 const LANGUAGES = {
   ko: { label: "한국어", locale: "ko-KR", dir: "ltr", fallback: "ko" },
@@ -633,6 +634,8 @@ const I18N = {
     "settings.help.title": "도움말",
     "settings.help.desc": "단독 사용자와 서버 연결 사용자의 차이, 백업, 서버 설정 기준을 확인합니다.",
     "settings.help.open": "도움말 열기",
+    "settings.version.title": "현재 버전",
+    "settings.version.desc": "배포와 설치 파일 기준 버전입니다.",
     "settings.workspace.title": "작업공간 / 지식 건강",
     "settings.workspace.desc": "반복 작업 상태를 저장하고 정리 우선순위를 확인합니다.",
     "settings.workspace.placeholder": "작업공간 이름",
@@ -1292,6 +1295,8 @@ const I18N = {
     "settings.help.title": "Help",
     "settings.help.desc": "Review standalone use, server-connected use, backups, and server setup.",
     "settings.help.open": "Open help",
+    "settings.version.title": "Current version",
+    "settings.version.desc": "Version used for deployment and installer builds.",
     "settings.workspace.title": "Workspaces / Knowledge Health",
     "settings.workspace.desc": "Save repeated work states and review cleanup priorities.",
     "settings.workspace.placeholder": "Workspace name",
@@ -6472,6 +6477,9 @@ function applyLanguage() {
   setText("#helpSettingTitle", t("settings.help.title"));
   setText("#helpSettingDesc", t("settings.help.desc"));
   setText("#settingsHelpBtn", t("settings.help.open"));
+  setText("#versionSettingTitle", t("settings.version.title"));
+  setText("#versionSettingDesc", t("settings.version.desc"));
+  setText("#appVersionText", `${isDesktopClient() ? "Desktop" : "Web"} ${APP_VERSION}`);
   setText("#workspaceSettingTitle", t("settings.workspace.title"));
   setText("#workspaceSettingDesc", t("settings.workspace.desc"));
   setPlaceholder(elements.workspaceNameInput, t("settings.workspace.placeholder"));
