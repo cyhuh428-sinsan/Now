@@ -1032,13 +1032,13 @@ class _TreeMemoTile extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
-                width: 18,
+                width: 20,
                 height: 34,
                 child: IconButton(
                   tooltip: '열기',
                   icon: const Icon(Icons.open_in_new_outlined, size: 18),
                   constraints: const BoxConstraints.tightFor(
-                    width: 18,
+                    width: 20,
                     height: 34,
                   ),
                   padding: EdgeInsets.zero,
@@ -1060,13 +1060,13 @@ class _TreeMemoTile extends ConsumerWidget {
               ),
               if (addParent != null && addLevel != null)
                 SizedBox(
-                  width: 18,
+                  width: 20,
                   height: 34,
                   child: IconButton(
                     tooltip: '${_treeMemoKind(addLevel)} 추가',
                     icon: const Icon(Icons.add, size: 18),
                     constraints: const BoxConstraints.tightFor(
-                      width: 18,
+                      width: 20,
                       height: 34,
                     ),
                     padding: EdgeInsets.zero,
@@ -1076,7 +1076,7 @@ class _TreeMemoTile extends ConsumerWidget {
                   ),
                 ),
               SizedBox(
-                width: 18,
+                width: 20,
                 height: 34,
                 child: PopupMenuButton<String>(
                   tooltip: '메모 작업',
