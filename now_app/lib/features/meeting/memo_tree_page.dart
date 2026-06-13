@@ -608,7 +608,6 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
           ? unlocked ?? ''
           : node.content;
       return node.title.toLowerCase().contains(query) ||
-          node.tags.toLowerCase().contains(query) ||
           searchableContent.toLowerCase().contains(query);
     }
 
