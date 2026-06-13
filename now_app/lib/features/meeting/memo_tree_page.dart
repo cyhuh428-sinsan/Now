@@ -75,6 +75,14 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   bool _showDeleted = false;
   final Set<String> _selectedDeletedIds = {};
   final Map<String, String> _unlockedEncryptedContents = {};
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
 
   int _deletedMemoCount(AsyncValue<List<TreeDeletedMemo>> async) {
     if (async is AsyncData<List<TreeDeletedMemo>>) {
@@ -188,6 +196,13 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
       setState(() {
         _unlockedEncryptedContents[node.id] = plain;
       });
+      _showTreeMemoContentSheet(
+        context,
+        ref,
+        node,
+        plain,
+        editable: false,
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('메모를 복호화했습니다.')),
       );
@@ -556,6 +571,56 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     _clearDeletedSelection();
   }
 
+  List<TreeMemoNode> _filterTreeNodes(List<TreeMemoNode> nodes) {
+    final query = _searchQuery.trim().toLowerCase();
+    if (query.isEmpty) return nodes;
+
+    final byId = {for (final node in nodes) node.id: node};
+    final childrenByParent = <String, List<TreeMemoNode>>{};
+    for (final node in nodes) {
+      final parentId = node.parentId;
+      if (parentId == null) continue;
+      childrenByParent.putIfAbsent(parentId, () => []).add(node);
+    }
+
+    bool matches(TreeMemoNode node) {
+      final unlocked = _unlockedEncryptedContents[node.id];
+      final searchableContent = node.isEncrypted
+          ? unlocked ?? ''
+          : node.content;
+      return node.title.toLowerCase().contains(query) ||
+          node.tags.toLowerCase().contains(query) ||
+          searchableContent.toLowerCase().contains(query);
+    }
+
+    final visibleIds = <String>{};
+    void includeAncestors(TreeMemoNode node) {
+      var current = node;
+      while (current.parentId != null) {
+        final parent = byId[current.parentId];
+        if (parent == null || !visibleIds.add(parent.id)) break;
+        current = parent;
+      }
+    }
+
+    void includeDescendants(TreeMemoNode node) {
+      for (final child in childrenByParent[node.id] ?? const <TreeMemoNode>[]) {
+        if (visibleIds.add(child.id)) {
+          includeDescendants(child);
+        }
+      }
+    }
+
+    for (final node in nodes) {
+      if (!matches(node)) continue;
+      visibleIds.add(node.id);
+      includeAncestors(node);
+      includeDescendants(node);
+    }
+
+    return nodes.where((node) => visibleIds.contains(node.id)).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     final memosAsync = ref.watch(treeMemosProvider);
@@ -633,6 +698,32 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
               ],
             ),
             const SizedBox(height: 12),
+            if (!_showDeleted) ...[
+              TextField(
+                controller: _searchCtrl,
+                decoration: InputDecoration(
+                  hintText: '메모 검색',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _searchQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '검색어 지우기',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _searchCtrl.clear();
+                            setState(() => _searchQuery = '');
+                          },
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: (value) => setState(() => _searchQuery = value),
+              ),
+              const SizedBox(height: 12),
+            ],
             Expanded(
               child: _showDeleted
                   ? deletedAsync.when(
@@ -701,14 +792,26 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
                   : memosAsync.when(
                       data: (memos) {
                         final nodes = memos.map(TreeMemoNode.fromMemo).toList();
-                        final roots = nodes
+                        final visibleNodes = _filterTreeNodes(nodes);
+                        final roots = visibleNodes
                             .where((n) => n.parentId == null)
                             .toList();
 
-                        if (roots.isEmpty) {
+                        if (nodes.isEmpty) {
                           return const Center(
                             child: Text(
                               '아직 계층 메모가 없습니다',
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Color(0xFF9CA3AF),
+                              ),
+                            ),
+                          );
+                        }
+                        if (roots.isEmpty) {
+                          return const Center(
+                            child: Text(
+                              '검색 결과가 없습니다',
                               style: TextStyle(
                                 fontSize: 14,
                                 color: Color(0xFF9CA3AF),
@@ -723,7 +826,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
                               .map(
                                 (node) => _TreeMemoTile(
                                   node: node,
-                                  allNodes: nodes,
+                                  allNodes: visibleNodes,
                                   unlockedContents: _unlockedEncryptedContents,
                                   onUnlock: _unlockTreeMemo,
                                   onLock: _lockTreeMemo,
