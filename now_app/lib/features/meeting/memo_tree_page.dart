@@ -896,6 +896,7 @@ class TreeMemoNode {
   });
 
   bool get isEncrypted => isEncryptedNoteContent(content);
+  bool get isShared => _treeMemoTagsContainShared(tags);
 
   String displayContent(String? unlockedContent) {
     if (!isEncrypted) return content;
@@ -928,6 +929,24 @@ Map<String, String> _parseTags(String? raw) {
   return result;
 }
 
+bool _treeMemoTagsContainShared(String rawTags) {
+  final parsed = _parseTags(rawTags);
+  final candidates = <String>[
+    rawTags,
+    parsed['serverTags'] ?? '',
+    parsed['tags'] ?? '',
+  ];
+  for (final candidate in candidates) {
+    final tokens = candidate
+        .toLowerCase()
+        .split(RegExp(r'[\s,;=]+'))
+        .map((token) => token.trim())
+        .where((token) => token.isNotEmpty);
+    if (tokens.contains('shared')) return true;
+  }
+  return false;
+}
+
 class _TreeMemoTile extends ConsumerWidget {
   final TreeMemoNode node;
   final List<TreeMemoNode> allNodes;
@@ -955,6 +974,13 @@ class _TreeMemoTile extends ConsumerWidget {
     final addLevel = addParent == null ? null : _resolveNextLevel(addParent);
     final unlockedContent = unlockedContents[node.id];
     final displayContent = node.displayContent(unlockedContent);
+    final isShared = node.isShared;
+    final accentColor = isShared
+        ? const Color(0xFF059669)
+        : const Color(0xFF2563EB);
+    final titleColor = isShared
+        ? const Color(0xFF047857)
+        : const Color(0xFF111827);
 
     return Padding(
       padding: EdgeInsets.only(left: indent, bottom: 8),
@@ -971,12 +997,14 @@ class _TreeMemoTile extends ConsumerWidget {
           minTileHeight: 56,
           visualDensity: const VisualDensity(horizontal: -4, vertical: -2),
           leading: Icon(
-            node.level == 1
+            isShared
+                ? Icons.folder_shared_outlined
+                : node.level == 1
                 ? Icons.folder_outlined
                 : node.level == 2
                 ? Icons.note_outlined
                 : Icons.notes,
-            color: const Color(0xFF2563EB),
+            color: accentColor,
             size: 22,
           ),
           title: InkWell(
@@ -1012,8 +1040,7 @@ class _TreeMemoTile extends ConsumerWidget {
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFF111827),
-                ),
+                ).copyWith(color: titleColor),
               ),
             ),
           ),
