@@ -65,9 +65,9 @@
 - 파일명: `NowNote-Setup-2.3.5-x64.exe`
 - 경로: `desktop/dist/NowNote-Setup-2.3.5-x64.exe`
 - 설치형 package version: `2.3.5`
-- 크기: `101,031,939 bytes`
-- 생성시각: `2026-06-13 오후 11:30:12`
-- SHA256: `A4D8B3840203848345D414A239AB164F57027FA85EBE8D594F712FADE970D382`
+- 크기: `101,032,391 bytes`
+- 생성시각: `2026-06-14 오전 4:16:40`
+- SHA256: `84B6320A261F717E0EAD31C1952F34712E462DF135D1AB8477737FD3B1BC449A`
 
 ## 6. 운영 서버 확인
 
@@ -87,16 +87,37 @@
 - Release URL: `https://github.com/cyhuh428-sinsan/Now/releases/tag/v2.3.5`
 - 업로드 결과: 완료
 - 업로드 asset 상태: `uploaded`
-- 업로드 asset 크기: `101,031,939 bytes`
+- 업로드 asset 크기: `101,032,391 bytes`
 - 다운로드 URL: `https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe`
 
 ## 8. 완료 판단
 
 - Web/설치형 입력, 검색, 본문찾기, 단축키, Tab 들여쓰기 검증 통과
 - Web/설치형 본문찾기 결과 위치 이동 보정 완료
+- Web 공유 문서 첫 화면을 `그룹 공유메모` 기준으로 열어 같은 그룹의 공유 문서가 바로 보이도록 보정
+- Web/설치형 그룹 메신저 좌측 목록에 그룹원 영역 표시 추가
+- 그룹 메신저 폰트를 기준표에 맞춰 제목 12px, 본문 11px, 설명 9px 중심으로 축소
 - Web 메신저 2.3 room/첨부 UI 표면 검증 통과
 - 설치형 Web 전용 기능 숨김 기준 검증 통과
 - 설치형 `NowNote-Setup-2.3.5-x64.exe` 릴리즈 산출물 생성 완료
 - 설치형 저장/입력/단축키 재검증 통과
 - GitHub Release asset 업로드 완료
 - Web/설치형 최종 완료
+
+## 9. 2026-06-14 공유 메모/메신저 표시 보정
+
+### 변경 내용
+
+- Web hosted 모드의 기본 공유 보기 탭을 `내 공유메모`에서 `그룹 공유메모`로 변경
+- 로그인 후 서버 공유 문서를 전체 재로딩할 때도 `그룹 공유메모` 탭을 기본 선택하도록 보정
+- `그룹 지식체계` 탭 명칭을 실제 기능에 맞춰 `그룹 공유메모`로 정정
+- 그룹 메신저 좌측 방 목록 아래에 그룹원 목록을 표시
+- 그룹 메신저 방/그룹원/본문 글자 크기를 2.3 폰트 기준에 맞춰 축소
+
+### 검증 결과
+
+- `node --check web\app.js`: 통과
+- `node --check desktop\app\app.js`: 통과
+- `C:\Users\cyhuh\anaconda3\python.exe web\scripts\verify_web_surface.py`: 통과, 726/726
+- `npm run dist:win` in `desktop`: 통과
+- `npm run check:storage` in `desktop`: 통과

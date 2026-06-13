@@ -126,3 +126,28 @@
 - `npm run check:storage` in `desktop`: 통과
 - `node --check web\app.js`: 통과
 - `node --check desktop\app\app.js`: 통과
+
+## 2026-06-14 Web 공유 메모/설치형 메신저 표시 보정
+
+### 변경 내용
+
+- Web hosted 모드의 기본 공유 문서 보기를 `그룹 공유메모`로 변경했다.
+- 서버 공유 문서 재로딩 시에도 `그룹 공유메모` 탭을 기본 선택하도록 했다.
+- `그룹 지식체계` 표기를 실제 기능 기준인 `그룹 공유메모`로 정정했다.
+- 그룹 메신저 좌측 영역에 그룹원 목록을 표시하도록 했다.
+- 그룹 메신저 방/그룹원/메시지 글자 크기를 기준표의 제목 12px, 본문 11px, 설명 9px 흐름에 맞췄다.
+
+### 검증 결과
+
+- `node --check web\app.js`: 통과
+- `node --check desktop\app\app.js`: 통과
+- `C:\Users\cyhuh\anaconda3\python.exe web\scripts\verify_web_surface.py`: 통과, 726/726
+- `npm run dist:win` in `desktop`: 통과
+- `npm run check:storage` in `desktop`: 통과
+
+### 설치형 산출물
+
+- 생성 파일: `desktop/dist/NowNote-Setup-2.3.5-x64.exe`
+- 생성 시각: 2026-06-14 04:16:40
+- 파일 크기: 101,032,391 bytes
+- SHA256: `84B6320A261F717E0EAD31C1952F34712E462DF135D1AB8477737FD3B1BC449A`

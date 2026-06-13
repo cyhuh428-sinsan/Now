@@ -172,7 +172,7 @@ const I18N = {
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
     "nav.shared.mine": "내 공유메모",
-    "nav.shared.groupTree": "그룹 지식체계",
+    "nav.shared.groupTree": "그룹 공유메모",
     "nav.shared.member": "구성원별 공유문서",
     "aria.quickMenu": "빠른 메뉴",
     "aria.sidebar": "NowNote 메뉴",
@@ -227,6 +227,9 @@ const I18N = {
     "messenger.send": "보내기",
     "messenger.placeholder": "그룹원에게 보낼 메시지",
     "messenger.group": "그룹: {group}",
+    "messenger.rooms": "채팅방",
+    "messenger.members": "그룹원",
+    "messenger.memberMine": "나",
     "messenger.empty": "아직 메시지가 없습니다.",
     "messenger.loadFailed": "메시지를 불러오지 못했습니다",
     "messenger.sendFailed": "메시지를 보내지 못했습니다",
@@ -833,7 +836,7 @@ const I18N = {
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
     "nav.shared.mine": "My shared notes",
-    "nav.shared.groupTree": "Group knowledge tree",
+    "nav.shared.groupTree": "Group shared notes",
     "nav.shared.member": "Shared by member",
     "aria.quickMenu": "Quick menu",
     "aria.sidebar": "NowNote menu",
@@ -888,6 +891,9 @@ const I18N = {
     "messenger.send": "Send",
     "messenger.placeholder": "Message your group",
     "messenger.group": "Group: {group}",
+    "messenger.rooms": "Rooms",
+    "messenger.members": "Members",
+    "messenger.memberMine": "Me",
     "messenger.empty": "No messages yet.",
     "messenger.loadFailed": "Could not load messages",
     "messenger.sendFailed": "Could not send message",
@@ -1670,7 +1676,7 @@ const state = {
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
-  sharedView: "mine",
+  sharedView: isHostedWebClient() ? "group-tree" : "mine",
   selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
   selectedDeletedTreeIds: new Set(),
@@ -4647,6 +4653,7 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
     if (replace) {
       state.data = defaultData();
       state.selectedTreeId = null;
+      if (isHostedWebClient()) state.sharedView = "group-tree";
       state.expandedTreeIds.clear();
       state.selectedDeletedTreeIds.clear();
     }
@@ -5353,17 +5360,64 @@ function updateMessengerUnreadTotal() {
     .reduce((sum, room) => sum + (Number(room.unread_count) || 0), 0);
 }
 
+function collectGroupMessengerMembers(server = state.settings.server) {
+  const currentOwnerId = normalizeOwnerId(server?.ownerId || "local_user");
+  const members = new Map();
+  const addMember = (ownerId, displayName = "") => {
+    const id = normalizeOwnerId(ownerId || "");
+    if (!id || members.has(id)) return;
+    members.set(id, {
+      ownerId: id,
+      displayName: normalizeText(displayName || id).slice(0, 48),
+    });
+  };
+  addMember(currentOwnerId, server?.userProfile?.displayName || currentOwnerId);
+  (Array.isArray(server?.groupMessengerRooms) ? server.groupMessengerRooms : []).forEach((room) => {
+    const roomMembers = Array.isArray(room?.members) ? room.members : [];
+    roomMembers.forEach((member) => {
+      if (typeof member === "string") addMember(member);
+      else addMember(member?.owner_id || member?.ownerId, member?.display_name || member?.displayName || member?.name);
+    });
+  });
+  (Array.isArray(server?.groupMessages) ? server.groupMessages : []).forEach((message) => {
+    addMember(message?.sender_owner_id || message?.senderOwnerId, message?.sender_display_name || message?.senderDisplayName);
+  });
+  return [...members.values()].sort((left, right) => {
+    if (left.ownerId === currentOwnerId) return -1;
+    if (right.ownerId === currentOwnerId) return 1;
+    return left.displayName.localeCompare(right.displayName, state.settings.language === "ko" ? "ko-KR" : "en");
+  });
+}
+
+function renderMessengerSection(titleKey, children) {
+  const section = document.createElement("section");
+  section.className = "messenger-room-section";
+  const heading = document.createElement("div");
+  heading.className = "messenger-room-heading";
+  heading.textContent = t(titleKey);
+  section.append(heading, ...children);
+  return section;
+}
+
+function renderMessengerMemberItem(member, currentOwnerId) {
+  const item = document.createElement("div");
+  item.className = "messenger-member-item";
+  const name = document.createElement("strong");
+  name.textContent = member.displayName || member.ownerId;
+  const owner = document.createElement("span");
+  owner.textContent = member.ownerId === currentOwnerId ? t("messenger.memberMine") : member.ownerId;
+  item.append(name, owner);
+  return item;
+}
+
 function renderMessengerRooms() {
   if (!elements.groupMessengerRoomList) return;
   const server = state.settings.server || defaultServerSettings();
   const rooms = Array.isArray(server.groupMessengerRooms) ? server.groupMessengerRooms : [];
   const activeId = activeMessengerRoomId(server);
-  if (!rooms.length) {
-    elements.groupMessengerRoomList.innerHTML = `<div class="side-empty">${escapeHtml(t("messenger.empty"))}</div>`;
-    return;
-  }
-  elements.groupMessengerRoomList.replaceChildren(
-    ...rooms.map((room) => {
+  const currentOwnerId = normalizeOwnerId(server.ownerId || "local_user");
+  const roomItems = rooms.length
+    ? rooms.map((room) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = `messenger-room-item${Number(room.id) === Number(activeId) ? " active" : ""}`;
@@ -5378,7 +5432,15 @@ function renderMessengerRooms() {
         await markGroupMessagesRead({ silent: true });
       });
       return button;
-    }),
+    })
+    : [Object.assign(document.createElement("div"), {
+      className: "side-empty",
+      textContent: t("messenger.empty"),
+    })];
+  const memberItems = collectGroupMessengerMembers(server).map((member) => renderMessengerMemberItem(member, currentOwnerId));
+  elements.groupMessengerRoomList.replaceChildren(
+    renderMessengerSection("messenger.rooms", roomItems),
+    renderMessengerSection("messenger.members", memberItems),
   );
 }
 
