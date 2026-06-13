@@ -360,8 +360,13 @@ button {
   gap: 4px;
 }
 
-.messenger-card {
-  width: min(860px, calc(100vw - 28px));
+#groupMessengerView {
+  padding-top: 28px;
+}
+
+.quick-card.messenger-card {
+  width: min(1100px, calc(100vw - 28px));
+  max-height: calc(100vh - 56px);
 }
 
 .messenger-toolbar,
@@ -380,8 +385,8 @@ button {
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 220px;
-  max-height: min(52vh, 520px);
+  min-height: 360px;
+  max-height: min(64vh, 680px);
   overflow: auto;
   padding: 10px;
   border: 1px solid var(--line);
@@ -391,7 +396,7 @@ button {
 
 .messenger-layout {
   display: grid;
-  grid-template-columns: minmax(150px, 190px) minmax(0, 1fr);
+  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -399,7 +404,7 @@ button {
   display: grid;
   align-content: start;
   gap: 10px;
-  max-height: min(52vh, 520px);
+  max-height: min(64vh, 680px);
   overflow: auto;
 }
 
