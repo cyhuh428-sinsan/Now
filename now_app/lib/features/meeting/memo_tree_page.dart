@@ -1031,102 +1031,110 @@ class _TreeMemoTile extends ConsumerWidget {
           trailing: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              IconButton(
-                tooltip: '열기',
-                icon: const Icon(Icons.open_in_new_outlined, size: 18),
-                constraints: const BoxConstraints.tightFor(
-                  width: 20,
-                  height: 34,
-                ),
-                padding: EdgeInsets.zero,
-                onPressed: () {
-                  if (node.isEncrypted && unlockedContent == null) {
-                    onUnlock(node);
-                    return;
-                  }
-                  _showTreeMemoContentSheet(
-                    context,
-                    ref,
-                    node,
-                    displayContent,
-                    editable: !node.isEncrypted,
-                  );
-                },
-              ),
-              if (addParent != null && addLevel != null)
-                IconButton(
-                  tooltip: '${_treeMemoKind(addLevel)} 추가',
-                  icon: const Icon(Icons.add, size: 18),
+              SizedBox(
+                width: 18,
+                height: 34,
+                child: IconButton(
+                  tooltip: '열기',
+                  icon: const Icon(Icons.open_in_new_outlined, size: 18),
                   constraints: const BoxConstraints.tightFor(
-                    width: 20,
+                    width: 18,
                     height: 34,
                   ),
                   padding: EdgeInsets.zero,
-                  onPressed: () =>
-                      _showTreeMemoDialog(context, ref, parent: addParent),
-                ),
-              PopupMenuButton<String>(
-                tooltip: '메모 작업',
-                icon: const SizedBox(
-                  width: 20,
-                  height: 34,
-                  child: Icon(Icons.more_vert, size: 20),
-                ),
-                padding: EdgeInsets.zero,
-                onSelected: (value) {
-                  switch (value) {
-                    case 'unlock':
+                  visualDensity: VisualDensity.compact,
+                  onPressed: () {
+                    if (node.isEncrypted && unlockedContent == null) {
                       onUnlock(node);
-                      break;
-                    case 'lock':
-                      onLock(node);
-                      break;
-                    case 'removeEncryption':
-                      onRemoveEncryption(node);
-                      break;
-                    case 'encrypt':
-                      onEncrypt(node);
-                      break;
-                    case 'analysis':
-                      _requestTreeMemoAnalysis(context, ref, node);
-                      break;
-                    case 'delete':
-                      _confirmDeleteTreeMemo(context, ref, node);
-                      break;
-                  }
-                },
-                itemBuilder: (context) => [
-                  if (node.isEncrypted)
-                    PopupMenuItem(
-                      value: unlockedContent == null ? 'unlock' : 'lock',
-                      child: Text(unlockedContent == null ? '복호화' : '잠금'),
-                    )
-                  else
-                    const PopupMenuItem(
-                      value: 'encrypt',
-                      child: Text('암호화'),
+                      return;
+                    }
+                    _showTreeMemoContentSheet(
+                      context,
+                      ref,
+                      node,
+                      displayContent,
+                      editable: !node.isEncrypted,
+                    );
+                  },
+                ),
+              ),
+              if (addParent != null && addLevel != null)
+                SizedBox(
+                  width: 18,
+                  height: 34,
+                  child: IconButton(
+                    tooltip: '${_treeMemoKind(addLevel)} 추가',
+                    icon: const Icon(Icons.add, size: 18),
+                    constraints: const BoxConstraints.tightFor(
+                      width: 18,
+                      height: 34,
                     ),
-                  if (node.isEncrypted)
-                    const PopupMenuItem(
-                      value: 'removeEncryption',
-                      child: Text('암호화 해제'),
-                    ),
-                  if (!node.isEncrypted)
-                    const PopupMenuItem(
-                      value: 'analysis',
-                      child: Text('서버 분석'),
-                    ),
-                  if (children.isEmpty)
-                    const PopupMenuItem(
-                      value: 'delete',
-                      child: Text('삭제'),
-                    )
-                  else
-                    const PopupMenuItem(
-                      enabled: false,
-                      child: Text('하위 메모가 있어 삭제 불가'),
-                    ),
-                ],
+                    padding: EdgeInsets.zero,
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () =>
+                        _showTreeMemoDialog(context, ref, parent: addParent),
+                  ),
+                ),
+              SizedBox(
+                width: 18,
+                height: 34,
+                child: PopupMenuButton<String>(
+                  tooltip: '메모 작업',
+                  icon: const Icon(Icons.more_vert, size: 20),
+                  iconSize: 20,
+                  padding: EdgeInsets.zero,
+                  onSelected: (value) {
+                    switch (value) {
+                      case 'unlock':
+                        onUnlock(node);
+                        break;
+                      case 'lock':
+                        onLock(node);
+                        break;
+                      case 'removeEncryption':
+                        onRemoveEncryption(node);
+                        break;
+                      case 'encrypt':
+                        onEncrypt(node);
+                        break;
+                      case 'analysis':
+                        _requestTreeMemoAnalysis(context, ref, node);
+                        break;
+                      case 'delete':
+                        _confirmDeleteTreeMemo(context, ref, node);
+                        break;
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    if (node.isEncrypted)
+                      PopupMenuItem(
+                        value: unlockedContent == null ? 'unlock' : 'lock',
+                        child: Text(unlockedContent == null ? '복호화' : '잠금'),
+                      )
+                    else
+                      const PopupMenuItem(
+                        value: 'encrypt',
+                        child: Text('암호화'),
+                      ),
+                    if (node.isEncrypted)
+                      const PopupMenuItem(
+                        value: 'removeEncryption',
+                        child: Text('암호화 해제'),
+                      ),
+                    if (!node.isEncrypted)
+                      const PopupMenuItem(
+                        value: 'analysis',
+                        child: Text('서버 분석'),
+                      ),
+                    if (children.isEmpty)
+                      const PopupMenuItem(value: 'delete', child: Text('삭제'))
+                    else
+                      const PopupMenuItem(
+                        enabled: false,
+                        child: Text('하위 메모가 있어 삭제 불가'),
+                      ),
+                  ],
+                ),
               ),
             ],
           ),
