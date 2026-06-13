@@ -65,9 +65,9 @@
 - 파일명: `NowNote-Setup-2.3.5-x64.exe`
 - 경로: `desktop/dist/NowNote-Setup-2.3.5-x64.exe`
 - 설치형 package version: `2.3.5`
-- 크기: `101,031,820 bytes`
-- 생성시각: `2026-06-13 오후 10:14:35`
-- SHA256: `C0172001BEED4614FFDD3A79EBD15A2632F1E2B1AC52AF53A84C9A0765B5B045`
+- 크기: `101,031,939 bytes`
+- 생성시각: `2026-06-13 오후 11:30:12`
+- SHA256: `A4D8B3840203848345D414A239AB164F57027FA85EBE8D594F712FADE970D382`
 
 ## 6. 운영 서버 확인
 
@@ -87,7 +87,7 @@
 - Release URL: `https://github.com/cyhuh428-sinsan/Now/releases/tag/v2.3.5`
 - 업로드 결과: 완료
 - 업로드 asset 상태: `uploaded`
-- 업로드 asset 크기: `101,031,820 bytes`
+- 업로드 asset 크기: `101,031,939 bytes`
 - 다운로드 URL: `https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe`
 
 ## 8. 완료 판단

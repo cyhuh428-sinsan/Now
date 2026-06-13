@@ -9927,17 +9927,31 @@ function scrollTreeContentToOffset(offset) {
   const editor = elements.treeContent;
   if (!editor) return;
   const computed = window.getComputedStyle(editor);
-  const fontSize = Number.parseFloat(computed.fontSize) || 14;
-  const lineHeight = Number.parseFloat(computed.lineHeight) || fontSize * 1.5;
-  const lineIndex = editor.value.slice(0, offset).split("\n").length - 1;
-  const targetTop = Math.max(0, lineIndex * lineHeight);
-  const upperMargin = lineHeight * 2;
-  const lowerMargin = lineHeight * 3;
-  if (targetTop < editor.scrollTop + upperMargin) {
-    editor.scrollTop = Math.max(0, targetTop - editor.clientHeight * 0.3);
-  } else if (targetTop > editor.scrollTop + editor.clientHeight - lowerMargin) {
-    editor.scrollTop = Math.max(0, targetTop - editor.clientHeight * 0.45);
-  }
+  const mirror = document.createElement("div");
+  const marker = document.createElement("span");
+  const width = Math.max(0, editor.clientWidth);
+  mirror.style.position = "fixed";
+  mirror.style.visibility = "hidden";
+  mirror.style.pointerEvents = "none";
+  mirror.style.left = "-10000px";
+  mirror.style.top = "0";
+  mirror.style.width = `${width}px`;
+  mirror.style.boxSizing = computed.boxSizing;
+  mirror.style.padding = computed.padding;
+  mirror.style.border = computed.border;
+  mirror.style.font = computed.font;
+  mirror.style.letterSpacing = computed.letterSpacing;
+  mirror.style.lineHeight = computed.lineHeight;
+  mirror.style.whiteSpace = "pre-wrap";
+  mirror.style.overflowWrap = "break-word";
+  mirror.style.wordBreak = computed.wordBreak;
+  mirror.textContent = editor.value.slice(0, Math.max(0, offset));
+  marker.textContent = "\u200b";
+  mirror.append(marker);
+  document.body.append(mirror);
+  const targetTop = marker.offsetTop;
+  mirror.remove();
+  editor.scrollTop = Math.max(0, targetTop - editor.clientHeight * 0.4);
 }
 
 function selectNoteFindMatch(index, options = {}) {
