@@ -9923,10 +9923,27 @@ function noteFindMatches() {
   return matches;
 }
 
+function scrollTreeContentToOffset(offset) {
+  const editor = elements.treeContent;
+  if (!editor) return;
+  const computed = window.getComputedStyle(editor);
+  const fontSize = Number.parseFloat(computed.fontSize) || 14;
+  const lineHeight = Number.parseFloat(computed.lineHeight) || fontSize * 1.5;
+  const lineIndex = editor.value.slice(0, offset).split("\n").length - 1;
+  const targetTop = Math.max(0, lineIndex * lineHeight);
+  const upperMargin = lineHeight * 2;
+  const lowerMargin = lineHeight * 3;
+  if (targetTop < editor.scrollTop + upperMargin) {
+    editor.scrollTop = Math.max(0, targetTop - editor.clientHeight * 0.3);
+  } else if (targetTop > editor.scrollTop + editor.clientHeight - lowerMargin) {
+    editor.scrollTop = Math.max(0, targetTop - editor.clientHeight * 0.45);
+  }
+}
+
 function selectNoteFindMatch(index, options = {}) {
   const query = elements.noteFindInput.value.trim();
   const matches = noteFindMatches();
-  const shouldKeepInputFocus = options.keepInputFocus || options.previewOnly || document.activeElement === elements.noteFindInput;
+  const shouldKeepInputFocus = options.keepInputFocus || options.previewOnly;
   if (!query || matches.length === 0) {
     elements.noteFindInput.dataset.index = "0";
     updateNoteFindState(matches, query);
@@ -9944,6 +9961,7 @@ function selectNoteFindMatch(index, options = {}) {
   elements.previewToggleBtn.textContent = t("editor.preview");
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(start, start + query.length);
+  scrollTreeContentToOffset(start);
 }
 
 function focusNoteFindInput() {

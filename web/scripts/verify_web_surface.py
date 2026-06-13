@@ -373,6 +373,8 @@ def main() -> None:
         ('setWebLoginMode("login");', "hosted Web password reset returns to login mode"),
         ('elements.webResetCodeInput.value = "";', "hosted Web password reset clears reset code after success"),
         ("function noteFindMatches", "in-note search function"),
+        ("function scrollTreeContentToOffset", "in-note search scroll-to-match helper"),
+        ("scrollTreeContentToOffset(start)", "in-note search scrolls to selected match"),
         ("keepInputFocus", "in-note search keeps input focus"),
         ("focusNoteFindInput", "in-note search input focus helper"),
         ("focusSearchPopoverInput", "search popover input focus helper"),
