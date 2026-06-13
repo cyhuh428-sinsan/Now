@@ -1055,10 +1055,10 @@ class _TreeMemoTile extends ConsumerWidget {
               ),
               PopupMenuButton<String>(
                 tooltip: '메모 작업',
-                icon: const Icon(Icons.more_vert, size: 20),
-                constraints: const BoxConstraints.tightFor(
+                icon: const SizedBox(
                   width: 28,
                   height: 34,
+                  child: Icon(Icons.more_vert, size: 20),
                 ),
                 padding: EdgeInsets.zero,
                 onSelected: (value) {
