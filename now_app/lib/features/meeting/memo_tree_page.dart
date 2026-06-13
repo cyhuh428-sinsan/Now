@@ -720,7 +720,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
               TextField(
                 controller: _searchCtrl,
                 decoration: InputDecoration(
-                  hintText: '메모 검색',
+                  hintText: '목록 제목/본문 검색',
                   prefixIcon: const Icon(Icons.search),
                   suffixIcon: _searchQuery.isEmpty
                       ? null
@@ -1035,7 +1035,7 @@ class _TreeMemoTile extends ConsumerWidget {
                 tooltip: '열기',
                 icon: const Icon(Icons.open_in_new_outlined, size: 18),
                 constraints: const BoxConstraints.tightFor(
-                  width: 28,
+                  width: 20,
                   height: 34,
                 ),
                 padding: EdgeInsets.zero,
@@ -1053,10 +1053,22 @@ class _TreeMemoTile extends ConsumerWidget {
                   );
                 },
               ),
+              if (addParent != null && addLevel != null)
+                IconButton(
+                  tooltip: '${_treeMemoKind(addLevel)} 추가',
+                  icon: const Icon(Icons.add, size: 18),
+                  constraints: const BoxConstraints.tightFor(
+                    width: 20,
+                    height: 34,
+                  ),
+                  padding: EdgeInsets.zero,
+                  onPressed: () =>
+                      _showTreeMemoDialog(context, ref, parent: addParent),
+                ),
               PopupMenuButton<String>(
                 tooltip: '메모 작업',
                 icon: const SizedBox(
-                  width: 28,
+                  width: 20,
                   height: 34,
                   child: Icon(Icons.more_vert, size: 20),
                 ),
@@ -1077,11 +1089,6 @@ class _TreeMemoTile extends ConsumerWidget {
                       break;
                     case 'analysis':
                       _requestTreeMemoAnalysis(context, ref, node);
-                      break;
-                    case 'add':
-                      if (addParent != null) {
-                        _showTreeMemoDialog(context, ref, parent: addParent);
-                      }
                       break;
                     case 'delete':
                       _confirmDeleteTreeMemo(context, ref, node);
@@ -1108,11 +1115,6 @@ class _TreeMemoTile extends ConsumerWidget {
                     const PopupMenuItem(
                       value: 'analysis',
                       child: Text('서버 분석'),
-                    ),
-                  if (addParent != null && addLevel != null)
-                    PopupMenuItem(
-                      value: 'add',
-                      child: Text('${_treeMemoKind(addLevel)} 추가'),
                     ),
                   if (children.isEmpty)
                     const PopupMenuItem(
@@ -1161,7 +1163,57 @@ Future<void> _showTreeMemoContentSheet(
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (ctx) => DraggableScrollableSheet(
+    builder: (ctx) => _TreeMemoContentSheet(
+      node: node,
+      content: content,
+      editable: editable,
+      onEdit: () {
+        Navigator.pop(ctx);
+        _showTreeMemoDialog(context, ref, editingNode: node);
+      },
+    ),
+  );
+}
+
+class _TreeMemoContentSheet extends StatefulWidget {
+  final TreeMemoNode node;
+  final String content;
+  final bool editable;
+  final VoidCallback onEdit;
+
+  const _TreeMemoContentSheet({
+    required this.node,
+    required this.content,
+    required this.editable,
+    required this.onEdit,
+  });
+
+  @override
+  State<_TreeMemoContentSheet> createState() => _TreeMemoContentSheetState();
+}
+
+class _TreeMemoContentSheetState extends State<_TreeMemoContentSheet> {
+  final TextEditingController _findCtrl = TextEditingController();
+  String _findQuery = '';
+
+  @override
+  void dispose() {
+    _findCtrl.dispose();
+    super.dispose();
+  }
+
+  int get _matchCount {
+    final query = _findQuery.trim();
+    if (query.isEmpty) return 0;
+    return RegExp(RegExp.escape(query), caseSensitive: false)
+        .allMatches(widget.content)
+        .length;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final matchCount = _matchCount;
+    return DraggableScrollableSheet(
       expand: false,
       initialChildSize: 0.78,
       minChildSize: 0.45,
@@ -1187,7 +1239,7 @@ Future<void> _showTreeMemoContentSheet(
                 children: [
                   Expanded(
                     child: Text(
-                      node.title,
+                      widget.node.title,
                       style: const TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
@@ -1195,12 +1247,9 @@ Future<void> _showTreeMemoContentSheet(
                       ),
                     ),
                   ),
-                  if (editable)
+                  if (widget.editable)
                     TextButton.icon(
-                      onPressed: () {
-                        Navigator.pop(ctx);
-                        _showTreeMemoDialog(context, ref, editingNode: node);
-                      },
+                      onPressed: widget.onEdit,
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('편집'),
                     ),
@@ -1208,12 +1257,48 @@ Future<void> _showTreeMemoContentSheet(
               ),
               const SizedBox(height: 8),
               Text(
-                _treeMemoKind(node.level),
+                _treeMemoKind(widget.node.level),
                 style: const TextStyle(fontSize: 12, color: Color(0xFF6B7280)),
               ),
-              const Divider(height: 24),
+              const SizedBox(height: 10),
+              TextField(
+                controller: _findCtrl,
+                decoration: InputDecoration(
+                  hintText: '본문 찾기',
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: _findQuery.isEmpty
+                      ? null
+                      : IconButton(
+                          tooltip: '검색어 지우기',
+                          icon: const Icon(Icons.clear),
+                          onPressed: () {
+                            _findCtrl.clear();
+                            setState(() => _findQuery = '');
+                          },
+                        ),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
+                ),
+                textInputAction: TextInputAction.search,
+                onChanged: (value) => setState(() => _findQuery = value),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                _findQuery.trim().isEmpty
+                    ? '본문에서 단어를 찾습니다'
+                    : '찾은 단어 $matchCount개',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: matchCount == 0 && _findQuery.trim().isNotEmpty
+                      ? const Color(0xFFEF4444)
+                      : const Color(0xFF6B7280),
+                ),
+              ),
+              const Divider(height: 18),
               Expanded(
-                child: content.trim().isEmpty
+                child: widget.content.trim().isEmpty
                     ? const Center(
                         child: Text(
                           '메모 내용이 없습니다',
@@ -1225,21 +1310,28 @@ Future<void> _showTreeMemoContentSheet(
                       )
                     : SingleChildScrollView(
                         controller: scrollController,
-                        child: _LinkifiedSelectableText(content: content),
+                        child: _LinkifiedSelectableText(
+                          content: widget.content,
+                          highlightQuery: _findQuery,
+                        ),
                       ),
               ),
             ],
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }
 
 class _LinkifiedSelectableText extends StatelessWidget {
   final String content;
+  final String highlightQuery;
 
-  const _LinkifiedSelectableText({required this.content});
+  const _LinkifiedSelectableText({
+    required this.content,
+    this.highlightQuery = '',
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -1257,7 +1349,12 @@ class _LinkifiedSelectableText extends StatelessWidget {
     return SelectableText.rich(
       TextSpan(
         style: baseStyle,
-        children: _linkifiedMemoSpans(content, baseStyle, linkStyle),
+        children: _linkifiedMemoSpans(
+          content,
+          baseStyle,
+          linkStyle,
+          highlightQuery.trim(),
+        ),
       ),
     );
   }
@@ -1267,6 +1364,7 @@ List<InlineSpan> _linkifiedMemoSpans(
   String text,
   TextStyle baseStyle,
   TextStyle linkStyle,
+  String highlightQuery,
 ) {
   final pattern = RegExp(
     r'(https?:\/\/[^\s<>()]+|www\.[^\s<>()]+|[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})',
@@ -1276,25 +1374,92 @@ List<InlineSpan> _linkifiedMemoSpans(
   var index = 0;
   for (final match in pattern.allMatches(text)) {
     if (match.start > index) {
-      spans.add(TextSpan(text: text.substring(index, match.start), style: baseStyle));
+      spans.addAll(
+        _highlightedMemoSpans(
+          text.substring(index, match.start),
+          baseStyle,
+          highlightQuery,
+        ),
+      );
     }
     final raw = match.group(0) ?? '';
     final trimmed = raw.replaceFirst(RegExp(r'[.,;:!?]+$'), '');
     final trailing = raw.substring(trimmed.length);
-    spans.add(
-      TextSpan(
-        text: trimmed,
-        style: linkStyle,
-        recognizer: TapGestureRecognizer()..onTap = () => _openMemoLink(trimmed),
+    spans.addAll(
+      _highlightedMemoSpans(
+        trimmed,
+        linkStyle,
+        highlightQuery,
+        recognizerFactory: () =>
+            TapGestureRecognizer()..onTap = () => _openMemoLink(trimmed),
       ),
     );
     if (trailing.isNotEmpty) {
-      spans.add(TextSpan(text: trailing, style: baseStyle));
+      spans.addAll(_highlightedMemoSpans(trailing, baseStyle, highlightQuery));
     }
     index = match.end;
   }
   if (index < text.length) {
-    spans.add(TextSpan(text: text.substring(index), style: baseStyle));
+    spans.addAll(
+      _highlightedMemoSpans(text.substring(index), baseStyle, highlightQuery),
+    );
+  }
+  return spans;
+}
+
+List<TextSpan> _highlightedMemoSpans(
+  String text,
+  TextStyle style,
+  String query, {
+  GestureRecognizer Function()? recognizerFactory,
+}) {
+  if (text.isEmpty) return const [];
+  final normalizedQuery = query.trim();
+  if (normalizedQuery.isEmpty) {
+    return [
+      TextSpan(text: text, style: style, recognizer: recognizerFactory?.call()),
+    ];
+  }
+
+  final matches = RegExp(
+    RegExp.escape(normalizedQuery),
+    caseSensitive: false,
+  ).allMatches(text).toList();
+  if (matches.isEmpty) {
+    return [
+      TextSpan(text: text, style: style, recognizer: recognizerFactory?.call()),
+    ];
+  }
+
+  final spans = <TextSpan>[];
+  var index = 0;
+  for (final match in matches) {
+    if (match.start > index) {
+      spans.add(
+        TextSpan(
+          text: text.substring(index, match.start),
+          style: style,
+          recognizer: recognizerFactory?.call(),
+        ),
+      );
+    }
+    spans.add(
+      TextSpan(
+        text: text.substring(match.start, match.end),
+        style: style.copyWith(backgroundColor: const Color(0xFFFFF59D)),
+        recognizer: recognizerFactory?.call(),
+      ),
+    );
+    index = match.end;
+  }
+  if (index < text.length) {
+    spans.add(
+      TextSpan(
+        text: text.substring(index),
+        style: style,
+        recognizer: recognizerFactory?.call(),
+      ),
+    );
   }
   return spans;
 }
