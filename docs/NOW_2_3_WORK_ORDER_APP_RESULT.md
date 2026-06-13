@@ -85,3 +85,35 @@
 - `NowNote-2.3.5.apk` 릴리즈 산출물 생성 완료
 - 에뮬레이터 설치/실행 검증 통과
 - GitHub Release asset 업로드 완료
+
+## 8. 추가 앱 수정 결과 - 계층 메모 조회/본문 찾기
+
+- 작업일: 2026-06-14
+- 담당: App
+- 앱 작업 범위 외 항목: Server, Web, 설치형 프로그램 변경 없음
+
+### 변경 내용
+
+- 계층 메모 목록의 상단 검색 문구를 `목록 제목/본문 검색`으로 정리하여 본문 찾기와 구분
+- 계층 메모 상세 보기 화면에 `본문 찾기` 입력창 추가
+- 상세 보기 본문에서 검색어 일치 개수 표시
+- 상세 보기 본문에서 검색어를 노란색 배경으로 강조 표시
+- URL/이메일 링크 표시 기능은 유지하면서 검색어 강조가 같이 동작하도록 처리
+- 계층 메모 카드의 열기 아이콘 옆에 하위 메모 추가 아이콘을 직접 배치
+- 기존 더보기 메뉴의 하위 메모 추가 항목은 중복을 피하기 위해 제거
+
+### 검증 결과
+
+| 구분 | 명령 | 결과 |
+| --- | --- | --- |
+| Flutter 전체 테스트 | `flutter test` | 통과, 72 tests |
+| 릴리즈 APK 빌드 | `flutter build apk --release` | 통과 |
+| 모바일 표면 정적 검증 | `C:\Users\cyhuh\anaconda3\python.exe scripts\verify_mobile_surface.py` | 통과, 142/142 |
+| Android 설치/실행 점검 | `C:\Users\cyhuh\anaconda3\python.exe scripts\check_android_launch.py --serial emulator-5554 --apk build\app\outputs\flutter-apk\app-release.apk` | 통과 |
+
+### 완료 판단
+
+- 목록 검색과 열린 메모 본문 찾기를 분리 완료
+- 열린 메모 안에서 단어를 찾고 일치 위치를 확인할 수 있도록 본문 강조 표시 완료
+- 계층 메모 카드의 열기/추가/더보기 아이콘 배치 정리 완료
+- 릴리즈 APK 재빌드 완료
