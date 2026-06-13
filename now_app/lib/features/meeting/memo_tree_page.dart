@@ -224,7 +224,26 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   }
 
   Future<void> _removeTreeMemoEncryption(TreeMemoNode node) async {
-    final plain = _unlockedEncryptedContents[node.id];
+    var plain = _unlockedEncryptedContents[node.id];
+    if (plain == null) {
+      final key = await _requestEncryptionKey(
+        title: '암호화 해제',
+        message: '평문으로 저장하려면 암호 키를 입력하세요.',
+      );
+      if (key == null) return;
+      try {
+        plain = await NoteEncryptionService().decrypt(node.content, key);
+      } catch (_) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('암호화 해제 실패: 암호 키를 확인하세요.'),
+            backgroundColor: Color(0xFFEF4444),
+          ),
+        );
+        return;
+      }
+    }
     if (plain == null) return;
     final confirmed = await showDialog<bool>(
       context: context,
@@ -932,7 +951,7 @@ class _TreeMemoTile extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final children = allNodes.where((n) => n.parentId == node.id).toList();
-    final indent = (node.level - 1) * 16.0;
+    final indent = (node.level - 1) * 8.0;
     final addParent = _resolveAddParent(node);
     final addLevel = addParent == null ? null : _resolveNextLevel(addParent);
     final unlockedContent = unlockedContents[node.id];
@@ -948,8 +967,10 @@ class _TreeMemoTile extends ConsumerWidget {
         ),
         child: ExpansionTile(
           initiallyExpanded: node.level < 3,
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-          childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
+          tilePadding: const EdgeInsets.symmetric(horizontal: 8),
+          childrenPadding: const EdgeInsets.fromLTRB(6, 0, 6, 8),
+          minTileHeight: 56,
+          visualDensity: const VisualDensity(horizontal: -4, vertical: -2),
           leading: Icon(
             node.level == 1
                 ? Icons.folder_outlined
@@ -957,6 +978,7 @@ class _TreeMemoTile extends ConsumerWidget {
                 ? Icons.note_outlined
                 : Icons.notes,
             color: const Color(0xFF2563EB),
+            size: 22,
           ),
           title: InkWell(
             onTap: () {
@@ -971,11 +993,7 @@ class _TreeMemoTile extends ConsumerWidget {
                   );
                   return;
                 }
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.'),
-                  ),
-                );
+                onUnlock(node);
                 return;
               }
               _showTreeMemoContentSheet(
@@ -986,12 +1004,17 @@ class _TreeMemoTile extends ConsumerWidget {
                 editable: true,
               );
             },
-            child: Text(
-              node.title,
-              style: const TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFF111827),
+            child: SizedBox(
+              width: double.infinity,
+              child: Text(
+                node.title,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFF111827),
+                ),
               ),
             ),
           ),
@@ -1010,80 +1033,99 @@ class _TreeMemoTile extends ConsumerWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               IconButton(
-                tooltip: node.isEncrypted
-                    ? (unlockedContent == null ? '복호화' : '잠금')
-                    : '암호화',
-                icon: Icon(
-                  node.isEncrypted
-                      ? (unlockedContent == null
-                            ? Icons.lock_open_outlined
-                            : Icons.lock_outline)
-                      : Icons.enhanced_encryption_outlined,
-                  size: 18,
-                ),
+                tooltip: '열기',
+                icon: const Icon(Icons.open_in_new_outlined, size: 18),
                 constraints: const BoxConstraints.tightFor(
-                  width: 36,
-                  height: 36,
+                  width: 28,
+                  height: 34,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: node.isEncrypted
-                    ? (unlockedContent == null
-                          ? () => onUnlock(node)
-                          : () => onLock(node))
-                    : () => onEncrypt(node),
+                onPressed: () {
+                  if (node.isEncrypted && unlockedContent == null) {
+                    onUnlock(node);
+                    return;
+                  }
+                  _showTreeMemoContentSheet(
+                    context,
+                    ref,
+                    node,
+                    displayContent,
+                    editable: !node.isEncrypted,
+                  );
+                },
               ),
-              if (node.isEncrypted && unlockedContent != null)
-                IconButton(
-                  tooltip: '암호화 해제',
-                  icon: const Icon(Icons.no_encryption_outlined, size: 18),
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  onPressed: () => onRemoveEncryption(node),
-                ),
-              IconButton(
-                tooltip: '서버 분석',
-                icon: const Icon(Icons.auto_awesome_outlined, size: 18),
+              PopupMenuButton<String>(
+                tooltip: '메모 작업',
+                icon: const Icon(Icons.more_vert, size: 20),
                 constraints: const BoxConstraints.tightFor(
-                  width: 36,
-                  height: 36,
+                  width: 28,
+                  height: 34,
                 ),
                 padding: EdgeInsets.zero,
-                onPressed: node.isEncrypted
-                    ? null
-                    : () => _requestTreeMemoAnalysis(context, ref, node),
-              ),
-              if (addParent != null && addLevel != null)
-                IconButton(
-                  tooltip: '${_treeMemoKind(addLevel)} 추가',
-                  icon: const Icon(Icons.add, size: 18),
-                  constraints: const BoxConstraints.tightFor(
-                    width: 36,
-                    height: 36,
-                  ),
-                  padding: EdgeInsets.zero,
-                  onPressed: () =>
-                      _showTreeMemoDialog(context, ref, parent: addParent),
-                ),
-              IconButton(
-                tooltip: children.isEmpty ? '삭제' : '하위 메모가 있어 삭제 불가',
-                icon: Icon(
-                  Icons.delete_outline,
-                  size: 18,
-                  color: children.isEmpty
-                      ? const Color(0xFF9CA3AF)
-                      : const Color(0xFFD1D5DB),
-                ),
-                constraints: const BoxConstraints.tightFor(
-                  width: 36,
-                  height: 36,
-                ),
-                padding: EdgeInsets.zero,
-                onPressed: children.isEmpty
-                    ? () => _confirmDeleteTreeMemo(context, ref, node)
-                    : null,
+                onSelected: (value) {
+                  switch (value) {
+                    case 'unlock':
+                      onUnlock(node);
+                      break;
+                    case 'lock':
+                      onLock(node);
+                      break;
+                    case 'removeEncryption':
+                      onRemoveEncryption(node);
+                      break;
+                    case 'encrypt':
+                      onEncrypt(node);
+                      break;
+                    case 'analysis':
+                      _requestTreeMemoAnalysis(context, ref, node);
+                      break;
+                    case 'add':
+                      if (addParent != null) {
+                        _showTreeMemoDialog(context, ref, parent: addParent);
+                      }
+                      break;
+                    case 'delete':
+                      _confirmDeleteTreeMemo(context, ref, node);
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  if (node.isEncrypted)
+                    PopupMenuItem(
+                      value: unlockedContent == null ? 'unlock' : 'lock',
+                      child: Text(unlockedContent == null ? '복호화' : '잠금'),
+                    )
+                  else
+                    const PopupMenuItem(
+                      value: 'encrypt',
+                      child: Text('암호화'),
+                    ),
+                  if (node.isEncrypted)
+                    const PopupMenuItem(
+                      value: 'removeEncryption',
+                      child: Text('암호화 해제'),
+                    ),
+                  if (!node.isEncrypted)
+                    const PopupMenuItem(
+                      value: 'analysis',
+                      child: Text('서버 분석'),
+                    ),
+                  if (addParent != null && addLevel != null)
+                    PopupMenuItem(
+                      value: 'add',
+                      child: Text('${_treeMemoKind(addLevel)} 추가'),
+                    ),
+                  if (children.isEmpty)
+                    const PopupMenuItem(
+                      value: 'delete',
+                      child: Text('삭제'),
+                    )
+                  else
+                    const PopupMenuItem(
+                      enabled: false,
+                      child: Text('하위 메모가 있어 삭제 불가'),
+                    ),
+                ],
               ),
             ],
           ),

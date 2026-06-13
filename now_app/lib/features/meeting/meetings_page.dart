@@ -326,6 +326,8 @@ class _MemoOverviewList extends StatefulWidget {
 class _MemoOverviewListState extends State<_MemoOverviewList> {
   late DateTime _focusedDay;
   late DateTime _selectedDay;
+  final TextEditingController _searchCtrl = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -335,10 +337,72 @@ class _MemoOverviewListState extends State<_MemoOverviewList> {
   }
 
   @override
+  void dispose() {
+    _searchCtrl.dispose();
+    super.dispose();
+  }
+
+  bool _matchesDailyMemo(MeetingSummary memo, String query) {
+    final dateText = DateFormat('yyyy-MM-dd').format(memo.date);
+    return memo.title.toLowerCase().contains(query) ||
+        dateText.contains(query);
+  }
+
+  bool _matchesTreeMemo(Memo memo, String query) {
+    final node = TreeMemoNode.fromMemo(memo);
+    return node.title.toLowerCase().contains(query) ||
+        node.content.toLowerCase().contains(query) ||
+        node.tags.toLowerCase().contains(query);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final query = _searchQuery.trim().toLowerCase();
+    final dailyMemos = query.isEmpty
+        ? widget.dailyMemos
+        : widget.dailyMemos
+            .where((memo) => _matchesDailyMemo(memo, query))
+            .toList();
+    final treeMemos = query.isEmpty
+        ? widget.treeMemos
+        : widget.treeMemos.where((memo) => _matchesTreeMemo(memo, query)).toList();
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 100),
       children: [
+        TextField(
+          controller: _searchCtrl,
+          decoration: InputDecoration(
+            hintText: '메모 검색',
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _searchQuery.isEmpty
+                ? null
+                : IconButton(
+                    tooltip: '검색어 지우기',
+                    icon: const Icon(Icons.clear),
+                    onPressed: () {
+                      _searchCtrl.clear();
+                      setState(() => _searchQuery = '');
+                    },
+                  ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            isDense: true,
+          ),
+          textInputAction: TextInputAction.search,
+          onChanged: (value) => setState(() => _searchQuery = value),
+        ),
+        const SizedBox(height: 16),
+        if (query.isNotEmpty && dailyMemos.isEmpty && treeMemos.isEmpty) ...[
+          _EmptyInlineMemoCard(
+            icon: Icons.search_off_outlined,
+            title: '검색 결과가 없습니다',
+            subtitle: '다른 검색어로 다시 찾아보세요',
+            onTap: () {},
+          ),
+          const SizedBox(height: 16),
+        ],
         const _SectionHeader(
           icon: Icons.calendar_month_outlined,
           label: '일자별 메모',
@@ -358,7 +422,7 @@ class _MemoOverviewListState extends State<_MemoOverviewList> {
             daysOfWeekHeight: 24,
             rowHeight: 36,
             selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
-            eventLoader: (day) => widget.dailyMemos
+            eventLoader: (day) => dailyMemos
                 .where((memo) => isSameDay(memo.date, day))
                 .toList(),
             calendarFormat: CalendarFormat.month,
@@ -421,21 +485,27 @@ class _MemoOverviewListState extends State<_MemoOverviewList> {
           ],
         ),
         const SizedBox(height: 8),
-        if (widget.treeMemos.isEmpty)
+        if (treeMemos.isEmpty)
           _EmptyInlineMemoCard(
             icon: Icons.account_tree_outlined,
-            title: '계층 메모가 없습니다',
-            subtitle: '상위 메모부터 만들어보세요',
+            title: query.isEmpty ? '계층 메모가 없습니다' : '검색된 계층 메모가 없습니다',
+            subtitle: query.isEmpty ? '상위 메모부터 만들어보세요' : '제목이나 내용으로 다시 찾아보세요',
             onTap: () => context.push('/memo/tree'),
           )
         else
-          _TreeMemoCompactList(memos: widget.treeMemos),
+          _TreeMemoCompactList(memos: treeMemos),
       ],
     );
   }
 
   MeetingSummary? _dailyMemoFor(DateTime day) {
-    for (final memo in widget.dailyMemos) {
+    final query = _searchQuery.trim().toLowerCase();
+    final dailyMemos = query.isEmpty
+        ? widget.dailyMemos
+        : widget.dailyMemos
+            .where((memo) => _matchesDailyMemo(memo, query))
+            .toList();
+    for (final memo in dailyMemos) {
       if (isSameDay(memo.date, day)) return memo;
     }
     return null;

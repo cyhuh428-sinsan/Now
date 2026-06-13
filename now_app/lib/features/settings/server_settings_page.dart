@@ -24,6 +24,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
+  bool _profileAutoLoadStarted = false;
   ServerConnectionResult? _connectionResult;
   ServerOpsResult? _opsResult;
   ServerUserProfile? _profile;
@@ -57,6 +58,12 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
     _lastSyncedAt = settings.lastSyncedAt;
     _loaded = true;
+    if (settings.isConfigured && !_profileAutoLoadStarted) {
+      _profileAutoLoadStarted = true;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _loadProfile(silent: true);
+      });
+    }
   }
 
   ServerSettings _currentSettings() {
@@ -123,7 +130,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
-  Future<void> _loadProfile() async {
+  Future<void> _loadProfile({bool silent = false}) async {
     setState(() => _busy = true);
     try {
       final settings = _currentSettings();
@@ -138,12 +145,14 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
           _emailCtrl.text = profile.email ?? '';
           _timezoneCtrl.text = profile.timezone;
         });
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('사용자 프로필을 불러왔습니다')));
+        if (!silent) {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('사용자 프로필을 불러왔습니다')));
+        }
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !silent) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('프로필 조회 실패: $e'),
