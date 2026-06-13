@@ -115,6 +115,9 @@ const I18N = {
     "note.labelTopic": "주제",
     "note.labelCategory": "분류",
     "note.labelNote": "메모",
+    "note.shareShared": "공유됨",
+    "note.sharePrivate": "공유 안 함",
+    "note.shareReadOnly": "읽기 전용",
     "note.expand": "펼치기",
     "note.collapse": "접기",
     "note.addChild": "아래에 추가",
@@ -172,7 +175,7 @@ const I18N = {
     "today.label": "오늘 메모",
     "nav.tree": "지식 메모",
     "nav.shared.mine": "내 공유메모",
-    "nav.shared.groupTree": "그룹 공유메모",
+    "nav.shared.groupTree": "그룹 지식체계",
     "nav.shared.member": "구성원별 공유문서",
     "aria.quickMenu": "빠른 메뉴",
     "aria.sidebar": "NowNote 메뉴",
@@ -779,6 +782,9 @@ const I18N = {
     "note.labelTopic": "Topic",
     "note.labelCategory": "Category",
     "note.labelNote": "Note",
+    "note.shareShared": "Shared",
+    "note.sharePrivate": "Not shared",
+    "note.shareReadOnly": "Read-only",
     "note.expand": "Expand",
     "note.collapse": "Collapse",
     "note.addChild": "Add child",
@@ -836,7 +842,7 @@ const I18N = {
     "today.label": "Today note",
     "nav.tree": "Knowledge notes",
     "nav.shared.mine": "My shared notes",
-    "nav.shared.groupTree": "Group shared notes",
+    "nav.shared.groupTree": "Group knowledge tree",
     "nav.shared.member": "Shared by member",
     "aria.quickMenu": "Quick menu",
     "aria.sidebar": "NowNote menu",
@@ -9440,6 +9446,17 @@ function ownerLabelForTreeNode(node) {
   return `${state.settings.server?.ownerId || "내 계정"} · 내 공유`;
 }
 
+function treeShareIcon(node) {
+  if (isReadOnlyTreeNode(node)) {
+    const owner = node.remoteOwnerId ? ` · ${node.remoteOwnerId}` : "";
+    return { className: "readonly", icon: "◇", title: `${t("note.shareReadOnly")}${owner}` };
+  }
+  if (isTreeNodeSharedForServer(node)) {
+    return { className: "shared", icon: "↗", title: t("note.shareShared") };
+  }
+  return { className: "private", icon: "•", title: t("note.sharePrivate") };
+}
+
 function treeNodeElement(node) {
   const sourceNode = findTreeNode(state.data.tree, node.id) || node;
   const wrapper = document.createElement("div");
@@ -9479,7 +9496,8 @@ function treeNodeElement(node) {
     node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
   ].filter(Boolean);
   const nodeTitle = noteTitle(node.title);
-  labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${nodeTitle}` : nodeTitle)}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
+  const shareIcon = treeShareIcon(sourceNode);
+  labelButton.innerHTML = `<div class="tree-title-row"><div class="tree-title">${escapeHtml(node.favorite ? `★ ${nodeTitle}` : nodeTitle)}</div><span class="tree-share-icon ${escapeHtml(shareIcon.className)}" title="${escapeHtml(shareIcon.title)}">${escapeHtml(shareIcon.icon)}</span></div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
 
   const addButton = document.createElement("button");
   addButton.type = "button";
