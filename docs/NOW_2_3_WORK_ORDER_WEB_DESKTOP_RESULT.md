@@ -52,6 +52,7 @@
 - 제목 입력, 본문 입력, 전체 검색, 본문찾기 입력은 검증 스크립트 기준 통과
 - `Ctrl+F`는 전체 검색으로 열림
 - `Ctrl+Shift+F`는 현재 메모 본문찾기로 열림
+- 본문찾기 결과 이동 시 선택 위치와 스크롤이 검색 결과 위치로 이동함
 - `Tab`은 설정된 칸 수 기준 들여쓰기 동작
 - `Shift+Tab`은 내어쓰기 동작
 - Web 그룹 공유/메신저 UI는 hosted Web 전용으로 유지
@@ -64,9 +65,9 @@
 - 파일명: `NowNote-Setup-2.3.5-x64.exe`
 - 경로: `desktop/dist/NowNote-Setup-2.3.5-x64.exe`
 - 설치형 package version: `2.3.5`
-- 크기: `101,031,456 bytes`
-- 생성시각: `2026-06-13 오전 4:40:23`
-- SHA256: `35799CC95EA2FA2366EEB86F2FAA7DAC0C55BB80CE3BA7D521C517460C3E1E45`
+- 크기: `101,031,820 bytes`
+- 생성시각: `2026-06-13 오후 10:14:35`
+- SHA256: `C0172001BEED4614FFDD3A79EBD15A2632F1E2B1AC52AF53A84C9A0765B5B045`
 
 ## 6. 운영 서버 확인
 
@@ -86,12 +87,13 @@
 - Release URL: `https://github.com/cyhuh428-sinsan/Now/releases/tag/v2.3.5`
 - 업로드 결과: 완료
 - 업로드 asset 상태: `uploaded`
-- 업로드 asset 크기: `101,031,456 bytes`
+- 업로드 asset 크기: `101,031,820 bytes`
 - 다운로드 URL: `https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe`
 
 ## 8. 완료 판단
 
 - Web/설치형 입력, 검색, 본문찾기, 단축키, Tab 들여쓰기 검증 통과
+- Web/설치형 본문찾기 결과 위치 이동 보정 완료
 - Web 메신저 2.3 room/첨부 UI 표면 검증 통과
 - 설치형 Web 전용 기능 숨김 기준 검증 통과
 - 설치형 `NowNote-Setup-2.3.5-x64.exe` 릴리즈 산출물 생성 완료

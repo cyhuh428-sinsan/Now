@@ -151,7 +151,7 @@ async function dispatchKey(page, key, options = {}) {
   const lowerKey = normalizedKey.toLowerCase();
   const isSingleLetter = /^[a-z]$/.test(lowerKey);
   const code = normalizedKey === "Tab" ? "Tab" : isSingleLetter ? `Key${lowerKey.toUpperCase()}` : normalizedKey;
-  const virtualKeyCode = normalizedKey === "Tab" ? 9 : isSingleLetter ? lowerKey.toUpperCase().charCodeAt(0) : 0;
+  const virtualKeyCode = normalizedKey === "Tab" ? 9 : normalizedKey === "Enter" ? 13 : isSingleLetter ? lowerKey.toUpperCase().charCodeAt(0) : 0;
   const modifiers =
     (options.shift ? 8 : 0)
     | (options.ctrl ? 2 : 0)
@@ -291,6 +291,51 @@ async function verifySearchShortcuts(page) {
   assert(!ctrlShiftF.searchOpen && ctrlShiftF.noteFindOpen && ctrlShiftF.activeId === "noteFindInput", "Ctrl+Shift+F did not open the in-note find bar.");
 }
 
+async function verifyNoteFindMovement(page) {
+  const target = "target-search-position";
+  await evaluate(page, `
+    (() => {
+      const content = document.querySelector('#treeContent');
+      content.focus();
+      content.value = [
+        ${JSON.stringify(Array.from({ length: 260 }, (_, index) => `filler line ${index + 1}`).join("\n"))},
+        ${JSON.stringify(target)}
+      ].join('\\n');
+      content.scrollTop = 0;
+      content.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#noteFindBar')?.classList.add('hidden');
+      return true;
+    })()
+  `);
+  await dispatchKey(page, "f", { ctrl: true, shift: true });
+  await evaluate(page, `
+    (() => {
+      const input = document.querySelector('#noteFindInput');
+      input.value = ${JSON.stringify(target)};
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.focus();
+      return true;
+    })()
+  `);
+  await evaluate(page, `document.querySelector('#noteFindNextBtn').click()`);
+  const result = await evaluate(page, `
+    (() => {
+      const content = document.querySelector('#treeContent');
+      return {
+        selectionStart: content.selectionStart,
+        expectedStart: content.value.indexOf(${JSON.stringify(target)}),
+        scrollTop: content.scrollTop,
+        scrollHeight: content.scrollHeight,
+        clientHeight: content.clientHeight,
+        activeId: document.activeElement?.id || ''
+      };
+    })()
+  `);
+  assert(result.selectionStart === result.expectedStart, `In-note search did not move the editor selection to the matched text: ${JSON.stringify(result)}`);
+  assert(result.scrollTop > 0, `In-note search did not scroll the editor to the matched text: ${JSON.stringify(result)}`);
+  assert(result.activeId === "treeContent", `In-note search did not focus the editor after moving to the match: ${JSON.stringify(result)}`);
+}
+
 async function main() {
   assert(typeof WebSocket === "function", "Current Node.js runtime does not support WebSocket.");
   assert(await exists(EXE_PATH), `Desktop app is missing: ${EXE_PATH}`);
@@ -343,12 +388,14 @@ async function main() {
     `, "desktop store reload");
     await verifyEditorTabIndent(second.page);
     await verifySearchShortcuts(second.page);
+    await verifyNoteFindMovement(second.page);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
     console.log(`- Reloaded note: ${title}`);
     console.log("- Editor Tab/Shift+Tab indentation passed");
     console.log("- Ctrl+F and Ctrl+Shift+F shortcuts passed");
+    console.log("- In-note search movement passed");
   } finally {
     first?.client?.close();
     second?.client?.close();
