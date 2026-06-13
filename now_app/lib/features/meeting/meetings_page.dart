@@ -351,8 +351,7 @@ class _MemoOverviewListState extends State<_MemoOverviewList> {
   bool _matchesTreeMemo(Memo memo, String query) {
     final node = TreeMemoNode.fromMemo(memo);
     return node.title.toLowerCase().contains(query) ||
-        node.content.toLowerCase().contains(query) ||
-        node.tags.toLowerCase().contains(query);
+        node.content.toLowerCase().contains(query);
   }
 
   @override
