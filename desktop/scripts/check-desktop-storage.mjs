@@ -293,12 +293,15 @@ async function verifySearchShortcuts(page) {
 
 async function verifyNoteFindMovement(page) {
   const target = "target-search-position";
+  const wrappedLines = Array.from({ length: 90 }, (_, index) =>
+    `https://www.example.com/memberRegStep${index}.do?path=very-long-shopping-mall-account-line-${index}-8710-4009-2679-2041-and-extra-wrapped-text`
+  ).join("\n");
   await evaluate(page, `
     (() => {
       const content = document.querySelector('#treeContent');
       content.focus();
       content.value = [
-        ${JSON.stringify(Array.from({ length: 260 }, (_, index) => `filler line ${index + 1}`).join("\n"))},
+        ${JSON.stringify(wrappedLines)},
         ${JSON.stringify(target)}
       ].join('\\n');
       content.scrollTop = 0;
@@ -321,18 +324,44 @@ async function verifyNoteFindMovement(page) {
   const result = await evaluate(page, `
     (() => {
       const content = document.querySelector('#treeContent');
+      const computed = window.getComputedStyle(content);
+      const mirror = document.createElement('div');
+      const marker = document.createElement('span');
+      mirror.style.position = 'fixed';
+      mirror.style.visibility = 'hidden';
+      mirror.style.pointerEvents = 'none';
+      mirror.style.left = '-10000px';
+      mirror.style.top = '0';
+      mirror.style.width = content.clientWidth + 'px';
+      mirror.style.boxSizing = computed.boxSizing;
+      mirror.style.padding = computed.padding;
+      mirror.style.border = computed.border;
+      mirror.style.font = computed.font;
+      mirror.style.letterSpacing = computed.letterSpacing;
+      mirror.style.lineHeight = computed.lineHeight;
+      mirror.style.whiteSpace = 'pre-wrap';
+      mirror.style.overflowWrap = 'break-word';
+      mirror.style.wordBreak = computed.wordBreak;
+      mirror.textContent = content.value.slice(0, content.value.indexOf(${JSON.stringify(target)}));
+      marker.textContent = '\\u200b';
+      mirror.append(marker);
+      document.body.append(mirror);
+      const targetTop = marker.offsetTop;
+      mirror.remove();
       return {
         selectionStart: content.selectionStart,
         expectedStart: content.value.indexOf(${JSON.stringify(target)}),
         scrollTop: content.scrollTop,
         scrollHeight: content.scrollHeight,
         clientHeight: content.clientHeight,
+        targetViewportTop: targetTop - content.scrollTop,
         activeId: document.activeElement?.id || ''
       };
     })()
   `);
   assert(result.selectionStart === result.expectedStart, `In-note search did not move the editor selection to the matched text: ${JSON.stringify(result)}`);
   assert(result.scrollTop > 0, `In-note search did not scroll the editor to the matched text: ${JSON.stringify(result)}`);
+  assert(result.targetViewportTop > 0 && result.targetViewportTop < result.clientHeight, `In-note search did not bring the matched text into view: ${JSON.stringify(result)}`);
   assert(result.activeId === "treeContent", `In-note search did not focus the editor after moving to the match: ${JSON.stringify(result)}`);
 }
 
