@@ -8,6 +8,7 @@ import '../../widgets/context_memo_widget.dart';
 import '../../widgets/app_bottom_nav.dart';
 import '../settings/routine_management_page.dart';
 import '../../services/briefing_service.dart';
+import '../../services/server_sync_service.dart';
 import '../../core/database/app_database.dart';
 import '../meeting/meetings_page.dart';
 
@@ -309,6 +310,27 @@ class _HomeInputFab extends StatelessWidget {
                   context.push('/meeting/start');
                 },
               ),
+              FutureBuilder<ServerSettings>(
+                future: ServerSettings.load(),
+                builder: (context, snapshot) {
+                  final settings = snapshot.data;
+                  final enabled = settings != null &&
+                      settings.isConfigured &&
+                      settings.userToken.trim().isNotEmpty;
+                  return _InputHubAction(
+                    icon: Icons.forum_outlined,
+                    title: '그룹 메신저',
+                    subtitle: enabled
+                        ? '그룹 메시지 확인 및 전송'
+                        : '서버 접속 토큰 설정 후 사용',
+                    enabled: enabled,
+                    onTap: () {
+                      Navigator.pop(sheetContext);
+                      context.push('/messenger');
+                    },
+                  );
+                },
+              ),
             ],
           ),
         ),
@@ -322,18 +344,20 @@ class _InputHubAction extends StatelessWidget {
   final String title;
   final String subtitle;
   final VoidCallback onTap;
+  final bool enabled;
 
   const _InputHubAction({
     required this.icon,
     required this.title,
     required this.subtitle,
     required this.onTap,
+    this.enabled = true,
   });
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: onTap,
+      onTap: enabled ? onTap : null,
       borderRadius: BorderRadius.circular(12),
       child: Padding(
         padding: const EdgeInsets.symmetric(vertical: 8),
@@ -343,10 +367,18 @@ class _InputHubAction extends StatelessWidget {
               width: 44,
               height: 44,
               decoration: BoxDecoration(
-                color: const Color(0xFFEFF6FF),
+                color: enabled
+                    ? const Color(0xFFEFF6FF)
+                    : const Color(0xFFF3F4F6),
                 borderRadius: BorderRadius.circular(12),
               ),
-              child: Icon(icon, color: const Color(0xFF2563EB), size: 22),
+              child: Icon(
+                icon,
+                color: enabled
+                    ? const Color(0xFF2563EB)
+                    : const Color(0xFF9CA3AF),
+                size: 22,
+              ),
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -355,10 +387,12 @@ class _InputHubAction extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF111827),
+                      color: enabled
+                          ? const Color(0xFF111827)
+                          : const Color(0xFF9CA3AF),
                     ),
                   ),
                   const SizedBox(height: 2),
@@ -372,7 +406,11 @@ class _InputHubAction extends StatelessWidget {
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 20, color: Color(0xFF9CA3AF)),
+            Icon(
+              enabled ? Icons.chevron_right : Icons.lock_outline,
+              size: 20,
+              color: const Color(0xFF9CA3AF),
+            ),
           ],
         ),
       ),
