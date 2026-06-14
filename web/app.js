@@ -1847,6 +1847,10 @@ function isDesktopClient() {
   return Boolean(window.nownoteDesktop?.storage);
 }
 
+function canUseGroupMessenger() {
+  return isHostedWebClient() || isDesktopClient();
+}
+
 function defaultServerUserProfile() {
   return {
     email: "",
@@ -3922,6 +3926,7 @@ function applyHostedServerSettingsVisibility() {
   configNodes.forEach((node) => node?.classList.toggle("hidden", hosted));
   Array.from(document.querySelectorAll(".hosted-web-only"))
     .forEach((node) => node?.classList.toggle("hidden", !hosted));
+  elements.groupMessengerBtn?.classList.toggle("hidden", !canUseGroupMessenger());
   elements.webLogoutBtn?.classList.toggle("hidden", !hosted);
   if (!hosted) closeWebAccountMenu();
 }
@@ -5100,7 +5105,8 @@ function applyServerUserProfile(user) {
 }
 
 async function openGroupMessenger() {
-  if (!isHostedWebClient()) return;
+  const server = state.settings.server;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   closePopupLayers();
   elements.groupMessengerView?.classList.remove("hidden");
   renderGroupMessenger();
@@ -5133,7 +5139,7 @@ function stopGroupMessengerAutoRefresh() {
 
 async function refreshOpenGroupMessenger() {
   const server = state.settings.server || defaultServerSettings();
-  if (!isHostedWebClient() || !server.webSessionToken) {
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) {
     stopGroupMessengerAutoRefresh();
     return;
   }
@@ -5159,7 +5165,7 @@ async function refreshOpenGroupMessenger() {
 
 async function refreshGroupMessages({ silent = false } = {}) {
   const server = state.settings.server;
-  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   try {
     if (!Array.isArray(server.groupMessengerRooms) || server.groupMessengerRooms.length === 0) {
       await refreshMessengerRooms({ silent: true });
@@ -5212,7 +5218,7 @@ function groupMessagesChanged(previous = [], next = []) {
 async function sendGroupMessage(event) {
   event?.preventDefault();
   const server = state.settings.server;
-  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   const body = elements.groupMessengerInput?.value.trim() || "";
   if (!body && !pendingMessengerAttachment) return;
   const roomId = activeMessengerRoomId(server);
@@ -5247,7 +5253,7 @@ async function sendGroupMessage(event) {
 
 async function markGroupMessagesRead({ silent = false } = {}) {
   const server = state.settings.server;
-  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   const roomId = activeMessengerRoomId(server);
   if (!roomId) return;
   const latestId = Math.max(0, ...((server.groupMessages || []).map((message) => Number(message.id) || 0)));
@@ -5321,7 +5327,7 @@ function groupMessageElement(message, currentOwnerId) {
 
 async function refreshMessengerRooms({ silent = false } = {}) {
   const server = state.settings.server;
-  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   try {
     const payload = await requestServerJson(
       server,
@@ -5453,7 +5459,7 @@ function renderMessengerRooms() {
 
 async function createMessengerRoomFromPrompt() {
   const server = state.settings.server;
-  if (!isHostedWebClient() || !prepareServerRequest(server)) return;
+  if (!canUseGroupMessenger() || !prepareServerRequest(server)) return;
   const rawMembers = window.prompt("채팅방에 초대할 사용자 ID를 쉼표로 입력하세요.");
   if (!rawMembers) return;
   const memberOwnerIds = rawMembers.split(",").map((item) => item.trim()).filter(Boolean);
