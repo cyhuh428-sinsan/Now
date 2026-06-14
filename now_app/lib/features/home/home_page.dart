@@ -316,13 +316,14 @@ class _HomeInputFab extends StatelessWidget {
                   final settings = snapshot.data;
                   final enabled = settings != null &&
                       settings.isConfigured &&
-                      settings.userToken.trim().isNotEmpty;
+                      settings.userToken.trim().isNotEmpty &&
+                      settings.webSessionToken.trim().isNotEmpty;
                   return _InputHubAction(
                     icon: Icons.forum_outlined,
                     title: '그룹 메신저',
                     subtitle: enabled
                         ? '그룹 메시지 확인 및 전송'
-                        : '서버 접속 토큰 설정 후 사용',
+                        : '설정 연결 테스트로 메신저 준비',
                     enabled: enabled,
                     onTap: () {
                       Navigator.pop(sheetContext);
