@@ -138,7 +138,7 @@ button {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 48px 220px minmax(0, 1fr);
+  grid-template-columns: 48px 176px minmax(0, 1fr);
   height: 100vh;
   min-height: 0;
   overflow: hidden;
@@ -837,7 +837,7 @@ button {
 .daily-layout,
 .tree-layout {
   display: grid;
-  grid-template-columns: minmax(180px, var(--tree-list-width, 280px)) 8px minmax(0, 1fr);
+  grid-template-columns: minmax(176px, var(--tree-list-width, 176px)) 8px minmax(0, 1fr);
   gap: 8px;
   align-items: stretch;
   height: 100%;

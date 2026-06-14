@@ -1744,7 +1744,7 @@ function defaultSettings() {
     theme: "system",
     accent: "blue",
     wideEditor: true,
-    treeListWidth: 280,
+    treeListWidth: 176,
     treePanelCollapsed: false,
     sidebarCollapsed: false,
     railMode: "icon",
@@ -3143,7 +3143,7 @@ function bindEvents() {
 
   elements.wideEditorToggle.addEventListener("change", () => {
     state.settings.wideEditor = elements.wideEditorToggle.checked;
-    state.settings.treeListWidth = state.settings.wideEditor ? 280 : 360;
+    state.settings.treeListWidth = 176;
     persistSettings();
     applySettings();
   });
@@ -8923,7 +8923,7 @@ function bindTreeResize() {
   let startWidth = 0;
 
   const onMove = (event) => {
-    const nextWidth = Math.min(460, Math.max(180, startWidth + event.clientX - startX));
+    const nextWidth = Math.min(176, Math.max(176, startWidth + event.clientX - startX));
     state.settings.treeListWidth = nextWidth;
     applySettings();
   };
@@ -11284,7 +11284,7 @@ function normalizeSettings(settings = {}) {
   normalized.properties = normalizePropertyViewSettings(normalized.properties, defaults.properties);
   normalized.workspaces = normalizeWorkspaceSettings(normalized.workspaces, defaults.workspaces);
   normalized.openTreeTabs = limitOpenTreeTabs(normalized.openTreeTabs, 10, normalized.pinnedTreeTabs);
-  normalized.treeListWidth = Math.min(460, Math.max(180, Number(normalized.treeListWidth) || 280));
+  normalized.treeListWidth = Math.min(176, Math.max(176, Number(normalized.treeListWidth) || 176));
   return normalized;
 }
 
@@ -11372,7 +11372,7 @@ function normalizeWorkspaceState(value = {}) {
     treePanelCollapsed: Boolean(source.treePanelCollapsed),
     sidebarCollapsed: Boolean(source.sidebarCollapsed),
     wideEditor: source.wideEditor !== false,
-    treeListWidth: Math.min(460, Math.max(180, Number(source.treeListWidth) || 280)),
+    treeListWidth: Math.min(176, Math.max(176, Number(source.treeListWidth) || 176)),
   };
 }
 
