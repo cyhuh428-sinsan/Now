@@ -15,12 +15,13 @@ def main() -> None:
         os.environ["NOW_DATABASE_URL"] = f"sqlite:///{db_path.as_posix()}"
         os.environ["NOW_MESSENGER_STORAGE_DIR"] = storage_path.as_posix()
         os.environ["NOW_WEB_SESSION_TTL_HOURS"] = "24"
+        os.environ["NOW_USER_TOKEN_REQUIRED"] = "true"
 
         from fastapi.testclient import TestClient
 
         from app.db import SessionLocal, create_tables, engine
         from app.main import app
-        from app.services.user_accounts import create_user_account, issue_web_session
+        from app.services.user_accounts import create_user_account, issue_user_device_access_token, issue_web_session
 
         create_tables()
         with SessionLocal() as db:
@@ -45,14 +46,22 @@ def main() -> None:
                 email="outsider@example.com",
                 group_name="sinsan",
             )
+            db.flush()
             _session, token = issue_web_session(db, owner_id="sinsan")
             _member_session, member_token = issue_web_session(db, owner_id="member")
             _outsider_session, outsider_token = issue_web_session(db, owner_id="outsider")
+            _app_device, app_token = issue_user_device_access_token(
+                db,
+                owner_id="sinsan",
+                device_id="app-smoke-device",
+                display_name="App smoke device",
+            )
             db.commit()
 
         headers = {"X-Now-Web-Session": token}
         member_headers = {"X-Now-Web-Session": member_token}
         outsider_headers = {"X-Now-Web-Session": outsider_token}
+        app_headers = {"X-Now-User-Token": app_token}
         client = TestClient(app)
 
         missing_session_res = client.get("/api/v1/messenger/rooms", params={"owner_id": "sinsan"})
@@ -80,6 +89,25 @@ def main() -> None:
         )
         assert read_res.status_code == 200, read_res.text
         assert read_res.json()["last_read_message_id"] >= message_id
+
+        app_rooms_res = client.get(
+            "/api/v1/messenger/rooms",
+            params={"owner_id": "sinsan"},
+            headers=app_headers,
+        )
+        assert app_rooms_res.status_code == 200, app_rooms_res.text
+        app_message_res = client.post(
+            f"/api/v1/messenger/rooms/{room_id}/messages",
+            json={"owner_id": "sinsan", "body": "앱 토큰 확인"},
+            headers=app_headers,
+        )
+        assert app_message_res.status_code == 200, app_message_res.text
+        app_read_res = client.post(
+            f"/api/v1/messenger/rooms/{room_id}/read",
+            json={"owner_id": "sinsan", "last_read_message_id": app_message_res.json()["item"]["id"]},
+            headers=app_headers,
+        )
+        assert app_read_res.status_code == 200, app_read_res.text
 
         private_res = client.post(
             "/api/v1/messenger/rooms",

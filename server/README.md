@@ -597,13 +597,15 @@ Web 세션 요청은 `X-Now-Web-Session`으로 검증하며, 그룹 공유 문�
 
 ### Messenger
 
+메신저 보호 API는 Web 프로그램의 `X-Now-Web-Session` 또는 앱/설치형 프로그램의 `X-Now-User-Token` 중 하나로 인증합니다. 두 헤더가 모두 없으면 `web session required`로 차단되며, 인증 후에는 같은 그룹과 채팅방 참여 여부를 다시 확인합니다.
+
 `GET /api/v1/messenger/rooms?owner_id=...`
 
-Web 세션 사용자의 채팅방 목록과 방별 `unread_count`를 조회합니다. 기존 전체 그룹 채팅방은 기본 방으로 유지하며, 2.3 일부 그룹원 채팅방도 같은 목록에 포함됩니다.
+인증 사용자의 채팅방 목록과 방별 `unread_count`를 조회합니다. 기존 전체 그룹 채팅방은 기본 방으로 유지하며, 2.3 일부 그룹원 채팅방도 같은 목록에 포함됩니다.
 
 `GET /api/v1/messenger/rooms/unread?owner_id=...`
 
-메시지 본문을 내려받지 않고 채팅방별 `unread_count`와 `total_unread_count`만 가볍게 조회합니다. Web은 닫힌 메신저 상태에서 이 API로 unread 표시만 갱신할 수 있습니다.
+메시지 본문을 내려받지 않고 채팅방별 `unread_count`와 `total_unread_count`만 가볍게 조회합니다. Web/앱/설치형은 닫힌 메신저 상태에서 이 API로 unread 표시만 갱신할 수 있습니다.
 
 `POST /api/v1/messenger/rooms`
 

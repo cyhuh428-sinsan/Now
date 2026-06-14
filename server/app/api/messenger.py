@@ -20,7 +20,7 @@ from app.services.messenger_storage import (
     resolve_messenger_attachment_path,
     save_messenger_attachment,
 )
-from app.services.user_accounts import require_web_session_access
+from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(prefix="/api/v1/messenger", tags=["messenger"])
 
@@ -50,9 +50,10 @@ def messenger_policy() -> dict:
 def list_rooms(
     owner_id: str = Query(max_length=80),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=owner_id, web_session_token=web_session_token, user_token=user_token)
     group_room = _ensure_group_room(db, user)
     _migrate_group_messages(db, room=group_room, group_name=user.group_name)
     rooms = list(
@@ -86,9 +87,10 @@ def list_rooms(
 def list_room_unread_counts(
     owner_id: str = Query(max_length=80),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=owner_id, web_session_token=web_session_token, user_token=user_token)
     group_room = _ensure_group_room(db, user)
     _migrate_group_messages(db, room=group_room, group_name=user.group_name)
     rooms = list(
@@ -124,9 +126,10 @@ def list_room_unread_counts(
 def create_room(
     payload: MessengerRoomCreate,
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=payload.owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=payload.owner_id, web_session_token=web_session_token, user_token=user_token)
     member_ids = {item.strip()[:80] for item in payload.member_owner_ids if item.strip()}
     member_ids.add(user.owner_id)
     valid_users = list(
@@ -171,9 +174,10 @@ def list_messages(
     owner_id: str = Query(max_length=80),
     limit: int = Query(default=50, ge=1, le=100),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=owner_id, web_session_token=web_session_token, user_token=user_token)
     room, member = _require_room_member(db, room_id=room_id, user=user)
     if room.room_type == "group":
         _migrate_group_messages(db, room=room, group_name=user.group_name)
@@ -213,9 +217,10 @@ def create_message(
     room_id: int,
     payload: MessengerMessageCreate,
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=payload.owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=payload.owner_id, web_session_token=web_session_token, user_token=user_token)
     room, _member = _require_room_member(db, room_id=room_id, user=user)
     body = payload.body.strip()
     if not body:
@@ -235,9 +240,10 @@ async def upload_attachment(
     body: str = Query(default="", max_length=2000),
     file: UploadFile = File(...),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=owner_id, web_session_token=web_session_token, user_token=user_token)
     room, _member = _require_room_member(db, room_id=room_id, user=user)
     message = MessengerMessage(room_id=room.id, sender_owner_id=user.owner_id, body=body.strip())
     db.add(message)
@@ -262,9 +268,10 @@ def download_attachment(
     attachment_id: int,
     owner_id: str = Query(max_length=80),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> FileResponse:
-    user = _session_user(db, owner_id=owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=owner_id, web_session_token=web_session_token, user_token=user_token)
     attachment = db.get(MessengerAttachment, attachment_id)
     if attachment is None or attachment.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment not found")
@@ -287,9 +294,10 @@ def mark_room_read(
     room_id: int,
     payload: MessengerReadUpdate,
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     db: Session = Depends(get_db),
 ) -> dict:
-    user = _session_user(db, owner_id=payload.owner_id, token=web_session_token)
+    user = _messenger_user(db, owner_id=payload.owner_id, web_session_token=web_session_token, user_token=user_token)
     room, member = _require_room_member(db, room_id=room_id, user=user)
     latest_id = db.scalar(select(func.max(MessengerMessage.id)).where(MessengerMessage.room_id == room.id)) or 0
     member.last_read_message_id = max(member.last_read_message_id, min(payload.last_read_message_id, latest_id))
@@ -304,8 +312,21 @@ def mark_room_read(
     }
 
 
-def _session_user(db: Session, *, owner_id: str, token: str | None) -> UserAccount:
-    user = require_web_session_access(db, owner_id=owner_id.strip(), session_token=token)
+def _messenger_user(
+    db: Session,
+    *,
+    owner_id: str,
+    web_session_token: str | None,
+    user_token: str | None,
+) -> UserAccount:
+    if not web_session_token and not user_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="web session required")
+    user = require_user_api_access(
+        db,
+        owner_id=owner_id.strip(),
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
     group_name = (user.group_name or "").strip()
     if not group_name:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="user group required")
