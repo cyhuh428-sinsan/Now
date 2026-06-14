@@ -15,8 +15,6 @@ class GroupMessengerPage extends ConsumerStatefulWidget {
 
 class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
   final _messageCtrl = TextEditingController();
-  final _passwordCtrl = TextEditingController();
-  final _twoFactorCodeCtrl = TextEditingController();
   final _scrollCtrl = ScrollController();
   Timer? _refreshTimer;
   ServerSettings? _settings;
@@ -26,7 +24,6 @@ class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
   int? _activeRoomId;
   bool _loading = true;
   bool _sending = false;
-  bool _authenticating = false;
   String? _error;
 
   @override
@@ -43,8 +40,6 @@ class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
   void dispose() {
     _refreshTimer?.cancel();
     _messageCtrl.dispose();
-    _passwordCtrl.dispose();
-    _twoFactorCodeCtrl.dispose();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -171,38 +166,6 @@ class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
     }
   }
 
-  Future<void> _connectMessengerSession() async {
-    final settings = _settings ?? await ServerSettings.load();
-    if (_authenticating) return;
-    setState(() {
-      _authenticating = true;
-      _error = null;
-    });
-    try {
-      final nextSettings = await ref
-          .read(serverSyncServiceProvider)
-          .createWebSession(
-            settings,
-            password: _passwordCtrl.text,
-            twoFactorCode: _twoFactorCodeCtrl.text,
-          );
-      if (!mounted) return;
-      _passwordCtrl.clear();
-      _twoFactorCodeCtrl.clear();
-      setState(() => _settings = nextSettings);
-      await _loadAll();
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메신저 세션을 연결했습니다')),
-      );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _error = _friendlyError(e));
-    } finally {
-      if (mounted) setState(() => _authenticating = false);
-    }
-  }
-
   Future<void> _markVisibleRead() async {
     final settings = _settings;
     final roomId = _activeRoomId;
@@ -258,16 +221,9 @@ class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
     final text = error.toString().replaceFirst('Exception: ', '');
     if (text.contains('web session required') ||
         text.contains('invalid web session')) {
-      return '메신저 세션이 필요합니다. 서버 비밀번호로 메신저 세션을 연결하세요.';
+      return '메신저 세션이 필요합니다. 설정 > NowNote 서버에서 연결 테스트를 다시 실행하세요.';
     }
     return text;
-  }
-
-  bool _needsSessionLogin() {
-    final text = _error ?? '';
-    return text.contains('메신저 세션이 필요합니다') ||
-        text.contains('web session required') ||
-        text.contains('invalid web session');
   }
 
   @override
@@ -312,16 +268,6 @@ class _GroupMessengerPageState extends ConsumerState<GroupMessengerPage> {
               Padding(
                 padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
                 child: _ErrorBanner(message: _error!),
-              ),
-            if (_needsSessionLogin())
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                child: _SessionLoginPanel(
-                  passwordController: _passwordCtrl,
-                  twoFactorCodeController: _twoFactorCodeCtrl,
-                  busy: _authenticating,
-                  onConnect: _connectMessengerSession,
-                ),
               ),
             Expanded(
               child: _loading
@@ -531,97 +477,6 @@ class _Composer extends StatelessWidget {
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
                 : const Icon(Icons.send),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SessionLoginPanel extends StatelessWidget {
-  final TextEditingController passwordController;
-  final TextEditingController twoFactorCodeController;
-  final bool busy;
-  final VoidCallback onConnect;
-
-  const _SessionLoginPanel({
-    required this.passwordController,
-    required this.twoFactorCodeController,
-    required this.busy,
-    required this.onConnect,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE5E7EB)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            '메신저 세션 연결',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w700,
-              color: Color(0xFF111827),
-            ),
-          ),
-          const SizedBox(height: 6),
-          const Text(
-            '메모 동기화 토큰과 별도로 메신저는 서버 로그인 세션이 필요합니다. 비밀번호는 저장하지 않습니다.',
-            style: TextStyle(
-              fontSize: 12,
-              height: 1.35,
-              color: Color(0xFF6B7280),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: passwordController,
-            obscureText: true,
-            enabled: !busy,
-            decoration: const InputDecoration(
-              labelText: '서버 비밀번호',
-              border: OutlineInputBorder(),
-              isDense: true,
-            ),
-            textInputAction: TextInputAction.done,
-            onSubmitted: (_) => onConnect(),
-          ),
-          const SizedBox(height: 10),
-          TextField(
-            controller: twoFactorCodeController,
-            keyboardType: TextInputType.number,
-            maxLength: 6,
-            enabled: !busy,
-            decoration: const InputDecoration(
-              labelText: '2단계 인증 코드',
-              hintText: '필요한 경우',
-              border: OutlineInputBorder(),
-              counterText: '',
-              isDense: true,
-            ),
-          ),
-          const SizedBox(height: 12),
-          SizedBox(
-            width: double.infinity,
-            child: FilledButton.icon(
-              onPressed: busy ? null : onConnect,
-              icon: busy
-                  ? const SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.login),
-              label: const Text('메신저 연결'),
-            ),
           ),
         ],
       ),
