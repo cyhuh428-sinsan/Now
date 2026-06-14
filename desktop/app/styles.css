@@ -365,8 +365,8 @@ button {
 }
 
 .quick-card.messenger-card {
-  width: min(1100px, calc(100vw - 28px));
-  max-height: calc(100vh - 56px);
+  width: min(900px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
 }
 
 .messenger-toolbar,
@@ -385,8 +385,8 @@ button {
   display: grid;
   align-content: start;
   gap: 8px;
-  min-height: 360px;
-  max-height: min(64vh, 680px);
+  min-height: 430px;
+  max-height: min(74vh, 760px);
   overflow: auto;
   padding: 10px;
   border: 1px solid var(--line);
@@ -404,7 +404,7 @@ button {
   display: grid;
   align-content: start;
   gap: 10px;
-  max-height: min(64vh, 680px);
+  max-height: min(74vh, 760px);
   overflow: auto;
 }
 
