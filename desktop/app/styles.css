@@ -1354,14 +1354,14 @@ kbd {
 }
 
 .calendar-panel,
-.tree-panel,
-.editor-panel {
+.tree-panel {
   padding: 18px;
 }
 
 .editor-panel {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  padding: 6px;
 }
 
 .tree-panel,
@@ -1372,7 +1372,7 @@ kbd {
 }
 
 .tree-panel {
-  padding: 8px 6.4px;
+  padding: 8px 3.2px;
   overflow: auto;
 }
 
@@ -1438,11 +1438,11 @@ kbd {
 .open-tabs-bar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 10px;
+  gap: 4px;
   align-items: end;
-  margin: -4px 0 14px;
+  margin: -2px 0 5px;
   border-bottom: 1px solid var(--line);
-  padding-left: 4px;
+  padding-left: 2px;
 }
 
 .open-tabs {
@@ -1930,7 +1930,7 @@ kbd {
   resize: none;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 16px;
+  padding: 8px;
   line-height: 1.65;
   outline: none;
   font-family: inherit;
@@ -2005,8 +2005,8 @@ kbd {
 
 .tree-row {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr) 24px;
-  gap: 6px;
+  grid-template-columns: 11px minmax(0, 1fr) 24px;
+  gap: 3px;
   align-items: center;
   width: 100%;
   min-height: 34px;
@@ -2077,7 +2077,7 @@ kbd {
 .tree-children {
   display: grid;
   gap: 4px;
-  padding: 0 4px 5px 16px;
+  padding: 0 4px 5px 8px;
 }
 
 .small-btn {
@@ -2104,7 +2104,7 @@ kbd {
 .tree-toggle {
   display: grid;
   place-items: center;
-  width: 22px;
+  width: 11px;
   height: 22px;
   padding: 0;
   border-radius: 6px;
@@ -2237,7 +2237,7 @@ kbd {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 18px;
+  padding: 9px;
   background: var(--panel);
   line-height: 1.7;
 }
