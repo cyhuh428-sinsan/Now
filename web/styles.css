@@ -295,7 +295,7 @@ button {
   width: 100%;
   min-height: 38px;
   margin-bottom: 10px;
-  padding: 7px 10px;
+  padding: 7px 8px;
   border: 1px solid #bfdbfe;
   border-radius: 8px;
   background: var(--blue-soft);
@@ -365,7 +365,7 @@ button {
 }
 
 .quick-card.messenger-card {
-  width: min(900px, calc(100vw - 28px));
+  width: min(720px, calc(100vw - 28px));
   max-height: calc(100vh - 28px);
 }
 
@@ -396,7 +396,7 @@ button {
 
 .messenger-layout {
   display: grid;
-  grid-template-columns: minmax(190px, 240px) minmax(0, 1fr);
+  grid-template-columns: minmax(95px, 120px) minmax(0, 1fr);
   gap: 10px;
 }
 
@@ -643,7 +643,7 @@ button {
   display: flex;
   align-items: center;
   min-height: 30px;
-  padding: 0 9px;
+  padding: 0 7.2px;
   font-size: 13px;
   font-weight: 700;
   justify-content: flex-start;
@@ -1372,7 +1372,7 @@ kbd {
 }
 
 .tree-panel {
-  padding: 8px;
+  padding: 8px 6.4px;
   overflow: auto;
 }
 
@@ -2011,7 +2011,7 @@ kbd {
   width: 100%;
   min-height: 34px;
   background: transparent;
-  padding: 5px 7px;
+  padding: 5px 5.6px;
 }
 
 .tree-row.active {
