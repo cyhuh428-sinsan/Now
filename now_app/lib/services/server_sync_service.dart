@@ -336,6 +336,106 @@ class ServerRecording {
   }
 }
 
+class ServerMessengerRoom {
+  final int id;
+  final String roomType;
+  final String name;
+  final String groupName;
+  final int lastMessageId;
+  final int lastReadMessageId;
+  final int unreadCount;
+  final List<String> members;
+
+  const ServerMessengerRoom({
+    required this.id,
+    required this.roomType,
+    required this.name,
+    required this.groupName,
+    required this.lastMessageId,
+    required this.lastReadMessageId,
+    required this.unreadCount,
+    required this.members,
+  });
+
+  factory ServerMessengerRoom.fromJson(Map<String, dynamic> json) {
+    final rawMembers = (json['members'] as List?) ?? const [];
+    return ServerMessengerRoom(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      roomType: json['room_type']?.toString() ?? '',
+      name: json['name']?.toString() ?? '채팅방',
+      groupName: json['group_name']?.toString() ?? '',
+      lastMessageId:
+          int.tryParse(json['last_message_id']?.toString() ?? '') ?? 0,
+      lastReadMessageId:
+          int.tryParse(json['last_read_message_id']?.toString() ?? '') ?? 0,
+      unreadCount: int.tryParse(json['unread_count']?.toString() ?? '') ?? 0,
+      members: rawMembers
+          .map((item) {
+            if (item is Map) {
+              return item['owner_id']?.toString() ??
+                  item['ownerId']?.toString() ??
+                  '';
+            }
+            return item.toString();
+          })
+          .where((item) => item.trim().isNotEmpty)
+          .toList(),
+    );
+  }
+}
+
+class ServerMessengerMessage {
+  final int id;
+  final int roomId;
+  final String senderOwnerId;
+  final String senderDisplayName;
+  final String body;
+  final String createdAt;
+
+  const ServerMessengerMessage({
+    required this.id,
+    required this.roomId,
+    required this.senderOwnerId,
+    required this.senderDisplayName,
+    required this.body,
+    required this.createdAt,
+  });
+
+  factory ServerMessengerMessage.fromJson(Map<String, dynamic> json) {
+    return ServerMessengerMessage(
+      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
+      roomId: int.tryParse(json['room_id']?.toString() ?? '') ?? 0,
+      senderOwnerId: json['sender_owner_id']?.toString() ?? '',
+      senderDisplayName:
+          json['sender_display_name']?.toString() ??
+          json['sender_owner_id']?.toString() ??
+          '',
+      body: json['body']?.toString() ?? '',
+      createdAt: json['created_at']?.toString() ?? '',
+    );
+  }
+}
+
+class ServerMessengerRoomsResult {
+  final String groupName;
+  final List<ServerMessengerRoom> rooms;
+
+  const ServerMessengerRoomsResult({
+    required this.groupName,
+    required this.rooms,
+  });
+}
+
+class ServerMessengerMessagesResult {
+  final ServerMessengerRoom? room;
+  final List<ServerMessengerMessage> items;
+
+  const ServerMessengerMessagesResult({
+    required this.room,
+    required this.items,
+  });
+}
+
 class ServerUserProfile {
   final String ownerId;
   final String? email;
@@ -750,6 +850,122 @@ class ServerSyncService {
     }
   }
 
+  Future<ServerMessengerRoomsResult> loadMessengerRooms(
+    ServerSettings settings,
+  ) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _messengerDio(settings);
+    try {
+      final ownerId = _normalizeOwnerId(settings.ownerId);
+      final res = await dio.get<Map<String, dynamic>>(
+        '/api/v1/messenger/rooms',
+        queryParameters: {'owner_id': ownerId},
+      );
+      final rooms = ((res.data?['rooms'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => ServerMessengerRoom.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .where((room) => room.id > 0)
+          .toList();
+      return ServerMessengerRoomsResult(
+        groupName: res.data?['group_name']?.toString() ?? '',
+        rooms: rooms,
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '메신저 방 조회 실패'));
+    }
+  }
+
+  Future<ServerMessengerMessagesResult> loadMessengerMessages(
+    ServerSettings settings, {
+    required int roomId,
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final dio = _messengerDio(settings);
+    try {
+      final ownerId = _normalizeOwnerId(settings.ownerId);
+      final res = await dio.get<Map<String, dynamic>>(
+        '/api/v1/messenger/rooms/$roomId/messages',
+        queryParameters: {'owner_id': ownerId, 'limit': 100},
+      );
+      final rawRoom = res.data?['room'];
+      final messages = ((res.data?['items'] as List?) ?? const [])
+          .whereType<Map>()
+          .map(
+            (item) => ServerMessengerMessage.fromJson(
+              Map<String, dynamic>.from(item),
+            ),
+          )
+          .toList();
+      return ServerMessengerMessagesResult(
+        room: rawRoom is Map
+            ? ServerMessengerRoom.fromJson(Map<String, dynamic>.from(rawRoom))
+            : null,
+        items: messages,
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '메신저 메시지 조회 실패'));
+    }
+  }
+
+  Future<ServerMessengerMessage> sendMessengerMessage(
+    ServerSettings settings, {
+    required int roomId,
+    required String body,
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final trimmed = body.trim();
+    if (trimmed.isEmpty) {
+      throw Exception('메시지를 입력하세요');
+    }
+    final dio = _messengerDio(settings);
+    try {
+      final res = await dio.post<Map<String, dynamic>>(
+        '/api/v1/messenger/rooms/$roomId/messages',
+        data: {
+          'owner_id': _normalizeOwnerId(settings.ownerId),
+          'body': trimmed,
+        },
+      );
+      final item = res.data?['item'];
+      if (item is! Map) {
+        throw Exception('서버 응답에 메시지가 없습니다');
+      }
+      return ServerMessengerMessage.fromJson(Map<String, dynamic>.from(item));
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '메신저 메시지 전송 실패'));
+    }
+  }
+
+  Future<void> markMessengerRoomRead(
+    ServerSettings settings, {
+    required int roomId,
+    required int lastReadMessageId,
+  }) async {
+    if (!settings.isConfigured || lastReadMessageId <= 0) return;
+    final dio = _messengerDio(settings);
+    try {
+      await dio.post<Map<String, dynamic>>(
+        '/api/v1/messenger/rooms/$roomId/read',
+        data: {
+          'owner_id': _normalizeOwnerId(settings.ownerId),
+          'last_read_message_id': lastReadMessageId,
+        },
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '메신저 읽음 처리 실패'));
+    }
+  }
+
   Future<List<Map<String, dynamic>>> _dailyMemoPayloads(
     ServerSettings settings,
   ) async {
@@ -1065,6 +1281,15 @@ class ServerSyncService {
     if (settings.token.trim().isNotEmpty) {
       // 구형 개인 서버 호환용 NOW_API_TOKEN 흐름이다.
       dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
+    }
+    return dio;
+  }
+
+  Dio _messengerDio(ServerSettings settings) {
+    final dio = _dio(settings);
+    final sessionToken = settings.userToken.trim();
+    if (sessionToken.isNotEmpty) {
+      dio.options.headers['X-Now-Web-Session'] = sessionToken;
     }
     return dio;
   }

@@ -26,6 +26,7 @@ import '../../features/settings/llm_settings_page.dart';
 import '../../features/travel/travel_page.dart';
 import '../../features/capture/capture_page.dart';
 import '../../features/home/schedule_page.dart';
+import '../../features/messenger/group_messenger_page.dart';
 
 part 'app_router.g.dart';
 
@@ -112,6 +113,7 @@ GoRouter appRouter(AppRouterRef ref) {
       ),
       GoRoute(path: '/memo/tree',              builder: (_, __) => const MemoTreePage()),
       GoRoute(path: '/llm/chat',               builder: (_, __) => const LlmChatPage()),
+      GoRoute(path: '/messenger',              builder: (_, __) => const GroupMessengerPage()),
     ],
   );
 }

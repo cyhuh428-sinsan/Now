@@ -403,6 +403,18 @@ class _MemoOverviewListState extends State<_MemoOverviewList> {
           const SizedBox(height: 16),
         ],
         const _SectionHeader(
+          icon: Icons.chat_bubble_outline,
+          label: '그룹 메신저',
+        ),
+        const SizedBox(height: 8),
+        _EmptyInlineMemoCard(
+          icon: Icons.forum_outlined,
+          title: '그룹 메신저',
+          subtitle: '같은 그룹 안에서 짧은 메시지를 주고받습니다',
+          onTap: () => context.push('/messenger'),
+        ),
+        const SizedBox(height: 18),
+        const _SectionHeader(
           icon: Icons.calendar_month_outlined,
           label: '일자별 메모',
         ),
