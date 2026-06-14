@@ -16,6 +16,7 @@ const _serverEnabledKey = 'now_server_enabled';
 const _serverBaseUrlKey = 'now_server_base_url';
 const _serverTokenKey = 'now_server_token';
 const _serverUserTokenKey = 'now_server_user_token';
+const _serverWebSessionTokenKey = 'now_server_web_session_token';
 const _serverOwnerIdKey = 'now_server_owner_id';
 const _serverDeviceIdKey = 'now_server_device_id';
 const _serverLastSyncedAtKey = 'now_server_last_synced_at';
@@ -39,6 +40,7 @@ class ServerSettings {
   final String baseUrl;
   final String token;
   final String userToken;
+  final String webSessionToken;
   final String ownerId;
   final String deviceId;
   final DateTime? lastSyncedAt;
@@ -48,6 +50,7 @@ class ServerSettings {
     required this.baseUrl,
     required this.token,
     required this.userToken,
+    required this.webSessionToken,
     required this.ownerId,
     required this.deviceId,
     required this.lastSyncedAt,
@@ -71,11 +74,16 @@ class ServerSettings {
       prefs,
       key: _serverUserTokenKey,
     );
+    final webSessionToken = await _loadSecureToken(
+      prefs,
+      key: _serverWebSessionTokenKey,
+    );
     return ServerSettings(
       enabled: prefs.getBool(_serverEnabledKey) ?? false,
       baseUrl: prefs.getString(_serverBaseUrlKey) ?? '',
       token: token,
       userToken: userToken,
+      webSessionToken: webSessionToken,
       ownerId: _normalizeOwnerId(
         prefs.getString(_serverOwnerIdKey) ?? 'local_user',
       ),
@@ -94,6 +102,11 @@ class ServerSettings {
       prefs,
       key: _serverUserTokenKey,
     );
+    await _saveSecureToken(
+      webSessionToken.trim(),
+      prefs,
+      key: _serverWebSessionTokenKey,
+    );
     await prefs.setString(_serverOwnerIdKey, _normalizeOwnerId(ownerId));
     await prefs.setString(_serverDeviceIdKey, deviceId.trim());
     if (lastSyncedAt == null) {
@@ -111,6 +124,7 @@ class ServerSettings {
     String? baseUrl,
     String? token,
     String? userToken,
+    String? webSessionToken,
     String? ownerId,
     String? deviceId,
     DateTime? lastSyncedAt,
@@ -121,6 +135,7 @@ class ServerSettings {
       baseUrl: baseUrl ?? this.baseUrl,
       token: token ?? this.token,
       userToken: userToken ?? this.userToken,
+      webSessionToken: webSessionToken ?? this.webSessionToken,
       ownerId: ownerId ?? this.ownerId,
       deviceId: deviceId ?? this.deviceId,
       lastSyncedAt: clearLastSyncedAt
@@ -545,6 +560,46 @@ class ServerSyncService {
       '/api/v1/auth/token-login',
       data: data,
     );
+  }
+
+  Future<ServerSettings> createWebSession(
+    ServerSettings settings, {
+    required String password,
+    String twoFactorCode = '',
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      throw Exception('서버 비밀번호를 입력하세요');
+    }
+    try {
+      final data = <String, dynamic>{
+        'owner_id': _normalizeOwnerId(settings.ownerId),
+        'password': trimmedPassword,
+        'device_id': settings.deviceId.trim().isEmpty
+            ? 'android'
+            : settings.deviceId.trim(),
+      };
+      final code = twoFactorCode.trim();
+      if (code.isNotEmpty) {
+        data['two_factor_code'] = code;
+      }
+      final res = await _dioWithoutUserToken(settings).post<Map<String, dynamic>>(
+        '/api/v1/auth/web-login',
+        data: data,
+      );
+      final sessionToken = res.data?['session_token']?.toString() ?? '';
+      if (sessionToken.trim().isEmpty) {
+        throw Exception('서버 응답에 메신저 세션이 없습니다');
+      }
+      final nextSettings = settings.copyWith(webSessionToken: sessionToken);
+      await nextSettings.save();
+      return nextSettings;
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '메신저 세션 연결 실패'));
+    }
   }
 
   Future<ServerSyncResult> syncNotes(
@@ -1287,7 +1342,7 @@ class ServerSyncService {
 
   Dio _messengerDio(ServerSettings settings) {
     final dio = _dio(settings);
-    final sessionToken = settings.userToken.trim();
+    final sessionToken = settings.webSessionToken.trim();
     if (sessionToken.isNotEmpty) {
       dio.options.headers['X-Now-Web-Session'] = sessionToken;
     }

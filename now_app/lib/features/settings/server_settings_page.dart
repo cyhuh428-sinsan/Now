@@ -21,6 +21,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _emailCtrl = TextEditingController();
   final _timezoneCtrl = TextEditingController(text: 'Asia/Seoul');
   DateTime? _lastSyncedAt;
+  String _webSessionToken = '';
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
@@ -51,6 +52,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _baseUrlCtrl.text = settings.baseUrl;
     _tokenCtrl.text = settings.token;
     _userTokenCtrl.text = settings.userToken;
+    _webSessionToken = settings.webSessionToken;
     _ownerIdCtrl.text = settings.ownerId;
     _deviceIdCtrl.text = settings.deviceId;
     if (_timezoneCtrl.text.trim().isEmpty) {
@@ -72,6 +74,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       baseUrl: _baseUrlCtrl.text,
       token: _tokenCtrl.text,
       userToken: _userTokenCtrl.text,
+      webSessionToken: _webSessionToken,
       ownerId: _ownerIdCtrl.text,
       deviceId: _deviceIdCtrl.text,
       lastSyncedAt: _lastSyncedAt,
