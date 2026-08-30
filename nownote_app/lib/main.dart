@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 import 'providers/theme_mode_provider.dart';
 import 'router/app_router.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await initializeDateFormatting('ko', null); // 한국어 날짜 포맷 (오늘 메모 화면의 달력이 씀)
   runApp(const ProviderScope(child: NowNoteApp()));
 }
 
