@@ -336,6 +336,23 @@ const I18N = {
     "tree.moveDown": "아래로",
     "tree.moveNode": "이동",
     "tree.delete": "삭제",
+    "editor.insertSketch": "스케치 삽입",
+    "sketch.dialogTitle": "스케치 삽입",
+    "sketch.dialogDesc": "간단한 손그림을 그려 메모에 삽입합니다.",
+    "sketch.drawMode": "그리기",
+    "sketch.eraseMode": "지우개",
+    "sketch.colorLabel": "색상",
+    "sketch.widthThin": "얇게",
+    "sketch.widthNormal": "보통",
+    "sketch.widthThick": "굵게",
+    "sketch.undo": "실행 취소",
+    "sketch.clear": "전체 지우기",
+    "sketch.cancel": "취소",
+    "sketch.insert": "삽입",
+    "sketch.empty": "그림을 먼저 그려주세요.",
+    "sketch.uploading": "업로드 중...",
+    "sketch.uploadFailed": "업로드에 실패했습니다. 기기에만 저장된 그림으로 넣습니다.",
+    "sketch.inserted": "스케치를 메모에 넣었습니다.",
     "tabs.reopen": "다시 열기",
     "tabs.closeOther": "다른 탭 닫기",
     "tabs.closeAll": "모두 닫기",
@@ -1092,6 +1109,23 @@ const I18N = {
     "tree.moveDown": "Down",
     "tree.moveNode": "Move",
     "tree.delete": "Delete",
+    "editor.insertSketch": "Insert sketch",
+    "sketch.dialogTitle": "Insert sketch",
+    "sketch.dialogDesc": "Draw a quick sketch and insert it into the note.",
+    "sketch.drawMode": "Draw",
+    "sketch.eraseMode": "Erase",
+    "sketch.colorLabel": "Color",
+    "sketch.widthThin": "Thin",
+    "sketch.widthNormal": "Normal",
+    "sketch.widthThick": "Thick",
+    "sketch.undo": "Undo",
+    "sketch.clear": "Clear all",
+    "sketch.cancel": "Cancel",
+    "sketch.insert": "Insert",
+    "sketch.empty": "Draw something first.",
+    "sketch.uploading": "Uploading...",
+    "sketch.uploadFailed": "Upload failed. Inserting a device-only sketch instead.",
+    "sketch.inserted": "Sketch added to the note.",
     "tabs.reopen": "Reopen",
     "tabs.closeOther": "Close others",
     "tabs.closeAll": "Close all",
@@ -2279,6 +2313,14 @@ let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
 const messengerAttachmentPreviewCache = new Map();
+const noteAttachmentImageCache = new Map();
+
+// 스케치 다이얼로그 상태 (2.3.6 U11). 다이얼로그를 열 때마다 초기화한다.
+let sketchToolMode = "draw";
+let sketchDrawing = false;
+let sketchLastPoint = null;
+let sketchUndoStack = [];
+let sketchHasContent = false;
 
 // 한글 등 IME 조합 입력 처리.
 // 조합 중에는 편집기 값을 통째로 다시 쓰지 않고, 조합이 끝난 뒤 밀린 처리를 한 번만 실행한다.
@@ -3065,6 +3107,20 @@ const elements = {
   moveNodePreview: $("#moveNodePreview"),
   moveNodeCancelBtn: $("#moveNodeCancelBtn"),
   moveNodeOkBtn: $("#moveNodeOkBtn"),
+  insertSketchBtn: $("#insertSketchBtn"),
+  sketchDialog: $("#sketchDialog"),
+  sketchDialogTitle: $("#sketchDialogTitle"),
+  sketchDialogDesc: $("#sketchDialogDesc"),
+  sketchDrawModeBtn: $("#sketchDrawModeBtn"),
+  sketchEraseModeBtn: $("#sketchEraseModeBtn"),
+  sketchColorInput: $("#sketchColorInput"),
+  sketchLineWidthSelect: $("#sketchLineWidthSelect"),
+  sketchUndoBtn: $("#sketchUndoBtn"),
+  sketchClearBtn: $("#sketchClearBtn"),
+  sketchCanvas: $("#sketchCanvas"),
+  sketchDialogStatus: $("#sketchDialogStatus"),
+  sketchCancelBtn: $("#sketchCancelBtn"),
+  sketchInsertBtn: $("#sketchInsertBtn"),
   toastRegion: $("#toastRegion"),
   webLoginView: $("#webLoginView"),
   webLoginForm: $("#webLoginForm"),
@@ -4927,6 +4983,14 @@ function bindEvents() {
   elements.moveUpBtn.addEventListener("click", () => moveSelectedTreeNode(-1));
   elements.moveDownBtn.addEventListener("click", () => moveSelectedTreeNode(1));
   elements.moveNodeBtn.addEventListener("click", moveSelectedTreeNodeToNewParent);
+  elements.insertSketchBtn.addEventListener("click", openSketchDialog);
+  elements.sketchDrawModeBtn.addEventListener("click", () => setSketchToolMode("draw"));
+  elements.sketchEraseModeBtn.addEventListener("click", () => setSketchToolMode("erase"));
+  elements.sketchUndoBtn.addEventListener("click", undoSketchStroke);
+  elements.sketchClearBtn.addEventListener("click", clearSketchDialogCanvas);
+  elements.sketchCancelBtn.addEventListener("click", closeSketchDialog);
+  elements.sketchInsertBtn.addEventListener("click", insertSketchIntoTreeNote);
+  initializeSketchDialogCanvas();
 
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -8268,6 +8332,22 @@ function applyLanguage() {
   setText("#moveUpBtn", t("tree.moveUp"));
   setText("#moveDownBtn", t("tree.moveDown"));
   setText("#moveNodeBtn", t("tree.moveNode"));
+  setText("#insertSketchBtn", t("editor.insertSketch"));
+  setText("#sketchDialogTitle", t("sketch.dialogTitle"));
+  setText("#sketchDialogDesc", t("sketch.dialogDesc"));
+  setText("#sketchDrawModeBtn", t("sketch.drawMode"));
+  setText("#sketchEraseModeBtn", t("sketch.eraseMode"));
+  setTitle(elements.sketchColorInput, t("sketch.colorLabel"));
+  setText("#sketchUndoBtn", t("sketch.undo"));
+  setText("#sketchClearBtn", t("sketch.clear"));
+  setText("#sketchCancelBtn", t("sketch.cancel"));
+  setText("#sketchInsertBtn", t("sketch.insert"));
+  if (elements.sketchLineWidthSelect) {
+    const widthOptions = elements.sketchLineWidthSelect.querySelectorAll("option");
+    if (widthOptions[0]) widthOptions[0].textContent = t("sketch.widthThin");
+    if (widthOptions[1]) widthOptions[1].textContent = t("sketch.widthNormal");
+    if (widthOptions[2]) widthOptions[2].textContent = t("sketch.widthThick");
+  }
   setText("#addChildBtn", t("note.addChild"));
   setText("#deleteTreeBtn", t("tree.delete"));
   setText("#resultsEyebrow", t("results.eyebrow"));
@@ -8671,6 +8751,14 @@ function commandCatalog() {
       description: "선택 메모 커서 위치에 현재 시간을 넣습니다.",
       keywords: "time now insert 시간",
       run: insertCurrentTimeIntoTreeNote,
+    },
+    {
+      id: "insert-sketch",
+      label: "스케치 삽입",
+      group: "작성",
+      description: "손그림을 그려 선택 메모에 넣습니다.",
+      keywords: "sketch draw insert 스케치 그림",
+      run: openSketchDialog,
     },
     {
       id: "insert-checklist",
@@ -9236,6 +9324,201 @@ function insertTextIntoTreeContent(text) {
   elements.treeContent.setSelectionRange(nextCursor, nextCursor);
   syncTreeContentFromEditor();
   return true;
+}
+
+// 스케치 메모 (2.3.6 U11, 로드맵 1).
+// 저장 형식·경로 결정은 docs/NOW_2_3_6_FEATURE_DESIGN.md "3. 스케치 저장 형식과 경로"를 따른다:
+// PNG를 유지하고, 서버가 연결돼 있으면 메신저 첨부 저장소를 재사용하는 노트 첨부
+// 엔드포인트(P12, /api/v1/notes/attachments)에 올려 본문에는 nownote-attachment://{storage_key}
+// 참조만 남긴다. 서버가 없으면(설치형은 서버 없이도 쓴다) data URL로 폴백한다.
+function openSketchDialog() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isReadOnlyTreeNode(selected)) return;
+  closePopupLayers();
+  sketchToolMode = "draw";
+  sketchUndoStack = [];
+  sketchHasContent = false;
+  setSketchToolMode("draw");
+  if (elements.sketchDialogStatus) elements.sketchDialogStatus.textContent = "";
+  elements.sketchDialog.classList.remove("hidden");
+  clearSketchDialogCanvas();
+}
+
+function closeSketchDialog() {
+  elements.sketchDialog.classList.add("hidden");
+}
+
+function sketchCanvasContext() {
+  return elements.sketchCanvas?.getContext("2d") || null;
+}
+
+function fillSketchCanvasWhite(context) {
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, elements.sketchCanvas.width, elements.sketchCanvas.height);
+}
+
+function clearSketchDialogCanvas() {
+  const context = sketchCanvasContext();
+  if (!context) return;
+  fillSketchCanvasWhite(context);
+  sketchUndoStack = [];
+  sketchHasContent = false;
+  updateSketchUndoButtonState();
+}
+
+function setSketchToolMode(mode) {
+  sketchToolMode = mode === "erase" ? "erase" : "draw";
+  elements.sketchDrawModeBtn?.classList.toggle("is-active", sketchToolMode === "draw");
+  elements.sketchEraseModeBtn?.classList.toggle("is-active", sketchToolMode === "erase");
+}
+
+function updateSketchUndoButtonState() {
+  if (elements.sketchUndoBtn) elements.sketchUndoBtn.disabled = sketchUndoStack.length === 0;
+}
+
+// 스트로크를 시작하기 전 캔버스 상태를 스냅샷으로 남긴다. 획 하나 = 실행 취소 한 단계.
+function pushSketchUndoSnapshot() {
+  const canvas = elements.sketchCanvas;
+  const context = sketchCanvasContext();
+  if (!canvas || !context) return;
+  sketchUndoStack.push(context.getImageData(0, 0, canvas.width, canvas.height));
+  if (sketchUndoStack.length > 50) sketchUndoStack.shift();
+  updateSketchUndoButtonState();
+}
+
+function undoSketchStroke() {
+  const canvas = elements.sketchCanvas;
+  const context = sketchCanvasContext();
+  if (!canvas || !context || sketchUndoStack.length === 0) return;
+  const snapshot = sketchUndoStack.pop();
+  context.putImageData(snapshot, 0, 0);
+  sketchHasContent = sketchUndoStack.length > 0;
+  updateSketchUndoButtonState();
+}
+
+function sketchLineWidth() {
+  const value = Number(elements.sketchLineWidthSelect?.value);
+  return Number.isFinite(value) && value > 0 ? value : 4;
+}
+
+function sketchPointFromEvent(event) {
+  const canvas = elements.sketchCanvas;
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (event.clientX - rect.left) * scaleX,
+    y: (event.clientY - rect.top) * scaleY,
+  };
+}
+
+function initializeSketchDialogCanvas() {
+  const canvas = elements.sketchCanvas;
+  if (!canvas) return;
+  canvas.addEventListener("pointerdown", (event) => {
+    pushSketchUndoSnapshot();
+    sketchDrawing = true;
+    sketchHasContent = true;
+    sketchLastPoint = sketchPointFromEvent(event);
+    const context = sketchCanvasContext();
+    context.beginPath();
+    context.moveTo(sketchLastPoint.x, sketchLastPoint.y);
+  });
+  canvas.addEventListener("pointermove", (event) => {
+    if (!sketchDrawing) return;
+    const point = sketchPointFromEvent(event);
+    const context = sketchCanvasContext();
+    context.lineCap = "round";
+    context.lineJoin = "round";
+    context.lineWidth = sketchToolMode === "erase" ? sketchLineWidth() * 3 : sketchLineWidth();
+    context.strokeStyle = sketchToolMode === "erase" ? "#ffffff" : (elements.sketchColorInput?.value || "#1f2937");
+    context.lineTo(point.x, point.y);
+    context.stroke();
+    sketchLastPoint = point;
+  });
+  const stopDrawing = () => {
+    sketchDrawing = false;
+  };
+  window.addEventListener("pointerup", stopDrawing);
+  canvas.addEventListener("pointerleave", stopDrawing);
+}
+
+function sketchCanvasDataUrl() {
+  return elements.sketchCanvas.toDataURL("image/png");
+}
+
+function canUploadNoteAttachment() {
+  const server = state.settings.server || defaultServerSettings();
+  if (server.mode !== "server" || !server.url) return false;
+  if (isHostedWebClient() && !server.webSessionToken) return false;
+  return true;
+}
+
+async function uploadSketchAttachment(dataUrl) {
+  const server = state.settings.server;
+  const response = await fetch(dataUrl);
+  const blob = await response.blob();
+  const form = new FormData();
+  form.append("file", blob, "sketch.png");
+  const query = new URLSearchParams({ owner_id: normalizeOwnerId(server.ownerId) });
+  const uploadResponse = await fetch(
+    `${normalizeServerUrl(server.url)}/api/v1/notes/attachments?${query.toString()}`,
+    { method: "POST", body: form, headers: serverAuthHeaders(server) },
+  );
+  if (!uploadResponse.ok) throw new Error(await serverResponseError(uploadResponse));
+  const payload = await uploadResponse.json();
+  return payload?.attachment?.storage_key || "";
+}
+
+async function insertSketchIntoTreeNote() {
+  if (!sketchHasContent) {
+    if (elements.sketchDialogStatus) elements.sketchDialogStatus.textContent = t("sketch.empty");
+    return;
+  }
+  const dataUrl = sketchCanvasDataUrl();
+  let reference = dataUrl;
+  if (canUploadNoteAttachment()) {
+    if (elements.sketchDialogStatus) elements.sketchDialogStatus.textContent = t("sketch.uploading");
+    try {
+      const storageKey = await uploadSketchAttachment(dataUrl);
+      if (storageKey) reference = `nownote-attachment://${storageKey}`;
+    } catch {
+      showNotice(t("sketch.uploadFailed"), "error");
+    }
+  }
+  const inserted = insertTextIntoTreeContent(`![스케치](${reference})`);
+  closeSketchDialog();
+  if (inserted) showNotice(t("sketch.inserted"), "success");
+}
+
+async function hydrateNoteAttachmentImage(imgEl, storageKey) {
+  const cached = noteAttachmentImageCache.get(storageKey);
+  if (cached) {
+    imgEl.src = cached;
+    return;
+  }
+  const server = state.settings.server;
+  if (!canUploadNoteAttachment()) return;
+  try {
+    const query = new URLSearchParams({ owner_id: normalizeOwnerId(server.ownerId) });
+    const response = await fetch(
+      `${normalizeServerUrl(server.url)}/api/v1/notes/attachments/${encodeURIComponent(storageKey)}?${query.toString()}`,
+      { headers: serverAuthHeaders(server) },
+    );
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    noteAttachmentImageCache.set(storageKey, url);
+    imgEl.src = url;
+  } catch {
+    imgEl.alt = t("messenger.attachment.previewFailed");
+  }
+}
+
+function hydrateNoteAttachmentImages(container) {
+  container.querySelectorAll("img[data-note-attachment-key]").forEach((imgEl) => {
+    hydrateNoteAttachmentImage(imgEl, imgEl.dataset.noteAttachmentKey);
+  });
 }
 
 function createWritingTemplateNote(templateId = "project") {
@@ -12369,6 +12652,7 @@ function treePathNodes(id, nodes = state.data.tree, parents = []) {
 function renderMarkdownPreview(content) {
   const html = markdownToHtml(content || "", { withCodeBlockActions: true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
+  hydrateNoteAttachmentImages(elements.markdownPreview);
 }
 
 function renderLinkPanel() {
@@ -12911,10 +13195,15 @@ function openLiveMemoEditorLink(event) {
 function inlineMarkdown(text) {
   const codeSpans = [];
   const markdownLinks = [];
+  const markdownImages = [];
   const protectedText = text
     .replace(/`([^`]+)`/g, (_, code) => {
     const index = codeSpans.push(code) - 1;
     return `\u0000CODE${index}\u0000`;
+    })
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+      const index = markdownImages.push(renderInlineImage(alt, url)) - 1;
+      return `\u0000IMG${index}\u0000`;
     })
     .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, url) => {
       const index = markdownLinks.push(renderExternalLink(label, url)) - 1;
@@ -12932,6 +13221,7 @@ function inlineMarkdown(text) {
     .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>")
     .replace(/\u0000LINK(\d+)\u0000/g, (_, index) => markdownLinks[Number(index)] || "")
+    .replace(/\u0000IMG(\d+)\u0000/g, (_, index) => markdownImages[Number(index)] || "")
     .replace(/\u0000CODE(\d+)\u0000/g, (_, index) => `<code>${codeSpans[Number(index)] || ""}</code>`);
 }
 
@@ -12941,6 +13231,22 @@ function renderExternalLink(label, url) {
     return `[${label}](${url})`;
   }
   return `<a href="${escapeHtml(trimmedUrl)}" target="_blank" rel="noopener noreferrer">${label}</a>`;
+}
+
+// 이미지 마크다운(![alt](url)). nownote-attachment:// 참조는 서버에서
+// 인증된 blob을 별도로 불러와야 해 src를 비워두고
+// data-note-attachment-key로 표시한다(hydrateNoteAttachmentImages가 채운다).
+function renderInlineImage(alt, url) {
+  const trimmedUrl = decodeHtml(url.trim());
+  const altText = escapeHtml(alt || "");
+  if (trimmedUrl.startsWith("nownote-attachment://")) {
+    const storageKey = trimmedUrl.slice("nownote-attachment://".length);
+    return `<img class="note-inline-image" data-note-attachment-key="${escapeHtml(storageKey)}" alt="${altText}">`;
+  }
+  if (/^(data:image\/|https?:\/\/)/i.test(trimmedUrl)) {
+    return `<img class="note-inline-image" src="${escapeHtml(trimmedUrl)}" alt="${altText}">`;
+  }
+  return `![${alt}](${url})`;
 }
 
 function renderDetectedLink(value) {
