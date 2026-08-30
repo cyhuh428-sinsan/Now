@@ -3,6 +3,7 @@ import 'dart:developer' as developer;
 import 'package:drift/drift.dart';
 import 'package:device_calendar/device_calendar.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:now_core/now_core.dart';
 import '../../core/database/app_database.dart';
 import '../interfaces/calendar_event_repository.dart';
 
@@ -12,7 +13,9 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
   // ▼▼▼ [2. 추가] 캘린더 플러그인 객체 생성
   final DeviceCalendarPlugin _deviceCalendarPlugin = DeviceCalendarPlugin();
 
-  LocalCalendarEventRepository(this._db);
+  final NoteDatabase _noteDb;
+
+  LocalCalendarEventRepository(this._db, this._noteDb);
 
   // =========================================================
   // [1] 기존 핵심 로직 (LLM 및 홈 화면 연동용)
@@ -43,7 +46,7 @@ class LocalCalendarEventRepository implements CalendarEventRepository {
 
   @override
   Future<bool> hasMeeting(String calendarEventId) async {
-    final result = await (_db.select(_db.meetings)
+    final result = await (_noteDb.select(_noteDb.meetings)
           ..where((t) => t.calendarEventId.equals(calendarEventId)))
         .getSingleOrNull();
     return result != null;

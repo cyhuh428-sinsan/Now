@@ -1,19 +1,14 @@
 import 'dart:io';
 
-import 'package:dio/dio.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:url_launcher/url_launcher.dart';
-import '../../core/database/app_database.dart';
-import '../../services/note_encryption_service.dart';
+import 'package:now_core/now_core.dart';
 import '../../services/server_sync_service.dart';
-import '../../llm/services/llm_settings_service.dart';
 import '../../repositories/repository_providers.dart';
+import '../ask/ask_sheet.dart';
 
 class TreeDeletedMemo {
   final String memoId;
@@ -36,7 +31,7 @@ class TreeDeletedMemo {
 }
 
 final treeMemosProvider = FutureProvider.autoDispose<List<Memo>>((ref) async {
-  final db = ref.watch(appDatabaseProvider);
+  final db = ref.watch(noteDatabaseProvider);
   return (db.select(db.memos)
         ..where((m) => m.source.equals('note_tree'))
         ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
@@ -51,7 +46,7 @@ final treeDeletedMemosProvider =
         final value = entry.value;
         return TreeDeletedMemo(
           memoId: entry.key,
-          title: value['title']?.toString() ?? '삭제된 메모',
+          title: value['title']?.toString() ?? defaultDeletedNoteTitle,
           content: value['content']?.toString() ?? '',
           level: int.tryParse(value['level']?.toString() ?? '1') ?? 1,
           parentLocalId: value['parent_local_id']?.toString(),
@@ -160,10 +155,10 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   }
 
   Future<void> _saveTreeMemoBody(TreeMemoNode node, String body) async {
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     await (db.update(db.memos)..where((m) => m.memoId.equals(node.id))).write(
       MemosCompanion(
-        content: Value('${node.title}\n$body'),
+        content: Value(joinNoteContent(title: node.title, body: body)),
         updatedAt: Value(DateTime.now()),
       ),
     );
@@ -191,7 +186,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     );
     if (key == null) return;
     try {
-      final plain = await NoteEncryptionService().decrypt(node.content, key);
+      final plain = await const NoteEncryptionService().decrypt(node.content, key);
       if (!mounted) return;
       setState(() {
         _unlockedEncryptedContents[node.id] = plain;
@@ -232,7 +227,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
       );
       if (key == null) return;
       try {
-        plain = await NoteEncryptionService().decrypt(node.content, key);
+        plain = await const NoteEncryptionService().decrypt(node.content, key);
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -279,7 +274,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     );
     if (key == null) return;
     try {
-      final encrypted = await NoteEncryptionService().encrypt(node.content, key);
+      final encrypted = await const NoteEncryptionService().encrypt(node.content, key);
       await _saveTreeMemoBody(node, encrypted);
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -321,7 +316,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     );
     if (confirm != true) return;
 
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final syncService = ref.read(serverSyncServiceProvider);
     await (db.delete(
       db.memos,
@@ -358,7 +353,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     );
     if (confirm != true) return;
 
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final syncService = ref.read(serverSyncServiceProvider);
     final ids = items.map((item) => item.memoId).toList();
     await (db.delete(db.memos)..where((t) => t.memoId.isIn(ids))).go();
@@ -392,7 +387,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
     );
     if (confirm != true) return;
 
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final syncService = ref.read(serverSyncServiceProvider);
     await (db.delete(db.memos)..where((t) => t.memoId.equals(memoId))).go();
     await syncService.clearDeletedTreeMemoPendings({memoId});
@@ -427,7 +422,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
 
     final syncService = ref.read(serverSyncServiceProvider);
     final pendingMap = await syncService.getDeletedTreeMemoPendings();
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final restored = await _restoreDeletedMemoFromPending(
       pendingMap: pendingMap,
       memoId: memoId,
@@ -445,7 +440,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   Future<bool> _restoreDeletedMemoFromPending({
     required Map<String, Map<String, dynamic>> pendingMap,
     required String memoId,
-    required AppDatabase db,
+    required NoteDatabase db,
     required DateTime now,
   }) async {
     final data = pendingMap[memoId];
@@ -500,7 +495,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
 
     final syncService = ref.read(serverSyncServiceProvider);
     final pendingMap = await syncService.getDeletedTreeMemoPendings();
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final now = DateTime.now();
     final selectedIds = _selectedDeletedIds.toList()
       ..sort((a, b) {
@@ -559,7 +554,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
 
     final syncService = ref.read(serverSyncServiceProvider);
     final pendingMap = await syncService.getDeletedTreeMemoPendings();
-    final db = ref.read(appDatabaseProvider);
+    final db = ref.read(noteDatabaseProvider);
     final now = DateTime.now();
     final restoredIds = <String>{};
     final orderedIds = items.map((item) => item.memoId).toList()
@@ -878,74 +873,7 @@ class _MemoTreePageState extends ConsumerState<MemoTreePage> {
   }
 }
 
-class TreeMemoNode {
-  final String id;
-  final String title;
-  final String content;
-  final String? parentId;
-  final int level;
-  final String tags;
-
-  const TreeMemoNode({
-    required this.id,
-    required this.title,
-    required this.content,
-    required this.parentId,
-    required this.level,
-    required this.tags,
-  });
-
-  bool get isEncrypted => isEncryptedNoteContent(content);
-  bool get isShared => _treeMemoTagsContainShared(tags);
-
-  String displayContent(String? unlockedContent) {
-    if (!isEncrypted) return content;
-    return unlockedContent ?? '암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.';
-  }
-
-  factory TreeMemoNode.fromMemo(Memo memo) {
-    final tags = _parseTags(memo.tags);
-    final lines = memo.content.split('\n');
-    final title = lines.first.trim().isEmpty ? '제목 없음' : lines.first.trim();
-    final body = lines.skip(1).join('\n').trim();
-    return TreeMemoNode(
-      id: memo.memoId,
-      title: title,
-      content: body,
-      parentId: tags['parent']?.isEmpty == true ? null : tags['parent'],
-      level: int.tryParse(tags['level'] ?? '1') ?? 1,
-      tags: memo.tags ?? '',
-    );
-  }
-}
-
-Map<String, String> _parseTags(String? raw) {
-  final result = <String, String>{};
-  for (final part in (raw ?? '').split(';')) {
-    final index = part.indexOf('=');
-    if (index <= 0) continue;
-    result[part.substring(0, index)] = part.substring(index + 1);
-  }
-  return result;
-}
-
-bool _treeMemoTagsContainShared(String rawTags) {
-  final parsed = _parseTags(rawTags);
-  final candidates = <String>[
-    rawTags,
-    parsed['serverTags'] ?? '',
-    parsed['tags'] ?? '',
-  ];
-  for (final candidate in candidates) {
-    final tokens = candidate
-        .toLowerCase()
-        .split(RegExp(r'[\s,;=]+'))
-        .map((token) => token.trim())
-        .where((token) => token.isNotEmpty);
-    if (tokens.contains('shared')) return true;
-  }
-  return false;
-}
+// TreeMemoNode, 태그 파싱, 공유 판정은 now_core/notes 에 있다.
 
 class _TreeMemoTile extends ConsumerWidget {
   final TreeMemoNode node;
@@ -1231,10 +1159,50 @@ class _TreeMemoContentSheetState extends State<_TreeMemoContentSheet> {
   final TextEditingController _findCtrl = TextEditingController();
   String _findQuery = '';
 
+  late final VoicePlaybackService _voicePlayback;
+
+  @override
+  void initState() {
+    super.initState();
+    _voicePlayback = VoicePlaybackService(
+      synthesizer: ({
+        required String text,
+        String? voice,
+        String? language,
+        double? speed,
+      }) async {
+        final settings = await VoiceSettingsStore().load();
+        return VoiceEngineClient(settings: settings).synthesize(
+          text: text,
+          voice: voice,
+          language: language,
+          speed: speed,
+        );
+      },
+    );
+  }
+
   @override
   void dispose() {
     _findCtrl.dispose();
+    _voicePlayback.dispose();
     super.dispose();
+  }
+
+  Future<void> _speakContent() async {
+    try {
+      await _voicePlayback.speak(text: widget.content, id: widget.node.id);
+    } on VoiceEngineException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } on VoicePlaybackException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   int get _matchCount {
@@ -1282,6 +1250,44 @@ class _TreeMemoContentSheetState extends State<_TreeMemoContentSheet> {
                       ),
                     ),
                   ),
+                  if (widget.content.trim().isNotEmpty)
+                    StreamBuilder<VoicePlaybackState>(
+                      stream: _voicePlayback.states,
+                      initialData: _voicePlayback.state,
+                      builder: (context, snapshot) {
+                        final state = snapshot.data ?? VoicePlaybackState.idle;
+                        final isThis =
+                            state.id == widget.node.id && state.isBusy;
+                        final isLoading = isThis && state.isLoading;
+                        final isPlaying = isThis && state.isPlaying;
+                        return IconButton(
+                          tooltip: isPlaying ? '멈추기' : '읽어주기',
+                          icon: isLoading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Color(0xFF2563EB),
+                                  ),
+                                )
+                              : Icon(
+                                  isPlaying
+                                      ? Icons.stop_circle_outlined
+                                      : Icons.volume_up_outlined,
+                                  size: 20,
+                                  color: const Color(0xFF2563EB),
+                                ),
+                          onPressed: () {
+                            if (isPlaying) {
+                              _voicePlayback.stop();
+                            } else {
+                              _speakContent();
+                            }
+                          },
+                        );
+                      },
+                    ),
                   if (widget.editable)
                     TextButton.icon(
                       onPressed: widget.onEdit,
@@ -1587,8 +1593,9 @@ Future<void> _showTreeMemoDialog(
 }) async {
   final titleCtrl = TextEditingController(text: editingNode?.title ?? '');
   final bodyCtrl = TextEditingController(text: editingNode?.content ?? '');
-  final speech = SpeechToText();
-  final recorder = FlutterSoundRecorder();
+  // 녹음과 기기 내 STT는 now_core가 들고 있다. 화면은 시작/정지만 부른다.
+  final DeviceSpeechRecognizer speech = SpeechToTextRecognizer();
+  final recording = VoiceRecordingService();
   String? recordingPath;
   String? pendingUploadRecordingPath;
   String pendingUploadTranscript = '';
@@ -1615,7 +1622,7 @@ Future<void> _showTreeMemoDialog(
   Future<void> stopRecordingIfNeeded() async {
     try {
       if (voiceInputMode == 'record_then_transcribe') {
-        await recorder.stopRecorder();
+        await recording.stop();
       } else {
         await speech.stop();
       }
@@ -1623,9 +1630,7 @@ Future<void> _showTreeMemoDialog(
       // 음성 입력 세션 정리 실패는 사용자 체감 동작에 직접 영향이 크지 않으므로 무시
     }
 
-    try {
-      await recorder.closeRecorder();
-    } catch (_) {}
+    await recording.dispose();
 
     if (recordingPath != null) {
       try {
@@ -1698,6 +1703,37 @@ Future<void> _showTreeMemoDialog(
                 ),
               ),
               const SizedBox(height: 12),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: () {
+                    final isEncrypted = editingNode?.isEncrypted ?? false;
+                    final noteContent = isEncrypted
+                        ? null
+                        : joinNoteContent(
+                            title: titleCtrl.text.trim().isEmpty
+                                ? '제목 없음'
+                                : titleCtrl.text.trim(),
+                            body: bodyCtrl.text,
+                          );
+                    showAskSheet(
+                      context,
+                      noteContent: noteContent,
+                      onInsertAnswer: (block) {
+                        bodyCtrl.text =
+                            appendAskAnswerToNote(bodyCtrl.text, block);
+                        bodyCtrl.selection = TextSelection.fromPosition(
+                          TextPosition(offset: bodyCtrl.text.length),
+                        );
+                      },
+                    );
+                  },
+                  icon: const Icon(Icons.help_outline,
+                      size: 16, color: Color(0xFF2563EB)),
+                  label: const Text('묻기',
+                      style: TextStyle(color: Color(0xFF2563EB))),
+                ),
+              ),
               Container(
                 height: 260,
                 decoration: BoxDecoration(
@@ -1756,16 +1792,9 @@ Future<void> _showTreeMemoDialog(
                       });
                       try {
                         if (voiceInputMode == 'record_then_transcribe') {
-                          try {
-                            await recorder.stopRecorder();
-                            await recorder.closeRecorder();
-                          } catch (e) {
-                            debugPrint(
-                              '[MEMO_TREE_RECORD] recorder stop error: $e',
-                            );
-                          }
+                          final result = await recording.stop();
 
-                          if (recordingPath == null) {
+                          if (result == null) {
                             if (context.mounted) {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -1773,82 +1802,59 @@ Future<void> _showTreeMemoDialog(
                                 ),
                               );
                             }
+                          } else if (result.isTooShort) {
+                            await result.delete();
+                            recordingPath = null;
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('녹음이 짧아 변환을 생략했어요.'),
+                                ),
+                              );
+                            }
                           } else {
-                            final file = File(recordingPath!);
-                            if (!(await file.exists()) ||
-                                await file.length() < 1000) {
-                              await deleteRecordingFile();
+                            try {
+                              // 주소가 비어 있으면 클라이언트가 notConfigured로
+                              // 던진다. 안내 문구도 거기서 온다.
+                              final client = VoiceEngineClient(
+                                settings: await VoiceSettingsStore().load(),
+                              );
+                              final newText =
+                                  (await client.transcribe(file: result.file))
+                                      .trim();
+                              if (newText.isNotEmpty) {
+                                final current = bodyCtrl.text.trim();
+                                bodyCtrl.text = current.isEmpty
+                                    ? newText
+                                    : '$current\n$newText';
+                                bodyCtrl.selection =
+                                    TextSelection.fromPosition(
+                                      TextPosition(
+                                        offset: bodyCtrl.text.length,
+                                      ),
+                                    );
+                                await deletePendingUploadFile();
+                                pendingUploadRecordingPath = recordingPath;
+                                pendingUploadTranscript = newText;
+                                recordingPath = null;
+                              }
+                            } catch (e) {
+                              debugPrint(
+                                '[MEMO_TREE_RECORD] transcribe error: $e',
+                              );
                               if (context.mounted) {
+                                // 401·503·연결 실패·타임아웃이 각각 다른
+                                // 문장으로 보인다.
+                                final message = e is VoiceEngineException
+                                    ? e.message
+                                    : '변환 실패: $e';
                                 ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('녹음이 짧아 변환을 생략했어요.'),
-                                  ),
+                                  SnackBar(content: Text(message)),
                                 );
                               }
-                            } else {
-                              final whisperUrl = await LlmSettingsService()
-                                  .loadWhisperUrl();
-                              if (whisperUrl.trim().isEmpty) {
-                                if (context.mounted) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(
-                                      content: Text(
-                                        'Whisper 서버 URL이 없으면 녹음 후 변환을 시작할 수 없습니다.',
-                                      ),
-                                    ),
-                                  );
-                                }
-                              } else {
-                                try {
-                                  final dio = Dio();
-                                  final formData = FormData.fromMap({
-                                    'file': await MultipartFile.fromFile(
-                                      recordingPath!,
-                                      filename: 'memo_tree.aac',
-                                    ),
-                                  });
-                                  final response = await dio.post(
-                                    '$whisperUrl/transcribe',
-                                    data: formData,
-                                    options: Options(
-                                      receiveTimeout: const Duration(
-                                        seconds: 120,
-                                      ),
-                                    ),
-                                  );
-                                  final text =
-                                      response.data['text'] as String? ?? '';
-                                  final newText = text.trim();
-                                  if (newText.isNotEmpty) {
-                                    final current = bodyCtrl.text.trim();
-                                    bodyCtrl.text = current.isEmpty
-                                        ? newText
-                                        : '$current\n$newText';
-                                    bodyCtrl.selection =
-                                        TextSelection.fromPosition(
-                                          TextPosition(
-                                            offset: bodyCtrl.text.length,
-                                          ),
-                                        );
-                                    await deletePendingUploadFile();
-                                    pendingUploadRecordingPath = recordingPath;
-                                    pendingUploadTranscript = newText;
-                                    recordingPath = null;
-                                  }
-                                } catch (e) {
-                                  debugPrint(
-                                    '[MEMO_TREE_RECORD] transcribe error: $e',
-                                  );
-                                  if (context.mounted) {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text('변환 실패: $e')),
-                                    );
-                                  }
-                                }
-                              }
-                              if (recordingPath != null) {
-                                await deleteRecordingFile();
-                              }
+                            }
+                            if (recordingPath != null) {
+                              await deleteRecordingFile();
                             }
                           }
                         } else {
@@ -1867,19 +1873,8 @@ Future<void> _showTreeMemoDialog(
 
                     if (voiceInputMode == 'record_then_transcribe') {
                       try {
-                        final dir = await getApplicationDocumentsDirectory();
-                        final folder = Directory('${dir.path}/recordings');
-                        if (!await folder.exists()) {
-                          await folder.create(recursive: true);
-                        }
-                        recordingPath =
-                            '${folder.path}/memo_tree_${DateTime.now().millisecondsSinceEpoch}.aac';
-                        await recorder.openRecorder();
-                        await recorder.startRecorder(
-                          toFile: recordingPath!,
-                          codec: Codec.aacADTS,
-                          bitRate: 128000,
-                          sampleRate: 16000,
+                        recordingPath = await recording.start(
+                          namePrefix: 'memo_tree',
                         );
                         setDialogState(() => isListening = true);
                       } catch (e) {
@@ -1904,9 +1899,9 @@ Future<void> _showTreeMemoDialog(
                     setDialogState(() => isListening = true);
                     await speech.listen(
                       localeId: 'ko_KR',
-                      onResult: (result) {
+                      onResult: (outcome) {
                         if (voiceInputMode == 'realtime') {
-                          bodyCtrl.text = result.recognizedWords;
+                          bodyCtrl.text = outcome.text;
                           bodyCtrl.selection = TextSelection.fromPosition(
                             TextPosition(offset: bodyCtrl.text.length),
                           );
@@ -1938,9 +1933,8 @@ Future<void> _showTreeMemoDialog(
                         if (isTranscribing) return;
                         if (isListening) {
                           if (voiceInputMode == 'record_then_transcribe') {
-                            await recorder.stopRecorder();
-                            await recorder.closeRecorder();
-                            await deleteRecordingFile();
+                            await recording.discard();
+                            recordingPath = null;
                           } else {
                             await speech.stop();
                           }
@@ -1957,20 +1951,25 @@ Future<void> _showTreeMemoDialog(
                         if (isTranscribing) return;
                         if (isListening) {
                           if (voiceInputMode == 'record_then_transcribe') {
-                            await recorder.stopRecorder();
-                            await recorder.closeRecorder();
-                            await deleteRecordingFile();
+                            await recording.discard();
+                            recordingPath = null;
                           } else {
                             await speech.stop();
                           }
                         }
                         final title = titleCtrl.text.trim();
                         if (title.isEmpty) return;
-                        final db = ref.read(appDatabaseProvider);
+                        final db = ref.read(noteDatabaseProvider);
                         final now = DateTime.now();
-                        final content = '$title\n${bodyCtrl.text.trim()}';
-                        final tags =
-                            'kind=tree;parent=${parent?.id ?? editingNode?.parentId ?? ''};level=$level;voiceMode=$voiceInputMode';
+                        final content = joinNoteContent(
+                          title: title,
+                          body: bodyCtrl.text.trim(),
+                        );
+                        final tags = buildTreeMemoTags(
+                          parentId: parent?.id ?? editingNode?.parentId,
+                          level: level,
+                          voiceMode: voiceInputMode,
+                        );
                         final memoId =
                             editingNode?.id ??
                             now.microsecondsSinceEpoch.toString();
@@ -2087,7 +2086,7 @@ Future<void> _confirmDeleteTreeMemo(
   );
 
   if (confirmed != true) return;
-  final db = ref.read(appDatabaseProvider);
+  final db = ref.read(noteDatabaseProvider);
   final syncService = ref.read(serverSyncServiceProvider);
   await syncService.markTreeMemoDeleted(
     node.id,
@@ -2095,7 +2094,7 @@ Future<void> _confirmDeleteTreeMemo(
     parentLocalId: node.parentId,
     tags: node.tags,
     title: node.title,
-    content: '${node.title}\n${node.content}',
+    content: joinNoteContent(title: node.title, body: node.content),
     deletedAt: DateTime.now(),
   );
   await (db.delete(db.memos)..where((m) => m.memoId.equals(node.id))).go();

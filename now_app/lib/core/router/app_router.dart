@@ -22,7 +22,6 @@ import '../../features/life/fashion/fashion_page.dart';
 import '../../features/settings/weather_settings_page.dart';
 import '../../features/life/weather/weather_page.dart';
 import '../../features/life/subscription/subscription_page.dart';
-import '../../features/settings/llm_settings_page.dart';
 import '../../features/travel/travel_page.dart';
 import '../../features/capture/capture_page.dart';
 import '../../features/home/schedule_page.dart';
@@ -101,7 +100,6 @@ GoRouter appRouter(AppRouterRef ref) {
         path: '/travel/:id',
         builder: (context, state) => TripDetailPage(tripId: state.pathParameters['id']!),
       ),
-      GoRoute(path: '/settings/llm',      builder: (_, __) => const LlmSettingsPage()),
       GoRoute(path: '/settings/weather',   builder: (_, __) => const WeatherSettingsPage()),
       GoRoute(path: '/capture',              builder: (_, __) => const CapturePage()),
       GoRoute(path: '/schedule',             builder: (_, __) => const SchedulePage()),

@@ -132,7 +132,9 @@ def main() -> None:
             headers=headers,
         )
         assert bad_extension_res.status_code == 400, bad_extension_res.text
-        assert bad_extension_res.json()["detail"] == "file extension not allowed"
+        bad_extension_detail = bad_extension_res.json()["detail"]
+        assert bad_extension_detail["reason"] == "extension_not_allowed"
+        assert bad_extension_detail["message"] == "file extension not allowed"
 
         bad_mime_res = client.post(
             f"/api/v1/messenger/rooms/{private_room_id}/attachments",
@@ -141,7 +143,9 @@ def main() -> None:
             headers=headers,
         )
         assert bad_mime_res.status_code == 400, bad_mime_res.text
-        assert bad_mime_res.json()["detail"] == "file mime type not allowed"
+        bad_mime_detail = bad_mime_res.json()["detail"]
+        assert bad_mime_detail["reason"] == "mime_type_not_allowed"
+        assert bad_mime_detail["message"] == "file mime type not allowed"
 
         octet_stream_res = client.post(
             f"/api/v1/messenger/rooms/{private_room_id}/attachments",
@@ -150,7 +154,9 @@ def main() -> None:
             headers=headers,
         )
         assert octet_stream_res.status_code == 400, octet_stream_res.text
-        assert octet_stream_res.json()["detail"] == "file mime type not allowed"
+        octet_stream_detail = octet_stream_res.json()["detail"]
+        assert octet_stream_detail["reason"] == "mime_type_not_allowed"
+        assert octet_stream_detail["message"] == "file mime type not allowed"
 
         upload_res = client.post(
             f"/api/v1/messenger/rooms/{private_room_id}/attachments",

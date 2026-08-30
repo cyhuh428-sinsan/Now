@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
 from app.api.analysis import router as analysis_router
+from app.api.app_release import router as app_release_router
 from app.api.auth import api_router as auth_api_router
 from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
@@ -58,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(public_pages_router)
     app.include_router(monitor_router)
     app.include_router(server_router)
+    app.include_router(app_release_router)
     app.include_router(auth_api_router)
     app.include_router(notes_router)
     app.include_router(recordings_router)

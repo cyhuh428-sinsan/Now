@@ -63,7 +63,7 @@ Web 화면에서는 `help.html`로 같은 내용을 사용자용 화면에서 �
 - 가져오기/내보내기: JSON 백업 가져오기/내보내기, Markdown 내보내기, `.md`/`.txt` 파일을 새 주제로 가져오기, NowNote Markdown 내보내기 파일의 주제/분류/메모와 일자별 메모 복원, 여러 Markdown 파일 동시 가져오기 지원
 - 목록 제어: 지식 목록 전체 펼치기/접기
 - 팝업 토글: 일일 메모, 검색, 빠른 전환, 연결 보기, 화면 설정, 삭제 보관함은 같은 버튼으로 열고 닫기
-- 단축키: `Ctrl+N` 새 주제, `Ctrl+Shift+N` 선택 항목 아래에 추가, `Ctrl+S` 저장 상태 확인, `Ctrl+;` 시간 넣기, 본문에서 `Tab`/`Shift+Tab` 들여쓰기, 본문에서 `Ctrl+1/2/3` 제목, 본문에서 `Ctrl+B` 굵게, 본문에서 `Ctrl+I` 기울임, 본문에서 `Ctrl+Shift+L` 링크, 본문에서 `Ctrl+Shift+Q` 인용, 본문에서 `Ctrl+Shift+H` 구분선, 본문에서 `Ctrl+Shift+C` 체크리스트, 본문에서 `Ctrl+Shift+7` 번호 목록, 본문에서 `Ctrl+Shift+K` 코드블록, `Ctrl+F` 검색, `Ctrl+Shift+F` 본문 찾기, `Ctrl+K`/`Ctrl+O` 빠른 전환, `Ctrl+D` 일자별 메모, `Ctrl+G` 연결 보기, `Ctrl+W` 현재 탭 닫기, `Ctrl+Shift+T` 닫은 탭 다시 열기, `Ctrl+Shift+W` 다른 탭 닫기, `Ctrl+Alt+P` 현재 탭 고정, `Ctrl+PageUp`/`Ctrl+PageDown` 열린 탭 전환, `Ctrl+Alt+↑`/`Ctrl+Alt+↓` 같은 단계 순서 이동, `Ctrl+,` 화면 설정, `Esc` 팝업 닫기
+- 단축키: `Ctrl+N` 새 주제, `Ctrl+Shift+N` 선택 항목 아래에 추가, `Ctrl+S` 저장 상태 확인, `Ctrl+;` 시간 넣기, 본문에서 `Tab`/`Shift+Tab` 들여쓰기, 본문에서 `Ctrl+1/2/3` 제목, 본문에서 `Ctrl+B` 굵게, 본문에서 `Ctrl+I` 기울임, 본문에서 `Ctrl+Shift+L` 링크, 본문에서 `Ctrl+Shift+Q` 인용, 본문에서 `Ctrl+Shift+H` 구분선, 본문에서 `Ctrl+Shift+C` 체크리스트, 본문에서 `Ctrl+Shift+7` 번호 목록, 본문에서 `Ctrl+Shift+K` 코드블록, 본문에서 `Ctrl+Z` 실행 취소, 본문에서 `Ctrl+Shift+Z`/`Ctrl+Y` 다시 실행, `Ctrl+F` 검색, `Ctrl+Shift+F` 본문 찾기, `Ctrl+K`/`Ctrl+O` 빠른 전환, `Ctrl+D` 일자별 메모, `Ctrl+G` 연결 보기, `Ctrl+W` 현재 탭 닫기, `Ctrl+Shift+T` 닫은 탭 다시 열기, `Ctrl+Shift+W` 다른 탭 닫기, `Ctrl+Alt+P` 현재 탭 고정, `Ctrl+PageUp`/`Ctrl+PageDown` 열린 탭 전환, `Ctrl+Alt+↑`/`Ctrl+Alt+↓` 같은 단계 순서 이동, `Ctrl+,` 화면 설정, `Esc` 팝업 닫기
 - 검색: 일자별 메모와 지식 메모 통합 검색, 결과 개수와 검색어 하이라이트 표시, 검색 닫기, Enter/방향키 이동
 - 저장 기준: 서버 제공 Web에서는 서버 공유 문서가 원본이며, 개발용 파일 실행에서만 브라우저 localStorage를 사용
 - Web 그룹 조회: 로그인한 Web에서는 내 공유메모 수정, 전체 그룹 지식체계 조회, 구성원별 공유문서 조회를 분리하고 그룹원 문서는 업로드 대상에서 제외
@@ -124,6 +124,18 @@ node scripts/check_desktop_client_policies.mjs
 
 ```bash
 node scripts/check_graph_view.mjs
+```
+
+기본 단축키는 아래 명령으로 확인합니다. 합성 이벤트에는 `code`가 비어 있어 단축키가 죽어 있어도 통과하므로, 이 검사는 CDP로 실제 키 입력을 보냅니다.
+
+```bash
+node scripts/check_default_shortcuts.mjs
+```
+
+2.3.6 Markdown 색상 토큰은 아래 명령으로 확인합니다. 밝은/어두운 기본값, 보기 모드와 편집 모드가 같은 토큰을 읽는지, 사용자 값과 기본값 복원, 색이 아닌 값이 저장됐을 때의 처리, 그리고 오버레이가 색만 칠하는지(줄바꿈 정렬 유지)를 함께 봅니다.
+
+```bash
+node scripts/check_markdown_colors.mjs
 ```
 
 브라우저 실행 파일을 자동으로 찾지 못하거나 headless 브라우저가 불안정하면 `NOWNOTE_BROWSER_PATH`에 Chrome 또는 Edge 실행 파일 경로를 지정합니다.

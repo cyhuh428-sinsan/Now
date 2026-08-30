@@ -4,13 +4,16 @@ from fastapi import HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from app.core.capabilities import MAX_TREE_NOTE_LEVEL
 from app.models.note import Note, UserAccount
 from app.schemas.note import NoteIn
 
 
 def validate_note(payload: NoteIn) -> None:
-    if payload.level > 3:
-        raise HTTPException(status_code=400, detail="note level must be 1..3")
+    if payload.level > MAX_TREE_NOTE_LEVEL:
+        raise HTTPException(
+            status_code=400, detail=f"note level must be 1..{MAX_TREE_NOTE_LEVEL}"
+        )
     if payload.level == 1 and payload.parent_local_id:
         raise HTTPException(status_code=400, detail="level 1 note cannot have parent")
     if payload.level > 1 and not payload.parent_local_id:

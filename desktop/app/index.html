@@ -66,6 +66,7 @@
       <button id="railSearchBtn" class="rail-btn" type="button" title="검색" data-rail-letter="검" data-rail-icon="⌕">검</button>
       <button id="railQuickBtn" class="rail-btn" type="button" title="빠른 전환" data-rail-letter="전" data-rail-icon="⇄">전</button>
       <button id="railGraphBtn" class="rail-btn" type="button" title="연결 보기" data-rail-letter="연" data-rail-icon="⛓">연</button>
+      <button id="railTreeMapBtn" class="rail-btn" type="button" title="지식맵" data-rail-letter="맵" data-rail-icon="⛯">맵</button>
       <button id="railMarkdownExportBtn" class="rail-btn" type="button" title="Markdown 내보내기" data-rail-letter="내" data-rail-icon="⇩">내</button>
       <button id="railMarkdownImportBtn" class="rail-btn" type="button" title="Markdown 가져오기" data-rail-letter="가" data-rail-icon="⇧">가</button>
       <button id="railDeletedTreeBtn" class="rail-btn" type="button" title="삭제 보관함" data-rail-letter="삭" data-rail-icon="♻">삭</button>
@@ -128,6 +129,7 @@
           <button id="quickSwitchBtn" class="ghost-btn" type="button">빠른 전환</button>
           <button id="commandPaletteBtn" class="ghost-btn" type="button">명령 팔레트</button>
           <button id="graphBtn" class="ghost-btn" type="button">연결 보기</button>
+          <button id="treeMapBtn" class="ghost-btn" type="button">지식맵</button>
           <button id="propertiesBtn" class="ghost-btn" type="button">속성 보기</button>
           <button id="canvasBtn" class="ghost-btn" type="button">Canvas</button>
           <button id="captureBtn" class="ghost-btn" type="button">빠른 기록</button>
@@ -146,6 +148,10 @@
           <button id="groupMessengerBtn" class="ghost-btn count-btn hosted-web-only hidden" type="button">
             <span id="groupMessengerBtnLabel">그룹 메신저</span>
             <strong id="groupMessengerUnreadCount">0</strong>
+          </button>
+          <button id="syncStatusBtn" class="ghost-btn sync-status-btn" type="button">
+            <span id="syncStatusDot" class="sync-status-dot" aria-hidden="true"></span>
+            <span id="syncStatusBtnLabel">로컬 전용</span>
           </button>
           <button id="settingsBtn" class="ghost-btn" type="button">화면 설정</button>
           <a id="helpBtn" class="ghost-btn help-link" href="./help.html">도움말</a>
@@ -224,14 +230,27 @@
               </div>
               <span id="treePathLabel" class="path-label hidden"></span>
               <div id="noteFindBar" class="note-find-bar hidden" aria-label="현재 메모에서 찾기">
-                <label class="note-find-input-wrap">
-                  <span aria-hidden="true">⌕</span>
-                  <input id="noteFindInput" type="search" placeholder="본문에서 검색" title="Enter 다음, Shift+Enter 이전">
-                </label>
-                <span id="noteFindCount" class="note-find-count">0 / 0</span>
-                <button id="noteFindPrevBtn" class="icon-btn" type="button" title="이전 결과" aria-label="이전 결과">↑</button>
-                <button id="noteFindNextBtn" class="icon-btn" type="button" title="다음 결과" aria-label="다음 결과">↓</button>
-                <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+                <div class="note-find-row">
+                  <label class="note-find-input-wrap">
+                    <span aria-hidden="true">⌕</span>
+                    <input id="noteFindInput" type="search" placeholder="본문에서 검색" title="Enter 다음, Shift+Enter 이전">
+                  </label>
+                  <span id="noteFindCount" class="note-find-count">0 / 0</span>
+                  <button id="noteFindPrevBtn" class="icon-btn" type="button" title="이전 결과" aria-label="이전 결과">↑</button>
+                  <button id="noteFindNextBtn" class="icon-btn" type="button" title="다음 결과" aria-label="다음 결과">↓</button>
+                  <button id="noteReplaceToggleBtn" class="icon-btn" type="button" title="바꾸기" aria-label="바꾸기" aria-expanded="false">⇄</button>
+                  <button id="noteFindCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+                </div>
+                <div id="noteReplaceRow" class="note-replace-row hidden">
+                  <label class="note-find-input-wrap">
+                    <span aria-hidden="true">⇄</span>
+                    <input id="noteReplaceInput" type="text" placeholder="바꿀 말" title="바꿀 말">
+                  </label>
+                  <span id="noteReplaceCount" class="note-find-count" aria-live="polite"></span>
+                  <button id="noteReplaceCurrentBtn" class="secondary-btn" type="button" disabled>현재 항목 바꾸기</button>
+                  <button id="noteReplaceAllBtn" class="secondary-btn" type="button" disabled>모두 바꾸기</button>
+                </div>
+                <p id="noteReplaceLockedHint" class="field-hint hidden">암호를 풀어야 바꾸기를 쓸 수 있습니다.</p>
               </div>
               <aside id="outlinePanel" class="outline-panel hidden" aria-label="현재 메모 개요"></aside>
               <div id="tagList" class="tag-list" aria-label="태그"></div>
@@ -279,18 +298,24 @@
                 </div>
               </section>
               <div id="noteStats" class="note-stats" aria-label="메모 정보"></div>
-              <textarea
-                id="treeContent"
-                class="memo-editor live-memo-editor"
-                spellcheck="true"
-                placeholder="메모 내용을 입력하세요."
-              ></textarea>
+              <div id="treeContentSurface" class="memo-editor-surface">
+                <div id="treeContentBackdrop" class="memo-editor-backdrop hidden" aria-hidden="true"></div>
+                <textarea
+                  id="treeContent"
+                  class="memo-editor live-memo-editor"
+                  spellcheck="true"
+                  placeholder="메모 내용을 입력하세요."
+                ></textarea>
+                <div id="treeContentOverlay" class="memo-editor-overlay hidden" aria-hidden="true"></div>
+              </div>
               <article id="markdownPreview" class="markdown-preview hidden" aria-label="Markdown 미리보기"></article>
               <div class="editor-footer">
                 <aside id="backlinksPanel" class="backlinks-panel" aria-label="백링크"></aside>
                 <div class="editor-actions">
                   <button id="moveUpBtn" class="secondary-btn" type="button">위로</button>
                   <button id="moveDownBtn" class="secondary-btn" type="button">아래로</button>
+                  <button id="moveNodeBtn" class="secondary-btn" type="button">이동</button>
+                  <button id="insertSketchBtn" class="secondary-btn" type="button">스케치 삽입</button>
                   <button id="addChildBtn" class="secondary-btn" type="button">아래에 추가</button>
                   <button id="deleteTreeBtn" class="danger-btn" type="button">삭제</button>
                 </div>
@@ -477,6 +502,18 @@
 
           <section class="settings-row">
             <div>
+              <h3 id="undoDepthSettingTitle">실행 취소 단계</h3>
+              <p id="undoDepthSettingDesc">본문에서 되돌릴 수 있는 편집 단계 수를 정합니다. 긴 문서에서는 메모리 보호를 위해 자동으로 줄어들 수 있습니다.</p>
+            </div>
+            <select id="undoDepthSelect" class="settings-select" aria-label="실행 취소 단계">
+              <option id="undoDepth10Option" value="10">10단계</option>
+              <option id="undoDepth50Option" value="50">50단계</option>
+              <option id="undoDepth100Option" value="100">100단계</option>
+            </select>
+          </section>
+
+          <section class="settings-row">
+            <div>
               <h3 id="backlinksSettingTitle">백링크 표시</h3>
               <p id="backlinksSettingDesc">현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.</p>
             </div>
@@ -522,6 +559,14 @@
               <p id="featuresSettingDesc">사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.</p>
             </div>
             <div id="featureSettings" class="feature-toggle-list"></div>
+          </section>
+
+          <section class="settings-row markdown-colors-row">
+            <div>
+              <h3 id="markdownColorsSettingTitle">Markdown 색상</h3>
+              <p id="markdownColorsSettingDesc">제목·링크·코드 같은 Markdown 요소의 색을 밝은/어두운 테마별로 정합니다.</p>
+            </div>
+            <div id="markdownColorEditor" class="markdown-color-editor"></div>
           </section>
 
           <section id="desktopStorageRow" class="settings-row hidden">
@@ -838,8 +883,13 @@
             <div>
               <h3 id="versionSettingTitle">현재 버전</h3>
               <p id="versionSettingDesc">배포와 설치 파일 기준 버전입니다.</p>
+              <p id="updateStatusText" class="update-status-text"></p>
+              <div id="updateDownloadLinks" class="update-download-links hidden"></div>
             </div>
-            <strong id="appVersionText">Desktop 2.3.5</strong>
+            <div class="update-check-group">
+              <strong id="appVersionText">Desktop 2.3.5</strong>
+              <button id="checkUpdateBtn" class="secondary-btn" type="button" disabled>업데이트 확인</button>
+            </div>
           </section>
         </div>
       </div>
@@ -972,6 +1022,23 @@
             <div id="graphHubList" class="graph-mini-list"></div>
           </section>
         </div>
+      </div>
+    </section>
+
+    <section id="treeMapView" class="quick-popover hidden" aria-labelledby="treeMapTitle">
+      <div class="quick-card tree-map-card">
+        <header class="view-header">
+          <div>
+            <p id="treeMapEyebrow" class="eyebrow">선택한 주제 범위만 표시</p>
+            <h2 id="treeMapTitle">지식맵</h2>
+          </div>
+          <button id="treeMapCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+        </header>
+        <div class="tree-map-toolbar" aria-label="지식맵 주제 선택">
+          <label id="treeMapTopicLabel" for="treeMapTopicSelect">주제</label>
+          <select id="treeMapTopicSelect" class="settings-select" aria-label="지식맵 주제"></select>
+        </div>
+        <div id="treeMapCanvas" class="tree-map-canvas" aria-label="지식맵"></div>
       </div>
     </section>
 
@@ -1185,6 +1252,60 @@
       <div class="confirm-actions">
         <button id="keyDialogCancelBtn" class="secondary-btn" type="button">취소</button>
         <button id="keyDialogOkBtn" class="primary-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="markdownImportOptionsDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="markdownImportOptionsTitle" aria-describedby="markdownImportOptionsDesc">
+    <div class="confirm-card markdown-import-options-card">
+      <h2 id="markdownImportOptionsTitle">Markdown 가져오기 위치</h2>
+      <p id="markdownImportOptionsDesc"></p>
+      <div id="markdownImportOptionsList" class="markdown-import-options-list"></div>
+      <p id="markdownImportOptionsNote" class="markdown-import-options-note"></p>
+      <pre id="markdownImportOptionsPreview" class="markdown-import-options-preview"></pre>
+      <div class="confirm-actions">
+        <button id="markdownImportOptionsCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="markdownImportOptionsOkBtn" class="primary-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="moveNodeDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="moveNodeDialogTitle" aria-describedby="moveNodeDialogDesc">
+    <div class="confirm-card move-node-dialog-card">
+      <h2 id="moveNodeDialogTitle">문서 이동</h2>
+      <p id="moveNodeDialogDesc"></p>
+      <p id="moveNodeCurrentPath" class="move-node-current-path"></p>
+      <select id="moveNodeDestinationSelect" class="settings-select move-node-destination-select"></select>
+      <p id="moveNodeNoDestinationNote" class="move-node-no-destination hidden"></p>
+      <p id="moveNodePreview" class="move-node-preview"></p>
+      <div class="confirm-actions">
+        <button id="moveNodeCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="moveNodeOkBtn" class="primary-btn" type="button">이동</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="sketchDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="sketchDialogTitle" aria-describedby="sketchDialogDesc">
+    <div class="confirm-card sketch-dialog-card">
+      <h2 id="sketchDialogTitle">스케치 삽입</h2>
+      <p id="sketchDialogDesc">간단한 손그림을 그려 메모에 삽입합니다.</p>
+      <div class="sketch-toolbar">
+        <button id="sketchDrawModeBtn" class="secondary-btn is-active" type="button">그리기</button>
+        <button id="sketchEraseModeBtn" class="secondary-btn" type="button">지우개</button>
+        <label class="sketch-color-label"><input id="sketchColorInput" type="color" value="#1f2937" aria-label="색상"></label>
+        <select id="sketchLineWidthSelect" class="settings-select" aria-label="선 두께">
+          <option value="2">얇게</option>
+          <option value="4" selected>보통</option>
+          <option value="8">굵게</option>
+        </select>
+        <button id="sketchUndoBtn" class="secondary-btn" type="button" disabled>실행 취소</button>
+        <button id="sketchClearBtn" class="secondary-btn" type="button">전체 지우기</button>
+      </div>
+      <canvas id="sketchCanvas" class="sketch-canvas" width="640" height="360" aria-label="스케치 그림판"></canvas>
+      <p id="sketchDialogStatus" class="sketch-dialog-status"></p>
+      <div class="confirm-actions">
+        <button id="sketchCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="sketchInsertBtn" class="primary-btn" type="button">삽입</button>
       </div>
     </div>
   </section>

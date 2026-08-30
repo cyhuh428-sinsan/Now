@@ -1,6 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/services/note_encryption_service.dart';
+import 'package:now/services/note_encryption_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();

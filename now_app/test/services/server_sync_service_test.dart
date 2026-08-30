@@ -1,14 +1,14 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/core/database/app_database.dart';
-import 'package:now_note/services/server_sync_service.dart';
+import 'package:now_core/now_core.dart';
+import 'package:now/services/server_sync_service.dart';
 
 void main() {
   group('ServerSyncService', () {
-    late AppDatabase database;
+    late NoteDatabase database;
 
     setUp(() {
-      database = AppDatabase.forTesting(NativeDatabase.memory());
+      database = NoteDatabase.forTesting(NativeDatabase.memory());
     });
 
     tearDown(() async {

@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../llm/models/llm_config.dart';
+import 'package:now_core/now_core.dart';
 import '../../../llm/providers/llm_providers.dart';
 
 /// settings_page.dart 에서 import 후 ListView children에 삽입
@@ -102,7 +102,13 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
     try {
       final repo = await ref.read(llmRepositoryProvider.future);
       if (repo == null) {
-        setState(() => _testResult = '❌ API Key 또는 설정이 없습니다');
+        // Ollama는 기본 주소를 두지 않는다. 주소가 비었으면 무엇을 넣어야
+        // 하는지 알려 준다. 요청은 보내지 않는다.
+        final needsOllamaUrl = _selectedProvider == LlmProvider.ollama &&
+            _ollamaUrlCtrl.text.trim().isEmpty;
+        setState(() => _testResult = needsOllamaUrl
+            ? '❌ ${OllamaLlmRepository.missingServerMessage}'
+            : '❌ API Key 또는 설정이 없습니다');
         return;
       }
       final ok = await repo.testConnection();

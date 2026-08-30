@@ -1,8 +1,8 @@
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/core/database/app_database.dart';
-import 'package:now_note/repositories/local/trip_repository.dart';
-import 'package:now_note/services/trip_service.dart';
+import 'package:now/core/database/app_database.dart';
+import 'package:now/repositories/local/trip_repository.dart';
+import 'package:now/services/trip_service.dart';
 
 class _FakeTripLlm {
   _FakeTripLlm(this.reply);

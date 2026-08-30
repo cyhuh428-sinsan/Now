@@ -1,5 +1,7 @@
 # Flutter app artifacts
 now_app/.dart_tool/
+packages/now_core/.dart_tool/
+packages/now_core/build/
 now_app/.flutter-plugins-dependencies
 now_app/.pub-cache/
 now_app/.pub/

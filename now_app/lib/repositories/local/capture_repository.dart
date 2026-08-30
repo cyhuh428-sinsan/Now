@@ -1,6 +1,7 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:uuid/uuid.dart';
+import 'package:now_core/now_core.dart';
 import '../../core/database/app_database.dart';
 import '../repository_providers.dart';
 
@@ -9,7 +10,8 @@ const _userId = 'local_user';
 
 class CaptureRepository {
   final AppDatabase _db;
-  CaptureRepository(this._db);
+  final NoteDatabase _noteDb;
+  CaptureRepository(this._db, this._noteDb);
 
   // ── 1. CaptureItem 저장 ──
   Future<String> saveCaptureItem({
@@ -81,7 +83,7 @@ class CaptureRepository {
     required String content,
     String? tags,
   }) async {
-    await _db.into(_db.memos).insert(
+    await _noteDb.into(_noteDb.memos).insert(
       MemosCompanion.insert(
         memoId: _uuid.v4(),
         userId: _userId,
@@ -104,5 +106,6 @@ class CaptureRepository {
 // Provider
 final captureRepositoryProvider = Provider<CaptureRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
-  return CaptureRepository(db);
+  final noteDb = ref.watch(noteDatabaseProvider);
+  return CaptureRepository(db, noteDb);
 });

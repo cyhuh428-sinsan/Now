@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:share_plus/share_plus.dart';
 import 'dart:io';
 import 'dart:async';
-import 'package:dio/dio.dart';
-import 'package:flutter_sound/flutter_sound.dart';
-import 'package:path_provider/path_provider.dart';
-import '../../llm/services/llm_settings_service.dart';
+import 'package:now_core/now_core.dart';
 import '../home/home_page.dart';
 import '../../llm/providers/llm_providers.dart';
 import '../../services/feature_settings_service.dart';
 import '../items/items_review_page.dart';
+import '../ask/ask_sheet.dart';
 
 // ============================================================
 // 모델
@@ -75,12 +72,16 @@ class MeetingProgressPage extends ConsumerStatefulWidget {
 class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  final SpeechToText _speech = SpeechToText();
-  final FlutterSoundRecorder _recorder = FlutterSoundRecorder();
-  String _whisperUrl = '';
+  // 녹음과 기기 내 STT는 now_core가 들고 있다. 화면은 시작/정지만 부른다.
+  final DeviceSpeechRecognizer _speech = SpeechToTextRecognizer();
+  final VoiceRecordingService _recording = VoiceRecordingService();
+  VoiceSettings _voiceSettings = VoiceSettings.empty();
   Timer? _chunkTimer;
   bool _useWhisper = false;
+  /// 회의 저장 시 함께 남기는 전체 녹음 파일 경로.
   String? _fullRecordingPath;
+  /// 청크 변환이 같은 이유로 계속 실패할 때 안내를 한 번만 띄우기 위한 값.
+  String? _lastChunkErrorMessage;
 
   // STT 상태
   bool _speechAvailable = false;
@@ -100,7 +101,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   @override
   void initState() {
     super.initState();
-    _loadWhisperUrl();
+    _loadVoiceSettings();
     _silenceSeconds = widget.silenceThresholdSeconds;
     _initSpeech();
     _startMeetingTimer();
@@ -111,18 +112,18 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
       onStatus: (status) {
         debugPrint('[STT STATUS] $status');
         if (!mounted) return;
-        if ((status == 'done' || status == 'notListening') &&
+        if (DeviceSpeechDefaults.isStoppedStatus(status) &&
             ref.read(isListeningProvider)) {
           _restartEngine();
         }
       },
-      onError: (error) {
-        debugPrint('[STT ERROR] ${error.errorMsg} / permanent: ${error.permanent}');
+      onError: (failure) {
+        debugPrint(
+          '[STT ERROR] ${failure.message} / permanent: ${failure.permanent}',
+        );
         if (!mounted) return;
         if (!ref.read(isListeningProvider)) return;
-        final delay = error.errorMsg == 'error_busy'
-            ? const Duration(milliseconds: 1500)
-            : const Duration(milliseconds: 500);
+        final delay = DeviceSpeechDefaults.retryDelayFor(failure.message);
         Future.delayed(delay, () {
           if (mounted && ref.read(isListeningProvider)) _restartEngine();
         });
@@ -130,23 +131,43 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     );
   }
 
-  Future<void> _loadWhisperUrl() async {
-    final url = await LlmSettingsService().loadWhisperUrl();
+  Future<void> _loadVoiceSettings() async {
+    final settings = await VoiceSettingsStore().load();
     final tier = await LlmSettingsService().loadSttTier();
     if (mounted) {
       setState(() {
-        _whisperUrl = url;
-        _useWhisper = tier == 'tier2_local' && url.isNotEmpty;
+        _voiceSettings = settings;
+        _useWhisper = tier == 'tier2_local' && settings.hasSttServer;
       });
     }
+  }
+
+  /// 저장된 설정으로 음성 엔진 클라이언트를 만든다.
+  ///
+  /// 인증 키는 클라이언트가 `Authorization: Bearer`로 붙인다.
+  VoiceEngineClient get _voiceEngine =>
+      VoiceEngineClient(settings: _voiceSettings);
+
+  /// 음성 엔진 실패를 사용자에게 알린다.
+  ///
+  /// 문구는 [VoiceEngineException]이 들고 있는 한국어 메시지를 그대로 쓴다.
+  /// 401(키 오류), 503(모델 로딩 중), 연결 실패, 타임아웃이 각각 다른 문장으로
+  /// 보인다.
+  void _showVoiceError(Object error, String tag) {
+    final message = error is VoiceEngineException
+        ? error.message
+        : '음성 변환 중 문제가 생겼습니다.';
+    debugPrint('[$tag] $error');
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   // STT 엔진 재시작 (stop → delay → listen)
   void _restartEngine() async {
     debugPrint('[ENGINE] 재시작 시도, buffer="${_partialBuffer.trim()}"');
     // ※ 버퍼 저장 안 함 - Watchdog이 침묵 감지 시 저장
-    _speech.stop();
-    await Future.delayed(const Duration(milliseconds: 50));
+    await _speech.stop();
+    await Future.delayed(DeviceSpeechDefaults.restartDelay);
     if (!mounted || !ref.read(isListeningProvider)) return;
     _startListening();
   }
@@ -156,8 +177,8 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     if (_speech.isListening) return;
     try {
       await _speech.listen(
-        onResult: (result) {
-          final fullText = result.recognizedWords.trim();
+        onResult: (outcome) {
+          final fullText = outcome.text;
 
           if (fullText.isNotEmpty) {
             _partialBuffer = fullText;  // 전체 텍스트 그대로 저장
@@ -166,18 +187,11 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
           }
 
           // finalResult 오면 즉시 확정
-          if (result.finalResult && fullText.isNotEmpty) {
+          if (outcome.isFinal && fullText.isNotEmpty) {
             _flushSttBuffer(clearAll: true, reason: 'final');
           }
         },
-        localeId: 'ko_KR',
-        listenFor: const Duration(seconds: 300),
-        pauseFor: const Duration(seconds: 60),
-        listenOptions: SpeechListenOptions(
-          partialResults: true,
-          cancelOnError: false,
-          listenMode: ListenMode.dictation,
-        ),
+        dictation: true,
       );
     } catch (e) {
       debugPrint('[STT] startListening error: $e');
@@ -323,7 +337,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
         if (_partialBuffer.trim().isNotEmpty) {
           _flushSttBuffer(clearAll: true, reason: 'mic_off');
         }
-        _speech.stop();
+        await _speech.stop();
         _silenceTimer?.cancel();
         _watchdogTimer?.cancel();
       }
@@ -361,41 +375,21 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   }
 
   // ============================================================
-  // Whisper STT — 30초 청크 녹음 → 서버 전송
+  // 서버 STT — 30초 청크 녹음 → 서버 전송
+  // 녹음 규칙(경로, 이름, 짧은 녹음 판정)은 now_core의 VoiceRecordingService에 있다.
   // ============================================================
-  String? _currentChunkPath;
 
   Future<void> _startFullRecording() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final folder = Directory('${dir.path}/recordings');
-    if (!await folder.exists()) {
-      await folder.create(recursive: true);
-    }
-    _fullRecordingPath =
-        '${folder.path}/${widget.recordType}_${DateTime.now().millisecondsSinceEpoch}.aac';
-    await _recorder.openRecorder();
-    await _recorder.startRecorder(
-      toFile: _fullRecordingPath,
-      codec: Codec.aacADTS,
-      bitRate: 128000,
-      sampleRate: 16000,
-    );
+    _fullRecordingPath = await _recording.start(namePrefix: widget.recordType);
   }
 
   Future<void> _stopFullRecordingAndTranscribe() async {
-    final path = _fullRecordingPath;
-    try {
-      await _recorder.stopRecorder();
-      await _recorder.closeRecorder();
-    } catch (e) {
-      debugPrint('[RECORDER] stop error: $e');
-    }
+    final recording = await _recording.stop();
+    if (recording == null) return;
+    // 마이크를 켰다 바로 끈 경우다. 파일은 남기고 변환만 건너뛴다.
+    if (recording.isTooShort) return;
 
-    if (path == null) return;
-    final file = File(path);
-    if (!await file.exists() || await file.length() < 1000) return;
-
-    if (_whisperUrl.trim().isEmpty) {
+    if (!_voiceSettings.hasSttServer) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('음성 파일은 저장됐지만 STT 서버가 설정되지 않았습니다.')),
@@ -406,16 +400,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
 
     ref.read(isExtractingProvider.notifier).state = true;
     try {
-      final dio = Dio();
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(path, filename: 'audio.aac'),
-      });
-      final response = await dio.post(
-        '$_whisperUrl/transcribe',
-        data: formData,
-        options: Options(receiveTimeout: const Duration(seconds: 120)),
-      );
-      final text = response.data['text'] as String? ?? '';
+      final text = await _voiceEngine.transcribe(file: recording.file);
       if (text.trim().isNotEmpty) {
         _addTranscriptSegment(
           text.trim(),
@@ -424,19 +409,14 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
         );
       }
     } catch (e) {
-      debugPrint('[RECORDING_STT] 전송 오류: $e');
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('녹음 변환 중 오류가 발생했습니다: $e')),
-        );
-      }
+      _showVoiceError(e, 'RECORDING_STT');
     } finally {
       if (mounted) ref.read(isExtractingProvider.notifier).state = false;
     }
   }
 
   Future<void> _startWhisperRecording() async {
-    await _recorder.openRecorder();
+    _lastChunkErrorMessage = null;
     await _startNewChunk();
 
     // 30초마다 청크 전송
@@ -447,58 +427,57 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
   }
 
   Future<void> _startNewChunk() async {
-    final dir = await getTemporaryDirectory();
-    _currentChunkPath = '${dir.path}/chunk_${DateTime.now().millisecondsSinceEpoch}.aac';
-    await _recorder.startRecorder(
-      toFile: _currentChunkPath,
-      codec: Codec.aacADTS,
-      bitRate: 128000,
-      sampleRate: 16000,
+    await _recording.start(
+      namePrefix: 'chunk',
+      location: RecordingLocation.temporary,
     );
   }
 
   Future<void> _stopWhisperRecording() async {
     _chunkTimer?.cancel();
-    await _sendWhisperChunk();
-    await _recorder.closeRecorder();
+    await _sendWhisperChunk(isFinal: true);
   }
 
-  Future<void> _sendWhisperChunk() async {
-    await _recorder.stopRecorder();
-    final path = _currentChunkPath;
-    if (path == null) return;
+  Future<void> _sendWhisperChunk({bool isFinal = false}) async {
+    final chunk = await _recording.stop(closeDevice: isFinal);
+    if (chunk == null) return;
 
-    final file = File(path);
-    if (!await file.exists() || await file.length() < 1000) {
+    if (chunk.isTooShort) {
       // 너무 짧으면 무시하고 재시작
-      await _restartWhisperChunk();
+      await chunk.delete();
+      if (!isFinal) await _restartWhisperChunk();
       return;
     }
 
     try {
-      final dio = Dio();
-      final formData = FormData.fromMap({
-        'file': await MultipartFile.fromFile(path, filename: 'audio.m4a'),
-      });
-      final response = await dio.post(
-        '$_whisperUrl/transcribe',
-        data: formData,
-        options: Options(receiveTimeout: const Duration(seconds: 60)),
-      );
-      final text = response.data['text'] as String? ?? '';
+      final text = await _voiceEngine.transcribe(file: chunk.file);
       if (text.trim().isNotEmpty) {
+        _lastChunkErrorMessage = null;
         _commitDelta(text.trim(), reason: 'whisper', switchSpeaker: false);
       }
     } catch (e) {
-      debugPrint('[WHISPER] 전송 오류: $e');
+      _reportChunkError(e);
     } finally {
-      try {
-        await file.delete();
-      } catch (_) {}
-      if (ref.read(isListeningProvider)) {
+      await chunk.delete();
+      if (!isFinal && ref.read(isListeningProvider)) {
         await _restartWhisperChunk();
       }
     }
+  }
+
+  /// 청크 변환 실패를 알린다.
+  ///
+  /// 30초마다 도는 경로라 같은 이유가 반복되면 안내가 쌓인다. 이유가 바뀔 때만
+  /// 한 번 띄우고 나머지는 로그로 남긴다.
+  void _reportChunkError(Object error) {
+    final message = error is VoiceEngineException
+        ? error.message
+        : '음성 변환 중 문제가 생겼습니다.';
+    debugPrint('[WHISPER] 전송 오류: $error');
+    if (message == _lastChunkErrorMessage) return;
+    _lastChunkErrorMessage = message;
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
   }
 
   Future<void> _restartWhisperChunk() async {
@@ -518,6 +497,24 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
           current + const Duration(seconds: 1);
       return true;
     });
+  }
+
+  // ============================================================
+  // 묻기 — 지금 화면의 문단을 맥락으로 삼아 LLM에 묻는다.
+  // ============================================================
+  void _openAskSheet() {
+    final segments = ref.read(transcriptSegmentsProvider);
+    final body = segments.map((s) => s.text).join('\n');
+    final title = widget.event?.title ??
+        (widget.recordType == 'memo' ? '오늘 메모' : '오늘 기록');
+    final noteContent = joinNoteContent(title: title, body: body);
+    showAskSheet(
+      context,
+      noteContent: noteContent,
+      onInsertAnswer: (block) {
+        _addTranscriptSegment(block, source: 'ask', speakerLabel: 'user');
+      },
+    );
   }
 
   // ============================================================
@@ -931,7 +928,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
     _silenceTimer?.cancel();
     _watchdogTimer?.cancel();
     _chunkTimer?.cancel();
-    _recorder.closeRecorder();
+    _recording.dispose();
     _textController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -1181,6 +1178,7 @@ class _MeetingProgressPageState extends ConsumerState<MeetingProgressPage> {
               _toggleListening();
             },
             onUpload: _pickAndUploadFile,
+            onAsk: _openAskSheet,
           ),
         ],
       ),
@@ -1296,6 +1294,7 @@ class _InputArea extends StatelessWidget {
   final VoidCallback onSend;
   final VoidCallback onMic;
   final VoidCallback onUpload;
+  final VoidCallback onAsk;
 
   const _InputArea({
     required this.controller,
@@ -1304,6 +1303,7 @@ class _InputArea extends StatelessWidget {
     required this.onSend,
     required this.onMic,
     required this.onUpload,
+    required this.onAsk,
   });
 
   @override
@@ -1324,6 +1324,18 @@ class _InputArea extends StatelessWidget {
             decoration: const BoxDecoration(
                 color: Color(0xFFF3F4F6), shape: BoxShape.circle),
             child: const Icon(Icons.attach_file,
+                color: Color(0xFF6B7280), size: 20),
+          ),
+        ),
+        const SizedBox(width: 6),
+        GestureDetector(
+          onTap: onAsk,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: const BoxDecoration(
+                color: Color(0xFFF3F4F6), shape: BoxShape.circle),
+            child: const Icon(Icons.help_outline,
                 color: Color(0xFF6B7280), size: 20),
           ),
         ),

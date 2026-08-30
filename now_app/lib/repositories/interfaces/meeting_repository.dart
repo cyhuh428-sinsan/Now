@@ -1,3 +1,4 @@
+import 'package:now_core/now_core.dart';
 import '../../core/database/app_database.dart';
 
 abstract class MeetingRepository {

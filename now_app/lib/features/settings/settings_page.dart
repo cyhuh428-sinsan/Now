@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../llm/providers/llm_providers.dart';
 import '../../services/notification_service.dart';
 import '../../services/backup_service.dart';
 import '../../services/feature_settings_service.dart';
@@ -16,8 +15,6 @@ class SettingsPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final llmConfig = ref.watch(llmConfigProvider);
-
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       appBar: AppBar(
@@ -52,27 +49,8 @@ class SettingsPage extends ConsumerWidget {
                 icon: Icons.mic_outlined,
                 iconColor: const Color(0xFF2563EB),
                 title: '음성 입력',
-                summary: '기기 내 STT',
+                summary: '기기 내 STT · LLM 연동',
                 onTap: () => context.push('/settings/voice'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // ── LLM 연동 ──
-          const _SectionHeader(title: 'LLM 연동'),
-          _SettingsCard(
-            children: [
-              _NavTile(
-                icon: Icons.auto_awesome_outlined,
-                iconColor: const Color(0xFF7C3AED),
-                title: 'LLM 연동',
-                summary: llmConfig.when(
-                  data: (config) => config.provider.displayName,
-                  loading: () => '...',
-                  error: (_, __) => '미설정',
-                ),
-                onTap: () => context.push('/settings/llm'),
               ),
             ],
           ),

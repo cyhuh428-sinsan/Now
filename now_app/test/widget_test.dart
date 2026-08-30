@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/widgets/app_bottom_nav.dart';
+import 'package:now/widgets/app_bottom_nav.dart';
 
 void main() {
   testWidgets('AppBottomNav shows all primary tabs', (tester) async {

@@ -1,13 +1,15 @@
 from datetime import datetime
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import require_client_api_access
 from app.db import get_db
-from app.models.note import Note
+from app.models.note import Note, NoteAttachment
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
+from app.services.note_attachment_storage import resolve_note_attachment_path, save_note_attachment
 from app.services.note_sync import group_shared_owner_ids, list_changed_notes, sort_notes_for_upsert, upsert_note as save_note
 from app.services.user_accounts import require_user_api_access
 from app.services.user_devices import require_active_user_device
@@ -147,3 +149,72 @@ def sync_notes(
     for note in saved:
         db.refresh(note)
     return NoteSyncResponse(notes=saved)
+
+
+# 2.3.6 P12: 노트/스케치 첨부. 본문에는 참조(nownote-attachment://{storage_key})만
+# 남기고 이미지 자체는 여기로 올리고 내려받는다. 메신저 첨부 저장소의 기계적인 부분
+# (app/services/attachment_storage.py)을 재사용하되 정책은 노트 전용
+# (note_attachment_storage.py: PNG만, owner_id 기준 경로)이다.
+
+
+@router.post("/attachments")
+async def upload_note_attachment(
+    owner_id: str = Query(max_length=80),
+    file: UploadFile = File(...),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    saved = await save_note_attachment(owner_id=owner_id, upload=file)
+    attachment = NoteAttachment(owner_id=owner_id, **saved)
+    db.add(attachment)
+    db.commit()
+    db.refresh(attachment)
+    return {"status": "ok", "attachment": _note_attachment_payload(attachment)}
+
+
+@router.get("/attachments/{storage_key}")
+def download_note_attachment(
+    storage_key: str,
+    owner_id: str = Query(max_length=80),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    attachment = db.scalar(select(NoteAttachment).where(NoteAttachment.storage_key == storage_key))
+    if attachment is None or attachment.deleted_at is not None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment not found")
+    if attachment.owner_id != owner_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="attachment not owned by this user")
+    target = resolve_note_attachment_path(attachment.storage_path)
+    if target is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment file missing")
+    return FileResponse(
+        target,
+        media_type=attachment.content_type,
+        filename=attachment.original_name,
+    )
+
+
+def _note_attachment_payload(attachment: NoteAttachment) -> dict:
+    return {
+        "storage_key": attachment.storage_key,
+        "original_name": attachment.original_name,
+        "content_type": attachment.content_type,
+        "extension": attachment.extension,
+        "size_bytes": attachment.size_bytes,
+        "sha256": attachment.sha256,
+        "created_at": attachment.created_at,
+    }

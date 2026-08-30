@@ -18,6 +18,11 @@ class Settings(BaseSettings):
         "application/vnd.openxmlformats-officedocument.presentationml.presentation,"
         "application/zip"
     )
+    # 2.3.6 P12: 노트/스케치 첨부 저장소. PNG만 허용하므로(스케치 캔버스 출력 형식)
+    # 확장자/MIME 목록은 설정으로 열어두지 않고 note_attachment_storage.py에 고정한다.
+    # 크기 제한만 메신저처럼 설정으로 조정 가능하게 둔다.
+    note_attachment_storage_dir: str = "./data/note_attachments"
+    note_attachment_max_upload_mb: int = 5
     api_token: str | None = None
     user_token_required: bool = False
     worker_poll_seconds: int = 5

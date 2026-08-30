@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:now_core/now_core.dart';
 import '../../core/database/app_database.dart';
 
 // ============================================================
@@ -7,7 +8,8 @@ import '../../core/database/app_database.dart';
 
 class LocalMeetingRepository {
   final AppDatabase _db;
-  LocalMeetingRepository(this._db);
+  final NoteDatabase _noteDb;
+  LocalMeetingRepository(this._db, this._noteDb);
 
   // ── 기록 저장 ──────────────────────────────────────────────
   Future<void> saveMeeting({
@@ -27,7 +29,7 @@ class LocalMeetingRepository {
     final started = startedAt ?? now;
     final pName = participantName.isNotEmpty ? participantName : null;
 
-    await _db.into(_db.meetings).insertOnConflictUpdate(
+    await _noteDb.into(_noteDb.meetings).insertOnConflictUpdate(
       MeetingsCompanion(
         meetingId: Value(meetingId),
         // calendarEventId: null이면 생략 (NOT NULL 에러 방지)
@@ -55,7 +57,7 @@ class LocalMeetingRepository {
   Future<void> saveSegments(
       String meetingId, List<Map<String, dynamic>> segments) async {
     for (final s in segments) {
-      await _db.into(_db.transcriptSegments).insertOnConflictUpdate(
+      await _noteDb.into(_noteDb.transcriptSegments).insertOnConflictUpdate(
             TranscriptSegmentsCompanion.insert(
               segmentId: s['id'] as String,
               meetingId: meetingId,
@@ -90,7 +92,7 @@ class LocalMeetingRepository {
 
   // ── 기록 목록 조회 ─────────────────────────────────────────
   Future<List<Meeting>> getAllMeetings() async {
-    return (_db.select(_db.meetings)
+    return (_noteDb.select(_noteDb.meetings)
           ..orderBy([(t) => OrderingTerm.desc(t.createdAt)]))
         .get();
   }
@@ -111,14 +113,14 @@ class LocalMeetingRepository {
 
   // ── 기록 단건 조회 ─────────────────────────────────────────
   Future<Meeting?> getMeetingById(String meetingId) async {
-    return (_db.select(_db.meetings)
+    return (_noteDb.select(_noteDb.meetings)
           ..where((t) => t.meetingId.equals(meetingId)))
         .getSingleOrNull();
   }
 
   // ── 세그먼트 조회 ──────────────────────────────────────────
   Future<List<TranscriptSegment>> getSegments(String meetingId) async {
-    return (_db.select(_db.transcriptSegments)
+    return (_noteDb.select(_noteDb.transcriptSegments)
           ..where((t) => t.meetingId.equals(meetingId))
           ..orderBy([(t) => OrderingTerm.asc(t.timestamp)]))
         .get();
@@ -138,7 +140,7 @@ class LocalMeetingRepository {
 
   // ── 중요 토글 ──────────────────────────────────────────────
   Future<void> toggleImportant(String meetingId, bool isImportant) async {
-    await (_db.update(_db.meetings)
+    await (_noteDb.update(_noteDb.meetings)
           ..where((t) => t.meetingId.equals(meetingId)))
         .write(MeetingsCompanion(
       isImportant: Value(isImportant),
@@ -148,7 +150,7 @@ class LocalMeetingRepository {
 
   // ── 제목 수정 ──────────────────────────────────────────────
   Future<void> updateTitle(String meetingId, String title) async {
-    await (_db.update(_db.meetings)
+    await (_noteDb.update(_noteDb.meetings)
           ..where((t) => t.meetingId.equals(meetingId)))
         .write(MeetingsCompanion(
       title: Value(title),
@@ -179,10 +181,10 @@ class LocalMeetingRepository {
 
   // ── 삭제 ───────────────────────────────────────────────────
   Future<void> deleteMeeting(String meetingId) async {
-    await (_db.delete(_db.meetings)
+    await (_noteDb.delete(_noteDb.meetings)
           ..where((t) => t.meetingId.equals(meetingId)))
         .go();
-    await (_db.delete(_db.transcriptSegments)
+    await (_noteDb.delete(_noteDb.transcriptSegments)
           ..where((t) => t.meetingId.equals(meetingId)))
         .go();
     await (_db.delete(_db.extractedItems)

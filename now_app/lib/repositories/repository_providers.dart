@@ -1,3 +1,4 @@
+import 'package:now_core/now_core.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 import '../core/database/app_database.dart';
 import 'interfaces/meal_repository.dart';
@@ -25,7 +26,8 @@ part 'repository_providers.g.dart';
 // Meeting Repository (인터페이스 없음 — 직접 구현체 사용)
 final localMeetingRepositoryProvider = Provider<LocalMeetingRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
-  return LocalMeetingRepository(db);
+  final noteDb = ref.watch(noteDatabaseProvider);
+  return LocalMeetingRepository(db, noteDb);
 }); 
 
 // ============================================================
@@ -38,6 +40,13 @@ AppDatabase appDatabase(AppDatabaseRef ref) {
   ref.onDispose(db.close);
   return db;
 }
+
+// 노트 저장소는 now_core가 갖는다. Now와 NowNote가 같은 구조를 쓴다.
+final noteDatabaseProvider = Provider<NoteDatabase>((ref) {
+  final db = NoteDatabase();
+  ref.onDispose(db.close);
+  return db;
+});
 
 // ============================================================
 // Repository Providers
@@ -66,7 +75,8 @@ HealthRepository healthRepository(HealthRepositoryRef ref) {
 CalendarEventRepository calendarEventRepository(
     CalendarEventRepositoryRef ref) {
   final db = ref.watch(appDatabaseProvider);
-  return LocalCalendarEventRepository(db);
+  final noteDb = ref.watch(noteDatabaseProvider);
+  return LocalCalendarEventRepository(db, noteDb);
 }
 
 @riverpod
@@ -101,5 +111,6 @@ SubscriptionRepository subscriptionRepository(SubscriptionRepositoryRef ref) {
 
 final localCalendarEventRepositoryProvider = Provider<LocalCalendarEventRepository>((ref) {
   final db = ref.watch(appDatabaseProvider);
-  return LocalCalendarEventRepository(db);
+  final noteDb = ref.watch(noteDatabaseProvider);
+  return LocalCalendarEventRepository(db, noteDb);
 });

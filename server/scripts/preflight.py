@@ -145,6 +145,13 @@ def main() -> None:
     web_app_path = repo_root / "web" / "app.js"
     web_readme_path = repo_root / "web" / "README.md"
     mobile_server_sync_path = repo_root / "now_app" / "lib" / "services" / "server_sync_service.dart"
+    # 2.3.6 P1에서 ServerSettings/ServerConnectionApi(공용 서버 준비 상태, 토큰 로그인,
+    # 2단계 인증)를 packages/now_core로 옮겼다. 이 파일들도 함께 훑어야 아래 검사가
+    # 코드의 실제 위치를 따라간다.
+    mobile_server_core_paths = [
+        repo_root / "packages" / "now_core" / "lib" / "server" / "server_settings.dart",
+        repo_root / "packages" / "now_core" / "lib" / "server" / "server_connection.dart",
+    ]
     mobile_server_settings_path = (
         repo_root / "now_app" / "lib" / "features" / "settings" / "server_settings_page.dart"
     )
@@ -1148,8 +1155,11 @@ def main() -> None:
         )
     if mobile_server_sync_path.exists():
         mobile_server_sync = mobile_server_sync_path.read_text(encoding="utf-8")
+        mobile_server_sync_and_core = mobile_server_sync + "\n".join(
+            p.read_text(encoding="utf-8") for p in mobile_server_core_paths if p.exists()
+        )
         check_text_contains(
-            mobile_server_sync,
+            mobile_server_sync_and_core,
             [
                 ("ServerPublicReadiness", "Mobile models public server readiness", "mobile public readiness model"),
                 ("public_server_readiness", "Mobile reads public server readiness response", "mobile public readiness response"),
@@ -1162,7 +1172,7 @@ def main() -> None:
             failures,
         )
         check_text_not_contains(
-            mobile_server_sync,
+            mobile_server_sync_and_core,
             [
                 ("now_server_two_factor", "Mobile does not persist two-factor code", "2FA code is request-only"),
                 ("final String twoFactorCode;", "Mobile settings model excludes two-factor code", "2FA code is not stored in settings"),

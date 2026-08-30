@@ -11,6 +11,38 @@
   --amber: #d97706;
   --red: #dc2626;
   --shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+  /*
+   * Markdown 색상 토큰 - 밝은 모드 기본값 (2.3.6 M9).
+   *
+   * 보기 모드(.markdown-preview)와 편집 모드 오버레이(.memo-editor-overlay)가
+   * 이 토큰만 읽는다. 두 모드가 각자 색을 갖고 있으면 한쪽만 바뀌기 때문이다.
+   *
+   * 테마 토큰(--text, --blue …)을 그대로 쓰지 않고 따로 둔 이유는
+   * 사용자가 Markdown 색만 바꿔도 나머지 화면이 따라 바뀌면 안 되기 때문이다.
+   * --blue 는 강조색 설정이 쓰는 토큰이라 여기에 얹으면 버튼과 링크가 같이 움직인다.
+   *
+   * 사용자가 고른 값은 applyMarkdownColors() 가 :root 인라인 스타일로 덮어쓴다.
+   * 기본값 복원은 그 인라인 값을 지우는 것으로 끝난다.
+   * 값은 기기에만 저장한다. 서버로 올리지 않는다.
+   * (근거: docs/NOW_2_3_6_FEATURE_DESIGN.md "2. Markdown 색상 설정 저장 위치")
+   */
+  --md-heading: #1d4ed8;
+  --md-link: #2563eb;
+  --md-inline-code-text: #b45309;
+  --md-inline-code-bg: #f1f5f9;
+  --md-code-block-bg: #0f172a;
+  --md-code-block-text: #e5e7eb;
+  /*
+   * 파생 토큰 (2.3.6 U1). 사용자가 설정 화면에서 직접 바꾸는 6개 토큰이 아니다.
+   * 위 토큰들을 color-mix() 로 섞어서 만든다. :root 한 곳에만 두어도
+   * var() 는 참조하는 속성(--md-link 등)의 "지금 element 에서 이긴 값"을 읽으므로
+   * 어두운 모드에서 --md-link 가 바뀌면 이 값도 따라 바뀐다. 모드별로 다시 적을 필요가 없다.
+   * 목록 표시(-, *, 1.)와 bash 코드블록의 옵션/경로/숫자 구분에 쓴다.
+   */
+  --md-list-marker: color-mix(in srgb, var(--md-link) 70%, var(--md-heading) 30%);
+  --md-code-block-option: color-mix(in srgb, var(--md-code-block-text) 55%, var(--md-heading) 45%);
+  --md-code-block-path: color-mix(in srgb, var(--md-code-block-text) 55%, var(--md-link) 45%);
+  --md-code-block-number: color-mix(in srgb, var(--md-code-block-text) 70%, var(--md-inline-code-text) 30%);
 }
 
 :root[data-theme="dark"] {
@@ -22,6 +54,17 @@
   --line: #374151;
   --blue-soft: rgba(37, 99, 235, 0.18);
   --shadow: 0 18px 45px rgba(0, 0, 0, 0.28);
+  /*
+   * Markdown 색상 토큰 - 어두운 모드 기본값.
+   * 밝은 모드 값을 그대로 쓰면 어두운 판(--panel: #1f2937) 위에서 너무 어둡다.
+   * 제목과 링크는 한 단계 밝은 파랑, 인라인 코드는 밝은 주황으로 올린다.
+   */
+  --md-heading: #93c5fd;
+  --md-link: #60a5fa;
+  --md-inline-code-text: #fbbf24;
+  --md-inline-code-bg: #111827;
+  --md-code-block-bg: #0b1220;
+  --md-code-block-text: #e5e7eb;
 }
 
 * {
@@ -478,11 +521,66 @@ button {
 }
 
 .messenger-attachment {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 220px;
+}
+
+.messenger-attachment-preview {
+  display: grid;
+  place-items: center;
+  width: 160px;
+  max-width: 100%;
+  min-height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+  cursor: pointer;
+  background: var(--panel-alt, var(--panel));
+}
+
+.messenger-attachment-preview img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+}
+
+.messenger-attachment-preview-placeholder {
+  padding: 8px;
+  color: var(--muted);
+  font-size: 11px;
+  text-align: center;
+}
+
+.messenger-attachment-download {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 5px 7px;
   color: var(--blue-strong);
   font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.messenger-attachment-name {
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+.messenger-attachment-meta {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .messenger-item {
@@ -671,6 +769,32 @@ button {
 .count-btn:not(.has-items) strong {
   color: var(--muted);
   background: transparent;
+}
+
+.sync-status-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sync-status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--muted);
+  flex: 0 0 auto;
+}
+
+.sync-status-dot.ok {
+  background: var(--green);
+}
+
+.sync-status-dot.warn {
+  background: var(--amber);
+}
+
+.sync-status-dot.bad {
+  background: var(--red);
 }
 
 .file-btn {
@@ -947,6 +1071,47 @@ body.resizing {
   line-height: 1.45;
 }
 
+.update-check-group {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.update-status-text {
+  margin: 4px 0 0;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.update-status-text.ok {
+  color: var(--green);
+}
+
+.update-status-text.warn {
+  color: var(--amber);
+}
+
+.update-status-text.bad {
+  color: var(--red);
+}
+
+.update-download-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.update-download-links.hidden {
+  display: none;
+}
+
+.update-download-link {
+  font-size: 11px;
+  color: var(--accent);
+  text-decoration: underline;
+}
+
 .desktop-storage-box {
   display: grid;
   gap: 5px;
@@ -1177,6 +1342,77 @@ body.resizing {
 .feature-toggle-row small {
   color: var(--muted);
   font-size: 12px;
+}
+
+.markdown-color-editor {
+  display: grid;
+  gap: 10px;
+  width: min(620px, 100%);
+}
+
+.markdown-color-reset-all-btn {
+  justify-self: start;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.markdown-color-row {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) auto auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.markdown-color-label {
+  color: var(--text);
+}
+
+.markdown-color-input-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.markdown-color-mode-label {
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.markdown-color-input {
+  width: 32px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.markdown-color-changed-badge {
+  color: var(--blue);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.markdown-color-reset-btn {
+  min-height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 700;
 }
 
 kbd {
@@ -1769,7 +2005,7 @@ kbd {
 
 .note-find-bar {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 6px;
   flex: 0 0 auto;
   min-height: 44px;
@@ -1780,6 +2016,18 @@ kbd {
   background: var(--panel);
   position: relative;
   z-index: 2;
+}
+
+.note-find-row,
+.note-replace-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.note-replace-row .secondary-btn {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .note-find-input-wrap {
@@ -2019,6 +2267,7 @@ kbd {
   color: var(--blue);
 }
 
+/* #region nownote-only:desktop 트리 제목과 공유 아이콘을 한 줄로 묶는 래퍼. Web 트리에는 공유 아이콘이 없다 */
 .tree-title-row {
   display: flex;
   align-items: center;
@@ -2026,6 +2275,7 @@ kbd {
   min-width: 0;
 }
 
+/* #endregion */
 .tree-title {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2035,6 +2285,7 @@ kbd {
   font-weight: 800;
 }
 
+/* #region nownote-only:desktop 트리 공유 상태 아이콘 스타일. Web 트리에는 이 아이콘이 없다 */
 .tree-share-icon {
   display: inline-grid;
   flex: 0 0 16px;
@@ -2063,6 +2314,7 @@ kbd {
   color: var(--amber);
 }
 
+/* #endregion */
 .tree-meta {
   color: var(--muted);
   font-size: 10px;
@@ -2226,9 +2478,127 @@ kbd {
   display: none;
 }
 
+.tree-editor .memo-editor-surface {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* 편집기가 Markdown 보기로 가려지면 오버레이 껍데기도 함께 숨긴다. */
+.memo-editor-surface:has(> .memo-editor.hidden) {
+  display: none;
+}
+
 .tree-editor .memo-editor {
   flex: 1 1 auto;
   min-height: 0;
+}
+
+/*
+ * Markdown 강조 오버레이/배경 레이어 (2.3.6 M8b 골격, U1 강조 규칙 확장).
+ * textarea 글자를 투명하게 만들고 같은 자리에 색칠한 글을 겹쳐 보인다.
+ * 글꼴과 여백은 JS가 textarea 의 계산된 값을 그대로 옮겨 준다.
+ *
+ * 레이어는 셋이다 (뒤에서 앞으로):
+ *   1. #treeContentBackdrop (.memo-editor-backdrop, z-index: -1) - 배경색만 칠한다.
+ *   2. textarea#treeContent (.memo-editor)                       - 실제 입력, 캐럿, 선택 영역.
+ *   3. #treeContentOverlay (.memo-editor-overlay, z-index: 2)     - 글자색만 칠한다.
+ * textarea 는 highlight-on 일 때 배경을 투명하게 만들어 배경 레이어가 비쳐 보이게 한다.
+ */
+.memo-editor-overlay,
+.memo-editor-backdrop {
+  position: absolute;
+  left: 0;
+  top: 0;
+  margin: 0;
+  border: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
+  box-sizing: border-box;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.memo-editor-overlay {
+  z-index: 2;
+  background: transparent;
+  color: var(--text);
+}
+
+/*
+ * 배경 레이어는 textarea 바로 뒤(음수 z-index)에 둔다. 기본 배경은 원래 textarea
+ * 배경(.memo-editor 기본값, line 1969 참고)과 같게 둬서 코드블록/인라인 코드가 없는
+ * 구간은 지금까지와 같은 색으로 보인다. 실제 글자도 담아 두지만 색은 투명이다 —
+ * textarea 와 정확히 같은 줄바꿈을 내려면 같은 글자가 같은 폭으로 있어야 하기 때문이다.
+ */
+.memo-editor-backdrop {
+  z-index: -1;
+  background: color-mix(in srgb, var(--panel) 76%, var(--bg));
+  color: transparent;
+}
+
+.memo-editor-surface.highlight-on > .memo-editor {
+  background: transparent;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  caret-color: var(--text);
+}
+
+/*
+ * 오버레이(글자 위, z-index: 2)에는 글자 색만 준다.
+ * 굵기, 크기, 자간처럼 글자 너비를 바꾸는 것을 주면 그 줄의 줄바꿈 위치가
+ * textarea 와 달라진다. 5만 자 문서에서 font-weight: 800 하나로 31줄이 밀렸다.
+ * 굵게 보이고 싶으면 textarea 쪽에도 같은 값을 줘야 하는데 textarea 는 줄마다 다른
+ * 굵기를 가질 수 없다. 로드맵 8에서 강조 규칙을 넓힐 때 이 제약을 그대로 지킨다.
+ *
+ * 배경 토큰(--md-inline-code-bg, --md-code-block-bg)은 오버레이에 두지 않는다.
+ * 오버레이는 textarea 위에 있어서 배경을 얹으면 그 아래 선택 영역과 캐럿이 가려진다.
+ * 배경은 textarea 뒤의 .memo-editor-backdrop 쪽에 둔다(아래).
+ */
+.memo-editor-overlay .md-heading {
+  color: var(--md-heading);
+}
+
+.memo-editor-overlay .md-link {
+  color: var(--md-link);
+}
+
+.memo-editor-overlay .md-list-marker {
+  color: var(--md-list-marker);
+}
+
+.memo-editor-overlay .md-code {
+  color: var(--md-inline-code-text);
+}
+
+.memo-editor-overlay .md-codeblock-fg {
+  color: var(--md-code-block-text);
+}
+
+/* bash 코드블록 최소 강조 - 명령어는 기본 코드블록 글자색을 그대로 쓰고 옵션·경로·숫자만 옅게 갈라 둔다. */
+.memo-editor-overlay .md-bash-option {
+  color: var(--md-code-block-option);
+}
+
+.memo-editor-overlay .md-bash-path {
+  color: var(--md-code-block-path);
+}
+
+.memo-editor-overlay .md-bash-number {
+  color: var(--md-code-block-number);
+}
+
+/* 배경 레이어(글자 뒤, z-index: -1)는 배경색만 준다. 글자 색은 항상 투명이다. */
+.memo-editor-backdrop .md-codeblock-bg {
+  background: var(--md-code-block-bg);
+}
+
+.memo-editor-backdrop .md-inlinecode-bg {
+  background: var(--md-inline-code-bg);
 }
 
 .markdown-preview {
@@ -2249,6 +2619,7 @@ kbd {
 .markdown-preview h5,
 .markdown-preview h6 {
   margin: 0 0 12px;
+  color: var(--md-heading);
   line-height: 1.3;
   letter-spacing: 0;
 }
@@ -2294,7 +2665,8 @@ kbd {
 
 .markdown-preview code {
   border-radius: 6px;
-  background: #f1f5f9;
+  background: var(--md-inline-code-bg);
+  color: var(--md-inline-code-text);
   padding: 2px 6px;
 }
 
@@ -2303,8 +2675,8 @@ kbd {
   overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
-  background: #0f172a;
-  color: #e5e7eb;
+  background: var(--md-code-block-bg);
+  color: var(--md-code-block-text);
   padding: 12px;
 }
 
@@ -2314,7 +2686,59 @@ kbd {
   color: inherit;
 }
 
-:root[data-theme="dark"] .markdown-preview code,
+.markdown-preview .code-block {
+  margin: 0 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.markdown-preview .code-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 10px;
+  background: var(--md-code-block-bg);
+  color: var(--md-code-block-text);
+  border-bottom: 1px solid color-mix(in srgb, var(--md-code-block-text) 20%, transparent);
+}
+
+.markdown-preview .code-block-lang {
+  font-size: 12px;
+  color: var(--md-code-block-text);
+  opacity: 0.7;
+}
+
+.markdown-preview .code-block-copy-btn {
+  border: 1px solid color-mix(in srgb, var(--md-code-block-text) 35%, transparent);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--md-code-block-text);
+  padding: 2px 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.markdown-preview .code-block-copy-btn:hover {
+  background: color-mix(in srgb, var(--md-code-block-text) 15%, transparent);
+}
+
+.markdown-preview .code-block-copy-btn.is-copied {
+  opacity: 0.75;
+}
+
+.markdown-preview .code-block pre {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: var(--md-code-block-bg);
+  color: var(--md-code-block-text);
+  overflow-x: auto;
+  padding: 12px;
+}
+
 :root[data-theme="dark"] .tree-toggle:not(:disabled):hover {
   background: #111827;
 }
@@ -2329,7 +2753,7 @@ kbd {
 }
 
 .markdown-preview a {
-  color: var(--blue);
+  color: var(--md-link);
   font-weight: 800;
   text-decoration: none;
 }
@@ -3021,6 +3445,102 @@ kbd {
   grid-template-columns: repeat(5, minmax(150px, 1fr));
   gap: 10px;
   margin-top: 12px;
+}
+
+.tree-map-card {
+  width: min(880px, 100%);
+}
+
+.tree-map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.tree-map-toolbar label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tree-map-canvas {
+  position: relative;
+  min-height: 320px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--line) 34%, transparent) 1px, transparent 1px),
+    linear-gradient(0deg, color-mix(in srgb, var(--line) 34%, transparent) 1px, transparent 1px),
+    var(--panel);
+  background-size: 48px 48px;
+}
+
+.tree-map-canvas svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.tree-map-canvas line {
+  stroke: color-mix(in srgb, var(--blue) 42%, var(--line));
+  stroke-width: 1.8;
+}
+
+.tree-map-node {
+  position: absolute;
+  z-index: 1;
+  display: grid;
+  min-width: 96px;
+  max-width: 160px;
+  gap: 2px;
+  justify-items: center;
+  padding: 6px 9px;
+  border: 1px solid color-mix(in srgb, var(--blue) 28%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 92%, var(--blue-soft));
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+  transform: translate(-50%, -50%);
+}
+
+.tree-map-node.active {
+  border-color: var(--blue);
+  box-shadow: 0 0 0 3px var(--blue-soft);
+}
+
+.tree-map-node strong {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-map-node.tree-map-level-1 {
+  min-width: 130px;
+  border-color: color-mix(in srgb, var(--blue) 60%, var(--line));
+  background: color-mix(in srgb, var(--panel) 82%, var(--blue));
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.tree-map-node.tree-map-level-2 {
+  border-color: color-mix(in srgb, var(--purple, #8b5cf6) 45%, var(--line));
+  background: color-mix(in srgb, var(--panel) 88%, var(--purple, #8b5cf6));
+  border-radius: 8px;
+}
+
+.tree-map-node.tree-map-level-3 {
+  border-radius: 4px;
+  border-style: dashed;
+}
+
+.tree-map-lock {
+  color: var(--muted);
+  font-size: 11px;
 }
 
 .graph-insights section {
@@ -3780,6 +4300,139 @@ kbd {
   margin-top: 16px;
 }
 
+.markdown-import-options-card {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 10px;
+}
+
+.markdown-import-options-list {
+  display: grid;
+  gap: 6px;
+}
+
+.markdown-import-option-row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  gap: 8px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.markdown-import-option-row.disabled {
+  opacity: 0.55;
+}
+
+.markdown-import-option-reason {
+  grid-column: 2;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.markdown-import-options-note {
+  color: var(--muted);
+}
+
+.markdown-import-options-preview {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  white-space: pre-wrap;
+  font-family: inherit;
+  font-size: 11px;
+}
+
+.move-node-dialog-card {
+  width: min(480px, 100%);
+  display: grid;
+  gap: 10px;
+}
+
+.move-node-current-path {
+  color: var(--muted);
+}
+
+.move-node-destination-select {
+  width: 100%;
+}
+
+.move-node-no-destination {
+  color: var(--muted);
+}
+
+.sketch-dialog-card {
+  width: min(700px, 100%);
+  display: grid;
+  gap: 10px;
+}
+
+.sketch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.sketch-toolbar .is-active {
+  border-color: var(--accent, #2563eb);
+  color: var(--accent, #2563eb);
+}
+
+.sketch-color-label {
+  display: inline-flex;
+  align-items: center;
+}
+
+.sketch-color-label input[type="color"] {
+  width: 36px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+}
+
+.sketch-canvas {
+  width: 100%;
+  height: 360px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.sketch-dialog-status {
+  min-height: 14px;
+  color: var(--muted);
+}
+
+.note-inline-image {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-alt, var(--panel));
+  margin: 6px 0;
+}
+
+.move-node-preview {
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
 /* Compact type scale: small 10px, normal 12px, emphasis 14px. */
 .web-login-card label,
 .web-login-status,
@@ -3943,6 +4596,15 @@ kbd {
 
   .shortcut-groups {
     width: 100%;
+  }
+
+  .markdown-color-editor {
+    width: 100%;
+  }
+
+  .markdown-color-row {
+    grid-template-columns: 1fr;
+    justify-content: start;
   }
 }
 

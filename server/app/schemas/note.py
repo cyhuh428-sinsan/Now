@@ -2,6 +2,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
+from app.core.capabilities import MAX_TREE_NOTE_LEVEL
+
 
 class NoteIn(BaseModel):
     owner_id: str = Field(default="local_user", max_length=80)
@@ -11,7 +13,7 @@ class NoteIn(BaseModel):
     title: str = Field(max_length=240)
     content: str = ""
     parent_local_id: str | None = Field(default=None, max_length=120)
-    level: int = Field(default=1, ge=1, le=3)
+    level: int = Field(default=1, ge=1, le=MAX_TREE_NOTE_LEVEL)
     tags: str | None = None
     source: str | None = Field(default=None, max_length=80)
     client_updated_at: datetime | None = None

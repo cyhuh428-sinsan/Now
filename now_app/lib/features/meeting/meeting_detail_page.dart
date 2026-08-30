@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:share_plus/share_plus.dart'; 
+import 'package:share_plus/share_plus.dart';
+import 'package:now_core/now_core.dart';
 import '../items/items_review_page.dart';
 import 'meetings_page.dart';
 import '../../repositories/repository_providers.dart';
@@ -31,11 +32,46 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage> {
   List<ExtractedItemData> _items = [];
   bool _isLoading = true;
 
+  late final VoicePlaybackService _voicePlayback;
+
   @override
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.meeting.title);
+    _voicePlayback = VoicePlaybackService(
+      synthesizer: ({
+        required String text,
+        String? voice,
+        String? language,
+        double? speed,
+      }) async {
+        final settings = await VoiceSettingsStore().load();
+        return VoiceEngineClient(settings: settings).synthesize(
+          text: text,
+          voice: voice,
+          language: language,
+          speed: speed,
+        );
+      },
+    );
     WidgetsBinding.instance.addPostFrameCallback((_) => _loadFromDb());
+  }
+
+  /// 문단 하나를 읽어 준다. 실패하면 스낵바로 안내한다.
+  Future<void> _speakSegment(String id, String text) async {
+    try {
+      await _voicePlayback.speak(text: text, id: id);
+    } on VoiceEngineException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    } on VoicePlaybackException catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _loadFromDb() async {
@@ -74,6 +110,7 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage> {
   @override
   void dispose() {
     _titleController.dispose();
+    _voicePlayback.dispose();
     super.dispose();
   }
 
@@ -221,6 +258,8 @@ class _MeetingDetailPageState extends ConsumerState<MeetingDetailPage> {
           ..._segments.map((seg) => _SegmentBubble(
                 segment: seg,
                 isMemo: isMemo,
+                playback: _voicePlayback,
+                onPlay: () => _speakSegment(seg.id, seg.text),
               )),
         ],
       ),
@@ -482,8 +521,56 @@ class _SegmentData {
 class _SegmentBubble extends StatelessWidget {
   final _SegmentData segment;
   final bool isMemo;
+  final VoicePlaybackService playback;
+  final VoidCallback onPlay;
 
-  const _SegmentBubble({required this.segment, required this.isMemo});
+  const _SegmentBubble({
+    required this.segment,
+    required this.isMemo,
+    required this.playback,
+    required this.onPlay,
+  });
+
+  Widget _buildPlayButton() {
+    return StreamBuilder<VoicePlaybackState>(
+      stream: playback.states,
+      initialData: playback.state,
+      builder: (context, snapshot) {
+        final state = snapshot.data ?? VoicePlaybackState.idle;
+        final isThis = state.id == segment.id && state.isBusy;
+        final isLoading = isThis && state.isLoading;
+        final isPlaying = isThis && state.isPlaying;
+        return IconButton(
+          tooltip: isPlaying ? '멈추기' : '읽어주기',
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(width: 28, height: 28),
+          icon: isLoading
+              ? const SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Color(0xFF2563EB),
+                  ),
+                )
+              : Icon(
+                  isPlaying
+                      ? Icons.stop_circle_outlined
+                      : Icons.volume_up_outlined,
+                  size: 18,
+                  color: const Color(0xFF2563EB),
+                ),
+          onPressed: () {
+            if (isPlaying) {
+              playback.stop();
+            } else {
+              onPlay();
+            }
+          },
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -511,6 +598,8 @@ class _SegmentBubble extends StatelessWidget {
                   style:
                       const TextStyle(fontSize: 11, color: Color(0xFF9CA3AF)),
                 ),
+                const Spacer(),
+                _buildPlayButton(),
               ],
             ),
             const SizedBox(height: 8),
@@ -563,6 +652,8 @@ class _SegmentBubble extends StatelessWidget {
                       style: const TextStyle(
                           fontSize: 11, color: Color(0xFF9CA3AF)),
                     ),
+                    const Spacer(),
+                    _buildPlayButton(),
                   ],
                 ),
                 const SizedBox(height: 4),

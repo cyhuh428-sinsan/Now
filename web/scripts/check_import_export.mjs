@@ -315,6 +315,26 @@ async function confirmDialog(page, label) {
   await evaluate(page, "document.querySelector('#confirmOkBtn').click(); true");
 }
 
+async function markdownImportOptionsDialog(page, destinationKey, label) {
+  await waitForCondition(
+    page,
+    "!document.querySelector('#markdownImportOptionsDialog')?.classList.contains('hidden')",
+    `${label} 목적지 선택창`,
+  );
+  const selectExpression = [
+    "(() => {",
+    `  const input = document.querySelector('#markdownImportOptionsList input[value="${destinationKey}"]');`,
+    "  if (!input || input.disabled) return false;",
+    "  input.checked = true;",
+    "  input.dispatchEvent(new Event('change', { bubbles: true }));",
+    "  return true;",
+    "})()",
+  ].join("\n");
+  const selected = await evaluate(page, selectExpression);
+  assert(selected, `${label}: '${destinationKey}' 목적지 옵션을 선택할 수 없습니다.`);
+  await evaluate(page, "document.querySelector('#markdownImportOptionsOkBtn').click(); true");
+}
+
 function browserArgs(debugPort, userDataDir, appUrl) {
   return [
     "--headless=new",
@@ -403,7 +423,7 @@ async function main() {
     await fs.writeFile(markdownPath, "# 자동 점검 Markdown\n\n가져오기 본문입니다.\n", "utf-8");
 
     await setFileInput(page, "#importMarkdownInput", markdownPath);
-    await confirmDialog(page, "Markdown 가져오기");
+    await markdownImportOptionsDialog(page, "new-topic", "Markdown 가져오기(새 주제)");
     await waitForCondition(
       page,
       `(() => {
@@ -417,6 +437,54 @@ async function main() {
         return flat.some((node) => node.title === '자동 점검 Markdown' && String(node.content || '').includes('가져오기 본문입니다.'));
       })()`,
       "Markdown 가져오기 결과",
+    );
+
+    // 평범한 외부 Markdown 파일을 "현재 메모에 이어 붙이기" 목적지로 가져오는 경로도 검증한다.
+    // 레벨 3 메모를 미리 만들어 선택한 뒤, 새 파일을 그 메모에 이어 붙인다.
+    await evaluate(
+      page,
+      `(() => {
+        const note = createNode('이어붙이기 대상 메모', '원본 메모 내용입니다.', null, 3);
+        state.data.tree.push(note);
+        persist();
+        selectTreeNode(note.id);
+        return note.id;
+      })()`,
+    );
+    const appendMarkdownPath = path.join(filesDir, "이어붙이기.md");
+    await fs.writeFile(appendMarkdownPath, "# 이어붙일 내용\n\n이어붙이기 본문입니다.\n", "utf-8");
+    const beforeAppendNodeCount = await evaluate(
+      page,
+      `(() => {
+        const data = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '{}');
+        const flat = [];
+        const walk = (nodes) => (nodes || []).forEach((node) => {
+          flat.push(node);
+          walk(node.children);
+        });
+        walk(data.tree);
+        return flat.length;
+      })()`,
+    );
+    await setFileInput(page, "#importMarkdownInput", appendMarkdownPath);
+    await markdownImportOptionsDialog(page, "append", "Markdown 가져오기(이어 붙이기)");
+    await waitForCondition(
+      page,
+      `(() => {
+        const data = JSON.parse(localStorage.getItem('${STORAGE_KEY}') || '{}');
+        const flat = [];
+        const walk = (nodes) => (nodes || []).forEach((node) => {
+          flat.push(node);
+          walk(node.children);
+        });
+        walk(data.tree);
+        if (flat.length !== ${beforeAppendNodeCount}) return false;
+        const note = flat.find((node) => node.title === '이어붙이기 대상 메모');
+        return Boolean(note)
+          && note.content.includes('원본 메모 내용입니다.')
+          && note.content.includes('이어붙이기 본문입니다.');
+      })()`,
+      "Markdown 이어 붙이기 결과",
     );
 
     const beforeMarkdownExport = await listFiles(downloadDir);

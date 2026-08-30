@@ -251,6 +251,29 @@ class MessengerAttachment(Base):
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class NoteAttachment(Base):
+    """노트/스케치 첨부 (2.3.6 P12).
+
+    메신저 첨부(MessengerAttachment)와 달리 특정 메시지에 묶이지 않는다. 어느
+    메모에 속하는지는 메모 본문의 `nownote-attachment://{storage_key}` 참조로만
+    연결하고, 첨부 자체는 owner_id로만 소유자를 구분한다(강한 외래키 없음).
+    """
+
+    __tablename__ = "note_attachments"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    storage_key: Mapped[str] = mapped_column(String(240), unique=True, index=True)
+    storage_path: Mapped[str] = mapped_column(Text)
+    original_name: Mapped[str] = mapped_column(String(240))
+    content_type: Mapped[str] = mapped_column(String(120))
+    extension: Mapped[str] = mapped_column(String(20), index=True)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0)
+    sha256: Mapped[str] = mapped_column(String(64), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class SyncLog(Base):
     __tablename__ = "sync_logs"
 
@@ -261,6 +284,10 @@ class SyncLog(Base):
     pulled_count: Mapped[int] = mapped_column(Integer, default=0)
     include_deleted: Mapped[int] = mapped_column(Integer, default=0)
     updated_after: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # P8 동기화 상태 조회 — 성공 여부와 실패 사유. 실패한 동기화는 이전까지
+    # 기록이 전혀 없었다(app/api/sync.py의 sync() 참고).
+    succeeded: Mapped[int] = mapped_column(Integer, default=1, index=True)
+    failure_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

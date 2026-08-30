@@ -1,13 +1,22 @@
-import hashlib
 from pathlib import Path
 from uuid import uuid4
 
 from fastapi import HTTPException, UploadFile, status
 
 from app.core.config import get_settings
+from app.services.attachment_storage import (
+    file_extension,
+    resolve_storage_path,
+    safe_name,
+    stream_save_upload,
+)
 
 
 IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "webp", "gif"}
+
+
+def is_image_extension(extension: str | None) -> bool:
+    return (extension or "").strip().lower().lstrip(".") in IMAGE_EXTENSIONS
 
 
 def messenger_upload_policy() -> dict:
@@ -47,13 +56,13 @@ async def save_messenger_attachment(
     if extension not in set(policy["allowed_extensions"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="file extension not allowed",
+            detail={"reason": "extension_not_allowed", "message": "file extension not allowed"},
         )
     content_type = (upload.content_type or "application/octet-stream").split(";", 1)[0].strip().lower()
     if content_type not in set(policy["allowed_mime_types"]):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="file mime type not allowed",
+            detail={"reason": "mime_type_not_allowed", "message": "file mime type not allowed"},
         )
 
     settings = get_settings()
@@ -62,21 +71,11 @@ async def save_messenger_attachment(
 
     storage_key = f"{uuid4().hex}.{extension}"
     target = base / storage_key
-    digest = hashlib.sha256()
-    size = 0
-    max_size = int(policy["max_size_bytes"])
-    with target.open("wb") as output:
-        while chunk := await upload.read(1024 * 1024):
-            size += len(chunk)
-            if size > max_size:
-                output.close()
-                target.unlink(missing_ok=True)
-                raise HTTPException(
-                    status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
-                    detail="file too large",
-                )
-            digest.update(chunk)
-            output.write(chunk)
+    size, digest_hex = await stream_save_upload(
+        upload=upload,
+        target=target,
+        max_size_bytes=int(policy["max_size_bytes"]),
+    )
 
     return {
         "storage_key": storage_key,
@@ -85,19 +84,13 @@ async def save_messenger_attachment(
         "content_type": content_type,
         "extension": extension,
         "size_bytes": size,
-        "sha256": digest.hexdigest(),
+        "sha256": digest_hex,
     }
 
 
 def resolve_messenger_attachment_path(storage_path: str) -> Path | None:
     settings = get_settings()
-    storage_root = Path(settings.messenger_storage_dir).resolve(strict=False)
-    target = Path(storage_path).resolve(strict=False)
-    try:
-        target.relative_to(storage_root)
-    except ValueError:
-        return None
-    return target if target.is_file() else None
+    return resolve_storage_path(Path(settings.messenger_storage_dir), storage_path)
 
 
 def messenger_storage_state() -> tuple[str, str]:
@@ -129,11 +122,8 @@ def messenger_storage_usage() -> dict[str, int]:
 
 
 def _safe_name(name: str) -> str:
-    cleaned = Path(name or "").name.replace("\\", "_").replace("/", "_").strip()
-    if cleaned in {"", ".", ".."}:
-        return "_"
-    return cleaned[:240]
+    return safe_name(name)
 
 
 def _extension(name: str) -> str:
-    return Path(name).suffix.lower().lstrip(".")
+    return file_extension(name)

@@ -36,44 +36,7 @@ class CalendarEvents extends Table {
   Set<Column> get primaryKey => {calendarEventId};
 }
 
-// 회의/대화 기록
-class Meetings extends Table {
-  TextColumn get meetingId => text()();
-  TextColumn get calendarEventId => text().nullable()();
-  TextColumn get title => text().withDefault(const Constant(''))();
-  TextColumn get status => text().withDefault(const Constant('planned'))();
-  // recordType: meeting | interview | conversation
-  TextColumn get recordType =>
-      text().withDefault(const Constant('meeting'))();
-  TextColumn get participantName => text().nullable()();
-  DateTimeColumn get startedAt => dateTime().nullable()();
-  DateTimeColumn get endedAt => dateTime().nullable()();
-  TextColumn get summary => text().nullable()();
-  IntColumn get segmentCount => integer().withDefault(const Constant(0))();
-  IntColumn get actionCount => integer().withDefault(const Constant(0))();
-  IntColumn get decisionCount => integer().withDefault(const Constant(0))();
-  BoolColumn get isImportant => boolean().withDefault(const Constant(false))();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
 
-  @override
-  Set<Column> get primaryKey => {meetingId};
-}
-
-// 발언 세그먼트
-class TranscriptSegments extends Table {
-  TextColumn get segmentId => text()();
-  TextColumn get meetingId => text()();
-  TextColumn get speaker => text().withDefault(const Constant('unknown'))();
-  DateTimeColumn get timestamp => dateTime().nullable()();
-  TextColumn get content => text()();
-  RealColumn get confidence => real().nullable()();
-  TextColumn get source => text().withDefault(const Constant('text_input'))();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  Set<Column> get primaryKey => {segmentId};
-}
 
 // 추출 아이템 (Action / Decision)
 class ExtractedItems extends Table {
@@ -357,21 +320,6 @@ class Transactions extends Table {
   Set<Column> get primaryKey => {transactionId};
 }
 
-// 메모
-class Memos extends Table {
-  TextColumn get memoId => text()();
-  TextColumn get userId => text()();
-  TextColumn get content => text()();
-  TextColumn get tags => text().nullable()();
-  // source: capture | manual
-  TextColumn get source => text().withDefault(const Constant('manual'))();
-  TextColumn get extractedId => text().nullable()();
-  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
-  DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
-
-  @override
-  Set<Column> get primaryKey => {memoId};
-}
 
 
 // 여행
@@ -472,8 +420,6 @@ class RollingSummaries extends Table {
 @DriftDatabase(tables: [
   Users,
   CalendarEvents,
-  Meetings,
-  TranscriptSegments,
   ExtractedItems,
   MealRecords,
   DailyContexts,
@@ -490,7 +436,6 @@ class RollingSummaries extends Table {
   CaptureItems,
   ExtractedCaptures,
   Transactions,
-  Memos,
   // v12 신규
   Briefings,
   RollingSummaries,
@@ -504,7 +449,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase.forTesting(super.executor);
 
   @override
-  int get schemaVersion => 17;
+  int get schemaVersion => 18;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -586,7 +531,20 @@ class AppDatabase extends _$AppDatabase {
             await m.createTable(captureItems);
             await m.createTable(extractedCaptures);
             await m.createTable(transactions);
-            await m.createTable(memos);
+            // memos는 v18에서 now_core NoteDatabase로 이전했다.
+            // 구버전에서 올라오는 기기의 데이터 이전을 위해 테이블은 그대로 만든다.
+            await m.database.customStatement('''
+              CREATE TABLE IF NOT EXISTS memos (
+                memo_id TEXT NOT NULL PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tags TEXT,
+                source TEXT NOT NULL DEFAULT 'manual',
+                extracted_id TEXT,
+                created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+                updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now'))
+              )
+            ''');
           }
           if (from < 12) {
             await m.createTable(briefings);

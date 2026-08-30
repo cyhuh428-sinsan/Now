@@ -76,7 +76,7 @@ final healthRepositoryProvider = AutoDisposeProvider<HealthRepository>.internal(
 // ignore: unused_element
 typedef HealthRepositoryRef = AutoDisposeProviderRef<HealthRepository>;
 String _$calendarEventRepositoryHash() =>
-    r'048f9c9bbe3c7392b809dacaa93170c32b5ec62f';
+    r'c8d34898a741dbff2a6ef642b651447c4a25e150';
 
 /// See also [calendarEventRepository].
 @ProviderFor(calendarEventRepository)

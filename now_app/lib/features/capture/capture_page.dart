@@ -3,8 +3,8 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:now_core/now_core.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:speech_to_text/speech_to_text.dart';
 import '../../repositories/repository_providers.dart';
 import 'package:drift/drift.dart' hide Column;
 import 'package:uuid/uuid.dart';
@@ -36,13 +36,20 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   final _textController = TextEditingController();
   File? _selectedImage;
 
+  // 사진에서 읽어낸 글자. 도메인 판정에 들어가는 것은 사진이 아니라 이 텍스트다.
+  // 사진 자체는 메모 본문에 넣지 않는다.
+  String _photoText = '';
+  bool _photoReading = false;
+  String? _photoError;
+
   // 처리 상태
   _ProcessStatus _status = _ProcessStatus.idle;
   List<_ExtractedResult> _results = [];
   String? _errorMessage;
 
   // STT
-  final SpeechToText _speech = SpeechToText();
+  // 기기 내 STT는 now_core가 들고 있다. 화면은 시작/정지만 부른다.
+  final DeviceSpeechRecognizer _speech = SpeechToTextRecognizer();
   bool _speechAvailable = false;
   bool _isListening = false;
   String _sttPartial = '';
@@ -68,15 +75,13 @@ class _CapturePageState extends ConsumerState<CapturePage> {
     _speechAvailable = await _speech.initialize(
       onStatus: (status) {
         if (!mounted) return;
-        if ((status == 'done' || status == 'notListening') && _isListening) {
+        if (DeviceSpeechDefaults.isStoppedStatus(status) && _isListening) {
           _restartStt();
         }
       },
-      onError: (error) {
+      onError: (failure) {
         if (!mounted || !_isListening) return;
-        final delay = error.errorMsg == 'error_busy'
-            ? const Duration(milliseconds: 1500)
-            : const Duration(milliseconds: 500);
+        final delay = DeviceSpeechDefaults.retryDelayFor(failure.message);
         Future.delayed(delay, () {
           if (mounted && _isListening) _restartStt();
         });
@@ -93,13 +98,13 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   void _startSttListening() async {
     if (_speech.isListening) return;
     await _speech.listen(
-      onResult: (result) {
-        final text = result.recognizedWords.trim();
+      onResult: (outcome) {
+        final text = outcome.text;
         if (text.isNotEmpty) {
           setState(() => _sttPartial = text);
           _resetSilenceTimer();
         }
-        if (result.finalResult && text.isNotEmpty) {
+        if (outcome.isFinal && text.isNotEmpty) {
           setState(() {
             _sttFinal = '$_sttFinal $text'.trim();
             _sttPartial = '';
@@ -107,14 +112,8 @@ class _CapturePageState extends ConsumerState<CapturePage> {
           _silenceTimer?.cancel();
         }
       },
-      localeId: 'ko_KR',
-      listenFor: const Duration(seconds: 300),
       pauseFor: const Duration(seconds: 10),
-      listenOptions: SpeechListenOptions(
-        partialResults: true,
-        cancelOnError: false,
-        listenMode: ListenMode.dictation,
-      ),
+      dictation: true,
     );
   }
 
@@ -157,12 +156,69 @@ class _CapturePageState extends ConsumerState<CapturePage> {
   // ── 사진 선택 ──
   Future<void> _pickImage(ImageSource source) async {
     final picker = ImagePicker();
-    final picked = await picker.pickImage(source: source, imageQuality: 85);
+    final picked = await picker.pickImage(
+      source: source,
+      imageQuality: 85,
+      // 요즘 폰 사진은 4000px가 넘고 수 MB다. base64로 실으면 33% 더 커진다.
+      // 모델은 어차피 긴 변 1500px대로 줄여서 보므로 원본을 그대로 보내면
+      // 요금과 대기 시간만 늘어난다. image_picker가 이미 축소를 해 주므로
+      // 새 이미지 처리 플러그인을 넣지 않는다.
+      maxWidth: 1600,
+      maxHeight: 1600,
+    );
     if (picked == null) return;
     setState(() {
       _selectedImage = File(picked.path);
       _mode = _CaptureMode.photo;
+      _photoText = '';
+      _photoError = null;
     });
+    await _extractPhotoText();
+  }
+
+  // ── 사진 → 텍스트 ──
+  //
+  // 예전에는 파일 경로 문자열을 그대로 LLM에 보냈다. LLM은 사진을 보지 못한
+  // 채 경로만 읽고 내용을 지어냈다. 지금은 now_core의 변환 계층이 사진을
+  // 실제로 실어 보내고, 읽어낸 글자만 돌려받는다.
+  Future<void> _extractPhotoText() async {
+    final file = _selectedImage;
+    if (file == null) return;
+    setState(() {
+      _photoReading = true;
+      _photoError = null;
+    });
+    try {
+      final llm = await ref.read(llmRepositoryProvider.future);
+      if (!mounted) return;
+      if (llm == null) {
+        setState(() {
+          _photoReading = false;
+          _photoError = 'LLM 설정을 먼저 완료해주세요';
+        });
+        return;
+      }
+      final text = await PhotoTextExtractor(llm).extractFromFile(file);
+      if (!mounted) return;
+      setState(() {
+        _photoReading = false;
+        _photoText = text;
+      });
+    } on PhotoTextExtractionException catch (e) {
+      // 미설정, 미지원 provider, 인증 실패, 연결 실패, 너무 큰 파일이
+      // 여기서 갈린다. 문구는 now_core가 한국어로 들고 있다.
+      if (!mounted) return;
+      setState(() {
+        _photoReading = false;
+        _photoError = e.message;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _photoReading = false;
+        _photoError = '사진을 읽는 중 문제가 생겼습니다.\n$e';
+      });
+    }
   }
 
   // ── LLM 처리 ──
@@ -174,8 +230,16 @@ class _CapturePageState extends ConsumerState<CapturePage> {
       inputText = _textController.text.trim();
       if (inputText.isEmpty) return;
     } else if (_mode == _CaptureMode.photo) {
-      if (_selectedImage == null) return;
-      inputText = '[사진 입력] ${_selectedImage!.path}';
+      if (_selectedImage == null || _photoReading) return;
+      // 도메인 판정에 들어가는 것은 사용자가 확인하고 고친 텍스트다.
+      inputText = _photoText.trim();
+      if (inputText.isEmpty) {
+        setState(() {
+          _status = _ProcessStatus.error;
+          _errorMessage = _photoError ?? '사진에서 읽어낸 글자가 없습니다. 다시 읽어 보세요.';
+        });
+        return;
+      }
     } else if (_mode == _CaptureMode.voice) {
       inputText = _sttFinal.trim();
       if (inputText.isEmpty) return;
@@ -342,11 +406,12 @@ $input
             : _mode == _CaptureMode.voice
                 ? 'voice'
                 : 'text',
-        rawText: _mode == _CaptureMode.voice
-            ? _sttFinal
-            : _textController.text.isNotEmpty
-                ? _textController.text
-                : null,
+        rawText: switch (_mode) {
+          _CaptureMode.voice => _sttFinal,
+          // 사진의 원본은 읽어낸 글자다. 경로 문자열이 아니다.
+          _CaptureMode.photo => _photoText.isNotEmpty ? _photoText : null,
+          _ => _textController.text.isNotEmpty ? _textController.text : null,
+        },
         assetUri: _selectedImage?.path,
       );
       final extractedId = await repo.saveExtractedCapture(
@@ -458,6 +523,8 @@ $input
                 _results = [];
                 _mode = _CaptureMode.none;
                 _selectedImage = null;
+                _photoText = '';
+                _photoError = null;
                 _sttFinal = '';
                 _textController.clear();
               }),
@@ -476,6 +543,9 @@ $input
             status: _status,
             textController: _textController,
             selectedImage: _selectedImage,
+            photoText: _photoText,
+            photoReading: _photoReading,
+            photoError: _photoError,
             errorMessage: _errorMessage,
             isListening: _isListening,
             sttPartial: _sttPartial,
@@ -489,6 +559,8 @@ $input
             onTextTap: () => setState(() => _mode = _CaptureMode.text),
             onProcess: _process,
             onSttEdited: (v) => setState(() => _sttFinal = v),
+            onPhotoTextEdited: (v) => setState(() => _photoText = v),
+            onPhotoRetry: _extractPhotoText,
           ),
         ),
 
@@ -552,6 +624,9 @@ class _InputView extends StatefulWidget {
   final _ProcessStatus status;
   final TextEditingController textController;
   final File? selectedImage;
+  final String photoText;
+  final bool photoReading;
+  final String? photoError;
   final String? errorMessage;
   final bool isListening;
   final String sttPartial;
@@ -563,12 +638,17 @@ class _InputView extends StatefulWidget {
   final VoidCallback onTextTap;
   final VoidCallback onProcess;
   final ValueChanged<String>? onSttEdited;
+  final ValueChanged<String>? onPhotoTextEdited;
+  final VoidCallback? onPhotoRetry;
 
   const _InputView({
     required this.mode,
     required this.status,
     required this.textController,
     required this.selectedImage,
+    required this.photoText,
+    required this.photoReading,
+    required this.photoError,
     required this.errorMessage,
     required this.isListening,
     required this.sttPartial,
@@ -580,6 +660,8 @@ class _InputView extends StatefulWidget {
     required this.onTextTap,
     required this.onProcess,
     this.onSttEdited,
+    this.onPhotoTextEdited,
+    this.onPhotoRetry,
   });
 
   @override
@@ -588,11 +670,13 @@ class _InputView extends StatefulWidget {
 
 class _InputViewState extends State<_InputView> {
   late TextEditingController _sttEditCtrl;
+  late TextEditingController _photoEditCtrl;
 
   @override
   void initState() {
     super.initState();
     _sttEditCtrl = TextEditingController(text: widget.sttFinal);
+    _photoEditCtrl = TextEditingController(text: widget.photoText);
   }
 
   @override
@@ -602,11 +686,18 @@ class _InputViewState extends State<_InputView> {
     if (oldWidget.isListening && !widget.isListening && widget.sttFinal.isNotEmpty) {
       _sttEditCtrl.text = widget.sttFinal;
     }
+    // 사진을 새로 읽어냈을 때만 편집칸을 갈아 끼운다. 사용자가 고치는 중에
+    // 덮어쓰지 않도록 값이 실제로 달라졌을 때만 손댄다.
+    if (oldWidget.photoText != widget.photoText &&
+        widget.photoText != _photoEditCtrl.text) {
+      _photoEditCtrl.text = widget.photoText;
+    }
   }
 
   @override
   void dispose() {
     _sttEditCtrl.dispose();
+    _photoEditCtrl.dispose();
     super.dispose();
   }
 
@@ -732,17 +823,7 @@ class _InputViewState extends State<_InputView> {
     }
 
     if (mode == _CaptureMode.photo && selectedImage != null) {
-      return Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: const Color(0xFFE5E7EB)),
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: Image.file(selectedImage, fit: BoxFit.cover),
-        ),
-      );
+      return _buildPhotoContent(selectedImage);
     }
 
     if (mode == _CaptureMode.voice) {
@@ -834,6 +915,131 @@ class _InputViewState extends State<_InputView> {
     }
 
     return const SizedBox.shrink();
+  }
+
+  /// 사진 입력 영역.
+  ///
+  /// 사진은 미리보기로만 보여 준다. 메모에 들어가는 것은 아래 편집칸의
+  /// 텍스트다. 넣기 전에 사용자가 고칠 수 있어야 하므로 읽어낸 결과를 바로
+  /// 저장하지 않고 편집칸에 놓는다.
+  Widget _buildPhotoContent(File image) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE5E7EB)),
+      ),
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: SizedBox(
+              height: 140,
+              width: double.infinity,
+              child: Image.file(image, fit: BoxFit.cover),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Expanded(child: _buildPhotoTextArea()),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPhotoTextArea() {
+    if (widget.photoReading) {
+      return const Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(height: 10),
+            Text(
+              '사진에서 글자를 읽는 중...',
+              style: TextStyle(fontSize: 13, color: Color(0xFF6B7280)),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final photoError = widget.photoError;
+    if (photoError != null) {
+      // 조용히 실패하지 않는다. 왜 안 되는지와 다음에 할 것을 함께 보여 준다.
+      // 이미지를 못 받는 provider를 고른 경우도 여기로 온다.
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.image_not_supported_outlined,
+                size: 28, color: Color(0xFFEF4444)),
+            const SizedBox(height: 8),
+            Text(
+              photoError,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 13, color: Color(0xFFEF4444)),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: widget.onPhotoRetry,
+              icon: const Icon(Icons.refresh, size: 16),
+              label: const Text('다시 읽기'),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Expanded(
+              child: Text(
+                '읽어낸 글자 (고칠 수 있어요)',
+                style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Color(0xFF6B7280)),
+              ),
+            ),
+            TextButton.icon(
+              onPressed: widget.onPhotoRetry,
+              icon: const Icon(Icons.refresh, size: 14),
+              label: const Text('다시 읽기', style: TextStyle(fontSize: 12)),
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                minimumSize: const Size(0, 28),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Expanded(
+          child: TextField(
+            controller: _photoEditCtrl,
+            maxLines: null,
+            expands: true,
+            textAlignVertical: TextAlignVertical.top,
+            style: const TextStyle(fontSize: 14, color: Color(0xFF111827)),
+            decoration: const InputDecoration(
+              border: OutlineInputBorder(),
+              hintText: '사진에서 읽어낸 글자가 여기에 들어옵니다',
+              contentPadding: EdgeInsets.all(10),
+            ),
+            onChanged: (v) => widget.onPhotoTextEdited?.call(v),
+          ),
+        ),
+      ],
+    );
   }
 }
 

@@ -1,28 +1,34 @@
 import 'dart:convert';
-import 'dart:io';
 
 import 'package:dio/dio.dart';
-import 'package:drift/drift.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-import '../core/database/app_database.dart';
+import 'package:now_core/now_core.dart';
 import '../core/network/dio_client.dart';
 import '../repositories/repository_providers.dart';
 
-const _serverEnabledKey = 'now_server_enabled';
-const _serverBaseUrlKey = 'now_server_base_url';
-const _serverTokenKey = 'now_server_token';
-const _serverUserTokenKey = 'now_server_user_token';
-const _serverWebSessionTokenKey = 'now_server_web_session_token';
-const _serverOwnerIdKey = 'now_server_owner_id';
-const _serverDeviceIdKey = 'now_server_device_id';
-const _serverLastSyncedAtKey = 'now_server_last_synced_at';
-const _serverDeletedTreeMemosKey = 'now_server_deleted_tree_memos';
+// ServerSettings / ServerConnectionResult / ServerPublicReadiness는
+// now_core로 옮겼다(2.3.6 P1). ServerSyncResult는 노트 동기화와 함께
+// now_core로 옮겼다(2.3.6 P2). ServerUserProfile은 사용자 프로필과 함께
+// now_core로 옮겼다(2.3.6 P3). 화면 코드가 이 파일 import 하나로 계속
+// 그 타입들을 쓸 수 있도록 다시 내보낸다.
+export 'package:now_core/now_core.dart'
+    show
+        ServerSettings,
+        ServerConnectionResult,
+        ServerPublicReadiness,
+        ServerSyncResult,
+        ServerUserProfile,
+        ServerRecordingUploadResult,
+        ServerRecording,
+        ServerMessengerRoom,
+        ServerMessengerMessage,
+        ServerMessengerRoomsResult,
+        ServerMessengerMessagesResult;
 
-const _secureStorage = FlutterSecureStorage();
+const _serverDeletedTreeMemosKey = 'now_server_deleted_tree_memos';
 
 final serverSettingsProvider = FutureProvider.autoDispose<ServerSettings>((
   ref,
@@ -31,177 +37,9 @@ final serverSettingsProvider = FutureProvider.autoDispose<ServerSettings>((
 });
 
 final serverSyncServiceProvider = Provider<ServerSyncService>((ref) {
-  final db = ref.watch(appDatabaseProvider);
+  final db = ref.watch(noteDatabaseProvider);
   return ServerSyncService(db);
 });
-
-class ServerSettings {
-  final bool enabled;
-  final String baseUrl;
-  final String token;
-  final String userToken;
-  final String webSessionToken;
-  final String ownerId;
-  final String deviceId;
-  final DateTime? lastSyncedAt;
-
-  const ServerSettings({
-    required this.enabled,
-    required this.baseUrl,
-    required this.token,
-    required this.userToken,
-    required this.webSessionToken,
-    required this.ownerId,
-    required this.deviceId,
-    required this.lastSyncedAt,
-  });
-
-  bool get isConfigured => baseUrl.trim().isNotEmpty;
-
-  static Future<ServerSettings> load() async {
-    final prefs = await SharedPreferences.getInstance();
-    final deviceId = prefs.getString(_serverDeviceIdKey);
-    if (deviceId == null || deviceId.isEmpty) {
-      final generated = 'android_${DateTime.now().microsecondsSinceEpoch}';
-      await prefs.setString(_serverDeviceIdKey, generated);
-    }
-    final ownerId = prefs.getString(_serverOwnerIdKey);
-    if (ownerId == null || ownerId.trim().isEmpty) {
-      await prefs.setString(_serverOwnerIdKey, 'local_user');
-    }
-    final token = await _loadServerToken(prefs);
-    final userToken = await _loadSecureToken(
-      prefs,
-      key: _serverUserTokenKey,
-    );
-    final webSessionToken = await _loadSecureToken(
-      prefs,
-      key: _serverWebSessionTokenKey,
-    );
-    return ServerSettings(
-      enabled: prefs.getBool(_serverEnabledKey) ?? false,
-      baseUrl: prefs.getString(_serverBaseUrlKey) ?? '',
-      token: token,
-      userToken: userToken,
-      webSessionToken: webSessionToken,
-      ownerId: _normalizeOwnerId(
-        prefs.getString(_serverOwnerIdKey) ?? 'local_user',
-      ),
-      deviceId: prefs.getString(_serverDeviceIdKey) ?? '',
-      lastSyncedAt: _parseSyncTime(prefs.getString(_serverLastSyncedAtKey)),
-    );
-  }
-
-  Future<void> save() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool(_serverEnabledKey, enabled);
-    await prefs.setString(_serverBaseUrlKey, _normalizeBaseUrl(baseUrl));
-    await _saveSecureToken(token.trim(), prefs, key: _serverTokenKey);
-    await _saveSecureToken(
-      userToken.trim(),
-      prefs,
-      key: _serverUserTokenKey,
-    );
-    await _saveSecureToken(
-      webSessionToken.trim(),
-      prefs,
-      key: _serverWebSessionTokenKey,
-    );
-    await prefs.setString(_serverOwnerIdKey, _normalizeOwnerId(ownerId));
-    await prefs.setString(_serverDeviceIdKey, deviceId.trim());
-    if (lastSyncedAt == null) {
-      await prefs.remove(_serverLastSyncedAtKey);
-    } else {
-      await prefs.setString(
-        _serverLastSyncedAtKey,
-        lastSyncedAt!.toIso8601String(),
-      );
-    }
-  }
-
-  ServerSettings copyWith({
-    bool? enabled,
-    String? baseUrl,
-    String? token,
-    String? userToken,
-    String? webSessionToken,
-    String? ownerId,
-    String? deviceId,
-    DateTime? lastSyncedAt,
-    bool clearLastSyncedAt = false,
-  }) {
-    return ServerSettings(
-      enabled: enabled ?? this.enabled,
-      baseUrl: baseUrl ?? this.baseUrl,
-      token: token ?? this.token,
-      userToken: userToken ?? this.userToken,
-      webSessionToken: webSessionToken ?? this.webSessionToken,
-      ownerId: ownerId ?? this.ownerId,
-      deviceId: deviceId ?? this.deviceId,
-      lastSyncedAt: clearLastSyncedAt
-          ? null
-          : (lastSyncedAt ?? this.lastSyncedAt),
-    );
-  }
-}
-
-class ServerConnectionResult {
-  final bool ok;
-  final String message;
-  final String serverName;
-  final Map<String, dynamic> capabilities;
-  final ServerPublicReadiness? publicReadiness;
-
-  const ServerConnectionResult({
-    required this.ok,
-    required this.message,
-    this.serverName = '',
-    this.capabilities = const {},
-    this.publicReadiness,
-  });
-}
-
-class ServerPublicReadiness {
-  final String status;
-  final List<String> remaining;
-
-  const ServerPublicReadiness({
-    required this.status,
-    required this.remaining,
-  });
-
-  factory ServerPublicReadiness.fromJson(Map<String, dynamic> json) {
-    return ServerPublicReadiness(
-      status: json['status']?.toString() ?? '',
-      remaining: ((json['remaining'] as List?) ?? const [])
-          .map((item) => item.toString())
-          .where((item) => item.trim().isNotEmpty)
-          .toList(),
-    );
-  }
-
-  String get summary {
-    if (status == 'ready') return '공용 서버 준비 완료';
-    if (status == 'planned') {
-      return '공용 서버 준비 중 · 남은 항목 ${remaining.length}개';
-    }
-    return '';
-  }
-}
-
-class ServerSyncResult {
-  final int uploaded;
-  final int downloaded;
-  final DateTime? syncedAt;
-  final String message;
-
-  const ServerSyncResult({
-    required this.uploaded,
-    this.downloaded = 0,
-    this.syncedAt,
-    required this.message,
-  });
-}
 
 class ServerOpsResult {
   final String status;
@@ -288,248 +126,25 @@ class ServerAnalysisJob {
   }
 }
 
-class ServerRecordingUploadResult {
-  final String localId;
-  final String fileName;
-  final String? transcript;
-
-  const ServerRecordingUploadResult({
-    required this.localId,
-    required this.fileName,
-    required this.transcript,
-  });
-
-  factory ServerRecordingUploadResult.fromJson(Map<String, dynamic> json) {
-    return ServerRecordingUploadResult(
-      localId: json['local_id']?.toString() ?? '',
-      fileName: json['file_name']?.toString() ?? '',
-      transcript: json['transcript']?.toString(),
-    );
-  }
-}
-
-class ServerRecording {
-  final int id;
-  final String ownerId;
-  final String deviceId;
-  final String localId;
-  final String? noteLocalId;
-  final String fileName;
-  final String contentType;
-  final String? transcript;
-  final String? createdAt;
-  final String? updatedAt;
-
-  const ServerRecording({
-    required this.id,
-    required this.ownerId,
-    required this.deviceId,
-    required this.localId,
-    required this.noteLocalId,
-    required this.fileName,
-    required this.contentType,
-    required this.transcript,
-    required this.createdAt,
-    required this.updatedAt,
-  });
-
-  bool get hasTranscript => transcript?.trim().isNotEmpty == true;
-
-  factory ServerRecording.fromJson(Map<String, dynamic> json) {
-    return ServerRecording(
-      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      ownerId: json['owner_id']?.toString() ?? 'local_user',
-      deviceId: json['device_id']?.toString() ?? '-',
-      localId: json['local_id']?.toString() ?? '',
-      noteLocalId: json['note_local_id']?.toString(),
-      fileName: json['file_name']?.toString() ?? '',
-      contentType: json['content_type']?.toString() ?? '',
-      transcript: json['transcript']?.toString(),
-      createdAt: json['created_at']?.toString(),
-      updatedAt: json['updated_at']?.toString(),
-    );
-  }
-}
-
-class ServerMessengerRoom {
-  final int id;
-  final String roomType;
-  final String name;
-  final String groupName;
-  final int lastMessageId;
-  final int lastReadMessageId;
-  final int unreadCount;
-  final List<String> members;
-
-  const ServerMessengerRoom({
-    required this.id,
-    required this.roomType,
-    required this.name,
-    required this.groupName,
-    required this.lastMessageId,
-    required this.lastReadMessageId,
-    required this.unreadCount,
-    required this.members,
-  });
-
-  factory ServerMessengerRoom.fromJson(Map<String, dynamic> json) {
-    final rawMembers = (json['members'] as List?) ?? const [];
-    return ServerMessengerRoom(
-      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      roomType: json['room_type']?.toString() ?? '',
-      name: json['name']?.toString() ?? '채팅방',
-      groupName: json['group_name']?.toString() ?? '',
-      lastMessageId:
-          int.tryParse(json['last_message_id']?.toString() ?? '') ?? 0,
-      lastReadMessageId:
-          int.tryParse(json['last_read_message_id']?.toString() ?? '') ?? 0,
-      unreadCount: int.tryParse(json['unread_count']?.toString() ?? '') ?? 0,
-      members: rawMembers
-          .map((item) {
-            if (item is Map) {
-              return item['owner_id']?.toString() ??
-                  item['ownerId']?.toString() ??
-                  '';
-            }
-            return item.toString();
-          })
-          .where((item) => item.trim().isNotEmpty)
-          .toList(),
-    );
-  }
-}
-
-class ServerMessengerMessage {
-  final int id;
-  final int roomId;
-  final String senderOwnerId;
-  final String senderDisplayName;
-  final String body;
-  final String createdAt;
-
-  const ServerMessengerMessage({
-    required this.id,
-    required this.roomId,
-    required this.senderOwnerId,
-    required this.senderDisplayName,
-    required this.body,
-    required this.createdAt,
-  });
-
-  factory ServerMessengerMessage.fromJson(Map<String, dynamic> json) {
-    return ServerMessengerMessage(
-      id: int.tryParse(json['id']?.toString() ?? '') ?? 0,
-      roomId: int.tryParse(json['room_id']?.toString() ?? '') ?? 0,
-      senderOwnerId: json['sender_owner_id']?.toString() ?? '',
-      senderDisplayName:
-          json['sender_display_name']?.toString() ??
-          json['sender_owner_id']?.toString() ??
-          '',
-      body: json['body']?.toString() ?? '',
-      createdAt: json['created_at']?.toString() ?? '',
-    );
-  }
-}
-
-class ServerMessengerRoomsResult {
-  final String groupName;
-  final List<ServerMessengerRoom> rooms;
-
-  const ServerMessengerRoomsResult({
-    required this.groupName,
-    required this.rooms,
-  });
-}
-
-class ServerMessengerMessagesResult {
-  final ServerMessengerRoom? room;
-  final List<ServerMessengerMessage> items;
-
-  const ServerMessengerMessagesResult({
-    required this.room,
-    required this.items,
-  });
-}
-
-class ServerUserProfile {
-  final String ownerId;
-  final String? email;
-  final String? displayName;
-  final String timezone;
-  final String groupName;
-  final bool twoFactorEnabled;
-  final bool isActive;
-  final String? lastSeenAt;
-
-  const ServerUserProfile({
-    required this.ownerId,
-    required this.email,
-    required this.displayName,
-    required this.timezone,
-    required this.groupName,
-    required this.twoFactorEnabled,
-    required this.isActive,
-    required this.lastSeenAt,
-  });
-
-  factory ServerUserProfile.fromJson(Map<String, dynamic> json) {
-    return ServerUserProfile(
-      ownerId: json['owner_id']?.toString() ?? 'local_user',
-      email: json['email']?.toString(),
-      displayName: json['display_name']?.toString(),
-      timezone: json['timezone']?.toString() ?? 'Asia/Seoul',
-      groupName: json['group_name']?.toString() ?? '사용자',
-      twoFactorEnabled: json['two_factor_enabled'] == true,
-      isActive: json['is_active'] != false,
-      lastSeenAt: json['last_seen_at']?.toString(),
-    );
-  }
-}
-
 class ServerSyncService {
-  final AppDatabase _db;
+  final NoteDatabase _db;
 
   const ServerSyncService(this._db);
 
+  // testConnection / createWebSession의 실제 요청과 사용자 토큰 검증
+  // (_verifyUserToken)은 now_core의 ServerConnectionApi로 옮겼다(2.3.6 P1).
+  // 헤더 구성(_dio / _dioWithoutUserToken)은 다른 메서드들도 같이 쓰므로
+  // 여기 그대로 두고, 만든 Dio를 넘겨주기만 한다.
   Future<ServerConnectionResult> testConnection(
     ServerSettings settings, {
     String twoFactorCode = '',
-  }) async {
-    if (!settings.isConfigured) {
-      return const ServerConnectionResult(ok: false, message: '서버 주소가 없습니다');
-    }
-    try {
-      final dio = _dio(settings);
-      final res = await dio.get<Map<String, dynamic>>('/api/v1/server');
-      final name = res.data?['server']?.toString() ?? 'NowNote Server';
-      final authRequired = res.data?['auth_required'] == true;
-      final capabilities = Map<String, dynamic>.from(
-        (res.data?['capabilities'] as Map?) ?? const {},
-      );
-      final publicReadiness = _publicReadinessFromResponse(res.data);
-      if (settings.userToken.trim().isNotEmpty) {
-        await _verifyUserToken(settings, twoFactorCode: twoFactorCode);
-      }
-      return ServerConnectionResult(
-        ok: true,
-        message: _serverConnectionMessage(
-          name,
-          authRequired,
-          capabilities,
-          publicReadiness,
-        ),
-        serverName: name,
-        capabilities: capabilities,
-        publicReadiness: publicReadiness,
-      );
-    } on DioException catch (e) {
-      return ServerConnectionResult(
-        ok: false,
-        message: _serverErrorMessage(e, fallback: '서버에 연결하지 못했습니다'),
-      );
-    } catch (e) {
-      return ServerConnectionResult(ok: false, message: '$e');
-    }
+  }) {
+    return ServerConnectionApi.testConnection(
+      dio: _dio(settings),
+      dioWithoutUserToken: _dioWithoutUserToken(settings),
+      settings: settings,
+      twoFactorCode: twoFactorCode,
+    );
   }
 
   Future<ServerSyncResult> uploadNotes(ServerSettings settings) async {
@@ -540,151 +155,50 @@ class ServerSyncService {
   Future<void> applyPulledNotesForTest(
     ServerSettings settings,
     List<dynamic> pulledNotes,
-  ) {
-    return _applyPulledNotes(settings, pulledNotes);
-  }
-
-  Future<void> _verifyUserToken(
-    ServerSettings settings, {
-    required String twoFactorCode,
-  }) async {
-    final data = <String, dynamic>{
-      'owner_id': _normalizeOwnerId(settings.ownerId),
-      'access_token': settings.userToken.trim(),
-    };
-    final code = twoFactorCode.trim();
-    if (code.isNotEmpty) {
-      data['two_factor_code'] = code;
-    }
-    await _dioWithoutUserToken(settings).post<Map<String, dynamic>>(
-      '/api/v1/auth/token-login',
-      data: data,
+  ) async {
+    final cleared = await ServerNoteSyncApi.applyPulledNotes(
+      db: _db,
+      settings: settings,
+      pulledNotes: pulledNotes,
     );
+    if (cleared.isNotEmpty) {
+      await _clearPendingDeletedTreeMemos(cleared);
+    }
   }
 
   Future<ServerSettings> createWebSession(
     ServerSettings settings, {
     required String password,
     String twoFactorCode = '',
-  }) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final trimmedPassword = password.trim();
-    if (trimmedPassword.isEmpty) {
-      throw Exception('서버 비밀번호를 입력하세요');
-    }
-    try {
-      final data = <String, dynamic>{
-        'owner_id': _normalizeOwnerId(settings.ownerId),
-        'password': trimmedPassword,
-        'device_id': settings.deviceId.trim().isEmpty
-            ? 'android'
-            : settings.deviceId.trim(),
-      };
-      final code = twoFactorCode.trim();
-      if (code.isNotEmpty) {
-        data['two_factor_code'] = code;
-      }
-      final res = await _dioWithoutUserToken(settings).post<Map<String, dynamic>>(
-        '/api/v1/auth/web-login',
-        data: data,
-      );
-      final sessionToken = res.data?['session_token']?.toString() ?? '';
-      if (sessionToken.trim().isEmpty) {
-        throw Exception('서버 응답에 메신저 세션이 없습니다');
-      }
-      final nextSettings = settings.copyWith(webSessionToken: sessionToken);
-      await nextSettings.save();
-      return nextSettings;
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '메신저 세션 연결 실패'));
-    }
+  }) {
+    return ServerConnectionApi.createWebSession(
+      dioWithoutUserToken: _dioWithoutUserToken(settings),
+      settings: settings,
+      password: password,
+      twoFactorCode: twoFactorCode,
+    );
   }
 
+  // syncNotes()의 실제 payload 구성/요청/pull 반영은 now_core의
+  // ServerNoteSyncApi로 옮겼다(2.3.6 P2). 삭제 대기 계층 메모 저장소
+  // (SharedPreferences) 접근만 이 계층에 남긴다 — now_core가 그 저장소
+  // 접근 방식을 정하지 않도록 하기 위해서다(M2와 같은 판단).
   Future<ServerSyncResult> syncNotes(
     ServerSettings settings, {
     bool fullSync = false,
   }) async {
-    if (!settings.enabled) {
-      return const ServerSyncResult(uploaded: 0, message: '서버 동기화가 꺼져 있습니다');
+    final pendingDeletedTreeMemos = await _loadDeletedTreeMemos();
+    final outcome = await ServerNoteSyncApi.syncNotes(
+      dio: _dio(settings),
+      db: _db,
+      settings: settings,
+      pendingDeletedTreeMemos: pendingDeletedTreeMemos,
+      fullSync: fullSync,
+    );
+    if (outcome.clearedDeletedTreeMemoIds.isNotEmpty) {
+      await _clearPendingDeletedTreeMemos(outcome.clearedDeletedTreeMemoIds);
     }
-    if (!settings.isConfigured) {
-      return const ServerSyncResult(uploaded: 0, message: '서버 주소가 없습니다');
-    }
-
-    final notes = <Map<String, dynamic>>[
-      ...await _dailyMemoPayloads(settings),
-      ...await _treeMemoPayloads(settings),
-    ];
-    final deletedTreeNotes = await _treeDeletedMemoPayloads(settings);
-    final deletedMemoIds = <String>{
-      for (final item in deletedTreeNotes)
-        if (item['local_id'] is String) item['local_id'] as String,
-    };
-    notes.addAll(deletedTreeNotes);
-    if (_shouldSkipServerSyncRequest(notes, fullSync, settings.lastSyncedAt)) {
-      return const ServerSyncResult(uploaded: 0, message: '동기화할 메모가 없습니다');
-    }
-
-    final dio = _dio(settings);
-    final effectiveSyncPoint = fullSync
-        ? null
-        : settings.lastSyncedAt?.toIso8601String();
-    try {
-      final res = await dio.post<Map<String, dynamic>>(
-        '/api/v1/sync',
-        data: {
-          'owner_id': _normalizeOwnerId(settings.ownerId),
-          'device_id': settings.deviceId,
-          'updated_after': effectiveSyncPoint,
-          'include_deleted': true,
-          'notes': notes,
-        },
-      );
-      final pushedNotes = (res.data?['pushed_notes'] as List?) ?? const [];
-      final pushed = pushedNotes.length;
-      final pulledNotes = (res.data?['pulled_notes'] as List?) ?? const [];
-      final pulled = pulledNotes.length;
-
-      await _applyPulledNotes(settings, pulledNotes);
-
-      final serverTime = _parseSyncTime(res.data?['server_time']?.toString());
-      if (serverTime != null) {
-        await settings.copyWith(lastSyncedAt: serverTime).save();
-      }
-      if (deletedMemoIds.isNotEmpty) {
-        final syncedDeletedIds = <String>{};
-        for (final item in pushedNotes) {
-          if (item is! Map) continue;
-          final noteType = item['note_type']?.toString();
-          final deletedAt = item['deleted_at'];
-          final localId = item['local_id']?.toString();
-          if (noteType == 'tree' &&
-              localId != null &&
-              localId.isNotEmpty &&
-              deletedAt != null &&
-              deletedMemoIds.contains(localId)) {
-            syncedDeletedIds.add(localId);
-          }
-        }
-        if (syncedDeletedIds.isNotEmpty) {
-          await _clearPendingDeletedTreeMemos(syncedDeletedIds);
-        }
-      }
-
-      final emptySync = notes.isEmpty && pushed == 0 && pulled == 0;
-      return ServerSyncResult(
-        uploaded: pushed,
-        downloaded: pulled,
-        syncedAt: serverTime,
-        message: emptySync
-            ? '동기화할 메모가 없습니다'
-            : '메모 업로드 $pushed건 · 서버 변경 $pulled건 확인',
-      );
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '동기화 실패'));
-    }
+    return outcome.result;
   }
 
   Future<void> markTreeMemoDeleted(
@@ -699,16 +213,14 @@ class ServerSyncService {
     if (memoId.isEmpty) return;
     final prefs = await SharedPreferences.getInstance();
     final current = await _loadDeletedTreeMemos(prefs);
-    final now = deletedAt ?? DateTime.now();
-    current[memoId] = {
-      'deleted_at': now.toIso8601String(),
-      'level': level,
-      'parent_local_id': parentLocalId ?? '',
-      'tags': tags ?? '',
-      'title': title ?? '삭제된 메모',
-      'content': content ?? '',
-      'source': 'note_tree',
-    };
+    current[memoId] = buildDeletedTreeMemoEntry(
+      deletedAt: deletedAt ?? DateTime.now(),
+      level: level,
+      parentLocalId: parentLocalId,
+      tags: tags,
+      title: title,
+      content: content,
+    );
     await prefs.setString(_serverDeletedTreeMemosKey, jsonEncode(current));
   }
 
@@ -726,20 +238,14 @@ class ServerSyncService {
     await _clearPendingDeletedTreeMemos(current.keys.toSet());
   }
 
-  Future<ServerUserProfile> loadUserProfile(ServerSettings settings) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final dio = _dio(settings);
-    try {
-      final ownerId = _normalizeOwnerId(settings.ownerId);
-      final res = await dio.get<Map<String, dynamic>>(
-        '/api/v1/users/${Uri.encodeComponent(ownerId)}',
-      );
-      return _profileFromResponse(res.data);
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '사용자 프로필 조회 실패'));
-    }
+  // loadUserProfile / saveUserProfile의 실제 요청/응답 처리는 now_core의
+  // ServerProfileApi로 옮겼다(2.3.6 P3). 헤더 구성(_dio)은 다른 메서드들도
+  // 같이 쓰므로 여기 그대로 두고, 만든 Dio를 넘겨주기만 한다.
+  Future<ServerUserProfile> loadUserProfile(ServerSettings settings) {
+    return ServerProfileApi.loadUserProfile(
+      dio: _dio(settings),
+      settings: settings,
+    );
   }
 
   Future<ServerUserProfile> saveUserProfile(
@@ -747,29 +253,14 @@ class ServerSyncService {
     required String? email,
     required String? displayName,
     required String timezone,
-  }) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final dio = _dio(settings);
-    final ownerId = _normalizeOwnerId(settings.ownerId);
-    final path = '/api/v1/users/${Uri.encodeComponent(ownerId)}';
-    final data = {
-      'email': _blankToNull(email),
-      'display_name': _blankToNull(displayName),
-      'timezone': timezone.trim().isEmpty ? 'Asia/Seoul' : timezone.trim(),
-    };
-    try {
-      final res = await dio.patch<Map<String, dynamic>>(path, data: data);
-      return _profileFromResponse(res.data);
-    } on DioException catch (e) {
-      if (e.response?.statusCode == 404) {
-        await dio.get<Map<String, dynamic>>(path);
-        final res = await dio.patch<Map<String, dynamic>>(path, data: data);
-        return _profileFromResponse(res.data);
-      }
-      throw Exception(_serverErrorMessage(e, fallback: '사용자 프로필 저장 실패'));
-    }
+  }) {
+    return ServerProfileApi.saveUserProfile(
+      dio: _dio(settings),
+      settings: settings,
+      email: email,
+      displayName: displayName,
+      timezone: timezone,
+    );
   }
 
   Future<ServerOpsResult> loadOpsStatus(ServerSettings settings) async {
@@ -839,440 +330,82 @@ class ServerSyncService {
     }
   }
 
+  // uploadRecordingFile / loadRecordings의 실제 요청/응답 처리는 now_core의
+  // ServerRecordingApi로 옮겼다(2.3.6 P4). 헤더 구성(_dio)은 다른 메서드들도
+  // 같이 쓰므로 여기 그대로 두고, 만든 Dio를 넘겨주기만 한다.
   Future<ServerRecordingUploadResult> uploadRecordingFile(
     ServerSettings settings, {
     required String filePath,
     required String localId,
     required String? noteLocalId,
     required String? transcript,
-  }) async {
-    if (!settings.enabled) {
-      throw Exception('서버 동기화가 꺼져 있습니다');
-    }
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final file = File(filePath);
-    if (!await file.exists()) {
-      throw Exception('녹음 파일을 찾을 수 없습니다');
-    }
-
-    final dio = _dio(settings);
-    final fileName = file.uri.pathSegments.isEmpty
-        ? 'recording.aac'
-        : file.uri.pathSegments.last;
-    try {
-      final formData = FormData.fromMap({
-        'owner_id': _normalizeOwnerId(settings.ownerId),
-        'device_id': settings.deviceId,
-        'local_id': localId,
-        'note_local_id': _blankToNull(noteLocalId),
-        'transcript': _blankToNull(transcript),
-        'file': await MultipartFile.fromFile(filePath, filename: fileName),
-      });
-      final res = await dio.post<Map<String, dynamic>>(
-        '/api/v1/recordings',
-        data: formData,
-      );
-      return ServerRecordingUploadResult.fromJson(
-        res.data ?? const <String, dynamic>{},
-      );
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '녹음 업로드 실패'));
-    }
+  }) {
+    return ServerRecordingApi.uploadRecordingFile(
+      dio: _dio(settings),
+      settings: settings,
+      filePath: filePath,
+      localId: localId,
+      noteLocalId: noteLocalId,
+      transcript: transcript,
+    );
   }
 
-  Future<List<ServerRecording>> loadRecordings(ServerSettings settings) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final dio = _dio(settings);
-    try {
-      final ownerId = _normalizeOwnerId(settings.ownerId);
-      final res = await dio.get<List<dynamic>>(
-        '/api/v1/recordings',
-        queryParameters: {'owner_id': ownerId},
-      );
-      return (res.data ?? const [])
-          .whereType<Map>()
-          .map(
-            (item) =>
-                ServerRecording.fromJson(Map<String, dynamic>.from(item)),
-          )
-          .toList();
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '녹음 목록 조회 실패'));
-    }
+  Future<List<ServerRecording>> loadRecordings(ServerSettings settings) {
+    return ServerRecordingApi.loadRecordings(
+      dio: _dio(settings),
+      settings: settings,
+    );
   }
 
+  // loadMessengerRooms / loadMessengerMessages / sendMessengerMessage /
+  // markMessengerRoomRead의 실제 요청/응답 처리는 now_core의
+  // ServerMessengerApi로 옮겼다(2.3.6 P5). 메신저 전용 헤더 구성(_messengerDio)은
+  // 다른 메서드들이 쓰는 _dio와 같은 이유로 여기 그대로 두고, 만든 Dio를
+  // 넘겨주기만 한다.
   Future<ServerMessengerRoomsResult> loadMessengerRooms(
     ServerSettings settings,
-  ) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final dio = _messengerDio(settings);
-    try {
-      final ownerId = _normalizeOwnerId(settings.ownerId);
-      final res = await dio.get<Map<String, dynamic>>(
-        '/api/v1/messenger/rooms',
-        queryParameters: {'owner_id': ownerId},
-      );
-      final rooms = ((res.data?['rooms'] as List?) ?? const [])
-          .whereType<Map>()
-          .map(
-            (item) => ServerMessengerRoom.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .where((room) => room.id > 0)
-          .toList();
-      return ServerMessengerRoomsResult(
-        groupName: res.data?['group_name']?.toString() ?? '',
-        rooms: rooms,
-      );
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '메신저 방 조회 실패'));
-    }
+  ) {
+    return ServerMessengerApi.loadMessengerRooms(
+      dio: _messengerDio(settings),
+      settings: settings,
+    );
   }
 
   Future<ServerMessengerMessagesResult> loadMessengerMessages(
     ServerSettings settings, {
     required int roomId,
-  }) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final dio = _messengerDio(settings);
-    try {
-      final ownerId = _normalizeOwnerId(settings.ownerId);
-      final res = await dio.get<Map<String, dynamic>>(
-        '/api/v1/messenger/rooms/$roomId/messages',
-        queryParameters: {'owner_id': ownerId, 'limit': 100},
-      );
-      final rawRoom = res.data?['room'];
-      final messages = ((res.data?['items'] as List?) ?? const [])
-          .whereType<Map>()
-          .map(
-            (item) => ServerMessengerMessage.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
-          )
-          .toList();
-      return ServerMessengerMessagesResult(
-        room: rawRoom is Map
-            ? ServerMessengerRoom.fromJson(Map<String, dynamic>.from(rawRoom))
-            : null,
-        items: messages,
-      );
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '메신저 메시지 조회 실패'));
-    }
+  }) {
+    return ServerMessengerApi.loadMessengerMessages(
+      dio: _messengerDio(settings),
+      settings: settings,
+      roomId: roomId,
+    );
   }
 
   Future<ServerMessengerMessage> sendMessengerMessage(
     ServerSettings settings, {
     required int roomId,
     required String body,
-  }) async {
-    if (!settings.isConfigured) {
-      throw Exception('서버 주소가 없습니다');
-    }
-    final trimmed = body.trim();
-    if (trimmed.isEmpty) {
-      throw Exception('메시지를 입력하세요');
-    }
-    final dio = _messengerDio(settings);
-    try {
-      final res = await dio.post<Map<String, dynamic>>(
-        '/api/v1/messenger/rooms/$roomId/messages',
-        data: {
-          'owner_id': _normalizeOwnerId(settings.ownerId),
-          'body': trimmed,
-        },
-      );
-      final item = res.data?['item'];
-      if (item is! Map) {
-        throw Exception('서버 응답에 메시지가 없습니다');
-      }
-      return ServerMessengerMessage.fromJson(Map<String, dynamic>.from(item));
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '메신저 메시지 전송 실패'));
-    }
+  }) {
+    return ServerMessengerApi.sendMessengerMessage(
+      dio: _messengerDio(settings),
+      settings: settings,
+      roomId: roomId,
+      body: body,
+    );
   }
 
   Future<void> markMessengerRoomRead(
     ServerSettings settings, {
     required int roomId,
     required int lastReadMessageId,
-  }) async {
-    if (!settings.isConfigured || lastReadMessageId <= 0) return;
-    final dio = _messengerDio(settings);
-    try {
-      await dio.post<Map<String, dynamic>>(
-        '/api/v1/messenger/rooms/$roomId/read',
-        data: {
-          'owner_id': _normalizeOwnerId(settings.ownerId),
-          'last_read_message_id': lastReadMessageId,
-        },
-      );
-    } on DioException catch (e) {
-      throw Exception(_serverErrorMessage(e, fallback: '메신저 읽음 처리 실패'));
-    }
-  }
-
-  Future<List<Map<String, dynamic>>> _dailyMemoPayloads(
-    ServerSettings settings,
-  ) async {
-    final meetings =
-        await (_db.select(_db.meetings)
-              ..where((m) => m.recordType.equals('memo'))
-              ..orderBy([(m) => OrderingTerm.desc(m.updatedAt)]))
-            .get();
-
-    final payloads = <Map<String, dynamic>>[];
-    for (final meeting in meetings) {
-      final segments =
-          await (_db.select(_db.transcriptSegments)
-                ..where((s) => s.meetingId.equals(meeting.meetingId))
-                ..orderBy([(s) => OrderingTerm.asc(s.timestamp)]))
-              .get();
-      final content = segments.map((s) => s.content).join('\n\n').trim();
-      payloads.add({
-        'owner_id': _normalizeOwnerId(settings.ownerId),
-        'device_id': settings.deviceId,
-        'local_id': meeting.meetingId,
-        'note_type': 'daily',
-        'title': meeting.title.isEmpty ? '일자 메모' : meeting.title,
-        'content': content.isEmpty ? (meeting.summary ?? '') : content,
-        'parent_local_id': null,
-        'level': 1,
-        'tags': 'recordType=memo',
-        'source': 'now_app',
-        'client_updated_at': meeting.updatedAt.toIso8601String(),
-        'deleted_at': null,
-      });
-    }
-    return payloads;
-  }
-
-  Future<List<Map<String, dynamic>>> _treeMemoPayloads(
-    ServerSettings settings,
-  ) async {
-    final memos =
-        await (_db.select(_db.memos)
-              ..where((m) => m.source.equals('note_tree'))
-              ..orderBy([(m) => OrderingTerm.asc(m.createdAt)]))
-            .get();
-
-    return memos
-        .where((memo) {
-          final tags = _parseTags(memo.tags);
-          return tags['deleted']?.toLowerCase() != 'true';
-        })
-        .map((memo) {
-          final tags = _parseTags(memo.tags);
-          final lines = memo.content.split('\n');
-          final title = lines.first.trim().isEmpty
-              ? '제목 없음'
-              : lines.first.trim();
-          final body = lines.skip(1).join('\n').trim();
-          final parent = tags['parent']?.trim();
-          return {
-            'owner_id': _normalizeOwnerId(settings.ownerId),
-            'device_id': settings.deviceId,
-            'local_id': memo.memoId,
-            'note_type': 'tree',
-            'title': title,
-            'content': body,
-            'parent_local_id': parent == null || parent.isEmpty ? null : parent,
-            'level': int.tryParse(tags['level'] ?? '1') ?? 1,
-            'tags': memo.tags,
-            'source': memo.source,
-            'client_updated_at': memo.updatedAt.toIso8601String(),
-            'deleted_at': null,
-          };
-        })
-        .toList();
-  }
-
-  Future<List<Map<String, dynamic>>> _treeDeletedMemoPayloads(
-    ServerSettings settings,
-  ) async {
-    final deleted = await _loadDeletedTreeMemos();
-    final payloads = <Map<String, dynamic>>[];
-    for (final entry in deleted.entries) {
-      final deletedAt = DateTime.tryParse(
-        entry.value['deleted_at']?.toString() ?? '',
-      );
-      if (deletedAt == null) continue;
-
-      final level = int.tryParse(entry.value['level']?.toString() ?? '1') ?? 1;
-      final parentRaw = entry.value['parent_local_id']?.toString() ?? '';
-      final parentLocalId = parentRaw.isEmpty ? null : parentRaw;
-
-      payloads.add({
-        'owner_id': _normalizeOwnerId(settings.ownerId),
-        'device_id': settings.deviceId,
-        'local_id': entry.key,
-        'note_type': 'tree',
-        'title': entry.value['title']?.toString() ?? '삭제된 메모',
-        'content': '',
-        'parent_local_id': parentLocalId,
-        'level': level,
-        'tags': entry.value['tags']?.toString().isEmpty == true
-            ? null
-            : entry.value['tags']?.toString(),
-        'source': entry.value['source']?.toString() ?? 'note_tree',
-        'client_updated_at': deletedAt.toIso8601String(),
-        'deleted_at': deletedAt.toIso8601String(),
-      });
-    }
-    return payloads;
-  }
-
-  Future<void> _applyPulledNotes(
-    ServerSettings settings,
-    List<dynamic> pulledNotes,
-  ) async {
-    if (pulledNotes.isEmpty) return;
-    for (final raw in pulledNotes) {
-      if (raw is! Map) continue;
-      final note = Map<String, dynamic>.from(raw);
-      final noteType = note['note_type']?.toString();
-      if (noteType == 'tree') {
-        await _applyPulledTreeMemo(settings, note);
-      } else if (noteType == 'daily') {
-        await _applyPulledDailyMemo(note);
-      }
-    }
-  }
-
-  Future<void> _applyPulledTreeMemo(
-    ServerSettings settings,
-    Map<String, dynamic> note,
-  ) async {
-    final localId = note['local_id']?.toString() ?? '';
-    if (localId.isEmpty) return;
-
-    final serverUpdatedAt = _noteUpdatedAt(note);
-    final existing =
-        await (_db.select(_db.memos)
-              ..where((m) => m.memoId.equals(localId)))
-            .getSingleOrNull();
-    if (existing != null &&
-        serverUpdatedAt != null &&
-        existing.updatedAt.isAfter(serverUpdatedAt)) {
-      return;
-    }
-
-    if (_isDeletedServerNote(note)) {
-      await (_db.delete(_db.memos)..where((m) => m.memoId.equals(localId))).go();
-      await _clearPendingDeletedTreeMemos({localId});
-      return;
-    }
-
-    final title = _noteTitle(note['title']?.toString());
-    final body = note['content']?.toString().trim() ?? '';
-    final content = body.isEmpty ? title : '$title\n$body';
-    final updatedAt = serverUpdatedAt ?? DateTime.now();
-    final createdAt =
-        _parseSyncTime(note['created_at']?.toString()) ??
-        existing?.createdAt ??
-        updatedAt;
-    final tags = _treeTagsFromServerNote(note);
-
-    final companion = MemosCompanion(
-      memoId: Value(localId),
-      userId: Value(_normalizeOwnerId(settings.ownerId)),
-      content: Value(content),
-      tags: Value(tags),
-      source: const Value('note_tree'),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
+  }) {
+    return ServerMessengerApi.markMessengerRoomRead(
+      dio: _messengerDio(settings),
+      settings: settings,
+      roomId: roomId,
+      lastReadMessageId: lastReadMessageId,
     );
-
-    if (existing == null) {
-      await _db.into(_db.memos).insert(companion);
-    } else {
-      await (_db.update(_db.memos)..where((m) => m.memoId.equals(localId)))
-          .write(companion);
-    }
-  }
-
-  Future<void> _applyPulledDailyMemo(Map<String, dynamic> note) async {
-    final localId = note['local_id']?.toString() ?? '';
-    if (localId.isEmpty) return;
-
-    final serverUpdatedAt = _noteUpdatedAt(note);
-    final existing =
-        await (_db.select(_db.meetings)
-              ..where((m) => m.meetingId.equals(localId)))
-            .getSingleOrNull();
-    if (existing != null &&
-        serverUpdatedAt != null &&
-        existing.updatedAt.isAfter(serverUpdatedAt)) {
-      return;
-    }
-
-    if (_isDeletedServerNote(note)) {
-      await (_db.delete(_db.meetings)..where((m) => m.meetingId.equals(localId)))
-          .go();
-      await (_db.delete(_db.transcriptSegments)
-            ..where((s) => s.meetingId.equals(localId)))
-          .go();
-      return;
-    }
-
-    final content = note['content']?.toString().trim() ?? '';
-    final updatedAt = serverUpdatedAt ?? DateTime.now();
-    final startedAt = _dailyDateFromServerNote(note) ?? updatedAt;
-    final createdAt = existing?.createdAt ?? updatedAt;
-    final title = _noteTitle(note['title']?.toString(), fallback: '오늘 메모');
-
-    final companion = MeetingsCompanion(
-      meetingId: Value(localId),
-      title: Value(title),
-      status: const Value('closed'),
-      recordType: const Value('memo'),
-      participantName: const Value(null),
-      startedAt: Value(startedAt),
-      endedAt: Value(updatedAt),
-      summary: Value(content),
-      segmentCount: Value(content.isEmpty ? 0 : 1),
-      actionCount: const Value(0),
-      decisionCount: const Value(0),
-      isImportant: existing == null
-          ? const Value(false)
-          : Value(existing.isImportant),
-      createdAt: Value(createdAt),
-      updatedAt: Value(updatedAt),
-    );
-
-    if (existing == null) {
-      await _db.into(_db.meetings).insert(companion);
-    } else {
-      await (_db.update(_db.meetings)..where((m) => m.meetingId.equals(localId)))
-          .write(companion);
-      await (_db.delete(_db.transcriptSegments)
-            ..where((s) => s.meetingId.equals(localId)))
-          .go();
-    }
-
-    if (content.isNotEmpty) {
-      await _db.into(_db.transcriptSegments).insert(
-            TranscriptSegmentsCompanion.insert(
-              segmentId: '${localId}_server',
-              meetingId: localId,
-              speaker: const Value('user'),
-              timestamp: Value(startedAt),
-              content: content,
-              source: const Value('server_sync'),
-              createdAt: Value(updatedAt),
-            ),
-            mode: InsertMode.replace,
-          );
-    }
   }
 
   Future<Map<String, Map<String, dynamic>>> _loadDeletedTreeMemos([
@@ -1285,19 +418,7 @@ class ServerSyncService {
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        final result = <String, Map<String, dynamic>>{};
-        decoded.forEach((key, value) {
-          final memoId = key?.toString() ?? '';
-          if (memoId.isEmpty || value is! Map) return;
-          final item = <String, dynamic>{};
-          value.forEach((k, v) {
-            if (k != null) {
-              item[k.toString()] = v;
-            }
-          });
-          result[memoId] = item;
-        });
-        return result;
+        return normalizeDeletedTreeMemos(decoded);
       }
     } catch (_) {
       // 복구 목적: 손상된 저장 데이터를 즉시 초기화
@@ -1311,7 +432,7 @@ class ServerSyncService {
     final prefs = await SharedPreferences.getInstance();
     final current = await _loadDeletedTreeMemos(prefs);
     if (current.isEmpty) return;
-    memoIds.forEach(current.remove);
+    removeDeletedTreeMemos(current, memoIds);
     if (current.isEmpty) {
       await prefs.remove(_serverDeletedTreeMemosKey);
       return;
@@ -1350,88 +471,16 @@ class ServerSyncService {
   }
 }
 
+// syncNotes()의 판단 규칙(_shouldSkipServerSyncRequest)은 now_core의
+// shouldSkipServerSyncRequest로 옮겼다(2.3.6 P2). 기존 테스트가 이 이름으로
+// 계속 부를 수 있도록 위임만 남긴다.
 @visibleForTesting
 bool shouldSkipServerSyncRequestForTest(
   List<Map<String, dynamic>> notes,
   bool fullSync,
   DateTime? lastSyncedAt,
 ) {
-  return _shouldSkipServerSyncRequest(notes, fullSync, lastSyncedAt);
-}
-
-bool _shouldSkipServerSyncRequest(
-  List<Map<String, dynamic>> notes,
-  bool fullSync,
-  DateTime? lastSyncedAt,
-) {
-  if (fullSync || lastSyncedAt == null) return false;
-  return notes.isEmpty;
-}
-
-bool _isDeletedServerNote(Map<String, dynamic> note) {
-  final raw = note['deleted_at'];
-  return raw != null && raw.toString().trim().isNotEmpty;
-}
-
-DateTime? _noteUpdatedAt(Map<String, dynamic> note) {
-  return _parseSyncTime(note['client_updated_at']?.toString()) ??
-      _parseSyncTime(note['updated_at']?.toString()) ??
-      _parseSyncTime(note['created_at']?.toString());
-}
-
-DateTime? _dailyDateFromServerNote(Map<String, dynamic> note) {
-  final localId = note['local_id']?.toString() ?? '';
-  final match = RegExp(r'^daily:(\d{4})-(\d{2})-(\d{2})$').firstMatch(localId);
-  if (match != null) {
-    final year = int.tryParse(match.group(1)!);
-    final month = int.tryParse(match.group(2)!);
-    final day = int.tryParse(match.group(3)!);
-    if (year != null && month != null && day != null) {
-      return DateTime(year, month, day);
-    }
-  }
-  return _noteUpdatedAt(note);
-}
-
-String _noteTitle(String? value, {String fallback = '제목 없음'}) {
-  final trimmed = value?.trim() ?? '';
-  return trimmed.isEmpty ? fallback : trimmed;
-}
-
-String _treeTagsFromServerNote(Map<String, dynamic> note) {
-  final rawTags = note['tags']?.toString().trim() ?? '';
-  final parsed = _parseTags(rawTags);
-  final parent = note['parent_local_id']?.toString().trim() ?? '';
-  final level = int.tryParse(note['level']?.toString() ?? '') ?? 1;
-
-  if (parsed.isNotEmpty) {
-    parsed['kind'] = 'tree';
-    parsed['parent'] = parent;
-    parsed['level'] = level.toString();
-    return parsed.entries
-        .map((entry) => '${entry.key}=${entry.value}')
-        .join(';');
-  }
-
-  final parts = <String>[
-    'kind=tree',
-    'parent=$parent',
-    'level=$level',
-  ];
-  if (rawTags.isNotEmpty) {
-    parts.add('serverTags=${rawTags.replaceAll(';', ',')}');
-  }
-  return parts.join(';');
-}
-
-Map<String, String> _parseTags(String? raw) {
-  final result = <String, String>{};
-  for (final part in (raw ?? '').split(';')) {
-    final index = part.indexOf('=');
-    if (index <= 0) continue;
-    result[part.substring(0, index)] = part.substring(index + 1);
-  }
-  return result;
+  return shouldSkipServerSyncRequest(notes, fullSync, lastSyncedAt);
 }
 
 String _normalizeBaseUrl(String value) {
@@ -1447,105 +496,9 @@ String _normalizeOwnerId(String value) {
   return trimmed.isEmpty ? 'local_user' : trimmed;
 }
 
-Future<String> _loadServerToken(SharedPreferences prefs) async {
-  return _loadSecureToken(prefs, key: _serverTokenKey);
-}
-
-Future<String> _loadSecureToken(
-  SharedPreferences prefs, {
-  required String key,
-}) async {
-  final secureToken = await _secureStorage.read(key: key);
-  if (secureToken != null && secureToken.isNotEmpty) {
-    await prefs.remove(key);
-    return secureToken;
-  }
-
-  final legacyToken = prefs.getString(key)?.trim() ?? '';
-  if (legacyToken.isNotEmpty) {
-    await _secureStorage.write(key: key, value: legacyToken);
-    await prefs.remove(key);
-  }
-  return legacyToken;
-}
-
-Future<void> _saveSecureToken(
-  String token,
-  SharedPreferences prefs, {
-  required String key,
-}) async {
-  await prefs.remove(key);
-  if (token.isEmpty) {
-    await _secureStorage.delete(key: key);
-    return;
-  }
-  await _secureStorage.write(key: key, value: token);
-}
-
 String? _blankToNull(String? value) {
   final trimmed = value?.trim() ?? '';
   return trimmed.isEmpty ? null : trimmed;
-}
-
-ServerUserProfile _profileFromResponse(Map<String, dynamic>? data) {
-  final user = Map<String, dynamic>.from((data?['user'] as Map?) ?? const {});
-  return ServerUserProfile.fromJson(user);
-}
-
-ServerPublicReadiness? _publicReadinessFromResponse(
-  Map<String, dynamic>? data,
-) {
-  final raw = data?['public_server_readiness'];
-  if (raw is! Map) return null;
-  return ServerPublicReadiness.fromJson(Map<String, dynamic>.from(raw));
-}
-
-String _serverConnectionMessage(
-  String name,
-  bool authRequired,
-  Map<String, dynamic> capabilities,
-  ServerPublicReadiness? publicReadiness,
-) {
-  final sync = capabilities['sync'] == true ? '동기화 지원' : '동기화 미확인';
-  final maxLevel = capabilities['max_tree_note_level'];
-  final levelText = maxLevel is int ? '계층 $maxLevel단계' : '계층 확인';
-  final userText = capabilities['user_profile'] == true
-      ? '사용자 프로필'
-      : '사용자 미확인';
-  final timezoneText = capabilities['user_timezone'] == true ? '시간대' : '시간대 미확인';
-  final groupText = capabilities['user_groups'] == true ? '사용자 그룹' : '그룹 미확인';
-  final twoFactorText = capabilities['two_factor_status'] == true
-      ? '2단계 상태'
-      : '2단계 미확인';
-  final twoFactorAuth = capabilities['two_factor_auth'];
-  final twoFactorAuthText = twoFactorAuth == 'token_code'
-      ? '2단계 인증'
-      : (twoFactorAuth == 'planned' ? '2단계 예정' : '2단계 인증 미확인');
-  final backupText = capabilities['backup_export'] == true ? '백업' : '백업 미확인';
-  final backupVerifyText = capabilities['backup_verify'] == true
-      ? '백업 검증'
-      : '검증 미확인';
-  final publicReadinessText = publicReadiness?.summary ?? '';
-  final authText = authRequired ? '토큰 필요' : '토큰 선택';
-  return [
-    '$name 연결됨',
-    authText,
-    sync,
-    levelText,
-    userText,
-    timezoneText,
-    groupText,
-    twoFactorText,
-    twoFactorAuthText,
-    backupText,
-    backupVerifyText,
-    publicReadinessText,
-  ].where((item) => item.isNotEmpty).join(' · ');
-}
-
-DateTime? _parseSyncTime(String? value) {
-  if (value == null || value.isEmpty) return null;
-  return DateTime.tryParse(value);
 }
 
 String _serverErrorMessage(

@@ -4,10 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/core/database/app_database.dart';
-import 'package:now_note/features/home/home_page.dart';
-import 'package:now_note/repositories/repository_providers.dart';
-import 'package:now_note/services/briefing_service.dart';
+import 'package:now/core/database/app_database.dart';
+import 'package:now_core/now_core.dart';
+import 'package:now/features/home/home_page.dart';
+import 'package:now/repositories/repository_providers.dart';
+import 'package:now/services/briefing_service.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -18,13 +19,16 @@ void main() {
 
   group('HomePage', () {
     late AppDatabase database;
+    late NoteDatabase noteDatabase;
 
     setUp(() {
       database = AppDatabase.forTesting(NativeDatabase.memory());
+      noteDatabase = NoteDatabase.forTesting(NativeDatabase.memory());
     });
 
     tearDown(() async {
       await database.close();
+      await noteDatabase.close();
     });
 
     Future<void> pumpPage(WidgetTester tester) async {
@@ -32,6 +36,7 @@ void main() {
         ProviderScope(
           overrides: [
             appDatabaseProvider.overrideWith((ref) => database),
+            noteDatabaseProvider.overrideWith((ref) => noteDatabase),
             briefingServiceProvider.overrideWith(
               (ref) => BriefingService(database, null),
             ),

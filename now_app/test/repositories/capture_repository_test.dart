@@ -1,20 +1,24 @@
+import 'package:now_core/now_core.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/core/database/app_database.dart';
-import 'package:now_note/repositories/local/capture_repository.dart';
+import 'package:now/core/database/app_database.dart';
+import 'package:now/repositories/local/capture_repository.dart';
 
 void main() {
   group('CaptureRepository', () {
     late AppDatabase database;
+    late NoteDatabase noteDatabase;
     late CaptureRepository repository;
 
     setUp(() {
       database = AppDatabase.forTesting(NativeDatabase.memory());
-      repository = CaptureRepository(database);
+      noteDatabase = NoteDatabase.forTesting(NativeDatabase.memory());
+      repository = CaptureRepository(database, noteDatabase);
     });
 
     tearDown(() async {
       await database.close();
+      await noteDatabase.close();
     });
 
     test('saveCaptureItem creates a record and returns an id', () async {
@@ -100,7 +104,7 @@ void main() {
         tags: '업무,미팅',
       );
 
-      final memos = await database.select(database.memos).get();
+      final memos = await noteDatabase.select(noteDatabase.memos).get();
       expect(memos.length, 1);
       expect(memos.first.content, '내일 미팅 준비물 챙기기');
       expect(memos.first.tags, '업무,미팅');

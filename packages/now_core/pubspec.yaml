@@ -1,0 +1,38 @@
+name: now_core
+description: "Shared note, sync, and input layer for the Now and NowNote apps."
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ^3.8.1
+
+dependencies:
+  flutter:
+    sdk: flutter
+  drift: ^2.18.0
+  drift_flutter: ^0.2.0
+  # drift_dev를 일반 의존으로 둔다. dev_dependencies는 앱 쪽 빌드 그래프에
+  # 포함되지 않아 이 패키지의 테이블이 코드 생성에서 인식되지 않는다.
+  drift_dev: ^2.18.0
+  # 음성 엔진 / LLM provider HTTP 호출
+  dio: ^5.4.3
+  # 옛 Ollama 기본 주소를 지문으로만 비교한다. 개인 서버 주소를 코드에
+  # 그대로 남기지 않기 위한 것이다. (llm/llm_settings_migration.dart)
+  crypto: ^3.0.0
+  # 음성 엔진 API 키 저장. 키가 들어가므로 shared_preferences를 쓰지 않는다.
+  flutter_secure_storage: ^10.0.0
+  # 녹음. 앱 화면에 흩어져 있던 녹음 규칙을 이 패키지로 옮기면서 함께 들어왔다.
+  flutter_sound: ^9.2.13
+  # 기기 내 음성 인식.
+  speech_to_text: ^7.3.0
+  # 녹음 파일이 놓일 디렉터리.
+  path_provider: ^2.1.2
+  # 서버 연결 설정(주소·소유자 id·기기 id·마지막 동기화 시각) 저장.
+  # 접속 토큰은 여기 두지 않고 flutter_secure_storage에 둔다.
+  shared_preferences: ^2.2.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  # drift_dev가 이 패키지의 테이블 정의를 분석해야 앱 쪽 코드 생성이 된다.
+  build_runner: ^2.4.9

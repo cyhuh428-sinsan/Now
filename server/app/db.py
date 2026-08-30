@@ -36,6 +36,7 @@ def create_tables() -> None:
         MessengerRoom,
         MessengerRoomMember,
         Note,
+        NoteAttachment,
         Recording,
         ReleaseEvidenceRecord,
         SyncLog,
@@ -100,6 +101,17 @@ def migrate_schema(conn: Connection | None = None) -> None:
             ("user_groups", name, definition)
             for name, definition in group_migrations.items()
             if name not in group_columns
+        )
+    if "sync_logs" in table_names:
+        sync_log_columns = {column["name"] for column in inspector.get_columns("sync_logs")}
+        sync_log_migrations = {
+            "succeeded": "INTEGER DEFAULT 1",
+            "failure_reason": "TEXT",
+        }
+        migrations.extend(
+            ("sync_logs", name, definition)
+            for name, definition in sync_log_migrations.items()
+            if name not in sync_log_columns
         )
     if not migrations:
         return

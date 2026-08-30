@@ -1,11 +1,11 @@
+import 'package:now_core/now_core.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
-import '../models/llm_config.dart';
-import '../interfaces/llm_repository.dart';
-import '../services/llm_settings_service.dart';
-import '../cloud_llm_repositories.dart';
-import '../ollama_llm_repository.dart';
 
 part 'llm_providers.g.dart';
+
+// LLM provider 구현과 설정 저장은 now_core/lib/llm에 있다. NowNote와 "묻기"
+// 기능이 같은 것을 쓴다. 여기 남은 것은 앱의 riverpod 배선뿐이다.
+// now_core는 riverpod에 기대지 않는다. 음성 계층(M4)도 같은 모양이다.
 
 @riverpod
 LlmSettingsService llmSettingsService(LlmSettingsServiceRef ref) {

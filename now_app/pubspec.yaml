@@ -1,5 +1,5 @@
-name: now_note
-description: "NowNote is a personal life and note management app for quick memos, voice records, schedules, routines, and daily knowledge capture."
+name: now
+description: "Now is a personal life management app for daily records, meals, health, money, travel, meetings, and notes."
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -34,6 +34,10 @@ dependencies:
   # The following adds the Cupertino Icons font to your application.
   # Use with the CupertinoIcons class for iOS style icons.
   cupertino_icons: ^1.0.8
+
+  # 공용 기능 계층 (Now / NowNote 공유)
+  now_core:
+    path: ../packages/now_core
 
   # 상태관리
   flutter_riverpod: ^2.5.1

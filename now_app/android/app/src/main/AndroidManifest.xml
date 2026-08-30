@@ -1,6 +1,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
-    package="com.sinsan.nownote">
+    package="com.sinsan.now">
     <uses-permission android:name="android.permission.RECORD_AUDIO"/>
     <uses-permission android:name="android.permission.CAMERA"/>
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>
@@ -19,7 +19,7 @@
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.CAPTURE_AUDIO_OUTPUT" tools:node="remove" />
     <application
-        android:label="NowNote"
+        android:label="Now"
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:allowBackup="true"

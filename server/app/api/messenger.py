@@ -16,6 +16,7 @@ from app.models.note import (
     UserAccount,
 )
 from app.services.messenger_storage import (
+    is_image_extension,
     messenger_upload_policy,
     resolve_messenger_attachment_path,
     save_messenger_attachment,
@@ -456,7 +457,7 @@ def _attachment_payload(attachment: MessengerAttachment) -> dict:
         "content_type": attachment.content_type,
         "extension": attachment.extension,
         "size_bytes": attachment.size_bytes,
-        "is_image": attachment.extension in {"jpg", "jpeg", "png", "webp", "gif"},
+        "is_image": is_image_extension(attachment.extension),
     }
 
 

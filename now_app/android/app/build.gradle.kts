@@ -14,7 +14,7 @@ if (keystorePropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.sinsan.nownote"
+    namespace = "com.sinsan.now"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -29,7 +29,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "com.sinsan.nownote"
+        applicationId = "com.sinsan.now"
         minSdk = 26  // Health Connect 최소 요구사항
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode

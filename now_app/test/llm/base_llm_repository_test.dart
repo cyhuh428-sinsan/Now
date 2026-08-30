@@ -1,7 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/llm/base_llm_repository.dart';
-import 'package:now_note/llm/interfaces/llm_repository.dart';
-import 'package:now_note/llm/models/llm_config.dart';
+import 'package:now_core/now_core.dart';
 
 class _FakeBaseLlmRepository extends BaseLlmRepository {
   @override

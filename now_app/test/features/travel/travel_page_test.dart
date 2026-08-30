@@ -2,10 +2,10 @@ import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:now_note/core/database/app_database.dart';
-import 'package:now_note/features/travel/travel_page.dart';
-import 'package:now_note/repositories/local/trip_repository.dart';
-import 'package:now_note/repositories/repository_providers.dart';
+import 'package:now/core/database/app_database.dart';
+import 'package:now/features/travel/travel_page.dart';
+import 'package:now/repositories/local/trip_repository.dart';
+import 'package:now/repositories/repository_providers.dart';
 
 void main() {
   group('TravelPage', () {
