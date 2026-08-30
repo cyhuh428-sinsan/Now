@@ -3,6 +3,7 @@ import 'package:now_core/now_core.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/network/dio_client.dart';
+import '../tree/tree_repository.dart';
 
 /// 사설 네트워크 연결 판정 절차에서 실패한 단계.
 ///
@@ -174,6 +175,39 @@ class ServerSettingsService {
       password: password,
       twoFactorCode: twoFactorCode,
     );
+  }
+
+  /// 오늘 메모(`Meetings`/`TranscriptSegments`, `recordType='memo'`)와 계층 메모
+  /// (`Memos`, `source='note_tree'`)를 서버와 맞춘다.
+  ///
+  /// 실제 payload 구성/요청/pull 반영은 now_core의 `ServerNoteSyncApi`가 한다
+  /// (now_app의 `server_sync_service.dart`가 쓰는 것과 같은 계층) — NowNote와
+  /// Now가 같은 스키마(`NoteDatabase`)를 쓰므로 그대로 재사용할 수 있다.
+  /// 삭제 대기 계층 메모 저장소 접근만 [treeRepo]를 통해 이 계층에서 처리한다.
+  Future<ServerSyncResult> syncNotes({
+    required ServerSettings settings,
+    required NoteDatabase db,
+    required TreeMemoRepository treeRepo,
+    bool fullSync = false,
+  }) async {
+    if (!settings.enabled) {
+      return const ServerSyncResult(uploaded: 0, message: '서버 동기화가 꺼져 있습니다');
+    }
+    if (!settings.isConfigured) {
+      return const ServerSyncResult(uploaded: 0, message: '서버 주소가 없습니다');
+    }
+    final pendingDeletedTreeMemos = await treeRepo.loadPendingDeleted();
+    final outcome = await ServerNoteSyncApi.syncNotes(
+      dio: _dioBuilder(settings),
+      db: db,
+      settings: settings,
+      pendingDeletedTreeMemos: pendingDeletedTreeMemos,
+      fullSync: fullSync,
+    );
+    if (outcome.clearedDeletedTreeMemoIds.isNotEmpty) {
+      await treeRepo.clearPendingDeleted(outcome.clearedDeletedTreeMemoIds);
+    }
+    return outcome.result;
   }
 }
 

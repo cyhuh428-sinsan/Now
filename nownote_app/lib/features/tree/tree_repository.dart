@@ -181,6 +181,24 @@ class TreeMemoRepository {
     return _loadPendingDeleted(prefs);
   }
 
+  /// 서버가 삭제를 확정한 항목을 삭제 대기 목록에서 지운다.
+  ///
+  /// `ServerNoteSyncApi.syncNotes`가 돌려주는 `clearedDeletedTreeMemoIds`를
+  /// 그대로 넘기면 된다(now_app의 `ServerSyncService._clearPendingDeletedTreeMemos`와
+  /// 같은 역할).
+  Future<void> clearPendingDeleted(Set<String> memoIds) async {
+    if (memoIds.isEmpty) return;
+    final prefs = await SharedPreferences.getInstance();
+    final current = await _loadPendingDeleted(prefs);
+    if (current.isEmpty) return;
+    removeDeletedTreeMemos(current, memoIds);
+    if (current.isEmpty) {
+      await prefs.remove(_deletedTreeMemosPrefsKey);
+      return;
+    }
+    await prefs.setString(_deletedTreeMemosPrefsKey, jsonEncode(current));
+  }
+
   List<TreeMemoNode> _collectWithDescendants(
     TreeMemoNode node,
     List<TreeMemoNode> allNodes,

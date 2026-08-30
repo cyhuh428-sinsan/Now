@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 
+import '../tree/tree_repository.dart';
+import '../../shared/note_database_provider.dart';
 import 'settings_providers.dart';
 
 /// 서버 설정 화면.
@@ -171,6 +173,38 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     }
   }
 
+  /// 오늘 메모·계층 메모를 서버와 맞춘다. 연결 테스트/로그인과 달리 실제
+  /// 메모를 올리고 받는다 (`ServerSettingsService.syncNotes`).
+  Future<void> _syncNow() async {
+    setState(() => _busy = true);
+    try {
+      final service = ref.read(serverSettingsServiceProvider);
+      final settings = _currentSettings();
+      await service.saveSettings(settings);
+      final db = ref.read(noteDatabaseProvider);
+      final treeRepo = TreeMemoRepository(db);
+      final result = await service.syncNotes(
+        settings: settings,
+        db: db,
+        treeRepo: treeRepo,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result.message)),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('동기화 실패: $e'),
+          backgroundColor: Theme.of(context).colorScheme.errorContainer,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
@@ -282,6 +316,12 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: _busy || !_enabled ? null : _syncNow,
+                  icon: const Icon(Icons.sync, size: 18),
+                  label: const Text('지금 동기화'),
                 ),
               ],
             ),
