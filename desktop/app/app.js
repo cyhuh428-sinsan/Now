@@ -136,6 +136,8 @@ const I18N = {
     "note.backupFileOpenError": "JSON 파일을 열 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
     "note.backupFileParseError": "JSON 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
     "note.markdownNoContent": "가져올 Markdown 내용이 없습니다.",
+    "note.droppedFileTooLarge": "파일이 너무 큽니다({max}까지 가능). 더 작은 파일로 다시 시도해 주세요.",
+    "note.droppedFileUnsupported": "지원하지 않는 파일 형식입니다. .md, .markdown, .txt 파일만 끌어다 놓을 수 있습니다.",
     "note.markdownImportConfirm": "{count}개 Markdown 파일을 가져올까요? 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportDone": "Markdown 가져오기 완료: 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportError": "Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
@@ -960,6 +962,8 @@ const I18N = {
     "note.backupFileOpenError": "Unable to open JSON file. Please check file permission or format.",
     "note.backupFileParseError": "Unable to read JSON file. Please check file permission or format.",
     "note.markdownNoContent": "No markdown content to import.",
+    "note.droppedFileTooLarge": "File is too large (max {max}). Try a smaller file.",
+    "note.droppedFileUnsupported": "Unsupported file type. Only .md, .markdown, and .txt files can be dropped.",
     "note.markdownImportConfirm": "Import {count} Markdown file(s)? Notes: {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportDone": "Markdown import complete: note {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportError": "Unable to read Markdown file. Please check file permission or format.",
@@ -3135,6 +3139,7 @@ const elements = {
   collapseAllBtn: $("#collapseAllBtn"),
   addRootBtn: $("#addRootBtn"),
   emptyAddRootBtn: $("#emptyAddRootBtn"),
+  treePanel: $("#treePanel"),
   treeList: $("#treeList"),
   openTabsBar: $("#openTabsBar"),
   openTabs: $("#openTabs"),
@@ -3672,12 +3677,12 @@ function markdownImportDestinationResult(key, options) {
   return null;
 }
 
-function showMarkdownImportOptionsDialog(items) {
+function showMarkdownImportOptionsDialog(items, preferredKey) {
   if (!elements.markdownImportOptionsDialog) return Promise.resolve(null);
   const dialog = elements.markdownImportOptionsDialog;
   const options = markdownImportDestinationOptions();
   const keys = ["new-topic", "current-topic", "current-category", "append"];
-  let selectedKey = "new-topic";
+  let selectedKey = preferredKey && options[preferredKey]?.available ? preferredKey : "new-topic";
 
   const updatePreview = () => {
     elements.markdownImportOptionsPreview.textContent = markdownImportOptionsPreviewText(selectedKey, options, items);
@@ -4392,6 +4397,7 @@ async function initializeApp() {
   bindEvents();
   initializeTreeHighlightOverlay();
   initializeCaptureSketch();
+  initializeTreeDropImport();
   await refreshDesktopStorageInfo();
   renderSettings();
   applySettings();
@@ -15416,8 +15422,75 @@ function importData(event) {
   }
 }
 
+// 드래그 앤 드롭으로 떨어뜨릴 수 있는 파일 크기 상한. 텍스트 한 개 메모치고는
+// 넉넉한 값이며, 실수로 큰 파일을 끌어다 놓았을 때 브라우저가 멈추는 것을 막는다.
+const DROPPED_FILE_MAX_BYTES = 2 * 1024 * 1024;
+
+// "Markdown 가져오기" 파일 선택(accept=".md,.markdown,.txt,text/markdown,text/plain")과
+// 같은 형식만 받는다. 인식하지 못하는 파일 형식을 그대로 메모 본문에 넣지 않기 위해서다.
+const DROPPABLE_TEXT_EXTENSIONS = new Set(["md", "markdown", "txt"]);
+
+function isDroppableTextFile(file) {
+  const name = String(file?.name || "").toLowerCase();
+  const dot = name.lastIndexOf(".");
+  const ext = dot >= 0 ? name.slice(dot + 1) : "";
+  if (DROPPABLE_TEXT_EXTENSIONS.has(ext)) return true;
+  const type = String(file?.type || "").toLowerCase();
+  return type === "text/markdown" || type === "text/plain";
+}
+
+// 트리 목록에 텍스트 파일을 끌어다 놓으면 지금 선택한 위치(메모 아래 이어 붙이기 >
+// 분류 아래 > 주제 아래 > 새 주제 순으로 가장 구체적인 것)에 메모를 만든다.
+function initializeTreeDropImport() {
+  const target = elements.treePanel;
+  if (!target) return;
+  const hasFiles = (event) => Array.from(event.dataTransfer?.types || []).includes("Files");
+  target.addEventListener("dragover", (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+    target.classList.add("tree-drop-active");
+  });
+  target.addEventListener("dragleave", (event) => {
+    if (event.target !== target) return;
+    target.classList.remove("tree-drop-active");
+  });
+  target.addEventListener("drop", async (event) => {
+    if (!hasFiles(event)) return;
+    event.preventDefault();
+    target.classList.remove("tree-drop-active");
+    const dropped = Array.from(event.dataTransfer?.files || []);
+    if (dropped.length === 0) return;
+    const tooBig = dropped.filter((file) => file.size > DROPPED_FILE_MAX_BYTES);
+    const candidates = dropped.filter((file) => isDroppableTextFile(file) && file.size <= DROPPED_FILE_MAX_BYTES);
+    if (tooBig.length > 0) {
+      showNotice(t("note.droppedFileTooLarge", { max: formatBytes(DROPPED_FILE_MAX_BYTES) }), "error");
+    }
+    if (candidates.length === 0) {
+      if (tooBig.length === 0) showNotice(t("note.droppedFileUnsupported"), "error");
+      return;
+    }
+    await importMarkdownFiles(candidates, { preferCurrentLevel: true });
+  });
+}
+
 async function importMarkdownData(event) {
   const files = Array.from(event.target.files || []);
+  try {
+    await importMarkdownFiles(files);
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function preferredMarkdownImportDestinationKey(options) {
+  if (options.append?.available) return "append";
+  if (options["current-category"]?.available) return "current-category";
+  if (options["current-topic"]?.available) return "current-topic";
+  return "new-topic";
+}
+
+async function importMarkdownFiles(files, { preferCurrentLevel = false } = {}) {
   if (files.length === 0) return;
   try {
     const imports = (await Promise.all(files.map(async (file) => {
@@ -15454,7 +15527,10 @@ async function importMarkdownData(event) {
     const plainImports = imports.filter((item) => item.kind === "plain");
     let destinationChoice = null;
     if (plainImports.length > 0) {
-      destinationChoice = await showMarkdownImportOptionsDialog(plainImports);
+      const preferredKey = preferCurrentLevel
+        ? preferredMarkdownImportDestinationKey(markdownImportDestinationOptions())
+        : undefined;
+      destinationChoice = await showMarkdownImportOptionsDialog(plainImports, preferredKey);
       if (!destinationChoice) return;
     } else {
       const summary = markdownImportSummary(imports);
@@ -15524,8 +15600,6 @@ async function importMarkdownData(event) {
     showNotice(t("note.markdownImportDone", { nodes: nodes.length, daily: dailyNotes.length, archivedDaily: archivedDailyNotes.length }), "success");
   } catch {
     showNotice(t("note.markdownImportError"), "error");
-  } finally {
-    event.target.value = "";
   }
 }
 

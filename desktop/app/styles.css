@@ -1612,6 +1612,12 @@ kbd {
   overflow: auto;
 }
 
+.tree-panel.tree-drop-active {
+  outline: 2px dashed var(--blue);
+  outline-offset: -2px;
+  background: var(--blue-soft);
+}
+
 .month-bar {
   display: grid;
   grid-template-columns: 42px 1fr 42px;
@@ -2259,7 +2265,7 @@ kbd {
   width: 100%;
   min-height: 34px;
   background: transparent;
-  padding: 5px 5.6px;
+  padding: 5px 8.4px;
 }
 
 .tree-row.active {
@@ -2329,7 +2335,7 @@ kbd {
 .tree-children {
   display: grid;
   gap: 4px;
-  padding: 0 4px 5px 8px;
+  padding: 0 4px 5px 16px;
 }
 
 .small-btn {
