@@ -26,11 +26,45 @@ const ACCENTS = [
   { id: "orange", labelKey: "accent.orange", label: "주황", value: "#f97316" },
 ];
 
+// Markdown 색상 토큰 (2.3.6 M9, 로드맵 10).
+//
+// 보기 모드(.markdown-preview)와 편집 모드 오버레이(.memo-editor-overlay)가 같은 토큰을 읽는다.
+// 기본값은 styles.css 의 :root / :root[data-theme="dark"] 에 있고, 여기 light/dark 값은
+// 그 기본값을 그대로 옮겨 적은 것이다. 설정 화면이 "지금 값"을 보여주려면 JS 쪽에도 있어야 한다.
+// 두 곳이 갈라지지 않는지는 web/scripts/check_markdown_colors.mjs 가 확인한다.
+//
+// 값은 기기에만 저장한다. 서버로 올리지 않는다.
+// (근거: docs/NOW_2_3_6_FEATURE_DESIGN.md "2. Markdown 색상 설정 저장 위치")
+//
+// surface 는 그 토큰이 칠하는 자리다.
+//   text       - 글자 색. 보기 모드와 편집 모드가 함께 쓴다.
+//   background - 배경 색. 보기 모드에만 쓴다.
+// editor 는 편집 모드 오버레이가 그 토큰을 쓰는지 나타낸다.
+// 오버레이는 색만 칠할 수 있으므로 배경 토큰은 언제나 editor: false 다.
+const MARKDOWN_COLOR_TOKENS = [
+  { id: "heading", token: "--md-heading", surface: "text", editor: true, light: "#1d4ed8", dark: "#93c5fd" },
+  { id: "link", token: "--md-link", surface: "text", editor: false, light: "#2563eb", dark: "#60a5fa" },
+  { id: "inlineCode", token: "--md-inline-code-text", surface: "text", editor: true, light: "#b45309", dark: "#fbbf24" },
+  { id: "inlineCodeBg", token: "--md-inline-code-bg", surface: "background", editor: false, light: "#f1f5f9", dark: "#111827" },
+  { id: "codeBlockBg", token: "--md-code-block-bg", surface: "background", editor: false, light: "#0f172a", dark: "#0b1220" },
+  { id: "codeBlockText", token: "--md-code-block-text", surface: "text", editor: false, light: "#e5e7eb", dark: "#e5e7eb" },
+];
+
+const MARKDOWN_COLOR_MODES = ["light", "dark"];
+
 const I18N = {
   ko: {
     "dialog.confirmTitle": "확인",
     "dialog.ok": "확인",
     "dialog.cancel": "취소",
+    "dialog.markdownImportOptionsTitle": "Markdown 가져오기 위치 선택",
+    "dialog.markdownImportOptionsDesc": "{count}개 파일을 가져올 위치를 선택하고 미리보기를 확인하세요.",
+    "dialog.moveNodeTitle": "문서 이동",
+    "dialog.moveNodeDesc": "'{title}'을(를) 이동할 위치를 선택하세요.",
+    "dialog.moveNodeCurrentPathLabel": "현재 위치: {path}",
+    "dialog.moveNodePreviewLabel": "이동 후 위치: {path}",
+    "dialog.moveNodeNoDestination": "이동할 수 있는 주제/분류가 없습니다. 최대 3단계 제한 또는 이동 중인 항목의 하위 위치이기 때문입니다.",
+    "dialog.moveNodeConfirm": "이동",
     "note.untitled": "제목 없음",
     "note.emptyTitle": "주제가 없습니다",
     "note.emptyDescription": "먼저 주제를 추가하세요.",
@@ -63,6 +97,7 @@ const I18N = {
     "note.nodeDelete.permanentConfirm": "'{title}' 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
     "note.nodeDelete.permanentSelected": "선택한 {count}개 메모를 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
     "note.nodeDelete.permanentAll": "삭제 보관함의 {count}개 메모를 모두 영구 삭제할까요? 이 작업은 되돌릴 수 없습니다.",
+    "note.moveNodeSuccess": "'{title}'을(를) '{path}'로 이동했습니다.",
     "note.noArchive": "보관할 메모가 없습니다.",
     "note.archiveConfirm": "{date} 메모를 보관함으로 이동할까요?",
     "note.archiveRestoreConfirm": "같은 날짜의 활성 메모가 있습니다. 보관본 내용을 아래에 추가할까요?",
@@ -104,6 +139,15 @@ const I18N = {
     "note.markdownImportConfirm": "{count}개 Markdown 파일을 가져올까요? 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportDone": "Markdown 가져오기 완료: 지식 메모 {nodes}개, 일자별 메모 {daily}개, 보관 일자 {archivedDaily}개",
     "note.markdownImportError": "Markdown 파일을 읽을 수 없습니다. 파일 권한이나 형식을 확인해 주세요.",
+    "note.markdownImportDestNewTopic": "새 주제로 가져오기",
+    "note.markdownImportDestCurrentTopic": "현재 주제 아래로 가져오기",
+    "note.markdownImportDestCurrentCategory": "현재 분류 아래로 가져오기",
+    "note.markdownImportDestAppend": "현재 메모에 이어 붙이기",
+    "note.markdownImportDestReasonSelectAny": "먼저 트리에서 주제, 분류, 메모 중 하나를 선택하세요.",
+    "note.markdownImportDestReasonNeedCategoryOrNote": "먼저 분류나 메모를 선택하세요.",
+    "note.markdownImportDestReasonNeedNote": "먼저 메모를 선택하세요.",
+    "note.markdownImportIndependentNotice": "가져온 Markdown은 원본 파일과 자동 동기화되지 않는 독립 메모입니다.",
+    "note.markdownAppendedFrom": "--- {name}에서 가져옴 ---",
     "note.snapshotCreated": "복구 스냅샷을 만들었습니다.",
     "note.snapshotRestored": "선택한 스냅샷으로 복구했습니다.",
     "note.snapshotRestoreConfirm": "선택한 스냅샷으로 현재 데이터를 복구할까요? 현재 상태도 먼저 스냅샷으로 남깁니다.",
@@ -186,6 +230,7 @@ const I18N = {
     "aria.openTabs": "열린 메모",
     "aria.treeTools": "지식 메모 도구",
     "aria.noteFind": "현재 메모에서 찾기",
+    "aria.replaceToggle": "바꾸기",
     "aria.outline": "현재 메모 개요",
     "aria.tags": "태그",
     "aria.noteStats": "메모 정보",
@@ -200,6 +245,7 @@ const I18N = {
     "aria.fontSize": "글자 크기",
     "aria.lineHeight": "줄 간격",
     "aria.tabIndent": "Tab 들여쓰기",
+    "aria.undoDepth": "실행 취소 단계",
     "aria.searchScope": "검색 범위",
     "aria.searchSort": "검색 정렬",
     "aria.searchOption": "검색 옵션",
@@ -214,6 +260,7 @@ const I18N = {
     "side.explore": "탐색",
     "side.quick": "빠른 전환",
     "side.graph": "연결 보기",
+    "side.treeMap": "지식맵",
     "side.file": "파일",
     "side.mdExport": "Markdown 내보내기",
     "side.mdImport": "Markdown 가져오기",
@@ -234,6 +281,17 @@ const I18N = {
     "messenger.loadFailed": "메시지를 불러오지 못했습니다",
     "messenger.sendFailed": "메시지를 보내지 못했습니다",
     "messenger.readFailed": "읽음 상태를 저장하지 못했습니다",
+    "messenger.attachment.download": "다운로드",
+    "messenger.attachment.kindPdf": "PDF 문서",
+    "messenger.attachment.kindImage": "이미지",
+    "messenger.attachment.kindImageExt": "{ext} 이미지",
+    "messenger.attachment.kindFile": "파일",
+    "messenger.attachment.kindFileExt": "{ext} 파일",
+    "messenger.attachment.previewLoading": "미리보기 불러오는 중…",
+    "messenger.attachment.previewFailed": "미리보기를 불러오지 못했습니다",
+    "messenger.attachment.failure.fileTooLarge": "파일이 너무 큽니다. 더 작은 파일로 다시 시도해 주세요.",
+    "messenger.attachment.failure.extensionNotAllowed": "허용되지 않는 파일 형식입니다.",
+    "messenger.attachment.failure.mimeTypeNotAllowed": "허용되지 않는 파일 종류입니다.",
     "rail.sidebar.open": "목록 펼치기",
     "rail.sidebar.close": "목록 접기",
     "rail.knowledge": "지식 메모",
@@ -241,6 +299,7 @@ const I18N = {
     "rail.search": "검색",
     "rail.quick": "빠른 전환",
     "rail.graph": "연결 보기",
+    "rail.treeMap": "지식맵",
     "rail.mdExport": "Markdown 내보내기",
     "rail.mdImport": "Markdown 가져오기",
     "rail.trash": "삭제 보관함",
@@ -251,6 +310,7 @@ const I18N = {
     "rail.letter.search": "검",
     "rail.letter.quick": "전",
     "rail.letter.graph": "연",
+    "rail.letter.treeMap": "맵",
     "rail.letter.mdExport": "내",
     "rail.letter.mdImport": "가",
     "rail.letter.trash": "삭",
@@ -269,6 +329,7 @@ const I18N = {
     "tree.contentPlaceholder": "메모 내용을 입력하세요.",
     "tree.moveUp": "위로",
     "tree.moveDown": "아래로",
+    "tree.moveNode": "이동",
     "tree.delete": "삭제",
     "tabs.reopen": "다시 열기",
     "tabs.closeOther": "다른 탭 닫기",
@@ -315,6 +376,12 @@ const I18N = {
     "editor.find": "본문 찾기",
     "editor.findPlaceholder": "본문에서 검색",
     "editor.findTitle": "Enter 다음, Shift+Enter 이전",
+    "editor.replace": "바꾸기",
+    "editor.replacePlaceholder": "바꿀 말",
+    "editor.replaceCurrent": "현재 항목 바꾸기",
+    "editor.replaceAll": "모두 바꾸기",
+    "editor.replaceCount": "{count}개 항목을 바꿉니다",
+    "editor.replaceLocked": "암호를 풀어야 바꾸기를 쓸 수 있습니다.",
     "editor.outline": "개요",
     "editor.insertTime": "시간 넣기",
     "editor.openLink": "링크 열기",
@@ -389,6 +456,11 @@ const I18N = {
     "settings.tabIndent.2": "2칸",
     "settings.tabIndent.4": "4칸",
     "settings.tabIndent.8": "8칸",
+    "settings.undoDepth.title": "실행 취소 단계",
+    "settings.undoDepth.desc": "본문에서 되돌릴 수 있는 편집 단계 수를 정합니다. 긴 문서에서는 메모리 보호를 위해 자동으로 줄어들 수 있습니다.",
+    "settings.undoDepth.10": "10단계",
+    "settings.undoDepth.50": "50단계",
+    "settings.undoDepth.100": "100단계",
     "settings.backlinks.title": "백링크 표시",
     "settings.backlinks.desc": "현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.",
     "settings.tags.title": "태그 표시",
@@ -399,6 +471,19 @@ const I18N = {
     "settings.shortcutGuide.desc": "자주 쓰는 창, 탭, 편집 작업을 키보드로 바로 실행합니다.",
     "settings.features.title": "지식 기능",
     "settings.features.desc": "사용하지 않는 기능은 화면에서 숨기고 동작도 멈춥니다.",
+    "settings.markdownColors.title": "Markdown 색상",
+    "settings.markdownColors.desc": "제목·링크·코드 같은 Markdown 요소의 색을 밝은/어두운 테마별로 정합니다.",
+    "settings.markdownColors.light": "밝은 테마",
+    "settings.markdownColors.dark": "어두운 테마",
+    "settings.markdownColors.changed": "바꿈",
+    "settings.markdownColors.reset": "기본값",
+    "settings.markdownColors.resetAll": "모두 기본값으로",
+    "markdownColor.heading": "제목",
+    "markdownColor.link": "링크",
+    "markdownColor.inlineCode": "인라인 코드 글자",
+    "markdownColor.inlineCodeBg": "인라인 코드 배경",
+    "markdownColor.codeBlockBg": "코드 블록 배경",
+    "markdownColor.codeBlockText": "코드 블록 글자",
     "settings.desktopStorage.title": "PC 로컬 저장소",
     "settings.desktopStorage.desc": "설치형 프로그램은 이 PC의 로컬 파일에 원본 메모와 설정을 저장합니다.",
     "settings.desktopStorage.web": "Web은 서버 공유 문서만 사용합니다.",
@@ -481,6 +566,15 @@ const I18N = {
     "settings.server.ok": "서버 연결 확인됨",
     "settings.server.noUrl": "서버 주소를 입력해야 합니다.",
     "settings.server.fail": "서버 연결 실패",
+    "settings.server.fail.action.network": "네트워크 연결을 확인하고 다시 시도하세요.",
+    "settings.server.fail.action.auth": "설정에서 서버 접속 토큰을 확인하세요.",
+    "settings.server.fail.action.retry": "잠시 후 다시 시도하세요. 반복되면 서버 상태를 확인하세요.",
+    "settings.server.fail.action.default": "설정에서 서버 주소와 연결 상태를 확인하세요.",
+    "settings.server.syncIndicator.local": "로컬 전용",
+    "settings.server.syncIndicator.syncing": "동기화 중…",
+    "settings.server.syncIndicator.success": "동기화 완료",
+    "settings.server.syncIndicator.failed": "동기화 실패",
+    "settings.server.syncIndicator.idle": "동기화 대기",
     "settings.server.syncing": "서버로 메모를 동기화하는 중입니다.",
     "settings.server.syncOk": "서버 동기화 완료",
     "settings.server.syncEmpty": "동기화할 메모가 없습니다.",
@@ -614,6 +708,8 @@ const I18N = {
     "shortcut.action.link": "링크",
     "shortcut.action.indent": "들여쓰기",
     "shortcut.action.outdent": "내어쓰기",
+    "shortcut.action.undo": "실행 취소",
+    "shortcut.action.redo": "다시 실행",
     "feature.search.label": "통합 검색",
     "feature.search.description": "일자별 메모와 지식 메모 전체 검색",
     "feature.daily.label": "일일 메모",
@@ -632,6 +728,10 @@ const I18N = {
     "feature.shortcuts.description": "키보드 빠른 실행",
     "editor.copyLinkSuccess": "링크 복사됨",
     "editor.copyLinkFail": "복사 실패",
+    "markdown.codeBlock.copy": "복사",
+    "markdown.codeBlock.copied": "복사됨",
+    "markdown.codeBlock.copyFail": "복사 실패",
+    "markdown.codeBlock.plainText": "텍스트",
     "settings.resetConfirm": "화면 설정을 기본값으로 되돌릴까요? 메모 내용은 유지됩니다.",
     "settings.resetTitle": "기본값으로",
     "settings.help.title": "도움말",
@@ -639,6 +739,14 @@ const I18N = {
     "settings.help.open": "도움말 열기",
     "settings.version.title": "현재 버전",
     "settings.version.desc": "배포와 설치 파일 기준 버전입니다.",
+    "settings.update.check": "업데이트 확인",
+    "settings.update.noServer": "서버 연결 후 확인할 수 있습니다.",
+    "settings.update.checking": "확인 중…",
+    "settings.update.upToDate": "최신 버전입니다.",
+    "settings.update.newVersion": "새 버전이 있습니다: {version}",
+    "settings.update.checkFailed": "확인할 수 없습니다. 잠시 후 다시 시도해 주세요.",
+    "settings.update.downloadInstaller": "설치 파일 다운로드",
+    "settings.update.downloadReleasePage": "릴리즈 페이지 열기",
     "settings.workspace.title": "작업공간 / 지식 건강",
     "settings.workspace.desc": "반복 작업 상태를 저장하고 정리 우선순위를 확인합니다.",
     "settings.workspace.placeholder": "작업공간 이름",
@@ -661,6 +769,11 @@ const I18N = {
     "quick.count.all": "전체 메모를 표시합니다.",
     "graph.eyebrow": "[[제목]] 연결 기준",
     "graph.title": "연결 보기",
+    "treeMap.eyebrow": "선택한 주제 범위만 표시",
+    "treeMap.title": "지식맵",
+    "treeMap.topicLabel": "주제",
+    "treeMap.empty": "표시할 주제가 없습니다. 주제를 먼저 만들어 주세요.",
+    "treeMap.locked": "암호화된 메모",
     "trash.eyebrow": "실수 삭제를 막기 위한 임시 보관",
     "trash.title": "삭제 보관함",
     "trash.deleteSelected": "선택 영구 삭제",
@@ -695,6 +808,14 @@ const I18N = {
     "dialog.confirmTitle": "Confirm",
     "dialog.ok": "OK",
     "dialog.cancel": "Cancel",
+    "dialog.markdownImportOptionsTitle": "Choose Markdown import destination",
+    "dialog.markdownImportOptionsDesc": "Choose where to import {count} file(s) and review the preview.",
+    "dialog.moveNodeTitle": "Move document",
+    "dialog.moveNodeDesc": "Choose where to move '{title}'.",
+    "dialog.moveNodeCurrentPathLabel": "Current location: {path}",
+    "dialog.moveNodePreviewLabel": "New location: {path}",
+    "dialog.moveNodeNoDestination": "There is no valid topic/category to move to. This is due to the 3-level limit or because it is inside the item being moved.",
+    "dialog.moveNodeConfirm": "Move",
     "note.untitled": "Untitled",
     "note.emptyTitle": "No topics yet",
     "note.emptyDescription": "Please add a topic first.",
@@ -727,6 +848,7 @@ const I18N = {
     "note.nodeDelete.permanentConfirm": "Permanently delete '{title}'? This cannot be undone.",
     "note.nodeDelete.permanentSelected": "Permanently delete the selected {count} notes? This cannot be undone.",
     "note.nodeDelete.permanentAll": "Permanently delete all {count} notes in trash? This cannot be undone.",
+    "note.moveNodeSuccess": "Moved '{title}' to '{path}'.",
     "note.noArchive": "There is no content to archive.",
     "note.archiveConfirm": "Move {date} note to archive?",
     "note.archiveRestoreConfirm": "There is already an active note for this date. Append archived content below?",
@@ -768,6 +890,15 @@ const I18N = {
     "note.markdownImportConfirm": "Import {count} Markdown file(s)? Notes: {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportDone": "Markdown import complete: note {nodes}, daily {daily}, archived daily {archivedDaily}",
     "note.markdownImportError": "Unable to read Markdown file. Please check file permission or format.",
+    "note.markdownImportDestNewTopic": "Import as a new topic",
+    "note.markdownImportDestCurrentTopic": "Import under the current topic",
+    "note.markdownImportDestCurrentCategory": "Import under the current category",
+    "note.markdownImportDestAppend": "Append to the current note",
+    "note.markdownImportDestReasonSelectAny": "Select a topic, category, or note in the tree first.",
+    "note.markdownImportDestReasonNeedCategoryOrNote": "Select a category or note first.",
+    "note.markdownImportDestReasonNeedNote": "Select a note first.",
+    "note.markdownImportIndependentNotice": "Imported Markdown becomes an independent note that will not stay in sync with the original file.",
+    "note.markdownAppendedFrom": "--- Imported from {name} ---",
     "note.snapshotCreated": "Recovery snapshot created.",
     "note.snapshotRestored": "Restored the selected snapshot.",
     "note.snapshotRestoreConfirm": "Restore current data from the selected snapshot? The current state will be saved as a snapshot first.",
@@ -851,6 +982,7 @@ const I18N = {
     "aria.tabIndent": "Tab indentation",
     "aria.treeTools": "Knowledge note tools",
     "aria.noteFind": "Find in current note",
+    "aria.replaceToggle": "Replace",
     "aria.outline": "Current note outline",
     "aria.tags": "Tags",
     "aria.noteStats": "Note information",
@@ -864,6 +996,7 @@ const I18N = {
     "aria.railMode": "Quick menu display",
     "aria.fontSize": "Font size",
     "aria.lineHeight": "Line height",
+    "aria.undoDepth": "Undo steps",
     "aria.searchScope": "Search scope",
     "aria.searchSort": "Search sort",
     "aria.searchOption": "Search options",
@@ -878,6 +1011,7 @@ const I18N = {
     "side.explore": "Explore",
     "side.quick": "Quick switch",
     "side.graph": "Linked notes",
+    "side.treeMap": "Knowledge map",
     "side.file": "Files",
     "side.mdExport": "Export Markdown",
     "side.mdImport": "Import Markdown",
@@ -898,6 +1032,17 @@ const I18N = {
     "messenger.loadFailed": "Could not load messages",
     "messenger.sendFailed": "Could not send message",
     "messenger.readFailed": "Could not save read state",
+    "messenger.attachment.download": "Download",
+    "messenger.attachment.kindPdf": "PDF document",
+    "messenger.attachment.kindImage": "Image",
+    "messenger.attachment.kindImageExt": "{ext} image",
+    "messenger.attachment.kindFile": "File",
+    "messenger.attachment.kindFileExt": "{ext} file",
+    "messenger.attachment.previewLoading": "Loading preview…",
+    "messenger.attachment.previewFailed": "Could not load preview",
+    "messenger.attachment.failure.fileTooLarge": "The file is too large. Try a smaller file.",
+    "messenger.attachment.failure.extensionNotAllowed": "This file type is not allowed.",
+    "messenger.attachment.failure.mimeTypeNotAllowed": "This file kind is not allowed.",
     "rail.sidebar.open": "Open list",
     "rail.sidebar.close": "Close list",
     "rail.knowledge": "Knowledge notes",
@@ -905,6 +1050,7 @@ const I18N = {
     "rail.search": "Search",
     "rail.quick": "Quick switch",
     "rail.graph": "Linked notes",
+    "rail.treeMap": "Knowledge map",
     "rail.mdExport": "Export Markdown",
     "rail.mdImport": "Import Markdown",
     "rail.trash": "Trash",
@@ -915,6 +1061,7 @@ const I18N = {
     "rail.letter.search": "S",
     "rail.letter.quick": "Q",
     "rail.letter.graph": "G",
+    "rail.letter.treeMap": "M",
     "rail.letter.mdExport": "E",
     "rail.letter.mdImport": "I",
     "rail.letter.trash": "T",
@@ -933,6 +1080,7 @@ const I18N = {
     "tree.contentPlaceholder": "Write your note here.",
     "tree.moveUp": "Up",
     "tree.moveDown": "Down",
+    "tree.moveNode": "Move",
     "tree.delete": "Delete",
     "tabs.reopen": "Reopen",
     "tabs.closeOther": "Close others",
@@ -979,6 +1127,12 @@ const I18N = {
     "editor.find": "Find in note",
     "editor.findPlaceholder": "Find in content",
     "editor.findTitle": "Enter next, Shift+Enter previous",
+    "editor.replace": "Replace",
+    "editor.replacePlaceholder": "Replace with",
+    "editor.replaceCurrent": "Replace current",
+    "editor.replaceAll": "Replace all",
+    "editor.replaceCount": "{count} matches will be replaced",
+    "editor.replaceLocked": "Unlock the note to use replace.",
     "editor.outline": "Outline",
     "editor.insertTime": "Insert time",
     "editor.openLink": "Open link",
@@ -1061,8 +1215,26 @@ const I18N = {
     "settings.tabIndent.2": "2 spaces",
     "settings.tabIndent.4": "4 spaces",
     "settings.tabIndent.8": "8 spaces",
+    "settings.undoDepth.title": "Undo steps",
+    "settings.undoDepth.desc": "Choose how many edit steps you can undo in the note body. Long notes may keep fewer steps to protect memory.",
+    "settings.undoDepth.10": "10 steps",
+    "settings.undoDepth.50": "50 steps",
+    "settings.undoDepth.100": "100 steps",
     "settings.features.title": "Knowledge features",
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
+    "settings.markdownColors.title": "Markdown colors",
+    "settings.markdownColors.desc": "Set colors for headings, links, and code in Markdown for the light and dark themes.",
+    "settings.markdownColors.light": "Light theme",
+    "settings.markdownColors.dark": "Dark theme",
+    "settings.markdownColors.changed": "Changed",
+    "settings.markdownColors.reset": "Default",
+    "settings.markdownColors.resetAll": "Reset all to default",
+    "markdownColor.heading": "Heading",
+    "markdownColor.link": "Link",
+    "markdownColor.inlineCode": "Inline code text",
+    "markdownColor.inlineCodeBg": "Inline code background",
+    "markdownColor.codeBlockBg": "Code block background",
+    "markdownColor.codeBlockText": "Code block text",
     "settings.desktopStorage.title": "PC local storage",
     "settings.desktopStorage.desc": "The installed desktop client saves original notes and settings to a local file on this PC.",
     "settings.desktopStorage.web": "Web uses only server-shared notes.",
@@ -1145,6 +1317,15 @@ const I18N = {
     "settings.server.ok": "Server connection verified",
     "settings.server.noUrl": "Enter a server URL first.",
     "settings.server.fail": "Server connection failed",
+    "settings.server.fail.action.network": "Check your network connection and try again.",
+    "settings.server.fail.action.auth": "Check the server access token in settings.",
+    "settings.server.fail.action.retry": "Try again shortly. If it keeps happening, check the server status.",
+    "settings.server.fail.action.default": "Check the server address and connection in settings.",
+    "settings.server.syncIndicator.local": "Local only",
+    "settings.server.syncIndicator.syncing": "Syncing…",
+    "settings.server.syncIndicator.success": "Synced",
+    "settings.server.syncIndicator.failed": "Sync failed",
+    "settings.server.syncIndicator.idle": "Sync pending",
     "settings.server.syncing": "Syncing notes to the server.",
     "settings.server.syncOk": "Server sync complete",
     "settings.server.syncEmpty": "There are no notes to sync.",
@@ -1278,6 +1459,8 @@ const I18N = {
     "shortcut.action.link": "Link",
     "shortcut.action.indent": "Indent",
     "shortcut.action.outdent": "Outdent",
+    "shortcut.action.undo": "Undo",
+    "shortcut.action.redo": "Redo",
     "feature.search.label": "Global search",
     "feature.search.description": "Search both daily and knowledge notes",
     "feature.daily.label": "Daily note",
@@ -1296,6 +1479,10 @@ const I18N = {
     "feature.shortcuts.description": "Keyboard quick actions",
     "editor.copyLinkSuccess": "Copied",
     "editor.copyLinkFail": "Copy failed",
+    "markdown.codeBlock.copy": "Copy",
+    "markdown.codeBlock.copied": "Copied",
+    "markdown.codeBlock.copyFail": "Copy failed",
+    "markdown.codeBlock.plainText": "Text",
     "settings.resetConfirm": "Would you like to reset display settings to defaults? Notes will be kept.",
     "settings.resetTitle": "Reset to default",
     "settings.help.title": "Help",
@@ -1303,6 +1490,14 @@ const I18N = {
     "settings.help.open": "Open help",
     "settings.version.title": "Current version",
     "settings.version.desc": "Version used for deployment and installer builds.",
+    "settings.update.check": "Check for updates",
+    "settings.update.noServer": "Connect to a server to check for updates.",
+    "settings.update.checking": "Checking…",
+    "settings.update.upToDate": "You are up to date.",
+    "settings.update.newVersion": "A new version is available: {version}",
+    "settings.update.checkFailed": "Could not check for updates. Please try again later.",
+    "settings.update.downloadInstaller": "Download installer",
+    "settings.update.downloadReleasePage": "Open release page",
     "settings.workspace.title": "Workspaces / Knowledge Health",
     "settings.workspace.desc": "Save repeated work states and review cleanup priorities.",
     "settings.workspace.placeholder": "Workspace name",
@@ -1325,6 +1520,11 @@ const I18N = {
     "quick.count.all": "Showing all notes.",
     "graph.eyebrow": "Based on [[title]] links",
     "graph.title": "Linked notes",
+    "treeMap.eyebrow": "Shows only the selected topic scope",
+    "treeMap.title": "Knowledge map",
+    "treeMap.topicLabel": "Topic",
+    "treeMap.empty": "No topic to show yet. Create a topic first.",
+    "treeMap.locked": "Encrypted note",
     "trash.eyebrow": "Temporary storage to prevent accidental deletion",
     "trash.title": "Trash",
     "trash.deleteSelected": "Delete selected",
@@ -1623,6 +1823,369 @@ Object.entries(LANGUAGE_PACKS).forEach(([language, pack]) => {
   };
 });
 
+// 실행 취소 / 다시 실행 스택 (2.3.6 M8c).
+//
+// 브라우저 기본 실행 취소는 코드가 editor.value 에 값을 대입하는 순간 끊긴다.
+// 본문 편집기는 마커 삽입, 시각 삽입, 병합/분할 등 여러 곳에서 값을 통째로 대입하므로
+// 되돌리기를 브라우저에 맡길 수 없다.
+//
+// 값 변경은 세터를 또 가로채지 않고 "기록을 명시적으로 부르는" 방식으로 잡는다.
+//   - M8b 오버레이가 이미 editor.value 를 Object.defineProperty 로 가로채고 있고,
+//     오버레이를 끌 때 delete editor.value 로 그 자체 속성을 통째로 지운다.
+//     같은 자체 속성에 두 겹을 얹을 수 없어 나중 것이 앞 것을 덮고, 지울 때 둘 다 사라진다.
+//   - 오버레이 가로채기는 오버레이를 켠 동안에만 있다.
+//     setTreeHighlightOverlayEnabled(false) 상태에서도 실행 취소는 동작해야 한다.
+//   - 세터는 setSelectionRange 보다 먼저 돌기 때문에 편집이 끝난 뒤의 커서를 알 수 없다.
+//   - 세터만으로는 사용자의 편집과 다른 메모 열기 같은 바깥 렌더를 구분할 수 없다.
+//
+// 항목은 전체 본문이 아니라 바뀐 조각만 담는다. 5만 자 문서를 50벌 들고 있지 않는다.
+const TREE_UNDO_DEPTHS = [10, 50, 100];
+const TREE_UNDO_DEFAULT_DEPTH = 50;
+// 이어 친 글자를 한 항목으로 묶는 시간 간격.
+const TREE_UNDO_COALESCE_MS = 700;
+// 묶인 한 항목이 이 길이를 넘으면 거기서 끊는다.
+const TREE_UNDO_COALESCE_MAX = 80;
+// 스택 전체가 들고 있을 수 있는 글자 수 상한. UTF-16 기준 약 800KB.
+// 조각만 담으므로 평범한 타자로는 닿지 않는다. 본문을 통째로 갈아 끼우는 편집이
+// 쌓일 때만 걸리고, 걸리면 오래된 항목부터 버려 단계 수가 설정값보다 줄어든다.
+// 로드맵 11의 "긴 문서에서는 메모리 보호를 위해 단계 수를 자동 제한할 수 있다"가 이것이다.
+const TREE_UNDO_CHAR_BUDGET = 400_000;
+// 다시 실행 보조 단축키. Ctrl+Shift+Z 와 함께 Ctrl+Y 도 받는다.
+const TREE_UNDO_REDO_ALT_SHORTCUT = { ctrl: true, key: "y" };
+
+const treeUndoStack = {
+  noteId: null,
+  text: "",
+  selectionStart: 0,
+  selectionEnd: 0,
+  entries: [],
+  // 되돌릴 수 있는 항목 수. entries[index] 부터가 다시 실행 대상이다.
+  index: 0,
+  chars: 0,
+  lastKind: "",
+  lastAt: 0,
+  applying: false,
+};
+
+function normalizeUndoDepth(value) {
+  const depth = Number(value);
+  return TREE_UNDO_DEPTHS.includes(depth) ? depth : TREE_UNDO_DEFAULT_DEPTH;
+}
+
+function treeUndoDepthLimit() {
+  return normalizeUndoDepth(state?.settings?.undoDepth);
+}
+
+function treeUndoSelection() {
+  const editor = elements.treeContent;
+  const start = Number(editor?.selectionStart ?? 0) || 0;
+  const end = Number(editor?.selectionEnd ?? start) || start;
+  return { start, end };
+}
+
+function resetTreeEditorHistory(noteId, text) {
+  const selection = treeUndoSelection();
+  treeUndoStack.noteId = noteId ?? null;
+  treeUndoStack.text = String(text ?? "");
+  treeUndoStack.selectionStart = selection.start;
+  treeUndoStack.selectionEnd = selection.end;
+  treeUndoStack.entries = [];
+  treeUndoStack.index = 0;
+  treeUndoStack.chars = 0;
+  treeUndoStack.lastKind = "";
+  treeUndoStack.lastAt = 0;
+}
+
+// 앞뒤로 같은 부분을 걷어내고 가운데 바뀐 조각만 남긴다.
+function treeUndoDiff(previous, next) {
+  const previousLength = previous.length;
+  const nextLength = next.length;
+  const shorter = Math.min(previousLength, nextLength);
+  let head = 0;
+  while (head < shorter && previous.charCodeAt(head) === next.charCodeAt(head)) head += 1;
+  let tail = 0;
+  while (
+    tail < shorter - head
+    && previous.charCodeAt(previousLength - 1 - tail) === next.charCodeAt(nextLength - 1 - tail)
+  ) tail += 1;
+  return {
+    at: head,
+    removed: detachTreeUndoSlice(previous.slice(head, previousLength - tail), previous),
+    inserted: detachTreeUndoSlice(next.slice(head, nextLength - tail), next),
+  };
+}
+
+function treeUndoEntryChars(entry) {
+  return entry.removed.length + entry.inserted.length;
+}
+
+// 잘라낸 조각은 자바스크립트 엔진 안에서 원본 전체를 가리키는 참조로 남을 수 있다.
+// 그대로 두면 5만 자 문서에서 짧은 조각 50개가 원본 50벌을 붙들어 메모리가 몇 MB 늘어난다.
+// 조각이 원본보다 훨씬 작을 때만 새 문자열로 옮겨 참조를 끊는다.
+function detachTreeUndoSlice(value, source) {
+  if (!value || value.length * 4 > source.length) return value;
+  return value.split("").join("");
+}
+
+// 한 항목의 경계.
+// 글자 하나마다 항목을 만들면 50단계가 열 글자로 차 버린다.
+// 이어서 친 글자는 한 항목으로 묶고, 아래에서 끊는다.
+//   - 타자가 아닌 편집(마커 삽입, 병합/분할, 바꾸기)은 언제나 한 항목이다
+//   - 700ms 넘게 쉬면 끊는다
+//   - 줄바꿈에서 끊는다
+//   - 이어지지 않는 위치로 옮기면 끊는다
+//   - 넣기와 지우기가 뒤바뀌면 끊는다
+//   - 묶인 길이가 80자를 넘으면 끊는다
+function canCoalesceTreeUndo(previous, patch, kind, now) {
+  if (kind !== "type" || previous.kind !== "type") return false;
+  if (now - treeUndoStack.lastAt > TREE_UNDO_COALESCE_MS) return false;
+  if (!patch.removed && !previous.removed) {
+    if (patch.at !== previous.at + previous.inserted.length) return false;
+    if (previous.inserted.includes("\n") || patch.inserted.includes("\n")) return false;
+    return previous.inserted.length + patch.inserted.length <= TREE_UNDO_COALESCE_MAX;
+  }
+  if (!patch.inserted && !previous.inserted) {
+    if (patch.at + patch.removed.length !== previous.at) return false;
+    if (previous.removed.includes("\n") || patch.removed.includes("\n")) return false;
+    return previous.removed.length + patch.removed.length <= TREE_UNDO_COALESCE_MAX;
+  }
+  return false;
+}
+
+function mergeTreeUndoEntry(previous, patch) {
+  if (!patch.removed && !previous.removed) {
+    previous.inserted += patch.inserted;
+    return;
+  }
+  previous.at = patch.at;
+  previous.removed = `${patch.removed}${previous.removed}`;
+}
+
+function dropOldestTreeUndoEntry() {
+  const dropped = treeUndoStack.entries.shift();
+  if (!dropped) return;
+  treeUndoStack.chars -= treeUndoEntryChars(dropped);
+  if (treeUndoStack.index > 0) treeUndoStack.index -= 1;
+}
+
+function trimTreeUndoStack() {
+  const limit = treeUndoDepthLimit();
+  while (treeUndoStack.entries.length > limit) dropOldestTreeUndoEntry();
+  // 긴 문서 보호. 조각이 커서 예산을 넘으면 설정한 단계 수보다 적게 들고 있는다.
+  while (treeUndoStack.entries.length > 1 && treeUndoStack.chars > TREE_UNDO_CHAR_BUDGET) {
+    dropOldestTreeUndoEntry();
+  }
+}
+
+function dropTreeUndoRedoTail() {
+  if (treeUndoStack.entries.length <= treeUndoStack.index) return;
+  for (let index = treeUndoStack.index; index < treeUndoStack.entries.length; index += 1) {
+    treeUndoStack.chars -= treeUndoEntryChars(treeUndoStack.entries[index]);
+  }
+  treeUndoStack.entries.length = treeUndoStack.index;
+}
+
+// 지금 편집기 내용을 직전 기록과 견주어 달라진 만큼을 한 항목으로 남긴다.
+// kind 가 "type" 이면 앞 항목과 묶일 수 있고, 그 밖에는 언제나 따로 남는다.
+function captureTreeEditorHistory(kind = "command") {
+  const editor = elements.treeContent;
+  if (!editor || treeUndoStack.applying) return false;
+  // 조합 중에는 남기지 않는다. 자모마다 항목이 생기면 실행 취소가 자모 단위로 되돌아간다.
+  // 조합이 끝나면 bindEditorComposition 이 밀린 처리를 흘려보내고 그때 한 항목으로 남는다.
+  if (isEditorComposing(editor)) return false;
+  const selected = getSelectedTreeNode();
+  const noteId = selected ? selected.id : null;
+  const text = String(editor.value ?? "");
+  // 다른 메모로 옮기면 스택을 비운다. 기록은 메모별 편집 세션 안에서만 유지한다.
+  if (treeUndoStack.noteId !== noteId) {
+    resetTreeEditorHistory(noteId, text);
+    return false;
+  }
+  const selection = treeUndoSelection();
+  if (text === treeUndoStack.text) {
+    treeUndoStack.selectionStart = selection.start;
+    treeUndoStack.selectionEnd = selection.end;
+    return false;
+  }
+  const patch = treeUndoDiff(treeUndoStack.text, text);
+  const before = { start: treeUndoStack.selectionStart, end: treeUndoStack.selectionEnd };
+  const after = { start: selection.start, end: selection.end };
+  const now = Date.now();
+  // 되돌린 뒤 새로 편집하면 다시 실행 기록은 버린다.
+  dropTreeUndoRedoTail();
+  const previous = treeUndoStack.index > 0 ? treeUndoStack.entries[treeUndoStack.index - 1] : null;
+  if (previous && canCoalesceTreeUndo(previous, patch, kind, now)) {
+    treeUndoStack.chars -= treeUndoEntryChars(previous);
+    mergeTreeUndoEntry(previous, patch);
+    previous.after = after;
+    treeUndoStack.chars += treeUndoEntryChars(previous);
+  } else {
+    treeUndoStack.entries.push({ ...patch, before, after, kind });
+    treeUndoStack.index = treeUndoStack.entries.length;
+    treeUndoStack.chars += treeUndoEntryChars(patch);
+  }
+  treeUndoStack.text = text;
+  treeUndoStack.selectionStart = after.start;
+  treeUndoStack.selectionEnd = after.end;
+  treeUndoStack.lastKind = kind;
+  treeUndoStack.lastAt = now;
+  trimTreeUndoStack();
+  return true;
+}
+
+// 본문이 그대로인 채 커서만 움직였을 때 기준 커서를 따라 옮긴다.
+// 다음 항목의 "되돌린 뒤 커서"가 사용자가 실제로 있던 자리가 되게 하기 위한 것이다.
+function syncTreeEditorHistoryCursor() {
+  const editor = elements.treeContent;
+  if (!editor || treeUndoStack.applying) return;
+  const selection = treeUndoSelection();
+  if (treeUndoStack.selectionStart === selection.start && treeUndoStack.selectionEnd === selection.end) return;
+  const text = String(editor.value ?? "");
+  if (text.length !== treeUndoStack.text.length || text !== treeUndoStack.text) return;
+  treeUndoStack.selectionStart = selection.start;
+  treeUndoStack.selectionEnd = selection.end;
+}
+
+// renderTreeEditor 가 편집기에 값을 써 넣은 직후에 부른다.
+function syncTreeEditorHistorySession(node) {
+  const editor = elements.treeContent;
+  if (!editor) return;
+  // 조합 중에는 setEditorValue 가 쓰기를 미뤄 둔 상태다. 여기서 판단하지 않는다.
+  if (isEditorComposing(editor)) return;
+  const noteId = node ? node.id : null;
+  const text = String(editor.value ?? "");
+  if (treeUndoStack.noteId !== noteId) {
+    resetTreeEditorHistory(noteId, text);
+    return;
+  }
+  if (text === treeUndoStack.text) return;
+  // 같은 메모인데 바깥에서 본문이 통째로 바뀐 경우다(잠금 해제, 서버 동기화, 복원 등).
+  // 남은 기록은 지금 본문에 맞지 않으므로 비운다.
+  resetTreeEditorHistory(noteId, text);
+}
+
+function isTreeEditorHistoryEditable() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return false;
+  if (isReadOnlyTreeNode(selected)) return false;
+  if (isEncryptedTreeNodeLocked(selected)) return false;
+  return true;
+}
+
+function canUndoTreeEditor() {
+  return treeUndoStack.index > 0;
+}
+
+function canRedoTreeEditor() {
+  return treeUndoStack.entries.length > treeUndoStack.index;
+}
+
+function applyTreeUndoText(text, selection) {
+  const editor = elements.treeContent;
+  treeUndoStack.applying = true;
+  try {
+    // 오버레이가 켜져 있으면 이 대입이 오버레이 가로채기를 거쳐 다시 칠하기를 예약한다.
+    // 꺼져 있으면 평범한 textarea 대입이다. 어느 쪽이든 스택은 똑같이 돈다.
+    editor.value = text;
+    if (typeof editor.focus === "function") editor.focus({ preventScroll: true });
+    if (typeof editor.setSelectionRange === "function") {
+      editor.setSelectionRange(selection.start, selection.end);
+    }
+    // 이어 붙여 만든 본문을 그대로 들고 있으면 앞선 판이 함께 남는다.
+    // 편집기가 되돌려 주는 값은 한 벌짜리 문자열이므로 그것으로 바꿔 든다.
+    const stored = String(editor.value ?? "");
+    treeUndoStack.text = stored === text ? stored : text;
+    treeUndoStack.selectionStart = selection.start;
+    treeUndoStack.selectionEnd = selection.end;
+    treeUndoStack.lastKind = "";
+    treeUndoStack.lastAt = 0;
+  } finally {
+    treeUndoStack.applying = false;
+  }
+  // 자동 저장이 유일한 저장 경로다. .value 대입은 input 이벤트를 내지 않으므로
+  // 여기서 저장을 부르지 않으면 되돌린 내용이 저장되지 않고 다음 렌더에서 되살아난다.
+  syncTreeContentFromEditor();
+}
+
+function undoTreeEditor() {
+  if (!isTreeEditorHistoryEditable()) return false;
+  // 아직 기록되지 않은 입력이 있으면 먼저 한 항목으로 마무리한다.
+  captureTreeEditorHistory("type");
+  if (!canUndoTreeEditor()) return false;
+  const entry = treeUndoStack.entries[treeUndoStack.index - 1];
+  const text = `${treeUndoStack.text.slice(0, entry.at)}${entry.removed}${treeUndoStack.text.slice(entry.at + entry.inserted.length)}`;
+  treeUndoStack.index -= 1;
+  applyTreeUndoText(text, entry.before);
+  return true;
+}
+
+function redoTreeEditor() {
+  if (!isTreeEditorHistoryEditable()) return false;
+  captureTreeEditorHistory("type");
+  if (!canRedoTreeEditor()) return false;
+  const entry = treeUndoStack.entries[treeUndoStack.index];
+  const text = `${treeUndoStack.text.slice(0, entry.at)}${entry.inserted}${treeUndoStack.text.slice(entry.at + entry.removed.length)}`;
+  treeUndoStack.index += 1;
+  applyTreeUndoText(text, entry.after);
+  return true;
+}
+
+// 바깥에서 본문을 바꾸고 그 변경을 실행 취소 한 항목으로 남기는 입구.
+// U2 의 바꾸기가 이것을 쓴다.
+//   recordTreeEditorEdit("replace", (editor) => {
+//     editor.value = nextText;
+//     editor.setSelectionRange(cursor, cursor);
+//   });
+// 여러 곳을 한 번에 바꿔도 호출 한 번이 항목 하나가 된다.
+function recordTreeEditorEdit(kind, mutate) {
+  const editor = elements.treeContent;
+  if (!editor || typeof mutate !== "function") return false;
+  if (!isTreeEditorHistoryEditable()) return false;
+  // 밀린 타자를 먼저 끊어 바깥 편집과 섞이지 않게 한다.
+  captureTreeEditorHistory("type");
+  mutate(editor);
+  const recorded = captureTreeEditorHistory(kind || "command");
+  if (recorded) syncTreeContentFromEditor();
+  return recorded;
+}
+
+// 본문 전체를 한 번에 갈아 끼우는 짧은 형태.
+function applyTreeEditorText(kind, nextText, selection) {
+  return recordTreeEditorEdit(kind, (editor) => {
+    editor.value = String(nextText ?? "");
+    const start = Number(selection?.start ?? editor.value.length) || 0;
+    const end = Number(selection?.end ?? start) || start;
+    if (typeof editor.setSelectionRange === "function") editor.setSelectionRange(start, end);
+  });
+}
+
+// 실행 취소 / 다시 실행은 단축키 기능을 꺼도 동작해야 한다.
+// 끈 상태에서는 기본 조합만 받는다.
+// 눌린 키의 code 는 기록된 조합이 code 를 지정했을 때만 견준다.
+function matchesTreeHistoryShortcut(event, actionId) {
+  if (actionId === "redo" && matchesShortcutDefinition(event, TREE_UNDO_REDO_ALT_SHORTCUT)) return true;
+  const action = SHORTCUT_ACTIONS.find((item) => item.id === actionId);
+  const shortcut = state.settings.enableShortcuts
+    ? shortcutForAction(actionId)
+    : action?.defaultShortcut;
+  return matchesShortcutDefinition(event, shortcut);
+}
+// matchesShortcutDefinition 은 단축키 판정을 한 벌로 모은 것이라 shortcutMatches 옆에 둔다.
+
+// 검사 하네스가 읽는 값. 사용 중에는 아무 영향이 없다.
+function treeEditorHistoryState() {
+  return {
+    noteId: treeUndoStack.noteId,
+    depthLimit: treeUndoDepthLimit(),
+    entries: treeUndoStack.entries.length,
+    index: treeUndoStack.index,
+    chars: treeUndoStack.chars,
+    charBudget: TREE_UNDO_CHAR_BUDGET,
+    canUndo: canUndoTreeEditor(),
+    canRedo: canRedoTreeEditor(),
+  };
+}
+
 const SHORTCUT_ACTIONS = [
   { id: "addRoot", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addRoot", label: "새 주제", defaultShortcut: { ctrl: true, key: "n" }, group: "창과 탭" },
   { id: "addChild", groupKey: "shortcut.group.tabs", labelKey: "shortcut.action.addChild", label: "아래에 추가", defaultShortcut: { ctrl: true, shift: true, key: "n" }, group: "창과 탭" },
@@ -1658,6 +2221,8 @@ const SHORTCUT_ACTIONS = [
   { id: "link", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.link", label: "링크", defaultShortcut: { ctrl: true, shift: true, key: "l" }, group: "본문 편집" },
   { id: "indent", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.indent", label: "들여쓰기", defaultShortcut: { key: "tab" }, group: "본문 편집" },
   { id: "outdent", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.outdent", label: "내어쓰기", defaultShortcut: { shift: true, key: "tab" }, group: "본문 편집" },
+  { id: "undo", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.undo", label: "실행 취소", defaultShortcut: { ctrl: true, key: "z" }, group: "본문 편집" },
+  { id: "redo", groupKey: "shortcut.group.editor", labelKey: "shortcut.action.redo", label: "다시 실행", defaultShortcut: { ctrl: true, shift: true, key: "z" }, group: "본문 편집" },
 ];
 
 const FEATURE_TOGGLES = [
@@ -1676,6 +2241,7 @@ const state = {
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
   selectedTreeId: null,
+  treeMapTopicId: null,
   sharedView: isHostedWebClient() ? "group-tree" : "mine",
   selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
@@ -1702,6 +2268,60 @@ let pendingMessengerAttachment = null;
 let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
+const messengerAttachmentPreviewCache = new Map();
+
+// 한글 등 IME 조합 입력 처리.
+// 조합 중에는 편집기 값을 통째로 다시 쓰지 않고, 조합이 끝난 뒤 밀린 처리를 한 번만 실행한다.
+// 브라우저마다 compositionend 와 input 의 순서가 달라 event.isComposing 만 믿지 않고
+// compositionstart / compositionend 로 조합 상태를 직접 들고 있는다.
+const composingEditors = new Set();
+const pendingEditorInputFlush = new Set();
+const pendingEditorValueWrite = new Map();
+
+function isEditorComposing(element) {
+  return Boolean(element) && composingEditors.has(element);
+}
+
+function bindEditorComposition(element, flushInput) {
+  if (!element) return;
+  const settle = () => {
+    composingEditors.delete(element);
+    if (pendingEditorValueWrite.has(element)) {
+      // 조합 중에 바깥에서 편집기 내용을 통째로 바꿨다면 그 값이 최신이므로 그것을 적용한다.
+      const nextValue = pendingEditorValueWrite.get(element);
+      pendingEditorValueWrite.delete(element);
+      pendingEditorInputFlush.delete(element);
+      element.value = nextValue;
+      return;
+    }
+    if (!pendingEditorInputFlush.delete(element)) return;
+    flushInput();
+  };
+  element.addEventListener("compositionstart", () => {
+    composingEditors.add(element);
+  });
+  element.addEventListener("compositionend", settle);
+  // 조합 중에 편집기를 벗어나면 compositionend 가 오지 않을 수 있다.
+  // 자동 저장이 유일한 저장 경로이므로 밀린 처리를 여기서 반드시 마무리한다.
+  element.addEventListener("blur", settle);
+}
+
+function handleEditorInput(element, event, flushInput) {
+  if (isEditorComposing(element) || event?.isComposing) {
+    pendingEditorInputFlush.add(element);
+    return;
+  }
+  flushInput();
+}
+
+function setEditorValue(element, nextValue) {
+  if (!element) return;
+  if (isEditorComposing(element)) {
+    pendingEditorValueWrite.set(element, nextValue);
+    return;
+  }
+  element.value = nextValue;
+}
 
 const WRITING_TEMPLATES = {
   project: {
@@ -1743,6 +2363,7 @@ function defaultSettings() {
     language: "ko",
     theme: "system",
     accent: "blue",
+    markdownColors: defaultMarkdownColorSettings(),
     wideEditor: true,
     treeListWidth: 176,
     treePanelCollapsed: false,
@@ -1752,6 +2373,7 @@ function defaultSettings() {
     fontSize: "medium",
     lineHeight: "normal",
     tabIndentSize: 2,
+    undoDepth: TREE_UNDO_DEFAULT_DEPTH,
     showBacklinks: true,
     enableShortcuts: true,
     showTags: true,
@@ -1766,6 +2388,134 @@ function defaultSettings() {
     properties: defaultPropertyViewSettings(),
     workspaces: defaultWorkspaceSettings(),
   };
+}
+
+// Markdown 색상 설정.
+//
+// 저장하는 것은 "사용자가 바꾼 값"뿐이다. 손대지 않은 항목은 비워 둔다.
+// 그래야 기본값 복원이 저장된 값을 지우는 것으로 끝나고,
+// 기본값을 나중에 손보면 손대지 않은 항목이 저절로 따라온다.
+//
+// 밝은 모드와 어두운 모드를 따로 담는다. 한 색을 두 모드에 함께 쓰면
+// 밝은 판에서 고른 색이 어두운 판에서 안 보이는 일이 생긴다.
+function defaultMarkdownColorSettings() {
+  return { light: {}, dark: {} };
+}
+
+function markdownColorToken(id) {
+  return MARKDOWN_COLOR_TOKENS.find((item) => item.id === id) || null;
+}
+
+function markdownColorMode(theme) {
+  return theme === "dark" ? "dark" : "light";
+}
+
+// #rgb 와 #rrggbb 만 받는다. rgb() 나 색 이름은 받지 않는다.
+// 저장소는 사용자가 직접 고칠 수 있는 자리다. 거기 들어온 문자열을 그대로 CSS 로
+// 흘려보내면 값 하나로 규칙 하나를 통째로 바꿔 쓸 수 있다. 받는 모양을 좁혀서 막는다.
+// 읽을 수 없는 값이면 빈 문자열을 돌려주고, 부르는 쪽은 기본값으로 되돌아간다.
+function normalizeMarkdownColorValue(value) {
+  if (typeof value !== "string") return "";
+  const text = value.trim().toLowerCase();
+  if (/^#[0-9a-f]{3}$/.test(text)) {
+    return `#${text[1]}${text[1]}${text[2]}${text[2]}${text[3]}${text[3]}`;
+  }
+  return /^#[0-9a-f]{6}$/.test(text) ? text : "";
+}
+
+function normalizeMarkdownColorSettings(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const normalized = {};
+  MARKDOWN_COLOR_MODES.forEach((mode) => {
+    const modeSource = source[mode] && typeof source[mode] === "object" && !Array.isArray(source[mode])
+      ? source[mode]
+      : {};
+    const modeValues = {};
+    MARKDOWN_COLOR_TOKENS.forEach((item) => {
+      const color = normalizeMarkdownColorValue(modeSource[item.id]);
+      if (color) modeValues[item.id] = color;
+    });
+    normalized[mode] = modeValues;
+  });
+  return normalized;
+}
+
+// state.settings 를 직접 만지는 자리가 여럿이라 모양이 깨져 있을 수 있다.
+// 읽기 전에 한 번 바로잡는다.
+function markdownColorSettings() {
+  const settings = state.settings.markdownColors;
+  if (!settings || typeof settings !== "object" || Array.isArray(settings)) {
+    state.settings.markdownColors = defaultMarkdownColorSettings();
+    return state.settings.markdownColors;
+  }
+  MARKDOWN_COLOR_MODES.forEach((mode) => {
+    if (!settings[mode] || typeof settings[mode] !== "object" || Array.isArray(settings[mode])) {
+      settings[mode] = {};
+    }
+  });
+  return settings;
+}
+
+function currentMarkdownColorMode() {
+  return markdownColorMode(document.documentElement.dataset.theme);
+}
+
+// 지금 화면에 실제로 칠해지는 값. 설정 화면(U4)이 이 값을 보여준다.
+function markdownColorValue(id, mode = currentMarkdownColorMode()) {
+  const item = markdownColorToken(id);
+  if (!item) return "";
+  const modeKey = markdownColorMode(mode);
+  const stored = normalizeMarkdownColorValue(markdownColorSettings()[modeKey][id]);
+  return stored || item[modeKey];
+}
+
+function markdownColorValues(mode = currentMarkdownColorMode()) {
+  const modeKey = markdownColorMode(mode);
+  return Object.fromEntries(MARKDOWN_COLOR_TOKENS.map((item) => [item.id, markdownColorValue(item.id, modeKey)]));
+}
+
+function isMarkdownColorChanged(id, mode = currentMarkdownColorMode()) {
+  const modeKey = markdownColorMode(mode);
+  return Boolean(normalizeMarkdownColorValue(markdownColorSettings()[modeKey][id]));
+}
+
+// 사용자가 바꾼 값만 :root 인라인 스타일로 덮어쓴다.
+// 바꾸지 않았거나 읽을 수 없는 값이면 인라인 값을 지워서 styles.css 의 기본값이 다시 살아나게 한다.
+function applyMarkdownColors(theme = document.documentElement.dataset.theme) {
+  const stored = markdownColorSettings()[markdownColorMode(theme)];
+  const root = document.documentElement;
+  MARKDOWN_COLOR_TOKENS.forEach((item) => {
+    const color = normalizeMarkdownColorValue(stored[item.id]);
+    if (color) root.style.setProperty(item.token, color);
+    else root.style.removeProperty(item.token);
+  });
+}
+
+// 설정 화면이 값을 넣는 통로. 화면은 다음 작업(U4)에서 만든다.
+// 읽을 수 없는 값을 넣으면 저장하지 않고 그 항목을 기본값으로 되돌린 뒤 false 를 돌려준다.
+function setMarkdownColor(id, value, mode = currentMarkdownColorMode()) {
+  const item = markdownColorToken(id);
+  if (!item) return false;
+  const modeKey = markdownColorMode(mode);
+  const color = normalizeMarkdownColorValue(value);
+  const stored = markdownColorSettings();
+  if (color) stored[modeKey][id] = color;
+  else delete stored[modeKey][id];
+  persistSettings();
+  applyMarkdownColors();
+  return Boolean(color);
+}
+
+// 기본값 복원. mode 를 주지 않으면 두 모드를 함께 되돌린다.
+function resetMarkdownColors(mode = "all") {
+  const stored = markdownColorSettings();
+  const modes = mode === "all" ? MARKDOWN_COLOR_MODES : [markdownColorMode(mode)];
+  modes.forEach((key) => {
+    stored[key] = {};
+  });
+  persistSettings();
+  applyMarkdownColors();
+  return true;
 }
 
 function defaultGraphSettings() {
@@ -1986,6 +2736,9 @@ const elements = {
   treeEditor: $("#treeEditor"),
   treeTitleInput: $("#treeTitleInput"),
   treeContent: $("#treeContent"),
+  treeContentSurface: $("#treeContentSurface"),
+  treeContentBackdrop: $("#treeContentBackdrop"),
+  treeContentOverlay: $("#treeContentOverlay"),
   treePathLabel: $("#treePathLabel"),
   notePropertiesPanel: $("#notePropertiesPanel"),
   propertyStatusSelect: $("#propertyStatusSelect"),
@@ -2011,6 +2764,13 @@ const elements = {
   noteFindPrevBtn: $("#noteFindPrevBtn"),
   noteFindNextBtn: $("#noteFindNextBtn"),
   noteFindCloseBtn: $("#noteFindCloseBtn"),
+  noteReplaceToggleBtn: $("#noteReplaceToggleBtn"),
+  noteReplaceRow: $("#noteReplaceRow"),
+  noteReplaceInput: $("#noteReplaceInput"),
+  noteReplaceCount: $("#noteReplaceCount"),
+  noteReplaceCurrentBtn: $("#noteReplaceCurrentBtn"),
+  noteReplaceAllBtn: $("#noteReplaceAllBtn"),
+  noteReplaceLockedHint: $("#noteReplaceLockedHint"),
   tagList: $("#tagList"),
   noteStats: $("#noteStats"),
   previewToggleBtn: $("#previewToggleBtn"),
@@ -2022,6 +2782,7 @@ const elements = {
   markdownPreview: $("#markdownPreview"),
   moveUpBtn: $("#moveUpBtn"),
   moveDownBtn: $("#moveDownBtn"),
+  moveNodeBtn: $("#moveNodeBtn"),
   addChildBtn: $("#addChildBtn"),
   deleteTreeBtn: $("#deleteTreeBtn"),
   deletedTreeBtn: $("#deletedTreeBtn"),
@@ -2062,6 +2823,10 @@ const elements = {
   quickSwitchBtn: $("#quickSwitchBtn"),
   commandPaletteBtn: $("#commandPaletteBtn"),
   graphBtn: $("#graphBtn"),
+  treeMapBtn: $("#treeMapBtn"),
+  syncStatusBtn: $("#syncStatusBtn"),
+  syncStatusDot: $("#syncStatusDot"),
+  syncStatusBtnLabel: $("#syncStatusBtnLabel"),
   settingsBtn: $("#settingsBtn"),
   helpBtn: $("#helpBtn"),
   railSidebarBtn: $("#railSidebarBtn"),
@@ -2069,6 +2834,7 @@ const elements = {
   railSearchBtn: $("#railSearchBtn"),
   railQuickBtn: $("#railQuickBtn"),
   railGraphBtn: $("#railGraphBtn"),
+  railTreeMapBtn: $("#railTreeMapBtn"),
   railMarkdownExportBtn: $("#railMarkdownExportBtn"),
   railMarkdownImportBtn: $("#railMarkdownImportBtn"),
   railDeletedTreeBtn: $("#railDeletedTreeBtn"),
@@ -2084,11 +2850,13 @@ const elements = {
   fontSizeSelect: $("#fontSizeSelect"),
   lineHeightSelect: $("#lineHeightSelect"),
   tabIndentSelect: $("#tabIndentSelect"),
+  undoDepthSelect: $("#undoDepthSelect"),
   backlinksToggle: $("#backlinksToggle"),
   tagsToggle: $("#tagsToggle"),
   shortcutsToggle: $("#shortcutsToggle"),
   shortcutEditor: $("#shortcutEditor"),
   featureSettings: $("#featureSettings"),
+  markdownColorEditor: $("#markdownColorEditor"),
   serverModeSelect: $("#serverModeSelect"),
   serverUrlInput: $("#serverUrlInput"),
   serverTokenInput: $("#serverTokenInput"),
@@ -2154,6 +2922,9 @@ const elements = {
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
+  checkUpdateBtn: $("#checkUpdateBtn"),
+  updateStatusText: $("#updateStatusText"),
+  updateDownloadLinks: $("#updateDownloadLinks"),
   treeResizeHandle: $("#treeResizeHandle"),
   backlinksPanel: $("#backlinksPanel"),
   quickSwitchView: $("#quickSwitchView"),
@@ -2194,6 +2965,13 @@ const elements = {
   graphIsolatedList: $("#graphIsolatedList"),
   graphHubList: $("#graphHubList"),
   graphCloseBtn: $("#graphCloseBtn"),
+  treeMapView: $("#treeMapView"),
+  treeMapEyebrow: $("#treeMapEyebrow"),
+  treeMapTitle: $("#treeMapTitle"),
+  treeMapCloseBtn: $("#treeMapCloseBtn"),
+  treeMapTopicLabel: $("#treeMapTopicLabel"),
+  treeMapTopicSelect: $("#treeMapTopicSelect"),
+  treeMapCanvas: $("#treeMapCanvas"),
   propertiesBtn: $("#propertiesBtn"),
   propertiesView: $("#propertiesView"),
   propertiesCloseBtn: $("#propertiesCloseBtn"),
@@ -2260,6 +3038,23 @@ const elements = {
   keyDialogInput: $("#keyDialogInput"),
   keyDialogCancelBtn: $("#keyDialogCancelBtn"),
   keyDialogOkBtn: $("#keyDialogOkBtn"),
+  markdownImportOptionsDialog: $("#markdownImportOptionsDialog"),
+  markdownImportOptionsTitle: $("#markdownImportOptionsTitle"),
+  markdownImportOptionsDesc: $("#markdownImportOptionsDesc"),
+  markdownImportOptionsList: $("#markdownImportOptionsList"),
+  markdownImportOptionsNote: $("#markdownImportOptionsNote"),
+  markdownImportOptionsPreview: $("#markdownImportOptionsPreview"),
+  markdownImportOptionsCancelBtn: $("#markdownImportOptionsCancelBtn"),
+  markdownImportOptionsOkBtn: $("#markdownImportOptionsOkBtn"),
+  moveNodeDialog: $("#moveNodeDialog"),
+  moveNodeDialogTitle: $("#moveNodeDialogTitle"),
+  moveNodeDialogDesc: $("#moveNodeDialogDesc"),
+  moveNodeCurrentPath: $("#moveNodeCurrentPath"),
+  moveNodeDestinationSelect: $("#moveNodeDestinationSelect"),
+  moveNodeNoDestinationNote: $("#moveNodeNoDestinationNote"),
+  moveNodePreview: $("#moveNodePreview"),
+  moveNodeCancelBtn: $("#moveNodeCancelBtn"),
+  moveNodeOkBtn: $("#moveNodeOkBtn"),
   toastRegion: $("#toastRegion"),
   webLoginView: $("#webLoginView"),
   webLoginForm: $("#webLoginForm"),
@@ -2345,6 +3140,256 @@ function requestEncryptionKey(message) {
     window.addEventListener("keydown", onKeyDown);
     window.setTimeout(() => elements.keyDialogInput.focus(), 0);
   });
+}
+
+function markdownImportDestinationLabel(key) {
+  return {
+    "new-topic": t("note.markdownImportDestNewTopic"),
+    "current-topic": t("note.markdownImportDestCurrentTopic"),
+    "current-category": t("note.markdownImportDestCurrentCategory"),
+    append: t("note.markdownImportDestAppend"),
+  }[key] || key;
+}
+
+function markdownImportDestinationReason(key) {
+  return {
+    "current-topic": t("note.markdownImportDestReasonSelectAny"),
+    "current-category": t("note.markdownImportDestReasonNeedCategoryOrNote"),
+    append: t("note.markdownImportDestReasonNeedNote"),
+  }[key] || "";
+}
+
+function markdownImportDestinationOptions() {
+  const selected = getSelectedTreeNode();
+  const options = {
+    "new-topic": { available: true },
+    "current-topic": { available: false },
+    "current-category": { available: false },
+    append: { available: false },
+  };
+  if (!selected) return options;
+  const path = treePathNodes(selected.id);
+  const topic = path[0] || null;
+  if (topic) {
+    options["current-topic"] = { available: true, parent: topic };
+  }
+  let category = null;
+  if (selected.level === 2) {
+    category = selected;
+  } else if (selected.level === 3) {
+    const parent = findTreeNode(state.data.tree, selected.parentId);
+    if (parent && parent.level === 2) category = parent;
+  }
+  if (category) {
+    options["current-category"] = { available: true, parent: category };
+  }
+  if (selected.level === 3 && !isReadOnlyTreeNode(selected) && !isEncryptedTreeNodeLocked(selected)) {
+    options.append = { available: true, target: selected };
+  }
+  return options;
+}
+
+function markdownImportDestinationPath(key, options) {
+  const option = options[key];
+  if (!option?.available) return [];
+  if (key === "new-topic") return [];
+  if (key === "append") return treePath(option.target.id);
+  return treePath(option.parent.id);
+}
+
+function markdownImportOptionsPreviewText(key, options, items) {
+  const basePath = markdownImportDestinationPath(key, options);
+  const visible = items.slice(0, 5);
+  const lines = visible.map((item) => {
+    if (key === "append") {
+      return `- ${basePath.join(" / ")} (${item.title})`;
+    }
+    return `- ${[...basePath, item.title].join(" / ")}`;
+  });
+  if (items.length > visible.length) {
+    lines.push(`- ${t("note.markdownImportedMore", { count: items.length - visible.length })}`);
+  }
+  return lines.join("\n");
+}
+
+function markdownImportDestinationResult(key, options) {
+  const option = options[key];
+  if (key === "new-topic") return { destination: key, parentId: null, level: 1 };
+  if (key === "current-topic") return { destination: key, parentId: option.parent.id, level: 2 };
+  if (key === "current-category") return { destination: key, parentId: option.parent.id, level: 3 };
+  if (key === "append") return { destination: key, targetId: option.target.id };
+  return null;
+}
+
+function showMarkdownImportOptionsDialog(items) {
+  if (!elements.markdownImportOptionsDialog) return Promise.resolve(null);
+  const dialog = elements.markdownImportOptionsDialog;
+  const options = markdownImportDestinationOptions();
+  const keys = ["new-topic", "current-topic", "current-category", "append"];
+  let selectedKey = "new-topic";
+
+  const updatePreview = () => {
+    elements.markdownImportOptionsPreview.textContent = markdownImportOptionsPreviewText(selectedKey, options, items);
+  };
+
+  const buildList = () => {
+    elements.markdownImportOptionsList.replaceChildren(...keys.map((key) => {
+      const available = options[key].available;
+      const row = document.createElement("label");
+      row.className = "markdown-import-option-row";
+      row.classList.toggle("disabled", !available);
+      const input = document.createElement("input");
+      input.type = "radio";
+      input.name = "markdownImportDestination";
+      input.value = key;
+      input.checked = key === selectedKey;
+      input.disabled = !available;
+      input.addEventListener("change", () => {
+        if (!input.checked) return;
+        selectedKey = key;
+        updatePreview();
+      });
+      const text = document.createElement("span");
+      text.textContent = markdownImportDestinationLabel(key);
+      row.append(input, text);
+      if (!available) {
+        const reason = document.createElement("small");
+        reason.className = "markdown-import-option-reason";
+        reason.textContent = markdownImportDestinationReason(key);
+        row.append(reason);
+      }
+      return row;
+    }));
+  };
+
+  elements.markdownImportOptionsTitle.textContent = t("dialog.markdownImportOptionsTitle");
+  elements.markdownImportOptionsDesc.textContent = t("dialog.markdownImportOptionsDesc", { count: items.length });
+  elements.markdownImportOptionsNote.textContent = t("note.markdownImportIndependentNotice");
+  elements.markdownImportOptionsCancelBtn.textContent = t("dialog.cancel");
+  elements.markdownImportOptionsOkBtn.textContent = t("dialog.ok");
+  buildList();
+  updatePreview();
+  dialog.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const close = (result) => {
+      dialog.classList.add("hidden");
+      elements.markdownImportOptionsOkBtn.removeEventListener("click", onOk);
+      elements.markdownImportOptionsCancelBtn.removeEventListener("click", onCancel);
+      dialog.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKeyDown);
+      resolve(result);
+    };
+    const onOk = () => close(markdownImportDestinationResult(selectedKey, options));
+    const onCancel = () => close(null);
+    const onBackdrop = (event) => {
+      if (event.target === dialog) close(null);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") close(null);
+      if (event.key === "Enter") close(markdownImportDestinationResult(selectedKey, options));
+    };
+    elements.markdownImportOptionsOkBtn.addEventListener("click", onOk);
+    elements.markdownImportOptionsCancelBtn.addEventListener("click", onCancel);
+    dialog.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => elements.markdownImportOptionsOkBtn.focus(), 0);
+  });
+}
+
+function moveNodeDestinationLabel(dest) {
+  return treePath(dest.id).join(" / ");
+}
+
+function moveNodePreviewText(node, dest) {
+  if (!dest) return "";
+  return [...treePath(dest.id), noteTitle(node.title)].join(" / ");
+}
+
+function showMoveNodeDialog(node) {
+  if (!elements.moveNodeDialog) return Promise.resolve(null);
+  const dialog = elements.moveNodeDialog;
+  const candidates = moveNodeDestinationCandidates(node);
+  let selectedId = candidates[0]?.id || null;
+
+  const currentPath = treePath(node.id);
+  elements.moveNodeDialogTitle.textContent = t("dialog.moveNodeTitle");
+  elements.moveNodeDialogDesc.textContent = t("dialog.moveNodeDesc", { title: noteTitle(node.title) });
+  elements.moveNodeCurrentPath.textContent = t("dialog.moveNodeCurrentPathLabel", { path: currentPath.join(" / ") });
+  elements.moveNodeCancelBtn.textContent = t("dialog.cancel");
+  elements.moveNodeOkBtn.textContent = t("dialog.moveNodeConfirm");
+
+  const updatePreview = () => {
+    const dest = selectedId ? findTreeNode(state.data.tree, selectedId) : null;
+    elements.moveNodePreview.textContent = dest
+      ? t("dialog.moveNodePreviewLabel", { path: moveNodePreviewText(node, dest) })
+      : "";
+    elements.moveNodeOkBtn.disabled = !dest;
+  };
+
+  elements.moveNodeDestinationSelect.replaceChildren(
+    ...candidates.map((dest) => {
+      const option = document.createElement("option");
+      option.value = dest.id;
+      option.textContent = moveNodeDestinationLabel(dest);
+      return option;
+    }),
+  );
+  elements.moveNodeDestinationSelect.value = selectedId || "";
+  elements.moveNodeDestinationSelect.disabled = candidates.length === 0;
+  elements.moveNodeNoDestinationNote.textContent = t("dialog.moveNodeNoDestination");
+  elements.moveNodeNoDestinationNote.classList.toggle("hidden", candidates.length > 0);
+  elements.moveNodeDestinationSelect.classList.toggle("hidden", candidates.length === 0);
+  updatePreview();
+  dialog.classList.remove("hidden");
+
+  return new Promise((resolve) => {
+    const onChange = () => {
+      selectedId = elements.moveNodeDestinationSelect.value || null;
+      updatePreview();
+    };
+    const close = (result) => {
+      dialog.classList.add("hidden");
+      elements.moveNodeOkBtn.removeEventListener("click", onOk);
+      elements.moveNodeCancelBtn.removeEventListener("click", onCancel);
+      elements.moveNodeDestinationSelect.removeEventListener("change", onChange);
+      dialog.removeEventListener("click", onBackdrop);
+      window.removeEventListener("keydown", onKeyDown);
+      resolve(result);
+    };
+    const onOk = () => {
+      if (elements.moveNodeOkBtn.disabled) return;
+      const dest = selectedId ? findTreeNode(state.data.tree, selectedId) : null;
+      close(dest || null);
+    };
+    const onCancel = () => close(null);
+    const onBackdrop = (event) => {
+      if (event.target === dialog) close(null);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") close(null);
+      if (event.key === "Enter") onOk();
+    };
+    elements.moveNodeOkBtn.addEventListener("click", onOk);
+    elements.moveNodeCancelBtn.addEventListener("click", onCancel);
+    elements.moveNodeDestinationSelect.addEventListener("change", onChange);
+    dialog.addEventListener("click", onBackdrop);
+    window.addEventListener("keydown", onKeyDown);
+    window.setTimeout(() => elements.moveNodeDestinationSelect.focus(), 0);
+  });
+}
+
+async function moveSelectedTreeNodeToNewParent() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  if (isReadOnlyTreeNode(selected)) return;
+  const dest = await showMoveNodeDialog(selected);
+  if (!dest) return;
+  if (!moveTreeNodeTo(selected, dest)) return;
+  persist();
+  const toPath = treePath(selected.id).join(" / ");
+  selectTreeNode(selected.id);
+  showNotice(t("note.moveNodeSuccess", { title: noteTitle(selected.title), path: toPath }), "info");
 }
 
 function showNotice(message, type = "info") {
@@ -2894,6 +3939,7 @@ async function initializeApp() {
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
   bindEvents();
+  initializeTreeHighlightOverlay();
   initializeCaptureSketch();
   await refreshDesktopStorageInfo();
   renderSettings();
@@ -2976,6 +4022,465 @@ function initializeLiveMemoEditor() {
   });
 }
 
+// Markdown 강조 오버레이 (2.3.6 M8b 성능 시험대 → U1 강조 규칙 확장).
+//
+// <textarea> 는 글자에 색을 칠할 수 없고 배경도 부분적으로 줄 수 없다. 그래서 같은 글을
+// 담은 요소 둘을 textarea 앞뒤에 겹쳐 둔다.
+//   - 뒤(배경 레이어, #treeContentBackdrop): 배경색만 칠한다 (코드블록/인라인 코드).
+//   - 앞(오버레이, #treeContentOverlay): 글자색만 칠한다 (제목/목록/링크/인라인 코드/코드블록).
+// textarea 글자는 투명하게 만들어 앞뒤 레이어가 보이게 한다.
+//
+// 배경을 오버레이(앞)에 두지 않는 이유: 오버레이는 textarea 위에 있어서 배경을 얹으면
+// 그 아래 선택 영역과 캐럿이 가려진다. 배경 레이어는 textarea 뒤(z-index: -1)에 둬서
+// 캐럿/선택 영역이 항상 배경 위, 글자 오버레이 아래에 그대로 보이게 한다.
+//
+// 강조 규칙 (로드맵 8):
+//   - 제목: `#`~`######` 로 시작하는 줄 전체를 --md-heading 으로 칠한다.
+//   - 목록: 줄 앞의 `-`/`*`/`+`/`1.` 표시만 --md-list-marker 로 칠한다.
+//   - 링크: `[텍스트](주소)` 전체를 --md-link 로 칠한다.
+//   - 인라인 코드: 백틱으로 감싼 부분 - 글자는 --md-inline-code-text(오버레이),
+//     배경은 --md-inline-code-bg(배경 레이어)로 나눠 칠한다.
+//   - 코드블록(``` ~ ```): 전체 줄 배경은 --md-code-block-bg(배경 레이어), 글자는
+//     --md-code-block-text(오버레이). 언어가 bash 인 줄은 명령어/옵션/경로/숫자를
+//     정규식으로 다시 갈라 옵션·경로·숫자만 옅게 다른 색을 준다(새 토큰 없음 - 기존
+//     토큰을 color-mix() 로 섞은 파생 값. styles.css 의 --md-code-block-option 등 참고).
+//
+// 코드블록 상태(펜스 안/밖, 언어)는 이전 줄에 걸쳐 있어서 다시 칠하기 전에
+// computeMarkdownLineStates() 로 전체 줄을 한 번 훑어 상태를 구한다. 이 상태를 줄 글자와
+// 합쳐 "키"로 만들고, 이 키로 이전 결과와 비교해 바뀐 줄만 다시 그린다(성능 유지).
+// 펜스가 늘거나 줄어 이후 모든 줄의 상태가 바뀌면 키가 통째로 달라지므로 자동으로
+// 그 아래를 전부 다시 그린다 - 별도 처리가 필요 없다.
+//
+// 이 단계는 강조 규칙을 완성하는 것이 목적이 아니라 5만 자에서 다시 칠하기가
+// 한 글자당 50ms 안에 끝나는지 재기 위한 골격이었다(M8b). 규칙을 넓힌 뒤에도 이 예산은
+// web/scripts/check_editor_overlay_perf.mjs 로 다시 잰다.
+//
+// 끄면 textarea 단독 동작으로 완전히 되돌아간다. setTreeHighlightOverlayEnabled(false) 를 쓴다.
+const TREE_HIGHLIGHT_OVERLAY_DEFAULT = true;
+
+// textarea 와 오버레이의 글자 배치를 정확히 맞추기 위해 옮겨 적는 계산된 스타일.
+const TREE_HIGHLIGHT_MIRRORED_STYLES = [
+  "fontFamily",
+  "fontSize",
+  "fontWeight",
+  "fontStyle",
+  "fontVariant",
+  "fontStretch",
+  "lineHeight",
+  "letterSpacing",
+  "wordSpacing",
+  "textTransform",
+  "textIndent",
+  "textRendering",
+  "whiteSpace",
+  "wordBreak",
+  "overflowWrap",
+  "tabSize",
+  "direction",
+  "paddingTop",
+  "paddingRight",
+  "paddingBottom",
+  "paddingLeft",
+];
+
+let treeHighlightOverlayEnabled = false;
+// 성능 비교용. true 면 다시 칠할 때마다 innerHTML 을 통째로 새로 쓴다(최적화 이전 방식).
+let treeHighlightOverlayFullRebuild = false;
+let treeHighlightOverlayFrame = 0;
+let treeHighlightOverlayDirty = false;
+// 이전에 그린 줄의 "키"(줄 글자 + 코드블록 상태) 배열. 원문 줄 자체가 아니라 키로 비교해야
+// 코드블록 펜스가 늘거나 줄어 이전엔 같던 줄의 렌더링이 달라지는 경우를 잡아낼 수 있다.
+let treeHighlightOverlayLineKeys = [];
+let treeHighlightOverlayResizeObserver = null;
+let treeHighlightOverlayValueHooked = false;
+// 측정 하네스가 읽는 값. 사용 중에는 아무 영향이 없다.
+const treeHighlightOverlayStats = {
+  paintCount: 0,
+  skippedWhileComposing: 0,
+  lastPaintMs: 0,
+  lastChangedLines: 0,
+  lastMode: "none",
+};
+
+function isTreeHighlightOverlayEnabled() {
+  return treeHighlightOverlayEnabled;
+}
+
+function setTreeHighlightOverlayFullRebuild(useFullRebuild) {
+  treeHighlightOverlayFullRebuild = Boolean(useFullRebuild);
+  treeHighlightOverlayLineKeys = [];
+  return treeHighlightOverlayFullRebuild;
+}
+
+// ``` 나 ~~~ 로 여는/닫는 펜스. 여는 펜스 뒤의 글자(있으면)는 언어다.
+const MARKDOWN_FENCE_RE = /^ {0,3}(`{3,}|~{3,})\s*([^\s`~]*)\s*$/;
+// 목록 표시: 줄 맨 앞 공백(0~3칸) + `-`/`*`/`+` 또는 `1.`/`1)` 형태.
+const MARKDOWN_LIST_MARKER_RE = /^(\s{0,3})([-*+]|\d{1,9}[.)])(?=\s|$)/;
+// 줄 안에서 링크 `[텍스트](주소)` 또는 인라인 코드 `` `...` `` 를 찾는다. 둘 다 한 줄을 넘지 않는다.
+const MARKDOWN_INLINE_RE = /`[^`\n]*`|\[[^\]\n]*\]\([^)\n]*\)/g;
+// bash 최소 강조: 공백 구간과 그 외 토큰을 가른다.
+const MARKDOWN_BASH_TOKEN_RE = /(\s+)|(\S+)/g;
+
+// 줄마다 "코드블록 안인지, 어떤 언어인지, 펜스 줄 자체인지"를 계산한다.
+// 코드블록은 여러 줄에 걸치므로 앞 줄의 상태를 이어받아야 한다 - 줄 하나만 보고는 알 수 없다.
+function computeMarkdownLineStates(lines) {
+  const states = new Array(lines.length);
+  let openLang = null; // null = 코드블록 밖. 문자열(빈 문자열 포함)이면 그 언어의 코드블록 안.
+  for (let index = 0; index < lines.length; index += 1) {
+    const line = lines[index];
+    const fence = MARKDOWN_FENCE_RE.exec(line);
+    if (fence) {
+      if (openLang === null) {
+        const lang = fence[2] ? fence[2].toLowerCase() : "";
+        states[index] = { isCode: true, isFence: true, lang };
+        openLang = lang;
+        continue;
+      }
+      if (!fence[2]) {
+        // 정보 문자열이 없는 펜스만 닫는 펜스로 본다(CommonMark 규칙).
+        states[index] = { isCode: true, isFence: true, lang: openLang };
+        openLang = null;
+        continue;
+      }
+    }
+    states[index] = { isCode: openLang !== null, isFence: false, lang: openLang };
+  }
+  return states;
+}
+
+function markdownLineKey(line, state) {
+  return state.isCode
+    ? `${line}C${state.isFence ? "F" : ""}:${state.lang}`
+    : `${line}P`;
+}
+
+// 링크/인라인 코드/목록 표시를 한 번에 찾아 순서대로 조각낸다.
+// kind: "plain" | "list" | "link" | "code"
+function tokenizeMarkdownLineSegments(line) {
+  const segments = [];
+  let offset = 0;
+  const listMatch = MARKDOWN_LIST_MARKER_RE.exec(line);
+  if (listMatch) {
+    if (listMatch[1]) segments.push({ text: listMatch[1], kind: "plain" });
+    segments.push({ text: listMatch[2], kind: "list" });
+    offset = listMatch[0].length;
+  }
+  const remainder = line.slice(offset);
+  if (remainder.indexOf("`") < 0 && remainder.indexOf("[") < 0) {
+    if (remainder) segments.push({ text: remainder, kind: "plain" });
+    return segments;
+  }
+  let cursor = 0;
+  MARKDOWN_INLINE_RE.lastIndex = 0;
+  let match = MARKDOWN_INLINE_RE.exec(remainder);
+  while (match) {
+    if (match.index > cursor) segments.push({ text: remainder.slice(cursor, match.index), kind: "plain" });
+    segments.push({ text: match[0], kind: match[0].charAt(0) === "`" ? "code" : "link" });
+    cursor = match.index + match[0].length;
+    match = MARKDOWN_INLINE_RE.exec(remainder);
+  }
+  if (cursor < remainder.length) segments.push({ text: remainder.slice(cursor), kind: "plain" });
+  return segments;
+}
+
+// bash 코드블록 한 줄을 공백으로 갈라 명령어(첫 토큰)/옵션(-로 시작)/경로(/포함)/숫자로 나눈다.
+// 정교한 문법 분석이 아니라 정규식 기반의 최소 규칙이다.
+function tokenizeBashLineSegments(line) {
+  const segments = [];
+  let seenToken = false;
+  MARKDOWN_BASH_TOKEN_RE.lastIndex = 0;
+  let match = MARKDOWN_BASH_TOKEN_RE.exec(line);
+  while (match) {
+    if (match[1] !== undefined) {
+      segments.push({ text: match[1], kind: "plain" });
+    } else {
+      const token = match[2];
+      let kind = "plain";
+      if (!seenToken) kind = "command";
+      else if (token.charAt(0) === "-") kind = "option";
+      else if (token.indexOf("/") >= 0) kind = "path";
+      else if (/^-?\d+(\.\d+)?$/.test(token)) kind = "number";
+      segments.push({ text: token, kind });
+      seenToken = true;
+    }
+    match = MARKDOWN_BASH_TOKEN_RE.exec(line);
+  }
+  return segments;
+}
+
+// 오버레이(글자, 앞)와 배경 레이어(배경, 뒤) 에 넣을 HTML을 한 줄 분량 함께 만든다.
+// 같은 토큰화 결과를 재사용해 규칙이 늘어난 만큼 다시 훑는 비용이 두 배가 되지 않게 한다.
+function renderMarkdownLine(line, state) {
+  if (!line) return { overlayHtml: "", backdropHtml: "" };
+  if (state.isCode) {
+    const backdropHtml = `<span class="md-codeblock-bg">${escapeHtml(line)}</span>`;
+    if (!state.isFence && state.lang === "bash") {
+      const fg = tokenizeBashLineSegments(line).map((seg) => {
+        const escaped = escapeHtml(seg.text);
+        if (seg.kind === "option") return `<span class="md-bash-option">${escaped}</span>`;
+        if (seg.kind === "path") return `<span class="md-bash-path">${escaped}</span>`;
+        if (seg.kind === "number") return `<span class="md-bash-number">${escaped}</span>`;
+        return escaped;
+      }).join("");
+      return { overlayHtml: `<span class="md-codeblock-fg">${fg}</span>`, backdropHtml };
+    }
+    return { overlayHtml: `<span class="md-codeblock-fg">${escapeHtml(line)}</span>`, backdropHtml };
+  }
+  if (/^ {0,3}#{1,6}(\s|$)/.test(line)) {
+    const escaped = escapeHtml(line);
+    return { overlayHtml: `<span class="md-heading">${escaped}</span>`, backdropHtml: escaped };
+  }
+  if (line.indexOf("`") < 0 && line.indexOf("[") < 0 && !MARKDOWN_LIST_MARKER_RE.test(line)) {
+    const escaped = escapeHtml(line);
+    return { overlayHtml: escaped, backdropHtml: escaped };
+  }
+  let overlayHtml = "";
+  let backdropHtml = "";
+  tokenizeMarkdownLineSegments(line).forEach((seg) => {
+    const escaped = escapeHtml(seg.text);
+    if (seg.kind === "list") overlayHtml += `<span class="md-list-marker">${escaped}</span>`;
+    else if (seg.kind === "link") overlayHtml += `<span class="md-link">${escaped}</span>`;
+    else if (seg.kind === "code") overlayHtml += `<span class="md-code">${escaped}</span>`;
+    else overlayHtml += escaped;
+    backdropHtml += seg.kind === "code" ? `<span class="md-inlinecode-bg">${escaped}</span>` : escaped;
+  });
+  return { overlayHtml, backdropHtml };
+}
+
+function markdownLineSpan(html) {
+  const span = document.createElement("span");
+  span.className = "md-line";
+  span.innerHTML = `${html}\n`;
+  return span;
+}
+
+function syncTreeHighlightOverlayMetrics() {
+  const editor = elements.treeContent;
+  const overlay = elements.treeContentOverlay;
+  const backdrop = elements.treeContentBackdrop;
+  if (!treeHighlightOverlayEnabled || !editor || !overlay || !backdrop) return;
+  const computed = window.getComputedStyle(editor);
+  // clientWidth/clientHeight 는 세로 스크롤막대를 뺀 값이다.
+  // 이것을 그대로 써야 줄바꿈 위치가 textarea 와 같아진다. 배경 레이어도 같은 자리·크기를 써야
+  // 인라인 코드/코드블록 배경이 실제 글자 위치와 어긋나지 않는다.
+  const left = `${editor.offsetLeft + (parseFloat(computed.borderLeftWidth) || 0)}px`;
+  const top = `${editor.offsetTop + (parseFloat(computed.borderTopWidth) || 0)}px`;
+  const width = `${editor.clientWidth}px`;
+  const height = `${editor.clientHeight}px`;
+  [overlay, backdrop].forEach((layer) => {
+    TREE_HIGHLIGHT_MIRRORED_STYLES.forEach((name) => {
+      layer.style[name] = computed[name];
+    });
+    layer.style.left = left;
+    layer.style.top = top;
+    layer.style.width = width;
+    layer.style.height = height;
+  });
+}
+
+function syncTreeHighlightOverlayScroll() {
+  const editor = elements.treeContent;
+  const overlay = elements.treeContentOverlay;
+  const backdrop = elements.treeContentBackdrop;
+  if (!treeHighlightOverlayEnabled || !editor || !overlay || !backdrop) return;
+  overlay.scrollTop = editor.scrollTop;
+  overlay.scrollLeft = editor.scrollLeft;
+  backdrop.scrollTop = editor.scrollTop;
+  backdrop.scrollLeft = editor.scrollLeft;
+}
+
+function repaintTreeHighlightOverlay(force = false) {
+  const editor = elements.treeContent;
+  const overlay = elements.treeContentOverlay;
+  const backdrop = elements.treeContentBackdrop;
+  if (!treeHighlightOverlayEnabled || !editor || !overlay || !backdrop) return 0;
+  // 조합 중에는 다시 칠하지 않는다. compositionend / blur 에서 한 번만 칠한다.
+  if (!force && isEditorComposing(editor)) {
+    treeHighlightOverlayDirty = true;
+    treeHighlightOverlayStats.skippedWhileComposing += 1;
+    return 0;
+  }
+  const startedAt = performance.now();
+  const lines = String(editor.value ?? "").split("\n");
+  const states = computeMarkdownLineStates(lines);
+  const keys = lines.map((line, index) => markdownLineKey(line, states[index]));
+  const previous = treeHighlightOverlayLineKeys;
+  let changed = 0;
+  if (
+    treeHighlightOverlayFullRebuild
+    || previous.length !== overlay.childElementCount
+    || previous.length !== backdrop.childElementCount
+  ) {
+    let overlayHtml = "";
+    let backdropHtml = "";
+    for (let index = 0; index < lines.length; index += 1) {
+      const rendered = renderMarkdownLine(lines[index], states[index]);
+      overlayHtml += `<span class="md-line">${rendered.overlayHtml}\n</span>`;
+      backdropHtml += `<span class="md-line">${rendered.backdropHtml}\n</span>`;
+    }
+    overlay.innerHTML = overlayHtml;
+    backdrop.innerHTML = backdropHtml;
+    changed = lines.length;
+    treeHighlightOverlayStats.lastMode = "rebuild";
+  } else {
+    // 바뀐 줄만 갈아 끼운다. 한 글자 입력은 대개 한 줄만 바뀌므로 문서 크기와 무관해진다.
+    // 원문뿐 아니라 코드블록 상태(키)까지 같아야 "안 바뀐 줄"로 본다 - 펜스가 늘거나 줄어
+    // 이후 줄의 렌더링이 달라지는 경우를 놓치지 않기 위해서다.
+    const shorter = Math.min(previous.length, keys.length);
+    let head = 0;
+    while (head < shorter && previous[head] === keys[head]) head += 1;
+    let tail = 0;
+    while (
+      tail < shorter - head
+      && previous[previous.length - 1 - tail] === keys[keys.length - 1 - tail]
+    ) tail += 1;
+    const removeCount = previous.length - tail - head;
+    const insertCount = keys.length - tail - head;
+    if (removeCount === 1 && insertCount === 1) {
+      const rendered = renderMarkdownLine(lines[head], states[head]);
+      overlay.children[head].innerHTML = `${rendered.overlayHtml}\n`;
+      backdrop.children[head].innerHTML = `${rendered.backdropHtml}\n`;
+      changed = 1;
+    } else if (removeCount > 0 || insertCount > 0) {
+      for (let index = 0; index < removeCount; index += 1) {
+        overlay.children[head].remove();
+        backdrop.children[head].remove();
+      }
+      if (insertCount > 0) {
+        const overlayFragment = document.createDocumentFragment();
+        const backdropFragment = document.createDocumentFragment();
+        for (let index = 0; index < insertCount; index += 1) {
+          const rendered = renderMarkdownLine(lines[head + index], states[head + index]);
+          overlayFragment.appendChild(markdownLineSpan(rendered.overlayHtml));
+          backdropFragment.appendChild(markdownLineSpan(rendered.backdropHtml));
+        }
+        overlay.insertBefore(overlayFragment, overlay.children[head] || null);
+        backdrop.insertBefore(backdropFragment, backdrop.children[head] || null);
+      }
+      changed = removeCount + insertCount;
+    }
+    treeHighlightOverlayStats.lastMode = "diff";
+  }
+  treeHighlightOverlayLineKeys = keys;
+  treeHighlightOverlayDirty = false;
+  treeHighlightOverlayStats.paintCount += 1;
+  treeHighlightOverlayStats.lastChangedLines = changed;
+  treeHighlightOverlayStats.lastPaintMs = performance.now() - startedAt;
+  return treeHighlightOverlayStats.lastPaintMs;
+}
+
+function scheduleTreeHighlightOverlayRepaint() {
+  if (!treeHighlightOverlayEnabled) return;
+  treeHighlightOverlayDirty = true;
+  if (treeHighlightOverlayFrame) return;
+  treeHighlightOverlayFrame = window.requestAnimationFrame(() => {
+    treeHighlightOverlayFrame = 0;
+    if (!treeHighlightOverlayDirty) return;
+    if (isEditorComposing(elements.treeContent)) {
+      treeHighlightOverlayStats.skippedWhileComposing += 1;
+      return;
+    }
+    repaintTreeHighlightOverlay();
+    syncTreeHighlightOverlayScroll();
+  });
+}
+
+function handleTreeHighlightOverlayInput() {
+  scheduleTreeHighlightOverlayRepaint();
+}
+
+function handleTreeHighlightOverlayCompositionEnd() {
+  // M8a 의 bindEditorComposition 이 먼저 조합 상태를 정리한 뒤 이 처리가 돈다.
+  scheduleTreeHighlightOverlayRepaint();
+}
+
+function hookTreeHighlightOverlayValue(editor) {
+  if (treeHighlightOverlayValueHooked) return;
+  const base = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  if (!base || typeof base.get !== "function" || typeof base.set !== "function") return;
+  // 코드가 editor.value 에 직접 대입하는 자리가 많다. 그때는 input 이벤트가 오지 않으므로
+  // 값 대입을 가로채 다시 칠하기를 예약한다.
+  Object.defineProperty(editor, "value", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return base.get.call(this);
+    },
+    set(next) {
+      base.set.call(this, next);
+      scheduleTreeHighlightOverlayRepaint();
+    },
+  });
+  treeHighlightOverlayValueHooked = true;
+}
+
+function unhookTreeHighlightOverlayValue(editor) {
+  if (!treeHighlightOverlayValueHooked) return;
+  delete editor.value;
+  treeHighlightOverlayValueHooked = false;
+}
+
+function setTreeHighlightOverlayEnabled(enabled) {
+  const editor = elements.treeContent;
+  const overlay = elements.treeContentOverlay;
+  const backdrop = elements.treeContentBackdrop;
+  const surface = elements.treeContentSurface;
+  if (!editor || !overlay || !backdrop || !surface || editor.tagName !== "TEXTAREA") return false;
+  const next = Boolean(enabled);
+  if (next === treeHighlightOverlayEnabled) return treeHighlightOverlayEnabled;
+  treeHighlightOverlayEnabled = next;
+  surface.classList.toggle("highlight-on", next);
+  overlay.classList.toggle("hidden", !next);
+  backdrop.classList.toggle("hidden", !next);
+  if (next) {
+    hookTreeHighlightOverlayValue(editor);
+    editor.addEventListener("input", handleTreeHighlightOverlayInput);
+    treeHighlightOverlayResizeObserver?.observe(editor);
+    treeHighlightOverlayLineKeys = [];
+    syncTreeHighlightOverlayMetrics();
+    repaintTreeHighlightOverlay(true);
+    syncTreeHighlightOverlayScroll();
+  } else {
+    editor.removeEventListener("input", handleTreeHighlightOverlayInput);
+    treeHighlightOverlayResizeObserver?.disconnect();
+    unhookTreeHighlightOverlayValue(editor);
+    if (treeHighlightOverlayFrame) {
+      window.cancelAnimationFrame(treeHighlightOverlayFrame);
+      treeHighlightOverlayFrame = 0;
+    }
+    treeHighlightOverlayDirty = false;
+    treeHighlightOverlayLineKeys = [];
+    overlay.textContent = "";
+    overlay.removeAttribute("style");
+    backdrop.textContent = "";
+    backdrop.removeAttribute("style");
+  }
+  return treeHighlightOverlayEnabled;
+}
+
+function initializeTreeHighlightOverlay() {
+  const editor = elements.treeContent;
+  const overlay = elements.treeContentOverlay;
+  const backdrop = elements.treeContentBackdrop;
+  if (!editor || !overlay || !backdrop || editor.tagName !== "TEXTAREA") return;
+  if (editor.dataset.highlightOverlayReady === "true") return;
+  editor.dataset.highlightOverlayReady = "true";
+  editor.addEventListener("scroll", syncTreeHighlightOverlayScroll, { passive: true });
+  editor.addEventListener("compositionend", handleTreeHighlightOverlayCompositionEnd);
+  editor.addEventListener("blur", handleTreeHighlightOverlayCompositionEnd);
+  if (typeof ResizeObserver === "function") {
+    treeHighlightOverlayResizeObserver = new ResizeObserver(() => {
+      syncTreeHighlightOverlayMetrics();
+      syncTreeHighlightOverlayScroll();
+    });
+  }
+  window.addEventListener("resize", () => {
+    syncTreeHighlightOverlayMetrics();
+    syncTreeHighlightOverlayScroll();
+  });
+  setTreeHighlightOverlayEnabled(TREE_HIGHLIGHT_OVERLAY_DEFAULT);
+}
+
 function bindEvents() {
   elements.navTabs.forEach((button) => {
     button.addEventListener("click", () => {
@@ -3050,9 +4555,10 @@ function bindEvents() {
     renderArchiveList();
   });
 
-  elements.dailyContent.addEventListener("input", () => {
-    saveDailyFromEditor();
+  elements.dailyContent.addEventListener("input", (event) => {
+    handleEditorInput(elements.dailyContent, event, saveDailyFromEditor);
   });
+  bindEditorComposition(elements.dailyContent, saveDailyFromEditor);
 
   elements.railSidebarBtn.addEventListener("click", () => {
     state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
@@ -3070,6 +4576,10 @@ function bindEvents() {
 
   elements.railGraphBtn.addEventListener("click", () => {
     toggleGraph();
+  });
+
+  elements.railTreeMapBtn.addEventListener("click", () => {
+    toggleTreeMap();
   });
 
   elements.railMarkdownExportBtn.addEventListener("click", exportMarkdown);
@@ -3090,6 +4600,17 @@ function bindEvents() {
 
   elements.graphBtn.addEventListener("click", () => {
     toggleGraph();
+  });
+
+  elements.treeMapBtn.addEventListener("click", () => {
+    toggleTreeMap();
+  });
+
+  elements.treeMapCloseBtn.addEventListener("click", closeTreeMap);
+
+  elements.treeMapTopicSelect.addEventListener("change", () => {
+    state.treeMapTopicId = elements.treeMapTopicSelect.value || null;
+    renderTreeMap();
   });
 
   elements.exportMarkdownBtn.addEventListener("click", exportMarkdown);
@@ -3115,6 +4636,10 @@ function bindEvents() {
   elements.workspaceSelect?.addEventListener("change", renderWorkspacePanel);
 
   elements.settingsBtn.addEventListener("click", () => {
+    toggleSettings();
+  });
+
+  elements.syncStatusBtn?.addEventListener("click", () => {
     toggleSettings();
   });
 
@@ -3178,6 +4703,12 @@ function bindEvents() {
   elements.tabIndentSelect.addEventListener("change", () => {
     state.settings.tabIndentSize = normalizeTabIndentSize(elements.tabIndentSelect.value);
     persistSettings();
+  });
+  elements.undoDepthSelect.addEventListener("change", () => {
+    state.settings.undoDepth = normalizeUndoDepth(elements.undoDepthSelect.value);
+    persistSettings();
+    // 줄인 단계 수를 지금 쌓여 있는 기록에도 바로 적용한다.
+    trimTreeUndoStack();
   });
 
   elements.backlinksToggle.addEventListener("change", () => {
@@ -3270,6 +4801,10 @@ function bindEvents() {
 
   elements.resetSettingsBtn.addEventListener("click", resetViewSettings);
 
+  elements.checkUpdateBtn?.addEventListener("click", () => {
+    checkAppUpdate();
+  });
+
   elements.addRootBtn.addEventListener("click", () => {
     addRootNote();
   });
@@ -3293,35 +4828,23 @@ function bindEvents() {
     addRootNote();
   });
 
-  elements.treeTitleInput.addEventListener("input", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    if (isReadOnlyTreeNode(selected)) {
-      elements.treeTitleInput.value = selected.title;
-      return;
-    }
-    selected.title = elements.treeTitleInput.value;
-    markTreeNodeChanged(selected);
-    persist();
-    renderTreeListOnly();
-    renderOpenTreeTabs();
-    renderSidebarKnowledge();
-    renderTreePath(selected);
-    renderNoteStats(selected);
-    renderLinkPanel();
-    if (!elements.graphView.classList.contains("hidden")) renderGraph();
-    showSaved(elements.treeSavedLabel);
+  elements.treeTitleInput.addEventListener("input", (event) => {
+    handleEditorInput(elements.treeTitleInput, event, flushTreeTitleInput);
   });
+  bindEditorComposition(elements.treeTitleInput, flushTreeTitleInput);
 
-  elements.treeContent.addEventListener("input", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    if (isReadOnlyTreeNode(selected)) {
-      elements.treeContent.value = visibleContentForNode(selected);
-      return;
-    }
-    syncTreeContentFromEditor();
+  elements.treeContent.addEventListener("input", (event) => {
+    handleEditorInput(elements.treeContent, event, flushTreeContentInput);
   });
+  bindEditorComposition(elements.treeContent, flushTreeContentInput);
+  // bindEditorComposition 이 먼저 조합 상태를 정리하고 밀린 처리를 흘려보낸다.
+  // 그 뒤에 도는 이 처리는 밀린 입력이 없었던 경우를 받아 준다.
+  elements.treeContent.addEventListener("compositionend", () => {
+    captureTreeEditorHistory("type");
+  });
+  elements.treeContent.addEventListener("keyup", syncTreeEditorHistoryCursor);
+  elements.treeContent.addEventListener("mouseup", syncTreeEditorHistoryCursor);
+  elements.treeContent.addEventListener("select", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
 
   elements.favoriteBtn.addEventListener("click", () => {
@@ -3362,6 +4885,11 @@ function bindEvents() {
   elements.noteFindPrevBtn.addEventListener("click", () => moveNoteFindMatch(-1));
   elements.noteFindNextBtn.addEventListener("click", () => moveNoteFindMatch(1));
   elements.noteFindCloseBtn.addEventListener("click", closeNoteFind);
+  elements.noteReplaceToggleBtn.addEventListener("click", toggleNoteReplaceRow);
+  elements.noteReplaceInput.addEventListener("input", updateNoteReplaceState);
+  elements.noteReplaceInput.addEventListener("keydown", handleNoteReplaceInputKey);
+  elements.noteReplaceCurrentBtn.addEventListener("click", replaceCurrentNoteFindMatch);
+  elements.noteReplaceAllBtn.addEventListener("click", replaceAllNoteFindMatches);
   elements.noteActionMenuBtn?.addEventListener("click", (event) => {
     event.stopPropagation();
     toggleNoteActionMenu();
@@ -3382,6 +4910,7 @@ function bindEvents() {
   elements.closeAllTabsBtn.addEventListener("click", closeAllTreeTabs);
   elements.moveUpBtn.addEventListener("click", () => moveSelectedTreeNode(-1));
   elements.moveDownBtn.addEventListener("click", () => moveSelectedTreeNode(1));
+  elements.moveNodeBtn.addEventListener("click", moveSelectedTreeNodeToNewParent);
 
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -3557,6 +5086,11 @@ function bindEvents() {
       toggleMarkdownTask(Number(taskInput.closest(".task-list-item").dataset.taskIndex));
       return;
     }
+    const copyBtn = event.target.closest(".code-block-copy-btn");
+    if (copyBtn) {
+      handleCodeBlockCopy(copyBtn);
+      return;
+    }
     const link = event.target.closest("[data-wiki-link]");
     if (!link) return;
     openWikiLink(link.dataset.wikiLink);
@@ -3647,6 +5181,7 @@ function renderSettings() {
   elements.fontSizeSelect.value = state.settings.fontSize;
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.tabIndentSelect.value = String(state.settings.tabIndentSize);
+  elements.undoDepthSelect.value = String(normalizeUndoDepth(state.settings.undoDepth));
   elements.backlinksToggle.checked = state.settings.showBacklinks;
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
@@ -3655,6 +5190,7 @@ function renderSettings() {
   renderDesktopStorageStatus();
   renderShortcutEditor();
   renderFeatureSettings();
+  renderMarkdownColorEditor();
   renderWorkspacePanel();
   elements.accentChoices.replaceChildren(
     ...ACCENTS.map((accent) => {
@@ -3918,6 +5454,7 @@ function renderServerSettings() {
   renderServerConflicts(server.conflicts);
   renderServerProfileMeta(profile);
   renderServerGroupJoinMeta(profile);
+  renderUpdateCheckAvailability();
 }
 
 function applyHostedServerSettingsVisibility() {
@@ -4028,6 +5565,34 @@ function renderServerStatus(status, message) {
   if (status === "ok") elements.serverStatusText.classList.add("ok");
   if (status === "saved" || status === "testing") elements.serverStatusText.classList.add("warn");
   if (status === "bad") elements.serverStatusText.classList.add("bad");
+  renderSyncStatusIndicator(server, status);
+}
+
+function renderSyncStatusIndicator(server, status) {
+  if (!elements.syncStatusBtn || !elements.syncStatusBtnLabel) return;
+  elements.syncStatusDot?.classList.remove("ok", "warn", "bad");
+  elements.syncStatusBtn.removeAttribute("title");
+  if (server.mode !== "server") {
+    elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.local");
+    return;
+  }
+  if (status === "testing") {
+    elements.syncStatusDot?.classList.add("warn");
+    elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.syncing");
+    return;
+  }
+  if (status === "bad") {
+    elements.syncStatusDot?.classList.add("bad");
+    elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.failed");
+    if (server.lastMessage) elements.syncStatusBtn.title = server.lastMessage;
+    return;
+  }
+  if (status === "ok" || server.lastSyncedAt) {
+    elements.syncStatusDot?.classList.add("ok");
+    elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.success");
+    return;
+  }
+  elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.idle");
 }
 
 function translatedServerStatusMessage(server, message) {
@@ -5037,7 +6602,8 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
   } catch (error) {
     const server = state.settings.server;
     server.lastCheckedAt = new Date().toISOString();
-    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message}`);
+    const action = classifySyncFailureAction(error);
+    setServerRawMessage(server, "bad", `${t("settings.server.fail")}: ${error.message} ${action}`);
   } finally {
     persistSettings();
     renderServerSettings();
@@ -5047,6 +6613,26 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       scheduleServerSync({ force: true, delay: 800 });
     }
   }
+}
+
+function classifySyncFailureAction(error) {
+  const message = String(error?.message || "");
+  const name = String(error?.name || "");
+  if (name === "TypeError" || /fetch/i.test(message) || /network/i.test(message)) {
+    return t("settings.server.fail.action.network");
+  }
+  const httpMatch = /^HTTP\s+(\d+)/.exec(message);
+  const statusCode = httpMatch ? Number(httpMatch[1]) : null;
+  if (statusCode === 401 || statusCode === 403) {
+    return t("settings.server.fail.action.auth");
+  }
+  if (statusCode !== null && statusCode >= 500) {
+    return t("settings.server.fail.action.retry");
+  }
+  if (name === "AbortError" || /timeout/i.test(message)) {
+    return t("settings.server.fail.action.retry");
+  }
+  return t("settings.server.fail.action.default");
 }
 
 function prepareServerRequest(server) {
@@ -5067,6 +6653,93 @@ function prepareServerRequest(server) {
     return false;
   }
   return true;
+}
+
+// 점으로 나뉜 버전 문자열을 비교한다 (예: "2.3.6" > "2.3.5").
+// a > b 이면 양수, a < b 이면 음수, 같으면 0을 돌려준다.
+function compareVersions(a, b) {
+  const partsA = String(a || "0").split(".").map((part) => parseInt(part, 10) || 0);
+  const partsB = String(b || "0").split(".").map((part) => parseInt(part, 10) || 0);
+  const length = Math.max(partsA.length, partsB.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (partsA[index] || 0) - (partsB[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
+function canCheckAppUpdate() {
+  const server = state.settings.server || defaultServerSettings();
+  return server.mode === "server" && !!server.url;
+}
+
+function renderUpdateCheckAvailability() {
+  if (!elements.checkUpdateBtn) return;
+  const canCheck = canCheckAppUpdate();
+  elements.checkUpdateBtn.disabled = !canCheck;
+  if (!canCheck) {
+    setUpdateStatusMessage(t("settings.update.noServer"), "idle");
+  }
+}
+
+function setUpdateStatusMessage(text, status = "idle") {
+  if (!elements.updateStatusText) return;
+  elements.updateStatusText.textContent = text;
+  elements.updateStatusText.classList.remove("ok", "warn", "bad");
+  if (status === "ok") elements.updateStatusText.classList.add("ok");
+  if (status === "warn") elements.updateStatusText.classList.add("warn");
+  if (status === "bad") elements.updateStatusText.classList.add("bad");
+}
+
+function renderUpdateDownloadLinks(payload) {
+  if (!elements.updateDownloadLinks) return;
+  elements.updateDownloadLinks.innerHTML = "";
+  if (!payload) {
+    elements.updateDownloadLinks.classList.add("hidden");
+    return;
+  }
+  const links = [];
+  if (isDesktopClient() && payload.downloads?.windows_installer) {
+    links.push({ href: payload.downloads.windows_installer, label: t("settings.update.downloadInstaller") });
+  }
+  if (payload.release_url) {
+    links.push({ href: payload.release_url, label: t("settings.update.downloadReleasePage") });
+  }
+  links.forEach((link) => {
+    const anchor = document.createElement("a");
+    anchor.href = link.href;
+    anchor.target = "_blank";
+    anchor.rel = "noopener noreferrer";
+    anchor.textContent = link.label;
+    anchor.className = "update-download-link";
+    elements.updateDownloadLinks.append(anchor);
+  });
+  elements.updateDownloadLinks.classList.toggle("hidden", links.length === 0);
+}
+
+async function checkAppUpdate() {
+  const server = state.settings.server || defaultServerSettings();
+  if (!canCheckAppUpdate()) {
+    setUpdateStatusMessage(t("settings.update.noServer"), "idle");
+    renderUpdateDownloadLinks(null);
+    return;
+  }
+  setUpdateStatusMessage(t("settings.update.checking"), "idle");
+  renderUpdateDownloadLinks(null);
+  try {
+    const payload = await requestServerJson(server, "/api/v1/app/release");
+    const comparison = compareVersions(payload.latest_version, APP_VERSION);
+    if (comparison > 0) {
+      setUpdateStatusMessage(t("settings.update.newVersion", { version: payload.latest_version }), "warn");
+      renderUpdateDownloadLinks(payload);
+    } else {
+      setUpdateStatusMessage(t("settings.update.upToDate"), "ok");
+      renderUpdateDownloadLinks(null);
+    }
+  } catch (error) {
+    setUpdateStatusMessage(t("settings.update.checkFailed"), "bad");
+    renderUpdateDownloadLinks(null);
+  }
 }
 
 async function requestServerJson(server, path, options = {}) {
@@ -5322,6 +6995,7 @@ function groupMessageElement(message, currentOwnerId) {
     `<p class="messenger-body">${escapeHtml(message.body || "")}</p>`,
     messengerAttachmentsHtml(message.attachments || []),
   ].join("");
+  hydrateMessengerAttachmentPreviews(item, message.attachments || []);
   return item;
 }
 
@@ -5487,7 +7161,16 @@ async function createMessengerRoomFromPrompt() {
 }
 
 function handleMessengerAttachmentChange() {
-  pendingMessengerAttachment = elements.groupMessengerFileInput?.files?.[0] || null;
+  const file = elements.groupMessengerFileInput?.files?.[0] || null;
+  const maxBytes = Number(state.settings.server?.capabilities?.messenger_max_upload_bytes) || 0;
+  if (file && maxBytes > 0 && file.size > maxBytes) {
+    showNotice(t("messenger.attachment.failure.fileTooLarge"), "error");
+    if (elements.groupMessengerFileInput) elements.groupMessengerFileInput.value = "";
+    pendingMessengerAttachment = null;
+    renderMessengerAttachmentLabel();
+    return;
+  }
+  pendingMessengerAttachment = file;
   renderMessengerAttachmentLabel();
 }
 
@@ -5518,11 +7201,73 @@ async function uploadMessengerAttachment(server, roomId, body) {
   });
 }
 
+function messengerAttachmentExtension(attachment) {
+  const name = String(attachment?.original_name || "");
+  const dotIndex = name.lastIndexOf(".");
+  if (dotIndex <= 0 || dotIndex === name.length - 1) return "";
+  return name.slice(dotIndex + 1).toUpperCase();
+}
+
+function messengerAttachmentIsImage(attachment) {
+  return /^image\//i.test(String(attachment?.content_type || ""));
+}
+
+function messengerAttachmentKindLabel(attachment) {
+  const contentType = String(attachment?.content_type || "").toLowerCase();
+  const ext = messengerAttachmentExtension(attachment);
+  if (contentType === "application/pdf" || ext === "PDF") {
+    return t("messenger.attachment.kindPdf");
+  }
+  if (messengerAttachmentIsImage(attachment)) {
+    return ext ? t("messenger.attachment.kindImageExt", { ext }) : t("messenger.attachment.kindImage");
+  }
+  return ext ? t("messenger.attachment.kindFileExt", { ext }) : t("messenger.attachment.kindFile");
+}
+
 function messengerAttachmentsHtml(attachments) {
   if (!Array.isArray(attachments) || attachments.length === 0) return "";
   return `<div class="messenger-attachments">${attachments.map((attachment) => {
-    return `<button class="messenger-attachment" type="button" data-attachment-id="${escapeHtml(attachment.id)}" data-file-name="${escapeHtml(attachment.original_name || "attachment")}">${escapeHtml(attachment.original_name || "attachment")}</button>`;
+    const id = escapeHtml(attachment.id);
+    const fileName = escapeHtml(attachment.original_name || "attachment");
+    const meta = escapeHtml([formatBytes(attachment.size_bytes), messengerAttachmentKindLabel(attachment)].filter(Boolean).join(" · "));
+    const isImage = messengerAttachmentIsImage(attachment);
+    const preview = isImage
+      ? `<div class="messenger-attachment-preview" data-attachment-id="${id}" data-file-name="${fileName}" title="${escapeHtml(t("messenger.attachment.download"))}"><span class="messenger-attachment-preview-placeholder">${escapeHtml(t("messenger.attachment.previewLoading"))}</span></div>`
+      : "";
+    return `<div class="messenger-attachment">${preview}<button class="messenger-attachment-download" type="button" data-attachment-id="${id}" data-file-name="${fileName}" title="${escapeHtml(t("messenger.attachment.download"))}"><span class="messenger-attachment-name">${fileName}</span><span class="messenger-attachment-meta">${meta}</span></button></div>`;
   }).join("")}</div>`;
+}
+
+async function hydrateMessengerAttachmentPreview(node, attachment) {
+  const cacheKey = String(attachment.id);
+  const cached = messengerAttachmentPreviewCache.get(cacheKey);
+  if (cached) {
+    node.innerHTML = `<img src="${escapeHtml(cached)}" alt="${escapeHtml(attachment.original_name || "")}" />`;
+    return;
+  }
+  const server = state.settings.server;
+  if (!prepareServerRequest(server)) return;
+  try {
+    const response = await fetch(
+      `${normalizeServerUrl(server.url)}/api/v1/messenger/attachments/${encodeURIComponent(attachment.id)}?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
+      { headers: serverAuthHeaders(server) },
+    );
+    if (!response.ok) throw new Error(await serverResponseError(response));
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    messengerAttachmentPreviewCache.set(cacheKey, url);
+    node.innerHTML = `<img src="${escapeHtml(url)}" alt="${escapeHtml(attachment.original_name || "")}" />`;
+  } catch {
+    node.textContent = t("messenger.attachment.previewFailed");
+  }
+}
+
+function hydrateMessengerAttachmentPreviews(container, attachments) {
+  if (!Array.isArray(attachments) || attachments.length === 0) return;
+  container.querySelectorAll(".messenger-attachment-preview").forEach((node) => {
+    const attachment = attachments.find((item) => String(item.id) === node.dataset.attachmentId);
+    if (attachment) hydrateMessengerAttachmentPreview(node, attachment);
+  });
 }
 
 async function handleMessengerAttachmentClick(event) {
@@ -5551,6 +7296,15 @@ async function handleMessengerAttachmentClick(event) {
   }
 }
 
+function knownMessengerUploadFailureKey(reason) {
+  const map = {
+    file_too_large: "messenger.attachment.failure.fileTooLarge",
+    extension_not_allowed: "messenger.attachment.failure.extensionNotAllowed",
+    mime_type_not_allowed: "messenger.attachment.failure.mimeTypeNotAllowed",
+  };
+  return map[reason] || "";
+}
+
 async function serverResponseError(response) {
   const statusPart = `HTTP ${response.status}`;
   try {
@@ -5563,6 +7317,14 @@ async function serverResponseError(response) {
           return `${statusPart}: ${t("settings.server.inactiveDenied")}`;
         }
         return `${statusPart}: ${parsed.detail}`;
+      }
+      if (parsed && typeof parsed === "object" && parsed.detail && typeof parsed.detail === "object") {
+        const reasonKey = knownMessengerUploadFailureKey(parsed.detail.reason);
+        if (reasonKey) return `${statusPart}: ${t(reasonKey)}`;
+        if (typeof parsed.detail.message === "string") {
+          return `${statusPart}: ${parsed.detail.message}`;
+        }
+        return `${statusPart}: ${body.slice(0, 200)}`;
       }
       if (parsed && typeof parsed === "object" && typeof parsed.message === "string") {
         return `${statusPart}: ${parsed.message}`;
@@ -6113,6 +7875,67 @@ function renderFeatureSettings() {
   );
 }
 
+// U4: Markdown 색상 설정 화면. 데이터 계층(M9)은 손대지 않고
+// markdownColorValue()/setMarkdownColor()/resetMarkdownColors()/isMarkdownColorChanged() 만 부른다.
+function renderMarkdownColorEditor() {
+  if (!elements.markdownColorEditor) return;
+  const resetAllBtn = document.createElement("button");
+  resetAllBtn.type = "button";
+  resetAllBtn.className = "markdown-color-reset-all-btn";
+  resetAllBtn.textContent = t("settings.markdownColors.resetAll");
+  resetAllBtn.addEventListener("click", () => {
+    resetMarkdownColors("all");
+    renderMarkdownColorEditor();
+  });
+  elements.markdownColorEditor.replaceChildren(
+    resetAllBtn,
+    ...MARKDOWN_COLOR_TOKENS.map((item) => renderMarkdownColorRow(item)),
+  );
+}
+
+function renderMarkdownColorRow(item) {
+  const row = document.createElement("div");
+  row.className = "markdown-color-row";
+  const label = document.createElement("span");
+  label.className = "markdown-color-label";
+  label.textContent = t(`markdownColor.${item.id}`);
+  row.append(label);
+  MARKDOWN_COLOR_MODES.forEach((mode) => {
+    const group = document.createElement("label");
+    group.className = "markdown-color-input-group";
+    const modeLabel = document.createElement("span");
+    modeLabel.className = "markdown-color-mode-label";
+    modeLabel.textContent = t(`settings.markdownColors.${mode}`);
+    const input = document.createElement("input");
+    input.type = "color";
+    input.className = "markdown-color-input";
+    input.value = markdownColorValue(item.id, mode);
+    input.addEventListener("change", (event) => {
+      setMarkdownColor(item.id, event.target.value, mode);
+      renderMarkdownColorEditor();
+    });
+    group.append(modeLabel, input);
+    if (isMarkdownColorChanged(item.id, mode)) {
+      const badge = document.createElement("small");
+      badge.className = "markdown-color-changed-badge";
+      badge.textContent = t("settings.markdownColors.changed");
+      group.append(badge);
+    }
+    row.append(group);
+  });
+  const resetBtn = document.createElement("button");
+  resetBtn.type = "button";
+  resetBtn.className = "markdown-color-reset-btn";
+  resetBtn.textContent = t("settings.markdownColors.reset");
+  resetBtn.addEventListener("click", () => {
+    setMarkdownColor(item.id, "", "light");
+    setMarkdownColor(item.id, "", "dark");
+    renderMarkdownColorEditor();
+  });
+  row.append(resetBtn);
+  return row;
+}
+
 function featureEnabled(featureId) {
   return state.settings.features?.[featureId] !== false;
 }
@@ -6145,10 +7968,10 @@ function handleShortcutCapture(event) {
 }
 
 function assignShortcut(actionId, shortcut) {
-  const signature = shortcutSignature(shortcut);
   Object.entries(state.settings.shortcuts).forEach(([id, current]) => {
-    if (id !== actionId && shortcutSignature(current) === signature) {
-      delete state.settings.shortcuts[id];
+    if (id !== actionId && shortcutConflicts(shortcut, current)) {
+      // 지우면 기본값으로 되돌아가 방금 뺏은 조합이 되살아난다. 미지정으로 남긴다.
+      state.settings.shortcuts[id] = {};
     }
   });
   state.settings.shortcuts[actionId] = shortcut;
@@ -6160,7 +7983,46 @@ function shortcutForAction(actionId) {
 }
 
 function shortcutMatches(event, actionId) {
-  return shortcutSignature(shortcutFromEvent(event)) === shortcutSignature(shortcutForAction(actionId));
+  return matchesShortcutDefinition(event, shortcutForAction(actionId));
+}
+
+// 눌린 키가 기록된 조합과 같은지 보는 곳. 단축키 판정은 모두 여기를 거친다.
+//
+// 기본 정의는 글쇠 값(key)으로만 적혀 있고, 사용자가 설정에서 다시 잡은 조합에는
+// 물리 키 위치(code)가 함께 실린다. 실제 keydown 에는 code 가 늘 실려 오므로
+// code 를 언제나 견주면 기본 정의는 어떤 키를 눌러도 맞지 않는다.
+// 그래서 기록된 조합이 code 를 지정했을 때만 code 로 견주고, 없으면 key 로 견준다.
+//
+// code 로 견줄 때는 key 를 보지 않는다. 자판 배열을 바꾸면 같은 물리 키라도 key 가
+// 달라지는데, 다시 잡은 단축키는 물리 키 위치로 기억하는 것이 의도이기 때문이다.
+// (한글 자판에서 Ctrl+ㅂ 을 눌러도 code 는 KeyB 다. Shift+7 의 key 가 & 인 것도 같다.)
+function matchesShortcutDefinition(event, shortcut) {
+  const target = normalizeShortcut(shortcut || {});
+  if (!target.key && !target.code) return false;
+  const byCode = Boolean(target.code);
+  return shortcutCompareKey(shortcutFromEvent(event), byCode) === shortcutCompareKey(target, byCode);
+}
+
+// 견주기용 문자열. 보여 주기용인 shortcutSignature 와 달리 축을 하나만 쓴다.
+function shortcutCompareKey(shortcut, byCode) {
+  const normalized = normalizeShortcut(shortcut);
+  return [
+    normalized.ctrl ? "ctrl" : "",
+    normalized.shift ? "shift" : "",
+    normalized.alt ? "alt" : "",
+    byCode ? `code:${normalized.code || ""}` : `key:${normalized.key}`,
+  ].filter(Boolean).join("+");
+}
+
+// 설정 화면의 중복 검사. 한 번의 키 입력으로 둘 다 발동하면 겹친 것으로 본다.
+// 한쪽만 code 를 들고 있으면(기본 정의 대 다시 잡은 조합) 지금 자판에서 겹치는지를 key 로 본다.
+function shortcutConflicts(left, right) {
+  const a = normalizeShortcut(left);
+  const b = normalizeShortcut(right);
+  if (!a.key && !a.code) return false;
+  if (a.ctrl !== b.ctrl || a.shift !== b.shift || a.alt !== b.alt) return false;
+  if (a.code && b.code) return a.code === b.code;
+  return Boolean(a.key) && a.key === b.key;
 }
 
 function shortcutEquals(left, right) {
@@ -6194,6 +8056,8 @@ function normalizeShortcutKey(key = "") {
   return value;
 }
 
+// 조합을 그대로 옮겨 적은 값. 저장된 조합이 예전 기본값 그대로인지 가릴 때만 쓴다.
+// 키 입력 판정에는 쓰지 않는다. 그쪽은 matchesShortcutDefinition 이 맡는다.
 function shortcutSignature(shortcut = {}) {
   const normalized = normalizeShortcut(shortcut);
   const code = normalized.code ? `:${normalized.code}` : "";
@@ -6252,6 +8116,8 @@ function applySettings() {
   });
   document.documentElement.style.setProperty("--blue", accent.value);
   document.documentElement.style.setProperty("--tree-list-width", `${state.settings.treeListWidth}px`);
+  applyMarkdownColors(resolvedTheme);
+  syncTreeHighlightOverlayMetrics();
   applyLanguage();
 }
 
@@ -6303,6 +8169,7 @@ function applyLanguage() {
   setText("#manageActionTitle", t("side.manage"));
   setText("#quickSwitchBtn", t("side.quick"));
   setText("#graphBtn", t("side.graph"));
+  setText("#treeMapBtn", t("side.treeMap"));
   setText("#exportMarkdownBtn", t("side.mdExport"));
   setText("#importMarkdownBtn", t("side.mdImport"));
   setText("#deletedTreeBtnLabel", t("side.trash"));
@@ -6352,6 +8219,12 @@ function applyLanguage() {
   setIconLabel(elements.noteFindPrevBtn, t("aria.prevResult"));
   setIconLabel(elements.noteFindNextBtn, t("aria.nextResult"));
   setIconLabel(elements.noteFindCloseBtn, t("aria.close"));
+  setIconLabel(elements.noteReplaceToggleBtn, t("aria.replaceToggle"));
+  setPlaceholder(elements.noteReplaceInput, t("editor.replacePlaceholder"));
+  setTitle(elements.noteReplaceInput, t("editor.replacePlaceholder"));
+  setText("#noteReplaceCurrentBtn", t("editor.replaceCurrent"));
+  setText("#noteReplaceAllBtn", t("editor.replaceAll"));
+  setText("#noteReplaceLockedHint", t("editor.replaceLocked"));
   setText("#outlineToggleBtn", t("editor.outline"));
   setText("#insertTimeBtn", t("editor.insertTime"));
   setText("#openDetectedLinkBtn", t("editor.openLink"));
@@ -6365,6 +8238,7 @@ function applyLanguage() {
   );
   setText("#moveUpBtn", t("tree.moveUp"));
   setText("#moveDownBtn", t("tree.moveDown"));
+  setText("#moveNodeBtn", t("tree.moveNode"));
   setText("#addChildBtn", t("note.addChild"));
   setText("#deleteTreeBtn", t("tree.delete"));
   setText("#resultsEyebrow", t("results.eyebrow"));
@@ -6440,6 +8314,14 @@ function applyLanguage() {
     4: t("settings.tabIndent.4"),
     8: t("settings.tabIndent.8"),
   });
+  setText("#undoDepthSettingTitle", t("settings.undoDepth.title"));
+  setText("#undoDepthSettingDesc", t("settings.undoDepth.desc"));
+  setIconLabel(elements.undoDepthSelect, t("aria.undoDepth"));
+  setOptionLabels(elements.undoDepthSelect, {
+    10: t("settings.undoDepth.10"),
+    50: t("settings.undoDepth.50"),
+    100: t("settings.undoDepth.100"),
+  });
   setText("#backlinksSettingTitle", t("settings.backlinks.title"));
   setText("#backlinksSettingDesc", t("settings.backlinks.desc"));
   setText("#tagsSettingTitle", t("settings.tags.title"));
@@ -6450,6 +8332,8 @@ function applyLanguage() {
   setText("#shortcutGuideSettingDesc", t("settings.shortcutGuide.desc"));
   setText("#featuresSettingTitle", t("settings.features.title"));
   setText("#featuresSettingDesc", t("settings.features.desc"));
+  setText("#markdownColorsSettingTitle", t("settings.markdownColors.title"));
+  setText("#markdownColorsSettingDesc", t("settings.markdownColors.desc"));
   setText("#serverSettingTitle", t("settings.server.title"));
   setText("#serverSettingDesc", t(isHostedWebClient() ? "settings.server.desc.hosted" : "settings.server.desc"));
   setText("#serverGuideTitle", t("settings.server.guide.title"));
@@ -6533,6 +8417,8 @@ function applyLanguage() {
   setText("#versionSettingTitle", t("settings.version.title"));
   setText("#versionSettingDesc", t("settings.version.desc"));
   setText("#appVersionText", `${isDesktopClient() ? "Desktop" : "Web"} ${APP_VERSION}`);
+  setText("#checkUpdateBtn", t("settings.update.check"));
+  renderUpdateCheckAvailability();
   setText("#workspaceSettingTitle", t("settings.workspace.title"));
   setText("#workspaceSettingDesc", t("settings.workspace.desc"));
   setPlaceholder(elements.workspaceNameInput, t("settings.workspace.placeholder"));
@@ -6558,6 +8444,10 @@ function applyLanguage() {
   setText("#graphEyebrow", t("graph.eyebrow"));
   setText("#graphTitle", t("graph.title"));
   setIconLabel(elements.graphCloseBtn, t("aria.close"));
+  setText("#treeMapEyebrow", t("treeMap.eyebrow"));
+  setText("#treeMapTitle", t("treeMap.title"));
+  setText("#treeMapTopicLabel", t("treeMap.topicLabel"));
+  setIconLabel(elements.treeMapCloseBtn, t("aria.close"));
   setText("#deletedTreeEyebrow", t("trash.eyebrow"));
   setText("#deletedTreeTitle", t("trash.title"));
   setIconLabel(elements.deletedTreeCloseBtn, t("aria.close"));
@@ -6581,6 +8471,7 @@ function applyLanguage() {
   setTitle(elements.railSearchBtn, t("rail.search"));
   setTitle(elements.railQuickBtn, t("rail.quick"));
   setTitle(elements.railGraphBtn, t("rail.graph"));
+  setTitle(elements.railTreeMapBtn, t("rail.treeMap"));
   setTitle(elements.railMarkdownExportBtn, t("rail.mdExport"));
   setTitle(elements.railMarkdownImportBtn, t("rail.mdImport"));
   setTitle(elements.railDeletedTreeBtn, t("rail.trash"));
@@ -6589,6 +8480,7 @@ function applyLanguage() {
   setIconLabel(elements.searchPopoverCloseBtn, t("aria.close"));
   renderShortcutEditor();
   renderFeatureSettings();
+  renderMarkdownColorEditor();
   renderTree();
   renderDaily();
   renderResults();
@@ -6624,6 +8516,7 @@ function renderRailButtons() {
     [elements.railSearchBtn, "rail.letter.search"],
     [elements.railQuickBtn, "rail.letter.quick"],
     [elements.railGraphBtn, "rail.letter.graph"],
+    [elements.railTreeMapBtn, "rail.letter.treeMap"],
     [elements.railMarkdownExportBtn, "rail.letter.mdExport"],
     [elements.railMarkdownImportBtn, "rail.letter.mdImport"],
     [elements.railDeletedTreeBtn, "rail.letter.trash"],
@@ -6794,6 +8687,8 @@ function commandPaletteItem(command) {
 
 function handleCommandPaletteInputKey(event) {
   if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  // 조합 중 Enter 는 IME 의 확정이다. 여기서 명령을 실행하면 안 된다.
+  if (event.key === "Enter" && (event.isComposing || event.keyCode === 229)) return;
   const first = elements.commandPaletteList.querySelector(".command-item");
   if (!first) return;
   event.preventDefault();
@@ -6920,6 +8815,8 @@ function renderQuickResults() {
 
 function handleQuickInputKey(event) {
   if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  // 조합 중 Enter 는 IME 의 확정이다. 여기서 첫 결과를 열면 안 된다.
+  if (event.key === "Enter" && (event.isComposing || event.keyCode === 229)) return;
   const first = elements.quickResults.querySelector(".quick-result");
   if (!first) return;
   event.preventDefault();
@@ -6974,6 +8871,167 @@ function toggleGraph() {
 
 function closeGraph() {
   elements.graphView.classList.add("hidden");
+}
+
+function openTreeMap() {
+  closePopupLayers();
+  syncTreeMapTopicSelect();
+  renderTreeMap();
+  elements.treeMapView.classList.remove("hidden");
+}
+
+function toggleTreeMap() {
+  if (elements.treeMapView.classList.contains("hidden")) {
+    openTreeMap();
+  } else {
+    closeTreeMap();
+  }
+}
+
+function closeTreeMap() {
+  elements.treeMapView.classList.add("hidden");
+}
+
+function treeMapTopics() {
+  return state.data.tree.filter(isPlainObject).filter((node) => node.level === 1);
+}
+
+function syncTreeMapTopicSelect() {
+  const select = elements.treeMapTopicSelect;
+  if (!select) return;
+  const topics = treeMapTopics();
+  select.innerHTML = topics
+    .map((topic) => `<option value="${escapeHtml(topic.id)}">${escapeHtml(noteTitle(topic.title))}</option>`)
+    .join("");
+  let nextId = topics.some((topic) => topic.id === state.treeMapTopicId) ? state.treeMapTopicId : null;
+  if (!nextId) {
+    const selected = getSelectedTreeNode();
+    if (selected) {
+      const ancestors = treePathNodes(selected.id);
+      const rootAncestor = ancestors[0];
+      if (rootAncestor && topics.some((topic) => topic.id === rootAncestor.id)) {
+        nextId = rootAncestor.id;
+      }
+    }
+  }
+  if (!nextId && topics.length > 0) nextId = topics[0].id;
+  state.treeMapTopicId = nextId || null;
+  select.value = state.treeMapTopicId || "";
+  select.disabled = topics.length === 0;
+}
+
+// 주제(레벨1) 서브트리 하나를 입력받아 각 노드의 그릴 좌표를 계산한다.
+// 레벨3(메모)부터 좌->우로 슬롯을 매기고, 레벨2(분류)는 자식 슬롯의 평균 x,
+// 레벨1(주제)은 레벨2 x의 평균에 놓는다. y는 레벨별로 고정한다.
+function computeTreeMapLayout(topicNode) {
+  const empty = { nodes: [], edges: [], slotCount: 0, levelCount: 3 };
+  if (!topicNode || !isPlainObject(topicNode)) return empty;
+
+  const categories = (topicNode.children || []).filter(isPlainObject);
+  let slotCursor = 0;
+  const categoryInfos = categories.map((category) => {
+    const memos = (category.children || []).filter(isPlainObject);
+    if (memos.length === 0) {
+      const ownSlot = slotCursor++;
+      return { category, memos: [], slots: [], ownSlot };
+    }
+    const slots = memos.map(() => slotCursor++);
+    return { category, memos, slots, ownSlot: null };
+  });
+
+  const slotCount = Math.max(slotCursor, 1);
+  const positions = new Map();
+
+  categoryInfos.forEach((info) => {
+    info.memos.forEach((memo, index) => {
+      positions.set(memo.id, { x: info.slots[index] + 0.5, y: 2, node: memo });
+    });
+  });
+
+  categoryInfos.forEach((info) => {
+    const x = info.memos.length > 0
+      ? info.slots.reduce((sum, slot) => sum + slot + 0.5, 0) / info.slots.length
+      : info.ownSlot + 0.5;
+    positions.set(info.category.id, { x, y: 1, node: info.category });
+  });
+
+  const topicX = categoryInfos.length > 0
+    ? categoryInfos.reduce((sum, info) => sum + positions.get(info.category.id).x, 0) / categoryInfos.length
+    : slotCount / 2;
+  positions.set(topicNode.id, { x: topicX, y: 0, node: topicNode });
+
+  const nodes = [];
+  positions.forEach((pos, id) => {
+    nodes.push({ id, x: pos.x, y: pos.y, node: pos.node });
+  });
+
+  const edges = [];
+  categoryInfos.forEach((info) => {
+    edges.push({ from: topicNode.id, to: info.category.id });
+    info.memos.forEach((memo) => edges.push({ from: info.category.id, to: memo.id }));
+  });
+
+  return { nodes, edges, slotCount, levelCount: 3 };
+}
+
+function renderTreeMap() {
+  const topic = state.treeMapTopicId ? findTreeNode(state.data.tree, state.treeMapTopicId) : null;
+  if (!topic) {
+    elements.treeMapCanvas.innerHTML = `<div class="empty-compact">${escapeHtml(t("treeMap.empty"))}</div>`;
+    return;
+  }
+  const layout = computeTreeMapLayout(topic);
+  if (layout.nodes.length === 0) {
+    elements.treeMapCanvas.innerHTML = `<div class="empty-compact">${escapeHtml(t("treeMap.empty"))}</div>`;
+    return;
+  }
+  const width = 760;
+  const height = 300;
+  const marginX = 70;
+  const marginY = 40;
+  const usableWidth = width - marginX * 2;
+  const usableHeight = height - marginY * 2;
+  const selectedId = state.selectedTreeId;
+
+  const positions = new Map();
+  layout.nodes.forEach((item) => {
+    const x = layout.slotCount > 1
+      ? marginX + (item.x / layout.slotCount) * usableWidth
+      : width / 2;
+    const y = marginY + (item.y / Math.max(1, layout.levelCount - 1)) * usableHeight;
+    positions.set(item.id, { x, y });
+  });
+
+  const edgeSvg = layout.edges.map((edge) => {
+    const from = positions.get(edge.from);
+    const to = positions.get(edge.to);
+    if (!from || !to) return "";
+    return `<line x1="${from.x}" y1="${from.y}" x2="${to.x}" y2="${to.y}" />`;
+  }).join("");
+
+  const nodeSvg = layout.nodes.map((item) => {
+    const node = item.node;
+    const pos = positions.get(item.id);
+    const active = node.id === selectedId ? " active" : "";
+    const locked = isEncryptedContent(node.content);
+    const label = escapeHtml(noteTitle(node.title));
+    return `
+      <button class="tree-map-node tree-map-level-${node.level}${active}" type="button" style="left:${(pos.x / width) * 100}%;top:${(pos.y / height) * 100}%" data-node-id="${escapeHtml(node.id)}">
+        <strong>${label}</strong>
+        ${locked ? `<small class="tree-map-lock" title="${escapeHtml(t("treeMap.locked"))}">🔒</small>` : ""}
+      </button>
+    `;
+  }).join("");
+
+  elements.treeMapCanvas.innerHTML = `
+    <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">${edgeSvg}</svg>
+    ${nodeSvg}
+  `;
+  elements.treeMapCanvas.querySelectorAll("[data-node-id]").forEach((button) => {
+    button.addEventListener("click", () => {
+      selectTreeNode(button.dataset.nodeId);
+    });
+  });
 }
 
 function openDeletedTreeBox() {
@@ -7237,6 +9295,8 @@ function mergeSelectedNoteChildren() {
   selected.tags = extractTags(selected.content);
   markTreeNodeChanged(selected);
   elements.treeContent.value = editableContentForNode(selected);
+  // renderTree 가 renderTreeEditor 를 거쳐 편집 세션을 다시 잡기 전에 남긴다.
+  captureTreeEditorHistory("command");
   persist();
   renderTree();
   return true;
@@ -7257,6 +9317,8 @@ function splitSelectedNoteByHeading() {
   state.expandedTreeIds.add(selected.id);
   markTreeNodeChanged(selected);
   elements.treeContent.value = editableContentForNode(selected);
+  // renderTree 가 renderTreeEditor 를 거쳐 편집 세션을 다시 잡기 전에 남긴다.
+  captureTreeEditorHistory("command");
   persist();
   renderTree();
   return true;
@@ -7290,6 +9352,19 @@ function splitContentBySecondLevelHeading(content) {
 }
 
 function handleTreeContentShortcut(event) {
+  // 조합 중 keydown 은 IME 의 것이다. 여기서 본문을 다시 쓰면 조합이 깨진다.
+  if (event.isComposing || event.keyCode === 229 || isEditorComposing(elements.treeContent)) return;
+  // 실행 취소 / 다시 실행. 브라우저 기본 되돌리기가 끼어들지 않게 여기서 소비한다.
+  if (matchesTreeHistoryShortcut(event, "undo")) {
+    consumeTreeContentShortcut(event);
+    undoTreeEditor();
+    return;
+  }
+  if (matchesTreeHistoryShortcut(event, "redo")) {
+    consumeTreeContentShortcut(event);
+    redoTreeEditor();
+    return;
+  }
   if (event.key === "Enter" && executeSlashCommandFromEditor()) {
     consumeTreeContentShortcut(event);
     return;
@@ -7450,9 +9525,44 @@ function continueMarkdownLineOnEnter() {
   return true;
 }
 
+function flushTreeTitleInput() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  if (isReadOnlyTreeNode(selected)) {
+    setEditorValue(elements.treeTitleInput, selected.title);
+    return;
+  }
+  selected.title = elements.treeTitleInput.value;
+  markTreeNodeChanged(selected);
+  persist();
+  renderTreeListOnly();
+  renderOpenTreeTabs();
+  renderSidebarKnowledge();
+  renderTreePath(selected);
+  renderNoteStats(selected);
+  renderLinkPanel();
+  if (!elements.graphView.classList.contains("hidden")) renderGraph();
+  showSaved(elements.treeSavedLabel);
+}
+
+function flushTreeContentInput() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  if (isReadOnlyTreeNode(selected)) {
+    setEditorValue(elements.treeContent, visibleContentForNode(selected));
+    return;
+  }
+  // 타자는 여기서 기록한다. 이어 친 글자는 한 항목으로 묶인다.
+  captureTreeEditorHistory("type");
+  syncTreeContentFromEditor();
+}
+
 function syncTreeContentFromEditor() {
   const selected = getSelectedTreeNode();
   if (!selected) return;
+  // 마커 삽입, 시각 삽입, 들여쓰기 같은 프로그램 편집은 모두 이 함수를 거친다.
+  // 타자 경로는 앞에서 이미 "type" 으로 남겼으므로 여기서는 아무 일도 하지 않는다.
+  captureTreeEditorHistory("command");
   if (isEncryptedContent(selected.content)) {
     const unlocked = unlockedEncryptedNotes.get(selected.id);
     if (!unlocked) return;
@@ -7936,6 +10046,7 @@ function applyLinkSuggestion(candidate) {
   source.syncState = "pending";
   if (state.selectedTreeId === source.id) {
     elements.treeContent.value = source.content;
+    captureTreeEditorHistory("command");
   }
   persist();
   renderTree();
@@ -8986,6 +11097,7 @@ function closePopupLayers() {
   closeCommandPalette();
   closeSearchPopover();
   closeGraph();
+  closeTreeMap();
   closePropertiesView();
   closeCanvasView();
   closeCaptureView();
@@ -9059,7 +11171,7 @@ function renderDaily() {
   setDailyArchivePreviewMode(false);
   elements.monthLabel.textContent = monthLabel(state.visibleMonth);
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
-  elements.dailyContent.value = state.data.daily[state.selectedDate]?.content || "";
+  setEditorValue(elements.dailyContent, state.data.daily[state.selectedDate]?.content || "");
   renderTodayMemoState();
   renderCalendar();
   renderArchiveList();
@@ -9470,7 +11582,9 @@ function treeNodeElement(node) {
     node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
   ].filter(Boolean);
   const nodeTitle = noteTitle(node.title);
+  // #region nownote-only:web 아이콘 없는 트리 라벨 마크업. 설치형은 nownote-only:desktop 쪽을 쓴다
   labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${nodeTitle}` : nodeTitle)}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
+  // #endregion
 
   const addButton = document.createElement("button");
   addButton.type = "button";
@@ -9537,12 +11651,14 @@ function renderTreeEditor() {
   }
   addOpenTreeTab(selected.id);
 
-  elements.treeTitleInput.value = selected.title;
+  setEditorValue(elements.treeTitleInput, selected.title);
   const displayContent = visibleContentForNode(selected);
   const editableContent = editableContentForNode(selected);
-  elements.treeContent.value = isEncryptedContent(selected.content) && !isEncryptedNodeUnlocked(selected)
-    ? displayContent
-    : editableContent;
+  setEditorValue(
+    elements.treeContent,
+    isEncryptedContent(selected.content) && !isEncryptedNodeUnlocked(selected) ? displayContent : editableContent,
+  );
+  syncTreeEditorHistorySession(selected);
   renderFavorite(selected);
   renderShareState(selected);
   renderEncryptionControls(selected);
@@ -9573,6 +11689,7 @@ function renderReadOnlyTreeState(node) {
   elements.deleteTreeBtn.disabled = readOnly;
   elements.moveUpBtn.disabled = readOnly || elements.moveUpBtn.disabled;
   elements.moveDownBtn.disabled = readOnly || elements.moveDownBtn.disabled;
+  elements.moveNodeBtn.disabled = readOnly;
   elements.favoriteBtn.disabled = readOnly;
   elements.shareTreeBtn.disabled = readOnly || isHostedWebClient();
   elements.encryptNoteBtn.disabled = readOnly;
@@ -9589,6 +11706,7 @@ function renderReadOnlyTreeState(node) {
   elements.treeSavedLabel.textContent = readOnly
     ? `읽기 전용 · ${node.remoteOwnerId || "그룹 공유"}`
     : t("saved");
+  if (!elements.noteFindBar.classList.contains("hidden")) updateNoteReplaceState();
 }
 
 function isReadOnlyTreeNode(node) {
@@ -9939,6 +12057,9 @@ function closeNoteFind() {
   elements.noteFindBar.classList.add("hidden");
   elements.noteFindInput.value = "";
   elements.noteFindInput.dataset.index = "0";
+  elements.noteReplaceInput.value = "";
+  elements.noteReplaceRow.classList.add("hidden");
+  elements.noteReplaceToggleBtn.setAttribute("aria-expanded", "false");
   updateNoteFindState([], "");
   elements.treeContent.focus();
 }
@@ -9954,6 +12075,8 @@ function seedNoteFindFromSelection() {
 
 function handleNoteFindInputKey(event) {
   if (event.key === "Enter") {
+    // 조합 중 Enter 는 IME 의 확정이다. 여기서 다음 찾기를 실행하면 안 된다.
+    if (event.isComposing || event.keyCode === 229) return;
     event.preventDefault();
     moveNoteFindMatch(event.shiftKey ? -1 : 1);
   }
@@ -10052,6 +12175,104 @@ function updateNoteFindState(matches, query, index = -1) {
   elements.noteFindBar.classList.toggle("not-found", hasQuery && !hasMatches);
   elements.noteFindPrevBtn.disabled = !hasMatches;
   elements.noteFindNextBtn.disabled = !hasMatches;
+  updateNoteReplaceState();
+}
+
+// U2 바꾸기. 본문찾기가 이미 갖고 있는 옵션(대소문자 구분 없음, 일반 문자열)을 그대로 따른다.
+// 새 옵션은 만들지 않는다.
+function toggleNoteReplaceRow() {
+  const willShow = elements.noteReplaceRow.classList.contains("hidden");
+  elements.noteReplaceRow.classList.toggle("hidden", !willShow);
+  elements.noteReplaceToggleBtn.setAttribute("aria-expanded", String(willShow));
+  updateNoteReplaceState();
+  if (!willShow) return;
+  window.setTimeout(() => {
+    if (elements.noteReplaceRow.classList.contains("hidden")) return;
+    elements.noteReplaceInput.focus();
+  }, 0);
+}
+
+function handleNoteReplaceInputKey(event) {
+  if (event.key === "Enter") {
+    // 조합 중 Enter 는 IME 의 확정이다. 여기서 바꾸기를 실행하면 안 된다.
+    if (event.isComposing || event.keyCode === 229) return;
+    event.preventDefault();
+    replaceCurrentNoteFindMatch();
+  }
+  if (event.key === "Escape") {
+    event.preventDefault();
+    closeNoteFind();
+  }
+}
+
+// 잠긴(복호화 안 된) 메모에서는 바꾸기를 막는다.
+// isTreeEditorHistoryEditable() 은 M8c 가 실행 취소 기록 여부를 가릴 때 쓰는 것과 같은 판정이다.
+function updateNoteReplaceState() {
+  const locked = !isTreeEditorHistoryEditable();
+  elements.noteReplaceLockedHint.classList.toggle("hidden", !locked);
+  elements.noteReplaceInput.disabled = locked;
+  if (locked) {
+    elements.noteReplaceCurrentBtn.disabled = true;
+    elements.noteReplaceAllBtn.disabled = true;
+    elements.noteReplaceCount.textContent = "";
+    return;
+  }
+  const query = elements.noteFindInput.value.trim();
+  const matches = noteFindMatches();
+  const hasMatches = Boolean(query) && matches.length > 0;
+  elements.noteReplaceCurrentBtn.disabled = !hasMatches;
+  elements.noteReplaceAllBtn.disabled = !hasMatches;
+  elements.noteReplaceCount.textContent = hasMatches
+    ? t("editor.replaceCount", { count: matches.length })
+    : "";
+}
+
+// 현재 항목만 바꾸고 다음 매치로 옮긴다.
+function replaceCurrentNoteFindMatch() {
+  if (!isTreeEditorHistoryEditable()) return;
+  const query = elements.noteFindInput.value.trim();
+  const matches = noteFindMatches();
+  if (!query || matches.length === 0) return;
+  const currentIndex = ((Number(elements.noteFindInput.dataset.index || 0) % matches.length) + matches.length) % matches.length;
+  const start = matches[currentIndex];
+  const replacement = elements.noteReplaceInput.value;
+  const text = elements.treeContent.value;
+  const nextText = text.slice(0, start) + replacement + text.slice(start + query.length);
+  const cursor = start + replacement.length;
+  const recorded = applyTreeEditorText("replace", nextText, { start: cursor, end: cursor });
+  if (!recorded) return;
+  const nextMatches = noteFindMatches();
+  if (nextMatches.length === 0) {
+    elements.noteFindInput.dataset.index = "0";
+    updateNoteFindState(nextMatches, query);
+    return;
+  }
+  // 방금 바꾼 자리 다음에 있는 매치로 옮긴다. 없으면 처음으로 돌아간다.
+  let nextIndex = nextMatches.findIndex((matchStart) => matchStart >= cursor);
+  if (nextIndex === -1) nextIndex = 0;
+  selectNoteFindMatch(nextIndex, { keepInputFocus: false });
+}
+
+// 본문 안의 모든 매치를 한 번에 바꾼다. applyTreeEditorText 를 한 번만 불러
+// 실행 취소 항목 하나로 남긴다 — 매치마다 나눠 부르면 실행 취소가 쪼개진다.
+function replaceAllNoteFindMatches() {
+  if (!isTreeEditorHistoryEditable()) return;
+  const query = elements.noteFindInput.value.trim();
+  const matches = noteFindMatches();
+  if (!query || matches.length === 0) return;
+  const replacement = elements.noteReplaceInput.value;
+  const text = elements.treeContent.value;
+  let nextText = "";
+  let cursor = 0;
+  for (const start of matches) {
+    nextText += text.slice(cursor, start) + replacement;
+    cursor = start + query.length;
+  }
+  nextText += text.slice(cursor);
+  const recorded = applyTreeEditorText("replace", nextText, { start: 0, end: 0 });
+  if (!recorded) return;
+  elements.noteFindInput.dataset.index = "0";
+  updateNoteFindState(noteFindMatches(), query);
 }
 
 async function copyNoteLink(node) {
@@ -10103,7 +12324,7 @@ function treePathNodes(id, nodes = state.data.tree, parents = []) {
 }
 
 function renderMarkdownPreview(content) {
-  const html = markdownToHtml(content || "");
+  const html = markdownToHtml(content || "", { withCodeBlockActions: true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
 }
 
@@ -10158,7 +12379,8 @@ function renderLinkPanel() {
   elements.backlinksPanel.replaceChildren(...blocks);
 }
 
-function markdownToHtml(markdown) {
+function markdownToHtml(markdown, options = {}) {
+  const withCodeBlockActions = Boolean(options.withCodeBlockActions);
   const lines = escapeHtml(markdown).split("\n");
   const blocks = [];
   let listItems = [];
@@ -10184,10 +12406,17 @@ function markdownToHtml(markdown) {
     listItems.push(item);
   };
 
+  let codeLang = "";
   const flushCode = () => {
     if (!codeLines) return;
-    blocks.push(`<pre><code>${codeLines.join("\n")}</code></pre>`);
+    const codeHtml = codeLines.join("\n");
+    blocks.push(
+      withCodeBlockActions
+        ? renderMarkdownCodeBlock(codeHtml, codeLang)
+        : `<pre><code>${codeHtml}</code></pre>`,
+    );
     codeLines = null;
+    codeLang = "";
   };
 
   lines.forEach((line) => {
@@ -10198,6 +12427,7 @@ function markdownToHtml(markdown) {
         flushCode();
       } else {
         codeLines = [];
+        codeLang = trimmed.slice(3).trim();
       }
       return;
     }
@@ -10242,6 +12472,30 @@ function markdownToHtml(markdown) {
   flushList();
   flushCode();
   return blocks.join("");
+}
+
+function renderMarkdownCodeBlock(code, lang) {
+  const trimmedLang = (lang || "").trim();
+  const langLabel = trimmedLang || escapeHtml(t("markdown.codeBlock.plainText"));
+  const langAttr = trimmedLang ? ` data-lang="${trimmedLang}"` : "";
+  const copyLabel = escapeHtml(t("markdown.codeBlock.copy"));
+  const copiedLabel = escapeHtml(t("markdown.codeBlock.copied"));
+  return `<div class="code-block"${langAttr}><div class="code-block-header"><span class="code-block-lang">${langLabel}</span><button class="code-block-copy-btn" type="button" data-copy-label="${copyLabel}" data-copied-label="${copiedLabel}">${copyLabel}</button></div><pre><code>${code}</code></pre></div>`;
+}
+
+async function handleCodeBlockCopy(button) {
+  const codeEl = button.closest(".code-block")?.querySelector("pre code");
+  if (!codeEl) return;
+  const copied = await copyText(codeEl.textContent || "");
+  const originalLabel = button.dataset.copyLabel || t("markdown.codeBlock.copy");
+  const copiedLabel = button.dataset.copiedLabel || t("markdown.codeBlock.copied");
+  clearTimeout(button._codeCopyResetTimer);
+  button.textContent = copied ? copiedLabel : t("markdown.codeBlock.copyFail");
+  button.classList.toggle("is-copied", copied);
+  button._codeCopyResetTimer = setTimeout(() => {
+    button.textContent = originalLabel;
+    button.classList.remove("is-copied");
+  }, 1500);
 }
 
 function renderMarkdownListItem(item, taskIndex) {
@@ -10993,6 +13247,8 @@ function renderSearchResultsInto(container, results, afterSelect) {
 
 function handleSearchPopoverInputKey(event) {
   if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  // 조합 중 Enter 는 IME 의 확정이다. 여기서 첫 결과를 열면 안 된다.
+  if (event.key === "Enter" && (event.isComposing || event.keyCode === 229)) return;
   const first = firstSearchResult(elements.searchPopoverResults);
   if (!first) return;
   event.preventDefault();
@@ -11005,6 +13261,8 @@ function handleSearchPopoverInputKey(event) {
 
 function handleMainSearchInputKey(event) {
   if (event.key !== "Enter" && event.key !== "ArrowDown") return;
+  // 조합 중 Enter 는 IME 의 확정이다. 여기서 첫 결과를 열면 안 된다.
+  if (event.key === "Enter" && (event.isComposing || event.keyCode === 229)) return;
   const first = firstSearchResult(elements.resultsList);
   if (!first || state.view !== "results") return;
   event.preventDefault();
@@ -11197,6 +13455,45 @@ function detachTreeNode(id, nodes = state.data.tree) {
   return null;
 }
 
+function subtreeDepth(node) {
+  if (!node.children || node.children.length === 0) return 1;
+  return 1 + Math.max(...node.children.map(subtreeDepth));
+}
+
+function isNodeOrDescendant(root, id) {
+  if (root.id === id) return true;
+  return (root.children || []).some((child) => isNodeOrDescendant(child, id));
+}
+
+function moveNodeDestinationCandidates(node) {
+  const depth = subtreeDepth(node);
+  return flattenTree(state.data.tree).filter((dest) => {
+    if (dest.level !== 1 && dest.level !== 2) return false;
+    if (isReadOnlyTreeNode(dest)) return false;
+    if (isNodeOrDescendant(node, dest.id)) return false;
+    if (dest.level + depth > 3) return false;
+    return true;
+  });
+}
+
+function applyTreeLevelDelta(node, delta) {
+  node.level += delta;
+  (node.children || []).forEach((child) => applyTreeLevelDelta(child, delta));
+}
+
+function moveTreeNodeTo(node, dest) {
+  const detached = detachTreeNode(node.id);
+  if (!detached) return false;
+  const delta = dest.level + 1 - detached.level;
+  detached.parentId = dest.id;
+  if (delta !== 0) applyTreeLevelDelta(detached, delta);
+  dest.children.push(detached);
+  state.expandedTreeIds.add(dest.id);
+  markTreeNodeChanged(detached);
+  flattenTree(detached.children).forEach((child) => markTreeNodeChanged(child));
+  return true;
+}
+
 function flattenTree(nodes) {
   return (Array.isArray(nodes) ? nodes : [])
     .filter(isPlainObject)
@@ -11265,11 +13562,13 @@ function normalizeSettings(settings = {}) {
   normalized.language = normalizeLanguage(normalized.language || defaults.language);
   normalized.theme = ["system", "light", "dark"].includes(normalized.theme) ? normalized.theme : defaults.theme;
   normalized.accent = ACCENTS.some((accent) => accent.id === normalized.accent) ? normalized.accent : defaults.accent;
+  normalized.markdownColors = normalizeMarkdownColorSettings(normalized.markdownColors);
   normalized.railMode = ["icon", "letter"].includes(normalized.railMode) ? normalized.railMode : defaults.railMode;
   normalized.showEditorActionIcons = normalizeToggle(normalized.showEditorActionIcons, defaults.showEditorActionIcons);
   normalized.fontSize = ["small", "medium", "large"].includes(normalized.fontSize) ? normalized.fontSize : defaults.fontSize;
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.tabIndentSize = normalizeTabIndentSize(normalized.tabIndentSize);
+  normalized.undoDepth = normalizeUndoDepth(normalized.undoDepth);
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
   normalized.treePanelCollapsed = normalizeToggle(normalized.treePanelCollapsed, defaults.treePanelCollapsed);
   normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);
@@ -11969,6 +14268,7 @@ async function importMarkdownData(event) {
       const archivedDailyNotes = parseNowNoteMarkdownArchivedDaily(content);
       if (treeNodes.length > 0 || dailyNotes.length > 0 || archivedDailyNotes.length > 0) {
         return {
+          kind: "structured",
           title: t("note.markdownStructureTitle", { name: file.name }),
           nodes: treeNodes,
           dailyNotes,
@@ -11977,7 +14277,9 @@ async function importMarkdownData(event) {
       }
       const converted = markdownFileToImportNode(file.name, content);
       return {
+        kind: "plain",
         title: converted.title,
+        node: converted.node,
         nodes: [converted.node],
         dailyNotes: [],
         archivedDailyNotes: [],
@@ -11988,30 +14290,77 @@ async function importMarkdownData(event) {
       showNotice(t("note.markdownNoContent"), "error");
       return;
     }
-    const summary = markdownImportSummary(imports);
-    const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
-    const moreText = imports.length > 5 ? `\n- ${t("note.markdownImportedMore", { count: imports.length - 5 })}` : "";
-    if (!(await confirmAction([
-      t("note.markdownImportConfirm", { count: imports.length, nodes: summary.nodes, daily: summary.daily, archivedDaily: summary.archivedDaily }),
-      "",
-      previewNames + moreText,
-    ].join("\n")))) {
-      return;
+
+    const plainImports = imports.filter((item) => item.kind === "plain");
+    let destinationChoice = null;
+    if (plainImports.length > 0) {
+      destinationChoice = await showMarkdownImportOptionsDialog(plainImports);
+      if (!destinationChoice) return;
+    } else {
+      const summary = markdownImportSummary(imports);
+      const previewNames = imports.slice(0, 5).map((item) => `- ${item.title}`).join("\n");
+      const moreText = imports.length > 5 ? `\n- ${t("note.markdownImportedMore", { count: imports.length - 5 })}` : "";
+      if (!(await confirmAction([
+        t("note.markdownImportConfirm", { count: imports.length, nodes: summary.nodes, daily: summary.daily, archivedDaily: summary.archivedDaily }),
+        "",
+        previewNames + moreText,
+      ].join("\n")))) {
+        return;
+      }
     }
+
     createRecoverySnapshot("before-markdown-import");
     recordImportReport("Markdown 가져오기", imports);
-    const nodes = imports.flatMap((item) => item.nodes);
+    let nodes = imports.filter((item) => item.kind === "structured").flatMap((item) => item.nodes);
     const dailyNotes = imports.flatMap((item) => item.dailyNotes || []);
     const archivedDailyNotes = imports.flatMap((item) => item.archivedDailyNotes || []);
     if (nodes.length > 0) {
       state.data.tree.push(...nodes);
-      state.selectedTreeId = nodes[0].id;
       nodes.forEach((node) => state.expandedTreeIds.add(node.id));
     }
+
+    let appendedNode = null;
+    const createdPlainNodes = [];
+    if (destinationChoice?.destination === "append") {
+      const target = findTreeNode(state.data.tree, destinationChoice.targetId);
+      if (target) {
+        plainImports.forEach((item) => {
+          const separator = target.content && target.content.trim() ? "\n\n---\n\n" : "";
+          target.content = `${target.content || ""}${separator}${t("note.markdownAppendedFrom", { name: item.title })}\n\n${item.node.content}`;
+        });
+        markTreeNodeChanged(target);
+        appendedNode = target;
+      }
+    } else if (destinationChoice) {
+      plainImports.forEach((item) => {
+        const node = item.node;
+        node.parentId = destinationChoice.parentId;
+        node.level = destinationChoice.level;
+        if (destinationChoice.parentId) {
+          const parent = findTreeNode(state.data.tree, destinationChoice.parentId);
+          if (parent) {
+            parent.children.push(node);
+            state.expandedTreeIds.add(parent.id);
+          } else {
+            state.data.tree.push(node);
+          }
+        } else {
+          state.data.tree.push(node);
+        }
+        state.expandedTreeIds.add(node.id);
+        createdPlainNodes.push(node);
+      });
+    }
+    nodes = nodes.concat(createdPlainNodes);
+
     dailyNotes.forEach((note) => mergeImportedDailyNote(note));
     state.data.archivedDaily.unshift(...archivedDailyNotes);
     persist();
-    showMarkdownImportResult(nodes, dailyNotes);
+    if (appendedNode) {
+      selectTreeNode(appendedNode.id);
+    } else {
+      showMarkdownImportResult(nodes, dailyNotes);
+    }
     showNotice(t("note.markdownImportDone", { nodes: nodes.length, daily: dailyNotes.length, archivedDaily: archivedDailyNotes.length }), "success");
   } catch {
     showNotice(t("note.markdownImportError"), "error");
@@ -12031,7 +14380,7 @@ function markdownImportSummary(imports) {
 
 function showMarkdownImportResult(nodes, dailyNotes) {
   if (nodes.length > 0) {
-    setView("tree");
+    selectTreeNode(nodes[0].id);
     return;
   }
   if (dailyNotes.length > 0) {
