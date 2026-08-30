@@ -99,12 +99,39 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     try {
       final settings = _currentSettings();
       await settings.save();
-      final result = await ref
-          .read(serverSyncServiceProvider)
-          .testConnection(
-            settings,
-            twoFactorCode: _twoFactorCodeCtrl.text,
+
+      final syncService = ref.read(serverSyncServiceProvider);
+      final probe = await syncService.probeConnection(settings);
+      if (!probe.ok) {
+        if (mounted) {
+          setState(
+            () => _connectionResult = ServerConnectionResult(
+              ok: false,
+              message: probe.message,
+            ),
           );
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(probe.message),
+              backgroundColor: const Color(0xFFEF4444),
+            ),
+          );
+        }
+        return;
+      }
+      if (probe.serverMismatch && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(probe.message),
+            backgroundColor: const Color(0xFFD97706),
+          ),
+        );
+      }
+
+      final result = await syncService.testConnection(
+        settings,
+        twoFactorCode: _twoFactorCodeCtrl.text,
+      );
       ServerOpsResult? opsResult;
       if (result.ok) {
         final password = _passwordCtrl.text.trim();

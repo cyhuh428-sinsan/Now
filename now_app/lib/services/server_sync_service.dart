@@ -30,6 +30,43 @@ export 'package:now_core/now_core.dart'
 
 const _serverDeletedTreeMemosKey = 'now_server_deleted_tree_memos';
 
+// U18의 서버 주소/토큰 저장 키(now_core의 `ServerSettings`)와 별도로 둔다.
+// "이전에 연결에 성공한 서버 정보"는 Now 로컬에서만 쓰는 저장소다(NowNote의
+// `server_settings_service.dart`가 자기 키를 따로 쓰는 것과 같은 이유).
+const _knownServerNameKey = 'now_known_server_name';
+const _knownApiVersionKey = 'now_known_api_version';
+
+/// 사설 네트워크 연결 판정 절차에서 실패한 단계.
+///
+/// `docs/NOW_2_3_6_PRIVATE_NETWORK_CONNECTION.md`의 "클라이언트 판정 절차"를
+/// 그대로 따른다: `/health` → `/health/ready` → `/api/v1/server` 순서로
+/// 호출하고, 먼저 실패한 단계에서 멈춘다. NowNote의 `server_settings_service.dart`와
+/// 같은 이름으로 둔다.
+enum ProbeFailureStage { health, ready, serverInfo }
+
+/// [ServerSyncService.probeConnection]의 결과.
+///
+/// [ok]가 true여도 [serverMismatch]가 true이면 이전에 저장해 둔 서버 정보와
+/// 값이 달라 사용자에게 경고를 보여줘야 한다는 뜻이다 — 문서 원칙대로 연결을
+/// 막지는 않는다.
+class ConnectionProbeResult {
+  final bool ok;
+  final ProbeFailureStage? failedStage;
+  final String message;
+  final bool serverMismatch;
+  final String serverName;
+  final String apiVersion;
+
+  const ConnectionProbeResult({
+    required this.ok,
+    this.failedStage,
+    required this.message,
+    this.serverMismatch = false,
+    this.serverName = '',
+    this.apiVersion = '',
+  });
+}
+
 final serverSettingsProvider = FutureProvider.autoDispose<ServerSettings>((
   ref,
 ) async {
@@ -177,6 +214,61 @@ class ServerSyncService {
       password: password,
       twoFactorCode: twoFactorCode,
     );
+  }
+
+  /// `docs/NOW_2_3_6_PRIVATE_NETWORK_CONNECTION.md`의 3단계 절차를 순서대로
+  /// 실행한다. `/health` → `/health/ready` → `/api/v1/server` 순서로 호출하고
+  /// 먼저 실패한 단계에서 멈춘다. 사용자 토큰 검증이나 로그인은 하지 않는다 —
+  /// 그 부분은 지금처럼 [testConnection]/[createWebSession]이 맡는다.
+  ///
+  /// 3단계 자체는 now_core의 `ServerConnectionApi.probeConnectionSteps`를 그대로
+  /// 쓴다(NowNote도 같은 함수를 쓴다 — 어느 클라이언트로 연결해도 판정 기준이
+  /// 같아야 한다). "이전에 저장해 둔 서버와 다른가" 비교와 그 저장만 여기서 한다.
+  Future<ConnectionProbeResult> probeConnection(ServerSettings settings) async {
+    final steps = await ServerConnectionApi.probeConnectionSteps(
+      dioWithoutUserToken: _dioWithoutUserToken(settings),
+      settings: settings,
+    );
+    if (!steps.ok) {
+      return ConnectionProbeResult(
+        ok: false,
+        failedStage: _toProbeFailureStage(steps.failedStage),
+        message: steps.message,
+      );
+    }
+
+    final prefs = await SharedPreferences.getInstance();
+    final knownName = prefs.getString(_knownServerNameKey);
+    final knownApiVersion = prefs.getString(_knownApiVersionKey);
+    final isFirstConnection = knownName == null || knownName.trim().isEmpty;
+    final mismatch =
+        !isFirstConnection &&
+        (knownName != steps.serverName ||
+            (knownApiVersion ?? '') != steps.apiVersion);
+
+    await prefs.setString(_knownServerNameKey, steps.serverName);
+    await prefs.setString(_knownApiVersionKey, steps.apiVersion);
+
+    return ConnectionProbeResult(
+      ok: true,
+      message: mismatch ? '이 주소는 다른 서버로 보입니다. 주소를 다시 확인하세요' : '연결 성공',
+      serverMismatch: mismatch,
+      serverName: steps.serverName,
+      apiVersion: steps.apiVersion,
+    );
+  }
+
+  ProbeFailureStage? _toProbeFailureStage(ConnectionProbeStage? stage) {
+    switch (stage) {
+      case ConnectionProbeStage.health:
+        return ProbeFailureStage.health;
+      case ConnectionProbeStage.ready:
+        return ProbeFailureStage.ready;
+      case ConnectionProbeStage.serverInfo:
+        return ProbeFailureStage.serverInfo;
+      case null:
+        return null;
+    }
   }
 
   // syncNotes()의 실제 payload 구성/요청/pull 반영은 now_core의

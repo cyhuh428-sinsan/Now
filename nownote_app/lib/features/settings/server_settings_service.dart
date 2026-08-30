@@ -84,56 +84,24 @@ class ServerSettingsService {
   /// 먼저 실패한 단계에서 멈춘다. 이 메서드는 사용자 토큰 검증이나 로그인은
   /// 하지 않는다 — 그 부분은 지금처럼 [testConnection]/[createWebSession]이
   /// 맡는다.
+  ///
+  /// 3단계 자체(호출 순서, 실패 판정)는 now_core의
+  /// `ServerConnectionApi.probeConnectionSteps`를 그대로 쓴다(Now 앱도 같은
+  /// 함수를 쓴다 — 어느 클라이언트로 연결해도 판정 기준이 같아야 한다).
+  /// "이전에 저장해 둔 서버와 다른가" 비교와 그 저장(SharedPreferences)만
+  /// NowNote 쪽에서 한다.
   Future<ConnectionProbeResult> probeConnection(ServerSettings settings) async {
-    if (!settings.isConfigured) {
-      return const ConnectionProbeResult(
+    final steps = await ServerConnectionApi.probeConnectionSteps(
+      dioWithoutUserToken: _dioWithoutUserTokenBuilder(settings),
+      settings: settings,
+    );
+    if (!steps.ok) {
+      return ConnectionProbeResult(
         ok: false,
-        failedStage: ProbeFailureStage.health,
-        message: '서버 주소가 없습니다',
+        failedStage: _toProbeFailureStage(steps.failedStage),
+        message: steps.message,
       );
     }
-
-    final healthy = await _probeGet(settings, '/health');
-    if (!healthy) {
-      return const ConnectionProbeResult(
-        ok: false,
-        failedStage: ProbeFailureStage.health,
-        message: '서버에 연결할 수 없습니다',
-      );
-    }
-
-    final ready = await _probeGet(settings, '/health/ready');
-    if (!ready) {
-      return const ConnectionProbeResult(
-        ok: false,
-        failedStage: ProbeFailureStage.ready,
-        message: '서버가 시작 중입니다. 잠시 후 다시 시도하세요',
-      );
-    }
-
-    Map<String, dynamic>? data;
-    try {
-      final res = await _dioWithoutUserTokenBuilder(
-        settings,
-      ).get<Map<String, dynamic>>('/api/v1/server');
-      if (res.statusCode != 200) {
-        return const ConnectionProbeResult(
-          ok: false,
-          failedStage: ProbeFailureStage.serverInfo,
-          message: '서버 정보를 확인할 수 없습니다',
-        );
-      }
-      data = res.data;
-    } catch (_) {
-      return const ConnectionProbeResult(
-        ok: false,
-        failedStage: ProbeFailureStage.serverInfo,
-        message: '서버 정보를 확인할 수 없습니다',
-      );
-    }
-
-    final serverName = data?['server']?.toString() ?? '';
-    final apiVersion = data?['api_version']?.toString() ?? '';
 
     final prefs = await SharedPreferences.getInstance();
     final knownName = prefs.getString(_knownServerNameKey);
@@ -141,26 +109,31 @@ class ServerSettingsService {
     final isFirstConnection = knownName == null || knownName.trim().isEmpty;
     final mismatch =
         !isFirstConnection &&
-        (knownName != serverName || (knownApiVersion ?? '') != apiVersion);
+        (knownName != steps.serverName ||
+            (knownApiVersion ?? '') != steps.apiVersion);
 
-    await prefs.setString(_knownServerNameKey, serverName);
-    await prefs.setString(_knownApiVersionKey, apiVersion);
+    await prefs.setString(_knownServerNameKey, steps.serverName);
+    await prefs.setString(_knownApiVersionKey, steps.apiVersion);
 
     return ConnectionProbeResult(
       ok: true,
       message: mismatch ? '이 주소는 다른 서버로 보입니다. 주소를 다시 확인하세요' : '연결 성공',
       serverMismatch: mismatch,
-      serverName: serverName,
-      apiVersion: apiVersion,
+      serverName: steps.serverName,
+      apiVersion: steps.apiVersion,
     );
   }
 
-  Future<bool> _probeGet(ServerSettings settings, String path) async {
-    try {
-      final res = await _dioWithoutUserTokenBuilder(settings).get<dynamic>(path);
-      return res.statusCode == 200;
-    } catch (_) {
-      return false;
+  ProbeFailureStage? _toProbeFailureStage(ConnectionProbeStage? stage) {
+    switch (stage) {
+      case ConnectionProbeStage.health:
+        return ProbeFailureStage.health;
+      case ConnectionProbeStage.ready:
+        return ProbeFailureStage.ready;
+      case ConnectionProbeStage.serverInfo:
+        return ProbeFailureStage.serverInfo;
+      case null:
+        return null;
     }
   }
 

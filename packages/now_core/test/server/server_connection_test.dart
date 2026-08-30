@@ -227,6 +227,96 @@ void main() {
     });
   });
 
+  group('probeConnectionSteps', () {
+    test('서버 주소가 없으면 health 단계 실패로 돌려준다', () async {
+      final adapter = _FakeAdapter((_) {
+        fail('요청이 나가면 안 된다');
+      });
+      final dio = _dioFor('', adapter);
+      final result = await ServerConnectionApi.probeConnectionSteps(
+        dioWithoutUserToken: dio,
+        settings: _settings(baseUrl: ''),
+      );
+      expect(result.ok, false);
+      expect(result.failedStage, ConnectionProbeStage.health);
+      expect(adapter.requests, isEmpty);
+    });
+
+    test('/health가 실패하면 health 단계에서 멈춘다', () async {
+      final paths = <String>[];
+      final adapter = _FakeAdapter((options) {
+        paths.add(options.path);
+        throw DioException.connectionError(
+          requestOptions: options,
+          reason: 'refused',
+        );
+      });
+      final dio = _dioFor('http://server.test:8750', adapter);
+      final result = await ServerConnectionApi.probeConnectionSteps(
+        dioWithoutUserToken: dio,
+        settings: _settings(),
+      );
+      expect(result.ok, false);
+      expect(result.failedStage, ConnectionProbeStage.health);
+      expect(paths, ['/health']);
+    });
+
+    test('/health는 되지만 /health/ready가 실패하면 ready 단계에서 멈춘다', () async {
+      final paths = <String>[];
+      final adapter = _FakeAdapter((options) {
+        paths.add(options.path);
+        if (options.path == '/health') {
+          return _jsonBody({'status': 'ok'});
+        }
+        return ResponseBody.fromString('', 503);
+      });
+      final dio = _dioFor('http://server.test:8750', adapter);
+      final result = await ServerConnectionApi.probeConnectionSteps(
+        dioWithoutUserToken: dio,
+        settings: _settings(),
+      );
+      expect(result.ok, false);
+      expect(result.failedStage, ConnectionProbeStage.ready);
+      expect(paths, ['/health', '/health/ready']);
+    });
+
+    test('세 단계가 모두 성공하면 서버 이름과 api_version을 담는다', () async {
+      final paths = <String>[];
+      final adapter = _FakeAdapter((options) {
+        paths.add(options.path);
+        if (options.path == '/api/v1/server') {
+          return _jsonBody({'server': 'NowNote Server', 'api_version': 'v1'});
+        }
+        return _jsonBody({'status': 'ok'});
+      });
+      final dio = _dioFor('http://server.test:8750', adapter);
+      final result = await ServerConnectionApi.probeConnectionSteps(
+        dioWithoutUserToken: dio,
+        settings: _settings(),
+      );
+      expect(result.ok, true);
+      expect(result.serverName, 'NowNote Server');
+      expect(result.apiVersion, 'v1');
+      expect(paths, ['/health', '/health/ready', '/api/v1/server']);
+    });
+
+    test('/api/v1/server만 실패하면 serverInfo 단계로 표시한다', () async {
+      final adapter = _FakeAdapter((options) {
+        if (options.path == '/api/v1/server') {
+          return ResponseBody.fromString('', 500);
+        }
+        return _jsonBody({'status': 'ok'});
+      });
+      final dio = _dioFor('http://server.test:8750', adapter);
+      final result = await ServerConnectionApi.probeConnectionSteps(
+        dioWithoutUserToken: dio,
+        settings: _settings(),
+      );
+      expect(result.ok, false);
+      expect(result.failedStage, ConnectionProbeStage.serverInfo);
+    });
+  });
+
   group('createWebSession', () {
     setUp(() {
       SharedPreferences.setMockInitialValues({});

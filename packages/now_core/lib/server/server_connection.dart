@@ -21,6 +21,26 @@ class ServerConnectionResult {
   });
 }
 
+/// [ServerConnectionApi.probeConnectionSteps]에서 판정에 실패한 단계.
+enum ConnectionProbeStage { health, ready, serverInfo }
+
+/// [ServerConnectionApi.probeConnectionSteps]의 결과.
+class ConnectionProbeStepsResult {
+  final bool ok;
+  final ConnectionProbeStage? failedStage;
+  final String message;
+  final String serverName;
+  final String apiVersion;
+
+  const ConnectionProbeStepsResult({
+    required this.ok,
+    this.failedStage,
+    required this.message,
+    this.serverName = '',
+    this.apiVersion = '',
+  });
+}
+
 /// 서버가 `/api/v1/server` 응답에 담아 주는 공용 서버 준비 상태.
 class ServerPublicReadiness {
   final String status;
@@ -107,6 +127,85 @@ class ServerConnectionApi {
       );
     } catch (e) {
       return ServerConnectionResult(ok: false, message: '$e');
+    }
+  }
+
+  /// `docs/NOW_2_3_6_PRIVATE_NETWORK_CONNECTION.md`의 3단계 판정 절차.
+  ///
+  /// `/health` → `/health/ready` → `/api/v1/server` 순서로 호출하고 먼저
+  /// 실패한 단계에서 멈춘다. 이 세 경로는 인증이 없으므로 [dioWithoutUserToken]으로
+  /// 부른다.
+  ///
+  /// "이 서버가 이전에 연결한 그 서버가 맞는지"(재연결 시 이름 불일치 경고)는
+  /// 여기서 판단하지 않는다 — 그 정보를 어디에 저장할지는 앱마다 다르므로
+  /// (NowNote·Now 앱이 각자 다른 저장소 키를 쓴다) 호출하는 쪽이
+  /// [ConnectionProbeStepsResult.serverName]/[apiVersion]을 받아 직접 비교하고
+  /// 저장한다(`note_sync.dart`류 계층이 저장소 접근을 밖에 두는 것과 같은 이유).
+  static Future<ConnectionProbeStepsResult> probeConnectionSteps({
+    required Dio dioWithoutUserToken,
+    required ServerSettings settings,
+  }) async {
+    if (!settings.isConfigured) {
+      return const ConnectionProbeStepsResult(
+        ok: false,
+        failedStage: ConnectionProbeStage.health,
+        message: '서버 주소가 없습니다',
+      );
+    }
+
+    final healthy = await _probeGet(dioWithoutUserToken, '/health');
+    if (!healthy) {
+      return const ConnectionProbeStepsResult(
+        ok: false,
+        failedStage: ConnectionProbeStage.health,
+        message: '서버에 연결할 수 없습니다',
+      );
+    }
+
+    final ready = await _probeGet(dioWithoutUserToken, '/health/ready');
+    if (!ready) {
+      return const ConnectionProbeStepsResult(
+        ok: false,
+        failedStage: ConnectionProbeStage.ready,
+        message: '서버가 시작 중입니다. 잠시 후 다시 시도하세요',
+      );
+    }
+
+    Map<String, dynamic>? data;
+    try {
+      final res = await dioWithoutUserToken.get<Map<String, dynamic>>(
+        '/api/v1/server',
+      );
+      if (res.statusCode != 200) {
+        return const ConnectionProbeStepsResult(
+          ok: false,
+          failedStage: ConnectionProbeStage.serverInfo,
+          message: '서버 정보를 확인할 수 없습니다',
+        );
+      }
+      data = res.data;
+    } catch (_) {
+      return const ConnectionProbeStepsResult(
+        ok: false,
+        failedStage: ConnectionProbeStage.serverInfo,
+        message: '서버 정보를 확인할 수 없습니다',
+      );
+    }
+
+    return ConnectionProbeStepsResult(
+      ok: true,
+      message: '연결 성공',
+      serverName: data?['server']?.toString() ?? '',
+      apiVersion: data?['api_version']?.toString() ?? '',
+    );
+  }
+
+  static Future<bool> _probeGet(Dio dio, String path) async {
+    try {
+      final res = await dio.get<dynamic>(path);
+      return res.statusCode == 200;
+    } catch (_) {
+      return false;
     }
   }
 
