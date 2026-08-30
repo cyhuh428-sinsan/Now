@@ -587,6 +587,11 @@ const I18N = {
     "settings.server.fail.action.auth": "설정에서 서버 접속 토큰을 확인하세요.",
     "settings.server.fail.action.retry": "잠시 후 다시 시도하세요. 반복되면 서버 상태를 확인하세요.",
     "settings.server.fail.action.default": "설정에서 서버 주소와 연결 상태를 확인하세요.",
+    "settings.server.probe.unreachable": "이 주소로 서버에 도달하지 못했습니다. 사설망 연결 상태와 주소를 확인하세요.",
+    "settings.server.probe.notReady": "서버는 응답하지만 아직 준비되지 않았습니다. 잠시 후 다시 시도하세요.",
+    "settings.server.probe.infoFailed": "서버 정보를 확인할 수 없습니다.",
+    "settings.server.probe.differentServer": "이 주소는 다른 서버로 보입니다({previous} → {current}). 주소를 다시 확인하세요.",
+    "settings.server.privateNetworkHint": "포트를 열지 않아도 Tailscale, ZeroTier, WireGuard 같은 사설망이나 내부 LAN 주소면 그대로 연결됩니다.",
     "settings.server.syncIndicator.local": "로컬 전용",
     "settings.server.syncIndicator.syncing": "동기화 중…",
     "settings.server.syncIndicator.success": "동기화 완료",
@@ -1355,6 +1360,11 @@ const I18N = {
     "settings.server.fail.action.auth": "Check the server access token in settings.",
     "settings.server.fail.action.retry": "Try again shortly. If it keeps happening, check the server status.",
     "settings.server.fail.action.default": "Check the server address and connection in settings.",
+    "settings.server.probe.unreachable": "Could not reach a server at this address. Check your private network connection and the address.",
+    "settings.server.probe.notReady": "The server responded but is not ready yet. Try again shortly.",
+    "settings.server.probe.infoFailed": "Could not read server information.",
+    "settings.server.probe.differentServer": "This address looks like a different server ({previous} → {current}). Double-check the address.",
+    "settings.server.privateNetworkHint": "No port forwarding needed — a private network address (Tailscale, ZeroTier, WireGuard) or internal LAN address works as-is.",
     "settings.server.syncIndicator.local": "Local only",
     "settings.server.syncIndicator.syncing": "Syncing…",
     "settings.server.syncIndicator.success": "Synced",
@@ -2602,6 +2612,7 @@ function defaultServerSettings() {
     userProfile: defaultServerUserProfile(),
     capabilities: null,
     publicServerReadiness: null,
+    knownServerName: "",
     analysisJobs: [],
     userGroups: [],
     groupMessages: [],
@@ -6184,6 +6195,18 @@ function countPendingSyncNotes() {
     + flattenTree(state.data.tree).filter(shouldCountPendingTreeSync).length;
 }
 
+// /health, /health/ready 판정 한 단계. 인증이 없는 경로이므로 헤더를 붙이지 않는다
+// (docs/NOW_2_3_6_PRIVATE_NETWORK_CONNECTION.md "판정에 쓰는 세 경로").
+async function probeConnectionStep(baseUrl, path, failMessageKey) {
+  let response;
+  try {
+    response = await fetch(`${baseUrl}${path}`);
+  } catch {
+    throw new Error(t(failMessageKey));
+  }
+  if (!response.ok) throw new Error(`${t(failMessageKey)} (HTTP ${response.status})`);
+}
+
 async function testServerConnection() {
   saveServerSettingsFromForm(t("settings.server.testing"), "settings.server.testing");
   const server = state.settings.server;
@@ -6202,16 +6225,26 @@ async function testServerConnection() {
 
   renderServerStatus("testing", t("settings.server.testing"));
   try {
+    // 사설 네트워크 연결 판정 절차 (2.3.6 U12, P11).
+    // docs/NOW_2_3_6_PRIVATE_NETWORK_CONNECTION.md의 3단계를 순서대로 확인하고,
+    // 먼저 실패한 단계에서 멈춰 그 단계에 맞는 안내를 보인다.
+    await probeConnectionStep(server.url, "/health", "settings.server.probe.unreachable");
+    await probeConnectionStep(server.url, "/health/ready", "settings.server.probe.notReady");
     const response = await fetch(`${server.url}/api/v1/server`, {
       headers: serverAuthHeaders(server),
     });
-    if (!response.ok) throw new Error(await serverResponseError(response));
+    if (!response.ok) throw new Error(t("settings.server.probe.infoFailed"));
     const payload = await response.json();
     const serverName = payload.server || "NowNote";
     const apiVersion = payload.api_version ? ` · API ${payload.api_version}` : "";
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = payload.capabilities || null;
     server.publicServerReadiness = payload.public_server_readiness || null;
+    // 재연결(이미 서버 이름을 저장해 둔 상태)인데 이번에 받은 이름이 다르면 같은 사설망 안의
+    // 다른 서비스이거나 다른 NowNote 서버일 수 있다 — 문서 "3단계에서 성공하지만 값 불일치" 참고.
+    const previousServerName = server.knownServerName;
+    const serverNameMismatch = Boolean(previousServerName) && previousServerName !== serverName;
+    server.knownServerName = serverName;
     let tokenMessage = "";
     if ((server.webSessionToken || "").trim()) {
       const sessionPayload = await verifyWebSession();
@@ -6223,7 +6256,15 @@ async function testServerConnection() {
       applyServerUserProfile(tokenPayload.user);
       tokenMessage = ` · ${t("settings.server.userTokenOk")}`;
     }
-    setServerRawMessage(server, "ok", `${t("settings.server.ok")}: ${serverName}${apiVersion}${tokenMessage}`);
+    if (serverNameMismatch) {
+      setServerRawMessage(
+        server,
+        "bad",
+        t("settings.server.probe.differentServer", { previous: previousServerName, current: serverName }),
+      );
+    } else {
+      setServerRawMessage(server, "ok", `${t("settings.server.ok")}: ${serverName}${apiVersion}${tokenMessage}`);
+    }
   } catch (error) {
     server.lastCheckedAt = new Date().toISOString();
     server.capabilities = null;
@@ -8432,6 +8473,7 @@ function applyLanguage() {
   setText("#serverAutoSyncLabel", t("settings.server.autoSync"));
   setText("#serverAutoSyncHint", t("settings.server.autoSync.hint"));
   setText("#serverUrlHint", t("settings.server.url.hint"));
+  setText("#serverPrivateNetworkHint", t("settings.server.privateNetworkHint"));
   setText("#serverTokenHint", t("settings.server.token.hint"));
   setText("#serverUserTokenHint", t("settings.server.userToken.hint"));
   setText("#serverTwoFactorCodeHint", t("settings.server.twoFactorCode.hint"));
@@ -14011,6 +14053,7 @@ function normalizeServerSettings(server = {}, defaults = defaultServerSettings()
             : [],
         }
       : null;
+  normalized.knownServerName = typeof normalized.knownServerName === "string" ? normalized.knownServerName : "";
   normalized.analysisJobs = Array.isArray(normalized.analysisJobs) ? normalized.analysisJobs.slice(0, 5) : [];
   normalized.userGroups = normalizeServerGroups(normalized.userGroups);
   normalized.groupMessages = Array.isArray(normalized.groupMessages) ? normalized.groupMessages.slice(-100) : [];
