@@ -215,6 +215,8 @@
                       <button id="favoriteBtn" class="icon-text-btn" type="button" role="menuitem" data-icon="★">즐겨찾기</button>
                       <button id="shareTreeBtn" class="icon-text-btn" type="button" role="menuitem" data-icon="↗">공유</button>
                       <button id="copyLinkBtn" class="icon-text-btn" type="button" role="menuitem" data-icon="🔗">링크 복사</button>
+                      <button id="askOpenBtn" class="secondary-btn" type="button" role="menuitem" data-icon="묻">묻기</button>
+                      <button id="readAloudBtn" class="secondary-btn" type="button" role="menuitem" data-icon="▶">읽어주기</button>
                       <button id="noteFindToggleBtn" class="secondary-btn" type="button" role="menuitem" data-icon="찾">본문 찾기</button>
                       <button id="outlineToggleBtn" class="secondary-btn" type="button" role="menuitem" data-icon="개">개요</button>
                       <button id="insertTimeBtn" class="secondary-btn" type="button" role="menuitem" data-icon="시">시간 넣기</button>
@@ -757,6 +759,69 @@
 
           <section class="settings-row">
             <div>
+              <h3 id="llmSettingTitle">음성 · LLM 설정</h3>
+              <p id="llmSettingDesc">묻기와 읽어주기에 쓸 LLM과 음성 합성 서버를 설정합니다. 서버를 거치지 않고 이 기기에서 바로 provider에 연결합니다.</p>
+            </div>
+            <div class="server-settings-form">
+              <label>
+                <span id="llmProviderLabel">LLM provider</span>
+                <select id="llmProviderSelect" class="settings-select">
+                  <option value="openai">OpenAI ChatGPT</option>
+                  <option value="gemini">Google Gemini</option>
+                  <option value="claude">Anthropic Claude</option>
+                  <option value="groq">Groq</option>
+                  <option value="grok">xAI Grok</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="ollama">로컬 Ollama</option>
+                </select>
+              </label>
+              <label id="llmApiKeyField">
+                <span id="llmApiKeyLabel">API 키</span>
+                <input id="llmApiKeyInput" class="settings-input" type="password" autocomplete="off">
+              </label>
+              <label id="llmOllamaUrlField" class="hidden">
+                <span id="llmOllamaUrlLabel">Ollama 서버 주소</span>
+                <input id="llmOllamaUrlInput" class="settings-input" type="url" placeholder="http://localhost:11434">
+              </label>
+              <label id="llmOllamaModelField" class="hidden">
+                <span id="llmOllamaModelLabel">Ollama 모델</span>
+                <input id="llmOllamaModelInput" class="settings-input" type="text" placeholder="llama3.1">
+              </label>
+              <div class="settings-actions">
+                <button id="llmTestBtn" class="secondary-btn" type="button">LLM 연결 테스트</button>
+              </div>
+              <p id="llmStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
+              <hr>
+              <h4 id="voiceSettingTitle">읽어주기 (TTS)</h4>
+              <label>
+                <span id="ttsUrlLabel">TTS 서버 주소</span>
+                <input id="ttsBaseUrlInput" class="settings-input" type="url" placeholder="https://voice.example.com">
+              </label>
+              <label>
+                <span id="ttsKeyLabel">TTS API 키</span>
+                <input id="ttsApiKeyInput" class="settings-input" type="password" autocomplete="off">
+              </label>
+              <label>
+                <span id="ttsVoiceLabel">보이스</span>
+                <select id="ttsVoiceSelect" class="settings-select"></select>
+              </label>
+              <label>
+                <span id="ttsSpeedLabel">말하기 속도</span>
+                <input id="ttsSpeedInput" class="settings-input" type="number" min="0.25" max="4" step="0.25" value="1">
+              </label>
+              <label>
+                <span id="ttsLanguageLabel">언어 코드</span>
+                <input id="ttsLanguageInput" class="settings-input" type="text" placeholder="ko">
+              </label>
+              <div class="settings-actions">
+                <button id="ttsLoadVoicesBtn" class="secondary-btn" type="button">보이스 목록 불러오기</button>
+              </div>
+              <p id="voiceStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
+            </div>
+          </section>
+
+          <section class="settings-row">
+            <div>
               <h3 id="editorActionIconsSettingTitle">메모 작업 아이콘 표시</h3>
               <p id="editorActionIconsSettingDesc">상단에 자주 쓰는 메모 작업 아이콘을 표시합니다. 끄면 메뉴 안에만 표시됩니다.</p>
             </div>
@@ -1131,6 +1196,23 @@
             <button id="canvasMoveRightBtn" class="icon-btn" type="button" aria-label="오른쪽">→</button>
           </div>
         </div>
+      </div>
+    </section>
+
+    <section id="askPanel" class="ask-panel hidden" aria-label="묻기">
+      <div class="ask-panel-head">
+        <h2 id="askPanelTitle">묻기</h2>
+        <button id="askCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+      </div>
+      <label class="ask-context-toggle">
+        <input id="askIncludeContextToggle" type="checkbox" checked>
+        <span id="askIncludeContextLabel">현재 메모 내용 포함</span>
+      </label>
+      <div id="askConversationList" class="ask-conversation-list"></div>
+      <p id="askStatusText" class="ask-status-text"></p>
+      <div class="ask-input-row">
+        <textarea id="askQuestionInput" class="ask-question-input" placeholder="무엇이 궁금한가요?" rows="2"></textarea>
+        <button id="askSubmitBtn" class="primary-btn" type="button">묻기</button>
       </div>
     </section>
 

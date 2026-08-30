@@ -348,6 +348,23 @@ const I18N = {
     "sketch.uploading": "업로드 중...",
     "sketch.uploadFailed": "업로드에 실패했습니다. 기기에만 저장된 그림으로 넣습니다.",
     "sketch.inserted": "스케치를 메모에 넣었습니다.",
+    "editor.ask": "묻기",
+    "editor.readAloud": "읽어주기",
+    "ask.panelTitle": "묻기",
+    "ask.includeContext": "현재 메모 내용 포함",
+    "ask.questionPlaceholder": "무엇이 궁금한가요?",
+    "ask.submit": "묻기",
+    "ask.insert": "메모에 넣기",
+    "ask.copy": "복사",
+    "ask.discard": "버리기",
+    "ask.emptyQuestion": "무엇을 물을지 입력해 주세요.",
+    "ask.questionTooLong": "질문이 너무 깁니다. {max}자 안으로 줄여 주세요.",
+    "ask.asking": "묻는 중입니다...",
+    "ask.inserted": "답을 메모에 넣었습니다.",
+    "ask.copied": "답을 복사했습니다.",
+    "ask.copyFailed": "복사에 실패했습니다.",
+    "voice.readAloud": "▶ 읽기",
+    "voice.stop": "■ 정지",
     "tabs.reopen": "다시 열기",
     "tabs.closeOther": "다른 탭 닫기",
     "tabs.closeAll": "모두 닫기",
@@ -592,6 +609,35 @@ const I18N = {
     "settings.server.probe.infoFailed": "서버 정보를 확인할 수 없습니다.",
     "settings.server.probe.differentServer": "이 주소는 다른 서버로 보입니다({previous} → {current}). 주소를 다시 확인하세요.",
     "settings.server.privateNetworkHint": "포트를 열지 않아도 Tailscale, ZeroTier, WireGuard 같은 사설망이나 내부 LAN 주소면 그대로 연결됩니다.",
+    "settings.llm.title": "음성 · LLM 설정",
+    "settings.llm.desc": "묻기와 읽어주기에 쓸 LLM과 음성 합성 서버를 설정합니다. 서버를 거치지 않고 이 기기에서 바로 provider에 연결합니다.",
+    "settings.llm.providerLabel": "LLM provider",
+    "settings.llm.apiKeyLabel": "API 키",
+    "settings.llm.ollamaUrlLabel": "Ollama 서버 주소",
+    "settings.llm.ollamaModelLabel": "Ollama 모델",
+    "settings.llm.testBtn": "LLM 연결 테스트",
+    "settings.llm.testing": "LLM 연결을 확인하는 중입니다.",
+    "settings.llm.ok": "{provider} 연결 확인됨",
+    "settings.llm.fail": "LLM 연결 실패",
+    "settings.llm.idle": "아직 확인하지 않았습니다.",
+    "settings.voice.title": "읽어주기 (TTS)",
+    "settings.voice.ttsUrlLabel": "TTS 서버 주소",
+    "settings.voice.ttsKeyLabel": "TTS API 키",
+    "settings.voice.voiceLabel": "보이스",
+    "settings.voice.speedLabel": "말하기 속도",
+    "settings.voice.languageLabel": "언어 코드",
+    "settings.voice.loadVoicesBtn": "보이스 목록 불러오기",
+    "settings.voice.testing": "TTS 서버를 확인하는 중입니다.",
+    "settings.voice.ok": "연결 확인됨 · 보이스 {count}개",
+    "settings.voice.fail": "TTS 연결 실패",
+    "settings.voice.idle": "아직 확인하지 않았습니다.",
+    "ask.notConfigured": "먼저 설정에서 사용할 LLM을 지정해 주세요.",
+    "ask.error.connection": "LLM 서버에 연결할 수 없습니다. 네트워크 상태를 확인해 주세요.",
+    "ask.error.emptyAnswer": "답이 비어서 왔습니다. 질문을 조금 바꾸어 다시 물어 보세요.",
+    "voice.notConfigured": "읽어주기 서버 주소가 설정되어 있지 않습니다. 설정에서 주소를 입력해 주세요.",
+    "voice.emptyText": "읽어 줄 문장이 비어 있습니다.",
+    "voice.error.connection": "읽어주기 서버에 연결할 수 없습니다. 주소와 네트워크 상태를 확인해 주세요.",
+    "voice.error.invalidResponse": "읽어주기 서버가 오디오 대신 다른 응답을 보냈습니다.",
     "settings.server.syncIndicator.local": "로컬 전용",
     "settings.server.syncIndicator.syncing": "동기화 중…",
     "settings.server.syncIndicator.success": "동기화 완료",
@@ -1121,6 +1167,23 @@ const I18N = {
     "sketch.uploading": "Uploading...",
     "sketch.uploadFailed": "Upload failed. Inserting a device-only sketch instead.",
     "sketch.inserted": "Sketch added to the note.",
+    "editor.ask": "Ask",
+    "editor.readAloud": "Read aloud",
+    "ask.panelTitle": "Ask",
+    "ask.includeContext": "Include current note content",
+    "ask.questionPlaceholder": "What do you want to know?",
+    "ask.submit": "Ask",
+    "ask.insert": "Insert into note",
+    "ask.copy": "Copy",
+    "ask.discard": "Discard",
+    "ask.emptyQuestion": "Enter what you want to ask.",
+    "ask.questionTooLong": "The question is too long. Keep it under {max} characters.",
+    "ask.asking": "Asking...",
+    "ask.inserted": "Answer added to the note.",
+    "ask.copied": "Answer copied.",
+    "ask.copyFailed": "Copy failed.",
+    "voice.readAloud": "▶ Play",
+    "voice.stop": "■ Stop",
     "tabs.reopen": "Reopen",
     "tabs.closeOther": "Close others",
     "tabs.closeAll": "Close all",
@@ -1365,6 +1428,35 @@ const I18N = {
     "settings.server.probe.infoFailed": "Could not read server information.",
     "settings.server.probe.differentServer": "This address looks like a different server ({previous} → {current}). Double-check the address.",
     "settings.server.privateNetworkHint": "No port forwarding needed — a private network address (Tailscale, ZeroTier, WireGuard) or internal LAN address works as-is.",
+    "settings.llm.title": "Voice · LLM settings",
+    "settings.llm.desc": "Configure the LLM and speech server used by Ask and read-aloud. This device connects to the provider directly, with no server in between.",
+    "settings.llm.providerLabel": "LLM provider",
+    "settings.llm.apiKeyLabel": "API key",
+    "settings.llm.ollamaUrlLabel": "Ollama server address",
+    "settings.llm.ollamaModelLabel": "Ollama model",
+    "settings.llm.testBtn": "Test LLM connection",
+    "settings.llm.testing": "Checking the LLM connection.",
+    "settings.llm.ok": "{provider} connection verified",
+    "settings.llm.fail": "LLM connection failed",
+    "settings.llm.idle": "Not checked yet.",
+    "settings.voice.title": "Read aloud (TTS)",
+    "settings.voice.ttsUrlLabel": "TTS server address",
+    "settings.voice.ttsKeyLabel": "TTS API key",
+    "settings.voice.voiceLabel": "Voice",
+    "settings.voice.speedLabel": "Speaking speed",
+    "settings.voice.languageLabel": "Language code",
+    "settings.voice.loadVoicesBtn": "Load voice list",
+    "settings.voice.testing": "Checking the TTS server.",
+    "settings.voice.ok": "Connection verified · {count} voices",
+    "settings.voice.fail": "TTS connection failed",
+    "settings.voice.idle": "Not checked yet.",
+    "ask.notConfigured": "Set up which LLM to use in settings first.",
+    "ask.error.connection": "Could not connect to the LLM server. Check your network connection.",
+    "ask.error.emptyAnswer": "The answer came back empty. Try rephrasing your question.",
+    "voice.notConfigured": "No read-aloud server address is set. Enter one in settings.",
+    "voice.emptyText": "There is no text to read aloud.",
+    "voice.error.connection": "Could not connect to the read-aloud server. Check the address and your network.",
+    "voice.error.invalidResponse": "The read-aloud server returned something other than audio.",
     "settings.server.syncIndicator.local": "Local only",
     "settings.server.syncIndicator.syncing": "Syncing…",
     "settings.server.syncIndicator.success": "Synced",
@@ -2431,6 +2523,8 @@ function defaultSettings() {
     showTags: true,
     showSidebarAssist: false,
     server: defaultServerSettings(),
+    llm: defaultLlmSettings(),
+    voice: defaultVoiceSettings(),
     features: defaultFeatureSettings(),
     shortcuts: defaultShortcutSettings(),
     openTreeTabs: [],
@@ -2652,6 +2746,259 @@ function isDesktopClient() {
 
 function canUseGroupMessenger() {
   return isHostedWebClient() || isDesktopClient();
+}
+
+// 묻기(U26)와 읽어주기(U27)의 LLM·음성 provider 설정 (U28).
+//
+// now_core의 LlmConfig/VoiceSettings와 같은 구조를 따른다 - Now/NowNote 앱과 마찬가지로
+// 서버를 거치지 않고 클라이언트가 provider에 직접 키로 호출한다(docs/NOW_2_3_6_FEATURE_DESIGN.md
+// "4. 묻기와 음성의 화면 위치"). 받아쓰기(STT)는 Web·설치형에 넣지 않으므로 TTS만 설정한다.
+const LLM_PROVIDERS = [
+  { id: "openai", label: "OpenAI ChatGPT" },
+  { id: "gemini", label: "Google Gemini" },
+  { id: "claude", label: "Anthropic Claude" },
+  { id: "groq", label: "Groq" },
+  { id: "grok", label: "xAI Grok" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "ollama", label: "로컬 Ollama" },
+];
+
+function llmProviderLabel(providerId) {
+  return LLM_PROVIDERS.find((item) => item.id === providerId)?.label || providerId;
+}
+
+function defaultLlmSettings() {
+  return {
+    provider: "openai",
+    apiKey: "",
+    ollamaUrl: "",
+    ollamaModel: "llama3.1",
+    lastStatus: "idle",
+    lastMessage: "",
+  };
+}
+
+function normalizeLlmSettings(llm = {}, defaults = defaultLlmSettings()) {
+  const normalized = { ...defaults, ...(llm && typeof llm === "object" ? llm : {}) };
+  normalized.provider = LLM_PROVIDERS.some((item) => item.id === normalized.provider) ? normalized.provider : defaults.provider;
+  normalized.apiKey = typeof normalized.apiKey === "string" ? normalized.apiKey : "";
+  normalized.ollamaUrl = typeof normalized.ollamaUrl === "string" ? normalized.ollamaUrl : "";
+  normalized.ollamaModel = typeof normalized.ollamaModel === "string" && normalized.ollamaModel.trim() ? normalized.ollamaModel : defaults.ollamaModel;
+  normalized.lastStatus = ["idle", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
+  normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
+  return normalized;
+}
+
+function isLlmConfigured(llm) {
+  if (llm.provider === "ollama") return Boolean(llm.ollamaUrl.trim()) && Boolean(llm.ollamaModel.trim());
+  return Boolean(llm.apiKey.trim());
+}
+
+function defaultVoiceSettings() {
+  return {
+    ttsBaseUrl: "",
+    ttsApiKey: "",
+    voiceId: "",
+    speed: 1.0,
+    language: "ko",
+    lastStatus: "idle",
+    lastMessage: "",
+  };
+}
+
+function normalizeVoiceBaseUrl(raw) {
+  let value = String(raw || "").trim();
+  if (!value) return "";
+  value = value.replace(/\/+$/, "");
+  while (/\/v1$/i.test(value)) value = value.slice(0, -3).replace(/\/+$/, "");
+  return value;
+}
+
+function voiceEndpoint(baseUrl, path) {
+  const base = normalizeVoiceBaseUrl(baseUrl);
+  if (!base) return "";
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function normalizeVoiceSettings(voice = {}, defaults = defaultVoiceSettings()) {
+  const normalized = { ...defaults, ...(voice && typeof voice === "object" ? voice : {}) };
+  normalized.ttsBaseUrl = normalizeVoiceBaseUrl(normalized.ttsBaseUrl);
+  normalized.ttsApiKey = typeof normalized.ttsApiKey === "string" ? normalized.ttsApiKey : "";
+  normalized.voiceId = typeof normalized.voiceId === "string" ? normalized.voiceId : "";
+  const speed = Number(normalized.speed);
+  normalized.speed = Number.isFinite(speed) ? Math.min(4, Math.max(0.25, speed)) : defaults.speed;
+  normalized.language = typeof normalized.language === "string" && normalized.language.trim() ? normalized.language.trim() : defaults.language;
+  normalized.lastStatus = ["idle", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
+  normalized.lastMessage = typeof normalized.lastMessage === "string" ? normalized.lastMessage : "";
+  return normalized;
+}
+
+function voiceAuthHeaders(apiKey) {
+  const key = String(apiKey || "").trim();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
+// LLM provider 직접 호출. 서버를 거치지 않는다(위 주석 참고).
+// 각 provider의 요청 모양은 packages/now_core/lib/llm/cloud_llm_repositories.dart /
+// ollama_llm_repository.dart와 같은 값을 쓴다 — 제품 전체가 같은 답을 내야 한다.
+async function llmChatRequest(provider, config, prompt) {
+  const requesters = {
+    openai: () => fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+    }),
+    groq: () => fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+    }),
+    deepseek: () => fetch("https://api.deepseek.com/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+    }),
+    grok: () => fetch("https://api.x.ai/v1/chat/completions", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "grok-2-latest", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+    }),
+    gemini: () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } }),
+    }),
+    claude: () => fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
+      body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 2048, messages: [{ role: "user", content: prompt }] }),
+    }),
+    ollama: () => {
+      let base = config.ollamaUrl.trim().replace(/\/+$/, "");
+      if (!/\/v1$/.test(base)) base = `${base}/v1`;
+      return fetch(`${base}/chat/completions`, {
+        method: "POST",
+        headers: { Authorization: "Bearer daon-local-key", "Content-Type": "application/json" },
+        body: JSON.stringify({ model: config.ollamaModel, messages: [{ role: "user", content: prompt }], temperature: 0.3, stream: false }),
+      });
+    },
+  };
+  const requester = requesters[provider];
+  if (!requester) throw new Error(`지원하지 않는 LLM provider: ${provider}`);
+  return requester();
+}
+
+function extractLlmChatText(provider, data) {
+  if (provider === "gemini") return data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+  if (provider === "claude") return data?.content?.[0]?.text ?? "";
+  return data?.choices?.[0]?.message?.content ?? "";
+}
+
+async function callLlmChat(prompt) {
+  const llm = state.settings.llm;
+  if (!isLlmConfigured(llm)) {
+    throw new Error(t("ask.notConfigured"));
+  }
+  let response;
+  try {
+    response = await llmChatRequest(llm.provider, llm, prompt);
+  } catch {
+    throw new Error(t("ask.error.connection"));
+  }
+  if (!response.ok) throw new Error(await serverResponseError(response));
+  const data = await response.json();
+  const text = extractLlmChatText(llm.provider, data);
+  if (!text || !String(text).trim()) throw new Error(t("ask.error.emptyAnswer"));
+  return String(text).trim();
+}
+
+async function testLlmConnection() {
+  const llm = state.settings.llm;
+  llm.lastStatus = "testing";
+  llm.lastMessage = t("settings.llm.testing");
+  renderLlmVoiceSettings();
+  try {
+    if (!isLlmConfigured(llm)) throw new Error(t("ask.notConfigured"));
+    await callLlmChat("ping");
+    llm.lastStatus = "ok";
+    llm.lastMessage = t("settings.llm.ok", { provider: llmProviderLabel(llm.provider) });
+  } catch (error) {
+    llm.lastStatus = "bad";
+    llm.lastMessage = `${t("settings.llm.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderLlmVoiceSettings();
+}
+
+// 읽어주기(U27)가 쓰는 TTS 호출. now_core의 VoiceEngineClient와 같은 OpenAI Audio API
+// 호환 규격(POST {ttsBaseUrl}/v1/audio/speech)을 쓴다.
+async function synthesizeSpeech(text) {
+  const voice = state.settings.voice;
+  const url = voiceEndpoint(voice.ttsBaseUrl, "/v1/audio/speech");
+  if (!url) throw new Error(t("voice.notConfigured"));
+  const trimmed = String(text || "").trim();
+  if (!trimmed) throw new Error(t("voice.emptyText"));
+  let response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { ...voiceAuthHeaders(voice.ttsApiKey), "Content-Type": "application/json" },
+      body: JSON.stringify({
+        input: trimmed,
+        ...(voice.voiceId ? { voice: voice.voiceId } : {}),
+        ...(voice.language ? { language: voice.language } : {}),
+        speed: voice.speed,
+        response_format: "wav",
+      }),
+    });
+  } catch {
+    throw new Error(t("voice.error.connection"));
+  }
+  if (!response.ok) throw new Error(await serverResponseError(response));
+  const blob = await response.blob();
+  if (blob.type.startsWith("application/json") || blob.size === 0) {
+    throw new Error(t("voice.error.invalidResponse"));
+  }
+  return blob;
+}
+
+async function loadTtsVoices() {
+  const voice = state.settings.voice;
+  const url = voiceEndpoint(voice.ttsBaseUrl, "/v1/voices");
+  if (!url) throw new Error(t("voice.notConfigured"));
+  const response = await fetch(url, { headers: voiceAuthHeaders(voice.ttsApiKey) });
+  if (!response.ok) throw new Error(await serverResponseError(response));
+  const data = await response.json();
+  const raw = Array.isArray(data) ? data : Array.isArray(data?.voices) ? data.voices : [];
+  return raw
+    .map((item) => ({
+      id: String(item.id ?? item.voice_id ?? item.name ?? ""),
+      name: String(item.name ?? item.id ?? ""),
+    }))
+    .filter((item) => item.id);
+}
+
+async function testTtsConnection() {
+  const voice = state.settings.voice;
+  voice.lastStatus = "testing";
+  voice.lastMessage = t("settings.voice.testing");
+  renderLlmVoiceSettings();
+  try {
+    const voices = await loadTtsVoices();
+    if (elements.ttsVoiceSelect) {
+      elements.ttsVoiceSelect.innerHTML = voices
+        .map((item) => `<option value="${escapeHtml(item.id)}">${escapeHtml(item.name || item.id)}</option>`)
+        .join("");
+      if (voice.voiceId) elements.ttsVoiceSelect.value = voice.voiceId;
+    }
+    voice.lastStatus = "ok";
+    voice.lastMessage = t("settings.voice.ok", { count: voices.length });
+  } catch (error) {
+    voice.lastStatus = "bad";
+    voice.lastMessage = `${t("settings.voice.fail")}: ${error.message}`;
+  }
+  persistSettings();
+  renderLlmVoiceSettings();
 }
 
 function defaultServerUserProfile() {
@@ -3108,6 +3455,33 @@ const elements = {
   moveNodePreview: $("#moveNodePreview"),
   moveNodeCancelBtn: $("#moveNodeCancelBtn"),
   moveNodeOkBtn: $("#moveNodeOkBtn"),
+  llmProviderSelect: $("#llmProviderSelect"),
+  llmApiKeyField: $("#llmApiKeyField"),
+  llmApiKeyInput: $("#llmApiKeyInput"),
+  llmOllamaUrlField: $("#llmOllamaUrlField"),
+  llmOllamaUrlInput: $("#llmOllamaUrlInput"),
+  llmOllamaModelField: $("#llmOllamaModelField"),
+  llmOllamaModelInput: $("#llmOllamaModelInput"),
+  llmTestBtn: $("#llmTestBtn"),
+  llmStatusText: $("#llmStatusText"),
+  ttsBaseUrlInput: $("#ttsBaseUrlInput"),
+  ttsApiKeyInput: $("#ttsApiKeyInput"),
+  ttsVoiceSelect: $("#ttsVoiceSelect"),
+  ttsSpeedInput: $("#ttsSpeedInput"),
+  ttsLanguageInput: $("#ttsLanguageInput"),
+  ttsLoadVoicesBtn: $("#ttsLoadVoicesBtn"),
+  voiceStatusText: $("#voiceStatusText"),
+  askOpenBtn: $("#askOpenBtn"),
+  askPanel: $("#askPanel"),
+  askPanelTitle: $("#askPanelTitle"),
+  askCloseBtn: $("#askCloseBtn"),
+  askIncludeContextToggle: $("#askIncludeContextToggle"),
+  askIncludeContextLabel: $("#askIncludeContextLabel"),
+  askConversationList: $("#askConversationList"),
+  askStatusText: $("#askStatusText"),
+  askQuestionInput: $("#askQuestionInput"),
+  askSubmitBtn: $("#askSubmitBtn"),
+  readAloudBtn: $("#readAloudBtn"),
   insertSketchBtn: $("#insertSketchBtn"),
   sketchDialog: $("#sketchDialog"),
   sketchDialogTitle: $("#sketchDialogTitle"),
@@ -4987,6 +5361,57 @@ function bindEvents() {
   elements.sketchInsertBtn.addEventListener("click", insertSketchIntoTreeNote);
   initializeSketchDialogCanvas();
 
+  elements.llmProviderSelect.addEventListener("change", () => {
+    state.settings.llm.provider = elements.llmProviderSelect.value;
+    persistSettings();
+    renderLlmVoiceSettings();
+  });
+  elements.llmApiKeyInput.addEventListener("input", () => {
+    state.settings.llm.apiKey = elements.llmApiKeyInput.value;
+    persistSettings();
+  });
+  elements.llmOllamaUrlInput.addEventListener("input", () => {
+    state.settings.llm.ollamaUrl = elements.llmOllamaUrlInput.value;
+    persistSettings();
+  });
+  elements.llmOllamaModelInput.addEventListener("input", () => {
+    state.settings.llm.ollamaModel = elements.llmOllamaModelInput.value;
+    persistSettings();
+  });
+  elements.llmTestBtn.addEventListener("click", testLlmConnection);
+  elements.ttsBaseUrlInput.addEventListener("input", () => {
+    state.settings.voice.ttsBaseUrl = elements.ttsBaseUrlInput.value;
+    persistSettings();
+  });
+  elements.ttsApiKeyInput.addEventListener("input", () => {
+    state.settings.voice.ttsApiKey = elements.ttsApiKeyInput.value;
+    persistSettings();
+  });
+  elements.ttsVoiceSelect.addEventListener("change", () => {
+    state.settings.voice.voiceId = elements.ttsVoiceSelect.value;
+    persistSettings();
+  });
+  elements.ttsSpeedInput.addEventListener("change", () => {
+    state.settings.voice.speed = Number(elements.ttsSpeedInput.value) || 1;
+    persistSettings();
+    renderLlmVoiceSettings();
+  });
+  elements.ttsLanguageInput.addEventListener("input", () => {
+    state.settings.voice.language = elements.ttsLanguageInput.value;
+    persistSettings();
+  });
+  elements.ttsLoadVoicesBtn.addEventListener("click", testTtsConnection);
+  elements.askOpenBtn.addEventListener("click", openAskPanel);
+  elements.askCloseBtn.addEventListener("click", closeAskPanel);
+  elements.askSubmitBtn.addEventListener("click", submitAskQuestion);
+  elements.askQuestionInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      submitAskQuestion();
+    }
+  });
+  elements.readAloudBtn.addEventListener("click", toggleReadAloud);
+
   elements.previewToggleBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
     if (!selected) return;
@@ -5262,6 +5687,7 @@ function renderSettings() {
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
   elements.sidebarAssistToggle.checked = state.settings.showSidebarAssist;
   renderServerSettings();
+  renderLlmVoiceSettings();
   renderDesktopStorageStatus();
   renderShortcutEditor();
   renderFeatureSettings();
@@ -5530,6 +5956,43 @@ function renderServerSettings() {
   renderServerProfileMeta(profile);
   renderServerGroupJoinMeta(profile);
   renderUpdateCheckAvailability();
+}
+
+function renderLlmVoiceSettings() {
+  const llm = state.settings.llm || defaultLlmSettings();
+  if (elements.llmProviderSelect) elements.llmProviderSelect.value = llm.provider;
+  if (elements.llmApiKeyInput) elements.llmApiKeyInput.value = llm.apiKey;
+  if (elements.llmOllamaUrlInput) elements.llmOllamaUrlInput.value = llm.ollamaUrl;
+  if (elements.llmOllamaModelInput) elements.llmOllamaModelInput.value = llm.ollamaModel;
+  const isOllama = llm.provider === "ollama";
+  elements.llmApiKeyField?.classList.toggle("hidden", isOllama);
+  elements.llmOllamaUrlField?.classList.toggle("hidden", !isOllama);
+  elements.llmOllamaModelField?.classList.toggle("hidden", !isOllama);
+  if (elements.llmStatusText) {
+    elements.llmStatusText.textContent = llm.lastMessage || t("settings.llm.idle");
+    elements.llmStatusText.classList.remove("ok", "warn", "bad");
+    if (llm.lastStatus === "ok") elements.llmStatusText.classList.add("ok");
+    if (llm.lastStatus === "testing") elements.llmStatusText.classList.add("warn");
+    if (llm.lastStatus === "bad") elements.llmStatusText.classList.add("bad");
+  }
+
+  const voice = state.settings.voice || defaultVoiceSettings();
+  if (elements.ttsBaseUrlInput) elements.ttsBaseUrlInput.value = voice.ttsBaseUrl;
+  if (elements.ttsApiKeyInput) elements.ttsApiKeyInput.value = voice.ttsApiKey;
+  if (elements.ttsSpeedInput) elements.ttsSpeedInput.value = String(voice.speed);
+  if (elements.ttsLanguageInput) elements.ttsLanguageInput.value = voice.language;
+  if (elements.ttsVoiceSelect && voice.voiceId && !Array.from(elements.ttsVoiceSelect.options).some((option) => option.value === voice.voiceId)) {
+    elements.ttsVoiceSelect.add(optionElement(voice.voiceId, voice.voiceId));
+  }
+  if (elements.ttsVoiceSelect) elements.ttsVoiceSelect.value = voice.voiceId;
+  if (elements.voiceStatusText) {
+    elements.voiceStatusText.textContent = voice.lastMessage || t("settings.voice.idle");
+    elements.voiceStatusText.classList.remove("ok", "warn", "bad");
+    if (voice.lastStatus === "ok") elements.voiceStatusText.classList.add("ok");
+    if (voice.lastStatus === "testing") elements.voiceStatusText.classList.add("warn");
+    if (voice.lastStatus === "bad") elements.voiceStatusText.classList.add("bad");
+  }
+  renderAskAvailability();
 }
 
 function applyHostedServerSettingsVisibility() {
@@ -8474,6 +8937,26 @@ function applyLanguage() {
   setText("#serverAutoSyncHint", t("settings.server.autoSync.hint"));
   setText("#serverUrlHint", t("settings.server.url.hint"));
   setText("#serverPrivateNetworkHint", t("settings.server.privateNetworkHint"));
+  setText("#llmSettingTitle", t("settings.llm.title"));
+  setText("#llmSettingDesc", t("settings.llm.desc"));
+  setText("#llmProviderLabel", t("settings.llm.providerLabel"));
+  setText("#llmApiKeyLabel", t("settings.llm.apiKeyLabel"));
+  setText("#llmOllamaUrlLabel", t("settings.llm.ollamaUrlLabel"));
+  setText("#llmOllamaModelLabel", t("settings.llm.ollamaModelLabel"));
+  setText("#llmTestBtn", t("settings.llm.testBtn"));
+  setText("#voiceSettingTitle", t("settings.voice.title"));
+  setText("#ttsUrlLabel", t("settings.voice.ttsUrlLabel"));
+  setText("#ttsKeyLabel", t("settings.voice.ttsKeyLabel"));
+  setText("#ttsVoiceLabel", t("settings.voice.voiceLabel"));
+  setText("#ttsSpeedLabel", t("settings.voice.speedLabel"));
+  setText("#ttsLanguageLabel", t("settings.voice.languageLabel"));
+  setText("#ttsLoadVoicesBtn", t("settings.voice.loadVoicesBtn"));
+  setText("#askOpenBtn", t("editor.ask"));
+  renderReadAloudButton();
+  setText("#askPanelTitle", t("ask.panelTitle"));
+  setText("#askIncludeContextLabel", t("ask.includeContext"));
+  setPlaceholder(elements.askQuestionInput, t("ask.questionPlaceholder"));
+  setText("#askSubmitBtn", t("ask.submit"));
   setText("#serverTokenHint", t("settings.server.token.hint"));
   setText("#serverUserTokenHint", t("settings.server.userToken.hint"));
   setText("#serverTwoFactorCodeHint", t("settings.server.twoFactorCode.hint"));
@@ -8772,6 +9255,22 @@ function commandCatalog() {
       description: "손그림을 그려 선택 메모에 넣습니다.",
       keywords: "sketch draw insert 스케치 그림",
       run: openSketchDialog,
+    },
+    {
+      id: "ask-open",
+      label: "묻기 열기",
+      group: "작성",
+      description: "선택 메모를 보면서 LLM에 묻습니다.",
+      keywords: "ask llm question 묻기 질문",
+      run: openAskPanel,
+    },
+    {
+      id: "read-aloud",
+      label: "읽어주기",
+      group: "작성",
+      description: "선택 메모를 소리 내어 읽습니다.",
+      keywords: "read aloud tts speak 읽어주기 음성",
+      run: toggleReadAloud,
     },
     {
       id: "insert-checklist",
@@ -9298,6 +9797,273 @@ function showCurrentSaveState() {
   }
   if (!elements.dailyPopup.classList.contains("hidden")) {
     showSaved(elements.dailySavedLabel);
+  }
+}
+
+// 묻기 (2.3.6 U26, 로드맵 밖 추가 항목). 화면 형태와 진입점, "대화는 저장하지 않는다" 같은
+// 동작 기준은 docs/NOW_2_3_6_FEATURE_DESIGN.md "4. 묻기와 음성의 화면 위치"를 따른다.
+// 프롬프트 조립·길이 상한·삽입 형식은 packages/now_core/lib/ask/의 Dart 구현과 같은 값을
+// 그대로 옮겼다 — Now/NowNote 앱과 Web·설치형이 같은 결과를 내야 한다.
+const ASK_LIMITS = {
+  maxQuestionChars: 1000,
+  maxHistoryMessages: 20,
+  maxPromptChars: 4000,
+  minContextChars: 200,
+};
+
+const ASK_INSTRUCTION = `당신은 메모를 쓰는 사람 옆에서 짧게 거들어 주는 조수입니다.
+사용자는 글을 쓰다 잠깐 멈추고 궁금한 것을 물었습니다. 대화를 나누려는 것이 아닙니다.
+
+[답하는 방식]
+- 사용자가 쓴 언어로 답합니다.
+- 짧게 답합니다. 기본은 세 문장 이내입니다. 나열이 꼭 필요하면 다섯 항목까지만 씁니다.
+- 인사, 사과, 되묻기, 마무리 문장을 붙이지 않습니다. 답만 씁니다.
+- "아래에 정리했습니다" 같은 안내 문장을 쓰지 않습니다. 바로 내용부터 씁니다.
+- 참고로 받은 메모를 다시 옮겨 적거나 요약해 되풀이하지 않습니다.
+  메모는 질문을 이해하기 위한 배경일 뿐이고, 사용자는 그 내용을 이미 알고 있습니다.
+- 답은 사용자의 메모에 그대로 붙여 넣을 수 있는 문장이어야 합니다.
+- 모르면 모른다고 한 문장으로 말합니다. 지어내지 않습니다.
+- 확실하지 않은 사실은 확실하지 않다고 밝힙니다.
+- 묻지 않은 조언이나 추가 제안을 덧붙이지 않습니다.`;
+
+const askInsertionMarker = "묻기";
+const askInsertionQuestionChars = 80;
+
+let askConversation = [];
+let askBusy = false;
+
+function renderAskAvailability() {
+  const configured = isLlmConfigured(state.settings.llm || defaultLlmSettings());
+  if (elements.askOpenBtn) elements.askOpenBtn.disabled = !configured;
+  const voiceConfigured = Boolean((state.settings.voice || defaultVoiceSettings()).ttsBaseUrl);
+  if (elements.readAloudBtn) elements.readAloudBtn.disabled = !voiceConfigured;
+}
+
+function currentAskNoteContext() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return null;
+  if (!elements.askIncludeContextToggle?.checked) return null;
+  if (isEncryptedContent(selected.content) && !isEncryptedNodeUnlocked(selected)) return null;
+  const body = visibleContentForNode(selected).slice(0, 4000);
+  return { title: noteTitle(selected.title), body };
+}
+
+function assembleAskPrompt(question, history, context) {
+  const parts = [ASK_INSTRUCTION];
+  if (context && (context.title || context.body)) {
+    let block = `[참고 메모]\n제목: ${context.title}`;
+    if (context.body) block += `\n${context.body}`;
+    parts.push(block);
+  }
+  if (history.length > 0) {
+    const lines = history.flatMap((turn) => [`질문: ${turn.question}`, `답변: ${turn.answer}`]);
+    parts.push(`[앞선 대화]\n${lines.join("\n")}`);
+  }
+  parts.push(`[질문]\n${question}`);
+  return parts.join("\n\n");
+}
+
+// 상한을 넘으면 앞선 대화를 오래된 것부터 덜어 내고, 그래도 넘으면 메모 맥락을 줄인다.
+// 이번 질문은 건드리지 않는다 (packages/now_core/lib/ask/ask_prompt.dart와 같은 순서).
+function buildAskPrompt(question, conversation, noteContext) {
+  let history = conversation.slice(-ASK_LIMITS.maxHistoryMessages);
+  let context = noteContext;
+  let text = assembleAskPrompt(question, history, context);
+  while (text.length > ASK_LIMITS.maxPromptChars && history.length > 0) {
+    history = history.slice(1);
+    text = assembleAskPrompt(question, history, context);
+  }
+  while (text.length > ASK_LIMITS.maxPromptChars && context?.body && context.body.length > ASK_LIMITS.minContextChars) {
+    const next = Math.max(ASK_LIMITS.minContextChars, Math.floor(context.body.length / 2));
+    context = { ...context, body: context.body.slice(0, next) };
+    text = assembleAskPrompt(question, history, context);
+  }
+  return text;
+}
+
+function openAskPanel() {
+  if (!isLlmConfigured(state.settings.llm || defaultLlmSettings())) {
+    showNotice(t("ask.notConfigured"), "error");
+    return;
+  }
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  closePopupLayers();
+  askConversation = [];
+  if (elements.askStatusText) elements.askStatusText.textContent = "";
+  if (elements.askQuestionInput) elements.askQuestionInput.value = "";
+  elements.askPanel.classList.remove("hidden");
+  renderAskConversation();
+  elements.askQuestionInput?.focus();
+}
+
+function closeAskPanel() {
+  elements.askPanel.classList.add("hidden");
+}
+
+function renderAskConversation() {
+  if (!elements.askConversationList) return;
+  elements.askConversationList.replaceChildren(
+    ...askConversation.map((turn, index) => {
+      const wrapper = document.createDocumentFragment();
+      const question = document.createElement("div");
+      question.className = "ask-turn-question";
+      question.textContent = turn.question;
+      wrapper.append(question);
+
+      const answerBox = document.createElement("div");
+      answerBox.className = "ask-turn-answer";
+      const answerText = document.createElement("div");
+      answerText.className = "ask-turn-answer-text";
+      answerText.textContent = turn.answer;
+      const actions = document.createElement("div");
+      actions.className = "ask-turn-actions";
+      const insertBtn = document.createElement("button");
+      insertBtn.type = "button";
+      insertBtn.className = "secondary-btn";
+      insertBtn.textContent = t("ask.insert");
+      insertBtn.addEventListener("click", () => insertAskAnswerIntoNote(index));
+      const copyBtn = document.createElement("button");
+      copyBtn.type = "button";
+      copyBtn.className = "secondary-btn";
+      copyBtn.textContent = t("ask.copy");
+      copyBtn.addEventListener("click", () => copyAskAnswer(index));
+      const discardBtn = document.createElement("button");
+      discardBtn.type = "button";
+      discardBtn.className = "secondary-btn";
+      discardBtn.textContent = t("ask.discard");
+      discardBtn.addEventListener("click", () => discardAskAnswer(index));
+      actions.append(insertBtn, copyBtn, discardBtn);
+      answerBox.append(answerText, actions);
+      wrapper.append(answerBox);
+      return wrapper;
+    }),
+  );
+  elements.askConversationList.scrollTop = elements.askConversationList.scrollHeight;
+}
+
+async function submitAskQuestion() {
+  if (askBusy) return;
+  const question = elements.askQuestionInput.value.trim();
+  if (!question) {
+    elements.askStatusText.textContent = t("ask.emptyQuestion");
+    return;
+  }
+  if (question.length > ASK_LIMITS.maxQuestionChars) {
+    elements.askStatusText.textContent = t("ask.questionTooLong", { max: ASK_LIMITS.maxQuestionChars });
+    return;
+  }
+  askBusy = true;
+  elements.askSubmitBtn.disabled = true;
+  elements.askStatusText.textContent = t("ask.asking");
+  try {
+    const context = currentAskNoteContext();
+    const prompt = buildAskPrompt(question, askConversation, context);
+    const answer = await callLlmChat(prompt);
+    askConversation.push({ question, answer });
+    elements.askQuestionInput.value = "";
+    elements.askStatusText.textContent = "";
+    renderAskConversation();
+  } catch (error) {
+    elements.askStatusText.textContent = error.message;
+  } finally {
+    askBusy = false;
+    elements.askSubmitBtn.disabled = false;
+  }
+}
+
+function buildAskInsertionBlock(answer, question, sourceLabel) {
+  const body = answer.trim();
+  if (!body) return "";
+  const oneLine = (value, max) => {
+    const text = String(value || "").replace(/\s+/g, " ").trim();
+    return text.length <= max ? text : `${text.slice(0, max).trimEnd()}…`;
+  };
+  const lines = [];
+  const head = oneLine(question, askInsertionQuestionChars);
+  lines.push(head ? `> ${askInsertionMarker} — ${head}` : `> ${askInsertionMarker}`);
+  const source = oneLine(sourceLabel, askInsertionQuestionChars);
+  if (source) lines.push(`> 출처: ${source}`);
+  return `${lines.join("\n")}\n\n${body}`;
+}
+
+function insertAskAnswerIntoNote(index) {
+  const turn = askConversation[index];
+  if (!turn) return;
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const block = buildAskInsertionBlock(turn.answer, turn.question, llmProviderLabel(state.settings.llm.provider));
+  if (!block) return;
+  const current = elements.treeContent.value;
+  const base = current.replace(/\s+$/, "");
+  elements.treeContent.value = base ? `${base}\n\n${block}` : block;
+  syncTreeContentFromEditor();
+  showNotice(t("ask.inserted"), "success");
+}
+
+async function copyAskAnswer(index) {
+  const turn = askConversation[index];
+  if (!turn) return;
+  try {
+    await navigator.clipboard.writeText(turn.answer);
+    showNotice(t("ask.copied"), "success");
+  } catch {
+    showNotice(t("ask.copyFailed"), "error");
+  }
+}
+
+function discardAskAnswer(index) {
+  askConversation.splice(index, 1);
+  renderAskConversation();
+}
+
+// 읽어주기 (2.3.6 U27). 재생 중인 오디오 하나만 유지한다 - 여러 메모를 동시에 읽지 않는다.
+let readAloudAudio = null;
+
+function isReadingAloud() {
+  return Boolean(readAloudAudio) && !readAloudAudio.paused;
+}
+
+function stopReadAloud() {
+  if (readAloudAudio) {
+    readAloudAudio.pause();
+    if (readAloudAudio.src) URL.revokeObjectURL(readAloudAudio.src);
+    readAloudAudio = null;
+  }
+  renderReadAloudButton();
+}
+
+function renderReadAloudButton() {
+  if (!elements.readAloudBtn) return;
+  elements.readAloudBtn.textContent = isReadingAloud() ? t("voice.stop") : t("voice.readAloud");
+}
+
+async function toggleReadAloud() {
+  if (isReadingAloud()) {
+    stopReadAloud();
+    return;
+  }
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const content = isEncryptedContent(selected.content) && !isEncryptedNodeUnlocked(selected)
+    ? ""
+    : visibleContentForNode(selected);
+  if (!content.trim()) {
+    showNotice(t("voice.emptyText"), "error");
+    return;
+  }
+  try {
+    elements.readAloudBtn.disabled = true;
+    const blob = await synthesizeSpeech(content);
+    const url = URL.createObjectURL(blob);
+    readAloudAudio = new Audio(url);
+    readAloudAudio.addEventListener("ended", stopReadAloud);
+    await readAloudAudio.play();
+    renderReadAloudButton();
+  } catch (error) {
+    showNotice(`${t("voice.error.connection")}: ${error.message}`, "error");
+  } finally {
+    elements.readAloudBtn.disabled = false;
   }
 }
 
@@ -13925,6 +14691,8 @@ function normalizeSettings(settings = {}) {
   normalized.showTags = normalizeToggle(normalized.showTags, defaults.showTags);
   normalized.showSidebarAssist = normalizeToggle(normalized.showSidebarAssist, defaults.showSidebarAssist);
   normalized.server = normalizeServerSettings(normalized.server, defaults.server);
+  normalized.llm = normalizeLlmSettings(normalized.llm, defaults.llm);
+  normalized.voice = normalizeVoiceSettings(normalized.voice, defaults.voice);
   normalized.features = normalizeFeatureSettings(normalized.features, defaults.features);
   normalized.features.backlinks = normalized.showBacklinks;
   normalized.features.tags = normalized.showTags;
