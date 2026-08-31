@@ -18,11 +18,11 @@ NowNote는 한국어 사용 흐름을 먼저 기준으로 만든 로컬/서버 �
 - Web 화면: 왼쪽 메뉴 간격과 메신저 보내기 버튼 표시를 조정했습니다.
 - 2.3 Web 그룹 메신저 확장: 전체 그룹방을 유지하면서 일부 그룹원 채팅방, 파일/사진 첨부, 서버 저장소, 업로드/다운로드 API, 파일 크기/확장자 제한, 참여자 권한 검사를 추가했습니다.
 
-## 2.3.5 릴리즈 산출물
+## 2.3.6 릴리즈 산출물
 
 - Web 기준 주소: https://nownote.sinsan.kr
-- Windows 설치형 프로그램: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- Android 앱: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- Windows 설치형 프로그램: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- Android 앱: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - 서버/API, Web/설치형 프로그램, 앱 작업 결과는 `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`, `docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md`, `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`를 기준으로 확인합니다.
 
 ## 구성
@@ -168,11 +168,11 @@ The mobile app focuses on quick capture and voice memos. The Windows desktop ins
 - Web UI: sidebar spacing and the messenger send button layout were adjusted.
 - 2.3 Web group messenger expansion: the full-group room is preserved while selected-member rooms, file/photo attachments, server storage, upload/download APIs, file size/extension limits, and participant permission checks have been added.
 
-## 2.3.5 Release Artifacts
+## 2.3.6 Release Artifacts
 
 - Web base URL: https://nownote.sinsan.kr
-- Windows desktop installer: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- Android app: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- Windows desktop installer: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- Android app: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - Server/API, Web/desktop, and app work results are tracked in `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`, `docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md`, and `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`.
 
 ## Structure
@@ -284,11 +284,11 @@ NowNote 是一个本地和服务器并行使用的笔记系统，首先以韩语
 - Web 界面: 调整了左侧菜单间距和消息发送按钮的显示。
 - 2.3 Web 群组消息扩展: 保留全组聊天室，并新增部分成员聊天室、文件/图片附件、服务器存储、上传/下载 API、文件大小/扩展名限制和参与者权限检查。
 
-## 2.3.5 发布文件
+## 2.3.6 发布文件
 
 - Web 基准地址: https://nownote.sinsan.kr
-- Windows 安装程序: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- Android 应用: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- Windows 安装程序: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- Android 应用: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - Server/API、Web/安装版、App 的工作结果以 `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`、`docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md`、`docs/NOW_2_3_WORK_ORDER_APP_RESULT.md` 为准。
 
 ## 组成
@@ -359,11 +359,11 @@ NowNote は、韓国語の利用フローを最初の基準として作られた
 - Web 画面: 左メニューの間隔とメッセンジャー送信ボタンの表示を調整しました。
 - 2.3 Web グループメッセンジャー拡張: 全体グループルームを維持しつつ、一部メンバー向けチャットルーム、ファイル/写真添付、サーバーストレージ、アップロード/ダウンロード API、ファイルサイズ/拡張子制限、参加者権限チェックを追加しました。
 
-## 2.3.5 リリース成果物
+## 2.3.6 リリース成果物
 
 - Web 基準 URL: https://nownote.sinsan.kr
-- Windows インストーラー: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- Android アプリ: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- Windows インストーラー: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- Android アプリ: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - Server/API、Web/インストール版、アプリの作業結果は `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`、`docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md`、`docs/NOW_2_3_WORK_ORDER_APP_RESULT.md` を基準に確認します。
 
 ## 構成
@@ -434,11 +434,11 @@ NowNote là hệ thống ghi chú kết hợp local/server, được thiết k�
 - Giao diện Web: đã điều chỉnh khoảng cách menu bên trái và cách hiển thị nút gửi trong messenger.
 - Mở rộng Web group messenger 2.3: giữ phòng toàn nhóm, đồng thời thêm phòng chat cho một số thành viên, đính kèm file/ảnh, lưu trữ server, API upload/download, giới hạn dung lượng/phần mở rộng file và kiểm tra quyền người tham gia.
 
-## Gói phát hành 2.3.5
+## Gói phát hành 2.3.6
 
 - URL Web chuẩn: https://nownote.sinsan.kr
-- Trình cài đặt Windows: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- Ứng dụng Android: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- Trình cài đặt Windows: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- Ứng dụng Android: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - Kết quả công việc Server/API, Web/desktop và app được theo dõi trong `docs/NOW_2_3_WORK_ORDER_SERVER_API.md`, `docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md`, `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`.
 
 ## Cấu trúc
@@ -509,11 +509,11 @@ NowNote هو نظام ملاحظات يعمل محليا ومع الخادم، �
 - واجهة Web: تم ضبط تباعد القائمة اليسرى وطريقة عرض زر الإرسال في المرسال.
 - توسيع مرسال مجموعات Web في 2.3: تم الحفاظ على غرفة المجموعة الكاملة، مع إضافة غرف دردشة لبعض الأعضاء، ومرفقات الملفات/الصور، وتخزين الخادم، وواجهات upload/download API، وحدود حجم الملف والامتدادات، وفحص صلاحيات المشاركين.
 
-## ملفات إصدار 2.3.5
+## ملفات إصدار 2.3.6
 
 - عنوان Web الأساسي: https://nownote.sinsan.kr
-- مثبّت Windows: [NowNote-Setup-2.3.5-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-Setup-2.3.5-x64.exe)
-- تطبيق Android: [NowNote-2.3.5.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.5/NowNote-2.3.5.apk)
+- مثبّت Windows: [NowNote-Setup-2.3.6-x64.exe](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-Setup-2.3.6-x64.exe)
+- تطبيق Android: [NowNote-2.3.6.apk](https://github.com/cyhuh428-sinsan/Now/releases/download/v2.3.6/NowNote-2.3.6.apk)
 - يتم تتبع نتائج عمل Server/API و Web/desktop والتطبيق في `docs/NOW_2_3_WORK_ORDER_SERVER_API.md` و `docs/NOW_2_3_WORK_ORDER_WEB_DESKTOP_RESULT.md` و `docs/NOW_2_3_WORK_ORDER_APP_RESULT.md`.
 
 ## البنية

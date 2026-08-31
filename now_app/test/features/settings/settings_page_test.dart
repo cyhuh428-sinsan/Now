@@ -72,7 +72,7 @@ void main() {
       expect(find.text('화자 분리'), findsOneWidget);
       await scrollToText(tester, '앱 정보');
       expect(find.text('앱 정보'), findsOneWidget);
-      expect(find.text('2.3.5 (23005)'), findsOneWidget);
+      expect(find.text('2.3.6 (23006)'), findsOneWidget);
     });
   });
 }

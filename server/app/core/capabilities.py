@@ -9,7 +9,7 @@ SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
 # GitHub Release API 등 외부 서비스를 요청마다 부르지 않기 위해 코드 상수로 둔다.
 # 릴리즈마다 여기와 now_app/pubspec.yaml의 version, desktop/package.json의 version,
 # desktop/app/app.js의 APP_VERSION을 같은 값으로 맞춰 올린다.
-LATEST_APP_VERSION = "2.3.5"
+LATEST_APP_VERSION = "2.3.6"
 GITHUB_RELEASE_REPO = "cyhuh428-sinsan/Now"
 
 # 사설 네트워크 연결 판정에 쓸 수 있는 무인증 엔드포인트 목록.
