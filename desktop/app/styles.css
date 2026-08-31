@@ -2300,7 +2300,7 @@ kbd {
 
 .tree-list {
   display: grid;
-  gap: 4px;
+  gap: 6px;
 }
 
 .tree-node {
@@ -2387,7 +2387,7 @@ kbd {
 
 .tree-children {
   display: grid;
-  gap: 4px;
+  gap: 6px;
   padding: 0 4px 5px 16px;
 }
 
