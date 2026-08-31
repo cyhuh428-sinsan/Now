@@ -2386,6 +2386,11 @@ const FEATURE_TOGGLES = [
   { id: "shortcuts", labelKey: "feature.shortcuts.label", descriptionKey: "feature.shortcuts.description", label: "단축키", description: "키보드 빠른 실행" },
 ];
 
+const CONTEXT_MENU_ACTIONS = [
+  { id: "undo", labelKey: "context.action.undo", label: "실행 취소", description: "본문 편집을 한 단계 되돌립니다.", icon: "↶", defaultEnabled: true },
+  { id: "redo", labelKey: "context.action.redo", label: "다시 실행", description: "되돌린 본문 편집을 다시 적용합니다.", icon: "↷", defaultEnabled: true },
+];
+
 const state = {
   view: "tree",
   selectedDate: toDateKey(new Date()),
@@ -2540,6 +2545,7 @@ function defaultSettings() {
     llm: defaultLlmSettings(),
     voice: defaultVoiceSettings(),
     features: defaultFeatureSettings(),
+    contextMenuActions: defaultContextMenuActions(),
     shortcuts: defaultShortcutSettings(),
     openTreeTabs: [],
     closedTreeTabs: [],
@@ -3105,6 +3111,10 @@ function defaultFeatureSettings() {
   return Object.fromEntries(FEATURE_TOGGLES.map((feature) => [feature.id, true]));
 }
 
+function defaultContextMenuActions() {
+  return CONTEXT_MENU_ACTIONS.filter((action) => action.defaultEnabled).map((action) => action.id);
+}
+
 const elements = {
   searchInput: $("#searchInput"),
   navTabs: document.querySelectorAll(".nav-tab"),
@@ -3141,6 +3151,7 @@ const elements = {
   emptyAddRootBtn: $("#emptyAddRootBtn"),
   treePanel: $("#treePanel"),
   treeList: $("#treeList"),
+  treeEditorPanel: $("#treeEditorPanel"),
   openTabsBar: $("#openTabsBar"),
   openTabs: $("#openTabs"),
   pinTabBtn: $("#pinTabBtn"),
@@ -3166,6 +3177,7 @@ const elements = {
   treeSavedLabel: $("#treeSavedLabel"),
   noteActionMenuBtn: $("#noteActionMenuBtn"),
   noteActionMenu: $("#noteActionMenu"),
+  treeContextMenu: $("#treeContextMenu"),
   favoriteBtn: $("#favoriteBtn"),
   shareTreeBtn: $("#shareTreeBtn"),
   copyLinkBtn: $("#copyLinkBtn"),
@@ -3271,6 +3283,7 @@ const elements = {
   shortcutsToggle: $("#shortcutsToggle"),
   shortcutEditor: $("#shortcutEditor"),
   featureSettings: $("#featureSettings"),
+  contextMenuSettings: $("#contextMenuSettings"),
   markdownColorEditor: $("#markdownColorEditor"),
   serverModeSelect: $("#serverModeSelect"),
   serverUrlInput: $("#serverUrlInput"),
@@ -5360,6 +5373,13 @@ function bindEvents() {
   elements.noteActionMenu?.addEventListener("click", (event) => {
     if (event.target.closest("button")) closeNoteActionMenu();
   });
+  elements.treeList?.addEventListener("contextmenu", openTreeContextMenu);
+  elements.treeEditorPanel?.addEventListener("contextmenu", openTreeContextMenu);
+  elements.treeContextMenu?.addEventListener("click", (event) => {
+    const button = event.target.closest("button[data-action]");
+    if (!button) return;
+    executeContextMenuAction(button.dataset.action);
+  });
   elements.outlineToggleBtn.addEventListener("click", toggleOutlinePanel);
   elements.insertTimeBtn.addEventListener("click", insertCurrentTimeIntoTreeNote);
   elements.openDetectedLinkBtn?.addEventListener("click", openDetectedLinkFromEditor);
@@ -5619,6 +5639,10 @@ function bindEvents() {
   });
   window.addEventListener("keydown", handleShortcuts);
   window.addEventListener("mousedown", (event) => {
+    if (elements.treeContextMenu && !elements.treeContextMenu.classList.contains("hidden")) {
+      const target = event.target;
+      if (!elements.treeContextMenu.contains(target)) closeTreeContextMenu();
+    }
     if (elements.webAccountMenu && !elements.webAccountMenu.classList.contains("hidden")) {
       const target = event.target;
       if (!elements.webAccountMenu.contains(target) && !elements.webAccountMenuBtn?.contains(target)) {
@@ -5712,6 +5736,7 @@ function renderSettings() {
   renderLlmVoiceSettings();
   renderDesktopStorageStatus();
   renderShortcutEditor();
+  renderContextMenuSettings();
   renderFeatureSettings();
   renderMarkdownColorEditor();
   renderWorkspacePanel();
@@ -8440,6 +8465,35 @@ function renderShortcutRow(action) {
   return row;
 }
 
+function renderContextMenuSettings() {
+  if (!elements.contextMenuSettings) return;
+  const selectedIds = normalizeContextMenuActions(state.settings.contextMenuActions);
+  state.settings.contextMenuActions = selectedIds;
+  const selectedSet = new Set(selectedIds);
+  elements.contextMenuSettings.replaceChildren(
+    ...CONTEXT_MENU_ACTIONS.map((action) => {
+      const row = document.createElement("label");
+      row.className = "feature-toggle-row";
+      const text = document.createElement("span");
+      const actionLabel = localizeOrFallback(action.labelKey, action.label);
+      text.innerHTML = `<strong>${escapeHtml(actionLabel)}</strong><small>${escapeHtml(action.description)}</small>`;
+      const toggle = document.createElement("input");
+      toggle.type = "checkbox";
+      toggle.checked = selectedSet.has(action.id);
+      toggle.addEventListener("change", () => {
+        const next = new Set(normalizeContextMenuActions(state.settings.contextMenuActions));
+        if (toggle.checked) next.add(action.id);
+        else next.delete(action.id);
+        state.settings.contextMenuActions = normalizeContextMenuActions([...next]);
+        persistSettings();
+        renderContextMenuSettings();
+      });
+      row.append(text, toggle);
+      return row;
+    }),
+  );
+}
+
 function renderFeatureSettings() {
   elements.featureSettings.replaceChildren(
     ...FEATURE_TOGGLES.map((feature) => {
@@ -8949,6 +9003,8 @@ function applyLanguage() {
   setText("#shortcutsSettingDesc", t("settings.shortcuts.desc"));
   setText("#shortcutGuideSettingTitle", t("settings.shortcutGuide.title"));
   setText("#shortcutGuideSettingDesc", t("settings.shortcutGuide.desc"));
+  setText("#contextMenuSettingTitle", localizeOrFallback("settings.contextMenu.title", "마우스 오른쪽 메뉴"));
+  setText("#contextMenuSettingDesc", localizeOrFallback("settings.contextMenu.desc", "본문과 메모 목록에서 오른쪽 버튼을 눌렀을 때 보일 작업을 고릅니다."));
   setText("#featuresSettingTitle", t("settings.features.title"));
   setText("#featuresSettingDesc", t("settings.features.desc"));
   setText("#markdownColorsSettingTitle", t("settings.markdownColors.title"));
@@ -12218,6 +12274,7 @@ function closeSelectionOverlays() {
 function closePopupLayers() {
   cancelShortcutCapture();
   closeNoteActionMenu();
+  closeTreeContextMenu();
   closeDailyPopup();
   closeQuickSwitch();
   closeCommandPalette();
@@ -12247,6 +12304,91 @@ function closeNoteActionMenu() {
   if (!elements.noteActionMenu || !elements.noteActionMenuBtn) return;
   elements.noteActionMenu.classList.add("hidden");
   elements.noteActionMenuBtn.setAttribute("aria-expanded", "false");
+}
+
+function closeTreeContextMenu() {
+  if (!elements.treeContextMenu) return;
+  elements.treeContextMenu.classList.add("hidden");
+  elements.treeContextMenu.replaceChildren();
+}
+
+function openTreeContextMenu(event) {
+  if (!elements.treeContextMenu || event.shiftKey) return;
+  selectTreeNodeFromContextTarget(event.target);
+  if (!getSelectedTreeNode()) return;
+  const actions = contextMenuActions();
+  if (!actions.length) return;
+  event.preventDefault();
+  event.stopPropagation();
+  closePopupLayers();
+  renderTreeContextMenu(actions);
+  positionTreeContextMenu(event.clientX, event.clientY);
+}
+
+function selectTreeNodeFromContextTarget(target) {
+  const item = target?.closest?.(".tree-node");
+  if (!item?.dataset?.nodeId) return;
+  state.selectedTreeId = item.dataset.nodeId;
+  expandAncestors(state.selectedTreeId);
+  renderTreeListOnly();
+  renderTreeEditor();
+}
+
+function contextMenuActions() {
+  const selectedIds = normalizeContextMenuActions(state.settings.contextMenuActions);
+  return CONTEXT_MENU_ACTIONS.filter((action) => selectedIds.includes(action.id));
+}
+
+function renderTreeContextMenu(actions) {
+  elements.treeContextMenu.replaceChildren(
+    ...actions.map((action) => {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.dataset.action = action.id;
+      button.dataset.icon = action.icon;
+      button.textContent = localizeOrFallback(action.labelKey, action.label);
+      button.disabled = isContextMenuActionDisabled(action.id);
+      return button;
+    }),
+  );
+}
+
+function positionTreeContextMenu(x, y) {
+  const menu = elements.treeContextMenu;
+  menu.classList.remove("hidden");
+  const rect = menu.getBoundingClientRect();
+  const left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
+  const top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+}
+
+function isContextMenuActionDisabled(actionId) {
+  const selected = getSelectedTreeNode();
+  if (!selected) return true;
+  switch (actionId) {
+    case "undo":
+      return !canUndoTreeEditor();
+    case "redo":
+      return !canRedoTreeEditor();
+    default:
+      return false;
+  }
+}
+
+function executeContextMenuAction(actionId) {
+  if (isContextMenuActionDisabled(actionId)) return;
+  closeTreeContextMenu();
+  switch (actionId) {
+    case "undo":
+      undoTreeEditor();
+      break;
+    case "redo":
+      redoTreeEditor();
+      break;
+    default:
+      break;
+  }
 }
 
 function cancelShortcutCapture() {
@@ -12686,6 +12828,7 @@ function treeNodeElement(node) {
   const sourceNode = findTreeNode(state.data.tree, node.id) || node;
   const wrapper = document.createElement("div");
   wrapper.className = "tree-node";
+  wrapper.dataset.nodeId = node.id;
   const expanded = state.expandedTreeIds.has(node.id);
   const hasChildren = node.children.length > 0;
   wrapper.classList.toggle("expanded", expanded && hasChildren);
@@ -14743,6 +14886,7 @@ function normalizeSettings(settings = {}) {
   normalized.llm = normalizeLlmSettings(normalized.llm, defaults.llm);
   normalized.voice = normalizeVoiceSettings(normalized.voice, defaults.voice);
   normalized.features = normalizeFeatureSettings(normalized.features, defaults.features);
+  normalized.contextMenuActions = normalizeContextMenuActions(normalized.contextMenuActions, defaults.contextMenuActions);
   normalized.features.backlinks = normalized.showBacklinks;
   normalized.features.tags = normalized.showTags;
   normalized.features.shortcuts = normalized.enableShortcuts;
@@ -14988,6 +15132,19 @@ function normalizeFeatureSettings(value, fallback) {
       typeof source[feature.id] === "boolean" ? source[feature.id] : fallback[feature.id],
     ]),
   );
+}
+
+function normalizeContextMenuActions(value, fallback = defaultContextMenuActions()) {
+  const allowed = new Set(CONTEXT_MENU_ACTIONS.map((action) => action.id));
+  const source = Array.isArray(value) ? value : fallback;
+  const seen = new Set();
+  const normalized = [];
+  source.forEach((id) => {
+    if (!allowed.has(id) || seen.has(id)) return;
+    seen.add(id);
+    normalized.push(id);
+  });
+  return normalized;
 }
 
 function persistSettings() {

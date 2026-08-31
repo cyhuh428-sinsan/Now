@@ -1608,7 +1608,7 @@ kbd {
 }
 
 .tree-panel {
-  padding: 8px 3.2px;
+  padding: 8px 4.8px;
   overflow: auto;
 }
 
@@ -1897,6 +1897,59 @@ kbd {
 .note-action-menu .secondary-btn:hover {
   background: var(--blue-soft);
   color: var(--blue);
+}
+
+.tree-context-menu {
+  position: fixed;
+  z-index: 60;
+  display: grid;
+  min-width: 172px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.tree-context-menu.hidden {
+  display: none;
+}
+
+.tree-context-menu button {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  padding: 0 10px;
+  text-align: left;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.tree-context-menu button::before {
+  content: attr(data-icon);
+  color: var(--blue);
+  font-size: 11px;
+  text-align: center;
+}
+
+.tree-context-menu button:hover,
+.tree-context-menu button:focus {
+  background: var(--blue-soft);
+  color: var(--blue);
+  outline: none;
+}
+
+.tree-context-menu button:disabled {
+  color: var(--muted);
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 :root[data-editor-action-icons="show"] .note-action-menu-btn {
@@ -2265,7 +2318,7 @@ kbd {
   width: 100%;
   min-height: 34px;
   background: transparent;
-  padding: 5px 8.4px;
+  padding: 5px 12.6px;
 }
 
 .tree-row.active {
