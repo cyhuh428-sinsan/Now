@@ -2,9 +2,12 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = ROOT.parent
 LIB = ROOT / "lib"
 ANDROID = ROOT / "android"
 README = ROOT / "README.md"
+CORE = REPO_ROOT / "packages" / "now_core" / "lib"
+NOWNOTE_ANDROID = REPO_ROOT / "nownote_app" / "android"
 
 FILES = {
     "app router": LIB / "core" / "router" / "app_router.dart",
@@ -27,6 +30,12 @@ FILES = {
     "mobile Android runtime check": ROOT / "scripts" / "check_android_runtime.py",
     "mobile Android emulator check": ROOT / "scripts" / "check_android_emulator.py",
     "mobile Android launch check": ROOT / "scripts" / "check_android_launch.py",
+    "shared voice recorder": CORE / "voice" / "audio_recorder.dart",
+    "shared server connection": CORE / "server" / "server_connection.dart",
+    "shared server settings": CORE / "server" / "server_settings.dart",
+    "shared server note sync": CORE / "server" / "server_note_sync.dart",
+    "NowNote android build": NOWNOTE_ANDROID / "app" / "build.gradle.kts",
+    "NowNote android manifest": NOWNOTE_ANDROID / "app" / "src" / "main" / "AndroidManifest.xml",
 }
 
 CHECK_TOTAL = 0
@@ -83,26 +92,43 @@ def main() -> None:
     android_runtime_check = FILES["mobile Android runtime check"].read_text(encoding="utf-8")
     android_emulator_check = FILES["mobile Android emulator check"].read_text(encoding="utf-8")
     android_launch_check = FILES["mobile Android launch check"].read_text(encoding="utf-8")
+    shared_voice_recorder = FILES["shared voice recorder"].read_text(encoding="utf-8")
+    shared_server_connection = FILES["shared server connection"].read_text(encoding="utf-8")
+    shared_server_settings = FILES["shared server settings"].read_text(encoding="utf-8")
+    shared_server_note_sync = FILES["shared server note sync"].read_text(encoding="utf-8")
+    nownote_android_build = FILES["NowNote android build"].read_text(encoding="utf-8")
+    nownote_manifest = FILES["NowNote android manifest"].read_text(encoding="utf-8")
+
+    meeting_progress_surface = f"{meeting_progress}\n{shared_voice_recorder}"
+    server_sync_surface = "\n".join(
+        [
+            server_sync,
+            shared_server_connection,
+            shared_server_settings,
+            shared_server_note_sync,
+        ]
+    )
 
     require_text(router, [("MemoStartPage", "daily memo route"), ("MemoTreePage", "tree memo route"), ("ServerSettingsPage", "server settings route"), ("voiceInputMode", "voice input mode routing")], "router", failures)
     require_text(home, [("오늘 메모", "home daily memo card"), ("context.push('/memo/start'", "home memo start entry")], "home", failures)
     require_text(meetings, [("일자별 메모", "daily memo overview"), ("계층 메모", "tree memo overview"), ("TableCalendar", "daily calendar overview")], "meetings", failures)
     require_text(memo_start, [("getDailyMemoByDate", "single daily memo append model"), ("recordType: 'memo'", "daily memo record type"), ("실시간 변환", "realtime voice option"), ("녹음 후 변환", "record-then-transcribe option"), ("voiceInputMode", "daily voice mode forwarding")], "memo_start", failures)
     require_text(memo_tree, [("MemoTreePage", "tree memo screen"), ("note_tree", "tree memo source"), ("node.level < 3", "tree depth guard"), ("실시간 변환", "tree realtime voice option"), ("녹음 후 변환", "tree record-then-transcribe option"), ("uploadRecordingFile", "tree recording upload"), ("createAnalysisJob", "tree server analysis job"), ("삭제 보관함", "tree deleted bin")], "memo_tree", failures)
-    require_text(meeting_progress, [("record_then_transcribe", "record-then-transcribe progress mode"), ("FlutterSoundRecorder", "recording support"), ("SpeechToText", "realtime speech support"), ("FilePicker.platform.pickFiles", "file import support"), ("메모 내용이 기록되었습니다", "memo end dialog wording"), ("메모 내용을 입력하세요", "memo input hint")], "meeting_progress", failures)
+    require_text(meeting_progress_surface, [("record_then_transcribe", "record-then-transcribe progress mode"), ("FlutterSoundRecorder", "recording support"), ("SpeechToText", "realtime speech support"), ("FilePicker.platform.pickFiles", "file import support"), ("메모 내용이 기록되었습니다", "memo end dialog wording"), ("메모 내용을 입력하세요", "memo input hint")], "meeting_progress/shared_voice", failures)
     require_text(server_settings, [("_twoFactorCodeCtrl", "request-only two-factor code input"), ("twoFactorCode: _twoFactorCodeCtrl.text", "two-factor code request forwarding"), ("메모 동기화", "server memo sync button"), ("전체 다시 동기화", "server full sync button"), ("사용자 프로필", "server user profile section"), ("분석 작업", "server analysis section"), ("녹음 목록 새로고침", "server recording list refresh")], "server_settings", failures)
     require_text(server_settings, [("사용 방식", "server connection usage mode"), ("앱/설치형 접속 토큰", "app and desktop access token wording"), ("구형 개인 서버 API 토큰", "legacy personal server token wording"), ("고급 설정", "advanced settings section"), ("2.3 기본 흐름에서는 필요 없고", "legacy token advanced-only guidance")], "server_settings", failures)
     require_absent(server_settings, [("labelText: 'API 토큰'", "old API token label"), ("labelText: '사용자별 접속 토큰'", "old per-user token label")], "server_settings", failures)
     legacy_index = server_settings.find("구형 개인 서버 API 토큰")
     advanced_index = server_settings.find("고급 설정")
     check(advanced_index >= 0 and legacy_index > advanced_index, "Mobile keeps legacy API token in advanced settings", "server_settings: legacy token label appears after advanced settings", failures)
-    require_text(server_sync, [("FlutterSecureStorage", "secure token storage"), ("testConnection", "server connection test"), ("_verifyUserToken", "per-user token verification"), ("syncNotes", "note sync"), ("_dailyMemoPayloads", "daily memo sync payload"), ("note_tree", "tree memo sync payload"), ("uploadRecordingFile", "recording upload"), ("createAnalysisJob", "analysis job API"), ("twoFactorCode.trim()", "request-only two-factor validation"), ("/api/v1/auth/token-login", "token login API"), ("X-Now-User-Token", "user token header"), ("Authorization", "legacy authorization header"), ("구형 개인 서버 호환용 NOW_API_TOKEN", "legacy authorization comment"), ("shouldSkipServerSyncRequestForTest", "first pull regression guard")], "server_sync", failures)
-    require_absent(server_sync, [("_serverTwoFactor", "stored two-factor setting")], "server_sync", failures)
+    require_text(server_sync_surface, [("FlutterSecureStorage", "secure token storage"), ("testConnection", "server connection test"), ("_verifyUserToken", "per-user token verification"), ("syncNotes", "note sync"), ("_dailyMemoPayloads", "daily memo sync payload"), ("note_tree", "tree memo sync payload"), ("uploadRecordingFile", "recording upload"), ("createAnalysisJob", "analysis job API"), ("twoFactorCode.trim()", "request-only two-factor validation"), ("/api/v1/auth/token-login", "token login API"), ("X-Now-User-Token", "user token header"), ("Authorization", "legacy authorization header"), ("구형 개인 서버 호환용 NOW_API_TOKEN", "legacy authorization comment"), ("shouldSkipServerSyncRequestForTest", "first pull regression guard")], "server_sync/shared_core", failures)
+    require_absent(server_sync_surface, [("_serverTwoFactor", "stored two-factor setting")], "server_sync/shared_core", failures)
     require_text(help_page, [("일자별 메모는 하루 한 개의 메모장", "daily memo help"), ("Markdown 가져오기는 외부 .md/.txt 파일", "Markdown import help"), ("공용 서버 운영 전", "public server help")], "help_page", failures)
     require_text(backup_service, [("NowNote 백업", "mobile backup subject"), ("FilePicker.platform.pickFiles", "mobile backup import")], "backup_service", failures)
-    require_text(android_build, [('namespace = "com.sinsan.nownote"', "NowNote Android namespace"), ('applicationId = "com.sinsan.nownote"', "NowNote Android applicationId")], "android_build", failures)
+    require_text(nownote_android_build, [('namespace = "com.sinsan.nownote"', "NowNote Android namespace"), ('applicationId = "com.sinsan.nownote"', "NowNote Android applicationId")], "nownote_android_build", failures)
     require_text(android_gradle_properties, [("-Xmx2G", "bounded Gradle JVM heap"), ("org.gradle.workers.max=2", "bounded Gradle workers")], "android_gradle_properties", failures)
-    require_text(manifest, [('android:label="NowNote"', "NowNote Android label"), ("android.permission.RECORD_AUDIO", "microphone permission"), ("android.permission.CAMERA", "camera permission"), ("android.permission.POST_NOTIFICATIONS", "notification permission"), ("android:dataExtractionRules", "Android data extraction rules link"), ("android:fullBackupContent", "Android backup rules link")], "manifest", failures)
+    require_text(nownote_manifest, [('android:label="NowNote"', "NowNote Android label")], "nownote_manifest", failures)
+    require_text(manifest, [("android.permission.RECORD_AUDIO", "microphone permission"), ("android.permission.CAMERA", "camera permission"), ("android.permission.POST_NOTIFICATIONS", "notification permission"), ("android:dataExtractionRules", "Android data extraction rules link"), ("android:fullBackupContent", "Android backup rules link")], "manifest", failures)
     require_text(backup_rules, [('domain="database"', "backup excludes database"), ('domain="sharedpref"', "backup excludes shared preferences"), ('domain="file"', "backup excludes files")], "backup_rules", failures)
     require_text(data_extraction, [("<cloud-backup>", "cloud backup policy"), ("<device-transfer>", "device transfer policy"), ('domain="database"', "cloud backup excludes database")], "data_extraction", failures)
     require_text(readme, [("NowNote 모바일 앱", "mobile README title"), ("음성 메모", "mobile README voice memo"), ("일자별 메모", "mobile README daily memo"), ("계층 메모", "mobile README tree memo"), ("서버 연결", "mobile README server connection"), ("2단계 인증 코드는 저장하지 않고", "mobile README request-only 2FA"), ("Markdown 가져오기는 외부 파일", "mobile README Markdown import"), ("check_android_runtime.py", "mobile README Android runtime check link"), ("check_android_emulator.py", "mobile README Android emulator check link"), ("check_android_launch.py", "mobile README Android launch check link"), ("mobile_runtime_checklist_ko.md", "mobile README runtime checklist link")], "README", failures)
