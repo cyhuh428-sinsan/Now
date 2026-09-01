@@ -9,47 +9,70 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-NOW_APP = ROOT / "now_app"
-ANDROID = NOW_APP / "android"
-PLAY_DOCS = NOW_APP / "docs"
-PLAY_ASSETS = PLAY_DOCS / "play_assets"
 PHASE1_CHECKLIST = ROOT / "docs" / "PHASE1_RELEASE_CHECKLIST.md"
+
+APP_KEY = "now"
+APP_ROOT = ROOT / "now_app"
+ANDROID = APP_ROOT / "android"
+PLAY_DOCS = APP_ROOT / "docs"
+PLAY_ASSETS = PLAY_DOCS / "play_assets"
 PLAY_CHECKLIST = PLAY_DOCS / "google_play_release_checklist.md"
 
-REQUIRED_DOCS = [
-    PLAY_DOCS / "google_play_release_checklist.md",
-    PLAY_DOCS / "google_play_console_values_ko.md",
-    PLAY_DOCS / "google_play_paste_ready_ko.md",
-    PLAY_DOCS / "google_play_step_by_step_ko.md",
-    PLAY_DOCS / "privacy_policy_draft_ko.md",
-    PLAY_DOCS / "nownote_site" / "index.html",
-]
+REQUIRED_DOCS: list[Path] = []
+REQUIRED_ASSETS: list[Path] = []
+EXPECTED_ASSET_DIMENSIONS: dict[Path, tuple[int, int]] = {}
+LOCAL_RELEASE_FILES: list[Path] = []
 
-REQUIRED_ASSETS = [
-    PLAY_ASSETS / "app_icon_512.png",
-    PLAY_ASSETS / "feature_graphic_1024x500.png",
-    PLAY_ASSETS / "screenshot_01_home.png",
-    PLAY_ASSETS / "screenshot_02_daily_notes.png",
-    PLAY_ASSETS / "screenshot_03_tree_notes.png",
-    PLAY_ASSETS / "screenshot_04_voice.png",
-]
-
-EXPECTED_ASSET_DIMENSIONS = {
-    PLAY_ASSETS / "app_icon_512.png": (512, 512),
-    PLAY_ASSETS / "feature_graphic_1024x500.png": (1024, 500),
-    PLAY_ASSETS / "screenshot_01_home.png": (1080, 1920),
-    PLAY_ASSETS / "screenshot_02_daily_notes.png": (1080, 1920),
-    PLAY_ASSETS / "screenshot_03_tree_notes.png": (1080, 1920),
-    PLAY_ASSETS / "screenshot_04_voice.png": (1080, 1920),
-}
-
-LOCAL_RELEASE_FILES = [
-    ANDROID / "key.properties",
-    ANDROID / "upload-keystore.jks",
-    NOW_APP / "build" / "app" / "outputs" / "bundle" / "release" / "app-release.aab",
-]
 
 CHECKBOX_RE = re.compile(r"^-\s+\[(?P<mark>[ xX])\]\s+(?P<label>.+?)\s*$")
+
+
+def configure_app(app_key: str) -> None:
+    global APP_KEY, APP_ROOT, ANDROID, PLAY_DOCS, PLAY_ASSETS, PLAY_CHECKLIST
+    global REQUIRED_DOCS, REQUIRED_ASSETS, EXPECTED_ASSET_DIMENSIONS, LOCAL_RELEASE_FILES
+
+    if app_key not in {"now", "nownote"}:
+        raise SystemExit(f"지원하지 않는 앱입니다: {app_key}")
+
+    APP_KEY = app_key
+    APP_ROOT = ROOT / ("nownote_app" if app_key == "nownote" else "now_app")
+    ANDROID = APP_ROOT / "android"
+    PLAY_DOCS = APP_ROOT / "docs"
+    PLAY_ASSETS = PLAY_DOCS / "play_assets"
+    PLAY_CHECKLIST = PLAY_DOCS / "google_play_release_checklist.md"
+
+    REQUIRED_DOCS = [
+        PLAY_DOCS / "google_play_release_checklist.md",
+        PLAY_DOCS / "google_play_console_values_ko.md",
+        PLAY_DOCS / "google_play_paste_ready_ko.md",
+        PLAY_DOCS / "google_play_step_by_step_ko.md",
+        PLAY_DOCS / "privacy_policy_draft_ko.md",
+        PLAY_DOCS / "nownote_site" / "index.html",
+    ]
+
+    REQUIRED_ASSETS = [
+        PLAY_ASSETS / "app_icon_512.png",
+        PLAY_ASSETS / "feature_graphic_1024x500.png",
+        PLAY_ASSETS / "screenshot_01_home.png",
+        PLAY_ASSETS / "screenshot_02_daily_notes.png",
+        PLAY_ASSETS / "screenshot_03_tree_notes.png",
+        PLAY_ASSETS / "screenshot_04_voice.png",
+    ]
+
+    EXPECTED_ASSET_DIMENSIONS = {
+        PLAY_ASSETS / "app_icon_512.png": (512, 512),
+        PLAY_ASSETS / "feature_graphic_1024x500.png": (1024, 500),
+        PLAY_ASSETS / "screenshot_01_home.png": (1080, 1920),
+        PLAY_ASSETS / "screenshot_02_daily_notes.png": (1080, 1920),
+        PLAY_ASSETS / "screenshot_03_tree_notes.png": (1080, 1920),
+        PLAY_ASSETS / "screenshot_04_voice.png": (1080, 1920),
+    }
+
+    LOCAL_RELEASE_FILES = [
+        ANDROID / "key.properties",
+        ANDROID / "upload-keystore.jks",
+        APP_ROOT / "build" / "app" / "outputs" / "bundle" / "release" / "app-release.aab",
+    ]
 
 
 @dataclass
@@ -176,10 +199,15 @@ def check_play_texts(checks: list[Check]) -> None:
             ("마이크", "마이크 권한"),
             ("카메라", "카메라 권한"),
             ("사진 및 이미지", "사진/이미지 권한"),
-            ("캘린더", "캘린더 권한"),
             ("알림", "알림 권한"),
-            ("Health Connect", "Health Connect 권한"),
         ]
+        if APP_KEY == "now":
+            requirements.extend(
+                [
+                    ("캘린더", "캘린더 권한"),
+                    ("Health Connect", "Health Connect 권한"),
+                ]
+            )
         missing = [label for needle, label in requirements if needle not in text]
         checks.append(
             Check(
@@ -188,6 +216,16 @@ def check_play_texts(checks: list[Check]) -> None:
                 "누락 없음" if not missing else "누락: " + ", ".join(missing),
             )
         )
+        if APP_KEY == "nownote":
+            blocked_terms = ["건강 및 피트니스", "### Health Connect", "### 캘린더"]
+            found = [term for term in blocked_terms if term in text]
+            checks.append(
+                Check(
+                    "NowNote 제외 권한 문구",
+                    "warn" if found else "ok",
+                    "포함됨: " + ", ".join(found) if found else "health/calendar 문구 없음",
+                )
+            )
 
     if privacy_path.exists():
         text = privacy_path.read_text(encoding="utf-8")
@@ -215,20 +253,26 @@ def build_checks() -> list[Check]:
 
     key_properties = ANDROID / "key.properties"
     upload_key = ANDROID / "upload-keystore.jks"
-    checks.append(
-        Check(
-            "key.properties Git 제외",
-            "ok" if git_check_ignore(key_properties) else "warn",
-            "now_app/android/key.properties",
+    if key_properties.exists():
+        checks.append(
+            Check(
+                "key.properties Git 제외",
+                "ok" if git_check_ignore(key_properties) else "warn",
+                str(key_properties.relative_to(ROOT)),
+            )
         )
-    )
-    checks.append(
-        Check(
-            "upload-keystore.jks Git 제외",
-            "ok" if git_check_ignore(upload_key) else "warn",
-            "now_app/android/upload-keystore.jks",
+    else:
+        checks.append(Check("key.properties Git 제외", "manual", f"파일 없음: {key_properties.relative_to(ROOT)}"))
+    if upload_key.exists():
+        checks.append(
+            Check(
+                "upload-keystore.jks Git 제외",
+                "ok" if git_check_ignore(upload_key) else "warn",
+                str(upload_key.relative_to(ROOT)),
+            )
         )
-    )
+    else:
+        checks.append(Check("upload-keystore.jks Git 제외", "manual", f"파일 없음: {upload_key.relative_to(ROOT)}"))
 
     if PLAY_CHECKLIST.exists():
         done, total = parse_checked_items(PLAY_CHECKLIST)
@@ -249,7 +293,8 @@ def print_checks(checks: list[Check], show_manual: bool) -> None:
     warn_count = sum(1 for check in auto_checks if check.status == "warn")
     manual_count = sum(1 for check in checks if check.status == "manual")
 
-    print("NowNote Google Play 등록 준비 상태")
+    app_name = "NowNote" if APP_KEY == "nownote" else "Now"
+    print(f"{app_name} Google Play 등록 준비 상태")
     print(f"- 자동 확인: {ok_count}/{len(auto_checks)} OK")
     print(f"- 경고: {warn_count}")
     print(f"- 수동 확인: {manual_count}")
@@ -267,10 +312,12 @@ def print_checks(checks: list[Check], show_manual: bool) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Summarize NowNote Google Play release readiness")
+    parser.add_argument("--app", choices=["now", "nownote"], default="now", help="점검할 앱")
     parser.add_argument("--show-manual", action="store_true", help="수동 확인 항목까지 표시")
     parser.add_argument("--strict", action="store_true", help="경고 또는 수동 확인 항목이 있으면 실패")
     args = parser.parse_args()
 
+    configure_app(args.app)
     checks = build_checks()
     print_checks(checks, args.show_manual)
 
