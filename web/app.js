@@ -7753,7 +7753,7 @@ async function testMailSettings() {
         smtp_host: elements.mailSettingsHostInput.value.trim(),
         smtp_port: Number(elements.mailSettingsPortInput.value) || 587,
         security: elements.mailSettingsSecuritySelect.value,
-        smtp_user: elements.mailSettingsUserInput.value.trim(),
+        smtp_username: elements.mailSettingsUserInput.value.trim(),
         smtp_password: elements.mailSettingsPasswordInput.value,
         test_recipient: elements.mailSettingsTestRecipientInput.value.trim(),
       }),
