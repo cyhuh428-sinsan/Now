@@ -33,7 +33,7 @@ npm run dist:win
 생성 위치:
 
 ```text
-desktop/dist/NowNote-Setup-2.3.6-x64.exe
+desktop/dist/NowNote-Setup-2.3.7-x64.exe
 ```
 
 설치형 로컬 저장소가 재시작 후에도 유지되는지는 설치 파일 생성 후 아래 명령으로 점검합니다.

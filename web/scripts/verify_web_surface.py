@@ -250,7 +250,7 @@ def main() -> None:
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
         ("hosted-web-only hidden", "group shared view menu hosted Web visibility guard"),
-        ("Web 2.3.6", "current Web version display"),
+        ("Web 2.3.7", "current Web version display"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
@@ -933,7 +933,7 @@ def main() -> None:
         ("구형 개인 서버 API 토큰", "desktop legacy personal server token label"),
         ("앱/설치형 접속 토큰", "desktop app access token label"),
         ("현재 버전", "desktop current version label"),
-        ("Desktop 2.3.6", "desktop current version value"),
+        ("Desktop 2.3.7", "desktop current version value"),
         ('id="printPreviewDialog"', "desktop print preview dialog"),
         ('id="printPreviewTitle"', "desktop print preview title"),
         ('id="printPreviewMeta"', "desktop print preview metadata"),
@@ -1122,7 +1122,7 @@ def main() -> None:
     desktop_readme_requirements = [
         (".exe", "exe installer documentation"),
         ("npm run dist:win", "Windows build command documentation"),
-        ("NowNote-Setup-2.3.6-x64.exe", "installer output documentation"),
+        ("NowNote-Setup-2.3.7-x64.exe", "installer output documentation"),
         ("Web 전용", "hosted Web-only exclusion documentation"),
     ]
     for needle, label in desktop_readme_requirements:

@@ -6,7 +6,7 @@ const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
-const APP_VERSION = "2.3.6";
+const APP_VERSION = "2.3.7";
 
 const LANGUAGES = {
   ko: { label: "한국어", locale: "ko-KR", dir: "ltr", fallback: "ko" },
