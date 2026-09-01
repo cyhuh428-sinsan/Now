@@ -120,6 +120,9 @@ SERVER_CAPABILITIES = {
     "app_installed_token_auth": True,
     "legacy_api_token_auth": True,
     "password_reset_email": True,
+    "mail_settings_api": True,
+    "note_mail_send_api": True,
+    "mail_secret_encryption": True,
     "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
     "supported_note_types": SUPPORTED_NOTE_TYPES,
     # 문서 이동 (P7)
