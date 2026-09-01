@@ -2379,6 +2379,54 @@ const FEATURE_TOGGLES = [
 const CONTEXT_MENU_ACTIONS = [
   { id: "undo", labelKey: "context.action.undo", label: "실행 취소", description: "본문 편집을 한 단계 되돌립니다.", icon: "↶", defaultEnabled: true },
   { id: "redo", labelKey: "context.action.redo", label: "다시 실행", description: "되돌린 본문 편집을 다시 적용합니다.", icon: "↷", defaultEnabled: true },
+  { id: "cut", labelKey: "context.action.cut", label: "잘라내기", description: "선택한 내용을 잘라냅니다.", icon: "✂", defaultEnabled: true },
+  { id: "copy", labelKey: "context.action.copy", label: "복사", description: "선택한 내용을 복사합니다.", icon: "⧉", defaultEnabled: true },
+  { id: "paste", labelKey: "context.action.paste", label: "붙여넣기", description: "클립보드 내용을 붙여넣습니다.", icon: "▣", defaultEnabled: true },
+  { id: "delete", labelKey: "context.action.delete", label: "삭제", description: "선택한 내용을 삭제합니다.", icon: "⌫", defaultEnabled: true },
+  { id: "selectAll", labelKey: "context.action.selectAll", label: "전체 선택", description: "본문 전체를 선택합니다.", icon: "☷", defaultEnabled: true },
+  { id: "noteFind", labelKey: "context.action.noteFind", label: "본문 찾기", description: "현재 메모 안에서 텍스트를 찾습니다.", icon: "⌕", defaultEnabled: true },
+  { id: "replace", labelKey: "context.action.replace", label: "바꾸기", description: "현재 메모 안의 텍스트를 바꿉니다.", icon: "⇄", defaultEnabled: true },
+  { id: "insertTime", labelKey: "context.action.insertTime", label: "시간 삽입", description: "현재 시각을 본문에 삽입합니다.", icon: "◷", defaultEnabled: true },
+  { id: "insertLink", labelKey: "context.action.insertLink", label: "링크 삽입", description: "링크 형식을 본문에 삽입합니다.", icon: "🔗", defaultEnabled: true },
+  { id: "insertChecklist", labelKey: "context.action.insertChecklist", label: "체크리스트", description: "체크리스트 항목을 삽입합니다.", icon: "☑", defaultEnabled: true },
+  { id: "insertOrderedList", labelKey: "context.action.insertOrderedList", label: "번호 목록", description: "번호 목록 항목을 삽입합니다.", icon: "1.", defaultEnabled: true },
+  { id: "insertQuote", labelKey: "context.action.insertQuote", label: "인용", description: "인용 블록을 삽입합니다.", icon: "❝", defaultEnabled: true },
+  { id: "insertCodeBlock", labelKey: "context.action.insertCodeBlock", label: "코드 블록", description: "코드 블록을 삽입합니다.", icon: "</>", defaultEnabled: true },
+  { id: "insertHorizontalRule", labelKey: "context.action.insertHorizontalRule", label: "구분선", description: "가로 구분선을 삽입합니다.", icon: "—", defaultEnabled: true },
+  { id: "insertSketch", labelKey: "context.action.insertSketch", label: "스케치", description: "스케치 캡처를 삽입합니다.", icon: "✎", defaultEnabled: true },
+  { id: "bold", labelKey: "context.action.bold", label: "굵게", description: "선택한 텍스트에 굵게 서식을 적용합니다.", icon: "B", defaultEnabled: true },
+  { id: "italic", labelKey: "context.action.italic", label: "기울임", description: "선택한 텍스트에 기울임 서식을 적용합니다.", icon: "I", defaultEnabled: true },
+  { id: "heading1", labelKey: "context.action.heading1", label: "제목 1", description: "제목 1 서식을 적용합니다.", icon: "H1", defaultEnabled: true },
+  { id: "heading2", labelKey: "context.action.heading2", label: "제목 2", description: "제목 2 서식을 적용합니다.", icon: "H2", defaultEnabled: true },
+  { id: "heading3", labelKey: "context.action.heading3", label: "제목 3", description: "제목 3 서식을 적용합니다.", icon: "H3", defaultEnabled: true },
+  { id: "indent", labelKey: "context.action.indent", label: "들여쓰기", description: "선택한 줄을 들여씁니다.", icon: "⇥", defaultEnabled: true },
+  { id: "outdent", labelKey: "context.action.outdent", label: "내어쓰기", description: "선택한 줄을 내어씁니다.", icon: "⇤", defaultEnabled: true },
+  { id: "changeCase", labelKey: "context.action.changeCase", label: "대소문자 변경", description: "선택한 텍스트의 대소문자를 바꿉니다.", icon: "Aa", defaultEnabled: true },
+  { id: "clearFormat", labelKey: "context.action.clearFormat", label: "서식 지우기", description: "선택한 텍스트의 서식을 지웁니다.", icon: "Tx", defaultEnabled: true },
+  { id: "favorite", labelKey: "context.action.favorite", label: "즐겨찾기", description: "현재 메모의 즐겨찾기를 전환합니다.", icon: "★", defaultEnabled: true },
+  { id: "share", labelKey: "context.action.share", label: "공유", description: "현재 메모의 공유 상태를 전환합니다.", icon: "↗", defaultEnabled: true },
+  { id: "copyLink", labelKey: "context.action.copyLink", label: "링크 복사", description: "현재 메모 링크를 복사합니다.", icon: "⛓", defaultEnabled: true },
+  { id: "openLink", labelKey: "context.action.openLink", label: "링크 열기", description: "본문에서 감지한 링크를 엽니다.", icon: "↪", defaultEnabled: true },
+  { id: "outline", labelKey: "context.action.outline", label: "개요", description: "현재 메모의 개요 패널을 전환합니다.", icon: "☰", defaultEnabled: true },
+  { id: "readAloud", labelKey: "context.action.readAloud", label: "소리내어 읽기", description: "현재 메모를 음성으로 읽습니다.", icon: "♪", defaultEnabled: true },
+  { id: "markdownPreview", labelKey: "context.action.markdownPreview", label: "마크다운 미리보기", description: "마크다운 미리보기를 엽니다.", icon: "▤", defaultEnabled: true },
+  { id: "encrypt", labelKey: "context.action.encrypt", label: "암호화", description: "현재 메모를 암호화합니다.", icon: "◇", defaultEnabled: true },
+  { id: "lock", labelKey: "context.action.lock", label: "잠금", description: "열린 암호화 메모를 잠급니다.", icon: "◼", defaultEnabled: true },
+  { id: "unlock", labelKey: "context.action.unlock", label: "잠금 해제", description: "암호화 메모를 잠금 해제합니다.", icon: "◇", defaultEnabled: true },
+  { id: "decrypt", labelKey: "context.action.decrypt", label: "복호화", description: "암호화 메모를 일반 메모로 되돌립니다.", icon: "◆", defaultEnabled: true },
+  { id: "printPreview", labelKey: "context.action.printPreview", label: "인쇄 미리보기", description: "인쇄 전 미리보기를 엽니다.", icon: "▧", defaultEnabled: true },
+  { id: "print", labelKey: "context.action.print", label: "인쇄", description: "현재 메모를 인쇄합니다.", icon: "⎙", defaultEnabled: true },
+  { id: "sendMail", labelKey: "context.action.sendMail", label: "메일 보내기", description: "현재 메모를 메일로 보냅니다.", icon: "✉", defaultEnabled: true },
+];
+
+const CONTEXT_MENU_GROUPS = [
+  { id: "edit", labelKey: "context.group.edit", label: "편집", actions: ["undo", "redo", "cut", "copy", "paste", "delete", "selectAll"] },
+  { id: "find", labelKey: "context.group.find", label: "찾기", actions: ["noteFind", "replace"] },
+  { id: "insert", labelKey: "context.group.insert", label: "삽입", actions: ["insertTime", "insertLink", "insertChecklist", "insertOrderedList", "insertQuote", "insertCodeBlock", "insertHorizontalRule", "insertSketch"] },
+  { id: "format", labelKey: "context.group.format", label: "형식", actions: ["bold", "italic", "heading1", "heading2", "heading3", "indent", "outdent", "changeCase", "clearFormat"] },
+  { id: "note", labelKey: "context.group.note", label: "메모", actions: ["favorite", "share", "copyLink", "openLink", "outline", "readAloud", "markdownPreview"] },
+  { id: "security", labelKey: "context.group.security", label: "보안", actions: ["encrypt", "lock", "unlock", "decrypt"] },
+  { id: "output", labelKey: "context.group.output", label: "출력", actions: ["printPreview", "print", "sendMail"] },
 ];
 
 const state = {
@@ -12287,12 +12335,12 @@ function openTreeContextMenu(event) {
   if (!elements.treeContextMenu || event.shiftKey) return;
   selectTreeNodeFromContextTarget(event.target);
   if (!getSelectedTreeNode()) return;
-  const actions = contextMenuActions();
-  if (!actions.length) return;
+  const groups = contextMenuActions();
+  if (!groups.length) return;
   event.preventDefault();
   event.stopPropagation();
   closePopupLayers();
-  renderTreeContextMenu(actions);
+  renderTreeContextMenu(groups);
   positionTreeContextMenu(event.clientX, event.clientY);
 }
 
@@ -12307,21 +12355,40 @@ function selectTreeNodeFromContextTarget(target) {
 
 function contextMenuActions() {
   const selectedIds = normalizeContextMenuActions(state.settings.contextMenuActions);
-  return CONTEXT_MENU_ACTIONS.filter((action) => selectedIds.includes(action.id));
+  const selectedSet = new Set(selectedIds);
+  const actionMap = new Map(CONTEXT_MENU_ACTIONS.map((action) => [action.id, action]));
+  return CONTEXT_MENU_GROUPS.map((group) => ({
+    ...group,
+    actions: group.actions.map((actionId) => actionMap.get(actionId)).filter((action) => action && selectedSet.has(action.id)),
+  })).filter((group) => group.actions.length);
 }
 
-function renderTreeContextMenu(actions) {
-  elements.treeContextMenu.replaceChildren(
-    ...actions.map((action) => {
+function renderTreeContextMenu(groups) {
+  const children = [];
+  groups.forEach((group) => {
+    if (children.length) {
+      const separator = document.createElement("div");
+      separator.className = "context-menu-separator";
+      separator.setAttribute("role", "separator");
+      children.push(separator);
+    }
+    const groupEl = document.createElement("div");
+    groupEl.className = "context-menu-group";
+    groupEl.dataset.group = group.id;
+    group.actions.forEach((action) => {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.action = action.id;
       button.dataset.icon = action.icon;
       button.textContent = localizeOrFallback(action.labelKey, action.label);
-      button.disabled = isContextMenuActionDisabled(action.id);
-      return button;
-    }),
-  );
+      const disabled = isContextMenuActionDisabled(action.id);
+      button.disabled = disabled;
+      button.setAttribute("aria-disabled", disabled ? "true" : "false");
+      groupEl.append(button);
+    });
+    children.push(groupEl);
+  });
+  elements.treeContextMenu.replaceChildren(...children);
 }
 
 function positionTreeContextMenu(x, y) {
@@ -12342,6 +12409,45 @@ function isContextMenuActionDisabled(actionId) {
       return !canUndoTreeEditor();
     case "redo":
       return !canRedoTreeEditor();
+    case "cut":
+    case "copy":
+    case "paste":
+    case "delete":
+    case "selectAll":
+    case "noteFind":
+    case "replace":
+    case "insertTime":
+    case "insertLink":
+    case "insertChecklist":
+    case "insertOrderedList":
+    case "insertQuote":
+    case "insertCodeBlock":
+    case "insertHorizontalRule":
+    case "insertSketch":
+    case "bold":
+    case "italic":
+    case "heading1":
+    case "heading2":
+    case "heading3":
+    case "indent":
+    case "outdent":
+    case "changeCase":
+    case "clearFormat":
+    case "favorite":
+    case "share":
+    case "copyLink":
+    case "openLink":
+    case "outline":
+    case "readAloud":
+    case "markdownPreview":
+    case "encrypt":
+    case "lock":
+    case "unlock":
+    case "decrypt":
+    case "printPreview":
+    case "print":
+    case "sendMail":
+      return true;
     default:
       return false;
   }

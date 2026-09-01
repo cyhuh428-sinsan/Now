@@ -520,6 +520,16 @@ def main() -> None:
     ]
     for needle, label in app_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
+    context_menu_group_requirements = [
+        ("CONTEXT_MENU_GROUPS", "context menu groups"),
+        ('id: "printPreview"', "context menu print preview"),
+        ('id: "sendMail"', "context menu send mail"),
+        ('id: "replace"', "context menu replace"),
+        ("renderTreeContextMenu(groups)", "context menu grouped render"),
+    ]
+    for needle, label in context_menu_group_requirements:
+        check(needle in app, f"Web app has {label}", needle, failures)
+        check(needle in desktop_app_script, f"Desktop app script has {label}", needle, failures)
     native_confirm_call = "confirm" + "("
     check(native_confirm_call not in app, "Web app avoids native browser confirm", native_confirm_call, failures)
 
