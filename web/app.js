@@ -5355,31 +5355,9 @@ function bindEvents() {
   elements.treeContent.addEventListener("select", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
 
-  elements.favoriteBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    if (isReadOnlyTreeNode(selected)) return;
-    selected.favorite = !selected.favorite;
-    markTreeNodeChanged(selected);
-    persist();
-    renderTree();
-  });
+  elements.favoriteBtn.addEventListener("click", toggleSelectedTreeFavorite);
 
-  elements.shareTreeBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected || isReadOnlyTreeNode(selected) || isHostedWebClient()) return;
-    const nextShared = selected.shared === false;
-    selected.shared = nextShared;
-    selected.unsharedAt = nextShared ? null : new Date().toISOString();
-    if (nextShared || selected.serverShared === true) {
-      markTreeNodeChanged(selected);
-    } else {
-      selected.updatedAt = new Date().toISOString();
-      selected.syncState = "local";
-    }
-    persist();
-    renderTree();
-  });
+  elements.shareTreeBtn.addEventListener("click", toggleSelectedTreeShare);
 
   elements.copyLinkBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -5486,19 +5464,7 @@ function bindEvents() {
   });
   elements.readAloudBtn.addEventListener("click", toggleReadAloud);
 
-  elements.previewToggleBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    const isOpening = elements.markdownPreview.classList.contains("hidden");
-    elements.markdownPreview.classList.toggle("hidden", !isOpening);
-    elements.treeContent.classList.toggle("hidden", isOpening);
-    elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
-    if (isOpening) {
-      renderMarkdownPreview(visibleContentForNode(selected));
-    } else {
-      elements.treeContent.focus();
-    }
-  });
+  elements.previewToggleBtn.addEventListener("click", togglePreview);
 
   elements.addChildBtn.addEventListener("click", addChildToSelectedTreeNode);
 
@@ -10197,6 +10163,28 @@ function insertCurrentTimeIntoTreeNote() {
   syncTreeContentFromEditor();
 }
 
+function insertTimestampIntoTreeNote() {
+  insertCurrentTimeIntoTreeNote();
+}
+
+function readCurrentNoteAloud() {
+  toggleReadAloud();
+}
+
+function togglePreview() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const isOpening = elements.markdownPreview.classList.contains("hidden");
+  elements.markdownPreview.classList.toggle("hidden", !isOpening);
+  elements.treeContent.classList.toggle("hidden", isOpening);
+  elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
+  if (isOpening) {
+    renderMarkdownPreview(visibleContentForNode(selected));
+  } else {
+    elements.treeContent.focus();
+  }
+}
+
 function insertTextIntoTreeContent(text) {
   const selected = getSelectedTreeNode();
   if (!selected) return false;
@@ -12410,11 +12398,8 @@ function isContextMenuActionDisabled(actionId) {
     case "redo":
       return !canRedoTreeEditor();
     case "cut":
-    case "copy":
     case "paste":
     case "delete":
-    case "selectAll":
-    case "noteFind":
     case "replace":
     case "insertTime":
     case "insertLink":
@@ -12433,13 +12418,20 @@ function isContextMenuActionDisabled(actionId) {
     case "outdent":
     case "changeCase":
     case "clearFormat":
+      return !isTreeEditorHistoryEditable();
     case "favorite":
+      return isReadOnlyTreeNode(selected);
     case "share":
+      return isReadOnlyTreeNode(selected) || isHostedWebClient();
+    case "copy":
+    case "selectAll":
+    case "noteFind":
     case "copyLink":
     case "openLink":
     case "outline":
     case "readAloud":
     case "markdownPreview":
+      return false;
     case "encrypt":
     case "lock":
     case "unlock":
@@ -12456,16 +12448,214 @@ function isContextMenuActionDisabled(actionId) {
 function executeContextMenuAction(actionId) {
   if (isContextMenuActionDisabled(actionId)) return;
   closeTreeContextMenu();
+  runEditorCommand(actionId);
+}
+
+function runEditorCommand(actionId) {
   switch (actionId) {
     case "undo":
-      undoTreeEditor();
-      break;
+      return undoTreeEditor();
     case "redo":
-      redoTreeEditor();
-      break;
+      return redoTreeEditor();
+    case "cut":
+    case "copy":
+    case "paste":
+    case "delete":
+    case "selectAll":
+      return runNativeEditCommand(actionId);
+    case "noteFind":
+      openNoteFind();
+      return true;
+    case "replace":
+      openNoteFind();
+      toggleNoteReplaceRow({ forceOpen: true });
+      return true;
+    case "insertTime":
+      insertTimestampIntoTreeNote();
+      return true;
+    case "insertLink":
+    case "insertChecklist":
+    case "insertOrderedList":
+    case "insertQuote":
+    case "insertCodeBlock":
+    case "insertHorizontalRule":
+    case "bold":
+    case "italic":
+    case "heading1":
+    case "heading2":
+    case "heading3":
+    case "indent":
+    case "outdent":
+    case "changeCase":
+    case "clearFormat":
+      return runFormattingCommand(actionId);
+    case "insertSketch":
+      openSketchDialog();
+      return true;
+    case "favorite":
+      toggleSelectedTreeFavorite();
+      return true;
+    case "share":
+      toggleSelectedTreeShare();
+      return true;
+    case "copyLink": {
+      const selected = getSelectedTreeNode();
+      if (!selected) return false;
+      copyNoteLink(selected);
+      return true;
+    }
+    case "openLink":
+      openDetectedLinkFromEditor();
+      return true;
+    case "outline":
+      toggleOutlinePanel();
+      return true;
+    case "readAloud":
+      readCurrentNoteAloud();
+      return true;
+    case "markdownPreview":
+      togglePreview();
+      return true;
     default:
-      break;
+      return false;
   }
+}
+
+function runNativeEditCommand(actionId) {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  editor.focus();
+  switch (actionId) {
+    case "selectAll":
+      editor.setSelectionRange(0, editor.value.length);
+      return true;
+    case "copy":
+      return document.execCommand("copy");
+    case "cut":
+    case "paste":
+      if (!isTreeEditorHistoryEditable()) return false;
+      return document.execCommand(actionId);
+    case "delete": {
+      if (!isTreeEditorHistoryEditable()) return false;
+      const start = editor.selectionStart ?? 0;
+      const end = editor.selectionEnd ?? start;
+      if (start === end) return false;
+      return applyTreeEditorText("delete", `${editor.value.slice(0, start)}${editor.value.slice(end)}`, { start, end: start });
+    }
+    default:
+      return false;
+  }
+}
+
+function runFormattingCommand(actionId) {
+  if (!isTreeEditorHistoryEditable()) return false;
+  switch (actionId) {
+    case "bold":
+      wrapTreeContentSelection("**", "**");
+      return true;
+    case "italic":
+      wrapTreeContentSelection("*", "*");
+      return true;
+    case "heading1":
+      applyHeadingToTreeContent(1);
+      return true;
+    case "heading2":
+      applyHeadingToTreeContent(2);
+      return true;
+    case "heading3":
+      applyHeadingToTreeContent(3);
+      return true;
+    case "insertChecklist":
+      insertChecklistIntoTreeContent();
+      return true;
+    case "insertOrderedList":
+      insertOrderedListIntoTreeContent();
+      return true;
+    case "insertQuote":
+      applyLinePrefixToTreeContent("> ", /^>\s*/);
+      return true;
+    case "insertLink":
+      wrapTreeContentAsMarkdownLink();
+      return true;
+    case "insertCodeBlock":
+      wrapTreeContentAsCodeBlock();
+      return true;
+    case "insertHorizontalRule":
+      insertHorizontalRuleIntoTreeContent();
+      return true;
+    case "indent":
+      indentTreeContentSelection(1);
+      return true;
+    case "outdent":
+      indentTreeContentSelection(-1);
+      return true;
+    case "changeCase":
+      toggleTreeContentSelectionCase();
+      return true;
+    case "clearFormat":
+      clearTreeContentSelectionFormat();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function toggleSelectedTreeFavorite() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isReadOnlyTreeNode(selected)) return;
+  selected.favorite = !selected.favorite;
+  markTreeNodeChanged(selected);
+  persist();
+  renderTree();
+}
+
+function toggleSelectedTreeShare() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isReadOnlyTreeNode(selected) || isHostedWebClient()) return;
+  const nextShared = selected.shared === false;
+  selected.shared = nextShared;
+  selected.unsharedAt = nextShared ? null : new Date().toISOString();
+  if (nextShared || selected.serverShared === true) {
+    markTreeNodeChanged(selected);
+  } else {
+    selected.updatedAt = new Date().toISOString();
+    selected.syncState = "local";
+  }
+  persist();
+  renderTree();
+}
+
+function toggleTreeContentSelectionCase() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  const start = editor.selectionStart ?? 0;
+  const end = editor.selectionEnd ?? start;
+  if (start === end) return false;
+  const value = editor.value;
+  const selectedText = value.slice(start, end);
+  const nextSelection = selectedText === selectedText.toUpperCase()
+    ? selectedText.toLowerCase()
+    : selectedText.toUpperCase();
+  return applyTreeEditorText("changeCase", `${value.slice(0, start)}${nextSelection}${value.slice(end)}`, { start, end });
+}
+
+function clearTreeContentSelectionFormat() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  const start = editor.selectionStart ?? 0;
+  const end = editor.selectionEnd ?? start;
+  if (start === end) return false;
+  const value = editor.value;
+  const selectedText = value.slice(start, end);
+  const plainText = selectedText
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[-*]\s+\[[ xX]\]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "");
+  return applyTreeEditorText("clearFormat", `${value.slice(0, start)}${plainText}${value.slice(end)}`, { start, end: start + plainText.length });
 }
 
 function cancelShortcutCapture() {
@@ -13526,8 +13716,8 @@ function updateNoteFindState(matches, query, index = -1) {
 
 // U2 바꾸기. 본문찾기가 이미 갖고 있는 옵션(대소문자 구분 없음, 일반 문자열)을 그대로 따른다.
 // 새 옵션은 만들지 않는다.
-function toggleNoteReplaceRow() {
-  const willShow = elements.noteReplaceRow.classList.contains("hidden");
+function toggleNoteReplaceRow(options = {}) {
+  const willShow = options.forceOpen === true || elements.noteReplaceRow.classList.contains("hidden");
   elements.noteReplaceRow.classList.toggle("hidden", !willShow);
   elements.noteReplaceToggleBtn.setAttribute("aria-expanded", String(willShow));
   updateNoteReplaceState();

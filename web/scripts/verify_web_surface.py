@@ -58,6 +58,15 @@ def has_id(html: str, element_id: str) -> bool:
     return re.search(rf'\bid="{re.escape(element_id)}"', html) is not None
 
 
+def has_switch_case(source: str, function_name: str, action_id: str) -> bool:
+    match = re.search(
+        rf'function\s+{re.escape(function_name)}\s*\([^)]*\)\s*\{{(?P<body>.*?)\n\}}',
+        source,
+        re.S,
+    )
+    return bool(match and re.search(rf'case\s+["\']{re.escape(action_id)}["\']\s*:', match.group("body")))
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -823,6 +832,30 @@ def main() -> None:
     ]
     for needle, label in desktop_app_script_requirements:
         check(needle in desktop_app_script, f"Desktop app script has {label}", needle, failures)
+
+    for source, surface in [(app, "Web"), (desktop_app_script, "Desktop")]:
+        context_command_requirements = [
+            ("function runEditorCommand(actionId)", "editor context menu dispatcher"),
+            ("function runNativeEditCommand(actionId)", "native edit command dispatcher"),
+            ("function runFormattingCommand(actionId)", "formatting command dispatcher"),
+        ]
+        for needle, label in context_command_requirements:
+            check(needle in source, f"{surface} app script has {label}", needle, failures)
+        for action_id, label in [
+            ("cut", "cut command"),
+            ("copy", "copy command"),
+            ("paste", "paste command"),
+            ("delete", "delete command"),
+            ("selectAll", "select all command"),
+        ]:
+            check(has_switch_case(source, "runNativeEditCommand", action_id), f"{surface} native edit maps {label}", action_id, failures)
+        for action_id, label in [
+            ("noteFind", "note find command"),
+            ("replace", "replace command"),
+            ("insertSketch", "insert sketch command"),
+            ("markdownPreview", "Markdown preview command"),
+        ]:
+            check(has_switch_case(source, "runEditorCommand", action_id), f"{surface} editor command maps {label}", action_id, failures)
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
