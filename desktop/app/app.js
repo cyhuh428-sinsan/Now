@@ -2618,6 +2618,15 @@ function defaultSettings() {
   };
 }
 
+const mailSettings = {
+  status: "idle",
+  enabled: false,
+  senderEmail: "",
+  lastTestedAt: null,
+  message: "",
+  checking: false,
+};
+
 // Markdown 색상 설정.
 //
 // 저장하는 것은 "사용자가 바꾼 값"뿐이다. 손대지 않은 항목은 비워 둔다.
@@ -3529,6 +3538,24 @@ const elements = {
   printPreviewBody: $("#printPreviewBody"),
   printPreviewCloseBtn: $("#printPreviewCloseBtn"),
   printPreviewPrintBtn: $("#printPreviewPrintBtn"),
+  mailSettingsSenderNameInput: $("#mailSettingsSenderNameInput"),
+  mailSettingsSenderEmailInput: $("#mailSettingsSenderEmailInput"),
+  mailSettingsHostInput: $("#mailSettingsHostInput"),
+  mailSettingsPortInput: $("#mailSettingsPortInput"),
+  mailSettingsSecuritySelect: $("#mailSettingsSecuritySelect"),
+  mailSettingsUserInput: $("#mailSettingsUserInput"),
+  mailSettingsPasswordInput: $("#mailSettingsPasswordInput"),
+  mailSettingsTestRecipientInput: $("#mailSettingsTestRecipientInput"),
+  mailSettingsTestBtn: $("#mailSettingsTestBtn"),
+  mailSettingsStatusText: $("#mailSettingsStatusText"),
+  sendMailDialog: $("#sendMailDialog"),
+  sendMailDialogTitle: $("#sendMailDialogTitle"),
+  sendMailRecipientInput: $("#sendMailRecipientInput"),
+  sendMailSubjectInput: $("#sendMailSubjectInput"),
+  sendMailMessageInput: $("#sendMailMessageInput"),
+  sendMailCancelBtn: $("#sendMailCancelBtn"),
+  sendMailSendBtn: $("#sendMailSendBtn"),
+  sendMailStatusText: $("#sendMailStatusText"),
   keyDialog: $("#keyDialog"),
   keyDialogTitle: $("#keyDialogTitle"),
   keyDialogMessage: $("#keyDialogMessage"),
@@ -5585,6 +5612,24 @@ function bindEvents() {
 
   elements.serverTestBtn.addEventListener("click", testServerConnection);
 
+  elements.mailSettingsTestBtn?.addEventListener("click", testMailSettings);
+  [
+    elements.mailSettingsSenderNameInput,
+    elements.mailSettingsSenderEmailInput,
+    elements.mailSettingsHostInput,
+    elements.mailSettingsPortInput,
+    elements.mailSettingsSecuritySelect,
+    elements.mailSettingsUserInput,
+    elements.mailSettingsPasswordInput,
+    elements.mailSettingsTestRecipientInput,
+  ].forEach((input) => {
+    input?.addEventListener("input", () => {
+      mailSettings.enabled = false;
+      mailSettings.status = "idle";
+      renderMailSettings();
+    });
+  });
+
   elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
   elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
   elements.serverProfileLoadBtn.addEventListener("click", loadServerUserProfile);
@@ -5616,9 +5661,17 @@ function bindEvents() {
   elements.printPreviewDialog?.addEventListener("click", (event) => {
     if (event.target === elements.printPreviewDialog) closePrintPreview();
   });
+  elements.sendMailCancelBtn?.addEventListener("click", closeSendMailDialog);
+  elements.sendMailSendBtn?.addEventListener("click", submitCurrentNoteMail);
+  elements.sendMailDialog?.addEventListener("click", (event) => {
+    if (event.target === elements.sendMailDialog) closeSendMailDialog();
+  });
   window.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && !elements.printPreviewDialog?.classList.contains("hidden")) {
       closePrintPreview();
+    }
+    if (event.key === "Escape" && !elements.sendMailDialog?.classList.contains("hidden")) {
+      closeSendMailDialog();
     }
   });
 
@@ -6028,6 +6081,7 @@ function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
+    refreshMailSettingsStatus();
   } else {
     elements.settingsView.classList.add("hidden");
   }
@@ -6346,6 +6400,7 @@ function renderServerSettings() {
   elements.serverAnalysisCreateBtn.disabled = !isServerMode;
   elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
   if (elements.serverAnalysisTypeSelect) elements.serverAnalysisTypeSelect.disabled = !isServerMode;
+  renderMailSettings();
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
   renderServerCapabilities(server.capabilities, server.publicServerReadiness);
@@ -7619,6 +7674,190 @@ function prepareServerRequest(server) {
     return false;
   }
   return true;
+}
+
+function canCheckMailSettingsStatus(server = state.settings.server || defaultServerSettings()) {
+  if (server.mode !== "server" || !server.url) return false;
+  if (isHostedWebClient() && !server.webSessionToken) return false;
+  return true;
+}
+
+function setMailSettingsStatus(status, message, payload = {}) {
+  mailSettings.status = status;
+  mailSettings.enabled = Boolean(payload.enabled);
+  mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
+  mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
+  mailSettings.message = message || "";
+  renderMailSettings();
+}
+
+function sanitizeMailErrorMessage(error) {
+  let message = String(error?.message || "메일 서버 API를 사용할 수 없습니다.");
+  const password = elements.mailSettingsPasswordInput?.value || "";
+  if (password) message = message.split(password).join("********");
+  return message.slice(0, 220);
+}
+
+function renderMailSettings() {
+  const server = state.settings.server || defaultServerSettings();
+  const serverReady = canCheckMailSettingsStatus(server);
+  const statusEl = elements.mailSettingsStatusText;
+  if (elements.mailSettingsTestBtn) {
+    elements.mailSettingsTestBtn.disabled = !serverReady || mailSettings.checking;
+  }
+  if (!statusEl) return;
+  statusEl.classList.remove("ok", "warn", "bad");
+  if (!serverReady) {
+    mailSettings.enabled = false;
+    statusEl.textContent = server.mode === "server"
+      ? "서버 연결 준비 후 메일 설정을 테스트할 수 있습니다."
+      : "서버 연결을 사용해야 메일 보내기를 설정할 수 있습니다.";
+    statusEl.classList.add("warn");
+    return;
+  }
+  if (mailSettings.status === "ok" && mailSettings.enabled) {
+    const tested = mailSettings.lastTestedAt ? ` · ${formatDateTime(mailSettings.lastTestedAt)}` : "";
+    statusEl.textContent = `연결 테스트 성공${tested}`;
+    statusEl.classList.add("ok");
+  } else if (mailSettings.status === "testing") {
+    statusEl.textContent = "메일 서버 설정을 확인하는 중입니다.";
+    statusEl.classList.add("warn");
+  } else if (mailSettings.status === "bad") {
+    statusEl.textContent = mailSettings.message || "메일 서버 API가 없거나 설정 테스트에 실패했습니다.";
+    statusEl.classList.add("bad");
+  } else {
+    statusEl.textContent = "서버 설정 테스트 전입니다.";
+    statusEl.classList.add("warn");
+  }
+}
+
+async function refreshMailSettingsStatus({ silent = true } = {}) {
+  const server = state.settings.server || defaultServerSettings();
+  if (!canCheckMailSettingsStatus(server)) {
+    setMailSettingsStatus("idle", "");
+    return;
+  }
+  mailSettings.checking = true;
+  renderMailSettings();
+  try {
+    const payload = await requestServerJson(server, "/api/v1/mail/settings/status");
+    setMailSettingsStatus(payload.enabled ? "ok" : "idle", "", payload);
+  } catch (error) {
+    setMailSettingsStatus("bad", "메일 서버 API가 없거나 상태를 확인할 수 없습니다.");
+    if (!silent) showNotice(sanitizeMailErrorMessage(error), "error");
+  } finally {
+    mailSettings.checking = false;
+    renderMailSettings();
+  }
+}
+
+async function testMailSettings() {
+  saveServerSettingsFromForm("메일 설정 테스트 준비 중입니다.", "settings.server.saved");
+  const server = state.settings.server || defaultServerSettings();
+  if (!prepareServerRequest(server)) {
+    setMailSettingsStatus("idle", "");
+    return;
+  }
+  mailSettings.checking = true;
+  setMailSettingsStatus("testing", "메일 서버 설정을 확인하는 중입니다.");
+  try {
+    const payload = await requestServerJson(server, "/api/v1/mail/settings/test", {
+      method: "POST",
+      body: JSON.stringify({
+        sender_name: elements.mailSettingsSenderNameInput.value.trim(),
+        sender_email: elements.mailSettingsSenderEmailInput.value.trim(),
+        smtp_host: elements.mailSettingsHostInput.value.trim(),
+        smtp_port: Number(elements.mailSettingsPortInput.value) || 587,
+        security: elements.mailSettingsSecuritySelect.value,
+        smtp_user: elements.mailSettingsUserInput.value.trim(),
+        smtp_password: elements.mailSettingsPasswordInput.value,
+        test_recipient: elements.mailSettingsTestRecipientInput.value.trim(),
+      }),
+    });
+    setMailSettingsStatus("ok", "연결 테스트 성공", { ...payload, enabled: payload.enabled !== false });
+    showNotice("메일 연결 테스트에 성공했습니다.", "success");
+  } catch (error) {
+    setMailSettingsStatus("bad", `메일 서버 API가 없거나 설정 테스트에 실패했습니다. ${sanitizeMailErrorMessage(error)}`);
+  } finally {
+    mailSettings.checking = false;
+    renderMailSettings();
+  }
+}
+
+function isMailSendEnabled() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return false;
+  if (isReadOnlyTreeNode(selected)) return false;
+  if (isEncryptedTreeNodeLocked(selected)) return false;
+  return mailSettings.status === "ok" && mailSettings.enabled === true;
+}
+
+function defaultMailSubject(selected) {
+  return `[NowNote] ${noteTitle(selected?.title)}`;
+}
+
+function closeSendMailDialog() {
+  elements.sendMailDialog?.classList.add("hidden");
+}
+
+function sendCurrentNoteMail() {
+  const selected = getSelectedTreeNode();
+  if (!isMailSendEnabled() || !selected) {
+    showNotice("메일 연결 테스트가 완료된 잠금 해제 메모만 보낼 수 있습니다.", "error");
+    return false;
+  }
+  const subject = defaultMailSubject(selected);
+  elements.sendMailRecipientInput.value = "";
+  elements.sendMailSubjectInput.value = subject;
+  elements.sendMailMessageInput.value = `${subject}\n\n${selected.content || ""}`.trim();
+  elements.sendMailStatusText.textContent = "수신 주소를 입력하세요.";
+  elements.sendMailStatusText.classList.remove("ok", "warn", "bad");
+  elements.sendMailDialog.classList.remove("hidden");
+  window.setTimeout(() => elements.sendMailRecipientInput?.focus(), 0);
+  return true;
+}
+
+async function submitCurrentNoteMail() {
+  const selected = getSelectedTreeNode();
+  const server = state.settings.server || defaultServerSettings();
+  if (!selected || !isMailSendEnabled()) {
+    closeSendMailDialog();
+    return false;
+  }
+  const recipient = elements.sendMailRecipientInput.value.trim();
+  if (!validWebEmail(recipient)) {
+    elements.sendMailStatusText.textContent = "올바른 수신 주소를 입력하세요.";
+    elements.sendMailStatusText.classList.add("bad");
+    elements.sendMailRecipientInput.focus();
+    return false;
+  }
+  elements.sendMailSendBtn.disabled = true;
+  elements.sendMailStatusText.textContent = "메일을 보내는 중입니다.";
+  elements.sendMailStatusText.classList.remove("ok", "bad");
+  elements.sendMailStatusText.classList.add("warn");
+  try {
+    await requestServerJson(server, `/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, {
+      method: "POST",
+      body: JSON.stringify({
+        recipient,
+        subject: elements.sendMailSubjectInput.value.trim() || defaultMailSubject(selected),
+        message: elements.sendMailMessageInput.value || defaultMailSubject(selected),
+      }),
+    });
+    elements.sendMailStatusText.textContent = "메일을 보냈습니다.";
+    elements.sendMailStatusText.classList.remove("warn", "bad");
+    elements.sendMailStatusText.classList.add("ok");
+    showNotice("메일을 보냈습니다.", "success");
+    closeSendMailDialog();
+    return true;
+  } catch (error) {
+    elements.sendMailStatusText.textContent = `메일 서버 API가 없거나 발송에 실패했습니다. ${sanitizeMailErrorMessage(error)}`;
+    elements.sendMailStatusText.classList.remove("warn", "ok");
+    elements.sendMailStatusText.classList.add("bad");
+    return false;
+  } finally {
+    elements.sendMailSendBtn.disabled = false;
+  }
 }
 
 // 점으로 나뉜 버전 문자열을 비교한다 (예: "2.3.6" > "2.3.5").
@@ -9445,6 +9684,23 @@ function applyLanguage() {
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
+  setText("#mailSettingsTitle", "메일 보내기");
+  setText("#mailSettingsDesc", "서버에서 메모를 메일로 보내기 전에 SMTP 연결을 테스트합니다.");
+  setText("#mailSettingsSenderNameLabel", "발신자 이름");
+  setText("#mailSettingsSenderEmailLabel", "발신자 이메일");
+  setText("#mailSettingsHostLabel", "SMTP 서버 주소");
+  setText("#mailSettingsPortLabel", "포트");
+  setText("#mailSettingsSecurityLabel", "보안 방식");
+  setText("#mailSettingsUserLabel", "SMTP 사용자 ID");
+  setText("#mailSettingsPasswordLabel", "SMTP 비밀번호");
+  setText("#mailSettingsTestRecipientLabel", "테스트 수신 주소");
+  setText("#mailSettingsTestBtn", "연결 테스트");
+  setText("#sendMailDialogTitle", "메일 보내기");
+  setText("#sendMailRecipientLabel", "수신 주소");
+  setText("#sendMailSubjectLabel", "제목");
+  setText("#sendMailMessageLabel", "본문");
+  setText("#sendMailCancelBtn", t("dialog.cancel"));
+  setText("#sendMailSendBtn", "보내기");
   setText("#desktopStorageTitle", t("settings.desktopStorage.title"));
   setText("#desktopStorageDesc", t(isHostedWebClient() ? "settings.desktopStorage.web" : "settings.desktopStorage.desc"));
   setText("#webLogoutBtn", t("web.login.logout"));
@@ -12804,11 +13060,12 @@ function isContextMenuActionDisabled(actionId) {
     case "printPreview":
     case "print":
       return false;
+    case "sendMail":
+      return !isMailSendEnabled();
     case "encrypt":
     case "lock":
     case "unlock":
     case "decrypt":
-    case "sendMail":
       return true;
     default:
       return false;
@@ -12897,6 +13154,8 @@ function runEditorCommand(actionId) {
       return openPrintPreview();
     case "print":
       return printCurrentNote();
+    case "sendMail":
+      return sendCurrentNoteMail();
     default:
       return false;
   }

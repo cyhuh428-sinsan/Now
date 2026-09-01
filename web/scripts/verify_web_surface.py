@@ -134,6 +134,43 @@ def print_preview_context_menu_enabled_for_selected_note(source: str) -> bool:
     return marker in body and disabled_marker not in body
 
 
+def mail_send_script_ready(source: str) -> bool:
+    return all(
+        needle in source
+        for needle in [
+            "const mailSettings =",
+            "function renderMailSettings()",
+            "async function refreshMailSettingsStatus",
+            "async function testMailSettings()",
+            "function isMailSendEnabled()",
+            "function sendCurrentNoteMail()",
+            "mailSettingsPasswordInput: $(\"#mailSettingsPasswordInput\")",
+            "sendMailDialog: $(\"#sendMailDialog\")",
+            "requestServerJson(server, \"/api/v1/mail/settings/status\")",
+            "requestServerJson(server, \"/api/v1/mail/settings/test\"",
+            "/api/v1/notes/${encodeURIComponent(selected.id)}/mail",
+            "case \"sendMail\":",
+            "return sendCurrentNoteMail();",
+            "!isMailSendEnabled()",
+        ]
+    )
+
+
+def mail_settings_secret_guard(source: str) -> bool:
+    forbidden = [
+        "password: mailSettings",
+        "smtpPassword",
+        "smtp_password: mailSettings",
+        "mailSettings.password",
+        "state.settings.mail",
+    ]
+    return (
+        "mailSettingsPasswordInput.value" in source
+        and "smtp_password: elements.mailSettingsPasswordInput.value" in source
+        and all(item not in source for item in forbidden)
+    )
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -393,6 +430,23 @@ def main() -> None:
         ("printPreviewBody", "print preview rendered body"),
         ("printPreviewCloseBtn", "print preview close button"),
         ("printPreviewPrintBtn", "print preview print button"),
+        ("mailSettingsSenderNameInput", "mail sender name input"),
+        ("mailSettingsSenderEmailInput", "mail sender email input"),
+        ("mailSettingsHostInput", "mail SMTP host input"),
+        ("mailSettingsPortInput", "mail SMTP port input"),
+        ("mailSettingsSecuritySelect", "mail SMTP security selector"),
+        ("mailSettingsUserInput", "mail SMTP user input"),
+        ("mailSettingsPasswordInput", "mail SMTP password input"),
+        ("mailSettingsTestRecipientInput", "mail test recipient input"),
+        ("mailSettingsTestBtn", "mail settings test button"),
+        ("mailSettingsStatusText", "mail settings status text"),
+        ("sendMailDialog", "send mail dialog"),
+        ("sendMailRecipientInput", "send mail recipient input"),
+        ("sendMailSubjectInput", "send mail subject input"),
+        ("sendMailMessageInput", "send mail message input"),
+        ("sendMailCancelBtn", "send mail cancel button"),
+        ("sendMailSendBtn", "send mail send button"),
+        ("sendMailStatusText", "send mail status text"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -886,6 +940,23 @@ def main() -> None:
         ('id="printPreviewBody"', "desktop print preview rendered body"),
         ('id="printPreviewCloseBtn"', "desktop print preview close button"),
         ('id="printPreviewPrintBtn"', "desktop print preview print button"),
+        ('id="mailSettingsSenderNameInput"', "desktop mail sender name input"),
+        ('id="mailSettingsSenderEmailInput"', "desktop mail sender email input"),
+        ('id="mailSettingsHostInput"', "desktop mail SMTP host input"),
+        ('id="mailSettingsPortInput"', "desktop mail SMTP port input"),
+        ('id="mailSettingsSecuritySelect"', "desktop mail SMTP security selector"),
+        ('id="mailSettingsUserInput"', "desktop mail SMTP user input"),
+        ('id="mailSettingsPasswordInput"', "desktop mail SMTP password input"),
+        ('id="mailSettingsTestRecipientInput"', "desktop mail test recipient input"),
+        ('id="mailSettingsTestBtn"', "desktop mail settings test button"),
+        ('id="mailSettingsStatusText"', "desktop mail settings status text"),
+        ('id="sendMailDialog"', "desktop send mail dialog"),
+        ('id="sendMailRecipientInput"', "desktop send mail recipient input"),
+        ('id="sendMailSubjectInput"', "desktop send mail subject input"),
+        ('id="sendMailMessageInput"', "desktop send mail message input"),
+        ('id="sendMailCancelBtn"', "desktop send mail cancel button"),
+        ('id="sendMailSendBtn"', "desktop send mail send button"),
+        ('id="sendMailStatusText"', "desktop send mail status text"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
@@ -982,6 +1053,18 @@ def main() -> None:
             "cut clipboard side effect guarded",
             failures,
         )
+        check(
+            mail_send_script_ready(source),
+            f"{surface} app script has mail settings and send flow",
+            "mailSettings/render/test/status/send/API paths",
+            failures,
+        )
+        check(
+            mail_settings_secret_guard(source),
+            f"{surface} app script keeps SMTP password out of persisted settings",
+            "password only read from mailSettingsPasswordInput for test payload",
+            failures,
+        )
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
@@ -1002,6 +1085,8 @@ def main() -> None:
         (".print-preview-card", "desktop print preview card css"),
         (".print-preview-body", "desktop print preview body css"),
         ("@media print", "desktop print media rules"),
+        (".mail-settings-box", "desktop mail settings css"),
+        (".send-mail-dialog-card", "desktop send mail dialog css"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
@@ -1012,6 +1097,8 @@ def main() -> None:
         (".print-preview-card", "print preview card css"),
         (".print-preview-body", "print preview body css"),
         ("@media print", "print media rules"),
+        (".mail-settings-box", "mail settings css"),
+        (".send-mail-dialog-card", "send mail dialog css"),
     ]:
         check(needle in styles, f"Web app style has {label}", needle, failures)
 
