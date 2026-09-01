@@ -154,6 +154,27 @@ class WebSession(Base):
     )
 
 
+class UserMailSettings(Base):
+    __tablename__ = "user_mail_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    sender_name: Mapped[str] = mapped_column(String(120))
+    sender_email: Mapped[str] = mapped_column(String(240))
+    smtp_host: Mapped[str] = mapped_column(String(240))
+    smtp_port: Mapped[int] = mapped_column(Integer, default=587)
+    security: Mapped[str] = mapped_column(String(30), default="starttls")
+    smtp_username: Mapped[str] = mapped_column(String(240))
+    smtp_password_encrypted: Mapped[str] = mapped_column(Text)
+    test_recipient: Mapped[str] = mapped_column(String(240))
+    last_tested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class GroupMessage(Base):
     __tablename__ = "group_messages"
 

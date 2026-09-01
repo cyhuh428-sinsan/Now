@@ -557,6 +557,68 @@ Web 로그인 사용자가 참가 가능한 활성 그룹 목록을 조회합니
 
 앱에서 여러 메모를 한 번에 올리는 동기화 API입니다.
 
+`GET /api/v1/mail/settings/status?owner_id=local_user`
+
+현재 사용자의 메일 보내기 설정 상태를 조회합니다. Web은 `X-Now-Web-Session`, 앱/설치형은 `X-Now-User-Token`으로 인증합니다. 응답은 비밀값을 포함하지 않으며, 설정과 연결 테스트가 모두 완료된 경우에만 `enabled=true`를 반환합니다.
+
+응답 예시:
+
+```json
+{
+  "status": "ok",
+  "enabled": true,
+  "sender_name": "신산",
+  "sender_email": "sender@example.com",
+  "smtp_host": "smtp.example.com",
+  "smtp_port": 587,
+  "security": "starttls",
+  "smtp_username": "sender@example.com",
+  "test_recipient": "receiver@example.com",
+  "last_tested_at": "2026-09-01T00:00:00Z",
+  "last_error": null
+}
+```
+
+`POST /api/v1/mail/settings/test`
+
+SMTP 설정으로 테스트 메일을 발송합니다. 성공한 경우에만 설정을 저장하고 `last_tested_at`을 갱신합니다. SMTP 비밀번호 또는 앱 비밀번호는 평문 저장하지 않고 암호화해 저장합니다.
+
+요청 필드:
+
+- `owner_id`
+- `sender_name`
+- `sender_email`
+- `smtp_host`
+- `smtp_port`
+- `security`: `ssl_tls`, `starttls`, `none`
+- `smtp_username`
+- `smtp_password`
+- `test_recipient`
+
+`POST /api/v1/notes/{note_id}/mail?owner_id=local_user`
+
+현재 메모를 저장된 SMTP 설정으로 발송합니다. `note_id`는 서버 숫자 ID 또는 `local_id`를 사용할 수 있습니다. 메일 설정이 없거나 연결 테스트가 성공한 적이 없으면 `409 mail settings not tested`를 반환합니다.
+
+요청 예시:
+
+```json
+{
+  "to": ["receiver@example.com"],
+  "subject": "[NowNote] 메모 제목",
+  "message": "전달 메모"
+}
+```
+
+메일 API 오류 코드:
+
+- `401 mail auth required`: Web 세션 또는 앱/설치형 접속 토큰 없음
+- `401 user token required`, `401 invalid user token`, `401 web session required`: 사용자 인증 실패
+- `404 note not found`: 현재 사용자 소유 메모 없음
+- `409 mail settings not tested`: 메일 설정 또는 연결 테스트 미완료
+- `422 sender_email invalid`, `422 test_recipient invalid`, `422 to invalid`: 이메일 형식 오류
+- `502 smtp_test_failed`: SMTP 연결 테스트 실패
+- `502 smtp_send_failed`: 메모 메일 발송 실패
+
 `POST /api/v1/sync`
 
 앱에서 변경된 메모를 올리고, 서버에서 변경된 메모를 한 번에 내려받는 통합 동기화 API입니다.

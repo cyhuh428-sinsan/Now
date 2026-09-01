@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     smtp_password: str | None = None
     smtp_from: str | None = None
     smtp_use_tls: bool = True
+    mail_secret_key: str | None = None
     password_reset_code_minutes: int = 30
 
     model_config = SettingsConfigDict(env_prefix="NOW_")

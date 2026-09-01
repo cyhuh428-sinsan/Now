@@ -38,3 +38,40 @@ def send_password_reset_email(*, to_email: str, owner_id: str, reset_code: str) 
         if settings.smtp_username and settings.smtp_password:
             smtp.login(settings.smtp_username, settings.smtp_password)
         smtp.send_message(message)
+
+
+def send_smtp_message(
+    *,
+    host: str,
+    port: int,
+    security: str,
+    username: str,
+    password: str,
+    sender_name: str,
+    sender_email: str,
+    to: list[str],
+    subject: str,
+    text_body: str,
+    html_body: str,
+) -> None:
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = f"{sender_name} <{sender_email}>" if sender_name else sender_email
+    message["To"] = ", ".join(to)
+    message.set_content(text_body)
+    message.add_alternative(html_body, subtype="html")
+
+    mode = security.strip().lower()
+    if mode == "ssl_tls":
+        with smtplib.SMTP_SSL(host, port, timeout=15) as smtp:
+            if username and password:
+                smtp.login(username, password)
+            smtp.send_message(message)
+        return
+
+    with smtplib.SMTP(host, port, timeout=15) as smtp:
+        if mode == "starttls":
+            smtp.starttls()
+        if username and password:
+            smtp.login(username, password)
+        smtp.send_message(message)
