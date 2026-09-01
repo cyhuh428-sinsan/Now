@@ -826,6 +826,8 @@ def main() -> None:
         (".note-action-menu", "desktop note action dropdown style"),
         (".note-action-menu-btn", "desktop compact note action menu button style"),
         ("flex: 0 0 auto", "desktop note find bar fixed height"),
+        ("grid-template-columns: 34px 280px minmax(0, 1fr);", "desktop rail and note list width standard"),
+        ("grid-template-columns: minmax(280px, var(--tree-list-width, 280px)) 2px minmax(0, 1fr);", "desktop tree list width standard"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
@@ -1003,3 +1005,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
