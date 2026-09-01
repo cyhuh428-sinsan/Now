@@ -1608,7 +1608,7 @@ kbd {
 }
 
 .tree-panel {
-  padding: 8px 4.8px;
+  padding: 8px 2px;
   overflow: auto;
 }
 
@@ -2300,7 +2300,7 @@ kbd {
 
 .tree-list {
   display: grid;
-  gap: 6px;
+  gap: 2px;
 }
 
 .tree-node {
@@ -2316,9 +2316,9 @@ kbd {
   gap: 3px;
   align-items: center;
   width: 100%;
-  min-height: 34px;
+  min-height: 51px;
   background: transparent;
-  padding: 5px 12.6px;
+  padding: 5px 8px;
 }
 
 .tree-row.active {
@@ -2348,7 +2348,7 @@ kbd {
 
 .tree-children {
   display: grid;
-  gap: 6px;
+  gap: 2px;
   padding: 0 4px 5px 16px;
 }
 
