@@ -502,6 +502,8 @@ const I18N = {
     "settings.undoDepth.10": "10단계",
     "settings.undoDepth.50": "50단계",
     "settings.undoDepth.100": "100단계",
+    "settings.blockSelection.title": "Alt 드래그 영역 선택",
+    "settings.blockSelection.desc": "본문 편집 화면에서 Alt를 누른 채 드래그해 여러 줄의 같은 열 범위를 선택합니다.",
     "settings.backlinks.title": "백링크 표시",
     "settings.backlinks.desc": "현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.",
     "settings.tags.title": "태그 표시",
@@ -1336,6 +1338,8 @@ const I18N = {
     "settings.undoDepth.10": "10 steps",
     "settings.undoDepth.50": "50 steps",
     "settings.undoDepth.100": "100 steps",
+    "settings.blockSelection.title": "Alt-drag block selection",
+    "settings.blockSelection.desc": "Select the same column range across multiple note lines by dragging with Alt in the editor.",
     "settings.features.title": "Knowledge features",
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
     "settings.markdownColors.title": "Markdown colors",
@@ -2489,6 +2493,15 @@ const composingEditors = new Set();
 const pendingEditorInputFlush = new Set();
 const pendingEditorValueWrite = new Map();
 
+const blockSelection = {
+  active: false,
+  anchor: null,
+  focus: null,
+  ranges: [],
+  overlay: null,
+  pointerId: null,
+};
+
 function isEditorComposing(element) {
   return Boolean(element) && composingEditors.has(element);
 }
@@ -2585,6 +2598,7 @@ function defaultSettings() {
     lineHeight: "normal",
     tabIndentSize: 2,
     undoDepth: TREE_UNDO_DEFAULT_DEPTH,
+    enableAltDragBlockSelection: true,
     showBacklinks: true,
     enableShortcuts: true,
     showTags: true,
@@ -4457,6 +4471,7 @@ async function initializeApp() {
   initializeLiveMemoEditor();
   bindEvents();
   initializeTreeHighlightOverlay();
+  initializeBlockSelectionSetting();
   initializeCaptureSketch();
   initializeTreeDropImport();
   await refreshDesktopStorageInfo();
@@ -4805,6 +4820,278 @@ function syncTreeHighlightOverlayScroll() {
   overlay.scrollLeft = editor.scrollLeft;
   backdrop.scrollTop = editor.scrollTop;
   backdrop.scrollLeft = editor.scrollLeft;
+  renderBlockSelectionOverlay();
+}
+
+function ensureBlockSelectionOverlay() {
+  if (blockSelection.overlay) return blockSelection.overlay;
+  const surface = elements.treeContentSurface;
+  if (!surface) return null;
+  const overlay = document.createElement("div");
+  overlay.className = "block-selection-overlay hidden";
+  overlay.setAttribute("aria-hidden", "true");
+  surface.append(overlay);
+  blockSelection.overlay = overlay;
+  return overlay;
+}
+
+function clearBlockSelection() {
+  blockSelection.active = false;
+  blockSelection.anchor = null;
+  blockSelection.focus = null;
+  blockSelection.ranges = [];
+  blockSelection.pointerId = null;
+  renderBlockSelectionOverlay();
+}
+
+function getTabText() {
+  return " ".repeat(normalizeTabIndentSize(state.settings.tabIndentSize));
+}
+
+function treeEditorLineStarts(text = elements.treeContent?.value || "") {
+  const starts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\n") starts.push(index + 1);
+  }
+  return starts;
+}
+
+function lineColumnToOffset(text, lineStarts, lineIndex, column) {
+  const lineStart = lineStarts[lineIndex] ?? text.length;
+  const nextLineStart = lineStarts[lineIndex + 1] ?? text.length + 1;
+  const lineEnd = Math.max(lineStart, Math.min(text.length, nextLineStart - 1));
+  return Math.min(lineEnd, lineStart + Math.max(0, column));
+}
+
+function blockSelectionEditorMetrics() {
+  const editor = elements.treeContent;
+  if (!editor) return null;
+  const computed = window.getComputedStyle(editor);
+  const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) * 1.4 || 20;
+  return {
+    computed,
+    lineHeight,
+    paddingLeft: parseFloat(computed.paddingLeft) || 0,
+    paddingTop: parseFloat(computed.paddingTop) || 0,
+    borderLeft: parseFloat(computed.borderLeftWidth) || 0,
+    borderTop: parseFloat(computed.borderTopWidth) || 0,
+  };
+}
+
+function blockSelectionMeasureText(text, computed) {
+  const mirror = document.createElement("span");
+  mirror.style.position = "fixed";
+  mirror.style.left = "-10000px";
+  mirror.style.top = "-10000px";
+  mirror.style.visibility = "hidden";
+  mirror.style.whiteSpace = "pre";
+  mirror.style.font = computed.font;
+  mirror.style.letterSpacing = computed.letterSpacing;
+  mirror.style.tabSize = computed.tabSize;
+  mirror.textContent = text || "";
+  document.body.append(mirror);
+  const width = mirror.getBoundingClientRect().width;
+  mirror.remove();
+  return width;
+}
+
+function blockSelectionColumnFromX(line, targetX, computed) {
+  let low = 0;
+  let high = line.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (blockSelectionMeasureText(line.slice(0, mid), computed) <= targetX) low = mid;
+    else high = mid - 1;
+  }
+  const nextWidth = low < line.length ? blockSelectionMeasureText(line.slice(0, low + 1), computed) : Infinity;
+  const currentWidth = blockSelectionMeasureText(line.slice(0, low), computed);
+  return targetX - currentWidth > nextWidth - targetX ? Math.min(line.length, low + 1) : low;
+}
+
+function editorPointToLineColumn(event) {
+  const editor = elements.treeContent;
+  const metrics = blockSelectionEditorMetrics();
+  if (!editor || !metrics) return { lineIndex: 0, column: 0 };
+  const rect = editor.getBoundingClientRect();
+  const text = editor.value || "";
+  const lines = text.split("\n");
+  const x = Math.max(0, event.clientX - rect.left - metrics.borderLeft - metrics.paddingLeft + editor.scrollLeft);
+  const y = Math.max(0, event.clientY - rect.top - metrics.borderTop - metrics.paddingTop + editor.scrollTop);
+  const lineIndex = Math.max(0, Math.min(lines.length - 1, Math.floor(y / metrics.lineHeight)));
+  const column = blockSelectionColumnFromX(lines[lineIndex] || "", x, metrics.computed);
+  return { lineIndex, column };
+}
+
+function updateBlockSelectionRanges() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.anchor || !blockSelection.focus) {
+    blockSelection.ranges = [];
+    return;
+  }
+  const text = editor.value || "";
+  const lines = text.split("\n");
+  const lineStarts = treeEditorLineStarts(text);
+  const startLine = Math.min(blockSelection.anchor.lineIndex, blockSelection.focus.lineIndex);
+  const endLine = Math.max(blockSelection.anchor.lineIndex, blockSelection.focus.lineIndex);
+  const startColumn = Math.min(blockSelection.anchor.column, blockSelection.focus.column);
+  const endColumn = Math.max(blockSelection.anchor.column, blockSelection.focus.column);
+  if (startColumn === endColumn) {
+    blockSelection.ranges = [];
+    return;
+  }
+  blockSelection.ranges = [];
+  for (let lineIndex = startLine; lineIndex <= endLine; lineIndex += 1) {
+    const line = lines[lineIndex] || "";
+    const rangeStart = Math.min(startColumn, line.length);
+    const rangeEnd = Math.min(endColumn, line.length);
+    blockSelection.ranges.push({
+      lineIndex,
+      startColumn,
+      endColumn,
+      startOffset: lineColumnToOffset(text, lineStarts, lineIndex, rangeStart),
+      endOffset: lineColumnToOffset(text, lineStarts, lineIndex, rangeEnd),
+    });
+  }
+}
+
+function renderBlockSelectionOverlay() {
+  const overlay = ensureBlockSelectionOverlay();
+  const editor = elements.treeContent;
+  const metrics = blockSelectionEditorMetrics();
+  if (!overlay || !editor || !metrics || !blockSelection.ranges.length) {
+    overlay?.classList.add("hidden");
+    overlay?.replaceChildren();
+    return;
+  }
+  const lines = (editor.value || "").split("\n");
+  overlay.classList.remove("hidden");
+  overlay.style.left = `${editor.offsetLeft + metrics.borderLeft}px`;
+  overlay.style.top = `${editor.offsetTop + metrics.borderTop}px`;
+  overlay.style.width = `${editor.clientWidth}px`;
+  overlay.style.height = `${editor.clientHeight}px`;
+  overlay.replaceChildren(...blockSelection.ranges.map((range) => {
+    const line = lines[range.lineIndex] || "";
+    const startColumn = Math.min(range.startColumn, line.length);
+    const endColumn = Math.min(range.endColumn, line.length);
+    const left = metrics.paddingLeft + blockSelectionMeasureText(line.slice(0, startColumn), metrics.computed) - editor.scrollLeft;
+    const right = metrics.paddingLeft + blockSelectionMeasureText(line.slice(0, endColumn), metrics.computed) - editor.scrollLeft;
+    const rect = document.createElement("span");
+    rect.className = "block-selection-rect";
+    rect.style.left = `${Math.max(0, left)}px`;
+    rect.style.top = `${metrics.paddingTop + range.lineIndex * metrics.lineHeight - editor.scrollTop}px`;
+    rect.style.width = `${Math.max(2, right - left)}px`;
+    rect.style.height = `${metrics.lineHeight}px`;
+    return rect;
+  }));
+}
+
+function beginBlockSelection(event) {
+  const editor = elements.treeContent;
+  if (editor && !event.altKey && blockSelection.ranges.length) clearBlockSelection();
+  if (
+    !editor
+    || event.button !== 0
+    || !event.altKey
+    || state.settings.enableAltDragBlockSelection === false
+    || isEditorComposing(editor)
+    || event.isComposing
+    || !elements.markdownPreview.classList.contains("hidden")
+    || !isTreeEditorHistoryEditable()
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  editor.focus();
+  blockSelection.active = true;
+  blockSelection.pointerId = event.pointerId ?? null;
+  blockSelection.anchor = editorPointToLineColumn(event);
+  blockSelection.focus = blockSelection.anchor;
+  updateBlockSelectionRanges();
+  renderBlockSelectionOverlay();
+  if (typeof editor.setPointerCapture === "function" && event.pointerId !== undefined) {
+    editor.setPointerCapture(event.pointerId);
+  }
+  return true;
+}
+
+function updateBlockSelection(event) {
+  if (!blockSelection.active) return false;
+  event.preventDefault();
+  blockSelection.focus = editorPointToLineColumn(event);
+  updateBlockSelectionRanges();
+  renderBlockSelectionOverlay();
+  return true;
+}
+
+function finishBlockSelection() {
+  if (!blockSelection.active) return false;
+  blockSelection.active = false;
+  blockSelection.pointerId = null;
+  renderBlockSelectionOverlay();
+  return true;
+}
+
+function copyBlockSelectionText() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const text = editor.value || "";
+  copyText(blockSelection.ranges.map((range) => text.slice(range.startOffset, range.endOffset)).join("\n"));
+  return true;
+}
+
+function replaceBlockSelectionRanges(replacement) {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  let nextText = editor.value || "";
+  [...blockSelection.ranges].reverse().forEach((range) => {
+    nextText = `${nextText.slice(0, range.startOffset)}${replacement}${nextText.slice(range.endOffset)}`;
+  });
+  const cursor = blockSelection.ranges[0].startOffset;
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function prefixBlockSelectionLines(prefix) {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const lineIndexes = new Set(blockSelection.ranges.map((range) => range.lineIndex));
+  const lines = (editor.value || "").split("\n");
+  const nextText = lines.map((line, index) => (lineIndexes.has(index) ? `${prefix}${line}` : line)).join("\n");
+  const firstLine = Math.min(...lineIndexes);
+  const cursor = lineColumnToOffset(nextText, treeEditorLineStarts(nextText), firstLine, 0);
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function removePrefixFromBlockSelectionLines() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const tabText = getTabText();
+  const lineIndexes = new Set(blockSelection.ranges.map((range) => range.lineIndex));
+  const lines = (editor.value || "").split("\n");
+  const nextText = lines.map((line, index) => {
+    if (!lineIndexes.has(index)) return line;
+    if (line.startsWith(tabText)) return line.slice(tabText.length);
+    return line.replace(/^ {1,8}/, "");
+  }).join("\n");
+  const firstLine = Math.min(...lineIndexes);
+  const cursor = lineColumnToOffset(nextText, treeEditorLineStarts(nextText), firstLine, 0);
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function applyBlockSelectionEdit(kind) {
+  if (!blockSelection.ranges.length) return false;
+  if (kind === "copy") return copyBlockSelectionText();
+  if (kind === "cut") copyBlockSelectionText();
+  if (!isTreeEditorHistoryEditable()) return false;
+  if (kind === "delete" || kind === "cut") return replaceBlockSelectionRanges("");
+  if (kind === "indent") return prefixBlockSelectionLines(getTabText());
+  if (kind === "outdent") return removePrefixFromBlockSelectionLines();
+  return false;
 }
 
 function repaintTreeHighlightOverlay(force = false) {
@@ -4997,6 +5284,32 @@ function initializeTreeHighlightOverlay() {
     syncTreeHighlightOverlayScroll();
   });
   setTreeHighlightOverlayEnabled(TREE_HIGHLIGHT_OVERLAY_DEFAULT);
+}
+
+function initializeBlockSelectionSetting() {
+  if ($("#blockSelectionToggle")) return;
+  const undoDepthRow = elements.undoDepthSelect?.closest?.(".settings-row");
+  if (!undoDepthRow) return;
+  const row = document.createElement("section");
+  row.className = "settings-row";
+  row.innerHTML = [
+    "<div>",
+    '<h3 id="blockSelectionSettingTitle"></h3>',
+    '<p id="blockSelectionSettingDesc"></p>',
+    "</div>",
+    '<label class="toggle">',
+    '<input id="blockSelectionToggle" type="checkbox">',
+    "<span></span>",
+    "</label>",
+  ].join("");
+  undoDepthRow.after(row);
+  const toggle = $("#blockSelectionToggle");
+  toggle.checked = state.settings.enableAltDragBlockSelection !== false;
+  toggle.addEventListener("change", () => {
+    state.settings.enableAltDragBlockSelection = toggle.checked;
+    if (!toggle.checked) clearBlockSelection();
+    persistSettings();
+  });
 }
 
 function bindEvents() {
@@ -5358,6 +5671,7 @@ function bindEvents() {
   bindEditorComposition(elements.treeTitleInput, flushTreeTitleInput);
 
   elements.treeContent.addEventListener("input", (event) => {
+    if (!blockSelection.active && blockSelection.ranges.length) clearBlockSelection();
     handleEditorInput(elements.treeContent, event, flushTreeContentInput);
   });
   bindEditorComposition(elements.treeContent, flushTreeContentInput);
@@ -5370,6 +5684,11 @@ function bindEvents() {
   elements.treeContent.addEventListener("mouseup", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("select", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
+  elements.treeContent.addEventListener("mousedown", beginBlockSelection);
+  elements.treeContent.addEventListener("mousemove", updateBlockSelection);
+  elements.treeContent.addEventListener("mouseup", finishBlockSelection);
+  elements.treeContent.addEventListener("mouseleave", finishBlockSelection);
+  elements.treeContent.addEventListener("scroll", renderBlockSelectionOverlay, { passive: true });
 
   elements.favoriteBtn.addEventListener("click", toggleSelectedTreeFavorite);
 
@@ -5742,6 +6061,8 @@ function renderSettings() {
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.tabIndentSelect.value = String(state.settings.tabIndentSize);
   elements.undoDepthSelect.value = String(normalizeUndoDepth(state.settings.undoDepth));
+  const blockSelectionToggle = $("#blockSelectionToggle");
+  if (blockSelectionToggle) blockSelectionToggle.checked = state.settings.enableAltDragBlockSelection !== false;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
@@ -9009,6 +9330,8 @@ function applyLanguage() {
     50: t("settings.undoDepth.50"),
     100: t("settings.undoDepth.100"),
   });
+  setText("#blockSelectionSettingTitle", t("settings.blockSelection.title"));
+  setText("#blockSelectionSettingDesc", t("settings.blockSelection.desc"));
   setText("#backlinksSettingTitle", t("settings.backlinks.title"));
   setText("#backlinksSettingDesc", t("settings.backlinks.desc"));
   setText("#tagsSettingTitle", t("settings.tags.title"));
@@ -12479,6 +12802,7 @@ function isContextMenuActionDisabled(actionId) {
 function hasTreeContentSelection() {
   const editor = elements.treeContent;
   if (!editor) return false;
+  if (blockSelection.ranges.length > 0) return true;
   return editor.selectionStart !== editor.selectionEnd;
 }
 
@@ -12561,6 +12885,7 @@ function runEditorCommand(actionId) {
 function runNativeEditCommand(actionId) {
   const editor = elements.treeContent;
   if (!editor) return false;
+  if (["copy", "cut", "delete"].includes(actionId) && applyBlockSelectionEdit(actionId)) return true;
   editor.focus();
   switch (actionId) {
     case "selectAll":
@@ -12585,6 +12910,7 @@ function runNativeEditCommand(actionId) {
 }
 
 function runFormattingCommand(actionId) {
+  if (["indent", "outdent"].includes(actionId) && applyBlockSelectionEdit(actionId)) return true;
   if (!isTreeEditorHistoryEditable()) return false;
   switch (actionId) {
     case "bold":
@@ -15179,6 +15505,7 @@ function normalizeSettings(settings = {}) {
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.tabIndentSize = normalizeTabIndentSize(normalized.tabIndentSize);
   normalized.undoDepth = normalizeUndoDepth(normalized.undoDepth);
+  normalized.enableAltDragBlockSelection = normalizeToggle(normalized.enableAltDragBlockSelection, defaults.enableAltDragBlockSelection);
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
   normalized.treePanelCollapsed = normalizeToggle(normalized.treePanelCollapsed, defaults.treePanelCollapsed);
   normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);

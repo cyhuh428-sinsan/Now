@@ -876,6 +876,15 @@ def main() -> None:
             "cut/copy/delete selection guard",
             failures,
         )
+        block_selection_requirements = [
+            ("const blockSelection =", "block selection state"),
+            ("function beginBlockSelection", "block selection begin"),
+            ("function updateBlockSelection", "block selection update"),
+            ("function finishBlockSelection", "block selection finish"),
+            ("function applyBlockSelectionEdit", "block selection edit"),
+        ]
+        for needle, label in block_selection_requirements:
+            check(needle in source, f"{surface} app script has {label}", needle, failures)
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
@@ -891,9 +900,12 @@ def main() -> None:
         ("flex: 0 0 auto", "desktop note find bar fixed height"),
         ("grid-template-columns: 34px 280px minmax(0, 1fr);", "desktop rail and note list width standard"),
         ("grid-template-columns: minmax(280px, var(--tree-list-width, 280px)) 2px minmax(0, 1fr);", "desktop tree list width standard"),
+        (".block-selection-overlay", "desktop block selection css"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
+
+    check(".block-selection-overlay" in styles, "Web app style has block selection css", ".block-selection-overlay", failures)
 
     desktop_app_help_requirements = [
         ("NowNote", "desktop help title"),
