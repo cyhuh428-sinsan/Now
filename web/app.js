@@ -7666,6 +7666,12 @@ function canCheckMailSettingsStatus(server = state.settings.server || defaultSer
   return true;
 }
 
+function mailOwnerPath(path, server = state.settings.server || defaultServerSettings()) {
+  const ownerId = normalizeOwnerId(server.ownerId);
+  const separator = String(path).includes("?") ? "&" : "?";
+  return `${path}${separator}owner_id=${encodeURIComponent(ownerId)}`;
+}
+
 function setMailSettingsStatus(status, message, payload = {}) {
   mailSettings.status = status;
   mailSettings.enabled = Boolean(payload.enabled);
@@ -7724,7 +7730,7 @@ async function refreshMailSettingsStatus({ silent = true } = {}) {
   mailSettings.checking = true;
   renderMailSettings();
   try {
-    const payload = await requestServerJson(server, "/api/v1/mail/settings/status");
+    const payload = await requestServerJson(server, mailOwnerPath("/api/v1/mail/settings/status", server));
     setMailSettingsStatus(payload.enabled ? "ok" : "idle", "", payload);
   } catch (error) {
     setMailSettingsStatus("bad", "메일 서버 API가 없거나 상태를 확인할 수 없습니다.");
@@ -7820,7 +7826,7 @@ async function submitCurrentNoteMail() {
   elements.sendMailStatusText.classList.remove("ok", "bad");
   elements.sendMailStatusText.classList.add("warn");
   try {
-    await requestServerJson(server, `/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, {
+    await requestServerJson(server, mailOwnerPath(`/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, server), {
       method: "POST",
       body: JSON.stringify({
         recipient,
