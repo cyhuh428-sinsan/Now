@@ -1336,6 +1336,25 @@
     </div>
   </section>
 
+  <section id="printPreviewDialog" class="confirm-backdrop print-preview-dialog hidden" aria-modal="true" role="dialog" aria-labelledby="printPreviewTitle">
+    <div class="confirm-card print-preview-card">
+      <div class="print-preview-toolbar">
+        <h2>인쇄 미리보기</h2>
+        <div class="confirm-actions">
+          <button id="printPreviewCloseBtn" class="secondary-btn" type="button">닫기</button>
+          <button id="printPreviewPrintBtn" class="primary-btn" type="button">인쇄</button>
+        </div>
+      </div>
+      <article id="printPreviewContent" class="print-preview-content" aria-label="인쇄할 메모">
+        <header class="print-preview-header">
+          <h1 id="printPreviewTitle"></h1>
+          <p id="printPreviewMeta" class="print-preview-meta"></p>
+        </header>
+        <div id="printPreviewBody" class="markdown-preview print-preview-body"></div>
+      </article>
+    </div>
+  </section>
+
   <section id="keyDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="keyDialogTitle" aria-describedby="keyDialogMessage">
     <div class="confirm-card key-card">
       <h2 id="keyDialogTitle">암호 키 입력</h2>

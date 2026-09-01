@@ -3522,6 +3522,13 @@ const elements = {
   confirmMessage: $("#confirmMessage"),
   confirmCancelBtn: $("#confirmCancelBtn"),
   confirmOkBtn: $("#confirmOkBtn"),
+  printPreviewDialog: $("#printPreviewDialog"),
+  printPreviewContent: $("#printPreviewContent"),
+  printPreviewTitle: $("#printPreviewTitle"),
+  printPreviewMeta: $("#printPreviewMeta"),
+  printPreviewBody: $("#printPreviewBody"),
+  printPreviewCloseBtn: $("#printPreviewCloseBtn"),
+  printPreviewPrintBtn: $("#printPreviewPrintBtn"),
   keyDialog: $("#keyDialog"),
   keyDialogTitle: $("#keyDialogTitle"),
   keyDialogMessage: $("#keyDialogMessage"),
@@ -5604,6 +5611,16 @@ function bindEvents() {
     toggleWebAccountMenu();
   });
   elements.webLogoutBtn?.addEventListener("click", handleWebLogout);
+  elements.printPreviewCloseBtn?.addEventListener("click", closePrintPreview);
+  elements.printPreviewPrintBtn?.addEventListener("click", printCurrentNote);
+  elements.printPreviewDialog?.addEventListener("click", (event) => {
+    if (event.target === elements.printPreviewDialog) closePrintPreview();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.printPreviewDialog?.classList.contains("hidden")) {
+      closePrintPreview();
+    }
+  });
 
   window.addEventListener("online", () => {
     scheduleServerSync({ force: true, delay: 800 });
@@ -12784,13 +12801,13 @@ function isContextMenuActionDisabled(actionId) {
     case "outline":
     case "readAloud":
     case "markdownPreview":
+    case "printPreview":
+    case "print":
       return false;
     case "encrypt":
     case "lock":
     case "unlock":
     case "decrypt":
-    case "printPreview":
-    case "print":
     case "sendMail":
       return true;
     default:
@@ -12876,6 +12893,10 @@ function runEditorCommand(actionId) {
     case "markdownPreview":
       togglePreview();
       return true;
+    case "printPreview":
+      return openPrintPreview();
+    case "print":
+      return printCurrentNote();
     default:
       return false;
   }
@@ -14239,6 +14260,40 @@ function renderMarkdownPreview(content) {
   const html = markdownToHtml(content || "", { withCodeBlockActions: true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
   hydrateNoteAttachmentImages(elements.markdownPreview);
+}
+
+function openPrintPreview() {
+  const selected = getSelectedTreeNode();
+  if (!selected || !elements.printPreviewDialog) return false;
+  const content = visibleContentForNode(selected);
+  const bodyHtml = markdownToHtml(content || "", { withCodeBlockActions: false });
+  const meta = [
+    treePath(selected.id).join(" / "),
+    selected.tags?.length ? selected.tags.map((tag) => `#${tag}`).join(" ") : "",
+    formatDateTime(selected.updatedAt || selected.createdAt),
+  ].filter(Boolean);
+  elements.printPreviewTitle.textContent = noteTitle(selected.title);
+  elements.printPreviewMeta.textContent = meta.join(" · ");
+  elements.printPreviewBody.innerHTML = bodyHtml || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
+  hydrateNoteAttachmentImages(elements.printPreviewBody);
+  closeNoteActionMenu();
+  closeTreeContextMenu();
+  elements.printPreviewDialog.classList.remove("hidden");
+  window.setTimeout(() => elements.printPreviewCloseBtn?.focus(), 0);
+  return true;
+}
+
+function closePrintPreview() {
+  if (!elements.printPreviewDialog) return;
+  elements.printPreviewDialog.classList.add("hidden");
+}
+
+function printCurrentNote() {
+  if (!openPrintPreview()) return false;
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => window.print(), 0);
+  });
+  return true;
 }
 
 function renderLinkPanel() {

@@ -107,6 +107,33 @@ def block_selection_cut_checks_editability_before_copy(source: str) -> bool:
     return edit_guard in body and cut_copy in body and body.index(edit_guard) < body.index(cut_copy)
 
 
+def print_preview_script_ready(source: str) -> bool:
+    return all(
+        needle in source
+        for needle in [
+            "function openPrintPreview()",
+            "function closePrintPreview()",
+            "function printCurrentNote()",
+            "printPreviewDialog: $(\"#printPreviewDialog\")",
+            "printPreviewTitle: $(\"#printPreviewTitle\")",
+            "printPreviewMeta: $(\"#printPreviewMeta\")",
+            "printPreviewBody: $(\"#printPreviewBody\")",
+            "printPreviewCloseBtn: $(\"#printPreviewCloseBtn\")",
+            "printPreviewPrintBtn: $(\"#printPreviewPrintBtn\")",
+            'markdownToHtml(content || "", { withCodeBlockActions: false })',
+            'escapeHtml(t("note.previewEmpty"))',
+            "window.print()",
+        ]
+    )
+
+
+def print_preview_context_menu_enabled_for_selected_note(source: str) -> bool:
+    body = function_body(source, "isContextMenuActionDisabled")
+    marker = 'case "printPreview":\n    case "print":\n      return false;'
+    disabled_marker = 'case "printPreview":\n    case "print":\n    case "sendMail":\n      return true;'
+    return marker in body and disabled_marker not in body
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -360,6 +387,12 @@ def main() -> None:
         ("workspaceHealthSummary", "workspace health summary"),
         ("workspaceHealthList", "workspace health list"),
         ("workspaceExternalLinks", "workspace external links"),
+        ("printPreviewDialog", "print preview dialog"),
+        ("printPreviewTitle", "print preview title"),
+        ("printPreviewMeta", "print preview metadata"),
+        ("printPreviewBody", "print preview rendered body"),
+        ("printPreviewCloseBtn", "print preview close button"),
+        ("printPreviewPrintBtn", "print preview print button"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -847,6 +880,12 @@ def main() -> None:
         ("앱/설치형 접속 토큰", "desktop app access token label"),
         ("현재 버전", "desktop current version label"),
         ("Desktop 2.3.6", "desktop current version value"),
+        ('id="printPreviewDialog"', "desktop print preview dialog"),
+        ('id="printPreviewTitle"', "desktop print preview title"),
+        ('id="printPreviewMeta"', "desktop print preview metadata"),
+        ('id="printPreviewBody"', "desktop print preview rendered body"),
+        ('id="printPreviewCloseBtn"', "desktop print preview close button"),
+        ('id="printPreviewPrintBtn"', "desktop print preview print button"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
@@ -894,8 +933,22 @@ def main() -> None:
             ("replace", "replace command"),
             ("insertSketch", "insert sketch command"),
             ("markdownPreview", "Markdown preview command"),
+            ("printPreview", "print preview command"),
+            ("print", "print command"),
         ]:
             check(has_switch_case(source, "runEditorCommand", action_id), f"{surface} editor command maps {label}", action_id, failures)
+        check(
+            print_preview_script_ready(source),
+            f"{surface} app script has print preview and print wiring",
+            "openPrintPreview/closePrintPreview/printCurrentNote/bindings",
+            failures,
+        )
+        check(
+            print_preview_context_menu_enabled_for_selected_note(source),
+            f"{surface} context menu enables print actions for selected read-only notes",
+            "printPreview/print selected-note guard",
+            failures,
+        )
         check(
             context_menu_disables_selection_actions_without_selection(source),
             f"{surface} context menu disables selection-only actions without a selection",
@@ -945,11 +998,22 @@ def main() -> None:
         ("grid-template-columns: 34px 280px minmax(0, 1fr);", "desktop rail and note list width standard"),
         ("grid-template-columns: minmax(280px, var(--tree-list-width, 280px)) 2px minmax(0, 1fr);", "desktop tree list width standard"),
         (".block-selection-overlay", "desktop block selection css"),
+        (".print-preview-dialog", "desktop print preview dialog css"),
+        (".print-preview-card", "desktop print preview card css"),
+        (".print-preview-body", "desktop print preview body css"),
+        ("@media print", "desktop print media rules"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
 
     check(".block-selection-overlay" in styles, "Web app style has block selection css", ".block-selection-overlay", failures)
+    for needle, label in [
+        (".print-preview-dialog", "print preview dialog css"),
+        (".print-preview-card", "print preview card css"),
+        (".print-preview-body", "print preview body css"),
+        ("@media print", "print media rules"),
+    ]:
+        check(needle in styles, f"Web app style has {label}", needle, failures)
 
     desktop_app_help_requirements = [
         ("NowNote", "desktop help title"),
