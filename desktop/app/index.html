@@ -730,6 +730,54 @@
                 <button id="serverSyncBtn" class="secondary-btn desktop-server-only" type="button">서버로 동기화</button>
                 <button id="serverFullSyncBtn" class="secondary-btn desktop-server-only" type="button">전체 다시 동기화</button>
               </div>
+              <div class="mail-settings-box">
+                <div>
+                  <strong id="mailSettingsTitle">메일 보내기</strong>
+                  <p id="mailSettingsDesc">서버에서 메모를 메일로 보내기 전에 SMTP 연결을 테스트합니다.</p>
+                </div>
+                <div class="mail-settings-grid">
+                  <label>
+                    <span id="mailSettingsSenderNameLabel">발신자 이름</span>
+                    <input id="mailSettingsSenderNameInput" class="settings-input" type="text" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="mailSettingsSenderEmailLabel">발신자 이메일</span>
+                    <input id="mailSettingsSenderEmailInput" class="settings-input" type="email" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="mailSettingsHostLabel">SMTP 서버 주소</span>
+                    <input id="mailSettingsHostInput" class="settings-input" type="text" autocomplete="off" placeholder="smtp.example.com">
+                  </label>
+                  <label>
+                    <span id="mailSettingsPortLabel">포트</span>
+                    <input id="mailSettingsPortInput" class="settings-input" type="number" min="1" max="65535" value="587">
+                  </label>
+                  <label>
+                    <span id="mailSettingsSecurityLabel">보안 방식</span>
+                    <select id="mailSettingsSecuritySelect" class="settings-select">
+                      <option value="starttls">STARTTLS</option>
+                      <option value="ssl">SSL/TLS</option>
+                      <option value="none">없음</option>
+                    </select>
+                  </label>
+                  <label>
+                    <span id="mailSettingsUserLabel">SMTP 사용자 ID</span>
+                    <input id="mailSettingsUserInput" class="settings-input" type="text" autocomplete="off">
+                  </label>
+                  <label>
+                    <span id="mailSettingsPasswordLabel">SMTP 비밀번호</span>
+                    <input id="mailSettingsPasswordInput" class="settings-input" type="password" autocomplete="new-password">
+                  </label>
+                  <label>
+                    <span id="mailSettingsTestRecipientLabel">테스트 수신 주소</span>
+                    <input id="mailSettingsTestRecipientInput" class="settings-input" type="email" autocomplete="off">
+                  </label>
+                </div>
+                <div class="settings-actions">
+                  <button id="mailSettingsTestBtn" class="secondary-btn" type="button">연결 테스트</button>
+                </div>
+                <p id="mailSettingsStatusText" class="server-status-text">서버 설정 테스트 전입니다.</p>
+              </div>
               <div class="server-analysis-box">
                 <div>
                   <strong id="serverAnalysisTitle">분석 작업</strong>
@@ -1332,6 +1380,48 @@
       <div class="confirm-actions">
         <button id="confirmCancelBtn" class="secondary-btn" type="button">취소</button>
         <button id="confirmOkBtn" class="danger-btn" type="button">확인</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="printPreviewDialog" class="confirm-backdrop print-preview-dialog hidden" aria-modal="true" role="dialog" aria-labelledby="printPreviewTitle">
+    <div class="confirm-card print-preview-card">
+      <div class="print-preview-toolbar">
+        <h2>인쇄 미리보기</h2>
+        <div class="confirm-actions">
+          <button id="printPreviewCloseBtn" class="secondary-btn" type="button">닫기</button>
+          <button id="printPreviewPrintBtn" class="primary-btn" type="button">인쇄</button>
+        </div>
+      </div>
+      <article id="printPreviewContent" class="print-preview-content" aria-label="인쇄할 메모">
+        <header class="print-preview-header">
+          <h1 id="printPreviewTitle"></h1>
+          <p id="printPreviewMeta" class="print-preview-meta"></p>
+        </header>
+        <div id="printPreviewBody" class="markdown-preview print-preview-body"></div>
+      </article>
+    </div>
+  </section>
+
+  <section id="sendMailDialog" class="confirm-backdrop hidden" aria-modal="true" role="dialog" aria-labelledby="sendMailDialogTitle">
+    <div class="confirm-card send-mail-dialog-card">
+      <h2 id="sendMailDialogTitle">메일 보내기</h2>
+      <label>
+        <span id="sendMailRecipientLabel">수신 주소</span>
+        <input id="sendMailRecipientInput" class="settings-input" type="email" autocomplete="off">
+      </label>
+      <label>
+        <span id="sendMailSubjectLabel">제목</span>
+        <input id="sendMailSubjectInput" class="settings-input" type="text" autocomplete="off">
+      </label>
+      <label>
+        <span id="sendMailMessageLabel">본문</span>
+        <textarea id="sendMailMessageInput" class="settings-textarea" rows="6"></textarea>
+      </label>
+      <p id="sendMailStatusText" class="server-status-text">수신 주소를 입력하세요.</p>
+      <div class="confirm-actions">
+        <button id="sendMailCancelBtn" class="secondary-btn" type="button">취소</button>
+        <button id="sendMailSendBtn" class="primary-btn" type="button">보내기</button>
       </div>
     </div>
   </section>

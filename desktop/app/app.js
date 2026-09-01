@@ -502,6 +502,8 @@ const I18N = {
     "settings.undoDepth.10": "10단계",
     "settings.undoDepth.50": "50단계",
     "settings.undoDepth.100": "100단계",
+    "settings.blockSelection.title": "Alt 드래그 영역 선택",
+    "settings.blockSelection.desc": "본문 편집 화면에서 Alt를 누른 채 드래그해 여러 줄의 같은 열 범위를 선택합니다.",
     "settings.backlinks.title": "백링크 표시",
     "settings.backlinks.desc": "현재 메모를 언급한 다른 메모를 편집 화면 아래에 표시합니다.",
     "settings.tags.title": "태그 표시",
@@ -1336,6 +1338,8 @@ const I18N = {
     "settings.undoDepth.10": "10 steps",
     "settings.undoDepth.50": "50 steps",
     "settings.undoDepth.100": "100 steps",
+    "settings.blockSelection.title": "Alt-drag block selection",
+    "settings.blockSelection.desc": "Select the same column range across multiple note lines by dragging with Alt in the editor.",
     "settings.features.title": "Knowledge features",
     "settings.features.desc": "Hide unused features from the screen and stop their actions.",
     "settings.markdownColors.title": "Markdown colors",
@@ -2389,6 +2393,54 @@ const FEATURE_TOGGLES = [
 const CONTEXT_MENU_ACTIONS = [
   { id: "undo", labelKey: "context.action.undo", label: "실행 취소", description: "본문 편집을 한 단계 되돌립니다.", icon: "↶", defaultEnabled: true },
   { id: "redo", labelKey: "context.action.redo", label: "다시 실행", description: "되돌린 본문 편집을 다시 적용합니다.", icon: "↷", defaultEnabled: true },
+  { id: "cut", labelKey: "context.action.cut", label: "잘라내기", description: "선택한 내용을 잘라냅니다.", icon: "✂", defaultEnabled: true },
+  { id: "copy", labelKey: "context.action.copy", label: "복사", description: "선택한 내용을 복사합니다.", icon: "⧉", defaultEnabled: true },
+  { id: "paste", labelKey: "context.action.paste", label: "붙여넣기", description: "클립보드 내용을 붙여넣습니다.", icon: "▣", defaultEnabled: true },
+  { id: "delete", labelKey: "context.action.delete", label: "삭제", description: "선택한 내용을 삭제합니다.", icon: "⌫", defaultEnabled: true },
+  { id: "selectAll", labelKey: "context.action.selectAll", label: "전체 선택", description: "본문 전체를 선택합니다.", icon: "☷", defaultEnabled: true },
+  { id: "noteFind", labelKey: "context.action.noteFind", label: "본문 찾기", description: "현재 메모 안에서 텍스트를 찾습니다.", icon: "⌕", defaultEnabled: true },
+  { id: "replace", labelKey: "context.action.replace", label: "바꾸기", description: "현재 메모 안의 텍스트를 바꿉니다.", icon: "⇄", defaultEnabled: true },
+  { id: "insertTime", labelKey: "context.action.insertTime", label: "시간 삽입", description: "현재 시각을 본문에 삽입합니다.", icon: "◷", defaultEnabled: true },
+  { id: "insertLink", labelKey: "context.action.insertLink", label: "링크 삽입", description: "링크 형식을 본문에 삽입합니다.", icon: "🔗", defaultEnabled: true },
+  { id: "insertChecklist", labelKey: "context.action.insertChecklist", label: "체크리스트", description: "체크리스트 항목을 삽입합니다.", icon: "☑", defaultEnabled: true },
+  { id: "insertOrderedList", labelKey: "context.action.insertOrderedList", label: "번호 목록", description: "번호 목록 항목을 삽입합니다.", icon: "1.", defaultEnabled: true },
+  { id: "insertQuote", labelKey: "context.action.insertQuote", label: "인용", description: "인용 블록을 삽입합니다.", icon: "❝", defaultEnabled: true },
+  { id: "insertCodeBlock", labelKey: "context.action.insertCodeBlock", label: "코드 블록", description: "코드 블록을 삽입합니다.", icon: "</>", defaultEnabled: true },
+  { id: "insertHorizontalRule", labelKey: "context.action.insertHorizontalRule", label: "구분선", description: "가로 구분선을 삽입합니다.", icon: "—", defaultEnabled: true },
+  { id: "insertSketch", labelKey: "context.action.insertSketch", label: "스케치", description: "스케치 캡처를 삽입합니다.", icon: "✎", defaultEnabled: true },
+  { id: "bold", labelKey: "context.action.bold", label: "굵게", description: "선택한 텍스트에 굵게 서식을 적용합니다.", icon: "B", defaultEnabled: true },
+  { id: "italic", labelKey: "context.action.italic", label: "기울임", description: "선택한 텍스트에 기울임 서식을 적용합니다.", icon: "I", defaultEnabled: true },
+  { id: "heading1", labelKey: "context.action.heading1", label: "제목 1", description: "제목 1 서식을 적용합니다.", icon: "H1", defaultEnabled: true },
+  { id: "heading2", labelKey: "context.action.heading2", label: "제목 2", description: "제목 2 서식을 적용합니다.", icon: "H2", defaultEnabled: true },
+  { id: "heading3", labelKey: "context.action.heading3", label: "제목 3", description: "제목 3 서식을 적용합니다.", icon: "H3", defaultEnabled: true },
+  { id: "indent", labelKey: "context.action.indent", label: "들여쓰기", description: "선택한 줄을 들여씁니다.", icon: "⇥", defaultEnabled: true },
+  { id: "outdent", labelKey: "context.action.outdent", label: "내어쓰기", description: "선택한 줄을 내어씁니다.", icon: "⇤", defaultEnabled: true },
+  { id: "changeCase", labelKey: "context.action.changeCase", label: "대소문자 변경", description: "선택한 텍스트의 대소문자를 바꿉니다.", icon: "Aa", defaultEnabled: true },
+  { id: "clearFormat", labelKey: "context.action.clearFormat", label: "서식 지우기", description: "선택한 텍스트의 서식을 지웁니다.", icon: "Tx", defaultEnabled: true },
+  { id: "favorite", labelKey: "context.action.favorite", label: "즐겨찾기", description: "현재 메모의 즐겨찾기를 전환합니다.", icon: "★", defaultEnabled: true },
+  { id: "share", labelKey: "context.action.share", label: "공유", description: "현재 메모의 공유 상태를 전환합니다.", icon: "↗", defaultEnabled: true },
+  { id: "copyLink", labelKey: "context.action.copyLink", label: "링크 복사", description: "현재 메모 링크를 복사합니다.", icon: "⛓", defaultEnabled: true },
+  { id: "openLink", labelKey: "context.action.openLink", label: "링크 열기", description: "본문에서 감지한 링크를 엽니다.", icon: "↪", defaultEnabled: true },
+  { id: "outline", labelKey: "context.action.outline", label: "개요", description: "현재 메모의 개요 패널을 전환합니다.", icon: "☰", defaultEnabled: true },
+  { id: "readAloud", labelKey: "context.action.readAloud", label: "소리내어 읽기", description: "현재 메모를 음성으로 읽습니다.", icon: "♪", defaultEnabled: true },
+  { id: "markdownPreview", labelKey: "context.action.markdownPreview", label: "마크다운 미리보기", description: "마크다운 미리보기를 엽니다.", icon: "▤", defaultEnabled: true },
+  { id: "encrypt", labelKey: "context.action.encrypt", label: "암호화", description: "현재 메모를 암호화합니다.", icon: "◇", defaultEnabled: true },
+  { id: "lock", labelKey: "context.action.lock", label: "잠금", description: "열린 암호화 메모를 잠급니다.", icon: "◼", defaultEnabled: true },
+  { id: "unlock", labelKey: "context.action.unlock", label: "잠금 해제", description: "암호화 메모를 잠금 해제합니다.", icon: "◇", defaultEnabled: true },
+  { id: "decrypt", labelKey: "context.action.decrypt", label: "복호화", description: "암호화 메모를 일반 메모로 되돌립니다.", icon: "◆", defaultEnabled: true },
+  { id: "printPreview", labelKey: "context.action.printPreview", label: "인쇄 미리보기", description: "인쇄 전 미리보기를 엽니다.", icon: "▧", defaultEnabled: true },
+  { id: "print", labelKey: "context.action.print", label: "인쇄", description: "현재 메모를 인쇄합니다.", icon: "⎙", defaultEnabled: true },
+  { id: "sendMail", labelKey: "context.action.sendMail", label: "메일 보내기", description: "현재 메모를 메일로 보냅니다.", icon: "✉", defaultEnabled: true },
+];
+
+const CONTEXT_MENU_GROUPS = [
+  { id: "edit", labelKey: "context.group.edit", label: "편집", actions: ["undo", "redo", "cut", "copy", "paste", "delete", "selectAll"] },
+  { id: "find", labelKey: "context.group.find", label: "찾기", actions: ["noteFind", "replace"] },
+  { id: "insert", labelKey: "context.group.insert", label: "삽입", actions: ["insertTime", "insertLink", "insertChecklist", "insertOrderedList", "insertQuote", "insertCodeBlock", "insertHorizontalRule", "insertSketch"] },
+  { id: "format", labelKey: "context.group.format", label: "형식", actions: ["bold", "italic", "heading1", "heading2", "heading3", "indent", "outdent", "changeCase", "clearFormat"] },
+  { id: "note", labelKey: "context.group.note", label: "메모", actions: ["favorite", "share", "copyLink", "openLink", "outline", "readAloud", "markdownPreview"] },
+  { id: "security", labelKey: "context.group.security", label: "보안", actions: ["encrypt", "lock", "unlock", "decrypt"] },
+  { id: "output", labelKey: "context.group.output", label: "출력", actions: ["printPreview", "print", "sendMail"] },
 ];
 
 const state = {
@@ -2440,6 +2492,15 @@ let sketchHasContent = false;
 const composingEditors = new Set();
 const pendingEditorInputFlush = new Set();
 const pendingEditorValueWrite = new Map();
+
+const blockSelection = {
+  active: false,
+  anchor: null,
+  focus: null,
+  ranges: [],
+  overlay: null,
+  pointerId: null,
+};
 
 function isEditorComposing(element) {
   return Boolean(element) && composingEditors.has(element);
@@ -2537,6 +2598,7 @@ function defaultSettings() {
     lineHeight: "normal",
     tabIndentSize: 2,
     undoDepth: TREE_UNDO_DEFAULT_DEPTH,
+    enableAltDragBlockSelection: true,
     showBacklinks: true,
     enableShortcuts: true,
     showTags: true,
@@ -2555,6 +2617,15 @@ function defaultSettings() {
     workspaces: defaultWorkspaceSettings(),
   };
 }
+
+const mailSettings = {
+  status: "idle",
+  enabled: false,
+  senderEmail: "",
+  lastTestedAt: null,
+  message: "",
+  checking: false,
+};
 
 // Markdown 색상 설정.
 //
@@ -3460,6 +3531,31 @@ const elements = {
   confirmMessage: $("#confirmMessage"),
   confirmCancelBtn: $("#confirmCancelBtn"),
   confirmOkBtn: $("#confirmOkBtn"),
+  printPreviewDialog: $("#printPreviewDialog"),
+  printPreviewContent: $("#printPreviewContent"),
+  printPreviewTitle: $("#printPreviewTitle"),
+  printPreviewMeta: $("#printPreviewMeta"),
+  printPreviewBody: $("#printPreviewBody"),
+  printPreviewCloseBtn: $("#printPreviewCloseBtn"),
+  printPreviewPrintBtn: $("#printPreviewPrintBtn"),
+  mailSettingsSenderNameInput: $("#mailSettingsSenderNameInput"),
+  mailSettingsSenderEmailInput: $("#mailSettingsSenderEmailInput"),
+  mailSettingsHostInput: $("#mailSettingsHostInput"),
+  mailSettingsPortInput: $("#mailSettingsPortInput"),
+  mailSettingsSecuritySelect: $("#mailSettingsSecuritySelect"),
+  mailSettingsUserInput: $("#mailSettingsUserInput"),
+  mailSettingsPasswordInput: $("#mailSettingsPasswordInput"),
+  mailSettingsTestRecipientInput: $("#mailSettingsTestRecipientInput"),
+  mailSettingsTestBtn: $("#mailSettingsTestBtn"),
+  mailSettingsStatusText: $("#mailSettingsStatusText"),
+  sendMailDialog: $("#sendMailDialog"),
+  sendMailDialogTitle: $("#sendMailDialogTitle"),
+  sendMailRecipientInput: $("#sendMailRecipientInput"),
+  sendMailSubjectInput: $("#sendMailSubjectInput"),
+  sendMailMessageInput: $("#sendMailMessageInput"),
+  sendMailCancelBtn: $("#sendMailCancelBtn"),
+  sendMailSendBtn: $("#sendMailSendBtn"),
+  sendMailStatusText: $("#sendMailStatusText"),
   keyDialog: $("#keyDialog"),
   keyDialogTitle: $("#keyDialogTitle"),
   keyDialogMessage: $("#keyDialogMessage"),
@@ -4409,6 +4505,7 @@ async function initializeApp() {
   initializeLiveMemoEditor();
   bindEvents();
   initializeTreeHighlightOverlay();
+  initializeBlockSelectionSetting();
   initializeCaptureSketch();
   initializeTreeDropImport();
   await refreshDesktopStorageInfo();
@@ -4757,6 +4854,277 @@ function syncTreeHighlightOverlayScroll() {
   overlay.scrollLeft = editor.scrollLeft;
   backdrop.scrollTop = editor.scrollTop;
   backdrop.scrollLeft = editor.scrollLeft;
+  renderBlockSelectionOverlay();
+}
+
+function ensureBlockSelectionOverlay() {
+  if (blockSelection.overlay) return blockSelection.overlay;
+  const surface = elements.treeContentSurface;
+  if (!surface) return null;
+  const overlay = document.createElement("div");
+  overlay.className = "block-selection-overlay hidden";
+  overlay.setAttribute("aria-hidden", "true");
+  surface.append(overlay);
+  blockSelection.overlay = overlay;
+  return overlay;
+}
+
+function clearBlockSelection() {
+  blockSelection.active = false;
+  blockSelection.anchor = null;
+  blockSelection.focus = null;
+  blockSelection.ranges = [];
+  blockSelection.pointerId = null;
+  renderBlockSelectionOverlay();
+}
+
+function getTabText() {
+  return " ".repeat(normalizeTabIndentSize(state.settings.tabIndentSize));
+}
+
+function treeEditorLineStarts(text = elements.treeContent?.value || "") {
+  const starts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text[index] === "\n") starts.push(index + 1);
+  }
+  return starts;
+}
+
+function lineColumnToOffset(text, lineStarts, lineIndex, column) {
+  const lineStart = lineStarts[lineIndex] ?? text.length;
+  const nextLineStart = lineStarts[lineIndex + 1] ?? text.length + 1;
+  const lineEnd = Math.max(lineStart, Math.min(text.length, nextLineStart - 1));
+  return Math.min(lineEnd, lineStart + Math.max(0, column));
+}
+
+function blockSelectionEditorMetrics() {
+  const editor = elements.treeContent;
+  if (!editor) return null;
+  const computed = window.getComputedStyle(editor);
+  const lineHeight = parseFloat(computed.lineHeight) || parseFloat(computed.fontSize) * 1.4 || 20;
+  return {
+    computed,
+    lineHeight,
+    paddingLeft: parseFloat(computed.paddingLeft) || 0,
+    paddingTop: parseFloat(computed.paddingTop) || 0,
+    borderLeft: parseFloat(computed.borderLeftWidth) || 0,
+    borderTop: parseFloat(computed.borderTopWidth) || 0,
+  };
+}
+
+function blockSelectionMeasureText(text, computed) {
+  const mirror = document.createElement("span");
+  mirror.style.position = "fixed";
+  mirror.style.left = "-10000px";
+  mirror.style.top = "-10000px";
+  mirror.style.visibility = "hidden";
+  mirror.style.whiteSpace = "pre";
+  mirror.style.font = computed.font;
+  mirror.style.letterSpacing = computed.letterSpacing;
+  mirror.style.tabSize = computed.tabSize;
+  mirror.textContent = text || "";
+  document.body.append(mirror);
+  const width = mirror.getBoundingClientRect().width;
+  mirror.remove();
+  return width;
+}
+
+function blockSelectionColumnFromX(line, targetX, computed) {
+  let low = 0;
+  let high = line.length;
+  while (low < high) {
+    const mid = Math.ceil((low + high) / 2);
+    if (blockSelectionMeasureText(line.slice(0, mid), computed) <= targetX) low = mid;
+    else high = mid - 1;
+  }
+  const nextWidth = low < line.length ? blockSelectionMeasureText(line.slice(0, low + 1), computed) : Infinity;
+  const currentWidth = blockSelectionMeasureText(line.slice(0, low), computed);
+  return targetX - currentWidth > nextWidth - targetX ? Math.min(line.length, low + 1) : low;
+}
+
+function editorPointToLineColumn(event) {
+  const editor = elements.treeContent;
+  const metrics = blockSelectionEditorMetrics();
+  if (!editor || !metrics) return { lineIndex: 0, column: 0 };
+  const rect = editor.getBoundingClientRect();
+  const text = editor.value || "";
+  const lines = text.split("\n");
+  const x = Math.max(0, event.clientX - rect.left - metrics.borderLeft - metrics.paddingLeft + editor.scrollLeft);
+  const y = Math.max(0, event.clientY - rect.top - metrics.borderTop - metrics.paddingTop + editor.scrollTop);
+  const lineIndex = Math.max(0, Math.min(lines.length - 1, Math.floor(y / metrics.lineHeight)));
+  const column = blockSelectionColumnFromX(lines[lineIndex] || "", x, metrics.computed);
+  return { lineIndex, column };
+}
+
+function updateBlockSelectionRanges() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.anchor || !blockSelection.focus) {
+    blockSelection.ranges = [];
+    return;
+  }
+  const text = editor.value || "";
+  const lines = text.split("\n");
+  const lineStarts = treeEditorLineStarts(text);
+  const startLine = Math.min(blockSelection.anchor.lineIndex, blockSelection.focus.lineIndex);
+  const endLine = Math.max(blockSelection.anchor.lineIndex, blockSelection.focus.lineIndex);
+  const startColumn = Math.min(blockSelection.anchor.column, blockSelection.focus.column);
+  const endColumn = Math.max(blockSelection.anchor.column, blockSelection.focus.column);
+  if (startColumn === endColumn) {
+    blockSelection.ranges = [];
+    return;
+  }
+  blockSelection.ranges = [];
+  for (let lineIndex = startLine; lineIndex <= endLine; lineIndex += 1) {
+    const line = lines[lineIndex] || "";
+    const rangeStart = Math.min(startColumn, line.length);
+    const rangeEnd = Math.min(endColumn, line.length);
+    blockSelection.ranges.push({
+      lineIndex,
+      startColumn,
+      endColumn,
+      startOffset: lineColumnToOffset(text, lineStarts, lineIndex, rangeStart),
+      endOffset: lineColumnToOffset(text, lineStarts, lineIndex, rangeEnd),
+    });
+  }
+}
+
+function renderBlockSelectionOverlay() {
+  const overlay = ensureBlockSelectionOverlay();
+  const editor = elements.treeContent;
+  const metrics = blockSelectionEditorMetrics();
+  if (!overlay || !editor || !metrics || !blockSelection.ranges.length) {
+    overlay?.classList.add("hidden");
+    overlay?.replaceChildren();
+    return;
+  }
+  const lines = (editor.value || "").split("\n");
+  overlay.classList.remove("hidden");
+  overlay.style.left = `${editor.offsetLeft + metrics.borderLeft}px`;
+  overlay.style.top = `${editor.offsetTop + metrics.borderTop}px`;
+  overlay.style.width = `${editor.clientWidth}px`;
+  overlay.style.height = `${editor.clientHeight}px`;
+  overlay.replaceChildren(...blockSelection.ranges.map((range) => {
+    const line = lines[range.lineIndex] || "";
+    const startColumn = Math.min(range.startColumn, line.length);
+    const endColumn = Math.min(range.endColumn, line.length);
+    const left = metrics.paddingLeft + blockSelectionMeasureText(line.slice(0, startColumn), metrics.computed) - editor.scrollLeft;
+    const right = metrics.paddingLeft + blockSelectionMeasureText(line.slice(0, endColumn), metrics.computed) - editor.scrollLeft;
+    const rect = document.createElement("span");
+    rect.className = "block-selection-rect";
+    rect.style.left = `${Math.max(0, left)}px`;
+    rect.style.top = `${metrics.paddingTop + range.lineIndex * metrics.lineHeight - editor.scrollTop}px`;
+    rect.style.width = `${Math.max(2, right - left)}px`;
+    rect.style.height = `${metrics.lineHeight}px`;
+    return rect;
+  }));
+}
+
+function beginBlockSelection(event) {
+  const editor = elements.treeContent;
+  if (editor && event.button === 0 && !event.altKey && blockSelection.ranges.length) clearBlockSelection();
+  if (
+    !editor
+    || event.button !== 0
+    || !event.altKey
+    || state.settings.enableAltDragBlockSelection === false
+    || isEditorComposing(editor)
+    || event.isComposing
+    || !elements.markdownPreview.classList.contains("hidden")
+  ) {
+    return false;
+  }
+  event.preventDefault();
+  editor.focus();
+  blockSelection.active = true;
+  blockSelection.pointerId = event.pointerId ?? null;
+  blockSelection.anchor = editorPointToLineColumn(event);
+  blockSelection.focus = blockSelection.anchor;
+  updateBlockSelectionRanges();
+  renderBlockSelectionOverlay();
+  if (typeof editor.setPointerCapture === "function" && event.pointerId !== undefined) {
+    editor.setPointerCapture(event.pointerId);
+  }
+  return true;
+}
+
+function updateBlockSelection(event) {
+  if (!blockSelection.active) return false;
+  event.preventDefault();
+  blockSelection.focus = editorPointToLineColumn(event);
+  updateBlockSelectionRanges();
+  renderBlockSelectionOverlay();
+  return true;
+}
+
+function finishBlockSelection() {
+  if (!blockSelection.active) return false;
+  blockSelection.active = false;
+  blockSelection.pointerId = null;
+  renderBlockSelectionOverlay();
+  return true;
+}
+
+function copyBlockSelectionText() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const text = editor.value || "";
+  copyText(blockSelection.ranges.map((range) => text.slice(range.startOffset, range.endOffset)).join("\n"));
+  return true;
+}
+
+function replaceBlockSelectionRanges(replacement) {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  let nextText = editor.value || "";
+  [...blockSelection.ranges].reverse().forEach((range) => {
+    nextText = `${nextText.slice(0, range.startOffset)}${replacement}${nextText.slice(range.endOffset)}`;
+  });
+  const cursor = blockSelection.ranges[0].startOffset;
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function prefixBlockSelectionLines(prefix) {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const lineIndexes = new Set(blockSelection.ranges.map((range) => range.lineIndex));
+  const lines = (editor.value || "").split("\n");
+  const nextText = lines.map((line, index) => (lineIndexes.has(index) ? `${prefix}${line}` : line)).join("\n");
+  const firstLine = Math.min(...lineIndexes);
+  const cursor = lineColumnToOffset(nextText, treeEditorLineStarts(nextText), firstLine, 0);
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function removePrefixFromBlockSelectionLines() {
+  const editor = elements.treeContent;
+  if (!editor || !blockSelection.ranges.length) return false;
+  const tabText = getTabText();
+  const lineIndexes = new Set(blockSelection.ranges.map((range) => range.lineIndex));
+  const lines = (editor.value || "").split("\n");
+  const nextText = lines.map((line, index) => {
+    if (!lineIndexes.has(index)) return line;
+    if (line.startsWith(tabText)) return line.slice(tabText.length);
+    return line.replace(/^ {1,8}/, "");
+  }).join("\n");
+  const firstLine = Math.min(...lineIndexes);
+  const cursor = lineColumnToOffset(nextText, treeEditorLineStarts(nextText), firstLine, 0);
+  const applied = applyTreeEditorText("blockSelection", nextText, { start: cursor, end: cursor });
+  if (applied) clearBlockSelection();
+  return applied;
+}
+
+function applyBlockSelectionEdit(kind) {
+  if (!blockSelection.ranges.length) return false;
+  if (kind === "copy") return copyBlockSelectionText();
+  if (kind !== "copy" && !isTreeEditorHistoryEditable()) return false;
+  if (kind === "cut") copyBlockSelectionText();
+  if (kind === "delete" || kind === "cut") return replaceBlockSelectionRanges("");
+  if (kind === "indent") return prefixBlockSelectionLines(getTabText());
+  if (kind === "outdent") return removePrefixFromBlockSelectionLines();
+  return false;
 }
 
 function repaintTreeHighlightOverlay(force = false) {
@@ -4949,6 +5317,32 @@ function initializeTreeHighlightOverlay() {
     syncTreeHighlightOverlayScroll();
   });
   setTreeHighlightOverlayEnabled(TREE_HIGHLIGHT_OVERLAY_DEFAULT);
+}
+
+function initializeBlockSelectionSetting() {
+  if ($("#blockSelectionToggle")) return;
+  const undoDepthRow = elements.undoDepthSelect?.closest?.(".settings-row");
+  if (!undoDepthRow) return;
+  const row = document.createElement("section");
+  row.className = "settings-row";
+  row.innerHTML = [
+    "<div>",
+    '<h3 id="blockSelectionSettingTitle"></h3>',
+    '<p id="blockSelectionSettingDesc"></p>',
+    "</div>",
+    '<label class="toggle">',
+    '<input id="blockSelectionToggle" type="checkbox">',
+    "<span></span>",
+    "</label>",
+  ].join("");
+  undoDepthRow.after(row);
+  const toggle = $("#blockSelectionToggle");
+  toggle.checked = state.settings.enableAltDragBlockSelection !== false;
+  toggle.addEventListener("change", () => {
+    state.settings.enableAltDragBlockSelection = toggle.checked;
+    if (!toggle.checked) clearBlockSelection();
+    persistSettings();
+  });
 }
 
 function bindEvents() {
@@ -5218,6 +5612,24 @@ function bindEvents() {
 
   elements.serverTestBtn.addEventListener("click", testServerConnection);
 
+  elements.mailSettingsTestBtn?.addEventListener("click", testMailSettings);
+  [
+    elements.mailSettingsSenderNameInput,
+    elements.mailSettingsSenderEmailInput,
+    elements.mailSettingsHostInput,
+    elements.mailSettingsPortInput,
+    elements.mailSettingsSecuritySelect,
+    elements.mailSettingsUserInput,
+    elements.mailSettingsPasswordInput,
+    elements.mailSettingsTestRecipientInput,
+  ].forEach((input) => {
+    input?.addEventListener("input", () => {
+      mailSettings.enabled = false;
+      mailSettings.status = "idle";
+      renderMailSettings();
+    });
+  });
+
   elements.serverSyncBtn.addEventListener("click", syncWebNotesToServer);
   elements.serverFullSyncBtn.addEventListener("click", syncAllWebNotesToServer);
   elements.serverProfileLoadBtn.addEventListener("click", loadServerUserProfile);
@@ -5244,6 +5656,24 @@ function bindEvents() {
     toggleWebAccountMenu();
   });
   elements.webLogoutBtn?.addEventListener("click", handleWebLogout);
+  elements.printPreviewCloseBtn?.addEventListener("click", closePrintPreview);
+  elements.printPreviewPrintBtn?.addEventListener("click", printCurrentNote);
+  elements.printPreviewDialog?.addEventListener("click", (event) => {
+    if (event.target === elements.printPreviewDialog) closePrintPreview();
+  });
+  elements.sendMailCancelBtn?.addEventListener("click", closeSendMailDialog);
+  elements.sendMailSendBtn?.addEventListener("click", submitCurrentNoteMail);
+  elements.sendMailDialog?.addEventListener("click", (event) => {
+    if (event.target === elements.sendMailDialog) closeSendMailDialog();
+  });
+  window.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !elements.printPreviewDialog?.classList.contains("hidden")) {
+      closePrintPreview();
+    }
+    if (event.key === "Escape" && !elements.sendMailDialog?.classList.contains("hidden")) {
+      closeSendMailDialog();
+    }
+  });
 
   window.addEventListener("online", () => {
     scheduleServerSync({ force: true, delay: 800 });
@@ -5310,6 +5740,7 @@ function bindEvents() {
   bindEditorComposition(elements.treeTitleInput, flushTreeTitleInput);
 
   elements.treeContent.addEventListener("input", (event) => {
+    if (!blockSelection.active && blockSelection.ranges.length) clearBlockSelection();
     handleEditorInput(elements.treeContent, event, flushTreeContentInput);
   });
   bindEditorComposition(elements.treeContent, flushTreeContentInput);
@@ -5322,32 +5753,15 @@ function bindEvents() {
   elements.treeContent.addEventListener("mouseup", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("select", syncTreeEditorHistoryCursor);
   elements.treeContent.addEventListener("keydown", handleTreeContentShortcut);
+  elements.treeContent.addEventListener("mousedown", beginBlockSelection);
+  elements.treeContent.addEventListener("mousemove", updateBlockSelection);
+  elements.treeContent.addEventListener("mouseup", finishBlockSelection);
+  elements.treeContent.addEventListener("mouseleave", finishBlockSelection);
+  elements.treeContent.addEventListener("scroll", renderBlockSelectionOverlay, { passive: true });
 
-  elements.favoriteBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    if (isReadOnlyTreeNode(selected)) return;
-    selected.favorite = !selected.favorite;
-    markTreeNodeChanged(selected);
-    persist();
-    renderTree();
-  });
+  elements.favoriteBtn.addEventListener("click", toggleSelectedTreeFavorite);
 
-  elements.shareTreeBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected || isReadOnlyTreeNode(selected) || isHostedWebClient()) return;
-    const nextShared = selected.shared === false;
-    selected.shared = nextShared;
-    selected.unsharedAt = nextShared ? null : new Date().toISOString();
-    if (nextShared || selected.serverShared === true) {
-      markTreeNodeChanged(selected);
-    } else {
-      selected.updatedAt = new Date().toISOString();
-      selected.syncState = "local";
-    }
-    persist();
-    renderTree();
-  });
+  elements.shareTreeBtn.addEventListener("click", toggleSelectedTreeShare);
 
   elements.copyLinkBtn.addEventListener("click", () => {
     const selected = getSelectedTreeNode();
@@ -5454,19 +5868,7 @@ function bindEvents() {
   });
   elements.readAloudBtn.addEventListener("click", toggleReadAloud);
 
-  elements.previewToggleBtn.addEventListener("click", () => {
-    const selected = getSelectedTreeNode();
-    if (!selected) return;
-    const isOpening = elements.markdownPreview.classList.contains("hidden");
-    elements.markdownPreview.classList.toggle("hidden", !isOpening);
-    elements.treeContent.classList.toggle("hidden", isOpening);
-    elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
-    if (isOpening) {
-      renderMarkdownPreview(visibleContentForNode(selected));
-    } else {
-      elements.treeContent.focus();
-    }
-  });
+  elements.previewToggleBtn.addEventListener("click", togglePreview);
 
   elements.addChildBtn.addEventListener("click", addChildToSelectedTreeNode);
 
@@ -5679,6 +6081,7 @@ function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
+    refreshMailSettingsStatus();
   } else {
     elements.settingsView.classList.add("hidden");
   }
@@ -5728,6 +6131,8 @@ function renderSettings() {
   elements.lineHeightSelect.value = state.settings.lineHeight;
   elements.tabIndentSelect.value = String(state.settings.tabIndentSize);
   elements.undoDepthSelect.value = String(normalizeUndoDepth(state.settings.undoDepth));
+  const blockSelectionToggle = $("#blockSelectionToggle");
+  if (blockSelectionToggle) blockSelectionToggle.checked = state.settings.enableAltDragBlockSelection !== false;
   elements.backlinksToggle.checked = state.settings.showBacklinks;
   elements.tagsToggle.checked = state.settings.showTags;
   elements.shortcutsToggle.checked = state.settings.enableShortcuts;
@@ -5995,6 +6400,7 @@ function renderServerSettings() {
   elements.serverAnalysisCreateBtn.disabled = !isServerMode;
   elements.serverAnalysisRefreshBtn.disabled = !isServerMode;
   if (elements.serverAnalysisTypeSelect) elements.serverAnalysisTypeSelect.disabled = !isServerMode;
+  renderMailSettings();
   renderServerStatus(server.lastStatus, server.lastMessage);
   renderServerMeta();
   renderServerCapabilities(server.capabilities, server.publicServerReadiness);
@@ -7268,6 +7674,196 @@ function prepareServerRequest(server) {
     return false;
   }
   return true;
+}
+
+function canCheckMailSettingsStatus(server = state.settings.server || defaultServerSettings()) {
+  if (server.mode !== "server" || !server.url) return false;
+  if (isHostedWebClient() && !server.webSessionToken) return false;
+  return true;
+}
+
+function mailOwnerPath(path, server = state.settings.server || defaultServerSettings()) {
+  const ownerId = normalizeOwnerId(server.ownerId);
+  const separator = String(path).includes("?") ? "&" : "?";
+  return `${path}${separator}owner_id=${encodeURIComponent(ownerId)}`;
+}
+
+function setMailSettingsStatus(status, message, payload = {}) {
+  mailSettings.status = status;
+  mailSettings.enabled = Boolean(payload.enabled);
+  mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
+  mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
+  mailSettings.message = message || "";
+  renderMailSettings();
+}
+
+function sanitizeMailErrorMessage(error) {
+  let message = String(error?.message || "메일 서버 API를 사용할 수 없습니다.");
+  const password = elements.mailSettingsPasswordInput?.value || "";
+  if (password) message = message.split(password).join("********");
+  return message.slice(0, 220);
+}
+
+function renderMailSettings() {
+  const server = state.settings.server || defaultServerSettings();
+  const serverReady = canCheckMailSettingsStatus(server);
+  const statusEl = elements.mailSettingsStatusText;
+  if (elements.mailSettingsTestBtn) {
+    elements.mailSettingsTestBtn.disabled = !serverReady || mailSettings.checking;
+  }
+  if (!statusEl) return;
+  statusEl.classList.remove("ok", "warn", "bad");
+  if (!serverReady) {
+    mailSettings.enabled = false;
+    statusEl.textContent = server.mode === "server"
+      ? "서버 연결 준비 후 메일 설정을 테스트할 수 있습니다."
+      : "서버 연결을 사용해야 메일 보내기를 설정할 수 있습니다.";
+    statusEl.classList.add("warn");
+    return;
+  }
+  if (mailSettings.status === "ok" && mailSettings.enabled) {
+    const tested = mailSettings.lastTestedAt ? ` · ${formatDateTime(mailSettings.lastTestedAt)}` : "";
+    statusEl.textContent = `연결 테스트 성공${tested}`;
+    statusEl.classList.add("ok");
+  } else if (mailSettings.status === "testing") {
+    statusEl.textContent = "메일 서버 설정을 확인하는 중입니다.";
+    statusEl.classList.add("warn");
+  } else if (mailSettings.status === "bad") {
+    statusEl.textContent = mailSettings.message || "메일 서버 API가 없거나 설정 테스트에 실패했습니다.";
+    statusEl.classList.add("bad");
+  } else {
+    statusEl.textContent = "서버 설정 테스트 전입니다.";
+    statusEl.classList.add("warn");
+  }
+}
+
+async function refreshMailSettingsStatus({ silent = true } = {}) {
+  const server = state.settings.server || defaultServerSettings();
+  if (!canCheckMailSettingsStatus(server)) {
+    setMailSettingsStatus("idle", "");
+    return;
+  }
+  mailSettings.checking = true;
+  renderMailSettings();
+  try {
+    const payload = await requestServerJson(server, mailOwnerPath("/api/v1/mail/settings/status", server));
+    setMailSettingsStatus(payload.enabled ? "ok" : "idle", "", payload);
+  } catch (error) {
+    setMailSettingsStatus("bad", "메일 서버 API가 없거나 상태를 확인할 수 없습니다.");
+    if (!silent) showNotice(sanitizeMailErrorMessage(error), "error");
+  } finally {
+    mailSettings.checking = false;
+    renderMailSettings();
+  }
+}
+
+async function testMailSettings() {
+  saveServerSettingsFromForm("메일 설정 테스트 준비 중입니다.", "settings.server.saved");
+  const server = state.settings.server || defaultServerSettings();
+  if (!prepareServerRequest(server)) {
+    setMailSettingsStatus("idle", "");
+    return;
+  }
+  mailSettings.checking = true;
+  setMailSettingsStatus("testing", "메일 서버 설정을 확인하는 중입니다.");
+  try {
+    const payload = await requestServerJson(server, "/api/v1/mail/settings/test", {
+      method: "POST",
+      body: JSON.stringify({
+        sender_name: elements.mailSettingsSenderNameInput.value.trim(),
+        sender_email: elements.mailSettingsSenderEmailInput.value.trim(),
+        smtp_host: elements.mailSettingsHostInput.value.trim(),
+        smtp_port: Number(elements.mailSettingsPortInput.value) || 587,
+        security: elements.mailSettingsSecuritySelect.value,
+        smtp_username: elements.mailSettingsUserInput.value.trim(),
+        smtp_password: elements.mailSettingsPasswordInput.value,
+        test_recipient: elements.mailSettingsTestRecipientInput.value.trim(),
+      }),
+    });
+    setMailSettingsStatus("ok", "연결 테스트 성공", { ...payload, enabled: payload.enabled !== false });
+    showNotice("메일 연결 테스트에 성공했습니다.", "success");
+  } catch (error) {
+    setMailSettingsStatus("bad", `메일 서버 API가 없거나 설정 테스트에 실패했습니다. ${sanitizeMailErrorMessage(error)}`);
+  } finally {
+    mailSettings.checking = false;
+    renderMailSettings();
+  }
+}
+
+function isMailSendEnabled() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return false;
+  if (isReadOnlyTreeNode(selected)) return false;
+  if (isEncryptedTreeNodeLocked(selected)) return false;
+  return mailSettings.status === "ok" && mailSettings.enabled === true;
+}
+
+function defaultMailSubject(selected) {
+  return `[NowNote] ${noteTitle(selected?.title)}`;
+}
+
+function closeSendMailDialog() {
+  elements.sendMailDialog?.classList.add("hidden");
+}
+
+function sendCurrentNoteMail() {
+  const selected = getSelectedTreeNode();
+  if (!isMailSendEnabled() || !selected) {
+    showNotice("메일 연결 테스트가 완료된 잠금 해제 메모만 보낼 수 있습니다.", "error");
+    return false;
+  }
+  const subject = defaultMailSubject(selected);
+  elements.sendMailRecipientInput.value = "";
+  elements.sendMailSubjectInput.value = subject;
+  elements.sendMailMessageInput.value = `${subject}\n\n${selected.content || ""}`.trim();
+  elements.sendMailStatusText.textContent = "수신 주소를 입력하세요.";
+  elements.sendMailStatusText.classList.remove("ok", "warn", "bad");
+  elements.sendMailDialog.classList.remove("hidden");
+  window.setTimeout(() => elements.sendMailRecipientInput?.focus(), 0);
+  return true;
+}
+
+async function submitCurrentNoteMail() {
+  const selected = getSelectedTreeNode();
+  const server = state.settings.server || defaultServerSettings();
+  if (!selected || !isMailSendEnabled()) {
+    closeSendMailDialog();
+    return false;
+  }
+  const recipient = elements.sendMailRecipientInput.value.trim();
+  if (!validWebEmail(recipient)) {
+    elements.sendMailStatusText.textContent = "올바른 수신 주소를 입력하세요.";
+    elements.sendMailStatusText.classList.add("bad");
+    elements.sendMailRecipientInput.focus();
+    return false;
+  }
+  elements.sendMailSendBtn.disabled = true;
+  elements.sendMailStatusText.textContent = "메일을 보내는 중입니다.";
+  elements.sendMailStatusText.classList.remove("ok", "bad");
+  elements.sendMailStatusText.classList.add("warn");
+  try {
+    await requestServerJson(server, mailOwnerPath(`/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, server), {
+      method: "POST",
+      body: JSON.stringify({
+        recipient,
+        subject: elements.sendMailSubjectInput.value.trim() || defaultMailSubject(selected),
+        message: elements.sendMailMessageInput.value || defaultMailSubject(selected),
+      }),
+    });
+    elements.sendMailStatusText.textContent = "메일을 보냈습니다.";
+    elements.sendMailStatusText.classList.remove("warn", "bad");
+    elements.sendMailStatusText.classList.add("ok");
+    showNotice("메일을 보냈습니다.", "success");
+    closeSendMailDialog();
+    return true;
+  } catch (error) {
+    elements.sendMailStatusText.textContent = `메일 서버 API가 없거나 발송에 실패했습니다. ${sanitizeMailErrorMessage(error)}`;
+    elements.sendMailStatusText.classList.remove("warn", "ok");
+    elements.sendMailStatusText.classList.add("bad");
+    return false;
+  } finally {
+    elements.sendMailSendBtn.disabled = false;
+  }
 }
 
 // 점으로 나뉜 버전 문자열을 비교한다 (예: "2.3.6" > "2.3.5").
@@ -8995,6 +9591,8 @@ function applyLanguage() {
     50: t("settings.undoDepth.50"),
     100: t("settings.undoDepth.100"),
   });
+  setText("#blockSelectionSettingTitle", t("settings.blockSelection.title"));
+  setText("#blockSelectionSettingDesc", t("settings.blockSelection.desc"));
   setText("#backlinksSettingTitle", t("settings.backlinks.title"));
   setText("#backlinksSettingDesc", t("settings.backlinks.desc"));
   setText("#tagsSettingTitle", t("settings.tags.title"));
@@ -9092,6 +9690,23 @@ function applyLanguage() {
   setText("#serverTestBtn", t("settings.server.test"));
   setText("#serverSyncBtn", t("settings.server.sync"));
   setText("#serverFullSyncBtn", t("settings.server.fullSync"));
+  setText("#mailSettingsTitle", "메일 보내기");
+  setText("#mailSettingsDesc", "서버에서 메모를 메일로 보내기 전에 SMTP 연결을 테스트합니다.");
+  setText("#mailSettingsSenderNameLabel", "발신자 이름");
+  setText("#mailSettingsSenderEmailLabel", "발신자 이메일");
+  setText("#mailSettingsHostLabel", "SMTP 서버 주소");
+  setText("#mailSettingsPortLabel", "포트");
+  setText("#mailSettingsSecurityLabel", "보안 방식");
+  setText("#mailSettingsUserLabel", "SMTP 사용자 ID");
+  setText("#mailSettingsPasswordLabel", "SMTP 비밀번호");
+  setText("#mailSettingsTestRecipientLabel", "테스트 수신 주소");
+  setText("#mailSettingsTestBtn", "연결 테스트");
+  setText("#sendMailDialogTitle", "메일 보내기");
+  setText("#sendMailRecipientLabel", "수신 주소");
+  setText("#sendMailSubjectLabel", "제목");
+  setText("#sendMailMessageLabel", "본문");
+  setText("#sendMailCancelBtn", t("dialog.cancel"));
+  setText("#sendMailSendBtn", "보내기");
   setText("#desktopStorageTitle", t("settings.desktopStorage.title"));
   setText("#desktopStorageDesc", t(isHostedWebClient() ? "settings.desktopStorage.web" : "settings.desktopStorage.desc"));
   setText("#webLogoutBtn", t("web.login.logout"));
@@ -10176,6 +10791,28 @@ function insertCurrentTimeIntoTreeNote() {
   elements.treeContent.focus();
   elements.treeContent.setSelectionRange(nextCursor, nextCursor);
   syncTreeContentFromEditor();
+}
+
+function insertTimestampIntoTreeNote() {
+  insertCurrentTimeIntoTreeNote();
+}
+
+function readCurrentNoteAloud() {
+  toggleReadAloud();
+}
+
+function togglePreview() {
+  const selected = getSelectedTreeNode();
+  if (!selected) return;
+  const isOpening = elements.markdownPreview.classList.contains("hidden");
+  elements.markdownPreview.classList.toggle("hidden", !isOpening);
+  elements.treeContent.classList.toggle("hidden", isOpening);
+  elements.previewToggleBtn.textContent = isOpening ? t("editor.edit") : t("editor.preview");
+  if (isOpening) {
+    renderMarkdownPreview(visibleContentForNode(selected));
+  } else {
+    elements.treeContent.focus();
+  }
 }
 
 function insertTextIntoTreeContent(text) {
@@ -12316,12 +12953,12 @@ function openTreeContextMenu(event) {
   if (!elements.treeContextMenu || event.shiftKey) return;
   selectTreeNodeFromContextTarget(event.target);
   if (!getSelectedTreeNode()) return;
-  const actions = contextMenuActions();
-  if (!actions.length) return;
+  const groups = contextMenuActions();
+  if (!groups.length) return;
   event.preventDefault();
   event.stopPropagation();
   closePopupLayers();
-  renderTreeContextMenu(actions);
+  renderTreeContextMenu(groups);
   positionTreeContextMenu(event.clientX, event.clientY);
 }
 
@@ -12336,21 +12973,40 @@ function selectTreeNodeFromContextTarget(target) {
 
 function contextMenuActions() {
   const selectedIds = normalizeContextMenuActions(state.settings.contextMenuActions);
-  return CONTEXT_MENU_ACTIONS.filter((action) => selectedIds.includes(action.id));
+  const selectedSet = new Set(selectedIds);
+  const actionMap = new Map(CONTEXT_MENU_ACTIONS.map((action) => [action.id, action]));
+  return CONTEXT_MENU_GROUPS.map((group) => ({
+    ...group,
+    actions: group.actions.map((actionId) => actionMap.get(actionId)).filter((action) => action && selectedSet.has(action.id)),
+  })).filter((group) => group.actions.length);
 }
 
-function renderTreeContextMenu(actions) {
-  elements.treeContextMenu.replaceChildren(
-    ...actions.map((action) => {
+function renderTreeContextMenu(groups) {
+  const children = [];
+  groups.forEach((group) => {
+    if (children.length) {
+      const separator = document.createElement("div");
+      separator.className = "context-menu-separator";
+      separator.setAttribute("role", "separator");
+      children.push(separator);
+    }
+    const groupEl = document.createElement("div");
+    groupEl.className = "context-menu-group";
+    groupEl.dataset.group = group.id;
+    group.actions.forEach((action) => {
       const button = document.createElement("button");
       button.type = "button";
       button.dataset.action = action.id;
       button.dataset.icon = action.icon;
       button.textContent = localizeOrFallback(action.labelKey, action.label);
-      button.disabled = isContextMenuActionDisabled(action.id);
-      return button;
-    }),
-  );
+      const disabled = isContextMenuActionDisabled(action.id);
+      button.disabled = disabled;
+      button.setAttribute("aria-disabled", disabled ? "true" : "false");
+      groupEl.append(button);
+    });
+    children.push(groupEl);
+  });
+  elements.treeContextMenu.replaceChildren(...children);
 }
 
 function positionTreeContextMenu(x, y) {
@@ -12371,24 +13027,283 @@ function isContextMenuActionDisabled(actionId) {
       return !canUndoTreeEditor();
     case "redo":
       return !canRedoTreeEditor();
+    case "cut":
+    case "delete":
+      return !hasTreeContentSelection() || !isTreeEditorHistoryEditable();
+    case "copy":
+      return !hasTreeContentSelection();
+    case "paste":
+    case "replace":
+    case "insertTime":
+    case "insertLink":
+    case "insertChecklist":
+    case "insertOrderedList":
+    case "insertQuote":
+    case "insertCodeBlock":
+    case "insertHorizontalRule":
+    case "insertSketch":
+    case "bold":
+    case "italic":
+    case "heading1":
+    case "heading2":
+    case "heading3":
+    case "indent":
+    case "outdent":
+    case "changeCase":
+    case "clearFormat":
+      return !isTreeEditorHistoryEditable();
+    case "favorite":
+      return isReadOnlyTreeNode(selected);
+    case "share":
+      return isReadOnlyTreeNode(selected) || isHostedWebClient();
+    case "selectAll":
+    case "noteFind":
+    case "copyLink":
+    case "openLink":
+    case "outline":
+    case "readAloud":
+    case "markdownPreview":
+    case "printPreview":
+    case "print":
+      return false;
+    case "sendMail":
+      return !isMailSendEnabled();
+    case "encrypt":
+    case "lock":
+    case "unlock":
+    case "decrypt":
+      return true;
     default:
       return false;
   }
 }
 
+function hasTreeContentSelection() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  if (blockSelection.ranges.length > 0) return true;
+  return editor.selectionStart !== editor.selectionEnd;
+}
+
 function executeContextMenuAction(actionId) {
   if (isContextMenuActionDisabled(actionId)) return;
   closeTreeContextMenu();
+  runEditorCommand(actionId);
+}
+
+function runEditorCommand(actionId) {
   switch (actionId) {
     case "undo":
-      undoTreeEditor();
-      break;
+      return undoTreeEditor();
     case "redo":
-      redoTreeEditor();
-      break;
+      return redoTreeEditor();
+    case "cut":
+    case "copy":
+    case "paste":
+    case "delete":
+    case "selectAll":
+      return runNativeEditCommand(actionId);
+    case "noteFind":
+      openNoteFind();
+      return true;
+    case "replace":
+      openNoteFind();
+      toggleNoteReplaceRow({ forceOpen: true });
+      return true;
+    case "insertTime":
+      insertTimestampIntoTreeNote();
+      return true;
+    case "insertLink":
+    case "insertChecklist":
+    case "insertOrderedList":
+    case "insertQuote":
+    case "insertCodeBlock":
+    case "insertHorizontalRule":
+    case "bold":
+    case "italic":
+    case "heading1":
+    case "heading2":
+    case "heading3":
+    case "indent":
+    case "outdent":
+    case "changeCase":
+    case "clearFormat":
+      return runFormattingCommand(actionId);
+    case "insertSketch":
+      openSketchDialog();
+      return true;
+    case "favorite":
+      toggleSelectedTreeFavorite();
+      return true;
+    case "share":
+      toggleSelectedTreeShare();
+      return true;
+    case "copyLink": {
+      const selected = getSelectedTreeNode();
+      if (!selected) return false;
+      copyNoteLink(selected);
+      return true;
+    }
+    case "openLink":
+      openDetectedLinkFromEditor();
+      return true;
+    case "outline":
+      toggleOutlinePanel();
+      return true;
+    case "readAloud":
+      readCurrentNoteAloud();
+      return true;
+    case "markdownPreview":
+      togglePreview();
+      return true;
+    case "printPreview":
+      return openPrintPreview();
+    case "print":
+      return printCurrentNote();
+    case "sendMail":
+      return sendCurrentNoteMail();
     default:
-      break;
+      return false;
   }
+}
+
+function runNativeEditCommand(actionId) {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  if (["copy", "cut", "delete"].includes(actionId) && applyBlockSelectionEdit(actionId)) return true;
+  editor.focus();
+  switch (actionId) {
+    case "selectAll":
+      editor.setSelectionRange(0, editor.value.length);
+      return true;
+    case "copy":
+      return document.execCommand("copy");
+    case "cut":
+    case "paste":
+      if (!isTreeEditorHistoryEditable()) return false;
+      return document.execCommand(actionId);
+    case "delete": {
+      if (!isTreeEditorHistoryEditable()) return false;
+      const start = editor.selectionStart ?? 0;
+      const end = editor.selectionEnd ?? start;
+      if (start === end) return false;
+      return applyTreeEditorText("delete", `${editor.value.slice(0, start)}${editor.value.slice(end)}`, { start, end: start });
+    }
+    default:
+      return false;
+  }
+}
+
+function runFormattingCommand(actionId) {
+  if (["indent", "outdent"].includes(actionId) && applyBlockSelectionEdit(actionId)) return true;
+  if (!isTreeEditorHistoryEditable()) return false;
+  switch (actionId) {
+    case "bold":
+      wrapTreeContentSelection("**", "**");
+      return true;
+    case "italic":
+      wrapTreeContentSelection("*", "*");
+      return true;
+    case "heading1":
+      applyHeadingToTreeContent(1);
+      return true;
+    case "heading2":
+      applyHeadingToTreeContent(2);
+      return true;
+    case "heading3":
+      applyHeadingToTreeContent(3);
+      return true;
+    case "insertChecklist":
+      insertChecklistIntoTreeContent();
+      return true;
+    case "insertOrderedList":
+      insertOrderedListIntoTreeContent();
+      return true;
+    case "insertQuote":
+      applyLinePrefixToTreeContent("> ", /^>\s*/);
+      return true;
+    case "insertLink":
+      wrapTreeContentAsMarkdownLink();
+      return true;
+    case "insertCodeBlock":
+      wrapTreeContentAsCodeBlock();
+      return true;
+    case "insertHorizontalRule":
+      insertHorizontalRuleIntoTreeContent();
+      return true;
+    case "indent":
+      indentTreeContentSelection(1);
+      return true;
+    case "outdent":
+      indentTreeContentSelection(-1);
+      return true;
+    case "changeCase":
+      toggleTreeContentSelectionCase();
+      return true;
+    case "clearFormat":
+      clearTreeContentSelectionFormat();
+      return true;
+    default:
+      return false;
+  }
+}
+
+function toggleSelectedTreeFavorite() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isReadOnlyTreeNode(selected)) return;
+  selected.favorite = !selected.favorite;
+  markTreeNodeChanged(selected);
+  persist();
+  renderTree();
+}
+
+function toggleSelectedTreeShare() {
+  const selected = getSelectedTreeNode();
+  if (!selected || isReadOnlyTreeNode(selected) || isHostedWebClient()) return;
+  const nextShared = selected.shared === false;
+  selected.shared = nextShared;
+  selected.unsharedAt = nextShared ? null : new Date().toISOString();
+  if (nextShared || selected.serverShared === true) {
+    markTreeNodeChanged(selected);
+  } else {
+    selected.updatedAt = new Date().toISOString();
+    selected.syncState = "local";
+  }
+  persist();
+  renderTree();
+}
+
+function toggleTreeContentSelectionCase() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  const start = editor.selectionStart ?? 0;
+  const end = editor.selectionEnd ?? start;
+  if (start === end) return false;
+  const value = editor.value;
+  const selectedText = value.slice(start, end);
+  const nextSelection = selectedText === selectedText.toUpperCase()
+    ? selectedText.toLowerCase()
+    : selectedText.toUpperCase();
+  return applyTreeEditorText("changeCase", `${value.slice(0, start)}${nextSelection}${value.slice(end)}`, { start, end });
+}
+
+function clearTreeContentSelectionFormat() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  const start = editor.selectionStart ?? 0;
+  const end = editor.selectionEnd ?? start;
+  if (start === end) return false;
+  const value = editor.value;
+  const selectedText = value.slice(start, end);
+  const plainText = selectedText
+    .replace(/(\*\*|__)(.*?)\1/g, "$2")
+    .replace(/(\*|_)(.*?)\1/g, "$2")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/^>\s?/gm, "")
+    .replace(/^[-*]\s+\[[ xX]\]\s+/gm, "")
+    .replace(/^\d+\.\s+/gm, "");
+  return applyTreeEditorText("clearFormat", `${value.slice(0, start)}${plainText}${value.slice(end)}`, { start, end: start + plainText.length });
 }
 
 function cancelShortcutCapture() {
@@ -13463,8 +14378,8 @@ function updateNoteFindState(matches, query, index = -1) {
 
 // U2 바꾸기. 본문찾기가 이미 갖고 있는 옵션(대소문자 구분 없음, 일반 문자열)을 그대로 따른다.
 // 새 옵션은 만들지 않는다.
-function toggleNoteReplaceRow() {
-  const willShow = elements.noteReplaceRow.classList.contains("hidden");
+function toggleNoteReplaceRow(options = {}) {
+  const willShow = options.forceOpen === true || elements.noteReplaceRow.classList.contains("hidden");
   elements.noteReplaceRow.classList.toggle("hidden", !willShow);
   elements.noteReplaceToggleBtn.setAttribute("aria-expanded", String(willShow));
   updateNoteReplaceState();
@@ -13610,6 +14525,40 @@ function renderMarkdownPreview(content) {
   const html = markdownToHtml(content || "", { withCodeBlockActions: true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
   hydrateNoteAttachmentImages(elements.markdownPreview);
+}
+
+function openPrintPreview() {
+  const selected = getSelectedTreeNode();
+  if (!selected || !elements.printPreviewDialog) return false;
+  const content = visibleContentForNode(selected);
+  const bodyHtml = markdownToHtml(content || "", { withCodeBlockActions: false });
+  const meta = [
+    treePath(selected.id).join(" / "),
+    selected.tags?.length ? selected.tags.map((tag) => `#${tag}`).join(" ") : "",
+    formatDateTime(selected.updatedAt || selected.createdAt),
+  ].filter(Boolean);
+  elements.printPreviewTitle.textContent = noteTitle(selected.title);
+  elements.printPreviewMeta.textContent = meta.join(" · ");
+  elements.printPreviewBody.innerHTML = bodyHtml || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
+  hydrateNoteAttachmentImages(elements.printPreviewBody);
+  closeNoteActionMenu();
+  closeTreeContextMenu();
+  elements.printPreviewDialog.classList.remove("hidden");
+  window.setTimeout(() => elements.printPreviewCloseBtn?.focus(), 0);
+  return true;
+}
+
+function closePrintPreview() {
+  if (!elements.printPreviewDialog) return;
+  elements.printPreviewDialog.classList.add("hidden");
+}
+
+function printCurrentNote() {
+  if (!openPrintPreview()) return false;
+  window.requestAnimationFrame(() => {
+    window.setTimeout(() => window.print(), 0);
+  });
+  return true;
 }
 
 function renderLinkPanel() {
@@ -14875,6 +15824,7 @@ function normalizeSettings(settings = {}) {
   normalized.lineHeight = ["compact", "normal", "relaxed"].includes(normalized.lineHeight) ? normalized.lineHeight : defaults.lineHeight;
   normalized.tabIndentSize = normalizeTabIndentSize(normalized.tabIndentSize);
   normalized.undoDepth = normalizeUndoDepth(normalized.undoDepth);
+  normalized.enableAltDragBlockSelection = normalizeToggle(normalized.enableAltDragBlockSelection, defaults.enableAltDragBlockSelection);
   normalized.wideEditor = normalizeToggle(normalized.wideEditor, defaults.wideEditor);
   normalized.treePanelCollapsed = normalizeToggle(normalized.treePanelCollapsed, defaults.treePanelCollapsed);
   normalized.sidebarCollapsed = normalizeToggle(normalized.sidebarCollapsed, defaults.sidebarCollapsed);
