@@ -4987,7 +4987,7 @@ function renderBlockSelectionOverlay() {
 
 function beginBlockSelection(event) {
   const editor = elements.treeContent;
-  if (editor && !event.altKey && blockSelection.ranges.length) clearBlockSelection();
+  if (editor && event.button === 0 && !event.altKey && blockSelection.ranges.length) clearBlockSelection();
   if (
     !editor
     || event.button !== 0
@@ -4996,7 +4996,6 @@ function beginBlockSelection(event) {
     || isEditorComposing(editor)
     || event.isComposing
     || !elements.markdownPreview.classList.contains("hidden")
-    || !isTreeEditorHistoryEditable()
   ) {
     return false;
   }
@@ -5086,8 +5085,8 @@ function removePrefixFromBlockSelectionLines() {
 function applyBlockSelectionEdit(kind) {
   if (!blockSelection.ranges.length) return false;
   if (kind === "copy") return copyBlockSelectionText();
+  if (kind !== "copy" && !isTreeEditorHistoryEditable()) return false;
   if (kind === "cut") copyBlockSelectionText();
-  if (!isTreeEditorHistoryEditable()) return false;
   if (kind === "delete" || kind === "cut") return replaceBlockSelectionRanges("");
   if (kind === "indent") return prefixBlockSelectionLines(getTabText());
   if (kind === "outdent") return removePrefixFromBlockSelectionLines();

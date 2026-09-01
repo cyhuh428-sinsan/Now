@@ -81,6 +81,32 @@ def context_menu_disables_selection_actions_without_selection(source: str) -> bo
     )
 
 
+def function_body(source: str, function_name: str) -> str:
+    match = re.search(
+        rf'function\s+{re.escape(function_name)}\s*\([^)]*\)\s*\{{(?P<body>.*?)\n\}}',
+        source,
+        re.S,
+    )
+    return match.group("body") if match else ""
+
+
+def block_selection_preserves_context_menu(source: str) -> bool:
+    body = function_body(source, "beginBlockSelection")
+    return "event.button === 0 && !event.altKey && blockSelection.ranges.length" in body
+
+
+def block_selection_begin_allows_copy_only_readonly(source: str) -> bool:
+    body = function_body(source, "beginBlockSelection")
+    return bool(body) and "!isTreeEditorHistoryEditable()" not in body
+
+
+def block_selection_cut_checks_editability_before_copy(source: str) -> bool:
+    body = function_body(source, "applyBlockSelectionEdit")
+    edit_guard = 'if (kind !== "copy" && !isTreeEditorHistoryEditable()) return false;'
+    cut_copy = 'if (kind === "cut") copyBlockSelectionText();'
+    return edit_guard in body and cut_copy in body and body.index(edit_guard) < body.index(cut_copy)
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -885,6 +911,24 @@ def main() -> None:
         ]
         for needle, label in block_selection_requirements:
             check(needle in source, f"{surface} app script has {label}", needle, failures)
+        check(
+            block_selection_preserves_context_menu(source),
+            f"{surface} block selection preserves context menu selection",
+            "left-click-only clear guard",
+            failures,
+        )
+        check(
+            block_selection_begin_allows_copy_only_readonly(source),
+            f"{surface} block selection can start in copy-only state",
+            "begin guard does not require history editability",
+            failures,
+        )
+        check(
+            block_selection_cut_checks_editability_before_copy(source),
+            f"{surface} block selection cut checks editability before clipboard",
+            "cut clipboard side effect guarded",
+            failures,
+        )
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
