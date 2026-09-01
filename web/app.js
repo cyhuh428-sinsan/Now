@@ -12398,8 +12398,11 @@ function isContextMenuActionDisabled(actionId) {
     case "redo":
       return !canRedoTreeEditor();
     case "cut":
-    case "paste":
     case "delete":
+      return !hasTreeContentSelection() || !isTreeEditorHistoryEditable();
+    case "copy":
+      return !hasTreeContentSelection();
+    case "paste":
     case "replace":
     case "insertTime":
     case "insertLink":
@@ -12423,7 +12426,6 @@ function isContextMenuActionDisabled(actionId) {
       return isReadOnlyTreeNode(selected);
     case "share":
       return isReadOnlyTreeNode(selected) || isHostedWebClient();
-    case "copy":
     case "selectAll":
     case "noteFind":
     case "copyLink":
@@ -12443,6 +12445,12 @@ function isContextMenuActionDisabled(actionId) {
     default:
       return false;
   }
+}
+
+function hasTreeContentSelection() {
+  const editor = elements.treeContent;
+  if (!editor) return false;
+  return editor.selectionStart !== editor.selectionEnd;
 }
 
 function executeContextMenuAction(actionId) {

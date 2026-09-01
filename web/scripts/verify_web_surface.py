@@ -67,6 +67,20 @@ def has_switch_case(source: str, function_name: str, action_id: str) -> bool:
     return bool(match and re.search(rf'case\s+["\']{re.escape(action_id)}["\']\s*:', match.group("body")))
 
 
+def context_menu_disables_selection_actions_without_selection(source: str) -> bool:
+    return all(
+        needle in source
+        for needle in [
+            "function hasTreeContentSelection()",
+            "return editor.selectionStart !== editor.selectionEnd",
+            'case "cut":',
+            'case "copy":',
+            'case "delete":',
+            "return !hasTreeContentSelection()",
+        ]
+    )
+
+
 def main() -> None:
     failures: list[str] = []
 
@@ -856,6 +870,12 @@ def main() -> None:
             ("markdownPreview", "Markdown preview command"),
         ]:
             check(has_switch_case(source, "runEditorCommand", action_id), f"{surface} editor command maps {label}", action_id, failures)
+        check(
+            context_menu_disables_selection_actions_without_selection(source),
+            f"{surface} context menu disables selection-only actions without a selection",
+            "cut/copy/delete selection guard",
+            failures,
+        )
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
