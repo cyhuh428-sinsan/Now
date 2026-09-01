@@ -1,10 +1,12 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 
 import '../ask/ask_sheet.dart';
+import '../settings/mail_settings_status.dart';
 import '../settings/settings_providers.dart';
 import 'tree_input_bar.dart';
 import 'tree_providers.dart';
@@ -89,9 +91,7 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
     if (!repo.canAddChild(parent)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('계층 메모는 최대 $kMaxTreeMemoLevel단계까지만 만들 수 있습니다.'),
-        ),
+        SnackBar(content: Text('계층 메모는 최대 $kMaxTreeMemoLevel단계까지만 만들 수 있습니다.')),
       );
       return;
     }
@@ -102,15 +102,13 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
       }
       ref.invalidate(treeMemoNodesProvider);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('"${created.title}"을 추가했습니다.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('"${created.title}"을 추가했습니다.')));
     } on TreeMemoLevelLimitExceeded {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('계층 메모는 최대 $kMaxTreeMemoLevel단계까지만 만들 수 있습니다.'),
-        ),
+        SnackBar(content: Text('계층 메모는 최대 $kMaxTreeMemoLevel단계까지만 만들 수 있습니다.')),
       );
     }
   }
@@ -197,9 +195,9 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
       setState(() {
         _unlockedEncryptedContents[node.id] = plain;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메모를 복호화했습니다.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('메모를 복호화했습니다.')));
       _openMemo(node);
     } catch (_) {
       if (!mounted) return;
@@ -238,9 +236,9 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
       _unlockedEncryptedContents.remove(node.id);
       onEncrypted?.call();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('메모를 암호화했습니다.')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('메모를 암호화했습니다.')));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -261,10 +259,7 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
       );
       if (key == null) return;
       try {
-        plain = await const NoteEncryptionService().decrypt(
-          node.content,
-          key,
-        );
+        plain = await const NoteEncryptionService().decrypt(node.content, key);
       } catch (_) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -301,9 +296,357 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
       _unlockedEncryptedContents.remove(node.id);
     });
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('암호화를 해제하고 평문으로 저장했습니다.')),
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('암호화를 해제하고 평문으로 저장했습니다.')));
+  }
+
+  void _insertIntoController(TextEditingController controller, String text) {
+    final selection = controller.selection;
+    final value = controller.text;
+    final start = selection.isValid ? selection.start : value.length;
+    final end = selection.isValid ? selection.end : value.length;
+    final normalizedStart = start.clamp(0, value.length);
+    final normalizedEnd = end.clamp(normalizedStart, value.length);
+    controller.value = TextEditingValue(
+      text: value.replaceRange(normalizedStart, normalizedEnd, text),
+      selection: TextSelection.collapsed(offset: normalizedStart + text.length),
     );
+  }
+
+  Future<void> _openFindDialog(TextEditingController controller) async {
+    final queryCtrl = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('본문 찾기'),
+        content: TextField(
+          key: const Key('tree-editor-find-field'),
+          controller: queryCtrl,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '찾을 단어',
+            border: OutlineInputBorder(),
+          ),
+          onSubmitted: (_) {
+            final query = queryCtrl.text;
+            final index = controller.text.indexOf(query);
+            if (query.isNotEmpty && index >= 0) {
+              controller.selection = TextSelection(
+                baseOffset: index,
+                extentOffset: index + query.length,
+              );
+            }
+            Navigator.pop(ctx);
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final query = queryCtrl.text;
+              final index = controller.text.indexOf(query);
+              if (query.isNotEmpty && index >= 0) {
+                controller.selection = TextSelection(
+                  baseOffset: index,
+                  extentOffset: index + query.length,
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('찾기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _openReplaceDialog(TextEditingController controller) async {
+    final findCtrl = TextEditingController();
+    final replaceCtrl = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('바꾸기'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              key: const Key('tree-editor-replace-find-field'),
+              controller: findCtrl,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: '찾을 단어',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              key: const Key('tree-editor-replace-with-field'),
+              controller: replaceCtrl,
+              decoration: const InputDecoration(
+                labelText: '바꿀 단어',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () {
+              final query = findCtrl.text;
+              if (query.isNotEmpty) {
+                final index = controller.text.indexOf(query);
+                if (index >= 0) {
+                  controller.text = controller.text.replaceRange(
+                    index,
+                    index + query.length,
+                    replaceCtrl.text,
+                  );
+                  controller.selection = TextSelection.collapsed(
+                    offset: index + replaceCtrl.text.length,
+                  );
+                }
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('현재 항목 바꾸기'),
+          ),
+          FilledButton(
+            onPressed: () {
+              final query = findCtrl.text;
+              if (query.isNotEmpty) {
+                controller.text = controller.text.replaceAll(
+                  query,
+                  replaceCtrl.text,
+                );
+                controller.selection = TextSelection.collapsed(
+                  offset: controller.text.length,
+                );
+              }
+              Navigator.pop(ctx);
+            },
+            child: const Text('모두 바꾸기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showMarkdownPreview(
+    TreeMemoNode node,
+    TextEditingController controller,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(node.title),
+        content: SingleChildScrollView(
+          child: Text(controller.text.isEmpty ? '(내용 없음)' : controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('닫기'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _showEditorActionMenu(
+    TreeMemoNode node,
+    TextEditingController controller,
+  ) async {
+    final mailStatus = await ref.read(mailSettingsStatusProvider.future);
+    if (!mounted) return;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _EditorActionGroup(
+                title: '편집',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.copy_outlined,
+                    label: '복사',
+                    value: 'copy',
+                  ),
+                  _EditorActionItem(
+                    icon: Icons.select_all_outlined,
+                    label: '모두 선택',
+                    value: 'select_all',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '찾기',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.search_outlined,
+                    label: '본문 찾기',
+                    value: 'find',
+                  ),
+                  _EditorActionItem(
+                    icon: Icons.find_replace_outlined,
+                    label: '바꾸기',
+                    value: 'replace',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '삽입',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.access_time_outlined,
+                    label: '시간 넣기',
+                    value: 'insert_time',
+                  ),
+                  _EditorActionItem(
+                    icon: Icons.checklist_outlined,
+                    label: '체크리스트 넣기',
+                    value: 'insert_checklist',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '형식',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.format_bold,
+                    label: '굵게',
+                    value: 'bold',
+                  ),
+                  _EditorActionItem(
+                    icon: Icons.title_outlined,
+                    label: '제목 1',
+                    value: 'heading1',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '메모',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.help_outline,
+                    label: '묻기',
+                    value: 'ask',
+                  ),
+                  _EditorActionItem(
+                    icon: Icons.article_outlined,
+                    label: 'Markdown 보기',
+                    value: 'markdown',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '보안',
+                actions: [
+                  _EditorActionItem(
+                    icon: Icons.lock_outline,
+                    label: '암호화',
+                    value: 'encrypt',
+                  ),
+                ],
+              ),
+              _EditorActionGroup(
+                title: '출력',
+                actions: [
+                  _EditorActionItem(
+                    key: const Key('tree-editor-action-send-mail'),
+                    icon: Icons.mail_outline,
+                    label: '메일 보내기',
+                    value: 'send_mail',
+                    enabled: mailStatus.enabled,
+                    subtitle: mailStatus.enabled
+                        ? '메일 설정 테스트 완료'
+                        : '메일 설정 테스트 후 사용 가능',
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    if (action == null) return;
+    switch (action) {
+      case 'copy':
+        await Clipboard.setData(ClipboardData(text: controller.text));
+        break;
+      case 'select_all':
+        controller.selection = TextSelection(
+          baseOffset: 0,
+          extentOffset: controller.text.length,
+        );
+        break;
+      case 'find':
+        await _openFindDialog(controller);
+        break;
+      case 'replace':
+        await _openReplaceDialog(controller);
+        break;
+      case 'insert_time':
+        _insertIntoController(controller, DateTime.now().toIso8601String());
+        break;
+      case 'insert_checklist':
+        _insertIntoController(controller, '- [ ] ');
+        break;
+      case 'bold':
+        _insertIntoController(controller, '****');
+        controller.selection = TextSelection.collapsed(
+          offset: (controller.selection.baseOffset - 2).clamp(
+            0,
+            controller.text.length,
+          ),
+        );
+        break;
+      case 'heading1':
+        _insertIntoController(controller, '# ');
+        break;
+      case 'ask':
+        final noteContent = joinNoteContent(
+          title: node.title,
+          body: controller.text,
+        );
+        if (!mounted) return;
+        showAskSheet(
+          context,
+          noteContent: noteContent,
+          onInsertAnswer: (block) {
+            controller.text = appendAskAnswerToNote(controller.text, block);
+            controller.selection = TextSelection.fromPosition(
+              TextPosition(offset: controller.text.length),
+            );
+          },
+        );
+        break;
+      case 'markdown':
+        await _showMarkdownPreview(node, controller);
+        break;
+      case 'encrypt':
+        await _encryptMemo(node, controller.text);
+        break;
+      case 'send_mail':
+        if (!mailStatus.enabled) return;
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('메일 보내기 API 연결 후 발송 화면을 엽니다.')),
+        );
+        break;
+    }
   }
 
   void _openMemo(TreeMemoNode node) {
@@ -438,6 +781,12 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
                     ensurePlayback: _ensurePlayback,
                     currentPlayback: _currentPlayback,
                   ),
+                  IconButton(
+                    key: const Key('tree-editor-menu-button'),
+                    tooltip: '편집 메뉴',
+                    onPressed: () => _showEditorActionMenu(node, controller),
+                    icon: const Icon(Icons.more_vert),
+                  ),
                 ],
               ),
               const SizedBox(height: 4),
@@ -453,8 +802,10 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
                       context,
                       noteContent: noteContent,
                       onInsertAnswer: (block) {
-                        controller.text =
-                            appendAskAnswerToNote(controller.text, block);
+                        controller.text = appendAskAnswerToNote(
+                          controller.text,
+                          block,
+                        );
                         controller.selection = TextSelection.fromPosition(
                           TextPosition(offset: controller.text.length),
                         );
@@ -639,18 +990,21 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
           color: isSelected ? const Color(0x142563EB) : null,
           child: ListTile(
             key: Key('tree-node-${node.id}'),
-            contentPadding: EdgeInsets.only(left: 16.0 + depth * 20.0, right: 8),
+            contentPadding: EdgeInsets.only(
+              left: 16.0 + depth * 20.0,
+              right: 8,
+            ),
             leading: isLeafLevel
                 ? const SizedBox(width: 24)
-                : Icon(
-                    isExpanded ? Icons.expand_more : Icons.chevron_right,
-                  ),
+                : Icon(isExpanded ? Icons.expand_more : Icons.chevron_right),
             title: Row(
               children: [
                 Container(
                   key: Key('tree-badge-${node.id}'),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 6,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: _colorForLevel(node.level),
                     borderRadius: BorderRadius.circular(4),
@@ -667,10 +1021,7 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
                     child: Icon(Icons.lock, size: 14),
                   ),
                 Expanded(
-                  child: Text(
-                    node.title,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  child: Text(node.title, overflow: TextOverflow.ellipsis),
                 ),
                 if (children.isNotEmpty)
                   Text(
@@ -710,9 +1061,7 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
               child: Row(
                 children: [
-                  Expanded(
-                    child: Text('추가 위치: ${_selectedNode!.title} 아래'),
-                  ),
+                  Expanded(child: Text('추가 위치: ${_selectedNode!.title} 아래')),
                   TextButton(
                     onPressed: () => setState(() => _selectedNode = null),
                     child: const Text('선택 해제'),
@@ -730,8 +1079,7 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
                 final roots = byParent[null] ?? const <TreeMemoNode>[];
                 return ListView(
                   children: [
-                    for (final root in roots)
-                      _buildNodeTile(root, byParent, 0),
+                    for (final root in roots) _buildNodeTile(root, byParent, 0),
                   ],
                 );
               },
@@ -757,6 +1105,63 @@ class _TreeMemoPageState extends ConsumerState<TreeMemoPage> {
 /// 쪽이 잠긴 상태에서는 아예 만들지 않는다). [textProvider]는 버튼을 누르는
 /// 시점의 최신 내용을 돌려준다 — 편집 중인 텍스트 필드의 값이 바뀔 수
 /// 있어서다.
+
+class _EditorActionGroup extends StatelessWidget {
+  const _EditorActionGroup({required this.title, required this.actions});
+
+  final String title;
+  final List<_EditorActionItem> actions;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 4),
+          child: Text(
+            title,
+            style: Theme.of(
+              context,
+            ).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.bold),
+          ),
+        ),
+        for (final action in actions) action,
+      ],
+    );
+  }
+}
+
+class _EditorActionItem extends StatelessWidget {
+  const _EditorActionItem({
+    super.key,
+    required this.icon,
+    required this.label,
+    required this.value,
+    this.enabled = true,
+    this.subtitle,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
+  final bool enabled;
+  final String? subtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      enabled: enabled,
+      leading: Icon(icon),
+      title: Text(label),
+      subtitle: subtitle == null ? null : Text(subtitle!),
+      dense: true,
+      onTap: enabled ? () => Navigator.pop(context, value) : null,
+    );
+  }
+}
+
 class _PlaybackButton extends StatefulWidget {
   const _PlaybackButton({
     required this.id,

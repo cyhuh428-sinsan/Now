@@ -11,6 +11,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:now_core/now_core.dart';
+import 'package:nownote/features/settings/mail_settings_status.dart';
 import 'package:nownote/features/settings/settings_providers.dart';
 import 'package:nownote/features/tree/tree_page.dart';
 import 'package:nownote/features/tree/tree_providers.dart';
@@ -152,28 +153,28 @@ class _FakeEncryptionChannel {
   void install() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(_channel, (call) async {
-      switch (call.method) {
-        case noteEncryptMethod:
-          final plainText = call.arguments['plainText'] as String;
-          final password = call.arguments['password'] as String;
-          return '$encryptedNotePrefix$password::$plainText';
-        case noteDecryptMethod:
-          final content = call.arguments['content'] as String;
-          final password = call.arguments['password'] as String;
-          final payload = content.substring(encryptedNotePrefix.length);
-          final separatorIndex = payload.indexOf('::');
-          final storedPassword = payload.substring(0, separatorIndex);
-          if (storedPassword != password) {
-            throw PlatformException(
-              code: 'NOTE_ENCRYPTION_FAILED',
-              message: '암호 키가 일치하지 않습니다.',
-            );
+          switch (call.method) {
+            case noteEncryptMethod:
+              final plainText = call.arguments['plainText'] as String;
+              final password = call.arguments['password'] as String;
+              return '$encryptedNotePrefix$password::$plainText';
+            case noteDecryptMethod:
+              final content = call.arguments['content'] as String;
+              final password = call.arguments['password'] as String;
+              final payload = content.substring(encryptedNotePrefix.length);
+              final separatorIndex = payload.indexOf('::');
+              final storedPassword = payload.substring(0, separatorIndex);
+              if (storedPassword != password) {
+                throw PlatformException(
+                  code: 'NOTE_ENCRYPTION_FAILED',
+                  message: '암호 키가 일치하지 않습니다.',
+                );
+              }
+              return payload.substring(separatorIndex + 2);
+            default:
+              throw MissingPluginException();
           }
-          return payload.substring(separatorIndex + 2);
-        default:
-          throw MissingPluginException();
-      }
-    });
+        });
   }
 
   void uninstall() {
@@ -199,7 +200,9 @@ Future<void> _insertMemo(
     body: encrypted ? '$encryptedNotePrefix-cipher-text-' : body,
   );
   final tags = buildTreeMemoTags(parentId: parentId, level: level);
-  await db.into(db.memos).insert(
+  await db
+      .into(db.memos)
+      .insert(
         MemosCompanion.insert(
           memoId: id,
           userId: 'local_user',
@@ -229,7 +232,9 @@ Future<void> _insertEncryptedMemo(
     body: '$encryptedNotePrefix$rawEncryptedBody',
   );
   final tags = buildTreeMemoTags(parentId: parentId, level: level);
-  await db.into(db.memos).insert(
+  await db
+      .into(db.memos)
+      .insert(
         MemosCompanion.insert(
           memoId: id,
           userId: 'local_user',
@@ -270,13 +275,7 @@ void main() {
 
   testWidgets('3단계 트리를 들여쓰기로 보여준다', (tester) async {
     await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
-    await _insertMemo(
-      db,
-      id: 'c1',
-      title: '분류 1',
-      level: 2,
-      parentId: 't1',
-    );
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
     await _insertMemo(
       db,
       id: 'm1',
@@ -303,12 +302,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('메모 1'), findsOneWidget);
 
-    final rootTile =
-        tester.widget<ListTile>(find.byKey(const Key('tree-node-t1')));
-    final categoryTile =
-        tester.widget<ListTile>(find.byKey(const Key('tree-node-c1')));
-    final memoTile =
-        tester.widget<ListTile>(find.byKey(const Key('tree-node-m1')));
+    final rootTile = tester.widget<ListTile>(
+      find.byKey(const Key('tree-node-t1')),
+    );
+    final categoryTile = tester.widget<ListTile>(
+      find.byKey(const Key('tree-node-c1')),
+    );
+    final memoTile = tester.widget<ListTile>(
+      find.byKey(const Key('tree-node-m1')),
+    );
 
     final rootLeft = (rootTile.contentPadding as EdgeInsets).left;
     final categoryLeft = (categoryTile.contentPadding as EdgeInsets).left;
@@ -324,13 +326,7 @@ void main() {
 
   testWidgets('암호화된 메모는 잠긴 표시로만 보인다', (tester) async {
     await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
-    await _insertMemo(
-      db,
-      id: 'c1',
-      title: '분류 1',
-      level: 2,
-      parentId: 't1',
-    );
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
     await _insertMemo(
       db,
       id: 'm1',
@@ -358,10 +354,7 @@ void main() {
     await tester.tap(memoTileFinder);
     await tester.pumpAndSettle();
     // 잠긴 상태에서는 안내 문구와 "복호화" 버튼만 보이고 실제 내용은 보이지 않는다.
-    expect(
-      find.text('암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.'),
-      findsOneWidget,
-    );
+    expect(find.text('암호화된 메모입니다. 복호화 버튼을 눌러 키를 입력하세요.'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, '복호화'), findsOneWidget);
   });
 
@@ -370,13 +363,7 @@ void main() {
     addTearDown(fake.uninstall);
 
     await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
-    await _insertMemo(
-      db,
-      id: 'c1',
-      title: '분류 1',
-      level: 2,
-      parentId: 't1',
-    );
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
     // 이 테스트의 가짜 채널은 `mykey::비밀 내용` 형식을 쓴다.
     await _insertEncryptedMemo(
       db,
@@ -401,7 +388,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '복호화'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('tree-encryption-key-field')), 'mykey');
+    await tester.enterText(
+      find.byKey(const Key('tree-encryption-key-field')),
+      'mykey',
+    );
     await tester.tap(find.widgetWithText(FilledButton, '확인'));
     await tester.pumpAndSettle();
 
@@ -413,13 +403,7 @@ void main() {
     addTearDown(fake.uninstall);
 
     await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
-    await _insertMemo(
-      db,
-      id: 'c1',
-      title: '분류 1',
-      level: 2,
-      parentId: 't1',
-    );
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
     await _insertEncryptedMemo(
       db,
       id: 'm1',
@@ -443,7 +427,10 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, '복호화'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('tree-encryption-key-field')), '틀린키');
+    await tester.enterText(
+      find.byKey(const Key('tree-encryption-key-field')),
+      '틀린키',
+    );
     await tester.tap(find.widgetWithText(FilledButton, '확인'));
     await tester.pumpAndSettle();
 
@@ -455,13 +442,7 @@ void main() {
     addTearDown(fake.uninstall);
 
     await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
-    await _insertMemo(
-      db,
-      id: 'c1',
-      title: '분류 1',
-      level: 2,
-      parentId: 't1',
-    );
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
     await _insertMemo(
       db,
       id: 'm1',
@@ -485,7 +466,10 @@ void main() {
     await tester.tap(find.widgetWithText(OutlinedButton, '암호화'));
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byKey(const Key('tree-encryption-key-field')), 'mykey');
+    await tester.enterText(
+      find.byKey(const Key('tree-encryption-key-field')),
+      'mykey',
+    );
     await tester.tap(find.widgetWithText(FilledButton, '확인'));
     await tester.pumpAndSettle();
 
@@ -498,10 +482,7 @@ void main() {
     await tester.pumpWidget(wrap());
     await tester.pumpAndSettle();
 
-    await tester.enterText(
-      find.byKey(const Key('tree-input-field')),
-      '새 주제',
-    );
+    await tester.enterText(find.byKey(const Key('tree-input-field')), '새 주제');
     await tester.tap(find.byKey(const Key('tree-input-submit')));
     await tester.pumpAndSettle();
 
@@ -556,9 +537,7 @@ void main() {
     await tester.pumpWidget(
       wrap(
         extraOverrides: [
-          treeVoiceRecordingServiceProvider.overrideWithValue(
-            recordingService,
-          ),
+          treeVoiceRecordingServiceProvider.overrideWithValue(recordingService),
           voiceEngineClientBuilderProvider.overrideWithValue(
             (settings) => VoiceEngineClient(
               settings: VoiceSettings(sttBaseUrl: 'http://test-stt'),
@@ -658,9 +637,7 @@ void main() {
     expect(playbackService.isPlaying, isFalse);
   });
 
-  testWidgets('암호화된 메모는 잠긴 상태에서 읽어주기 버튼이 없고, 복호화 후에만 나타난다', (
-    tester,
-  ) async {
+  testWidgets('암호화된 메모는 잠긴 상태에서 읽어주기 버튼이 없고, 복호화 후에만 나타난다', (tester) async {
     final fake = _FakeEncryptionChannel()..install();
     addTearDown(fake.uninstall);
 
@@ -698,6 +675,100 @@ void main() {
 
     expect(find.byKey(const Key('tree-memo-playback-m1')), findsOneWidget);
   });
+  testWidgets('메모 편집 메뉴는 2.3.7 액션 그룹을 보여준다', (tester) async {
+    await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
+    await _insertMemo(
+      db,
+      id: 'm1',
+      title: '메모 1',
+      level: 3,
+      parentId: 'c1',
+      body: '찾을 본문',
+    );
+
+    await tester.pumpWidget(wrap());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-node-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-c1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-m1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-editor-menu-button')));
+    await tester.pumpAndSettle();
+
+    for (final group in ['편집', '찾기', '삽입', '형식', '메모', '보안', '출력']) {
+      expect(find.text(group), findsWidgets);
+    }
+    expect(find.text('본문 찾기'), findsOneWidget);
+    expect(find.text('바꾸기'), findsOneWidget);
+    expect(find.text('메일 보내기'), findsOneWidget);
+  });
+
+  testWidgets('메일 보내기는 서버 메일 상태가 꺼져 있으면 비활성화된다', (tester) async {
+    await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
+    await _insertMemo(db, id: 'm1', title: '메모 1', level: 3, parentId: 'c1');
+
+    await tester.pumpWidget(wrap());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-node-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-c1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-m1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-editor-menu-button')));
+    await tester.pumpAndSettle();
+
+    final mailTile = tester.widget<ListTile>(
+      find.descendant(
+        of: find.byKey(const Key('tree-editor-action-send-mail')),
+        matching: find.byType(ListTile),
+      ),
+    );
+    expect(mailTile.enabled, isFalse);
+  });
+
+  testWidgets('메일 보내기는 서버 메일 상태가 켜져 있으면 활성화된다', (tester) async {
+    await _insertMemo(db, id: 't1', title: '주제 1', level: 1);
+    await _insertMemo(db, id: 'c1', title: '분류 1', level: 2, parentId: 't1');
+    await _insertMemo(db, id: 'm1', title: '메모 1', level: 3, parentId: 'c1');
+
+    await tester.pumpWidget(
+      wrap(
+        extraOverrides: [
+          mailSettingsStatusProvider.overrideWith(
+            (ref) async => const MailSettingsStatus(enabled: true),
+          ),
+        ],
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-node-t1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-c1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('tree-node-m1')));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-editor-menu-button')));
+    await tester.pumpAndSettle();
+
+    final mailTile = tester.widget<ListTile>(
+      find.descendant(
+        of: find.byKey(const Key('tree-editor-action-send-mail')),
+        matching: find.byType(ListTile),
+      ),
+    );
+    expect(mailTile.enabled, isTrue);
+  });
 }
 
 /// 테스트에서 저장 결과를 직접 확인하기 위한 얕은 래퍼.
@@ -706,9 +777,9 @@ class TreeMemoPageTestAccess {
   final NoteDatabase _db;
 
   Future<List<TreeMemoNode>> loadNodes() async {
-    final rows = await (_db.select(_db.memos)
-          ..where((m) => m.source.equals('note_tree')))
-        .get();
+    final rows = await (_db.select(
+      _db.memos,
+    )..where((m) => m.source.equals('note_tree'))).get();
     return rows.map(TreeMemoNode.fromMemo).toList();
   }
 }
