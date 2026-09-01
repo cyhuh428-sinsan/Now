@@ -18,13 +18,11 @@ Widget _wrapWithRouter() {
       ),
       GoRoute(
         path: '/settings/server',
-        builder: (context, state) =>
-            const Scaffold(body: Text('서버 설정 화면')),
+        builder: (context, state) => const Scaffold(body: Text('서버 설정 화면')),
       ),
       GoRoute(
         path: '/settings/voice',
-        builder: (context, state) =>
-            const Scaffold(body: Text('음성 설정 화면')),
+        builder: (context, state) => const Scaffold(body: Text('음성 설정 화면')),
       ),
       GoRoute(
         path: '/settings/help',
@@ -41,7 +39,7 @@ void main() {
     FlutterSecureStorage.setMockInitialValues({});
   });
 
-  testWidgets('허브 화면에 테마 선택과 3개 목록 타일이 보인다', (tester) async {
+  testWidgets('허브 화면에 테마 선택과 4개 목록 타일이 보인다', (tester) async {
     await tester.pumpWidget(_wrapWithRouter());
     await tester.pumpAndSettle();
 
@@ -51,6 +49,7 @@ void main() {
 
     expect(find.text('서버 설정'), findsOneWidget);
     expect(find.text('음성 설정'), findsOneWidget);
+    expect(find.text('LLM Key 설정'), findsOneWidget);
     expect(find.text('도움말'), findsOneWidget);
   });
 
@@ -79,6 +78,15 @@ void main() {
     expect(find.text('서버 설정 화면'), findsOneWidget);
   });
 
+  testWidgets('LLM Key 설정 타일을 누르면 LLM 설정이 포함된 음성 설정 화면으로 이동한다', (tester) async {
+    await tester.pumpWidget(_wrapWithRouter());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('LLM Key 설정'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('음성 설정 화면'), findsOneWidget);
+  });
   testWidgets('음성 설정 타일을 누르면 음성 설정 화면으로 이동한다', (tester) async {
     await tester.pumpWidget(_wrapWithRouter());
     await tester.pumpAndSettle();

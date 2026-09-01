@@ -15,9 +15,7 @@ void main() {
       SharedPreferences.setMockInitialValues(preferences);
 
       await tester.pumpWidget(
-        const ProviderScope(
-          child: MaterialApp(home: SettingsPage()),
-        ),
+        const ProviderScope(child: MaterialApp(home: SettingsPage())),
       );
       await tester.pumpAndSettle();
     }
@@ -48,6 +46,7 @@ void main() {
       expect(find.text('매일 07:30 알림'), findsOneWidget);
       expect(find.text('음성 입력'), findsWidgets);
       expect(find.text('기기 내 STT · LLM 연동'), findsOneWidget);
+      expect(find.text('LLM Key 설정'), findsOneWidget);
       await scrollToText(tester, '반복 알림 설정');
       expect(find.text('루틴 관리'), findsWidgets);
       await scrollToText(tester, '날씨 설정');

@@ -20,21 +20,20 @@ class ServerSettingsPage extends ConsumerStatefulWidget {
   const ServerSettingsPage({super.key});
 
   @override
-  ConsumerState<ServerSettingsPage> createState() =>
-      _ServerSettingsPageState();
+  ConsumerState<ServerSettingsPage> createState() => _ServerSettingsPageState();
 }
 
 class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
   final _baseUrlCtrl = TextEditingController();
   final _ownerIdCtrl = TextEditingController();
   final _deviceIdCtrl = TextEditingController();
+  final _userTokenCtrl = TextEditingController();
   final _passwordCtrl = TextEditingController();
   final _twoFactorCodeCtrl = TextEditingController();
 
   bool _enabled = false;
   bool _loaded = false;
   bool _busy = false;
-  String _userToken = '';
   String _webSessionToken = '';
   String _legacyToken = '';
   ServerConnectionResult? _connectionResult;
@@ -50,20 +49,23 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
     _baseUrlCtrl.dispose();
     _ownerIdCtrl.dispose();
     _deviceIdCtrl.dispose();
+    _userTokenCtrl.dispose();
     _passwordCtrl.dispose();
     _twoFactorCodeCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _load() async {
-    final settings = await ref.read(serverSettingsServiceProvider).loadSettings();
+    final settings = await ref
+        .read(serverSettingsServiceProvider)
+        .loadSettings();
     if (!mounted) return;
     setState(() {
       _enabled = settings.enabled;
       _baseUrlCtrl.text = settings.baseUrl;
       _ownerIdCtrl.text = settings.ownerId;
       _deviceIdCtrl.text = settings.deviceId;
-      _userToken = settings.userToken;
+      _userTokenCtrl.text = settings.userToken;
       _webSessionToken = settings.webSessionToken;
       _legacyToken = settings.token;
       _loaded = true;
@@ -75,7 +77,7 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
       enabled: _enabled,
       baseUrl: _baseUrlCtrl.text,
       token: _legacyToken,
-      userToken: _userToken,
+      userToken: _userTokenCtrl.text,
       webSessionToken: _webSessionToken,
       ownerId: _ownerIdCtrl.text,
       deviceId: _deviceIdCtrl.text,
@@ -189,9 +191,9 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
         treeRepo: treeRepo,
       );
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result.message)),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(result.message)));
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -250,6 +252,18 @@ class _ServerSettingsPageState extends ConsumerState<ServerSettingsPage> {
                   controller: _deviceIdCtrl,
                   decoration: const InputDecoration(
                     labelText: '기기 ID',
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _userTokenCtrl,
+                  obscureText: true,
+                  decoration: const InputDecoration(
+                    labelText: '앱/설치형 접속 토큰',
+                    hintText: 'Web에서 발급한 앱/설치형 접속 토큰',
+                    helperText: '모바일 동기화용 개인 토큰입니다. 기기 보안 저장소에 저장합니다',
+                    helperMaxLines: 2,
                     border: OutlineInputBorder(),
                   ),
                 ),

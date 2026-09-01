@@ -69,14 +69,10 @@ void main() {
       find.widgetWithText(TextField, '서버 주소'),
       'http://server.test:8750',
     );
-    await tester.enterText(
-      find.widgetWithText(TextField, '사용자 ID'),
-      'cyhuh',
-    );
-    final saveButton = find.widgetWithText(ElevatedButton, '저장');
-    await tester.ensureVisible(saveButton);
+    await tester.enterText(find.widgetWithText(TextField, '사용자 ID'), 'cyhuh');
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
-    await tester.tap(saveButton);
+    await tester.tap(find.text('저장').last);
     await tester.pumpAndSettle();
 
     expect(find.text('서버 설정을 저장했습니다'), findsOneWidget);
@@ -84,6 +80,23 @@ void main() {
     final saved = await service.loadSettings();
     expect(saved.baseUrl, 'http://server.test:8750');
     expect(saved.ownerId, 'cyhuh');
+  });
+  testWidgets('앱 접속 토큰을 입력하고 저장할 수 있다', (tester) async {
+    final service = ServerSettingsService();
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+
+    await tester.enterText(
+      find.widgetWithText(TextField, '앱/설치형 접속 토큰'),
+      'app-token-123',
+    );
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('저장').last);
+    await tester.pumpAndSettle();
+
+    final saved = await service.loadSettings();
+    expect(saved.userToken, 'app-token-123');
   });
 
   /// 판정 절차(1단계 `/health` → 2단계 `/health/ready` → 3단계
@@ -151,7 +164,7 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
@@ -173,7 +186,7 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
@@ -192,15 +205,12 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
 
-    expect(
-      find.text('서버가 시작 중입니다. 잠시 후 다시 시도하세요'),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.text('서버가 시작 중입니다. 잠시 후 다시 시도하세요'), findsAtLeastNWidgets(1));
   });
 
   testWidgets('3단계(/api/v1/server) 실패 시 전용 문구를 보인다', (tester) async {
@@ -214,7 +224,7 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
@@ -233,7 +243,7 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
@@ -260,15 +270,12 @@ void main() {
       'http://server.test:8750',
     );
     final testButton = find.widgetWithText(OutlinedButton, '연결 테스트');
-    await tester.ensureVisible(testButton);
+    await tester.drag(find.byType(ListView), const Offset(0, -500));
     await tester.pumpAndSettle();
     await tester.tap(testButton);
     await tester.pumpAndSettle();
 
-    expect(
-      find.textContaining('이 주소는 다른 서버로 보입니다'),
-      findsAtLeastNWidgets(1),
-    );
+    expect(find.textContaining('이 주소는 다른 서버로 보입니다'), findsAtLeastNWidgets(1));
     expect(
       find.textContaining('NowNote Test Server 연결됨'),
       findsAtLeastNWidgets(1),
