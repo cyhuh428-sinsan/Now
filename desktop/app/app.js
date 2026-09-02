@@ -5792,6 +5792,13 @@ function bindEvents() {
   elements.treeList?.addEventListener("contextmenu", openTreeContextMenu);
   elements.treeEditorPanel?.addEventListener("contextmenu", openTreeContextMenu);
   elements.treeContextMenu?.addEventListener("click", (event) => {
+    const groupToggle = event.target.closest("button[data-group-toggle]");
+    if (groupToggle) {
+      const group = groupToggle.closest(".context-menu-group");
+      const isOpen = group?.classList.toggle("is-open") || false;
+      groupToggle.setAttribute("aria-expanded", isOpen ? "true" : "false");
+      return;
+    }
     const button = event.target.closest("button[data-action]");
     if (!button) return;
     executeContextMenuAction(button.dataset.action);
@@ -12996,9 +13003,22 @@ function renderTreeContextMenu(groups) {
     groupEl.className = "context-menu-group";
     groupEl.dataset.group = group.id;
     const groupLabel = document.createElement("div");
-    groupLabel.className = "context-menu-group-label";
-    groupLabel.textContent = localizeOrFallback(group.labelKey, group.label);
-    groupEl.append(groupLabel);
+    groupLabel.className = "context-menu-group-header";
+    const groupToggle = document.createElement("button");
+    groupToggle.type = "button";
+    groupToggle.className = "context-menu-group-label";
+    groupToggle.dataset.groupToggle = group.id;
+    groupToggle.setAttribute("aria-haspopup", "menu");
+    groupToggle.setAttribute("aria-expanded", "false");
+    groupToggle.textContent = localizeOrFallback(group.labelKey, group.label);
+    const groupArrow = document.createElement("span");
+    groupArrow.className = "context-menu-group-arrow";
+    groupArrow.textContent = "▶";
+    groupToggle.append(groupArrow);
+    groupLabel.append(groupToggle);
+    const submenu = document.createElement("div");
+    submenu.className = "context-menu-submenu";
+    submenu.setAttribute("role", "menu");
     group.actions.forEach((action) => {
       const button = document.createElement("button");
       button.type = "button";
@@ -13008,8 +13028,9 @@ function renderTreeContextMenu(groups) {
       const disabled = isContextMenuActionDisabled(action.id);
       button.disabled = disabled;
       button.setAttribute("aria-disabled", disabled ? "true" : "false");
-      groupEl.append(button);
+      submenu.append(button);
     });
+    groupEl.append(groupLabel, submenu);
     children.push(groupEl);
   });
   elements.treeContextMenu.replaceChildren(...children);

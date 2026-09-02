@@ -384,7 +384,9 @@ async function verifyEditorContextMenu(page) {
         actions: Array.from(menu.querySelectorAll('button[data-action]')).map((button) => button.dataset.action),
         groups: Array.from(menu.querySelectorAll('.context-menu-group')).map((group) => ({
           id: group.dataset.group,
-          label: group.querySelector('.context-menu-group-label')?.textContent || '',
+          label: group.querySelector('.context-menu-group-label')?.firstChild?.textContent || '',
+          submenu: Boolean(group.querySelector('.context-menu-submenu')),
+          toggle: Boolean(group.querySelector('[data-group-toggle]')),
         })),
       };
     })()
@@ -393,6 +395,7 @@ async function verifyEditorContextMenu(page) {
   assert(!result.hidden, `Editor context menu did not open: ${JSON.stringify(result)}`);
   assert(result.actions.includes('cut') && result.actions.includes('copy') && result.actions.includes('paste'), `Editor context menu is missing native edit actions: ${JSON.stringify(result)}`);
   assert(result.groups.some((group) => group.id === 'edit' && group.label === '편집') && result.groups.some((group) => group.id === 'format' && group.label === '형식'), `Editor context menu groups are missing visible labels: ${JSON.stringify(result)}`);
+  assert(result.groups.every((group) => group.submenu && group.toggle), `Editor context menu groups are not nested submenus: ${JSON.stringify(result)}`);
 }
 
 async function main() {
