@@ -157,6 +157,14 @@ def mail_send_script_ready(source: str) -> bool:
     )
 
 
+def mail_settings_test_payload_has_owner_id(source: str) -> bool:
+    body = function_body(source, "testMailSettings")
+    return (
+        'requestServerJson(server, "/api/v1/mail/settings/test"' in body
+        and "owner_id: normalizeOwnerId(server.ownerId)" in body
+    )
+
+
 def worklog_script_ready(source: str) -> bool:
     return all(
         needle in source
@@ -1129,6 +1137,12 @@ def main() -> None:
             mail_send_script_ready(source),
             f"{surface} app script has mail settings and send flow",
             "mailSettings/render/test/status/send/API paths",
+            failures,
+        )
+        check(
+            mail_settings_test_payload_has_owner_id(source),
+            f"{surface} mail settings test sends owner_id",
+            "server WorklogMailRecipient/MailSettings test body contract",
             failures,
         )
         check(

@@ -8024,6 +8024,7 @@ async function testMailSettings() {
     const payload = await requestServerJson(server, "/api/v1/mail/settings/test", {
       method: "POST",
       body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
         sender_name: elements.mailSettingsSenderNameInput.value.trim(),
         sender_email: elements.mailSettingsSenderEmailInput.value.trim(),
         smtp_host: elements.mailSettingsHostInput.value.trim(),
