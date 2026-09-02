@@ -365,6 +365,30 @@ async function verifyNoteFindMovement(page) {
   assert(result.activeId === "treeContent", `In-note search did not focus the editor after moving to the match: ${JSON.stringify(result)}`);
 }
 
+async function verifyEditorContextMenu(page) {
+  const result = await evaluate(page, `
+    (() => {
+      const editor = document.querySelector('#treeContent');
+      const menu = document.querySelector('#treeContextMenu');
+      if (!editor || !menu) return { error: 'editor or context menu missing' };
+      menu.classList.add('hidden');
+      editor.dispatchEvent(new MouseEvent('contextmenu', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 40,
+        clientY: 40,
+      }));
+      return {
+        hidden: menu.classList.contains('hidden'),
+        actions: Array.from(menu.querySelectorAll('button[data-action]')).map((button) => button.dataset.action),
+      };
+    })()
+  `);
+  assert(!result.error, `Editor context menu setup failed: ${result.error || 'unknown error'}`);
+  assert(!result.hidden, `Editor context menu did not open: ${JSON.stringify(result)}`);
+  assert(result.actions.includes('cut') && result.actions.includes('copy') && result.actions.includes('paste'), `Editor context menu is missing native edit actions: ${JSON.stringify(result)}`);
+}
+
 async function main() {
   assert(typeof WebSocket === "function", "Current Node.js runtime does not support WebSocket.");
   assert(await exists(EXE_PATH), `Desktop app is missing: ${EXE_PATH}`);
@@ -418,6 +442,7 @@ async function main() {
     await verifyEditorTabIndent(second.page);
     await verifySearchShortcuts(second.page);
     await verifyNoteFindMovement(second.page);
+    await verifyEditorContextMenu(second.page);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
@@ -425,6 +450,7 @@ async function main() {
     console.log("- Editor Tab/Shift+Tab indentation passed");
     console.log("- Ctrl+F and Ctrl+Shift+F shortcuts passed");
     console.log("- In-note search movement passed");
+    console.log("- Editor context menu passed");
   } finally {
     first?.client?.close();
     second?.client?.close();
