@@ -3,7 +3,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.security import require_client_api_access
@@ -11,7 +11,13 @@ from app.db import get_db
 from app.models.note import Note, NoteAttachment
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
 from app.services.note_attachment_storage import resolve_note_attachment_path, save_note_attachment
-from app.services.note_sync import group_shared_owner_ids, list_changed_notes, sort_notes_for_upsert, upsert_note as save_note
+from app.services.note_sync import (
+    as_naive_utc,
+    group_shared_owner_ids,
+    list_changed_notes,
+    sort_notes_for_upsert,
+    upsert_note as save_note,
+)
 from app.services.mail_settings import send_note_mail
 from app.services.user_accounts import require_user_api_access
 from app.services.user_devices import require_active_user_device
@@ -29,15 +35,24 @@ class NoteMailRequest(BaseModel):
     message: str | None = Field(default=None, max_length=2000)
 
 
+class WorklogMailRequest(NoteMailRequest):
+    date_from: datetime
+    date_to: datetime
+
+
 @router.get("", response_model=list[NoteOut])
 def list_notes(
     owner_id: str = Query(default="local_user"),
     updated_after: datetime | None = None,
     include_deleted: bool = False,
+    note_type: str | None = Query(default=None, max_length=40),
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> list[Note]:
+    date_from, date_to = _normalized_date_range(date_from, date_to)
     require_user_api_access(
         db,
         owner_id=owner_id,
@@ -50,6 +65,9 @@ def list_notes(
         updated_after=updated_after,
         include_deleted=include_deleted,
         include_group_shared=bool(web_session_token),
+        note_type=note_type,
+        date_from=date_from,
+        date_to=date_to,
     )
 
 
@@ -78,10 +96,13 @@ def search_notes(
     q: str = Query(min_length=1),
     owner_id: str = Query(default="local_user"),
     note_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> list[Note]:
+    date_from, date_to = _normalized_date_range(date_from, date_to)
     require_user_api_access(
         db,
         owner_id=owner_id,
@@ -103,6 +124,12 @@ def search_notes(
     )
     if note_type is not None:
         stmt = stmt.where(Note.note_type == note_type)
+    if date_from is not None or date_to is not None:
+        note_date = func.coalesce(Note.client_updated_at, Note.updated_at, Note.created_at)
+        if date_from is not None:
+            stmt = stmt.where(note_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(note_date <= date_to)
     stmt = stmt.order_by(Note.updated_at.desc()).limit(100)
     return list(db.scalars(stmt).all())
 
@@ -157,6 +184,53 @@ def sync_notes(
     for note in saved:
         db.refresh(note)
     return NoteSyncResponse(notes=saved)
+
+
+@router.post("/worklog/mail")
+def mail_worklog_range(
+    payload: WorklogMailRequest,
+    owner_id: str = Query(max_length=80),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    date_from, date_to = _normalized_date_range(payload.date_from, payload.date_to)
+    user = require_user_api_access(
+        db,
+        owner_id=owner_id,
+        access_token=user_token,
+        web_session_token=web_session_token,
+    )
+    notes = list_changed_notes(
+        db,
+        owner_id=user.owner_id,
+        updated_after=None,
+        include_deleted=False,
+        include_group_shared=False,
+        note_type="worklog",
+        date_from=date_from,
+        date_to=date_to,
+    )
+    if not notes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="worklog notes not found in date range",
+        )
+    note = _worklog_mail_note(
+        owner_id=user.owner_id,
+        notes=notes,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    send_note_mail(
+        db,
+        owner_id=user.owner_id,
+        note=note,
+        to=payload.to,
+        subject=payload.subject,
+        message=payload.message,
+    )
+    return {"status": "ok", "sent": True, "sent_count": len(notes)}
 
 
 @router.post("/{note_id}/mail")
@@ -260,3 +334,50 @@ def _note_attachment_payload(attachment: NoteAttachment) -> dict:
         "sha256": attachment.sha256,
         "created_at": attachment.created_at,
     }
+
+
+def _normalized_date_range(
+    date_from: datetime | None,
+    date_to: datetime | None,
+) -> tuple[datetime | None, datetime | None]:
+    date_from = as_naive_utc(date_from)
+    date_to = as_naive_utc(date_to)
+    if date_from is not None and date_to is not None and date_from > date_to:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="date range invalid")
+    return date_from, date_to
+
+
+def _worklog_mail_note(
+    *,
+    owner_id: str,
+    notes: list[Note],
+    date_from: datetime,
+    date_to: datetime,
+) -> Note:
+    title = f"작업 일지 {date_from.date().isoformat()} ~ {date_to.date().isoformat()}"
+    lines: list[str] = []
+    current_day = None
+    for note in sorted(notes, key=_note_period_sort_key):
+        note_day = _note_period_sort_key(note)[0].date().isoformat()
+        if note_day != current_day:
+            if lines:
+                lines.append("")
+            lines.extend([f"## {note_day}", ""])
+            current_day = note_day
+        lines.append(f"### {note.title.strip() or '제목 없음'}")
+        content = (note.content or "").strip()
+        if content:
+            lines.extend(["", content])
+        lines.append("")
+    return Note(
+        owner_id=owner_id,
+        device_id="server-worklog-mail",
+        local_id="worklog-period-mail",
+        note_type="worklog",
+        title=title,
+        content="\n".join(lines).strip(),
+    )
+
+
+def _note_period_sort_key(note: Note) -> tuple[datetime, int]:
+    return (note.client_updated_at or note.updated_at or note.created_at, note.id)

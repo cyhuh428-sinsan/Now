@@ -58,6 +58,12 @@ def test_existing_capability_names_unchanged(client: TestClient) -> None:
         assert name in capabilities, f"{name} capability가 사라졌습니다"
 
 
+def test_worklog_note_type_is_declared(client: TestClient) -> None:
+    """작업 일지는 선택형 기록이므로 note_type=worklog를 공식 지원 타입으로 알려야 한다."""
+    capabilities = _capabilities(client)
+    assert "worklog" in capabilities["supported_note_types"]
+
+
 def test_tree_depth_capability_matches_validation(client: TestClient) -> None:
     """선언한 계층 깊이와 서버가 실제로 막는 깊이가 같아야 한다."""
     from app.core.capabilities import MAX_TREE_NOTE_LEVEL

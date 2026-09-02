@@ -21,7 +21,7 @@ CURRENT_REQUEST = ""
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
-SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
+SUPPORTED_NOTE_TYPES = ["daily", "tree", "record", "worklog"]
 CHECKBOX_RE = re.compile(r"^-\s+\[[ xX]\]\s+")
 
 
@@ -1313,6 +1313,9 @@ def main() -> None:
     )
 
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    today = now[:10]
+    worklog_range_start = f"{today}T00:00:00+00:00"
+    worklog_range_end = f"{today}T23:59:59+00:00"
     sync_payload = {
         "owner_id": "local_user",
         "device_id": "smoke_test",
@@ -1326,6 +1329,20 @@ def main() -> None:
                 "note_type": "daily",
                 "title": "Smoke test memo",
                 "content": "NowNote server smoke test",
+                "parent_local_id": None,
+                "level": 1,
+                "tags": "test=smoke",
+                "source": "smoke_test",
+                "client_updated_at": now,
+                "deleted_at": None,
+            },
+            {
+                "owner_id": "local_user",
+                "device_id": "smoke_test",
+                "local_id": "smoke_worklog_001",
+                "note_type": "worklog",
+                "title": "Smoke test worklog",
+                "content": "NowNote server smoke test worklog",
                 "parent_local_id": None,
                 "level": 1,
                 "tags": "test=smoke",
@@ -1385,6 +1402,51 @@ def main() -> None:
         "GET /api/v1/notes(user_data_isolation):",
         status,
         {"other_user_note_hidden": True, "count": len(data)},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/notes?owner_id=local_user&note_type=worklog&date_from={worklog_range_start}&date_to={worklog_range_end}",
+        args.token,
+    )
+    worklog_note_ids = {item.get("local_id") for item in data}
+    require("smoke_worklog_001" in worklog_note_ids, "worklog 기간 조회에 실제 작성한 작업 일지가 없습니다")
+    require(
+        "smoke_note_001" not in worklog_note_ids,
+        "worklog 기간 조회에 daily 메모가 섞였습니다",
+    )
+    print(
+        "GET /api/v1/notes(worklog_period):",
+        status,
+        {"has_worklog": True, "count": len(data)},
+    )
+
+    status, data = request(
+        "GET",
+        f"{base_url}/api/v1/notes?owner_id=local_user&note_type=worklog&date_from=1970-01-01T00:00:00+00:00&date_to=1970-01-01T23:59:59+00:00",
+        args.token,
+    )
+    require(data == [], "worklog 빈 기간 조회가 빈 목록을 반환하지 않았습니다")
+    print("GET /api/v1/notes(worklog_empty_period):", status, {"count": len(data)})
+
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/notes/worklog/mail?owner_id=local_user",
+        args.token,
+        {
+            "to": ["receiver@example.com"],
+            "date_from": "1970-01-01T00:00:00+00:00",
+            "date_to": "1970-01-01T23:59:59+00:00",
+        },
+    )
+    require(
+        status == 409 and data.get("detail") == "worklog notes not found in date range",
+        "worklog 빈 기간 메일 발송이 차단되지 않았습니다",
+    )
+    print(
+        "POST /api/v1/notes/worklog/mail(empty_period):",
+        status,
+        {"detail": data.get("detail")},
     )
 
     status, data = request(

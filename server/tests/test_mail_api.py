@@ -236,3 +236,148 @@ def test_note_mail_sends_current_note_with_saved_settings(
     assert sent["subject"] == "직접 제목"
     assert "보낼 노트" in sent["text_body"]
     assert "<h1>제목</h1>" in sent["html_body"]
+
+
+def test_worklog_period_mail_sends_only_actual_worklogs_in_date_order(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.models.note import Note, UserMailSettings
+    from app.services.mail_settings import encrypt_secret
+
+    owner_id, web_token = _mail_user(db)
+    db.add_all(
+        [
+            Note(
+                owner_id=owner_id,
+                device_id="mail-worklog-device",
+                local_id="worklog-later",
+                note_type="worklog",
+                title="9월 2일 작업",
+                content="둘째 날 내용",
+                client_updated_at=datetime(2026, 9, 2, 9, 0, 0),
+            ),
+            Note(
+                owner_id=owner_id,
+                device_id="mail-worklog-device",
+                local_id="worklog-earlier",
+                note_type="worklog",
+                title="9월 1일 작업",
+                content="첫째 날 내용",
+                client_updated_at=datetime(2026, 9, 1, 9, 0, 0),
+            ),
+            Note(
+                owner_id=owner_id,
+                device_id="mail-worklog-device",
+                local_id="worklog-outside",
+                note_type="worklog",
+                title="9월 3일 작업",
+                content="기간 밖 내용",
+                client_updated_at=datetime(2026, 9, 3, 9, 0, 0),
+            ),
+            Note(
+                owner_id=owner_id,
+                device_id="mail-worklog-device",
+                local_id="daily-inside",
+                note_type="daily",
+                title="일자 메모",
+                content="작업 일지가 아님",
+                client_updated_at=datetime(2026, 9, 1, 10, 0, 0),
+            ),
+            UserMailSettings(
+                owner_id=owner_id,
+                sender_name="신산",
+                sender_email="sender@example.com",
+                smtp_host="smtp.example.com",
+                smtp_port=587,
+                security="starttls",
+                smtp_username="sender@example.com",
+                smtp_password_encrypted=encrypt_secret("app-password"),
+                test_recipient="receiver@example.com",
+                last_tested_at=datetime.utcnow(),
+            ),
+        ]
+    )
+    db.commit()
+
+    sent_messages = []
+
+    def fake_send_smtp_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr("app.services.mail_settings.send_smtp_message", fake_send_smtp_message)
+
+    res = client.post(
+        "/api/v1/notes/worklog/mail",
+        params={"owner_id": owner_id},
+        json={
+            "to": ["receiver@example.com"],
+            "subject": "작업 일지 공유",
+            "message": "확인 부탁드립니다",
+            "date_from": "2026-09-01T00:00:00",
+            "date_to": "2026-09-02T23:59:59",
+        },
+        headers={"X-Now-Web-Session": web_token},
+    )
+
+    assert res.status_code == 200, res.text
+    assert res.json()["sent"] is True
+    assert res.json()["sent_count"] == 2
+    assert len(sent_messages) == 1
+    sent = sent_messages[0]
+    assert sent["to"] == ["receiver@example.com"]
+    assert sent["subject"] == "작업 일지 공유"
+    text = sent["text_body"]
+    assert text.index("9월 1일 작업") < text.index("9월 2일 작업")
+    assert "첫째 날 내용" in text
+    assert "둘째 날 내용" in text
+    assert "기간 밖 내용" not in text
+    assert "작업 일지가 아님" not in text
+
+
+def test_worklog_period_mail_rejects_empty_range_without_sending(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.models.note import UserMailSettings
+    from app.services.mail_settings import encrypt_secret
+
+    owner_id, web_token = _mail_user(db)
+    db.add(
+        UserMailSettings(
+            owner_id=owner_id,
+            sender_name="신산",
+            sender_email="sender@example.com",
+            smtp_host="smtp.example.com",
+            smtp_port=587,
+            security="starttls",
+            smtp_username="sender@example.com",
+            smtp_password_encrypted=encrypt_secret("app-password"),
+            test_recipient="receiver@example.com",
+            last_tested_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    sent_messages = []
+
+    def fake_send_smtp_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr("app.services.mail_settings.send_smtp_message", fake_send_smtp_message)
+
+    res = client.post(
+        "/api/v1/notes/worklog/mail",
+        params={"owner_id": owner_id},
+        json={
+            "to": ["receiver@example.com"],
+            "date_from": "2026-09-10T00:00:00",
+            "date_to": "2026-09-10T23:59:59",
+        },
+        headers={"X-Now-Web-Session": web_token},
+    )
+
+    assert res.status_code == 409
+    assert res.json()["detail"] == "worklog notes not found in date range"
+    assert sent_messages == []

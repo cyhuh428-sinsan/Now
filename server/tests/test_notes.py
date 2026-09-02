@@ -161,6 +161,104 @@ def test_list_notes_include_deleted(client: TestClient) -> None:
     assert dead_id in local_ids
 
 
+def test_list_worklog_notes_filters_actual_entries_by_client_period(client: TestClient) -> None:
+    """빈 날짜를 자동 생성하지 않고, 기간 안의 실제 worklog만 반환한다."""
+    device_id = _device_id()
+    owner = f"owner_{uuid.uuid4().hex[:6]}"
+    in_range_worklog = _local_id()
+    out_range_worklog = _local_id()
+    daily_note = _local_id()
+
+    for payload in [
+        {
+            "owner_id": owner,
+            "device_id": device_id,
+            "local_id": in_range_worklog,
+            "note_type": "worklog",
+            "title": "9월 1일 작업 일지",
+            "content": "실제 작성된 작업",
+            "client_updated_at": "2026-09-01T10:00:00",
+        },
+        {
+            "owner_id": owner,
+            "device_id": device_id,
+            "local_id": out_range_worklog,
+            "note_type": "worklog",
+            "title": "9월 3일 작업 일지",
+            "content": "기간 밖 작업",
+            "client_updated_at": "2026-09-03T10:00:00",
+        },
+        {
+            "owner_id": owner,
+            "device_id": device_id,
+            "local_id": daily_note,
+            "note_type": "daily",
+            "title": "9월 1일 일자 메모",
+            "content": "작업 일지가 아님",
+            "client_updated_at": "2026-09-01T11:00:00",
+        },
+    ]:
+        res = client.post("/api/v1/notes", json=payload)
+        assert res.status_code == 200, res.text
+
+    empty_res = client.get(
+        "/api/v1/notes",
+        params={
+            "owner_id": owner,
+            "note_type": "worklog",
+            "date_from": "2026-09-02T00:00:00",
+            "date_to": "2026-09-02T23:59:59",
+        },
+    )
+    assert empty_res.status_code == 200
+    assert empty_res.json() == []
+
+    range_res = client.get(
+        "/api/v1/notes",
+        params={
+            "owner_id": owner,
+            "note_type": "worklog",
+            "date_from": "2026-09-01T00:00:00",
+            "date_to": "2026-09-01T23:59:59",
+        },
+    )
+    assert range_res.status_code == 200
+    local_ids = [item["local_id"] for item in range_res.json()]
+    assert local_ids == [in_range_worklog]
+
+
+def test_list_worklog_notes_accepts_mixed_timezone_period_bounds(client: TestClient) -> None:
+    """클라이언트별 날짜 직렬화 차이가 있어도 서버는 UTC-naive 기준으로 정규화한다."""
+    device_id = _device_id()
+    owner = f"owner_{uuid.uuid4().hex[:6]}"
+    local_id = _local_id()
+    res = client.post(
+        "/api/v1/notes",
+        json={
+            "owner_id": owner,
+            "device_id": device_id,
+            "local_id": local_id,
+            "note_type": "worklog",
+            "title": "timezone 작업 일지",
+            "content": "timezone 확인",
+            "client_updated_at": "2026-09-01T10:00:00",
+        },
+    )
+    assert res.status_code == 200, res.text
+
+    range_res = client.get(
+        "/api/v1/notes",
+        params={
+            "owner_id": owner,
+            "note_type": "worklog",
+            "date_from": "2026-09-01T00:00:00+00:00",
+            "date_to": "2026-09-01T23:59:59",
+        },
+    )
+    assert range_res.status_code == 200
+    assert [item["local_id"] for item in range_res.json()] == [local_id]
+
+
 # ── 검색 ──────────────────────────────────────────────────────────────────────
 
 def test_search_notes_by_title(client: TestClient) -> None:

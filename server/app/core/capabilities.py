@@ -1,7 +1,7 @@
 API_VERSION = "v1"
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
-SUPPORTED_NOTE_TYPES = ["daily", "tree", "record"]
+SUPPORTED_NOTE_TYPES = ["daily", "tree", "record", "worklog"]
 
 # 앱/설치형 버전 안내 (P10)에서 쓰는 "최신 버전" 값.
 # NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md의 버전 기준에 따라 서버·Web·설치형·앱은
@@ -122,6 +122,8 @@ SERVER_CAPABILITIES = {
     "password_reset_email": True,
     "mail_settings_api": True,
     "note_mail_send_api": True,
+    "worklog_period_query": True,
+    "worklog_period_mail_api": True,
     "mail_secret_encryption": True,
     "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
     "supported_note_types": SUPPORTED_NOTE_TYPES,

@@ -433,7 +433,7 @@ DB 연결까지 포함한 준비 상태 확인.
 `user_token_required`가 `true`이면 데이터 API 요청에 사용자별 접속 토큰 헤더 `X-Now-User-Token`이 필요합니다.
 `two_factor_status`는 관리자 화면에서 사용 여부를 관리할 수 있다는 뜻이고, `two_factor_auth`는 실제 로그인 2단계 인증 기능의 구현 상태를 나타냅니다.
 현재 `two_factor_auth` 값은 `token_code`입니다.
-현재 `max_tree_note_level` 값은 `3`, `supported_note_types` 값은 `daily`, `tree`, `record`입니다.
+현재 `max_tree_note_level` 값은 `3`, `supported_note_types` 값은 `daily`, `tree`, `record`, `worklog`입니다.
 
 ### Auth
 
@@ -547,6 +547,10 @@ Web 로그인 사용자가 참가 가능한 활성 그룹 목록을 조회합니
 
 특정 시점 이후 변경된 메모만 조회합니다.
 
+`GET /api/v1/notes?owner_id=local_user&note_type=worklog&date_from=2026-09-01T00:00:00&date_to=2026-09-02T23:59:59`
+
+선택형 작업 일지 목록을 기간으로 조회합니다. 서버는 빈 날짜의 `worklog` 메모를 자동 생성하지 않고, 실제 저장된 `note_type=worklog` 메모만 반환합니다. 기간 기준은 `client_updated_at`이 있으면 그 값을 우선 사용하고, 없으면 서버 저장 시각을 사용합니다.
+
 `POST /api/v1/notes`
 
 단일 메모를 생성하거나 갱신합니다.
@@ -619,6 +623,22 @@ SMTP 설정으로 테스트 메일을 발송합니다. 성공한 경우에만 �
 - `502 smtp_test_failed`: SMTP 연결 테스트 실패
 - `502 smtp_send_failed`: 메모 메일 발송 실패
 
+`POST /api/v1/notes/worklog/mail?owner_id=local_user`
+
+기간 내 실제 작성된 작업 일지를 저장된 SMTP 설정으로 묶어 발송합니다. 요청 본문의 수신자 계약은 단건 메모 메일과 같은 `to` 배열을 사용합니다. 서버는 `note_type=worklog`만 날짜 순으로 묶고, 기간 안에 실제 작업 일지가 없으면 `409 worklog notes not found in date range`로 발송을 막습니다.
+
+요청 예시:
+
+```json
+{
+  "to": ["receiver@example.com"],
+  "subject": "[NowNote] 작업 일지",
+  "message": "확인 부탁드립니다",
+  "date_from": "2026-09-01T00:00:00",
+  "date_to": "2026-09-02T23:59:59"
+}
+```
+
 `POST /api/v1/sync`
 
 앱에서 변경된 메모를 올리고, 서버에서 변경된 메모를 한 번에 내려받는 통합 동기화 API입니다.
@@ -648,6 +668,7 @@ Web 세션 요청은 `X-Now-Web-Session`으로 검증하며, 그룹 공유 문�
 - `daily`: 일자 중심 간단 메모
 - `tree`: 계층형 지식 메모
 - `record`: 회의/대화/음성 메모
+- `worklog`: 선택형 작업 일지
 
 계층형 메모는 `level` 값을 `1..3`으로 제한합니다.
 

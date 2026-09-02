@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.capabilities import MAX_TREE_NOTE_LEVEL
@@ -90,8 +90,13 @@ def list_changed_notes(
     updated_after: datetime | None,
     include_deleted: bool,
     include_group_shared: bool = False,
+    note_type: str | None = None,
+    date_from: datetime | None = None,
+    date_to: datetime | None = None,
 ) -> list[Note]:
     updated_after = as_naive_utc(updated_after)
+    date_from = as_naive_utc(date_from)
+    date_to = as_naive_utc(date_to)
     owner_ids = [owner_id]
     if include_group_shared:
         owner_ids.extend(group_shared_owner_ids(db, owner_id=owner_id))
@@ -103,6 +108,14 @@ def list_changed_notes(
     )
     if updated_after is not None:
         stmt = stmt.where(Note.updated_at > updated_after)
+    if note_type is not None:
+        stmt = stmt.where(Note.note_type == note_type)
+    if date_from is not None or date_to is not None:
+        note_date = func.coalesce(Note.client_updated_at, Note.updated_at, Note.created_at)
+        if date_from is not None:
+            stmt = stmt.where(note_date >= date_from)
+        if date_to is not None:
+            stmt = stmt.where(note_date <= date_to)
     if not include_deleted:
         stmt = stmt.where(Note.deleted_at.is_(None))
     stmt = stmt.order_by(Note.updated_at.asc(), Note.id.asc())
