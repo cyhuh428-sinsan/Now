@@ -1468,6 +1468,16 @@
         <span id="sendMailRecipientLabel">수신 주소</span>
         <input id="sendMailRecipientInput" class="settings-input" type="email" autocomplete="off">
       </label>
+      <section id="worklogRecipientBox" class="worklog-recipient-box hidden" aria-label="작업 일지 수신자">
+        <div class="worklog-recipient-row">
+          <select id="worklogRecipientSelect" class="settings-select" aria-label="저장된 작업 일지 수신자">
+            <option value="">저장된 수신자 선택</option>
+          </select>
+          <button id="worklogRecipientSaveBtn" class="secondary-btn" type="button">저장</button>
+          <button id="worklogRecipientDeleteBtn" class="secondary-btn" type="button">삭제</button>
+        </div>
+        <p id="worklogRecipientStatusText" class="server-status-text">작업 일지 수신자를 불러오지 않았습니다.</p>
+      </section>
       <label>
         <span id="sendMailSubjectLabel">제목</span>
         <input id="sendMailSubjectInput" class="settings-input" type="text" autocomplete="off">

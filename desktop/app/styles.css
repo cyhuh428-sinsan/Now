@@ -4537,6 +4537,35 @@ kbd {
   font-weight: 750;
 }
 
+.worklog-recipient-box {
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(11, 18, 32, 0.2);
+}
+
+.worklog-recipient-box.hidden {
+  display: none;
+}
+
+.worklog-recipient-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.worklog-recipient-row .secondary-btn {
+  min-height: 32px;
+  padding: 0 10px;
+}
+
+.worklog-recipient-box .server-status-text {
+  font-size: 11px;
+}
+
 .print-preview-content {
   min-height: 0;
   overflow: auto;

@@ -179,6 +179,25 @@ def worklog_script_ready(source: str) -> bool:
     )
 
 
+def worklog_mail_recipients_script_ready(source: str) -> bool:
+    return all(
+        needle in source
+        for needle in [
+            "let worklogMailRecipients = [];",
+            "function isWorklogMailDraft",
+            "function renderWorklogMailRecipients",
+            "async function refreshWorklogMailRecipients",
+            "async function saveCurrentWorklogMailRecipient",
+            "async function deleteSelectedWorklogMailRecipient",
+            "worklogRecipientBox: $(\"#worklogRecipientBox\")",
+            "worklogRecipientSelect: $(\"#worklogRecipientSelect\")",
+            "mailOwnerPath(\"/api/v1/mail/worklog/recipients\", server)",
+            "mailOwnerPath(`/api/v1/mail/worklog/recipients/${encodeURIComponent(recipientId)}`, server)",
+            'type: "worklog"',
+        ]
+    )
+
+
 def mail_settings_secret_guard(source: str) -> bool:
     forbidden = [
         "password: mailSettings",
@@ -477,6 +496,11 @@ def main() -> None:
         ("sendMailRecipientInput", "send mail recipient input"),
         ("sendMailSubjectInput", "send mail subject input"),
         ("sendMailMessageInput", "send mail message input"),
+        ("worklogRecipientBox", "worklog mail recipient controls"),
+        ("worklogRecipientSelect", "worklog mail recipient selector"),
+        ("worklogRecipientSaveBtn", "worklog mail recipient save button"),
+        ("worklogRecipientDeleteBtn", "worklog mail recipient delete button"),
+        ("worklogRecipientStatusText", "worklog mail recipient status text"),
         ("sendMailCancelBtn", "send mail cancel button"),
         ("sendMailSendBtn", "send mail send button"),
         ("sendMailStatusText", "send mail status text"),
@@ -987,6 +1011,11 @@ def main() -> None:
         ('id="sendMailRecipientInput"', "desktop send mail recipient input"),
         ('id="sendMailSubjectInput"', "desktop send mail subject input"),
         ('id="sendMailMessageInput"', "desktop send mail message input"),
+        ('id="worklogRecipientBox"', "desktop worklog mail recipient controls"),
+        ('id="worklogRecipientSelect"', "desktop worklog mail recipient selector"),
+        ('id="worklogRecipientSaveBtn"', "desktop worklog mail recipient save button"),
+        ('id="worklogRecipientDeleteBtn"', "desktop worklog mail recipient delete button"),
+        ('id="worklogRecipientStatusText"', "desktop worklog mail recipient status text"),
         ('id="sendMailCancelBtn"', "desktop send mail cancel button"),
         ('id="sendMailSendBtn"', "desktop send mail send button"),
         ('id="sendMailStatusText"', "desktop send mail status text"),
@@ -1114,6 +1143,12 @@ def main() -> None:
             "worklogs/note_type worklog/range mail",
             failures,
         )
+        check(
+            worklog_mail_recipients_script_ready(source),
+            f"{surface} app script wires worklog mail recipients API",
+            "worklog recipient list/save/delete and worklog-only drafts",
+            failures,
+        )
 
     desktop_app_style_requirements = [
         (".app-shell", "desktop app layout"),
@@ -1136,6 +1171,7 @@ def main() -> None:
         ("@media print", "desktop print media rules"),
         (".mail-settings-box", "desktop mail settings css"),
         (".send-mail-dialog-card", "desktop send mail dialog css"),
+        (".worklog-recipient-box", "desktop worklog mail recipient css"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
@@ -1148,6 +1184,7 @@ def main() -> None:
         ("@media print", "print media rules"),
         (".mail-settings-box", "mail settings css"),
         (".send-mail-dialog-card", "send mail dialog css"),
+        (".worklog-recipient-box", "worklog mail recipient css"),
     ]:
         check(needle in styles, f"Web app style has {label}", needle, failures)
 

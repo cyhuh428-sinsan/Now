@@ -2467,6 +2467,7 @@ let webLoginMode = "login";
 let pendingCaptureAttachment = null;
 let pendingMessengerAttachment = null;
 let pendingMailDraft = null;
+let worklogMailRecipients = [];
 let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
@@ -3570,6 +3571,11 @@ const elements = {
   sendMailDialog: $("#sendMailDialog"),
   sendMailDialogTitle: $("#sendMailDialogTitle"),
   sendMailRecipientInput: $("#sendMailRecipientInput"),
+  worklogRecipientBox: $("#worklogRecipientBox"),
+  worklogRecipientSelect: $("#worklogRecipientSelect"),
+  worklogRecipientSaveBtn: $("#worklogRecipientSaveBtn"),
+  worklogRecipientDeleteBtn: $("#worklogRecipientDeleteBtn"),
+  worklogRecipientStatusText: $("#worklogRecipientStatusText"),
   sendMailSubjectInput: $("#sendMailSubjectInput"),
   sendMailMessageInput: $("#sendMailMessageInput"),
   sendMailCancelBtn: $("#sendMailCancelBtn"),
@@ -5740,6 +5746,10 @@ function bindEvents() {
   });
   elements.sendMailCancelBtn?.addEventListener("click", closeSendMailDialog);
   elements.sendMailSendBtn?.addEventListener("click", submitCurrentNoteMail);
+  elements.sendMailRecipientInput?.addEventListener("input", renderWorklogMailRecipients);
+  elements.worklogRecipientSelect?.addEventListener("change", applySelectedWorklogMailRecipient);
+  elements.worklogRecipientSaveBtn?.addEventListener("click", saveCurrentWorklogMailRecipient);
+  elements.worklogRecipientDeleteBtn?.addEventListener("click", deleteSelectedWorklogMailRecipient);
   elements.sendMailDialog?.addEventListener("click", (event) => {
     if (event.target === elements.sendMailDialog) closeSendMailDialog();
   });
@@ -7783,6 +7793,170 @@ function sanitizeMailErrorMessage(error) {
   return message.slice(0, 220);
 }
 
+function isWorklogMailDraft(draft = pendingMailDraft) {
+  return draft?.type === "worklog";
+}
+
+function normalizeWorklogMailRecipients(payload) {
+  const recipients = Array.isArray(payload?.recipients) ? payload.recipients : [];
+  return recipients
+    .map((item) => ({
+      id: String(item?.id || ""),
+      email: String(item?.email || "").trim(),
+      label: String(item?.label || "").trim(),
+    }))
+    .filter((item) => item.id && validWebEmail(item.email));
+}
+
+function setWorklogMailRecipientStatus(message, status = "") {
+  const statusEl = elements.worklogRecipientStatusText;
+  if (!statusEl) return;
+  statusEl.textContent = message || "";
+  statusEl.classList.remove("ok", "warn", "bad");
+  if (status) statusEl.classList.add(status);
+}
+
+function renderWorklogMailRecipients() {
+  const isWorklog = isWorklogMailDraft();
+  elements.worklogRecipientBox?.classList.toggle("hidden", !isWorklog);
+  if (!isWorklog) return;
+
+  const currentRecipient = elements.sendMailRecipientInput?.value.trim() || "";
+  const selectedId = elements.worklogRecipientSelect?.value || "";
+  if (elements.worklogRecipientSelect) {
+    const select = elements.worklogRecipientSelect;
+    select.replaceChildren();
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "저장된 수신자 선택";
+    select.append(placeholder);
+    worklogMailRecipients.forEach((recipient) => {
+      const option = document.createElement("option");
+      option.value = recipient.id;
+      option.dataset.email = recipient.email;
+      option.textContent = recipient.label ? `${recipient.label} <${recipient.email}>` : recipient.email;
+      select.append(option);
+    });
+    if (selectedId && worklogMailRecipients.some((recipient) => recipient.id === selectedId)) {
+      select.value = selectedId;
+    } else {
+      const matching = worklogMailRecipients.find((recipient) => recipient.email === currentRecipient);
+      select.value = matching?.id || "";
+    }
+  }
+  if (elements.worklogRecipientSaveBtn) {
+    elements.worklogRecipientSaveBtn.disabled = !validWebEmail(currentRecipient);
+  }
+  if (elements.worklogRecipientDeleteBtn) {
+    elements.worklogRecipientDeleteBtn.disabled = !elements.worklogRecipientSelect?.value;
+  }
+}
+
+function applySelectedWorklogMailRecipient() {
+  if (!isWorklogMailDraft()) return;
+  const recipientId = elements.worklogRecipientSelect?.value || "";
+  const recipient = worklogMailRecipients.find((item) => item.id === recipientId);
+  if (recipient && elements.sendMailRecipientInput) {
+    elements.sendMailRecipientInput.value = recipient.email;
+  }
+  renderWorklogMailRecipients();
+}
+
+async function refreshWorklogMailRecipients({ silent = true } = {}) {
+  if (!isWorklogMailDraft()) return [];
+  const server = state.settings.server || defaultServerSettings();
+  if (!canCheckMailSettingsStatus(server)) {
+    worklogMailRecipients = [];
+    renderWorklogMailRecipients();
+    setWorklogMailRecipientStatus("서버 연결 준비 후 작업 일지 수신자를 불러올 수 있습니다.", "warn");
+    return [];
+  }
+  if (!silent) setWorklogMailRecipientStatus("작업 일지 수신자를 불러오는 중입니다.", "warn");
+  try {
+    const payload = await requestServerJson(server, mailOwnerPath("/api/v1/mail/worklog/recipients", server));
+    worklogMailRecipients = normalizeWorklogMailRecipients(payload);
+    renderWorklogMailRecipients();
+    setWorklogMailRecipientStatus(
+      worklogMailRecipients.length > 0
+        ? `${worklogMailRecipients.length}개 수신자를 불러왔습니다.`
+        : "저장된 작업 일지 수신자가 없습니다.",
+      worklogMailRecipients.length > 0 ? "ok" : "warn",
+    );
+    return worklogMailRecipients;
+  } catch (error) {
+    worklogMailRecipients = [];
+    renderWorklogMailRecipients();
+    setWorklogMailRecipientStatus(`수신자 목록을 불러오지 못했습니다. ${sanitizeMailErrorMessage(error)}`, "bad");
+    return [];
+  }
+}
+
+async function saveCurrentWorklogMailRecipient() {
+  if (!isWorklogMailDraft()) return false;
+  const server = state.settings.server || defaultServerSettings();
+  const email = elements.sendMailRecipientInput?.value.trim() || "";
+  if (!validWebEmail(email)) {
+    setWorklogMailRecipientStatus("올바른 수신 주소를 입력한 뒤 저장하세요.", "bad");
+    elements.sendMailRecipientInput?.focus();
+    return false;
+  }
+  elements.worklogRecipientSaveBtn.disabled = true;
+  setWorklogMailRecipientStatus("작업 일지 수신자를 저장하는 중입니다.", "warn");
+  try {
+    const payload = await requestServerJson(server, mailOwnerPath("/api/v1/mail/worklog/recipients", server), {
+      method: "POST",
+      body: JSON.stringify({
+        owner_id: normalizeOwnerId(server.ownerId),
+        email,
+        label: "",
+      }),
+    });
+    const saved = normalizeWorklogMailRecipients({ recipients: [payload?.recipient] })[0];
+    if (saved) {
+      worklogMailRecipients = [
+        saved,
+        ...worklogMailRecipients.filter((recipient) => recipient.id !== saved.id && recipient.email !== saved.email),
+      ].sort((a, b) => a.email.localeCompare(b.email));
+      renderWorklogMailRecipients();
+      if (elements.worklogRecipientSelect) elements.worklogRecipientSelect.value = saved.id;
+    }
+    setWorklogMailRecipientStatus("작업 일지 수신자를 저장했습니다.", "ok");
+    return true;
+  } catch (error) {
+    setWorklogMailRecipientStatus(`수신자를 저장하지 못했습니다. ${sanitizeMailErrorMessage(error)}`, "bad");
+    return false;
+  } finally {
+    renderWorklogMailRecipients();
+  }
+}
+
+async function deleteSelectedWorklogMailRecipient() {
+  if (!isWorklogMailDraft()) return false;
+  const server = state.settings.server || defaultServerSettings();
+  const recipientId = elements.worklogRecipientSelect?.value || "";
+  if (!recipientId) {
+    setWorklogMailRecipientStatus("삭제할 저장 수신자를 선택하세요.", "bad");
+    return false;
+  }
+  elements.worklogRecipientDeleteBtn.disabled = true;
+  setWorklogMailRecipientStatus("작업 일지 수신자를 삭제하는 중입니다.", "warn");
+  try {
+    await requestServerJson(server, mailOwnerPath(`/api/v1/mail/worklog/recipients/${encodeURIComponent(recipientId)}`, server), {
+      method: "DELETE",
+    });
+    worklogMailRecipients = worklogMailRecipients.filter((recipient) => recipient.id !== recipientId);
+    if (elements.worklogRecipientSelect) elements.worklogRecipientSelect.value = "";
+    renderWorklogMailRecipients();
+    setWorklogMailRecipientStatus("작업 일지 수신자를 삭제했습니다.", "ok");
+    return true;
+  } catch (error) {
+    setWorklogMailRecipientStatus(`수신자를 삭제하지 못했습니다. ${sanitizeMailErrorMessage(error)}`, "bad");
+    return false;
+  } finally {
+    renderWorklogMailRecipients();
+  }
+}
+
 function renderMailSettings() {
   const server = state.settings.server || defaultServerSettings();
   const serverReady = canCheckMailSettingsStatus(server);
@@ -7885,6 +8059,7 @@ function defaultMailSubject(selected) {
 function closeSendMailDialog() {
   elements.sendMailDialog?.classList.add("hidden");
   pendingMailDraft = null;
+  renderWorklogMailRecipients();
 }
 
 function sendCurrentNoteMail() {
@@ -7895,6 +8070,7 @@ function sendCurrentNoteMail() {
   }
   const subject = defaultMailSubject(selected);
   return openSendMailDialog({
+    type: "note",
     noteId: selected.id,
     subject,
     message: `${subject}\n\n${selected.content || ""}`.trim(),
@@ -13813,7 +13989,11 @@ function openSendMailDialog(draft) {
   elements.sendMailMessageInput.value = draft.message;
   elements.sendMailStatusText.textContent = "수신 주소를 입력하세요.";
   elements.sendMailStatusText.classList.remove("ok", "warn", "bad");
+  renderWorklogMailRecipients();
   elements.sendMailDialog.classList.remove("hidden");
+  if (isWorklogMailDraft(draft)) {
+    refreshWorklogMailRecipients({ silent: true });
+  }
   window.setTimeout(() => elements.sendMailRecipientInput?.focus(), 0);
   return true;
 }
@@ -13825,6 +14005,7 @@ function sendSelectedWorklogMail() {
     return false;
   }
   return openSendMailDialog({
+    type: "worklog",
     noteId: worklogMailNoteId(note),
     subject: worklogMailSubject(note),
     message: `${worklogMailSubject(note)}\n\n${note.content || ""}`.trim(),
@@ -13839,6 +14020,7 @@ function sendWorklogRangeMail() {
     return false;
   }
   return openSendMailDialog({
+    type: "worklog",
     noteId: worklogMailNoteId(entries[0]),
     subject: worklogRangeMailSubject(entries),
     message: worklogRangeMailMessage(entries),
