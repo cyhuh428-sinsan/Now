@@ -12966,6 +12966,10 @@ function renderTreeContextMenu(groups) {
     const groupEl = document.createElement("div");
     groupEl.className = "context-menu-group";
     groupEl.dataset.group = group.id;
+    const groupLabel = document.createElement("div");
+    groupLabel.className = "context-menu-group-label";
+    groupLabel.textContent = localizeOrFallback(group.labelKey, group.label);
+    groupEl.append(groupLabel);
     group.actions.forEach((action) => {
       const button = document.createElement("button");
       button.type = "button";
