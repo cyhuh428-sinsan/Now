@@ -11,6 +11,7 @@ const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
 const EXE_PATH = path.join(ROOT, "dist", "win-unpacked", "NowNote.exe");
 const STORE_FILE = "nownote-desktop-store.json";
 const STORAGE_KEY = "nownote.web.v1";
+const SETTINGS_KEY = "nownote.web.settings.v1";
 const TIMEOUT_MS = 20_000;
 
 class CdpClient {
@@ -431,6 +432,8 @@ async function main() {
     const storeRaw = await fs.readFile(storePath, "utf-8");
     const store = JSON.parse(storeRaw);
     assert(store.values?.[STORAGE_KEY]?.tree?.some((node) => node.title === title), "Saved note was not written to desktop store.");
+    store.values[SETTINGS_KEY] = { contextMenuActions: ["undo", "redo"] };
+    await fs.writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
 
     second = await launchApp(tempDir);
     await waitForCondition(second.page, `

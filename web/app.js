@@ -1,5 +1,6 @@
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
+const CONTEXT_MENU_SETTINGS_VERSION = 2;
 const WEB_SESSION_KEY = "nownote.web.session.v1";
 const WEB_LOGOUT_KEY = "nownote.web.logout.v1";
 const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
@@ -2598,6 +2599,7 @@ function defaultSettings() {
     voice: defaultVoiceSettings(),
     features: defaultFeatureSettings(),
     contextMenuActions: defaultContextMenuActions(),
+    contextMenuVersion: CONTEXT_MENU_SETTINGS_VERSION,
     shortcuts: defaultShortcutSettings(),
     openTreeTabs: [],
     closedTreeTabs: [],
@@ -15767,6 +15769,7 @@ function syncLanguageQueryParam(language) {
 
 function normalizeSettings(settings = {}) {
   const defaults = defaultSettings();
+  const savedContextMenuVersion = Number(settings?.contextMenuVersion) || 0;
   const normalized = {
     ...defaults,
     ...settings,
@@ -15793,7 +15796,11 @@ function normalizeSettings(settings = {}) {
   normalized.llm = normalizeLlmSettings(normalized.llm, defaults.llm);
   normalized.voice = normalizeVoiceSettings(normalized.voice, defaults.voice);
   normalized.features = normalizeFeatureSettings(normalized.features, defaults.features);
+  if (savedContextMenuVersion < CONTEXT_MENU_SETTINGS_VERSION) {
+    normalized.contextMenuActions = defaults.contextMenuActions;
+  }
   normalized.contextMenuActions = normalizeContextMenuActions(normalized.contextMenuActions, defaults.contextMenuActions);
+  normalized.contextMenuVersion = CONTEXT_MENU_SETTINGS_VERSION;
   normalized.features.backlinks = normalized.showBacklinks;
   normalized.features.tags = normalized.showTags;
   normalized.features.shortcuts = normalized.enableShortcuts;
