@@ -3089,6 +3089,41 @@ kbd {
   font-weight: 800;
 }
 
+.voice-llm-settings-row {
+  grid-template-columns: 1fr;
+  align-items: stretch;
+}
+
+.voice-llm-copy {
+  max-width: 680px;
+}
+
+.voice-llm-grid {
+  grid-template-columns: repeat(2, minmax(240px, 1fr));
+  align-items: start;
+}
+
+.voice-llm-panel {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+}
+
+.voice-llm-panel h4 {
+  margin: 0;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.voice-llm-panel .server-status-text {
+  margin-top: 0;
+}
+
 .server-guide-box {
   display: grid;
   gap: 8px;
@@ -4915,6 +4950,10 @@ kbd {
   }
 
   .settings-row {
+    grid-template-columns: 1fr;
+  }
+
+  .voice-llm-grid {
     grid-template-columns: 1fr;
   }
 

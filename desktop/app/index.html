@@ -872,66 +872,70 @@
             </div>
           </section>
 
-          <section class="settings-row">
-            <div>
+          <section class="settings-row voice-llm-settings-row">
+            <div class="voice-llm-copy">
               <h3 id="llmSettingTitle">음성 · LLM 설정</h3>
               <p id="llmSettingDesc">묻기와 읽어주기에 쓸 LLM과 음성 합성 서버를 설정합니다. 서버를 거치지 않고 이 기기에서 바로 provider에 연결합니다.</p>
             </div>
-            <div class="server-settings-form">
-              <label>
-                <span id="llmProviderLabel">LLM provider</span>
-                <select id="llmProviderSelect" class="settings-select">
-                  <option value="openai">OpenAI ChatGPT</option>
-                  <option value="gemini">Google Gemini</option>
-                  <option value="claude">Anthropic Claude</option>
-                  <option value="groq">Groq</option>
-                  <option value="grok">xAI Grok</option>
-                  <option value="deepseek">DeepSeek</option>
-                  <option value="ollama">로컬 Ollama</option>
-                </select>
-              </label>
-              <label id="llmApiKeyField">
-                <span id="llmApiKeyLabel">API 키</span>
-                <input id="llmApiKeyInput" class="settings-input" type="password" autocomplete="off">
-              </label>
-              <label id="llmOllamaUrlField" class="hidden">
-                <span id="llmOllamaUrlLabel">Ollama 서버 주소</span>
-                <input id="llmOllamaUrlInput" class="settings-input" type="url" placeholder="http://localhost:11434">
-              </label>
-              <label id="llmOllamaModelField" class="hidden">
-                <span id="llmOllamaModelLabel">Ollama 모델</span>
-                <input id="llmOllamaModelInput" class="settings-input" type="text" placeholder="llama3.1">
-              </label>
-              <div class="settings-actions">
-                <button id="llmTestBtn" class="secondary-btn" type="button">LLM 연결 테스트</button>
+            <div id="voiceLlmSettingsLayout" class="server-settings-form voice-llm-grid">
+              <div id="llmSettingsPanel" class="voice-llm-panel">
+                <h4>LLM</h4>
+                <label>
+                  <span id="llmProviderLabel">LLM provider</span>
+                  <select id="llmProviderSelect" class="settings-select">
+                    <option value="openai">OpenAI ChatGPT</option>
+                    <option value="gemini">Google Gemini</option>
+                    <option value="claude">Anthropic Claude</option>
+                    <option value="groq">Groq</option>
+                    <option value="grok">xAI Grok</option>
+                    <option value="deepseek">DeepSeek</option>
+                    <option value="ollama">로컬 Ollama</option>
+                  </select>
+                </label>
+                <label id="llmApiKeyField">
+                  <span id="llmApiKeyLabel">API 키</span>
+                  <input id="llmApiKeyInput" class="settings-input" type="password" autocomplete="off">
+                </label>
+                <label id="llmOllamaUrlField" class="hidden">
+                  <span id="llmOllamaUrlLabel">Ollama 서버 주소</span>
+                  <input id="llmOllamaUrlInput" class="settings-input" type="url" placeholder="http://localhost:11434">
+                </label>
+                <label id="llmOllamaModelField" class="hidden">
+                  <span id="llmOllamaModelLabel">Ollama 모델</span>
+                  <input id="llmOllamaModelInput" class="settings-input" type="text" placeholder="llama3.1">
+                </label>
+                <div class="settings-actions">
+                  <button id="llmTestBtn" class="secondary-btn" type="button">LLM 연결 테스트</button>
+                </div>
+                <p id="llmStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
               </div>
-              <p id="llmStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
-              <hr>
-              <h4 id="voiceSettingTitle">읽어주기 (TTS)</h4>
-              <label>
-                <span id="ttsUrlLabel">TTS 서버 주소</span>
-                <input id="ttsBaseUrlInput" class="settings-input" type="url" placeholder="https://voice.example.com">
-              </label>
-              <label>
-                <span id="ttsKeyLabel">TTS API 키</span>
-                <input id="ttsApiKeyInput" class="settings-input" type="password" autocomplete="off">
-              </label>
-              <label>
-                <span id="ttsVoiceLabel">보이스</span>
-                <select id="ttsVoiceSelect" class="settings-select"></select>
-              </label>
-              <label>
-                <span id="ttsSpeedLabel">말하기 속도</span>
-                <input id="ttsSpeedInput" class="settings-input" type="number" min="0.25" max="4" step="0.25" value="1">
-              </label>
-              <label>
-                <span id="ttsLanguageLabel">언어 코드</span>
-                <input id="ttsLanguageInput" class="settings-input" type="text" placeholder="ko">
-              </label>
-              <div class="settings-actions">
-                <button id="ttsLoadVoicesBtn" class="secondary-btn" type="button">보이스 목록 불러오기</button>
+              <div id="ttsSettingsPanel" class="voice-llm-panel">
+                <h4 id="voiceSettingTitle">읽어주기 (TTS)</h4>
+                <label>
+                  <span id="ttsUrlLabel">TTS 서버 주소</span>
+                  <input id="ttsBaseUrlInput" class="settings-input" type="url" placeholder="https://voice.example.com">
+                </label>
+                <label>
+                  <span id="ttsKeyLabel">TTS API 키</span>
+                  <input id="ttsApiKeyInput" class="settings-input" type="password" autocomplete="off">
+                </label>
+                <label>
+                  <span id="ttsVoiceLabel">보이스</span>
+                  <select id="ttsVoiceSelect" class="settings-select"></select>
+                </label>
+                <label>
+                  <span id="ttsSpeedLabel">말하기 속도</span>
+                  <input id="ttsSpeedInput" class="settings-input" type="number" min="0.25" max="4" step="0.25" value="1">
+                </label>
+                <label>
+                  <span id="ttsLanguageLabel">언어 코드</span>
+                  <input id="ttsLanguageInput" class="settings-input" type="text" placeholder="ko">
+                </label>
+                <div class="settings-actions">
+                  <button id="ttsLoadVoicesBtn" class="secondary-btn" type="button">보이스 목록 불러오기</button>
+                </div>
+                <p id="voiceStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
               </div>
-              <p id="voiceStatusText" class="server-status-text">아직 확인하지 않았습니다.</p>
             </div>
           </section>
 

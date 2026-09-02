@@ -512,6 +512,9 @@ def main() -> None:
         ("sendMailCancelBtn", "send mail cancel button"),
         ("sendMailSendBtn", "send mail send button"),
         ("sendMailStatusText", "send mail status text"),
+        ("voiceLlmSettingsLayout", "voice and LLM settings layout"),
+        ("llmSettingsPanel", "LLM settings panel"),
+        ("ttsSettingsPanel", "TTS settings panel"),
     ]
     for element_id, label in required_ids:
         check(has_id(html, element_id), f"Web surface has {label}", element_id, failures)
@@ -777,6 +780,9 @@ def main() -> None:
         ("min-height: 44px", "in-note search fixed height"),
         (".markdown-preview", "Markdown preview styling"),
         (".server-settings-form", "server settings styling"),
+        (".voice-llm-settings-row", "voice and LLM settings compact row styling"),
+        (".voice-llm-grid", "voice and LLM two-column settings grid"),
+        (".voice-llm-panel", "voice and LLM grouped panel styling"),
         (".shortcut-groups", "shortcut settings styling"),
         (".deleted-toolbar", "deleted bin toolbar styling"),
         (".graph-toolbar", "graph toolbar styling"),
@@ -1037,6 +1043,9 @@ def main() -> None:
         ('id="worklogMailBtn"', "desktop worklog single mail button"),
         ('id="worklogRangeMailBtn"', "desktop worklog range mail button"),
         ('id="worklogRangeList"', "desktop worklog range result list"),
+        ('id="voiceLlmSettingsLayout"', "desktop voice and LLM settings layout"),
+        ('id="llmSettingsPanel"', "desktop LLM settings panel"),
+        ('id="ttsSettingsPanel"', "desktop TTS settings panel"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
@@ -1186,6 +1195,9 @@ def main() -> None:
         (".mail-settings-box", "desktop mail settings css"),
         (".send-mail-dialog-card", "desktop send mail dialog css"),
         (".worklog-recipient-box", "desktop worklog mail recipient css"),
+        (".voice-llm-settings-row", "desktop voice and LLM settings compact row css"),
+        (".voice-llm-grid", "desktop voice and LLM settings grid css"),
+        (".voice-llm-panel", "desktop voice and LLM settings panel css"),
     ]
     for needle, label in desktop_app_style_requirements:
         check(needle in desktop_app_styles, f"Desktop app style has {label}", needle, failures)
