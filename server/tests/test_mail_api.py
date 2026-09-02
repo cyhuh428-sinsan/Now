@@ -105,6 +105,92 @@ def test_mail_status_accepts_app_user_token(client: TestClient, db: Session, mon
     assert status_res.json()["enabled"] is True
 
 
+def test_worklog_mail_recipients_are_separate_from_smtp_settings_and_shared_by_user(
+    client: TestClient,
+    db: Session,
+) -> None:
+    owner_id, web_token = _mail_user(db)
+    from app.services.user_accounts import issue_user_device_access_token
+
+    _device, app_token = issue_user_device_access_token(
+        db,
+        owner_id=owner_id,
+        device_id="worklog-recipient-desktop",
+        display_name="Desktop",
+    )
+    db.commit()
+
+    create_res = client.post(
+        "/api/v1/mail/worklog/recipients",
+        json={"owner_id": owner_id, "email": " Receiver@Example.com ", "label": "팀 공유"},
+        headers={"X-Now-Web-Session": web_token},
+    )
+    assert create_res.status_code == 200, create_res.text
+    created = create_res.json()["recipient"]
+    assert created["email"] == "receiver@example.com"
+    assert created["label"] == "팀 공유"
+    assert "smtp_password" not in created
+    assert "smtp_password_encrypted" not in created
+
+    list_res = client.get(
+        "/api/v1/mail/worklog/recipients",
+        params={"owner_id": owner_id},
+        headers={"X-Now-User-Token": app_token},
+    )
+    assert list_res.status_code == 200, list_res.text
+    body = list_res.json()
+    assert body["status"] == "ok"
+    assert [item["email"] for item in body["recipients"]] == ["receiver@example.com"]
+
+
+def test_worklog_mail_recipient_save_validates_email(client: TestClient, db: Session) -> None:
+    owner_id, web_token = _mail_user(db)
+    res = client.post(
+        "/api/v1/mail/worklog/recipients",
+        json={"owner_id": owner_id, "email": "not-an-email"},
+        headers={"X-Now-Web-Session": web_token},
+    )
+    assert res.status_code == 422
+    assert res.json()["detail"] == "email invalid"
+
+
+def test_worklog_mail_recipient_delete_removes_only_owner_item(
+    client: TestClient,
+    db: Session,
+) -> None:
+    owner_id, web_token = _mail_user(db)
+    other_owner_id, other_token = _mail_user(db)
+    create_res = client.post(
+        "/api/v1/mail/worklog/recipients",
+        json={"owner_id": owner_id, "email": "receiver@example.com"},
+        headers={"X-Now-Web-Session": web_token},
+    )
+    recipient_id = create_res.json()["recipient"]["id"]
+
+    forbidden_res = client.delete(
+        f"/api/v1/mail/worklog/recipients/{recipient_id}",
+        params={"owner_id": other_owner_id},
+        headers={"X-Now-Web-Session": other_token},
+    )
+    assert forbidden_res.status_code == 404
+
+    delete_res = client.delete(
+        f"/api/v1/mail/worklog/recipients/{recipient_id}",
+        params={"owner_id": owner_id},
+        headers={"X-Now-Web-Session": web_token},
+    )
+    assert delete_res.status_code == 200
+    assert delete_res.json() == {"status": "ok", "deleted": True}
+
+    list_res = client.get(
+        "/api/v1/mail/worklog/recipients",
+        params={"owner_id": owner_id},
+        headers={"X-Now-Web-Session": web_token},
+    )
+    assert list_res.status_code == 200
+    assert list_res.json()["recipients"] == []
+
+
 def test_note_mail_returns_409_when_settings_not_tested(
     client: TestClient,
     db: Session,

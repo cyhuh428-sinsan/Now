@@ -175,6 +175,22 @@ class UserMailSettings(Base):
     )
 
 
+class UserWorklogMailRecipient(Base):
+    __tablename__ = "user_worklog_mail_recipients"
+    __table_args__ = (
+        UniqueConstraint("owner_id", "email", name="uq_worklog_mail_recipient_owner_email"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    owner_id: Mapped[str] = mapped_column(String(80), index=True)
+    email: Mapped[str] = mapped_column(String(240), index=True)
+    label: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+
 class GroupMessage(Base):
     __tablename__ = "group_messages"
 

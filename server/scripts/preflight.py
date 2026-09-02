@@ -847,6 +847,7 @@ def main() -> None:
                 ),
                 ("worklog_period_query", "Capabilities exposes worklog period query support", "worklog period query"),
                 ("worklog_period_mail_api", "Capabilities exposes worklog period mail support", "worklog period mail"),
+                ("worklog_mail_recipients_api", "Capabilities exposes worklog mail recipient API support", "worklog mail recipients"),
                 ("PUBLIC_SERVER_READY_ITEMS", "Capabilities defines public server ready items", "PUBLIC_SERVER_READY_ITEMS"),
                 ("PUBLIC_SERVER_HTTPS_ITEM", "Capabilities defines public HTTPS readiness item", "PUBLIC_SERVER_HTTPS_ITEM"),
                 ("PUBLIC_SERVER_PASSWORD_RESET_ITEM", "Capabilities defines password reset readiness item", "password reset readiness item"),
@@ -892,6 +893,19 @@ def main() -> None:
                 ('note_type="worklog"', "Notes API filters worklog period mail to worklog notes", "worklog mail note type"),
                 ('@router.post("/worklog/mail")', "Notes API exposes worklog period mail endpoint", "worklog period mail endpoint"),
                 ("worklog notes not found in date range", "Notes API blocks empty worklog period mail", "empty worklog mail blocked"),
+            ],
+            failures,
+        )
+    mail_api_path = server_dir / "app" / "api" / "mail.py"
+    if mail_api_path.exists():
+        mail_api_source = mail_api_path.read_text(encoding="utf-8")
+        check_text_contains(
+            mail_api_source,
+            [
+                ('@router.get("/worklog/recipients")', "Mail API exposes worklog recipient list endpoint", "worklog recipients list"),
+                ('@router.post("/worklog/recipients")', "Mail API exposes worklog recipient save endpoint", "worklog recipients save"),
+                ('@router.delete("/worklog/recipients/{recipient_id}")', "Mail API exposes worklog recipient delete endpoint", "worklog recipients delete"),
+                ("WorklogMailRecipientSaveRequest", "Mail API defines worklog recipient request schema", "worklog recipient schema"),
             ],
             failures,
         )
@@ -1223,6 +1237,8 @@ def main() -> None:
                 ("evidence_location", "Release evidence records store evidence location", "evidence location field"),
                 ("actual_note", "Release evidence records store actual note", "actual note field"),
                 ("checked_by", "Release evidence records store checker", "checked by field"),
+                ("class UserWorklogMailRecipient", "Server models define worklog mail recipients", "worklog recipient model"),
+                ('__tablename__ = "user_worklog_mail_recipients"', "Worklog recipients use separate table", "worklog recipient table"),
             ],
             failures,
         )
@@ -2253,6 +2269,9 @@ def main() -> None:
                 ("worklog_period", "Smoke covers worklog period list", "worklog period list"),
                 ("worklog_empty_period", "Smoke covers empty worklog period list", "worklog empty period"),
                 ("worklog notes not found in date range", "Smoke covers empty worklog period mail block", "worklog empty mail block"),
+                ("mail/worklog/recipients", "Smoke covers worklog recipient APIs", "worklog recipients smoke"),
+                ("worklog 수신자 이메일 검증", "Smoke checks worklog recipient email validation", "worklog recipient email validation"),
+                ("worklog 수신자 응답에 SMTP 비밀번호", "Smoke checks worklog recipient password separation", "worklog recipient password separation"),
                 ("user_timezone", "Smoke covers user timezone capability", "user_timezone"),
                 ("two_factor_auth", "Smoke covers two-factor auth status", "two_factor_auth"),
                 ("TWO_FACTOR_AUTH_STATUS", "Smoke checks two-factor auth status", "TWO_FACTOR_AUTH_STATUS"),

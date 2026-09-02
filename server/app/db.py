@@ -43,6 +43,7 @@ def create_tables() -> None:
         UserAccount,
         UserDevice,
         UserMailSettings,
+        UserWorklogMailRecipient,
         UserGroup,
         WebSession,
     )

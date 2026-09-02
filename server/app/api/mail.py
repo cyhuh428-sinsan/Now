@@ -5,7 +5,15 @@ from sqlalchemy.orm import Session
 from app.core.security import require_client_api_access
 from app.db import get_db
 from app.models.note import UserAccount
-from app.services.mail_settings import get_mail_settings, mail_settings_payload, save_tested_mail_settings
+from app.services.mail_settings import (
+    delete_worklog_mail_recipient,
+    get_mail_settings,
+    list_worklog_mail_recipients,
+    mail_settings_payload,
+    save_tested_mail_settings,
+    save_worklog_mail_recipient,
+    worklog_mail_recipient_payload,
+)
 from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(
@@ -25,6 +33,12 @@ class MailSettingsTestRequest(BaseModel):
     smtp_username: str = Field(min_length=1, max_length=240)
     smtp_password: str = Field(min_length=1, max_length=500)
     test_recipient: str = Field(min_length=3, max_length=240)
+
+
+class WorklogMailRecipientSaveRequest(BaseModel):
+    owner_id: str = Field(max_length=80)
+    email: str = Field(min_length=3, max_length=240)
+    label: str | None = Field(default=None, max_length=120)
 
 
 @router.get("/settings/status")
@@ -59,6 +73,51 @@ def test_mail_settings(
         test_recipient=payload.test_recipient,
     )
     return mail_settings_payload(settings)
+
+
+@router.get("/worklog/recipients")
+def worklog_mail_recipients(
+    owner_id: str = Query(max_length=80),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _mail_user(db, owner_id=owner_id, user_token=user_token, web_session_token=web_session_token)
+    recipients = list_worklog_mail_recipients(db, owner_id=user.owner_id)
+    return {
+        "status": "ok",
+        "recipients": [worklog_mail_recipient_payload(item) for item in recipients],
+    }
+
+
+@router.post("/worklog/recipients")
+def save_worklog_mail_recipient_api(
+    payload: WorklogMailRecipientSaveRequest,
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _mail_user(db, owner_id=payload.owner_id, user_token=user_token, web_session_token=web_session_token)
+    recipient = save_worklog_mail_recipient(
+        db,
+        owner_id=user.owner_id,
+        email=payload.email,
+        label=payload.label,
+    )
+    return {"status": "ok", "recipient": worklog_mail_recipient_payload(recipient)}
+
+
+@router.delete("/worklog/recipients/{recipient_id}")
+def delete_worklog_mail_recipient_api(
+    recipient_id: int,
+    owner_id: str = Query(max_length=80),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _mail_user(db, owner_id=owner_id, user_token=user_token, web_session_token=web_session_token)
+    delete_worklog_mail_recipient(db, owner_id=user.owner_id, recipient_id=recipient_id)
+    return {"status": "ok", "deleted": True}
 
 
 def _mail_user(

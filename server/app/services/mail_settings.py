@@ -9,7 +9,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
-from app.models.note import Note, UserMailSettings
+from app.models.note import Note, UserMailSettings, UserWorklogMailRecipient
 from app.services.email_delivery import send_smtp_message
 
 ALLOWED_SECURITY = {"ssl_tls", "starttls", "none"}
@@ -158,6 +158,68 @@ def send_note_mail(
 
 def get_mail_settings(db: Session, *, owner_id: str) -> UserMailSettings | None:
     return db.query(UserMailSettings).filter(UserMailSettings.owner_id == owner_id.strip()).one_or_none()
+
+
+def worklog_mail_recipient_payload(recipient: UserWorklogMailRecipient) -> dict:
+    return {
+        "id": recipient.id,
+        "owner_id": recipient.owner_id,
+        "email": recipient.email,
+        "label": recipient.label,
+        "created_at": _utc_iso(recipient.created_at),
+        "updated_at": _utc_iso(recipient.updated_at),
+    }
+
+
+def list_worklog_mail_recipients(db: Session, *, owner_id: str) -> list[UserWorklogMailRecipient]:
+    return list(
+        db.query(UserWorklogMailRecipient)
+        .filter(UserWorklogMailRecipient.owner_id == owner_id.strip())
+        .order_by(UserWorklogMailRecipient.email.asc(), UserWorklogMailRecipient.id.asc())
+        .all()
+    )
+
+
+def save_worklog_mail_recipient(
+    db: Session,
+    *,
+    owner_id: str,
+    email: str,
+    label: str | None,
+) -> UserWorklogMailRecipient:
+    cleaned_owner_id = owner_id.strip()
+    cleaned_email = _clean_email(email, "email").lower()
+    cleaned_label = (label or "").strip()[:120] or None
+    recipient = (
+        db.query(UserWorklogMailRecipient)
+        .filter(
+            UserWorklogMailRecipient.owner_id == cleaned_owner_id,
+            UserWorklogMailRecipient.email == cleaned_email,
+        )
+        .one_or_none()
+    )
+    if recipient is None:
+        recipient = UserWorklogMailRecipient(owner_id=cleaned_owner_id, email=cleaned_email)
+        db.add(recipient)
+    recipient.label = cleaned_label
+    db.commit()
+    db.refresh(recipient)
+    return recipient
+
+
+def delete_worklog_mail_recipient(db: Session, *, owner_id: str, recipient_id: int) -> None:
+    recipient = (
+        db.query(UserWorklogMailRecipient)
+        .filter(
+            UserWorklogMailRecipient.owner_id == owner_id.strip(),
+            UserWorklogMailRecipient.id == recipient_id,
+        )
+        .one_or_none()
+    )
+    if recipient is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="worklog mail recipient not found")
+    db.delete(recipient)
+    db.commit()
 
 
 def encrypt_secret(value: str) -> str:

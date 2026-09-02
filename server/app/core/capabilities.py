@@ -124,6 +124,7 @@ SERVER_CAPABILITIES = {
     "note_mail_send_api": True,
     "worklog_period_query": True,
     "worklog_period_mail_api": True,
+    "worklog_mail_recipients_api": True,
     "mail_secret_encryption": True,
     "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
     "supported_note_types": SUPPORTED_NOTE_TYPES,

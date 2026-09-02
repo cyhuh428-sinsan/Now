@@ -62,6 +62,7 @@ def test_worklog_note_type_is_declared(client: TestClient) -> None:
     """작업 일지는 선택형 기록이므로 note_type=worklog를 공식 지원 타입으로 알려야 한다."""
     capabilities = _capabilities(client)
     assert "worklog" in capabilities["supported_note_types"]
+    assert capabilities["worklog_mail_recipients_api"] is True
 
 
 def test_tree_depth_capability_matches_validation(client: TestClient) -> None:

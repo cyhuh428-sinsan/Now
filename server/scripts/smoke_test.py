@@ -1312,6 +1312,57 @@ def main() -> None:
         {"is_active": data.get("user", {}).get("is_active") if isinstance(data, dict) else None},
     )
 
+    status, data = request(
+        "POST",
+        f"{base_url}/api/v1/mail/worklog/recipients",
+        args.token,
+        {
+            "owner_id": "local_user",
+            "email": " Smoke-Worklog@Example.com ",
+            "label": "Smoke worklog recipient",
+        },
+    )
+    worklog_recipient = data.get("recipient", {}) if isinstance(data, dict) else {}
+    worklog_recipient_id = worklog_recipient.get("id")
+    require(worklog_recipient.get("email") == "smoke-worklog@example.com", "worklog 수신자 이메일이 정규화되지 않았습니다")
+    require(worklog_recipient.get("label") == "Smoke worklog recipient", "worklog 수신자 라벨이 저장되지 않았습니다")
+    require("smtp_password" not in worklog_recipient, "worklog 수신자 응답에 SMTP 비밀번호가 노출됩니다")
+    require("smtp_password_encrypted" not in worklog_recipient, "worklog 수신자 응답에 SMTP 비밀번호 해시가 노출됩니다")
+    print(
+        "POST /api/v1/mail/worklog/recipients:",
+        status,
+        {"email": worklog_recipient.get("email"), "has_password": False},
+    )
+
+    status, data = request("GET", f"{base_url}/api/v1/mail/worklog/recipients?owner_id=local_user", args.token)
+    worklog_recipient_emails = [item.get("email") for item in data.get("recipients", [])]
+    require(
+        "smoke-worklog@example.com" in worklog_recipient_emails,
+        "worklog 수신자 목록 조회에서 저장한 이메일이 보이지 않습니다",
+    )
+    print(
+        "GET /api/v1/mail/worklog/recipients:",
+        status,
+        {"has_smoke_recipient": True, "count": len(worklog_recipient_emails)},
+    )
+
+    status, data = request_error(
+        "POST",
+        f"{base_url}/api/v1/mail/worklog/recipients",
+        args.token,
+        {"owner_id": "local_user", "email": "invalid-email"},
+    )
+    require(status == 422 and data.get("detail") == "email invalid", "worklog 수신자 이메일 검증이 동작하지 않습니다")
+    print("POST /api/v1/mail/worklog/recipients(invalid_email):", status, {"detail": data.get("detail")})
+
+    status, data = request(
+        "DELETE",
+        f"{base_url}/api/v1/mail/worklog/recipients/{worklog_recipient_id}?owner_id=local_user",
+        args.token,
+    )
+    require(data.get("deleted") is True, "worklog 수신자 삭제 응답이 올바르지 않습니다")
+    print("DELETE /api/v1/mail/worklog/recipients/{id}:", status, {"deleted": True})
+
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     today = now[:10]
     worklog_range_start = f"{today}T00:00:00+00:00"

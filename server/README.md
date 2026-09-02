@@ -599,6 +599,28 @@ SMTP 설정으로 테스트 메일을 발송합니다. 성공한 경우에만 �
 - `smtp_password`
 - `test_recipient`
 
+`GET /api/v1/mail/worklog/recipients?owner_id=local_user`
+
+작업 일지 메일 화면에서만 쓰는 수신자 목록을 조회합니다. 일반 메모 메일 수신자 입력과 분리된 worklog 전용 목록이며, 같은 사용자 ID 기준으로 Web과 설치형 프로그램이 공유합니다. 응답에는 SMTP 비밀번호나 암호화된 SMTP 비밀값이 포함되지 않습니다.
+
+`POST /api/v1/mail/worklog/recipients`
+
+작업 일지 메일 수신자를 저장하거나 같은 이메일의 라벨을 갱신합니다.
+
+요청 예시:
+
+```json
+{
+  "owner_id": "local_user",
+  "email": "receiver@example.com",
+  "label": "팀 공유"
+}
+```
+
+`DELETE /api/v1/mail/worklog/recipients/{recipient_id}?owner_id=local_user`
+
+작업 일지 메일 수신자를 삭제합니다. 다른 사용자의 수신자 ID는 조회하거나 삭제할 수 없으며 `404 worklog mail recipient not found`를 반환합니다.
+
 `POST /api/v1/notes/{note_id}/mail?owner_id=local_user`
 
 현재 메모를 저장된 SMTP 설정으로 발송합니다. `note_id`는 서버 숫자 ID 또는 `local_id`를 사용할 수 있습니다. 메일 설정이 없거나 연결 테스트가 성공한 적이 없으면 `409 mail settings not tested`를 반환합니다.
@@ -619,6 +641,8 @@ SMTP 설정으로 테스트 메일을 발송합니다. 성공한 경우에만 �
 - `401 user token required`, `401 invalid user token`, `401 web session required`: 사용자 인증 실패
 - `404 note not found`: 현재 사용자 소유 메모 없음
 - `409 mail settings not tested`: 메일 설정 또는 연결 테스트 미완료
+- `404 worklog mail recipient not found`: 현재 사용자 소유 작업 일지 수신자 없음
+- `422 email invalid`: 작업 일지 수신자 이메일 형식 오류
 - `422 sender_email invalid`, `422 test_recipient invalid`, `422 to invalid`: 이메일 형식 오류
 - `502 smtp_test_failed`: SMTP 연결 테스트 실패
 - `502 smtp_send_failed`: 메모 메일 발송 실패
