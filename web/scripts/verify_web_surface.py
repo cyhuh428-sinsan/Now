@@ -148,10 +148,33 @@ def mail_send_script_ready(source: str) -> bool:
             "sendMailDialog: $(\"#sendMailDialog\")",
             "requestServerJson(server, mailOwnerPath(\"/api/v1/mail/settings/status\", server))",
             "requestServerJson(server, \"/api/v1/mail/settings/test\"",
-            "mailOwnerPath(`/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, server)",
+            "mailOwnerPath(`/api/v1/notes/${encodeURIComponent(draft.noteId)}/mail`, server)",
+            "to: [recipient]",
             "case \"sendMail\":",
             "return sendCurrentNoteMail();",
             "!isMailSendEnabled()",
+        ]
+    )
+
+
+def worklog_script_ready(source: str) -> bool:
+    return all(
+        needle in source
+        for needle in [
+            "worklogs: {}",
+            "selectedWorklogDate",
+            "visibleWorklogMonth",
+            "function normalizeWorklogNotes(worklogs)",
+            "function renderWorklog()",
+            "function saveWorklogFromEditor()",
+            "function worklogEntriesInRange()",
+            "function renderWorklogRange()",
+            "function sendSelectedWorklogMail()",
+            "function sendWorklogRangeMail()",
+            "function worklogNoteToServerNote(note, server)",
+            'note_type: "worklog"',
+            "applyPulledWorklogNote(note)",
+            "delete state.data.worklogs[state.selectedWorklogDate]",
         ]
     )
 
@@ -269,6 +292,16 @@ def main() -> None:
         ("dailyView", "daily note popover"),
         ("calendarGrid", "daily calendar"),
         ("dailyContent", "daily note editor"),
+        ("worklogTabBtn", "worklog tab button"),
+        ("worklogPanel", "worklog panel"),
+        ("worklogCalendarGrid", "worklog calendar"),
+        ("worklogContent", "worklog editor"),
+        ("worklogRangeStartInput", "worklog range start date input"),
+        ("worklogRangeEndInput", "worklog range end date input"),
+        ("worklogRangeSearchBtn", "worklog range search button"),
+        ("worklogMailBtn", "worklog single mail button"),
+        ("worklogRangeMailBtn", "worklog range mail button"),
+        ("worklogRangeList", "worklog range result list"),
         ("archivePanel", "daily archive panel"),
         ("importMarkdownInput", "Markdown import input"),
         ("exportMarkdownBtn", "Markdown export button"),
@@ -957,6 +990,16 @@ def main() -> None:
         ('id="sendMailCancelBtn"', "desktop send mail cancel button"),
         ('id="sendMailSendBtn"', "desktop send mail send button"),
         ('id="sendMailStatusText"', "desktop send mail status text"),
+        ('id="worklogTabBtn"', "desktop worklog tab button"),
+        ('id="worklogPanel"', "desktop worklog panel"),
+        ('id="worklogCalendarGrid"', "desktop worklog calendar"),
+        ('id="worklogContent"', "desktop worklog editor"),
+        ('id="worklogRangeStartInput"', "desktop worklog range start input"),
+        ('id="worklogRangeEndInput"', "desktop worklog range end input"),
+        ('id="worklogRangeSearchBtn"', "desktop worklog range search button"),
+        ('id="worklogMailBtn"', "desktop worklog single mail button"),
+        ('id="worklogRangeMailBtn"', "desktop worklog range mail button"),
+        ('id="worklogRangeList"', "desktop worklog range result list"),
     ]
     for needle, label in desktop_app_index_requirements:
         check(needle in desktop_app_index, f"Desktop app shell has {label}", needle, failures)
@@ -1063,6 +1106,12 @@ def main() -> None:
             mail_settings_secret_guard(source),
             f"{surface} app script keeps SMTP password out of persisted settings",
             "password only read from mailSettingsPasswordInput for test payload",
+            failures,
+        )
+        check(
+            worklog_script_ready(source),
+            f"{surface} app script has separate worklog storage, sync, range, and mail flow",
+            "worklogs/note_type worklog/range mail",
             failures,
         )
 

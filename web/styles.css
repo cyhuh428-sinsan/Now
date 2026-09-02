@@ -1460,12 +1460,64 @@ kbd {
   padding: 18px;
 }
 
+.daily-tabs {
+  display: flex;
+  gap: 6px;
+  margin: 12px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.daily-tab {
+  min-height: 34px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: transparent;
+  color: var(--muted);
+  padding: 0 14px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.daily-tab.active {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
 .daily-layout.compact {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
 .daily-layout.compact .memo-editor {
   min-height: 360px;
+}
+
+.worklog-range-panel {
+  margin-top: 14px;
+  padding: 16px;
+}
+
+.worklog-range-controls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.worklog-range-item {
+  display: grid;
+  gap: 6px;
+}
+
+.worklog-range-item pre {
+  margin: 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.55;
 }
 
 .archive-panel {
@@ -4826,6 +4878,10 @@ kbd {
   }
 
   .daily-layout.compact {
+    grid-template-columns: 1fr;
+  }
+
+  .worklog-range-controls {
     grid-template-columns: 1fr;
   }
 

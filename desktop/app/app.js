@@ -2448,6 +2448,9 @@ const state = {
   view: "tree",
   selectedDate: toDateKey(new Date()),
   visibleMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  selectedWorklogDate: toDateKey(new Date()),
+  visibleWorklogMonth: new Date(new Date().getFullYear(), new Date().getMonth(), 1),
+  dailyViewMode: "daily",
   selectedTreeId: null,
   treeMapTopicId: null,
   sharedView: isHostedWebClient() ? "group-tree" : "mine",
@@ -2473,6 +2476,7 @@ let desktopStorageInfo = null;
 let webLoginMode = "login";
 let pendingCaptureAttachment = null;
 let pendingMessengerAttachment = null;
+let pendingMailDraft = null;
 let captureSketchDirty = false;
 const unlockedEncryptedNotes = new Map();
 const encryptedSaveTimers = new Map();
@@ -2572,6 +2576,7 @@ const WRITING_TEMPLATES = {
 function defaultData() {
   return {
     daily: {},
+    worklogs: {},
     archivedDaily: [],
     deletedTree: [],
     canvases: [],
@@ -3192,6 +3197,8 @@ const elements = {
   searchInput: $("#searchInput"),
   navTabs: document.querySelectorAll(".nav-tab"),
   dailyToggleBtn: $("#dailyToggleBtn"),
+  dailyTabBtn: $("#dailyTabBtn"),
+  worklogTabBtn: $("#worklogTabBtn"),
   dailyCloseBtn: $("#dailyCloseBtn"),
   todayMemoState: $("#todayMemoState"),
   favoriteList: $("#favoriteList"),
@@ -3201,6 +3208,8 @@ const elements = {
   sideTagList: $("#sideTagList"),
   tagCount: $("#tagCount"),
   dailyView: $("#dailyView"),
+  dailyPanel: $("#dailyPanel"),
+  worklogPanel: $("#worklogPanel"),
   treeView: $("#treeView"),
   resultsView: $("#resultsView"),
   monthLabel: $("#monthLabel"),
@@ -3208,6 +3217,24 @@ const elements = {
   selectedDateLabel: $("#selectedDateLabel"),
   dailyContent: $("#dailyContent"),
   dailySavedLabel: $("#dailySavedLabel"),
+  dailyHeaderActions: $("#dailyHeaderActions"),
+  worklogHeaderActions: $("#worklogHeaderActions"),
+  worklogMonthLabel: $("#worklogMonthLabel"),
+  worklogCalendarGrid: $("#worklogCalendarGrid"),
+  selectedWorklogDateLabel: $("#selectedWorklogDateLabel"),
+  worklogContent: $("#worklogContent"),
+  worklogSavedLabel: $("#worklogSavedLabel"),
+  worklogTodayBtn: $("#worklogTodayBtn"),
+  worklogAppendTimeBtn: $("#worklogAppendTimeBtn"),
+  worklogMailBtn: $("#worklogMailBtn"),
+  worklogPrevMonthBtn: $("#worklogPrevMonthBtn"),
+  worklogNextMonthBtn: $("#worklogNextMonthBtn"),
+  worklogRangeStartInput: $("#worklogRangeStartInput"),
+  worklogRangeEndInput: $("#worklogRangeEndInput"),
+  worklogRangeSearchBtn: $("#worklogRangeSearchBtn"),
+  worklogRangeMailBtn: $("#worklogRangeMailBtn"),
+  worklogRangeSummary: $("#worklogRangeSummary"),
+  worklogRangeList: $("#worklogRangeList"),
   todayBtn: $("#todayBtn"),
   appendTimeBtn: $("#appendTimeBtn"),
   archiveSelectedBtn: $("#archiveSelectedBtn"),
@@ -5374,6 +5401,14 @@ function bindEvents() {
     toggleDailyPopup();
   });
 
+  elements.dailyTabBtn?.addEventListener("click", () => {
+    switchDailyViewMode("daily");
+  });
+
+  elements.worklogTabBtn?.addEventListener("click", () => {
+    switchDailyViewMode("worklog");
+  });
+
   elements.dailyCloseBtn.addEventListener("click", () => {
     closeDailyPopup();
   });
@@ -5425,6 +5460,56 @@ function bindEvents() {
     handleEditorInput(elements.dailyContent, event, saveDailyFromEditor);
   });
   bindEditorComposition(elements.dailyContent, saveDailyFromEditor);
+
+  elements.worklogTodayBtn?.addEventListener("click", () => {
+    const today = new Date();
+    state.selectedWorklogDate = toDateKey(today);
+    state.visibleWorklogMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    renderWorklog();
+  });
+
+  elements.worklogPrevMonthBtn?.addEventListener("click", () => {
+    state.visibleWorklogMonth = new Date(
+      state.visibleWorklogMonth.getFullYear(),
+      state.visibleWorklogMonth.getMonth() - 1,
+      1,
+    );
+    renderWorklog();
+  });
+
+  elements.worklogNextMonthBtn?.addEventListener("click", () => {
+    state.visibleWorklogMonth = new Date(
+      state.visibleWorklogMonth.getFullYear(),
+      state.visibleWorklogMonth.getMonth() + 1,
+      1,
+    );
+    renderWorklog();
+  });
+
+  elements.worklogAppendTimeBtn?.addEventListener("click", () => {
+    const current = elements.worklogContent.value.trimEnd();
+    const prefix = current ? `${current}\n\n` : "";
+    elements.worklogContent.value = `${prefix}[${timeLabel(new Date())}] `;
+    elements.worklogContent.focus();
+    saveWorklogFromEditor();
+  });
+
+  elements.worklogMailBtn?.addEventListener("click", () => {
+    sendSelectedWorklogMail();
+  });
+
+  elements.worklogRangeSearchBtn?.addEventListener("click", () => {
+    renderWorklogRange();
+  });
+
+  elements.worklogRangeMailBtn?.addEventListener("click", () => {
+    sendWorklogRangeMail();
+  });
+
+  elements.worklogContent?.addEventListener("input", (event) => {
+    handleEditorInput(elements.worklogContent, event, saveWorklogFromEditor);
+  });
+  if (elements.worklogContent) bindEditorComposition(elements.worklogContent, saveWorklogFromEditor);
 
   elements.railSidebarBtn.addEventListener("click", () => {
     state.settings.sidebarCollapsed = !state.settings.sidebarCollapsed;
@@ -7115,6 +7200,7 @@ function formatServerJobTime(value) {
 function countPendingSyncNotes() {
   return [
     ...Object.values(state.data.daily),
+    ...Object.values(state.data.worklogs || {}),
     ...state.data.archivedDaily,
   ].filter((item) => item?.syncState === "pending").length
     + flattenTree(state.data.tree).filter(shouldCountPendingTreeSync).length;
@@ -7720,6 +7806,7 @@ function renderMailSettings() {
   if (elements.mailSettingsTestBtn) {
     elements.mailSettingsTestBtn.disabled = !serverReady || mailSettings.checking;
   }
+  renderWorklogMailButtons();
   if (!statusEl) return;
   statusEl.classList.remove("ok", "warn", "bad");
   if (!serverReady) {
@@ -7813,6 +7900,7 @@ function defaultMailSubject(selected) {
 
 function closeSendMailDialog() {
   elements.sendMailDialog?.classList.add("hidden");
+  pendingMailDraft = null;
 }
 
 function sendCurrentNoteMail() {
@@ -7822,20 +7910,17 @@ function sendCurrentNoteMail() {
     return false;
   }
   const subject = defaultMailSubject(selected);
-  elements.sendMailRecipientInput.value = "";
-  elements.sendMailSubjectInput.value = subject;
-  elements.sendMailMessageInput.value = `${subject}\n\n${selected.content || ""}`.trim();
-  elements.sendMailStatusText.textContent = "수신 주소를 입력하세요.";
-  elements.sendMailStatusText.classList.remove("ok", "warn", "bad");
-  elements.sendMailDialog.classList.remove("hidden");
-  window.setTimeout(() => elements.sendMailRecipientInput?.focus(), 0);
-  return true;
+  return openSendMailDialog({
+    noteId: selected.id,
+    subject,
+    message: `${subject}\n\n${selected.content || ""}`.trim(),
+  });
 }
 
 async function submitCurrentNoteMail() {
-  const selected = getSelectedTreeNode();
+  const draft = pendingMailDraft;
   const server = state.settings.server || defaultServerSettings();
-  if (!selected || !isMailSendEnabled()) {
+  if (!draft || !canSendMailWithSettings()) {
     closeSendMailDialog();
     return false;
   }
@@ -7851,12 +7936,19 @@ async function submitCurrentNoteMail() {
   elements.sendMailStatusText.classList.remove("ok", "bad");
   elements.sendMailStatusText.classList.add("warn");
   try {
-    await requestServerJson(server, mailOwnerPath(`/api/v1/notes/${encodeURIComponent(selected.id)}/mail`, server), {
+    const serverNotes = Array.isArray(draft.serverNotes) ? draft.serverNotes : [];
+    for (const note of serverNotes) {
+      await requestServerJson(server, "/api/v1/notes", {
+        method: "POST",
+        body: JSON.stringify(note),
+      });
+    }
+    await requestServerJson(server, mailOwnerPath(`/api/v1/notes/${encodeURIComponent(draft.noteId)}/mail`, server), {
       method: "POST",
       body: JSON.stringify({
-        recipient,
-        subject: elements.sendMailSubjectInput.value.trim() || defaultMailSubject(selected),
-        message: elements.sendMailMessageInput.value || defaultMailSubject(selected),
+        to: [recipient],
+        subject: elements.sendMailSubjectInput.value.trim() || draft.subject,
+        message: elements.sendMailMessageInput.value || draft.message || draft.subject,
       }),
     });
     elements.sendMailStatusText.textContent = "메일을 보냈습니다.";
@@ -8562,6 +8654,7 @@ function applyPulledServerNotes(serverNotes) {
   const result = { applied: 0, skipped: 0 };
   const notes = Array.isArray(serverNotes) ? serverNotes : [];
   const dailyNotes = notes.filter((note) => note.note_type === "daily");
+  const worklogNotes = notes.filter((note) => note.note_type === "worklog");
   const activeTreeNotes = notes
     .filter((note) => note.note_type === "tree" && !note.deleted_at)
     .sort((a, b) => (a.level || 1) - (b.level || 1));
@@ -8569,6 +8662,9 @@ function applyPulledServerNotes(serverNotes) {
 
   dailyNotes.forEach((note) => {
     applyPulledDailyNote(note) ? result.applied += 1 : result.skipped += 1;
+  });
+  worklogNotes.forEach((note) => {
+    applyPulledWorklogNote(note) ? result.applied += 1 : result.skipped += 1;
   });
   activeTreeNotes.forEach((note) => {
     applyPulledTreeNote(note) ? result.applied += 1 : result.skipped += 1;
@@ -8633,6 +8729,10 @@ function findLocalNoteForServerNote(note) {
       return state.data.archivedDaily.find((item) => item.id === id) || null;
     }
     return state.data.daily[date] || null;
+  }
+  if (note.note_type === "worklog") {
+    const date = worklogDateFromServerNote(note);
+    return date ? state.data.worklogs[date] || null : null;
   }
   if (note.note_type === "tree") {
     return findTreeNode(state.data.tree, note.local_id);
@@ -8711,6 +8811,37 @@ function applyPulledDailyNote(note) {
     });
     delete state.data.daily[date];
   }
+  return true;
+}
+
+function worklogDateFromServerNote(note) {
+  const localId = String(note?.local_id || "").replace(/^worklog:/, "");
+  if (isDateKey(localId)) return localId;
+  const dateFromTitle = /^(\d{4}-\d{2}-\d{2})/.exec(String(note?.title || ""));
+  return dateFromTitle && isDateKey(dateFromTitle[1]) ? dateFromTitle[1] : "";
+}
+
+function applyPulledWorklogNote(note) {
+  const date = worklogDateFromServerNote(note);
+  if (!date) return false;
+  const current = state.data.worklogs[date];
+  if (!shouldApplyPulledNote(current, note)) {
+    recordServerConflict(current, note);
+    return false;
+  }
+  clearServerConflictForNote("worklog", note.local_id);
+  if (note.deleted_at || !String(note.content || "").trim()) {
+    delete state.data.worklogs[date];
+    return true;
+  }
+  state.data.worklogs[date] = {
+    ...(current || {}),
+    date,
+    content: note.content || "",
+    status: "active",
+    syncState: "synced",
+    updatedAt: note.client_updated_at || note.updated_at || new Date().toISOString(),
+  };
   return true;
 }
 
@@ -8881,6 +9012,10 @@ function buildServerSyncNotes(server) {
       .filter((note) => note.content?.trim())
       .filter((note) => shouldSendServerNote(note, changedOnly))
       .map((note) => dailyNoteToServerNote(note, server)),
+    ...Object.values(state.data.worklogs || {})
+      .filter((note) => note.content?.trim())
+      .filter((note) => shouldSendServerNote(note, changedOnly))
+      .map((note) => worklogNoteToServerNote(note, server)),
     ...state.data.archivedDaily
       .filter((note) => note.content?.trim())
       .filter((note) => shouldSendServerNote(note, changedOnly))
@@ -8962,6 +9097,23 @@ function archivedDailyNoteToServerNote(note, server) {
   };
 }
 
+function worklogNoteToServerNote(note, server) {
+  return {
+    owner_id: server.ownerId,
+    device_id: server.deviceId,
+    local_id: `worklog:${note.date}`,
+    note_type: "worklog",
+    title: `${note.date} 작업 일지`,
+    content: note.content || "",
+    parent_local_id: null,
+    level: 1,
+    tags: "worklog",
+    source: "web-worklog",
+    client_updated_at: note.updatedAt || new Date().toISOString(),
+    deleted_at: null,
+  };
+}
+
 function treeNodeToServerNote(node, server, deletedAt) {
   return {
     owner_id: server.ownerId,
@@ -8988,6 +9140,12 @@ function markServerSyncedNotes(pushedNotes = null) {
         clearServerConflictForNote("daily", `daily:${note.date}`);
       }
     });
+    Object.values(state.data.worklogs || {}).forEach((note) => {
+      if (syncedIds.has(`worklog:worklog:${note.date}`)) {
+        note.syncState = "synced";
+        clearServerConflictForNote("worklog", `worklog:${note.date}`);
+      }
+    });
     state.data.archivedDaily.forEach((note) => {
       if (syncedIds.has(`daily:daily-archive:${note.id}`)) {
         note.syncState = "synced";
@@ -9005,6 +9163,9 @@ function markServerSyncedNotes(pushedNotes = null) {
     return;
   }
   Object.values(state.data.daily).forEach((note) => {
+    note.syncState = "synced";
+  });
+  Object.values(state.data.worklogs || {}).forEach((note) => {
     note.syncState = "synced";
   });
   state.data.archivedDaily.forEach((note) => {
@@ -13350,11 +13511,41 @@ function toggleDailyPopup() {
 function openDailyPopup() {
   closePopupLayers();
   elements.dailyView.classList.remove("hidden");
-  elements.dailyContent.focus();
+  renderDailyViewMode();
+  if (state.dailyViewMode === "worklog") {
+    renderWorklog();
+    elements.worklogContent?.focus();
+  } else {
+    elements.dailyContent.focus();
+  }
 }
 
 function closeDailyPopup() {
   elements.dailyView.classList.add("hidden");
+}
+
+function switchDailyViewMode(mode) {
+  state.dailyViewMode = mode === "worklog" ? "worklog" : "daily";
+  renderDailyViewMode();
+  if (state.dailyViewMode === "worklog") {
+    renderWorklog();
+    window.setTimeout(() => elements.worklogContent?.focus(), 0);
+    return;
+  }
+  renderDaily();
+  window.setTimeout(() => elements.dailyContent?.focus(), 0);
+}
+
+function renderDailyViewMode() {
+  const isWorklog = state.dailyViewMode === "worklog";
+  elements.dailyTabBtn?.classList.toggle("active", !isWorklog);
+  elements.dailyTabBtn?.setAttribute("aria-selected", isWorklog ? "false" : "true");
+  elements.worklogTabBtn?.classList.toggle("active", isWorklog);
+  elements.worklogTabBtn?.setAttribute("aria-selected", isWorklog ? "true" : "false");
+  elements.dailyPanel?.classList.toggle("hidden", isWorklog);
+  elements.worklogPanel?.classList.toggle("hidden", !isWorklog);
+  elements.dailyHeaderActions?.classList.toggle("hidden", isWorklog);
+  elements.worklogHeaderActions?.classList.toggle("hidden", !isWorklog);
 }
 
 function render() {
@@ -13379,12 +13570,14 @@ function renderDeletedTreeButton() {
 
 function renderDaily() {
   setDailyArchivePreviewMode(false);
+  renderDailyViewMode();
   elements.monthLabel.textContent = monthLabel(state.visibleMonth);
   elements.selectedDateLabel.textContent = longDateLabel(state.selectedDate);
   setEditorValue(elements.dailyContent, state.data.daily[state.selectedDate]?.content || "");
   renderTodayMemoState();
   renderCalendar();
   renderArchiveList();
+  renderWorklog();
 }
 
 function renderTodayMemoState() {
@@ -13515,6 +13708,171 @@ function saveDailyFromEditor() {
   renderCalendar();
   renderTodayMemoState();
   showSaved(elements.dailySavedLabel);
+}
+
+function renderWorklog() {
+  if (!elements.worklogPanel) return;
+  elements.worklogMonthLabel.textContent = monthLabel(state.visibleWorklogMonth);
+  elements.selectedWorklogDateLabel.textContent = longDateLabel(state.selectedWorklogDate);
+  setEditorValue(elements.worklogContent, state.data.worklogs[state.selectedWorklogDate]?.content || "");
+  renderWorklogCalendar();
+  if (!elements.worklogRangeStartInput.value) elements.worklogRangeStartInput.value = state.selectedWorklogDate;
+  if (!elements.worklogRangeEndInput.value) elements.worklogRangeEndInput.value = state.selectedWorklogDate;
+  renderWorklogRange();
+  renderWorklogMailButtons();
+}
+
+function renderWorklogCalendar() {
+  elements.worklogCalendarGrid.replaceChildren(...worklogCalendarButtons());
+}
+
+function worklogCalendarButtons() {
+  const start = new Date(state.visibleWorklogMonth);
+  start.setDate(1 - start.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const date = new Date(start);
+    date.setDate(start.getDate() + index);
+    const key = toDateKey(date);
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "day-btn";
+    button.textContent = String(date.getDate());
+    button.classList.toggle("muted", date.getMonth() !== state.visibleWorklogMonth.getMonth());
+    button.classList.toggle("selected", key === state.selectedWorklogDate);
+    button.classList.toggle("has-note", Boolean(state.data.worklogs[key]?.content?.trim()));
+    button.addEventListener("click", () => {
+      state.selectedWorklogDate = key;
+      state.visibleWorklogMonth = new Date(date.getFullYear(), date.getMonth(), 1);
+      renderWorklog();
+    });
+    return button;
+  });
+}
+
+function saveWorklogFromEditor() {
+  const content = elements.worklogContent.value;
+  if (!content.trim()) {
+    delete state.data.worklogs[state.selectedWorklogDate];
+  } else {
+    state.data.worklogs[state.selectedWorklogDate] = {
+      date: state.selectedWorklogDate,
+      content,
+      status: "active",
+      syncState: "pending",
+      updatedAt: new Date().toISOString(),
+    };
+  }
+  persist();
+  renderWorklogCalendar();
+  renderWorklogRange();
+  renderWorklogMailButtons();
+  showSaved(elements.worklogSavedLabel);
+}
+
+function worklogEntriesInRange() {
+  const start = elements.worklogRangeStartInput.value || state.selectedWorklogDate;
+  const end = elements.worklogRangeEndInput.value || start;
+  const from = start <= end ? start : end;
+  const to = start <= end ? end : start;
+  return Object.values(state.data.worklogs || {})
+    .filter((note) => isDateKey(note.date) && note.content?.trim())
+    .filter((note) => note.date >= from && note.date <= to)
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+function renderWorklogRange() {
+  if (!elements.worklogRangeList) return;
+  const entries = worklogEntriesInRange();
+  elements.worklogRangeSummary.textContent = entries.length
+    ? `${entries.length}개의 작업 일지를 찾았습니다.`
+    : "작성된 작업 일지가 없습니다.";
+  elements.worklogRangeList.replaceChildren(...entries.map((note) => {
+    const item = document.createElement("article");
+    item.className = "archive-item worklog-range-item";
+    item.innerHTML = `
+      <div class="archive-info">
+        <strong>${escapeHtml(longDateLabel(note.date))}</strong>
+        <pre>${escapeHtml(note.content || "")}</pre>
+      </div>
+    `;
+    return item;
+  }));
+  renderWorklogMailButtons();
+}
+
+function canSendMailWithSettings() {
+  return mailSettings.status === "ok" && mailSettings.enabled === true;
+}
+
+function renderWorklogMailButtons() {
+  const selected = state.data.worklogs[state.selectedWorklogDate];
+  if (elements.worklogMailBtn) {
+    elements.worklogMailBtn.disabled = !canSendMailWithSettings() || !selected?.content?.trim();
+  }
+  if (elements.worklogRangeMailBtn) {
+    elements.worklogRangeMailBtn.disabled = !canSendMailWithSettings() || worklogEntriesInRange().length === 0;
+  }
+}
+
+function worklogMailNoteId(note) {
+  return `worklog:${note.date}`;
+}
+
+function worklogMailSubject(note) {
+  return `[NowNote] ${note.date} 작업 일지`;
+}
+
+function worklogRangeMailSubject(entries) {
+  const first = entries[0]?.date || "";
+  const last = entries.at(-1)?.date || first;
+  return `[NowNote] 작업 일지 ${first}${first !== last ? ` - ${last}` : ""}`;
+}
+
+function worklogRangeMailMessage(entries) {
+  return entries
+    .map((note) => `## ${note.date}\n\n${note.content || ""}`.trim())
+    .join("\n\n---\n\n");
+}
+
+function openSendMailDialog(draft) {
+  pendingMailDraft = draft;
+  elements.sendMailRecipientInput.value = "";
+  elements.sendMailSubjectInput.value = draft.subject;
+  elements.sendMailMessageInput.value = draft.message;
+  elements.sendMailStatusText.textContent = "수신 주소를 입력하세요.";
+  elements.sendMailStatusText.classList.remove("ok", "warn", "bad");
+  elements.sendMailDialog.classList.remove("hidden");
+  window.setTimeout(() => elements.sendMailRecipientInput?.focus(), 0);
+  return true;
+}
+
+function sendSelectedWorklogMail() {
+  const note = state.data.worklogs[state.selectedWorklogDate];
+  if (!canSendMailWithSettings() || !note?.content?.trim()) {
+    showNotice("메일 연결 테스트가 완료되고 내용이 있는 작업 일지만 보낼 수 있습니다.", "error");
+    return false;
+  }
+  return openSendMailDialog({
+    noteId: worklogMailNoteId(note),
+    subject: worklogMailSubject(note),
+    message: `${worklogMailSubject(note)}\n\n${note.content || ""}`.trim(),
+    serverNotes: [worklogNoteToServerNote(note, state.settings.server || defaultServerSettings())],
+  });
+}
+
+function sendWorklogRangeMail() {
+  const entries = worklogEntriesInRange();
+  if (!canSendMailWithSettings() || entries.length === 0) {
+    showNotice("메일 연결 테스트가 완료되고 조회 기간에 작성된 작업 일지가 있어야 보낼 수 있습니다.", "error");
+    return false;
+  }
+  return openSendMailDialog({
+    noteId: worklogMailNoteId(entries[0]),
+    subject: worklogRangeMailSubject(entries),
+    message: worklogRangeMailMessage(entries),
+    serverNotes: entries.map((note) => worklogNoteToServerNote(note, state.settings.server || defaultServerSettings())),
+  });
 }
 
 async function archiveSelectedDailyNote() {
@@ -16150,6 +16508,9 @@ function normalizeData() {
   state.data.daily = state.data.daily && typeof state.data.daily === "object" && !Array.isArray(state.data.daily)
     ? state.data.daily
     : {};
+  state.data.worklogs = state.data.worklogs && typeof state.data.worklogs === "object" && !Array.isArray(state.data.worklogs)
+    ? state.data.worklogs
+    : {};
   state.data.archivedDaily = Array.isArray(state.data.archivedDaily) ? state.data.archivedDaily : [];
   state.data.deletedTree = Array.isArray(state.data.deletedTree) ? state.data.deletedTree : [];
   state.data.canvases = Array.isArray(state.data.canvases) ? state.data.canvases : [];
@@ -16160,6 +16521,7 @@ function normalizeData() {
   state.data.tree = Array.isArray(state.data.tree) ? state.data.tree : [];
 
   state.data.daily = normalizeDailyNotes(state.data.daily);
+  state.data.worklogs = normalizeWorklogNotes(state.data.worklogs);
   state.data.archivedDaily = state.data.archivedDaily.filter((note) => isPlainObject(note) && isDateKey(note.date));
   state.data.deletedTree = state.data.deletedTree.filter(isPlainObject);
   state.data.canvases = state.data.canvases.filter(isPlainObject).map(normalizeCanvas).slice(0, 12);
@@ -16172,6 +16534,16 @@ function normalizeData() {
   Object.values(state.data.daily).forEach((note) => {
     note.content = normalizeText(note.content);
     note.status = note.status || "active";
+    note.syncState = note.syncState || "synced";
+    note.updatedAt = note.updatedAt || new Date().toISOString();
+  });
+  Object.entries(state.data.worklogs).forEach(([date, note]) => {
+    note.content = normalizeText(note.content);
+    if (!note.content.trim()) {
+      delete state.data.worklogs[date];
+      return;
+    }
+    note.status = "active";
     note.syncState = note.syncState || "synced";
     note.updatedAt = note.updatedAt || new Date().toISOString();
   });
@@ -16244,6 +16616,25 @@ function normalizeDailyNotes(daily) {
     const entry = isPlainObject(note)
       ? { ...note, date }
       : { date, content: String(note || "") };
+    if (normalized[date]) {
+      normalized[date] = mergeDailyNote(normalized[date], entry);
+    } else {
+      normalized[date] = entry;
+    }
+    return normalized;
+  }, {});
+}
+
+function normalizeWorklogNotes(worklogs) {
+  return Object.entries(worklogs).reduce((normalized, [dateKey, note]) => {
+    const date = isPlainObject(note) && isDateKey(note.date)
+      ? note.date
+      : dateKey;
+    if (!isDateKey(date)) return normalized;
+    const entry = isPlainObject(note)
+      ? { ...note, date }
+      : { date, content: String(note || "") };
+    if (!String(entry.content || "").trim()) return normalized;
     if (normalized[date]) {
       normalized[date] = mergeDailyNote(normalized[date], entry);
     } else {

@@ -352,49 +352,107 @@
             <p id="dailyEyebrow" class="eyebrow">필요할 때 잠깐 여는 날짜 기록</p>
             <h2 id="dailyTitle">일자별 메모</h2>
           </div>
-          <div class="header-actions">
+          <div id="dailyHeaderActions" class="header-actions">
             <button id="todayBtn" class="secondary-btn" type="button">오늘</button>
             <button id="appendTimeBtn" class="primary-btn" type="button">시간 추가</button>
             <button id="archiveSelectedBtn" class="secondary-btn" type="button">보관</button>
             <button id="archiveToggleBtn" class="secondary-btn" type="button">보관함</button>
+          </div>
+          <div id="worklogHeaderActions" class="header-actions hidden">
+            <button id="worklogTodayBtn" class="secondary-btn" type="button">오늘</button>
+            <button id="worklogAppendTimeBtn" class="primary-btn" type="button">시간 추가</button>
+            <button id="worklogMailBtn" class="secondary-btn" type="button">작업 일지 메일</button>
+          </div>
+          <div class="header-actions">
             <button id="dailyCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
           </div>
         </header>
 
-        <div class="daily-layout compact">
-          <section id="calendarPanel" class="panel calendar-panel" aria-label="달력">
-            <div class="month-bar">
-              <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
-              <strong id="monthLabel"></strong>
-              <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
-            </div>
-            <div class="calendar-weekdays">
-              <span id="weekdaySun">일</span><span id="weekdayMon">월</span><span id="weekdayTue">화</span><span id="weekdayWed">수</span><span id="weekdayThu">목</span><span id="weekdayFri">금</span><span id="weekdaySat">토</span>
-            </div>
-            <div id="calendarGrid" class="calendar-grid"></div>
-          </section>
-
-          <section id="dailyEditorPanel" class="panel editor-panel" aria-label="선택한 날짜 메모">
-            <div class="editor-head">
-              <div>
-                <p id="selectedDateLabel" class="eyebrow"></p>
-                <h3 id="dailyMemoTitle">하루 하나의 메모장</h3>
-              </div>
-              <span id="dailySavedLabel" class="save-state">저장됨</span>
-            </div>
-            <textarea id="dailyContent" class="memo-editor daily-editor" placeholder="이 날짜의 메모장 하나에 계속 추가해서 적어두세요."></textarea>
-          </section>
+        <div class="daily-tabs" role="tablist" aria-label="날짜 기록 종류">
+          <button id="dailyTabBtn" class="daily-tab active" type="button" role="tab" aria-selected="true" aria-controls="dailyPanel">일자별 메모</button>
+          <button id="worklogTabBtn" class="daily-tab" type="button" role="tab" aria-selected="false" aria-controls="worklogPanel">작업 일지</button>
         </div>
 
-        <section id="archivePanel" class="panel archive-panel hidden" aria-label="일자별 메모 보관함">
-          <div class="archive-head">
-            <div>
-              <p id="dailyArchiveEyebrow" class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
-              <h3 id="dailyArchiveTitle">보관함</h3>
-            </div>
-            <span id="archiveCountLabel" class="save-state">0개</span>
+        <section id="dailyPanel">
+          <div class="daily-layout compact">
+            <section id="calendarPanel" class="panel calendar-panel" aria-label="달력">
+              <div class="month-bar">
+                <button id="prevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
+                <strong id="monthLabel"></strong>
+                <button id="nextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
+              </div>
+              <div class="calendar-weekdays">
+                <span id="weekdaySun">일</span><span id="weekdayMon">월</span><span id="weekdayTue">화</span><span id="weekdayWed">수</span><span id="weekdayThu">목</span><span id="weekdayFri">금</span><span id="weekdaySat">토</span>
+              </div>
+              <div id="calendarGrid" class="calendar-grid"></div>
+            </section>
+
+            <section id="dailyEditorPanel" class="panel editor-panel" aria-label="선택한 날짜 메모">
+              <div class="editor-head">
+                <div>
+                  <p id="selectedDateLabel" class="eyebrow"></p>
+                  <h3 id="dailyMemoTitle">하루 하나의 메모장</h3>
+                </div>
+                <span id="dailySavedLabel" class="save-state">저장됨</span>
+              </div>
+              <textarea id="dailyContent" class="memo-editor daily-editor" placeholder="이 날짜의 메모장 하나에 계속 추가해서 적어두세요."></textarea>
+            </section>
           </div>
-          <div id="archiveList" class="archive-list"></div>
+
+          <section id="archivePanel" class="panel archive-panel hidden" aria-label="일자별 메모 보관함">
+            <div class="archive-head">
+              <div>
+                <p id="dailyArchiveEyebrow" class="eyebrow">활성 메모에서 빠진 날짜 기록</p>
+                <h3 id="dailyArchiveTitle">보관함</h3>
+              </div>
+              <span id="archiveCountLabel" class="save-state">0개</span>
+            </div>
+            <div id="archiveList" class="archive-list"></div>
+          </section>
+        </section>
+
+        <section id="worklogPanel" class="hidden">
+          <div class="daily-layout compact worklog-layout">
+            <section id="worklogCalendarPanel" class="panel calendar-panel" aria-label="작업 일지 달력">
+              <div class="month-bar">
+                <button id="worklogPrevMonthBtn" class="icon-btn" type="button" aria-label="이전 달">‹</button>
+                <strong id="worklogMonthLabel"></strong>
+                <button id="worklogNextMonthBtn" class="icon-btn" type="button" aria-label="다음 달">›</button>
+              </div>
+              <div class="calendar-weekdays">
+                <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+              </div>
+              <div id="worklogCalendarGrid" class="calendar-grid"></div>
+            </section>
+
+            <section id="worklogEditorPanel" class="panel editor-panel" aria-label="선택한 날짜 작업 일지">
+              <div class="editor-head">
+                <div>
+                  <p id="selectedWorklogDateLabel" class="eyebrow"></p>
+                  <h3 id="worklogMemoTitle">작업 일지</h3>
+                </div>
+                <span id="worklogSavedLabel" class="save-state">저장됨</span>
+              </div>
+              <textarea id="worklogContent" class="memo-editor daily-editor" placeholder="작업한 날에만 내용을 적어두세요. 비워두면 저장하지 않습니다."></textarea>
+            </section>
+          </div>
+
+          <section id="worklogRangePanel" class="panel worklog-range-panel" aria-label="작업 일지 기간 조회">
+            <div class="archive-head">
+              <div>
+                <p class="eyebrow">작성된 작업 일지만 조회</p>
+                <h3>기간 조회</h3>
+              </div>
+              <button id="worklogRangeMailBtn" class="secondary-btn" type="button">조회 기간 메일 보내기</button>
+            </div>
+            <div class="worklog-range-controls">
+              <input id="worklogRangeStartInput" class="settings-input" type="date" aria-label="작업 일지 시작일">
+              <input id="worklogRangeEndInput" class="settings-input" type="date" aria-label="작업 일지 종료일">
+              <button id="worklogRangeSearchBtn" class="secondary-btn" type="button">조회</button>
+            </div>
+            <p id="worklogRangeSummary" class="empty-compact">작성된 작업 일지가 없습니다.</p>
+            <div id="worklogRangeList" class="archive-list"></div>
+          </section>
         </section>
       </div>
     </section>
