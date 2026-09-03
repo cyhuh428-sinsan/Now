@@ -96,3 +96,7 @@ now_app/docs/*
 nownote_app/docs/*
 !nownote_app/docs/google_play_step_by_step_ko.md
 !nownote_app/docs/google_play_release_checklist.md
+
+# Local test reports
+**/*TEST_REPORT*.md
+
