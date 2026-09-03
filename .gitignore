@@ -48,3 +48,51 @@ now_app/**/*.pyc
 .vscode/
 .DS_Store
 *.log
+# Local project documents, work logs, reports, drafts, and screenshots
+# Only explicitly maintained manuals and public README files are tracked.
+docs/
+!docs/HELP.md
+!docs/HELP.en.md
+!docs/OPEN_SOURCE_RELEASE.md
+!docs/SERVER_AUTH_POLICY.md
+now_app/docs/
+!now_app/docs/google_play_step_by_step_ko.md
+!now_app/docs/google_play_release_checklist.md
+!now_app/docs/mobile_runtime_checklist_ko.md
+nownote_app/docs/
+!nownote_app/docs/google_play_step_by_step_ko.md
+!nownote_app/docs/google_play_release_checklist.md
+# Credentials, certificates, local backups, and release binaries
+**/*.pem
+**/*.key
+**/*.p12
+**/*.pfx
+**/*.jks
+**/*.keystore
+**/*.crt
+**/*.cer
+**/*.der
+**/*.bak
+**/*.orig
+**/*.secret
+**/*credentials*
+**/*secrets*
+**/*.exe
+**/*.msi
+**/*.apk
+**/*.aab
+
+# Project planning, work logs, reports, drafts, and screenshots stay local.
+# Only explicitly maintained manuals and public README files are tracked.
+docs/*
+!docs/HELP.md
+!docs/HELP.en.md
+!docs/OPEN_SOURCE_RELEASE.md
+!docs/SERVER_AUTH_POLICY.md
+now_app/docs/*
+!now_app/docs/google_play_step_by_step_ko.md
+!now_app/docs/google_play_release_checklist.md
+!now_app/docs/mobile_runtime_checklist_ko.md
+nownote_app/docs/*
+!nownote_app/docs/google_play_step_by_step_ko.md
+!nownote_app/docs/google_play_release_checklist.md
