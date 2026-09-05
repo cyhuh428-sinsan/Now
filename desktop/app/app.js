@@ -14195,6 +14195,8 @@ function addChildToSelectedTreeNode() {
 }
 
 function renderTreeListOnly() {
+  const scrollTop = elements.treeList?.scrollTop || 0;
+  const scrollLeft = elements.treeList?.scrollLeft || 0;
   state.sharedView = normalizeSharedView(state.sharedView);
   const roots = sharedViewTreeRoots();
   if (roots.length === 0) {
@@ -14202,13 +14204,26 @@ function renderTreeListOnly() {
     empty.className = "empty-state";
     empty.innerHTML = `<strong>${escapeHtml(t("note.emptyTitle"))}</strong><span>${escapeHtml(t("note.emptyDescription"))}</span>`;
     elements.treeList.replaceChildren(empty);
+    restoreTreeListScroll(scrollTop, scrollLeft);
     return;
   }
   if (state.sharedView === "member") {
     renderMemberSharedTreeList(roots);
+    restoreTreeListScroll(scrollTop, scrollLeft);
     return;
   }
   elements.treeList.replaceChildren(...roots.map((node) => treeNodeElement(node)));
+  restoreTreeListScroll(scrollTop, scrollLeft);
+}
+
+function restoreTreeListScroll(scrollTop, scrollLeft) {
+  const restore = () => {
+    if (!elements.treeList) return;
+    elements.treeList.scrollTop = scrollTop;
+    elements.treeList.scrollLeft = scrollLeft;
+  };
+  restore();
+  window.requestAnimationFrame(restore);
 }
 
 function sharedViewTreeRoots() {
