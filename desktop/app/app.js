@@ -7799,6 +7799,13 @@ function setMailSettingsStatus(status, message, payload = {}) {
   mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
   mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
   mailSettings.message = message || "";
+  if (typeof payload.sender_name === "string") elements.mailSettingsSenderNameInput.value = payload.sender_name;
+  if (typeof payload.sender_email === "string") elements.mailSettingsSenderEmailInput.value = payload.sender_email;
+  if (typeof payload.smtp_host === "string") elements.mailSettingsHostInput.value = payload.smtp_host;
+  if (Number.isFinite(Number(payload.smtp_port))) elements.mailSettingsPortInput.value = String(payload.smtp_port);
+  if (typeof payload.security === "string") elements.mailSettingsSecuritySelect.value = payload.security;
+  if (typeof payload.smtp_username === "string") elements.mailSettingsUserInput.value = payload.smtp_username;
+  if (typeof payload.test_recipient === "string") elements.mailSettingsTestRecipientInput.value = payload.test_recipient;
   renderMailSettings();
 }
 
@@ -16348,6 +16355,7 @@ async function load() {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     state.data.daily = parsed.daily || {};
+    state.data.worklogs = parsed.worklogs || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
     state.data.canvases = parsed.canvases || [];
@@ -16948,26 +16956,25 @@ async function migrateLocalStorageToDesktopStore(key) {
 
 function writeStorage(key, value) {
   if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
-    window.nownoteDesktop.storage.write(key, value)
-      .then((result) => {
-        desktopStorageInfo = {
-          ...(desktopStorageInfo || {}),
-          ...result,
-          error: false,
-        };
-        renderDesktopStorageStatus();
-      })
-      .catch(() => {
-        desktopStorageInfo = {
-          ...(desktopStorageInfo || {}),
-          error: true,
-        };
-        renderDesktopStorageStatus();
-        if (!storageWarningShown) {
-          storageWarningShown = true;
-          showNotice(t("note.desktopStorageFail"), "error");
-        }
-      });
+    try {
+      const result = window.nownoteDesktop.storage.writeSync(key, value);
+      desktopStorageInfo = {
+        ...(desktopStorageInfo || {}),
+        ...result,
+        error: false,
+      };
+      renderDesktopStorageStatus();
+    } catch {
+      desktopStorageInfo = {
+        ...(desktopStorageInfo || {}),
+        error: true,
+      };
+      renderDesktopStorageStatus();
+      if (!storageWarningShown) {
+        storageWarningShown = true;
+        showNotice(t("note.desktopStorageFail"), "error");
+      }
+    }
     return true;
   }
   try {

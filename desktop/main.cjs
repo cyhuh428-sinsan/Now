@@ -69,6 +69,14 @@ function registerDesktopStorageHandlers() {
     writeDesktopStore(store);
     return { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
   });
+
+  ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
+    const store = readDesktopStore();
+    store.values[key] = value;
+    store.updatedAt = new Date().toISOString();
+    writeDesktopStore(store);
+    event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+  });
 }
 
 function loadAppFile(filePath) {
