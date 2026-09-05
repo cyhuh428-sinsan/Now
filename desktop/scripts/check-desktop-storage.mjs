@@ -405,6 +405,7 @@ async function main() {
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nownote-desktop-storage-"));
   const title = `Desktop storage smoke ${Date.now()}`;
   const body = "Desktop storage persisted after restart.";
+  const worklogBody = "작업일지 마지막 단어 보존";
   const storePath = path.join(tempDir, STORE_FILE);
 
   let first = null;
@@ -424,6 +425,10 @@ async function main() {
           content.textContent = ${JSON.stringify(body)};
         }
         content.dispatchEvent(new Event('input', { bubbles: true }));
+        document.querySelector('#worklogTabBtn').click();
+        const worklog = document.querySelector('#worklogContent');
+        worklog.value = ${JSON.stringify(worklogBody)};
+        worklog.dispatchEvent(new Event('input', { bubbles: true }));
         return true;
       })()
     `);
@@ -440,6 +445,7 @@ async function main() {
     const storeRaw = await fs.readFile(storePath, "utf-8");
     const store = JSON.parse(storeRaw);
     assert(store.values?.[STORAGE_KEY]?.tree?.some((node) => node.title === title), "Saved note was not written to desktop store.");
+    assert(store.values?.[STORAGE_KEY]?.worklogs?.[new Date().toISOString().slice(0, 10)]?.content === worklogBody, "Worklog was not written to desktop store.");
     store.values[SETTINGS_KEY] = { contextMenuActions: ["undo", "redo"] };
     await fs.writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
 
@@ -450,6 +456,8 @@ async function main() {
         return items.some((item) => item.includes(${JSON.stringify(title)}));
       })()
     `, "desktop store reload");
+    await evaluate(second.page, `document.querySelector('#worklogTabBtn').click()`);
+    await waitForCondition(second.page, `document.querySelector('#worklogContent').value === ${JSON.stringify(worklogBody)}`, "worklog reload");
     await verifyEditorTabIndent(second.page);
     await verifySearchShortcuts(second.page);
     await verifyNoteFindMovement(second.page);
@@ -458,6 +466,7 @@ async function main() {
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
     console.log(`- Reloaded note: ${title}`);
+    console.log(`- Reloaded worklog: ${worklogBody}`);
     console.log("- Editor Tab/Shift+Tab indentation passed");
     console.log("- Ctrl+F and Ctrl+Shift+F shortcuts passed");
     console.log("- In-note search movement passed");

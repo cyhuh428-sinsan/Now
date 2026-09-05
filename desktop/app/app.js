@@ -7799,6 +7799,13 @@ function setMailSettingsStatus(status, message, payload = {}) {
   mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
   mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
   mailSettings.message = message || "";
+  if (typeof payload.sender_name === "string") elements.mailSettingsSenderNameInput.value = payload.sender_name;
+  if (typeof payload.sender_email === "string") elements.mailSettingsSenderEmailInput.value = payload.sender_email;
+  if (typeof payload.smtp_host === "string") elements.mailSettingsHostInput.value = payload.smtp_host;
+  if (Number.isFinite(Number(payload.smtp_port))) elements.mailSettingsPortInput.value = String(payload.smtp_port);
+  if (typeof payload.security === "string") elements.mailSettingsSecuritySelect.value = payload.security;
+  if (typeof payload.smtp_username === "string") elements.mailSettingsUserInput.value = payload.smtp_username;
+  if (typeof payload.test_recipient === "string") elements.mailSettingsTestRecipientInput.value = payload.test_recipient;
   renderMailSettings();
 }
 
@@ -14195,6 +14202,8 @@ function addChildToSelectedTreeNode() {
 }
 
 function renderTreeListOnly() {
+  const scrollTop = elements.treeList?.scrollTop || 0;
+  const scrollLeft = elements.treeList?.scrollLeft || 0;
   state.sharedView = normalizeSharedView(state.sharedView);
   const roots = sharedViewTreeRoots();
   if (roots.length === 0) {
@@ -14202,13 +14211,26 @@ function renderTreeListOnly() {
     empty.className = "empty-state";
     empty.innerHTML = `<strong>${escapeHtml(t("note.emptyTitle"))}</strong><span>${escapeHtml(t("note.emptyDescription"))}</span>`;
     elements.treeList.replaceChildren(empty);
+    restoreTreeListScroll(scrollTop, scrollLeft);
     return;
   }
   if (state.sharedView === "member") {
     renderMemberSharedTreeList(roots);
+    restoreTreeListScroll(scrollTop, scrollLeft);
     return;
   }
   elements.treeList.replaceChildren(...roots.map((node) => treeNodeElement(node)));
+  restoreTreeListScroll(scrollTop, scrollLeft);
+}
+
+function restoreTreeListScroll(scrollTop, scrollLeft) {
+  const restore = () => {
+    if (!elements.treeList) return;
+    elements.treeList.scrollTop = scrollTop;
+    elements.treeList.scrollLeft = scrollLeft;
+  };
+  restore();
+  window.requestAnimationFrame(restore);
 }
 
 function sharedViewTreeRoots() {
@@ -16333,6 +16355,7 @@ async function load() {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     state.data.daily = parsed.daily || {};
+    state.data.worklogs = parsed.worklogs || {};
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
     state.data.canvases = parsed.canvases || [];
@@ -16933,26 +16956,25 @@ async function migrateLocalStorageToDesktopStore(key) {
 
 function writeStorage(key, value) {
   if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
-    window.nownoteDesktop.storage.write(key, value)
-      .then((result) => {
-        desktopStorageInfo = {
-          ...(desktopStorageInfo || {}),
-          ...result,
-          error: false,
-        };
-        renderDesktopStorageStatus();
-      })
-      .catch(() => {
-        desktopStorageInfo = {
-          ...(desktopStorageInfo || {}),
-          error: true,
-        };
-        renderDesktopStorageStatus();
-        if (!storageWarningShown) {
-          storageWarningShown = true;
-          showNotice(t("note.desktopStorageFail"), "error");
-        }
-      });
+    try {
+      const result = window.nownoteDesktop.storage.writeSync(key, value);
+      desktopStorageInfo = {
+        ...(desktopStorageInfo || {}),
+        ...result,
+        error: false,
+      };
+      renderDesktopStorageStatus();
+    } catch {
+      desktopStorageInfo = {
+        ...(desktopStorageInfo || {}),
+        error: true,
+      };
+      renderDesktopStorageStatus();
+      if (!storageWarningShown) {
+        storageWarningShown = true;
+        showNotice(t("note.desktopStorageFail"), "error");
+      }
+    }
     return true;
   }
   try {
