@@ -2502,9 +2502,15 @@ function isEditorComposing(element) {
   return Boolean(element) && composingEditors.has(element);
 }
 
+function setTreeEditorImeComposing(element, composing) {
+  if (element !== elements.treeContent) return;
+  elements.treeContentSurface?.classList.toggle("ime-composing", composing);
+}
+
 function bindEditorComposition(element, flushInput) {
   if (!element) return;
   const settle = () => {
+    setTreeEditorImeComposing(element, false);
     composingEditors.delete(element);
     if (pendingEditorValueWrite.has(element)) {
       // 조합 중에 바깥에서 편집기 내용을 통째로 바꿨다면 그 값이 최신이므로 그것을 적용한다.
@@ -2519,6 +2525,7 @@ function bindEditorComposition(element, flushInput) {
   };
   element.addEventListener("compositionstart", () => {
     composingEditors.add(element);
+    setTreeEditorImeComposing(element, true);
   });
   element.addEventListener("compositionend", settle);
   // 조합 중에 편집기를 벗어나면 compositionend 가 오지 않을 수 있다.

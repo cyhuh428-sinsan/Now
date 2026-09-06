@@ -333,6 +333,23 @@ async function runOnce() {
         input.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "사" }));
         results.renderValueAfterEnd = proto.get.call(input);
 
+        // During body composition the textarea text must remain visible while
+        // the Markdown overlay is paused, then the overlay must be restored.
+        state.data = defaultData();
+        state.data.tree = [node("content-ime", "memo", "body")];
+        state.selectedTreeId = "content-ime";
+        renderTreeEditor();
+        const contentEditor = elements.treeContent;
+        const contentSurface = elements.treeContentSurface;
+        contentEditor.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true }));
+        contentEditor.value = "body-ime";
+        contentEditor.dispatchEvent(new InputEvent("input", { bubbles: true, isComposing: true }));
+        results.contentSurfaceDuringComposition = contentSurface.classList.contains("ime-composing");
+        results.contentTextVisibleDuringComposition = getComputedStyle(contentEditor).color !== "rgba(0, 0, 0, 0)";
+        contentEditor.dispatchEvent(new CompositionEvent("compositionend", { bubbles: true, data: "e" }));
+        results.contentSurfaceAfterComposition = contentSurface.classList.contains("ime-composing");
+        results.contentOverlayVisibleAfterComposition = !elements.treeContentOverlay.classList.contains("hidden");
+
         // --- 3) 조합 없이 평범하게 입력하면 즉시 저장된다 ---
         state.data = defaultData();
         state.data.tree = [node("rw2", "메모", "본문")];
@@ -453,6 +470,10 @@ async function runOnce() {
     assert(result.renderWritesWhileComposing.length === 0, `조합 중 렌더가 value 를 덮어썼습니다: ${JSON.stringify(result.renderWritesWhileComposing)}`);
     assert(result.renderValueDuringComposition === "메모ㅅ", "조합 중 렌더가 값을 바꿨습니다.");
     assert(result.renderValueAfterEnd === "바깥에서바뀐제목", `조합이 끝난 뒤 미뤄둔 렌더 값이 적용되지 않았습니다: ${result.renderValueAfterEnd}`);
+    assert(result.contentSurfaceDuringComposition, "본문 조합 중 IME 표시 상태가 적용되지 않았습니다.");
+    assert(result.contentTextVisibleDuringComposition, "본문 조합 중 실제 입력 글자가 보이지 않습니다.");
+    assert(!result.contentSurfaceAfterComposition, "본문 조합 종료 후 IME 표시 상태가 남아 있습니다.");
+    assert(result.contentOverlayVisibleAfterComposition, "본문 조합 종료 후 Markdown 오버레이가 복원되지 않았습니다.");
     assert(result.plainTitleSaved === "새제목", "조합 없는 입력이 저장되지 않았습니다.");
     assert(result.blurTitleBefore === "메모", "조합 중에 이미 저장되면 안 됩니다.");
     assert(result.blurTitleAfter === "블러제목", "조합 중 blur 로 빠져나갈 때 저장되지 않았습니다.");
