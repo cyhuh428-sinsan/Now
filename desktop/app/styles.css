@@ -2739,6 +2739,17 @@ kbd {
   caret-color: var(--text);
 }
 
+/* IME 조합 중에는 오버레이가 멈추므로 실제 textarea의 조합 문자를 표시한다. */
+.memo-editor-surface.ime-composing > .memo-editor {
+  color: var(--text);
+  -webkit-text-fill-color: var(--text);
+}
+
+.memo-editor-surface.ime-composing > .memo-editor-overlay {
+  visibility: hidden;
+}
+
+
 /*
  * 오버레이(글자 위, z-index: 2)에는 글자 색만 준다.
  * 굵기, 크기, 자간처럼 글자 너비를 바꾸는 것을 주면 그 줄의 줄바꿈 위치가
