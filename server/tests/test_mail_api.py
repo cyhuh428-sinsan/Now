@@ -264,6 +264,58 @@ def test_mail_test_persists_encrypted_password_after_success(
     assert saved.last_tested_at is not None
 
 
+def test_mail_test_reuses_saved_password_when_password_is_omitted(
+    client: TestClient,
+    db: Session,
+    monkeypatch,
+) -> None:
+    from app.models.note import UserMailSettings
+    from app.services.mail_settings import encrypt_secret
+
+    owner_id, web_token = _mail_user(db)
+    db.add(
+        UserMailSettings(
+            owner_id=owner_id,
+            sender_name="기존 발신자",
+            sender_email="old@example.com",
+            smtp_host="old.smtp.example.com",
+            smtp_port=587,
+            security="starttls",
+            smtp_username="old@example.com",
+            smtp_password_encrypted=encrypt_secret("saved-app-password"),
+            test_recipient="old-receiver@example.com",
+            last_tested_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+
+    sent_messages = []
+
+    def fake_send_smtp_message(**kwargs):
+        sent_messages.append(kwargs)
+
+    monkeypatch.setattr("app.services.mail_settings.send_smtp_message", fake_send_smtp_message)
+
+    res = client.post(
+        "/api/v1/mail/settings/test",
+        json={
+            "owner_id": owner_id,
+            "sender_name": "새 발신자",
+            "sender_email": "sender@example.com",
+            "smtp_host": "smtp.example.com",
+            "smtp_port": 587,
+            "security": "starttls",
+            "smtp_username": "sender@example.com",
+            "smtp_password": "",
+            "test_recipient": "receiver@example.com",
+        },
+        headers={"X-Now-Web-Session": web_token},
+    )
+
+    assert res.status_code == 200, res.text
+    assert sent_messages[0]["password"] == "saved-app-password"
+
+
 def test_note_mail_sends_current_note_with_saved_settings(
     client: TestClient,
     db: Session,
