@@ -113,6 +113,39 @@ void main() {
       expect(adapter!.requests, hasLength(1));
     });
 
+    test('저장된 웹 세션 토큰을 실제 동기화 요청에 전달한다', () async {
+      final treeRepo = TreeMemoRepository(db);
+      await treeRepo.addMemo(title: '세션 동기화 테스트');
+
+      _FakeAdapter? adapter;
+      final service = ServerSettingsService(
+        dioBuilder: (settings) {
+          final dio = buildServerDio(settings);
+          adapter = _FakeAdapter((options) {
+            expect(options.headers['X-Now-Web-Session'], 'saved-session-token');
+            return _jsonBody({
+              'pushed_notes': <Map<String, dynamic>>[],
+              'pulled_notes': <Map<String, dynamic>>[],
+              'server_time': '2026-08-30T00:00:00',
+            });
+          });
+          dio.httpClientAdapter = adapter!;
+          return dio;
+        },
+      );
+
+      await service.syncNotes(
+        settings: _settings().copyWith(
+          userToken: '',
+          webSessionToken: 'saved-session-token',
+        ),
+        db: db,
+        treeRepo: treeRepo,
+      );
+
+      expect(adapter!.requests, hasLength(1));
+    });
+
     test('서버가 내려준 계층 메모를 로컬 DB에 반영한다', () async {
       final treeRepo = TreeMemoRepository(db);
 
