@@ -50,9 +50,9 @@ class ServerSettingsService {
   ServerSettingsService({
     Dio Function(ServerSettings settings)? dioBuilder,
     Dio Function(ServerSettings settings)? dioWithoutUserTokenBuilder,
-  }) : _dioBuilder = dioBuilder ?? _defaultDio,
+  }) : _dioBuilder = dioBuilder ?? buildServerDio,
        _dioWithoutUserTokenBuilder =
-           dioWithoutUserTokenBuilder ?? _defaultDioWithoutUserToken;
+           dioWithoutUserTokenBuilder ?? buildServerDioWithoutUserToken;
 
   final Dio Function(ServerSettings settings) _dioBuilder;
   final Dio Function(ServerSettings settings) _dioWithoutUserTokenBuilder;
@@ -186,8 +186,9 @@ class ServerSettingsService {
 
 /// Now의 `_dio`(`server_sync_service.dart` 약 443~453번째 줄)와 같은 헤더
 /// 구성이다: 구형 개인 서버 토큰(`Authorization`), 사용자 토큰
-/// (`X-Now-User-Token`).
-Dio _defaultDio(ServerSettings settings) {
+/// (`X-Now-User-Token`), 메신저/웹 세션 토큰(`X-Now-Web-Session`).
+/// 인증 헤더를 포함한 NowNote 서버용 Dio를 만든다.
+Dio buildServerDio(ServerSettings settings) {
   final dio = DioClient.create(baseUrl: normalizeBaseUrl(settings.baseUrl));
   if (settings.token.trim().isNotEmpty) {
     dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
@@ -195,13 +196,17 @@ Dio _defaultDio(ServerSettings settings) {
   if (settings.userToken.trim().isNotEmpty) {
     dio.options.headers['X-Now-User-Token'] = settings.userToken.trim();
   }
+  if (settings.webSessionToken.trim().isNotEmpty) {
+    dio.options.headers['X-Now-Web-Session'] = settings.webSessionToken.trim();
+  }
   return dio;
 }
 
 /// Now의 `_dioWithoutUserToken`(`server_sync_service.dart` 약 455~462번째
 /// 줄)과 같다. 사용자 토큰 검증/로그인 요청에는 그 토큰을 미리 붙이지
 /// 않는다.
-Dio _defaultDioWithoutUserToken(ServerSettings settings) {
+/// 사용자 토큰 없이 서버 연결·로그인에 사용하는 Dio를 만든다.
+Dio buildServerDioWithoutUserToken(ServerSettings settings) {
   final dio = DioClient.create(baseUrl: normalizeBaseUrl(settings.baseUrl));
   if (settings.token.trim().isNotEmpty) {
     dio.options.headers['Authorization'] = 'Bearer ${settings.token.trim()}';
