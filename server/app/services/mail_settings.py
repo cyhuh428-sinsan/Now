@@ -56,9 +56,19 @@ def save_tested_mail_settings(
     smtp_port: int,
     security: str,
     smtp_username: str,
-    smtp_password: str,
+    smtp_password: str | None,
     test_recipient: str,
 ) -> UserMailSettings:
+    settings = get_mail_settings(db, owner_id=owner_id)
+    supplied_password = (smtp_password or "").strip()
+    if not supplied_password:
+        if settings is None or not settings.smtp_password_encrypted:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="smtp_password required for first test",
+            )
+        supplied_password = decrypt_secret(settings.smtp_password_encrypted)
+
     cleaned = _validated_settings(
         sender_name=sender_name,
         sender_email=sender_email,
@@ -66,7 +76,7 @@ def save_tested_mail_settings(
         smtp_port=smtp_port,
         security=security,
         smtp_username=smtp_username,
-        smtp_password=smtp_password,
+        smtp_password=supplied_password,
         test_recipient=test_recipient,
     )
     try:
@@ -93,7 +103,6 @@ def save_tested_mail_settings(
             detail={"code": "smtp_test_failed", "message": _safe_error(exc)},
         ) from exc
 
-    settings = get_mail_settings(db, owner_id=owner_id)
     now = datetime.utcnow()
     if settings is None:
         settings = UserMailSettings(owner_id=owner_id)

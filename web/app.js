@@ -7790,6 +7790,22 @@ function setMailSettingsStatus(status, message, payload = {}) {
   mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
   mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
   mailSettings.message = message || "";
+  if (payload.enabled) {
+    const fields = [
+      [elements.mailSettingsSenderNameInput, payload.sender_name],
+      [elements.mailSettingsSenderEmailInput, payload.sender_email],
+      [elements.mailSettingsHostInput, payload.smtp_host],
+      [elements.mailSettingsPortInput, payload.smtp_port],
+      [elements.mailSettingsSecuritySelect, payload.security],
+      [elements.mailSettingsUserInput, payload.smtp_username],
+      [elements.mailSettingsTestRecipientInput, payload.test_recipient],
+    ];
+    for (const [element, value] of fields) {
+      if (element && value !== null && value !== undefined) element.value = String(value);
+    }
+    // 서버는 비밀번호를 반환하지 않는다. 빈 값은 서버의 저장 암호를 재사용한다.
+    if (elements.mailSettingsPasswordInput) elements.mailSettingsPasswordInput.value = "";
+  }
   renderMailSettings();
 }
 

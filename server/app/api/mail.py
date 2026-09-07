@@ -31,7 +31,9 @@ class MailSettingsTestRequest(BaseModel):
     smtp_port: int = Field(ge=1, le=65535)
     security: str = Field(pattern="^(ssl_tls|starttls|none)$")
     smtp_username: str = Field(min_length=1, max_length=240)
-    smtp_password: str = Field(min_length=1, max_length=500)
+    # 비워 두면 서버에 저장된 암호화 비밀번호를 재사용한다. 비밀번호 자체는
+    # 응답으로 돌려주지 않는다.
+    smtp_password: str | None = Field(default=None, max_length=500)
     test_recipient: str = Field(min_length=3, max_length=240)
 
 
