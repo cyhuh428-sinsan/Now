@@ -25,7 +25,9 @@ import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
-const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
+const ROOT = process.env.NOWNOTE_TREE_MAP_ROOT
+  ? path.resolve(process.env.NOWNOTE_TREE_MAP_ROOT)
+  : path.resolve(path.dirname(SCRIPT_PATH), "..");
 const DEFAULT_TIMEOUT_MS = 15_000;
 
 const MIME_TYPES = new Map([
@@ -260,6 +262,14 @@ async function evaluate(page, expression) {
   return result.result?.value;
 }
 
+async function saveScreenshot(page, name) {
+  const directory = process.env.NOWNOTE_TREE_MAP_SCREENSHOT_DIR;
+  if (!directory) return;
+  await fs.mkdir(directory, { recursive: true });
+  const { data } = await page.send("Page.captureScreenshot", { format: "png", captureBeyondViewport: false });
+  await fs.writeFile(path.join(directory, name), Buffer.from(data, "base64"));
+}
+
 async function waitForCondition(page, expression, label, timeoutMs = DEFAULT_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -331,6 +341,7 @@ async function main() {
     await page.send("Runtime.enable");
     await page.send("Page.enable");
     await page.send("DOM.enable");
+    await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
     await page.send("Page.navigate", { url: appUrl });
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#treeMapBtn'))", "지식맵 버튼");
@@ -360,12 +371,20 @@ async function main() {
         topicB.children.push(catB1);
         state.data.tree.push(topicB);
 
+        const topicC = createNode('많은 노드', '', null, 1);
+        const categoryC = createNode('긴 제목을 가진 분류', '', topicC.id, 2);
+        for (let index = 0; index < 30; index++) {
+          categoryC.children.push(createNode('긴 한글 제목을 가진 메모 ' + index + ' - 화면 밖까지 이어지는 제목', '', categoryC.id, 3));
+        }
+        topicC.children.push(categoryC);
+        state.data.tree.push(topicC);
+
         persist();
         renderTree();
         return {
           topicAId: topicA.id, catA1Id: catA1.id, catA2Id: catA2.id,
           memoA1aId: memoA1a.id, memoA1bId: memoA1b.id, memoA2aId: memoA2a.id, memoA2bId: memoA2b.id,
-          topicBId: topicB.id, catB1Id: catB1.id, memoB1aId: memoB1a.id,
+          topicBId: topicB.id, catB1Id: catB1.id, memoB1aId: memoB1a.id, topicCId: topicC.id,
         };
       })()`,
     );
@@ -404,6 +423,43 @@ async function main() {
       !scopeCheck.ids.includes(setup.topicBId) && !scopeCheck.ids.includes(setup.catB1Id) && !scopeCheck.ids.includes(setup.memoB1aId),
       "주제B의 노드는 지도에 그려지면 안 됩니다(범위 제한).",
     );
+
+    const controls = await evaluate(page, `(() => {
+      const card = document.querySelector('.tree-map-card');
+      const canvas = document.querySelector('#treeMapCanvas');
+      const expand = document.querySelector('#treeMapExpandBtn');
+      const out = document.querySelector('#treeMapZoomOutBtn');
+      const input = document.querySelector('#treeMapZoomInBtn');
+      const reset = document.querySelector('#treeMapZoomFitBtn');
+      const sample = () => ({
+        cardWidth: card.getBoundingClientRect().width,
+        stageWidth: document.querySelector('.tree-map-stage').getBoundingClientRect().width,
+        nodeWidth: document.querySelector('.tree-map-node').getBoundingClientRect().width,
+        labelHeight: document.querySelector('.tree-map-node strong').getBoundingClientRect().height,
+        zoom: document.querySelector('#treeMapZoomValue').textContent.trim(),
+      });
+      const initial = sample();
+      expand.click();
+      const expanded = sample();
+      expand.click();
+      const restored = sample();
+      for (let index = 0; index < 4; index++) out.click();
+      const minimum = { ...sample(), disabled: out.disabled };
+      for (let index = 0; index < 14; index++) input.click();
+      const maximum = { ...sample(), disabled: input.disabled };
+      reset.click();
+      return { initial, expanded, restored, minimum, maximum, reset: sample(), canvasMinHeight: Number.parseFloat(getComputedStyle(canvas).minHeight) };
+    })()`);
+    assert(controls.initial.cardWidth <= 880, `기본 팝업 너비는 최대 880px이어야 합니다 (${controls.initial.cardWidth}).`);
+    assert(controls.canvasMinHeight >= 320, `기본 캔버스 최소 높이는 320px이어야 합니다 (${controls.canvasMinHeight}).`);
+    assert(controls.expanded.cardWidth > controls.initial.cardWidth, "크게 보기에서 팝업 너비가 실제로 커져야 합니다.");
+    assert(Math.abs(controls.restored.cardWidth - controls.initial.cardWidth) < 2, "원래 크기에서 기본 팝업 너비가 복원되어야 합니다.");
+    assert(controls.minimum.zoom === "60%" && controls.minimum.disabled, "60%에서 축소 버튼이 비활성화되어야 합니다.");
+    assert(controls.maximum.zoom === "200%" && controls.maximum.disabled, "200%에서 확대 버튼이 비활성화되어야 합니다.");
+    assert(controls.maximum.stageWidth >= controls.reset.stageWidth * 1.9, "캔버스 내용 전체가 200%로 확대되어야 합니다.");
+    assert(controls.maximum.nodeWidth >= controls.reset.nodeWidth * 1.9, "노드 크기도 배율과 함께 확대되어야 합니다.");
+    assert(controls.maximum.labelHeight >= controls.reset.labelHeight * 1.9, "노드 글자도 배율과 함께 확대되어야 합니다.");
+    assert(controls.reset.zoom === "100%", "100% 버튼이 배율을 초기화해야 합니다.");
 
     // [검증 2] 메모 노드를 클릭하면 state.selectedTreeId가 바뀐다.
     await evaluate(
@@ -451,6 +507,89 @@ async function main() {
     );
     assert(topicBCheck.hasLock, "암호화된 메모 노드는 잠금 표시가 있어야 합니다.");
     assert(!topicBCheck.htmlHasBody, "암호화된 메모의 본문(암호문)이 지도에 노출되면 안 됩니다.");
+
+    const denseMap = await evaluate(page, `(() => {
+      const select = document.querySelector('#treeMapTopicSelect');
+      select.value = '${setup.topicCId}';
+      select.dispatchEvent(new Event('change', { bubbles: true }));
+      const nodes = Array.from(document.querySelectorAll('#treeMapCanvas .tree-map-level-3'));
+      const rects = nodes.map((node) => node.getBoundingClientRect());
+      const overlaps = rects.some((rect, index) => rects.slice(index + 1).some((other) => rect.left < other.right && rect.right > other.left && rect.top < other.bottom && rect.bottom > other.top));
+      return {
+        count: nodes.length,
+        overlaps,
+        longTitleTooltip: nodes[0]?.title === nodes[0]?.textContent.trim(),
+        scrollable: document.querySelector('#treeMapCanvas').scrollWidth > document.querySelector('#treeMapCanvas').clientWidth,
+      };
+    })()`);
+    assert(denseMap.count === 30, `대량 노드 30개가 모두 그려져야 합니다 (${denseMap.count}).`);
+    assert(!denseMap.overlaps, "대량 노드의 실제 화면 영역이 서로 겹치지 않아야 합니다.");
+    assert(denseMap.longTitleTooltip, "긴 제목은 전체 제목 툴팁으로 확인할 수 있어야 합니다.");
+    assert(denseMap.scrollable, "대량 노드 지도는 캔버스 내부에서 가로 이동할 수 있어야 합니다.");
+
+    const centerBefore = await evaluate(page, `(() => {
+      const canvas = document.querySelector('#treeMapCanvas');
+      document.querySelector('#treeMapZoomInBtn').click();
+      canvas.scrollLeft = Math.round((canvas.scrollWidth - canvas.clientWidth) / 2);
+      return (canvas.scrollLeft + canvas.clientWidth / 2) / canvas.scrollWidth;
+    })()`);
+    const centerAfter = await evaluate(page, `(() => {
+      document.querySelector('#treeMapZoomInBtn').click();
+      const canvas = document.querySelector('#treeMapCanvas');
+      return (canvas.scrollLeft + canvas.clientWidth / 2) / canvas.scrollWidth;
+    })()`);
+    assert(Math.abs(centerAfter - centerBefore) < 0.03, "배율을 바꿔도 보던 가로 중심을 유지해야 합니다.");
+
+    const keyboardAccess = await evaluate(page, `(() => {
+      const button = document.querySelector('#treeMapZoomInBtn');
+      button.focus();
+      return button instanceof HTMLButtonElement && document.activeElement === button && button.tabIndex >= 0 && !button.disabled;
+    })()`);
+    assert(keyboardAccess, "확대 버튼은 키보드 포커스를 받을 수 있는 활성 기본 버튼이어야 합니다.");
+
+    const reopen = await evaluate(page, `(() => {
+      const zoom = state.treeMapZoom;
+      closeTreeMap();
+      openTreeMap();
+      return !document.querySelector('#treeMapView').classList.contains('hidden') && state.treeMapZoom === zoom;
+    })()`);
+    assert(reopen, "닫고 다시 열어도 지식맵 배율과 팝업 동작이 유지되어야 합니다.");
+    await saveScreenshot(page, "tree-map-desktop.png");
+
+    await page.send("Emulation.setDeviceMetricsOverride", { width: 390, height: 740, deviceScaleFactor: 1, mobile: true });
+    const mobile = await evaluate(page, `(() => {
+      document.querySelector('#treeMapExpandBtn').click();
+      const card = document.querySelector('.tree-map-card').getBoundingClientRect();
+      const controls = Array.from(document.querySelectorAll('#treeMapCloseBtn, #treeMapExpandBtn, #treeMapZoomOutBtn, #treeMapZoomInBtn, #treeMapZoomFitBtn'));
+      return {
+        cardLeft: card.left,
+        cardRight: card.right,
+        headerButtonWidths: [document.querySelector('#treeMapExpandBtn').getBoundingClientRect().width, document.querySelector('#treeMapCloseBtn').getBoundingClientRect().width],
+        controlsVisible: controls.every((button) => {
+          const rect = button.getBoundingClientRect();
+          return rect.width > 0 && rect.left >= 0 && rect.right <= innerWidth;
+        }),
+      };
+    })()`);
+    assert(mobile.cardLeft >= 0 && mobile.cardRight <= 390, "좁은 화면에서 팝업이 가로로 잘리지 않아야 합니다.");
+    assert(mobile.controlsVisible, "좁은 화면에서도 모든 조작 버튼이 보여야 합니다.");
+    assert(mobile.headerButtonWidths.every((width) => width >= 32), `모바일 상단 버튼은 누르기 쉬운 폭이어야 합니다 (${mobile.headerButtonWidths}).`);
+    const firstOpen = await evaluate(page, `(() => {
+      const canvas = document.querySelector('#treeMapCanvas');
+      canvas.innerHTML = '';
+      canvas.scrollLeft = 0;
+      canvas.scrollTop = 0;
+      void canvas.offsetWidth;
+      state.treeMapTopicId = '${setup.topicCId}';
+      closeTreeMap();
+      openTreeMap();
+      const root = canvas.querySelector('.tree-map-level-1')?.getBoundingClientRect();
+      const viewport = canvas.getBoundingClientRect();
+      return Boolean(root && root.left < viewport.right && root.right > viewport.left && root.top < viewport.bottom && root.bottom > viewport.top);
+    })()`);
+    assert(firstOpen, "노드가 많은 지도를 처음 열 때 중심 주제가 캔버스 안에 보여야 합니다.");
+    await saveScreenshot(page, "tree-map-mobile.png");
+    await page.send("Emulation.setDeviceMetricsOverride", { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false });
 
     console.log("NowNote Web tree-map check passed");
     console.log("- 주제 하나의 서브트리만 렌더링된다 (범위 제한).");

@@ -205,6 +205,32 @@ async function launchApp(userDataDir) {
   return { app, client, page };
 }
 
+async function verifyTreeMap(page, title) {
+  const result = await evaluate(page, `(() => {
+    const topic = state.data.tree.find((node) => node.title === ${JSON.stringify(title)});
+    if (!topic) return { error: 'saved topic missing' };
+    state.treeMapTopicId = topic.id;
+    openTreeMap();
+    const canvas = document.querySelector('#treeMapCanvas');
+    const initialWidth = canvas.querySelector('.tree-map-stage').getBoundingClientRect().width;
+    document.querySelector('#treeMapZoomInBtn').click();
+    const zoomedWidth = canvas.querySelector('.tree-map-stage').getBoundingClientRect().width;
+    document.querySelector('#treeMapExpandBtn').click();
+    return {
+      desktopBridge: Boolean(window.nownoteDesktop?.storage),
+      nodeCount: canvas.querySelectorAll('[data-node-id]').length,
+      zoom: document.querySelector('#treeMapZoomValue').textContent.trim(),
+      zoomedWidth,
+      initialWidth,
+      expanded: document.querySelector('#treeMapView').classList.contains('tree-map-view-expanded'),
+    };
+  })()`);
+  assert(!result.error, `Desktop tree map setup failed: ${result.error || 'unknown error'}`);
+  assert(result.desktopBridge && result.nodeCount === 1, `Desktop tree map did not load with the preload bridge: ${JSON.stringify(result)}`);
+  assert(result.zoom === "110%" && result.zoomedWidth > result.initialWidth, `Desktop tree map did not zoom: ${JSON.stringify(result)}`);
+  assert(result.expanded, "Desktop tree map did not expand.");
+}
+
 async function verifyEditorTabIndent(page) {
   await evaluate(page, `
     (() => {
@@ -412,7 +438,7 @@ async function main() {
   let second = null;
   try {
     first = await launchApp(tempDir);
-    await evaluate(first.page, `
+    const selectedWorklogDate = await evaluate(first.page, `
       (() => {
         document.querySelector('#addRootBtn').click();
         const title = document.querySelector('#treeTitleInput');
@@ -429,7 +455,7 @@ async function main() {
         const worklog = document.querySelector('#worklogContent');
         worklog.value = ${JSON.stringify(worklogBody)};
         worklog.dispatchEvent(new Event('input', { bubbles: true }));
-        return true;
+        return state.selectedWorklogDate;
       })()
     `);
     await waitForCondition(first.page, `
@@ -438,6 +464,7 @@ async function main() {
         return Boolean(info.path && info.keys.includes(${JSON.stringify(STORAGE_KEY)}));
       })()
     `, "desktop store write");
+    await verifyTreeMap(first.page, title);
     first.client.close();
     stopProcess(first.app);
     first = null;
@@ -445,7 +472,7 @@ async function main() {
     const storeRaw = await fs.readFile(storePath, "utf-8");
     const store = JSON.parse(storeRaw);
     assert(store.values?.[STORAGE_KEY]?.tree?.some((node) => node.title === title), "Saved note was not written to desktop store.");
-    assert(store.values?.[STORAGE_KEY]?.worklogs?.[new Date().toISOString().slice(0, 10)]?.content === worklogBody, "Worklog was not written to desktop store.");
+    assert(store.values?.[STORAGE_KEY]?.worklogs?.[selectedWorklogDate]?.content === worklogBody, `Worklog was not written to desktop store for ${selectedWorklogDate}.`);
     store.values[SETTINGS_KEY] = { contextMenuActions: ["undo", "redo"] };
     await fs.writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
 
@@ -471,6 +498,7 @@ async function main() {
     console.log("- Ctrl+F and Ctrl+Shift+F shortcuts passed");
     console.log("- In-note search movement passed");
     console.log("- Editor context menu passed");
+    console.log("- Tree map zoom and expanded view passed in Electron");
   } finally {
     first?.client?.close();
     second?.client?.close();
