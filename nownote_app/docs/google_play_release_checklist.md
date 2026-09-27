@@ -18,13 +18,13 @@
 - [x] 기본 메모 기능은 로컬 저장으로 동작
 - [x] 서버 연결 시 메모 동기화 가능
 - [x] 릴리스 서명 설정: `nownote_app/android/key.properties`가 있으면 별도 업로드 키 사용
-- [ ] 업로드 키로 서명한 최종 AAB 생성 및 서명 확인
+- [x] NowNote 전용 업로드 키로 AAB 생성 및 로컬 서명 확인
 
 ## 업로드 서명 설정
 
 `nownote_app/android/key.properties`와 `nownote_app/android/upload-keystore.jks`는 로컬에만 둔다. `key.properties`에는 `storePassword`, `keyPassword`, `keyAlias`, `storeFile`을 지정한다. 키 파일을 `android` 폴더에 두는 경우 `storeFile=../upload-keystore.jks`를 사용한다.
 
-키 파일이 없으면 릴리스 AAB는 서명되지 않는다. Play Console에 올리기 전에 `flutter build appbundle --release`로 다시 빌드하고 AAB 서명을 검증한다.
+키 파일이 없으면 릴리스 AAB는 서명되지 않는다. Play Console에 올리기 전에 `flutter build appbundle --release`로 다시 빌드하고 AAB 서명을 검증한다. 업로드 키와 비밀번호 파일은 Git에 포함되지 않으며, 둘 다 별도로 안전하게 백업해야 한다.
 
 ## Play Console에서 준비할 항목
 
@@ -67,10 +67,12 @@
 ## 작업현황 (2026-09-28)
 
 - 담당: 어울 / Stage: NowNote Google Play 서명 준비
-- 상태: 코드 설정 및 빌드 검증 완료, 업로드 서명과 Play Console 등록 대기
+- 상태: NowNote 전용 키 생성 및 서명된 AAB 로컬 검증 완료, Play Console 등록 대기
 - 변경 파일: `nownote_app/android/app/build.gradle.kts`, `.gitignore`, 이 체크리스트
-- 검증: `nownote_app` Flutter 테스트 88개 통과, `flutter build appbundle --release --no-pub` 성공
-- 서명 확인: 생성된 `app-release.aab`는 `jarsigner -verify` 결과 `jar is unsigned`
-- 오류 횟수: 0회 (서명 확인 도구 PATH 미등록은 Android Studio JDK의 `jarsigner`로 확인)
-- 미검증: 실제 업로드 키로 서명한 AAB, Play Console 업로드 및 내부 테스트
-- 다음 조치: NowNote 업로드 키와 `key.properties`를 로컬에 준비한 뒤 AAB 재빌드, 서명 확인, Play Console 업로드
+- 검증: `nownote_app` Flutter 테스트 88개 통과, `flutter build appbundle --release --no-pub` 성공, `jarsigner -verify`에서 `jar verified`
+- 서명 확인: AAB와 NowNote 업로드 키의 인증서 SHA-256 지문 일치 (`A6:70:E7:A6:37:B9:29:31:61:2D:33:3C:F8:D0:F3:9B:C6:AB:B3:C9:A3:21:81:70:F8:E3:4F:E1:46:2E:13:77`)
+- 산출물: `nownote_app/build/play-release/NowNote-2.3.7-23007-a3ea626.aab` (SHA-256 `4F267B4D8B116657110F49646F2A3DD9D970B266577343350150C20D7191A44C`)
+- 로컬 보안: `D:\Project\Now\nownote_app\android`와 작업 worktree에 키/설정 파일 보관, Git 무시 확인, 네 파일의 ACL을 현재 사용자/SYSTEM/Administrators로 제한
+- 오류 횟수: 1회 (`icacls` 다중 경로 인수 오류, 파일별 조회로 해결)
+- 미검증: Play Console 업로드 및 내부 테스트, 업로드 키의 별도 백업
+- 다음 조치: 업로드 키와 비밀번호 파일을 별도 안전 저장소에 백업하고 Play Console에 서명된 AAB 업로드
