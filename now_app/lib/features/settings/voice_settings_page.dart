@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:now_core/now_core.dart';
 import '../../llm/providers/llm_providers.dart';
+import '../../llm/providers/now_llm_config.dart';
 
 final sttTierProvider = StateProvider<String>((ref) => 'tier1');
 
@@ -42,6 +43,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
   final Map<LlmProvider, TextEditingController> _apiKeyControllers = {};
   final _ollamaUrlCtrl = TextEditingController();
   final _ollamaModelCtrl = TextEditingController();
+  final _omniRouteModelCtrl = TextEditingController();
   bool _llmLoaded = false;
   bool _isTestingLlm = false;
   String? _llmTestResult;
@@ -55,7 +57,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
     LlmSettingsService().loadSttTier().then((tier) {
       if (mounted) ref.read(sttTierProvider.notifier).state = tier;
     });
-    for (final p in LlmProvider.values) {
+    for (final p in nowLlmProviders) {
       _apiKeyControllers[p] = TextEditingController();
     }
     _loadLlmSettings();
@@ -91,12 +93,13 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
 
   Future<void> _loadLlmSettings() async {
     final service = ref.read(llmSettingsServiceProvider);
-    final config = await service.loadConfig();
+    final config = await loadNowLlmConfig(service);
     if (!mounted) return;
     setState(() {
       _selectedProvider = config.provider;
       _ollamaUrlCtrl.text = config.ollamaUrl;
       _ollamaModelCtrl.text = config.ollamaModel;
+      _omniRouteModelCtrl.text = config.omniRouteModel;
       _llmLoaded = true;
     });
     final apiKey = await service.loadApiKey(config.provider);
@@ -127,6 +130,9 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
         model: _ollamaModelCtrl.text.trim(),
       );
     } else {
+      if (_selectedProvider == LlmProvider.omniRoute) {
+        await service.saveOmniRouteModel(_omniRouteModelCtrl.text);
+      }
       await service.saveApiKey(
         _selectedProvider,
         _apiKeyControllers[_selectedProvider]?.text.trim() ?? '',
@@ -193,6 +199,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
     }
     _ollamaUrlCtrl.dispose();
     _ollamaModelCtrl.dispose();
+    _omniRouteModelCtrl.dispose();
     super.dispose();
   }
 
@@ -530,10 +537,8 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Column(
-                children: LlmProvider.values
-                    .where((provider) => provider != LlmProvider.omniRoute)
-                    .map((provider) {
-                  final isLast = provider == LlmProvider.values.last;
+                children: nowLlmProviders.map((provider) {
+                  final isLast = provider == nowLlmProviders.last;
                   return Column(
                     children: [
                       _LlmOptionTile(
@@ -575,9 +580,24 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                       isLoading: _isLoadingOllamaModels,
                       onRefresh: _fetchOllamaModels,
                     )
-                  : _LlmApiKeyField(
-                      provider: _selectedProvider,
-                      controller: _apiKeyControllers[_selectedProvider]!,
+                  : Column(
+                      children: [
+                        if (_selectedProvider == LlmProvider.omniRoute) ...[
+                          TextField(
+                            controller: _omniRouteModelCtrl,
+                            decoration: const InputDecoration(
+                              labelText: 'OmniRoute 모델',
+                              hintText: 'auto',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                        ],
+                        _LlmApiKeyField(
+                          provider: _selectedProvider,
+                          controller: _apiKeyControllers[_selectedProvider]!,
+                        ),
+                      ],
                     ),
             ),
             const SizedBox(height: 16),

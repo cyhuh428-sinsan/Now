@@ -1,5 +1,6 @@
 import 'package:now_core/now_core.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
+import 'now_llm_config.dart';
 
 part 'llm_providers.g.dart';
 
@@ -15,7 +16,7 @@ LlmSettingsService llmSettingsService(LlmSettingsServiceRef ref) {
 @riverpod
 Future<LlmConfig> llmConfig(LlmConfigRef ref) async {
   final service = ref.watch(llmSettingsServiceProvider);
-  return service.loadConfig();
+  return loadNowLlmConfig(service);
 }
 
 @riverpod
@@ -24,7 +25,7 @@ Future<LlmRepository?> llmRepository(LlmRepositoryRef ref) async {
   if (!config.isConfigured) return null;
   return switch (config.provider) {
     LlmProvider.groq     => GroqLlmRepository(config),
-    LlmProvider.deepSeek => DeepSeekLlmRepository(config),
+    LlmProvider.deepSeek => null,
     LlmProvider.omniRoute => OmniRouteLlmRepository(config),
     LlmProvider.gemini   => GeminiLlmRepository(config),
     LlmProvider.openAi   => OpenAiLlmRepository(config),

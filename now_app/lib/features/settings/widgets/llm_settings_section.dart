@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 import '../../../llm/providers/llm_providers.dart';
+import '../../../llm/providers/now_llm_config.dart';
 
 /// settings_page.dart 에서 import 후 ListView children에 삽입
 /// 예:
@@ -21,6 +22,7 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
   final Map<LlmProvider, TextEditingController> _apiKeyControllers = {};
   final _ollamaUrlCtrl = TextEditingController();
   final _ollamaModelCtrl = TextEditingController();
+  final _omniRouteModelCtrl = TextEditingController();
   bool _isLoaded = false;
   bool _isTesting = false;
   String? _testResult;
@@ -28,7 +30,7 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
   @override
   void initState() {
     super.initState();
-    for (final p in LlmProvider.values) {
+    for (final p in nowLlmProviders) {
       _apiKeyControllers[p] = TextEditingController();
     }
     _loadSettings();
@@ -41,17 +43,19 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
     }
     _ollamaUrlCtrl.dispose();
     _ollamaModelCtrl.dispose();
+    _omniRouteModelCtrl.dispose();
     super.dispose();
   }
 
   Future<void> _loadSettings() async {
     final service = ref.read(llmSettingsServiceProvider);
-    final config = await service.loadConfig();
+    final config = await loadNowLlmConfig(service);
     if (!mounted) return;
     setState(() {
       _selectedProvider = config.provider;
       _ollamaUrlCtrl.text = config.ollamaUrl;
       _ollamaModelCtrl.text = config.ollamaModel;
+      _omniRouteModelCtrl.text = config.omniRouteModel;
       _isLoaded = true;
     });
     // 현재 선택된 LLM의 API Key만 로드
@@ -80,6 +84,9 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
         model: _ollamaModelCtrl.text.trim(),
       );
     } else {
+      if (_selectedProvider == LlmProvider.omniRoute) {
+        await service.saveOmniRouteModel(_omniRouteModelCtrl.text);
+      }
       await service.saveApiKey(
         _selectedProvider,
         _apiKeyControllers[_selectedProvider]?.text.trim() ?? '',
@@ -140,9 +147,7 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // LLM 선택 목록
-          ...LlmProvider.values
-              .where((provider) => provider != LlmProvider.omniRoute)
-              .map((provider) => _LlmOptionTile(
+          ...nowLlmProviders.map((provider) => _LlmOptionTile(
                 provider: provider,
                 isSelected: _selectedProvider == provider,
                 onTap: () {
@@ -164,10 +169,24 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
                     urlCtrl: _ollamaUrlCtrl,
                     modelCtrl: _ollamaModelCtrl,
                   )
-                : _ApiKeyField(
-                    provider: _selectedProvider,
-                    controller:
-                        _apiKeyControllers[_selectedProvider]!,
+                : Column(
+                    children: [
+                      if (_selectedProvider == LlmProvider.omniRoute) ...[
+                        TextField(
+                          controller: _omniRouteModelCtrl,
+                          decoration: const InputDecoration(
+                            labelText: 'OmniRoute 모델',
+                            hintText: 'auto',
+                            border: OutlineInputBorder(),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      _ApiKeyField(
+                        provider: _selectedProvider,
+                        controller: _apiKeyControllers[_selectedProvider]!,
+                      ),
+                    ],
                   ),
           ),
 
