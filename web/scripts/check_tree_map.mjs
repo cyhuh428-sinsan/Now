@@ -19,12 +19,14 @@ import { createReadStream } from "node:fs";
 import { promises as fs } from "node:fs";
 import { createServer } from "node:http";
 import net from "node:net";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { setTimeout as delay } from "node:timers/promises";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
+const WebSocketCtor = globalThis.WebSocket || createRequire(import.meta.url)("undici").WebSocket;
 const ROOT = process.env.NOWNOTE_TREE_MAP_ROOT
   ? path.resolve(process.env.NOWNOTE_TREE_MAP_ROOT)
   : path.resolve(path.dirname(SCRIPT_PATH), "..");
@@ -57,7 +59,7 @@ class CdpClient {
   }
 
   static async connect(url) {
-    const ws = new WebSocket(url);
+    const ws = new WebSocketCtor(url);
     await new Promise((resolve, reject) => {
       ws.addEventListener("open", resolve, { once: true });
       ws.addEventListener("error", () => reject(new Error(`CDP socket open failed: ${url}`)), { once: true });
@@ -307,7 +309,7 @@ function stopBrowserProcess(browser) {
 }
 
 async function main() {
-  assert(typeof WebSocket === "function", "현재 Node.js 런타임이 WebSocket을 지원하지 않습니다.");
+  assert(typeof WebSocketCtor === "function", "현재 Node.js 런타임이 WebSocket을 지원하지 않습니다.");
 
   const browserPath = await findBrowser();
   if (process.env.NOWNOTE_DEBUG_TREE_MAP) console.error(`Browser: ${browserPath}`);
