@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 import re
 
 
@@ -52,6 +53,14 @@ def check(condition: bool, name: str, detail: str, failures: list[str]) -> None:
         CHECK_PASSED += 1
     else:
         failures.append(f"{name}: {detail}")
+
+
+def check_optional_design(path: Path, requirements: list[tuple[str, str]], failures: list[str]) -> None:
+    if not path.exists():
+        return
+    content = path.read_text(encoding="utf-8")
+    for needle, label in requirements:
+        check(needle in content, f"{path.name} has {label}", needle, failures)
 
 
 def has_id(html: str, element_id: str) -> bool:
@@ -237,18 +246,6 @@ def main() -> None:
         IMPORT_EXPORT_CHECK,
         DESKTOP_POLICY_CHECK,
         GRAPH_VIEW_CHECK,
-        GRAPH_DESIGN,
-        PROPERTIES_DESIGN,
-        CANVAS_DESIGN,
-        CAPTURE_DESIGN,
-        COMMAND_DESIGN,
-        RECOVERY_IMPORT_DESIGN,
-        PUBLISH_SLIDES_DESIGN,
-        WORKSPACE_OPERATIONS_DESIGN,
-        GROUP_SHARED_VIEWS_DESIGN,
-        GROUP_MESSENGER_DESIGN,
-        LIGHTWEIGHT_RUNTIME_DESIGN,
-        GROUP_MESSENGER_ADVANCED_DESIGN,
         DESKTOP_PACKAGE,
         DESKTOP_MAIN,
         DESKTOP_PRELOAD,
@@ -265,6 +262,16 @@ def main() -> None:
     if failures:
         raise SystemExit(1)
 
+    for path in [
+        GRAPH_DESIGN, PROPERTIES_DESIGN, CANVAS_DESIGN, CAPTURE_DESIGN,
+        COMMAND_DESIGN, RECOVERY_IMPORT_DESIGN, PUBLISH_SLIDES_DESIGN,
+        WORKSPACE_OPERATIONS_DESIGN, GROUP_SHARED_VIEWS_DESIGN,
+        GROUP_MESSENGER_DESIGN, LIGHTWEIGHT_RUNTIME_DESIGN,
+        GROUP_MESSENGER_ADVANCED_DESIGN,
+    ]:
+        if not path.exists():
+            print(f"[SKIP] Local-only design document absent: {path.name}")
+
     html = INDEX.read_text(encoding="utf-8")
     app = APP.read_text(encoding="utf-8")
     styles = STYLES.read_text(encoding="utf-8")
@@ -277,13 +284,6 @@ def main() -> None:
     import_export_check = IMPORT_EXPORT_CHECK.read_text(encoding="utf-8")
     desktop_policy_check = DESKTOP_POLICY_CHECK.read_text(encoding="utf-8")
     graph_view_check = GRAPH_VIEW_CHECK.read_text(encoding="utf-8")
-    graph_design = GRAPH_DESIGN.read_text(encoding="utf-8")
-    properties_design = PROPERTIES_DESIGN.read_text(encoding="utf-8")
-    canvas_design = CANVAS_DESIGN.read_text(encoding="utf-8")
-    capture_design = CAPTURE_DESIGN.read_text(encoding="utf-8")
-    command_design = COMMAND_DESIGN.read_text(encoding="utf-8")
-    recovery_import_design = RECOVERY_IMPORT_DESIGN.read_text(encoding="utf-8")
-    publish_slides_design = PUBLISH_SLIDES_DESIGN.read_text(encoding="utf-8")
     desktop_package = DESKTOP_PACKAGE.read_text(encoding="utf-8")
     desktop_main = DESKTOP_MAIN.read_text(encoding="utf-8")
     desktop_preload = DESKTOP_PRELOAD.read_text(encoding="utf-8")
@@ -293,6 +293,7 @@ def main() -> None:
     desktop_app_help = DESKTOP_APP_HELP.read_text(encoding="utf-8")
     desktop_storage_check = DESKTOP_STORAGE_CHECK.read_text(encoding="utf-8")
     desktop_readme = DESKTOP_README.read_text(encoding="utf-8")
+    desktop_version = json.loads(DESKTOP_PACKAGE.read_text(encoding="utf-8"))["version"]
 
     html_requirements = [
         ("<title>NowNote</title>", "app title without Web suffix"),
@@ -1004,7 +1005,7 @@ def main() -> None:
         ("구형 개인 서버 API 토큰", "desktop legacy personal server token label"),
         ("앱/설치형 접속 토큰", "desktop app access token label"),
         ("현재 버전", "desktop current version label"),
-        ("Desktop 2.3.7", "desktop current version value"),
+        (f"Desktop {desktop_version}", "desktop current version value"),
         ('id="printPreviewDialog"', "desktop print preview dialog"),
         ('id="printPreviewTitle"', "desktop print preview title"),
         ('id="printPreviewMeta"', "desktop print preview metadata"),
@@ -1234,7 +1235,7 @@ def main() -> None:
     desktop_readme_requirements = [
         (".exe", "exe installer documentation"),
         ("npm run dist:win", "Windows build command documentation"),
-        ("NowNote-Setup-2.3.7-x64.exe", "installer output documentation"),
+        (f"NowNote-Setup-{desktop_version}-x64.exe", "installer output documentation"),
         ("Web 전용", "hosted Web-only exclusion documentation"),
     ]
     for needle, label in desktop_readme_requirements:
@@ -1281,8 +1282,7 @@ def main() -> None:
         ("연결 후보", "unlinked mention scope"),
         ("그래프 필터 북마크", "graph bookmark scope"),
     ]
-    for needle, label in graph_design_requirements:
-        check(needle in graph_design, f"1.2 design has {label}", needle, failures)
+    check_optional_design(GRAPH_DESIGN, graph_design_requirements, failures)
 
     properties_design_requirements = [
         ("NowNote 1.3 속성 기반 지식 관리 설계서", "1.3 properties design title"),
@@ -1292,8 +1292,7 @@ def main() -> None:
         ("누락 속성 점검", "missing property scope"),
         ("속성이 포함된 템플릿 메모 생성", "property template scope"),
     ]
-    for needle, label in properties_design_requirements:
-        check(needle in properties_design, f"1.3 design has {label}", needle, failures)
+    check_optional_design(PROPERTIES_DESIGN, properties_design_requirements, failures)
 
     canvas_design_requirements = [
         ("NowNote 1.4 Canvas와 시각적 사고 정리 설계서", "1.4 Canvas design title"),
@@ -1303,8 +1302,7 @@ def main() -> None:
         ("그래프 주변 메모를 Canvas 초안", "Canvas graph draft scope"),
         ("Canvas 저장 구조", "Canvas storage scope"),
     ]
-    for needle, label in canvas_design_requirements:
-        check(needle in canvas_design, f"1.4 design has {label}", needle, failures)
+    check_optional_design(CANVAS_DESIGN, canvas_design_requirements, failures)
 
     capture_design_requirements = [
         ("NowNote 1.5 첨부/미디어/빠른 기록 설계서", "1.5 quick capture design title"),
@@ -1316,8 +1314,7 @@ def main() -> None:
         ("첨부 파일 메타데이터 기록", "attachment metadata scope"),
         ("간단한 그림 카드 저장", "sketch scope"),
     ]
-    for needle, label in capture_design_requirements:
-        check(needle in capture_design, f"1.5 design has {label}", needle, failures)
+    check_optional_design(CAPTURE_DESIGN, capture_design_requirements, failures)
 
     command_design_requirements = [
         ("NowNote 1.6 작성 보조와 명령 체계 설계서", "1.6 command design title"),
@@ -1329,8 +1326,7 @@ def main() -> None:
         ("제목 섹션 기준 메모 나누기", "split scope"),
         ("랜덤 메모 열기", "random note scope"),
     ]
-    for needle, label in command_design_requirements:
-        check(needle in command_design, f"1.6 design has {label}", needle, failures)
+    check_optional_design(COMMAND_DESIGN, command_design_requirements, failures)
 
     recovery_import_design_requirements = [
         ("NowNote 1.7 복구, 가져오기, 마이그레이션 설계서", "1.7 recovery import design title"),
@@ -1341,8 +1337,7 @@ def main() -> None:
         ("Obsidian wiki 링크와 첨부 표기 보정", "Obsidian conversion scope"),
         ("가져오기 후 문제/보정 목록 표시", "import report scope"),
     ]
-    for needle, label in recovery_import_design_requirements:
-        check(needle in recovery_import_design, f"1.7 design has {label}", needle, failures)
+    check_optional_design(RECOVERY_IMPORT_DESIGN, recovery_import_design_requirements, failures)
 
     publish_slides_design_requirements = [
         ("NowNote 1.8 출판, 발표, 공개 지식 묶음 설계서", "1.8 publish slides design title"),
@@ -1353,10 +1348,8 @@ def main() -> None:
         ("HTML 문서", "public HTML export scope"),
         ("슬라이드형 HTML 문서", "slides HTML export scope"),
     ]
-    for needle, label in publish_slides_design_requirements:
-        check(needle in publish_slides_design, f"1.8 design has {label}", needle, failures)
+    check_optional_design(PUBLISH_SLIDES_DESIGN, publish_slides_design_requirements, failures)
 
-    workspace_operations_design = WORKSPACE_OPERATIONS_DESIGN.read_text(encoding="utf-8")
     workspace_operations_design_requirements = [
         ("NowNote 1.9 작업공간과 운영형 지식 관리 설계서", "1.9 workspace design title"),
         ("작업공간 저장", "workspace save scope"),
@@ -1364,8 +1357,7 @@ def main() -> None:
         ("지식 건강 점검", "knowledge health scope"),
         ("외부 링크", "external link scope"),
     ]
-    for needle, label in workspace_operations_design_requirements:
-        check(needle in workspace_operations_design, f"1.9 design has {label}", needle, failures)
+    check_optional_design(WORKSPACE_OPERATIONS_DESIGN, workspace_operations_design_requirements, failures)
 
     icon_requirements = [
         ("<svg", "SVG icon root"),
