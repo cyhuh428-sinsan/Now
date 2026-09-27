@@ -1,0 +1,21 @@
+services:
+  now-api:
+    volumes:
+      - type: bind
+        source: ${NOW_PRIVATE_PROJECT_DOCS_DIR:?Set the existing private project docs directory}
+        target: /docs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${NOW_PRIVATE_MOBILE_DOCS_DIR:?Set the existing private mobile docs directory}
+        target: /play_docs
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${NOW_PRIVATE_MOBILE_DOCS_DIR:?Set the existing private mobile docs directory}
+        target: /now_app/docs
+        read_only: true
+        bind:
+          create_host_path: false
