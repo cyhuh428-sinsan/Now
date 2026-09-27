@@ -25,6 +25,7 @@ Future<LlmRepository?> llmRepository(LlmRepositoryRef ref) async {
   return switch (config.provider) {
     LlmProvider.groq     => GroqLlmRepository(config),
     LlmProvider.deepSeek => DeepSeekLlmRepository(config),
+    LlmProvider.omniRoute => OmniRouteLlmRepository(config),
     LlmProvider.gemini   => GeminiLlmRepository(config),
     LlmProvider.openAi   => OpenAiLlmRepository(config),
     LlmProvider.claude   => ClaudeLlmRepository(config),

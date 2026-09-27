@@ -76,3 +76,16 @@
 - 오류 횟수: 1회 (`icacls` 다중 경로 인수 오류, 파일별 조회로 해결)
 - 미검증: Play Console 업로드 및 내부 테스트, 업로드 키의 별도 백업
 - 다음 조치: 업로드 키와 비밀번호 파일을 별도 안전 저장소에 백업하고 Play Console에 서명된 AAB 업로드
+
+## 작업현황 (2026-09-28, OmniRoute 전환)
+
+- 담당: 어울 / Stage: NowNote LLM 제공자 전환 및 Now 호환성 유지
+- 상태: NowNote에서 DeepSeek 선택지를 OmniRoute로 교체, Now 앱의 기존 DeepSeek 선택지는 유지. 공통 코어에 OmniRoute 제공자와 모델 설정 추가
+- 변경 파일: `packages/now_core/lib/llm/`, `packages/now_core/lib/now_core.dart`, `nownote_app/lib/features/settings/`, `nownote_app/lib/features/today/today_providers.dart`, `nownote_app/lib/features/tree/tree_llm_providers.dart`, `now_app/lib/features/settings/`, `now_app/lib/llm/providers/llm_providers.dart`, 관련 테스트와 이 체크리스트
+- 설정: 엔드포인트 `https://omniroute.sinsan.kr/v1`; 모델 기본값 `auto`(설정에서 변경 가능). 기존 DeepSeek 키는 OmniRoute 키로 복사하지 않음
+- 검증: NowNote 분석 문제 없음/테스트 89개 통과, now_core 분석 문제 없음/테스트 388개 통과, Now 테스트 86개 통과. Now 분석의 기존 미수정 파일 경고·권고 20건은 남음
+- 빌드: NowNote `flutter build appbundle --release --no-pub` 성공. `jarsigner -verify`에서 `jar verified`, 인증서 SHA-256 지문은 위 NowNote 업로드 키와 일치
+- 새 산출물: `D:\Project\Now\nownote_app\build\play-release\NowNote-2.3.7-23007-omniroute-71f5374e.aab` (SHA-256 `71F5374EB85DFA20B44B2F3EEA0C4040BBEAC2ECADC3374A7930A5CC8370874E`). 위의 이전 AAB는 변경 전 버전으로 보존
+- 오류 횟수: 2회 (core 패키지 설정 누락으로 테스트/분석 실패 후 오프라인 `pub get`으로 해결, Java 서명 도구가 PATH에 없어 설치 경로로 재실행)
+- 미검증: 실제 OmniRoute 키를 통한 인증·모델 `auto` 사용 가능 여부, 실기기 실행, Play Console 업로드 및 내부 테스트, 업로드 키 별도 백업
+- 다음 조치: 실제 키로 OmniRoute 연결 테스트 후 모델을 확정하고, Play Console 업로드 전 버전 코드와 이전 업로드 여부 확인

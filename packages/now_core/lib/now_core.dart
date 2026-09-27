@@ -21,6 +21,7 @@ export 'llm/llm_repository.dart';
 export 'llm/llm_settings_migration.dart';
 export 'llm/llm_settings_service.dart';
 export 'llm/ollama_llm_repository.dart';
+export 'llm/omniroute_llm_repository.dart';
 export 'notes/deleted_tree_memo.dart';
 export 'notes/note_content.dart';
 export 'notes/note_tags.dart';

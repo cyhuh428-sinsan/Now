@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 
 import '../../shared/note_database_provider.dart';
+import '../settings/nownote_llm_config.dart';
 import 'today_memo_repository.dart';
 
 // LLM provider 구현과 설정 저장은 now_core/lib/llm에 있다. NowNote는 화면에서
@@ -19,10 +20,11 @@ import 'today_memo_repository.dart';
 /// `NoteDatabase.forTesting(NativeDatabase.memory())`로 덮어써서 실제
 /// 파일을 건드리지 않는다 — 그 override가 이 provider에도 그대로
 /// 전달된다.
-final Provider<NoteDatabase> todayNoteDatabaseProvider =
-    Provider<NoteDatabase>((ref) {
-      return ref.watch(noteDatabaseProvider);
-    });
+final Provider<NoteDatabase> todayNoteDatabaseProvider = Provider<NoteDatabase>(
+  (ref) {
+    return ref.watch(noteDatabaseProvider);
+  },
+);
 
 /// 오늘 메모 데이터 접근 계층.
 final Provider<TodayMemoRepository> todayMemoRepositoryProvider =
@@ -81,7 +83,8 @@ final Provider<VoiceRecordingService> todayVoiceRecordingServiceProvider =
 final Provider<VoicePlaybackService Function(VoiceEngineClient engine)>
 todayVoicePlaybackServiceBuilderProvider =
     Provider<VoicePlaybackService Function(VoiceEngineClient engine)>(
-      (ref) => (engine) => VoicePlaybackService.withEngine(engine),
+      (ref) =>
+          (engine) => VoicePlaybackService.withEngine(engine),
     );
 
 // ---- 사진 입력이 쓰는 LLM 배선 ----
@@ -96,7 +99,7 @@ final FutureProvider<LlmConfig> llmConfigProvider = FutureProvider<LlmConfig>((
   ref,
 ) async {
   final service = ref.watch(llmSettingsServiceProvider);
-  return service.loadConfig();
+  return loadNowNoteLlmConfig(service);
 });
 
 final FutureProvider<LlmRepository?> llmRepositoryProvider =
@@ -105,7 +108,8 @@ final FutureProvider<LlmRepository?> llmRepositoryProvider =
       if (!config.isConfigured) return null;
       return switch (config.provider) {
         LlmProvider.groq => GroqLlmRepository(config),
-        LlmProvider.deepSeek => DeepSeekLlmRepository(config),
+        LlmProvider.deepSeek => null,
+        LlmProvider.omniRoute => OmniRouteLlmRepository(config),
         LlmProvider.gemini => GeminiLlmRepository(config),
         LlmProvider.openAi => OpenAiLlmRepository(config),
         LlmProvider.claude => ClaudeLlmRepository(config),

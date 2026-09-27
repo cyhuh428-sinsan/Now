@@ -530,7 +530,9 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                 border: Border.all(color: const Color(0xFFE5E7EB)),
               ),
               child: Column(
-                children: LlmProvider.values.map((provider) {
+                children: LlmProvider.values
+                    .where((provider) => provider != LlmProvider.omniRoute)
+                    .map((provider) {
                   final isLast = provider == LlmProvider.values.last;
                   return Column(
                     children: [
@@ -985,6 +987,7 @@ class _LlmOptionTile extends StatelessWidget {
   String get _emoji => switch (provider) {
         LlmProvider.groq => '⚡',
         LlmProvider.deepSeek => '🔍',
+        LlmProvider.omniRoute => '🔀',
         LlmProvider.gemini => '🌟',
         LlmProvider.openAi => '🤖',
         LlmProvider.claude => '🧠',

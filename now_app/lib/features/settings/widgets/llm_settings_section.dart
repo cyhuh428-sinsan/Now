@@ -140,7 +140,9 @@ class _LlmSettingsSectionState extends ConsumerState<LlmSettingsSection> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // LLM 선택 목록
-          ...LlmProvider.values.map((provider) => _LlmOptionTile(
+          ...LlmProvider.values
+              .where((provider) => provider != LlmProvider.omniRoute)
+              .map((provider) => _LlmOptionTile(
                 provider: provider,
                 isSelected: _selectedProvider == provider,
                 onTap: () {
@@ -249,6 +251,7 @@ class _LlmOptionTile extends StatelessWidget {
     return switch (provider) {
       LlmProvider.groq => '⚡',
       LlmProvider.deepSeek => '🔍',
+      LlmProvider.omniRoute => '🔀',
       LlmProvider.gemini => '🌟',
       LlmProvider.openAi => '🤖',
       LlmProvider.claude => '🧠',

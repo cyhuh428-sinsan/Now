@@ -1,6 +1,8 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 
+import '../settings/nownote_llm_config.dart';
+
 /// 사진 입력에 쓸 LLM 배선.
 ///
 /// LLM provider 구현과 설정 저장은 `now_core`에 있다(캡처와 "묻기"가 이미
@@ -12,17 +14,19 @@ final llmSettingsServiceProvider = Provider<LlmSettingsService>((ref) {
 
 final llmConfigProvider = FutureProvider.autoDispose<LlmConfig>((ref) async {
   final service = ref.watch(llmSettingsServiceProvider);
-  return service.loadConfig();
+  return loadNowNoteLlmConfig(service);
 });
 
 /// 설정이 없으면 null을 돌려준다. 화면은 null이면 안내 문구를 보여준다.
-final llmRepositoryProvider =
-    FutureProvider.autoDispose<LlmRepository?>((ref) async {
+final llmRepositoryProvider = FutureProvider.autoDispose<LlmRepository?>((
+  ref,
+) async {
   final config = await ref.watch(llmConfigProvider.future);
   if (!config.isConfigured) return null;
   return switch (config.provider) {
     LlmProvider.groq => GroqLlmRepository(config),
-    LlmProvider.deepSeek => DeepSeekLlmRepository(config),
+    LlmProvider.deepSeek => null,
+    LlmProvider.omniRoute => OmniRouteLlmRepository(config),
     LlmProvider.gemini => GeminiLlmRepository(config),
     LlmProvider.openAi => OpenAiLlmRepository(config),
     LlmProvider.claude => ClaudeLlmRepository(config),
