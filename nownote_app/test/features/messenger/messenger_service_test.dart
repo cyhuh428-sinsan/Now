@@ -192,7 +192,7 @@ void main() {
         expect(data['message_id'], 12);
         expect(data['target'], 'user');
         expect(data['reason'], 'harassment');
-        expect(data['description'], '반복적인 괴롭힘');
+        expect(data.containsKey('description'), isFalse);
         return _jsonBody({'status': 'ok'});
       });
 
@@ -202,7 +202,6 @@ void main() {
         messageId: 12,
         target: 'user',
         reason: 'harassment',
-        description: '반복적인 괴롭힘',
       );
       expect(adapter.requests, hasLength(1));
     });

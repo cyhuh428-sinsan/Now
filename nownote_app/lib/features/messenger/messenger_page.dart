@@ -351,7 +351,7 @@ class _MessengerPageState extends ConsumerState<MessengerPage> {
       context: context,
       builder: (_) => _ReportDialog(
         target: target,
-        onSubmit: (reason, description) => ref
+        onSubmit: (reason) => ref
             .read(messengerServiceProvider)
             .reportMessage(
               settings,
@@ -359,7 +359,6 @@ class _MessengerPageState extends ConsumerState<MessengerPage> {
               messageId: message.id,
               target: target,
               reason: reason,
-              description: description,
             ),
       ),
     );
@@ -715,23 +714,16 @@ class _ReportDialog extends StatefulWidget {
   const _ReportDialog({required this.target, required this.onSubmit});
 
   final String target;
-  final Future<void> Function(String reason, String description) onSubmit;
+  final Future<void> Function(String reason) onSubmit;
 
   @override
   State<_ReportDialog> createState() => _ReportDialogState();
 }
 
 class _ReportDialogState extends State<_ReportDialog> {
-  final _descriptionCtrl = TextEditingController();
   String _reason = 'harassment';
   String? _error;
   bool _submitting = false;
-
-  @override
-  void dispose() {
-    _descriptionCtrl.dispose();
-    super.dispose();
-  }
 
   Future<void> _submit() async {
     if (_submitting) return;
@@ -740,7 +732,7 @@ class _ReportDialogState extends State<_ReportDialog> {
       _error = null;
     });
     try {
-      await widget.onSubmit(_reason, _descriptionCtrl.text.trim());
+      await widget.onSubmit(_reason);
       if (!mounted) return;
       final messenger = ScaffoldMessenger.of(context);
       Navigator.pop(context);
@@ -776,12 +768,6 @@ class _ReportDialogState extends State<_ReportDialog> {
               onChanged: _submitting
                   ? null
                   : (value) => setState(() => _reason = value ?? 'other'),
-            ),
-            TextField(
-              controller: _descriptionCtrl,
-              maxLength: 500,
-              maxLines: 3,
-              decoration: const InputDecoration(labelText: '추가 설명 (선택)'),
             ),
             if (_error != null)
               Text(

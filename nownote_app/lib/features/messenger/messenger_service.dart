@@ -70,7 +70,6 @@ class MessengerService {
     required int messageId,
     required String target,
     required String reason,
-    required String description,
   }) {
     return ServerMessengerApi.reportMessengerMessage(
       dio: _messengerDioBuilder(settings),
@@ -79,7 +78,6 @@ class MessengerService {
       messageId: messageId,
       target: target,
       reason: reason,
-      description: description,
     );
   }
 }

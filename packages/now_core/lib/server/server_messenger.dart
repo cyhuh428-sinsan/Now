@@ -217,7 +217,6 @@ class ServerMessengerApi {
     required int messageId,
     required String target,
     required String reason,
-    required String description,
   }) async {
     if (!settings.isConfigured) {
       throw Exception('서버 주소가 없습니다');
@@ -230,7 +229,6 @@ class ServerMessengerApi {
           'message_id': messageId,
           'target': target,
           'reason': reason,
-          'description': description,
         },
       );
     } on DioException catch (e) {

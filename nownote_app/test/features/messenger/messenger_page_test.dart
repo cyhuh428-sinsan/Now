@@ -96,7 +96,6 @@ class _FakeMessengerService extends MessengerService {
     required int messageId,
     required String target,
     required String reason,
-    required String description,
   }) async {
     if (failReport) throw Exception('메일 전송 실패');
     reportedTargets.add(target);
