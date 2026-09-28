@@ -20,17 +20,10 @@
 !.github/workflows/preflight.yml
 !docs/
 !docs/SERVER_AUTH_POLICY.md
-!docs/PHASE1_RELEASE_CHECKLIST.md
 !docs/OPEN_SOURCE_RELEASE.md
-!docs/LICENSE_DECISION.md
 !now_app/docs/mobile_runtime_checklist_ko.md
 !now_app/docs/google_play_release_checklist.md
-!now_app/docs/google_play_console_values_ko.md
-!now_app/docs/google_play_paste_ready_ko.md
 !now_app/docs/google_play_step_by_step_ko.md
-!now_app/docs/privacy_policy_draft_ko.md
-!now_app/docs/nownote_site/index.html
-!now_app/docs/play_assets/*.png
 !web/
 !web/index.html
 !web/app.js

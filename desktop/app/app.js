@@ -7,7 +7,9 @@ const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
+// #region nownote-only:desktop 2.3.9 릴리스 전 설치형 버전 표기
 const APP_VERSION = "2.3.8";
+// #endregion
 
 const LANGUAGES = {
   ko: { label: "한국어", locale: "ko-KR", dir: "ltr", fallback: "ko" },
@@ -852,6 +854,11 @@ const I18N = {
     "treeMap.topicLabel": "주제",
     "treeMap.empty": "표시할 주제가 없습니다. 주제를 먼저 만들어 주세요.",
     "treeMap.locked": "암호화된 메모",
+    "treeMap.zoomOut": "축소",
+    "treeMap.zoomIn": "확대",
+    "treeMap.zoomFit": "100%",
+    "treeMap.expand": "화면 크게 보기",
+    "treeMap.restore": "원래 크기로 보기",
     "trash.eyebrow": "실수 삭제를 막기 위한 임시 보관",
     "trash.title": "삭제 보관함",
     "trash.deleteSelected": "선택 영구 삭제",
@@ -1680,6 +1687,11 @@ const I18N = {
     "treeMap.topicLabel": "Topic",
     "treeMap.empty": "No topic to show yet. Create a topic first.",
     "treeMap.locked": "Encrypted note",
+    "treeMap.zoomOut": "Zoom out",
+    "treeMap.zoomIn": "Zoom in",
+    "treeMap.zoomFit": "100%",
+    "treeMap.expand": "Expand view",
+    "treeMap.restore": "Restore view",
     "trash.eyebrow": "Temporary storage to prevent accidental deletion",
     "trash.title": "Trash",
     "trash.deleteSelected": "Delete selected",
@@ -2453,6 +2465,7 @@ const state = {
   dailyViewMode: "daily",
   selectedTreeId: null,
   treeMapTopicId: null,
+  treeMapZoom: 1,
   sharedView: isHostedWebClient() ? "group-tree" : "mine",
   selectedCanvasCardIds: [],
   expandedTreeIds: new Set(),
@@ -3505,8 +3518,13 @@ const elements = {
   treeMapEyebrow: $("#treeMapEyebrow"),
   treeMapTitle: $("#treeMapTitle"),
   treeMapCloseBtn: $("#treeMapCloseBtn"),
+  treeMapExpandBtn: $("#treeMapExpandBtn"),
   treeMapTopicLabel: $("#treeMapTopicLabel"),
   treeMapTopicSelect: $("#treeMapTopicSelect"),
+  treeMapZoomOutBtn: $("#treeMapZoomOutBtn"),
+  treeMapZoomValue: $("#treeMapZoomValue"),
+  treeMapZoomInBtn: $("#treeMapZoomInBtn"),
+  treeMapZoomFitBtn: $("#treeMapZoomFitBtn"),
   treeMapCanvas: $("#treeMapCanvas"),
   propertiesBtn: $("#propertiesBtn"),
   propertiesView: $("#propertiesView"),
@@ -5571,9 +5589,25 @@ function bindEvents() {
   });
 
   elements.treeMapCloseBtn.addEventListener("click", closeTreeMap);
+  elements.treeMapExpandBtn.addEventListener("click", () => {
+    const expanded = elements.treeMapView.classList.toggle("tree-map-view-expanded");
+    updateTreeMapExpandButton(expanded);
+  });
 
   elements.treeMapTopicSelect.addEventListener("change", () => {
     state.treeMapTopicId = elements.treeMapTopicSelect.value || null;
+    renderTreeMap();
+  });
+  elements.treeMapZoomOutBtn.addEventListener("click", () => {
+    state.treeMapZoom = Math.max(0.6, Number((state.treeMapZoom - 0.1).toFixed(1)));
+    renderTreeMap();
+  });
+  elements.treeMapZoomInBtn.addEventListener("click", () => {
+    state.treeMapZoom = Math.min(2, Number((state.treeMapZoom + 0.1).toFixed(1)));
+    renderTreeMap();
+  });
+  elements.treeMapZoomFitBtn.addEventListener("click", () => {
+    state.treeMapZoom = 1;
     renderTreeMap();
   });
 
@@ -7806,6 +7840,7 @@ function setMailSettingsStatus(status, message, payload = {}) {
   mailSettings.senderEmail = typeof payload.sender_email === "string" ? payload.sender_email : "";
   mailSettings.lastTestedAt = typeof payload.last_tested_at === "string" ? payload.last_tested_at : null;
   mailSettings.message = message || "";
+  // #region nownote-only:desktop 기존 설치형 메일 설정 표시 정책 유지
   if (typeof payload.sender_name === "string") elements.mailSettingsSenderNameInput.value = payload.sender_name;
   if (typeof payload.sender_email === "string") elements.mailSettingsSenderEmailInput.value = payload.sender_email;
   if (typeof payload.smtp_host === "string") elements.mailSettingsHostInput.value = payload.smtp_host;
@@ -7813,6 +7848,7 @@ function setMailSettingsStatus(status, message, payload = {}) {
   if (typeof payload.security === "string") elements.mailSettingsSecuritySelect.value = payload.security;
   if (typeof payload.smtp_username === "string") elements.mailSettingsUserInput.value = payload.smtp_username;
   if (typeof payload.test_recipient === "string") elements.mailSettingsTestRecipientInput.value = payload.test_recipient;
+  // #endregion
   renderMailSettings();
 }
 
@@ -10119,6 +10155,11 @@ function applyLanguage() {
   setText("#treeMapEyebrow", t("treeMap.eyebrow"));
   setText("#treeMapTitle", t("treeMap.title"));
   setText("#treeMapTopicLabel", t("treeMap.topicLabel"));
+  setText("#treeMapZoomFitBtn", t("treeMap.zoomFit"));
+  setTitle(elements.treeMapZoomOutBtn, t("treeMap.zoomOut"));
+  setTitle(elements.treeMapZoomInBtn, t("treeMap.zoomIn"));
+  setTitle(elements.treeMapZoomFitBtn, t("treeMap.zoomFit"));
+  updateTreeMapExpandButton();
   setIconLabel(elements.treeMapCloseBtn, t("aria.close"));
   setText("#deletedTreeEyebrow", t("trash.eyebrow"));
   setText("#deletedTreeTitle", t("trash.title"));
@@ -10572,8 +10613,8 @@ function closeGraph() {
 function openTreeMap() {
   closePopupLayers();
   syncTreeMapTopicSelect();
-  renderTreeMap();
   elements.treeMapView.classList.remove("hidden");
+  renderTreeMap();
 }
 
 function toggleTreeMap() {
@@ -10586,6 +10627,13 @@ function toggleTreeMap() {
 
 function closeTreeMap() {
   elements.treeMapView.classList.add("hidden");
+}
+
+function updateTreeMapExpandButton(expanded = elements.treeMapView.classList.contains("tree-map-view-expanded")) {
+  const label = expanded ? t("treeMap.restore") : t("treeMap.expand");
+  setTitle(elements.treeMapExpandBtn, label);
+  elements.treeMapExpandBtn.setAttribute("aria-label", label);
+  elements.treeMapExpandBtn.setAttribute("aria-pressed", expanded ? "true" : "false");
 }
 
 function treeMapTopics() {
@@ -10671,7 +10719,18 @@ function computeTreeMapLayout(topicNode) {
 }
 
 function renderTreeMap() {
+  const canvas = elements.treeMapCanvas;
+  const previousStage = canvas.querySelector(".tree-map-stage-frame");
   const topic = state.treeMapTopicId ? findTreeNode(state.data.tree, state.treeMapTopicId) : null;
+  const sameTopic = previousStage?.dataset.topicId === topic?.id;
+  const centerX = sameTopic ? (canvas.scrollLeft + canvas.clientWidth / 2) / Math.max(canvas.scrollWidth, 1) : null;
+  const centerY = sameTopic ? (canvas.scrollTop + canvas.clientHeight / 2) / Math.max(canvas.scrollHeight, 1) : null;
+  if (elements.treeMapZoomValue) {
+    elements.treeMapZoomValue.textContent = `${Math.round(state.treeMapZoom * 100)}%`;
+    elements.treeMapZoomValue.setAttribute("aria-label", `${t("treeMap.zoomIn")} ${Math.round(state.treeMapZoom * 100)}%`);
+  }
+  elements.treeMapZoomOutBtn.disabled = state.treeMapZoom <= 0.6;
+  elements.treeMapZoomInBtn.disabled = state.treeMapZoom >= 2;
   if (!topic) {
     elements.treeMapCanvas.innerHTML = `<div class="empty-compact">${escapeHtml(t("treeMap.empty"))}</div>`;
     return;
@@ -10681,10 +10740,10 @@ function renderTreeMap() {
     elements.treeMapCanvas.innerHTML = `<div class="empty-compact">${escapeHtml(t("treeMap.empty"))}</div>`;
     return;
   }
-  const width = 760;
-  const height = 300;
-  const marginX = 70;
-  const marginY = 40;
+  const width = Math.max(1200, layout.slotCount * 180 + 180);
+  const height = 520;
+  const marginX = 90;
+  const marginY = 60;
   const usableWidth = width - marginX * 2;
   const usableHeight = height - marginY * 2;
   const selectedId = state.selectedTreeId;
@@ -10712,7 +10771,7 @@ function renderTreeMap() {
     const locked = isEncryptedContent(node.content);
     const label = escapeHtml(noteTitle(node.title));
     return `
-      <button class="tree-map-node tree-map-level-${node.level}${active}" type="button" style="left:${(pos.x / width) * 100}%;top:${(pos.y / height) * 100}%" data-node-id="${escapeHtml(node.id)}">
+      <button class="tree-map-node tree-map-level-${node.level}${active}" type="button" style="left:${(pos.x / width) * 100}%;top:${(pos.y / height) * 100}%" data-node-id="${escapeHtml(node.id)}" title="${label}">
         <strong>${label}</strong>
         ${locked ? `<small class="tree-map-lock" title="${escapeHtml(t("treeMap.locked"))}">🔒</small>` : ""}
       </button>
@@ -10720,9 +10779,17 @@ function renderTreeMap() {
   }).join("");
 
   elements.treeMapCanvas.innerHTML = `
-    <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">${edgeSvg}</svg>
-    ${nodeSvg}
+    <div class="tree-map-stage-frame" data-topic-id="${escapeHtml(topic.id)}" style="width:${Math.round(width * state.treeMapZoom)}px;height:${Math.round(height * state.treeMapZoom)}px">
+      <div class="tree-map-stage" style="width:${width}px;height:${height}px;transform:scale(${state.treeMapZoom})">
+        <svg viewBox="0 0 ${width} ${height}" aria-hidden="true">${edgeSvg}</svg>
+        ${nodeSvg}
+      </div>
+    </div>
   `;
+  canvas.scrollLeft = centerX !== null
+    ? centerX * canvas.scrollWidth - canvas.clientWidth / 2
+    : positions.get(topic.id).x * state.treeMapZoom - canvas.clientWidth / 2;
+  canvas.scrollTop = centerY !== null ? centerY * canvas.scrollHeight - canvas.clientHeight / 2 : 0;
   elements.treeMapCanvas.querySelectorAll("[data-node-id]").forEach((button) => {
     button.addEventListener("click", () => {
       selectTreeNode(button.dataset.nodeId);
@@ -16362,7 +16429,9 @@ async function load() {
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
     state.data.daily = parsed.daily || {};
+    // #region nownote-only:desktop 기존 설치형 작업일지 복원 유지
     state.data.worklogs = parsed.worklogs || {};
+    // #endregion
     state.data.archivedDaily = parsed.archivedDaily || [];
     state.data.deletedTree = parsed.deletedTree || [];
     state.data.canvases = parsed.canvases || [];
@@ -16963,6 +17032,7 @@ async function migrateLocalStorageToDesktopStore(key) {
 
 function writeStorage(key, value) {
   if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
+    // #region nownote-only:desktop 기존 동기 저장 정책 유지
     try {
       const result = window.nownoteDesktop.storage.writeSync(key, value);
       desktopStorageInfo = {
@@ -16982,6 +17052,7 @@ function writeStorage(key, value) {
         showNotice(t("note.desktopStorageFail"), "error");
       }
     }
+    // #endregion
     return true;
   }
   try {

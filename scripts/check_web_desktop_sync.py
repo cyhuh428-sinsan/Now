@@ -79,7 +79,8 @@ def read_lines(path: Path) -> list[str]:
     두 파일 모두 CRLF와 LF가 섞여 있고 섞인 위치가 서로 다르다.
     화면 동작과 무관한 차이이므로 비교 전에 LF로 맞춘다.
     """
-    text = path.read_text(encoding="utf-8-sig", newline="")
+    with path.open("r", encoding="utf-8-sig", newline="") as source:
+        text = source.read()
     return text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
 
 

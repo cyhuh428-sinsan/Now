@@ -88,6 +88,7 @@ def main() -> None:
     dockerfile_path = server_dir / "Dockerfile"
     main_app_path = server_dir / "app" / "main.py"
     root_dockerignore_path = repo_root / ".dockerignore"
+    private_docs_compose_path = server_dir / "docker-compose.private-docs.yml.example"
     readme_path = server_dir / "README.md"
     public_env_example_path = server_dir / ".env.public.example"
     monitor_api_path = server_dir / "app" / "api" / "monitor.py"
@@ -359,7 +360,6 @@ def main() -> None:
             failures,
         )
 
-    check(project_status_path.exists(), "Project status document exists", str(project_status_path), failures)
     if project_status_path.exists():
         project_status = project_status_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -378,7 +378,6 @@ def main() -> None:
             failures,
         )
 
-    check(phase1_checklist_path.exists(), "Phase one release checklist exists", str(phase1_checklist_path), failures)
     if phase1_checklist_path.exists():
         phase1_checklist = phase1_checklist_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -400,7 +399,6 @@ def main() -> None:
         )
 
     check(open_source_release_path.exists(), "Open source release guide exists", str(open_source_release_path), failures)
-    check(license_decision_path.exists(), "License decision guide exists", str(license_decision_path), failures)
     if open_source_release_path.exists():
         open_source_release = open_source_release_path.read_text(encoding="utf-8")
         check_text_contains(
@@ -614,15 +612,24 @@ def main() -> None:
                 ("COPY README.md SECURITY.md CONTRIBUTING.md LICENSE /repo_docs/", "Dockerfile copies public repo docs and license", "public repo docs copy"),
                 ("COPY .github /repo_docs/.github", "Dockerfile copies GitHub templates", "GitHub templates copy"),
                 ("COPY docs/SERVER_AUTH_POLICY.md /docs/SERVER_AUTH_POLICY.md", "Dockerfile copies auth policy doc", "auth policy doc copy"),
-                ("COPY docs/PHASE1_RELEASE_CHECKLIST.md /docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile copies phase one checklist", "phase one checklist copy"),
                 ("COPY docs/OPEN_SOURCE_RELEASE.md /docs/OPEN_SOURCE_RELEASE.md", "Dockerfile copies open source release doc", "open source doc copy"),
-                ("COPY docs/LICENSE_DECISION.md /docs/LICENSE_DECISION.md", "Dockerfile copies license decision doc", "license decision doc copy"),
                 ("COPY now_app/docs/mobile_runtime_checklist_ko.md", "Dockerfile copies mobile runtime checklist", "mobile checklist copy"),
                 ("COPY now_app/docs/google_play_release_checklist.md", "Dockerfile copies Play checklist doc", "Play checklist doc copy"),
-                ("COPY now_app/docs/nownote_site/index.html", "Dockerfile copies privacy policy page", "privacy policy page copy"),
-                ("COPY now_app/docs/play_assets/*.png", "Dockerfile copies Play image assets", "Play image asset copy"),
                 ("COPY web/index.html web/app.js web/styles.css web/help.html web/manifest.webmanifest web/sw.js /web_app/", "Dockerfile copies hosted web app files", "hosted web app copy"),
                 ("COPY web/icons /web_app/icons", "Dockerfile copies hosted web app icons", "hosted web icons copy"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            dockerfile,
+            [
+                ("COPY docs/PHASE1_RELEASE_CHECKLIST.md", "Dockerfile leaves private release checklist out", "private checklist"),
+                ("COPY docs/LICENSE_DECISION.md", "Dockerfile leaves private license guide out", "private license guide"),
+                ("COPY now_app/docs/google_play_console_values_ko.md", "Dockerfile leaves private console values out", "private console values"),
+                ("COPY now_app/docs/google_play_paste_ready_ko.md", "Dockerfile leaves private paste-ready doc out", "private paste-ready doc"),
+                ("COPY now_app/docs/privacy_policy_draft_ko.md", "Dockerfile leaves private privacy draft out", "private privacy draft"),
+                ("COPY now_app/docs/nownote_site/index.html", "Dockerfile leaves private privacy page out", "private privacy page"),
+                ("COPY now_app/docs/play_assets/*.png", "Dockerfile leaves private Play assets out", "private Play assets"),
             ],
             failures,
         )
@@ -641,12 +648,9 @@ def main() -> None:
                 ("!LICENSE", "Root Dockerignore allows license file", "license context"),
                 ("!.github/workflows/preflight.yml", "Root Dockerignore allows preflight workflow", "preflight workflow context"),
                 ("!docs/SERVER_AUTH_POLICY.md", "Root Dockerignore allows auth policy doc", "auth policy context"),
-                ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Root Dockerignore allows phase one checklist", "phase one checklist context"),
                 ("!docs/OPEN_SOURCE_RELEASE.md", "Root Dockerignore allows open source release doc", "open source doc context"),
-                ("!docs/LICENSE_DECISION.md", "Root Dockerignore allows license decision doc", "license decision doc context"),
                 ("!now_app/docs/mobile_runtime_checklist_ko.md", "Root Dockerignore allows mobile runtime checklist", "mobile checklist context"),
                 ("!now_app/docs/google_play_release_checklist.md", "Root Dockerignore allows Play checklist", "Play checklist context"),
-                ("!now_app/docs/play_assets/*.png", "Root Dockerignore allows Play image assets", "Play image asset context"),
                 ("!web/index.html", "Root Dockerignore allows hosted web index", "hosted web index context"),
                 ("!web/app.js", "Root Dockerignore allows hosted web app script", "hosted web script context"),
                 ("!web/styles.css", "Root Dockerignore allows hosted web styles", "hosted web styles context"),
@@ -654,6 +658,33 @@ def main() -> None:
                 ("!web/manifest.webmanifest", "Root Dockerignore allows hosted web manifest", "hosted web manifest context"),
                 ("!web/sw.js", "Root Dockerignore allows hosted web service worker", "hosted web service worker context"),
                 ("!web/icons/**", "Root Dockerignore allows hosted web icons", "hosted web icons context"),
+            ],
+            failures,
+        )
+        check_text_not_contains(
+            root_dockerignore,
+            [
+                ("!docs/PHASE1_RELEASE_CHECKLIST.md", "Build context excludes private release checklist", "private checklist"),
+                ("!docs/LICENSE_DECISION.md", "Build context excludes private license guide", "private license guide"),
+                ("!now_app/docs/google_play_console_values_ko.md", "Build context excludes private console values", "private console values"),
+                ("!now_app/docs/google_play_paste_ready_ko.md", "Build context excludes private paste-ready doc", "private paste-ready doc"),
+                ("!now_app/docs/privacy_policy_draft_ko.md", "Build context excludes private privacy draft", "private privacy draft"),
+                ("!now_app/docs/nownote_site/index.html", "Build context excludes private privacy page", "private privacy page"),
+                ("!now_app/docs/play_assets/*.png", "Build context excludes private Play assets", "private Play assets"),
+            ],
+            failures,
+        )
+    check(private_docs_compose_path.exists(), "Private docs mount example exists", str(private_docs_compose_path), failures)
+    if private_docs_compose_path.exists():
+        private_docs_compose = private_docs_compose_path.read_text(encoding="utf-8")
+        check_text_contains(
+            private_docs_compose,
+            [
+                ("target: /docs", "Private project docs mount at runtime", "project docs mount"),
+                ("target: /play_docs", "Private Play docs mount at runtime", "Play docs mount"),
+                ("target: /now_app/docs", "Private mobile docs mount at runtime", "mobile docs mount"),
+                ("read_only: true", "Private docs mounts are read-only", "read-only mounts"),
+                ("create_host_path: false", "Missing host docs are not created", "missing host path rejection"),
             ],
             failures,
         )
@@ -823,10 +854,7 @@ def main() -> None:
         failures,
     )
     check(play_release_checklist_path.exists(), "Google Play release checklist exists", str(play_release_checklist_path), failures)
-    check(play_paste_ready_path.exists(), "Google Play paste-ready doc exists", str(play_paste_ready_path), failures)
     check(play_step_by_step_path.exists(), "Google Play step-by-step doc exists", str(play_step_by_step_path), failures)
-    check(privacy_policy_path.exists(), "Privacy policy draft exists", str(privacy_policy_path), failures)
-    check(privacy_site_path.exists(), "Privacy site page exists", str(privacy_site_path), failures)
     capabilities_source = ""
     if capabilities_path.exists():
         capabilities_source = capabilities_path.read_text(encoding="utf-8")

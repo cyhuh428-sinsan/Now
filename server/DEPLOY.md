@@ -7,6 +7,16 @@
 WSL 설치와 실행은 개발/테스트용입니다.
 실제 사용자는 공용 서버 `nownote.sinsan.kr`를 쓰거나, 별도 Linux 서버에 개인 서버를 설치합니다.
 
+## 비공개 문서와 이미지
+
+공개 Git 체크아웃의 Docker 이미지는 비공개 프로젝트 문서, Play 자료, 개인정보처리방침 원본을 포함하지 않습니다. 해당 자료가 있는 서버에서는 기존 호스트 파일을 `docker-compose.private-docs.yml.example`로 API 컨테이너에 읽기 전용 연결합니다. DB·녹음·첨부 볼륨과는 별개이며, 원본 문서를 Git이나 이미지에 복사하지 않습니다.
+
+`NOW_PRIVATE_PROJECT_DOCS_DIR`은 기존 `docs` 폴더, `NOW_PRIVATE_MOBILE_DOCS_DIR`은 기존 `now_app/docs` 폴더의 절대 경로로 지정합니다. 두 폴더와 필요한 문서가 실제로 있는지 먼저 확인하고 아래 설정 검사에 성공한 뒤, 인수 승인된 배포 명령에 동일한 두 Compose 파일을 사용합니다. 자료가 없는 개발 환경에서는 기본 Compose 파일만 사용하며 관련 관리 화면은 문서 없음으로 표시될 수 있습니다.
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.private-docs.yml.example config --quiet
+```
+
 ## 빠른 갱신
 
 아래 명령은 소스 갱신, preflight, 컨테이너 재시작, ready 확인, smoke test를 순서대로 실행합니다.

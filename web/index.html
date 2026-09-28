@@ -1217,11 +1217,20 @@
             <p id="treeMapEyebrow" class="eyebrow">선택한 주제 범위만 표시</p>
             <h2 id="treeMapTitle">지식맵</h2>
           </div>
-          <button id="treeMapCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+          <div class="tree-map-header-actions">
+            <button id="treeMapExpandBtn" class="icon-btn" type="button" title="화면 크게 보기" aria-label="화면 크게 보기">⛶</button>
+            <button id="treeMapCloseBtn" class="icon-btn" type="button" aria-label="닫기">×</button>
+          </div>
         </header>
         <div class="tree-map-toolbar" aria-label="지식맵 주제 선택">
           <label id="treeMapTopicLabel" for="treeMapTopicSelect">주제</label>
           <select id="treeMapTopicSelect" class="settings-select" aria-label="지식맵 주제"></select>
+          <div class="tree-map-zoom-controls" aria-label="지식맵 확대 축소">
+            <button id="treeMapZoomOutBtn" class="icon-btn" type="button" title="축소" aria-label="축소">−</button>
+            <output id="treeMapZoomValue" class="tree-map-zoom-value" aria-live="polite">100%</output>
+            <button id="treeMapZoomInBtn" class="icon-btn" type="button" title="확대" aria-label="확대">+</button>
+            <button id="treeMapZoomFitBtn" class="ghost-btn" type="button">100%</button>
+          </div>
         </div>
         <div id="treeMapCanvas" class="tree-map-canvas" aria-label="지식맵"></div>
       </div>
