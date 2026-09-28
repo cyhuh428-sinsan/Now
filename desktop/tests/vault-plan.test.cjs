@@ -83,3 +83,20 @@ test("path moves are visible and a changed path on both sides conflicts", () => 
   original.relativePath = "Another/_index.md";
   assert.equal(buildSyncPlan({ localNodes: local, vaultEntries: [original], baselines: base, direction: "both" }).items[0].classification, "conflict");
 });
+
+test("an intentionally linked root import retains distinct local and Vault baseline paths", () => {
+  const local = mapNowTree([node("t", "Topic", 1, [node("c", "Category", 2, [node("n", "loose", 3, [], "text")])])]);
+  const remote = vault("n", "note", "loose.md", "text");
+  remote.title = "loose";
+  const hash = contentHash(remote);
+  const baselines = { n: { localPath: "Topic/Category/loose.md", vaultPath: "loose.md", localHash: hash, vaultHash: hash } };
+  const plan = buildSyncPlan({ localNodes: local, vaultEntries: [remote], baselines, direction: "both" });
+  assert.equal(plan.items.find((item) => item.id === "n").classification, "unchanged");
+});
+
+test("encrypted content stays excluded from either sync direction", () => {
+  const local = mapNowTree([node("t", "Topic", 1, [], "NOW_ENCRYPTED_V1:secret")]);
+  assert.equal(buildSyncPlan({ localNodes: local, vaultEntries: [], baselines: {}, direction: "toVault" }).items[0].classification, "skipped");
+  const remote = vault("r", "note", "Topic/Category/secret.md", "NOW_ENCRYPTED_V1:secret");
+  assert.equal(buildSyncPlan({ localNodes: [], vaultEntries: [remote], baselines: {}, direction: "fromVault" }).items[0].classification, "skipped");
+});

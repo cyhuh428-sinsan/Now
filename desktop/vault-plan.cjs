@@ -74,7 +74,7 @@ function buildSyncPlan({ localNodes, vaultEntries, baselines = {}, direction }) 
     const local = localById.get(id);
     const remote = vaultById.get(id);
     const baseline = baselines[id];
-    const paths = { baseline: baseline?.relativePath || null, local: local?.relativePath || null, vault: remote?.relativePath || null };
+    const paths = { baseline: baseline?.relativePath || baseline?.vaultPath || null, local: local?.relativePath || null, vault: remote?.relativePath || null };
     let classification;
     let reason = null;
     const localPathKey = local && canonicalPath(local.relativePath);
@@ -84,7 +84,7 @@ function buildSyncPlan({ localNodes, vaultEntries, baselines = {}, direction }) 
     if (blocked || targetOccupied || (local && remote && local.kind !== remote.kind)) {
       classification = "conflict";
       reason = blocked ? "duplicateIdentityOrPath" : targetOccupied ? "targetPathOccupied" : "kindMismatch";
-    } else if (local?.status === "deleted" || local?.body?.trimStart().startsWith("NOW_ENCRYPTED_V1:")) {
+    } else if (local?.status === "deleted" || local?.body?.trimStart().startsWith("NOW_ENCRYPTED_V1:") || remote?.body?.trimStart().startsWith("NOW_ENCRYPTED_V1:")) {
       classification = "skipped";
       reason = "localExcluded";
     } else if (!local || !remote) {
@@ -92,8 +92,8 @@ function buildSyncPlan({ localNodes, vaultEntries, baselines = {}, direction }) 
     } else {
       const localHash = contentHash(local);
       const vaultHash = contentHash(remote);
-      const localPathChanged = Boolean(baseline && baseline.relativePath !== local.relativePath);
-      const vaultPathChanged = Boolean(baseline && baseline.relativePath !== remote.relativePath);
+      const localPathChanged = Boolean(baseline && (baseline.localPath || baseline.relativePath) !== local.relativePath);
+      const vaultPathChanged = Boolean(baseline && (baseline.vaultPath || baseline.relativePath) !== remote.relativePath);
       if (!baseline) {
         classification = localHash === vaultHash ? "unchanged" : "conflict";
       } else {

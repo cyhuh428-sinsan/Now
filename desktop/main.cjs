@@ -1,6 +1,6 @@
 const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
-const fs = require("fs");
 const path = require("path");
+const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
 
 const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
@@ -15,35 +15,8 @@ function desktopStorePath() {
   return path.join(app.getPath("userData"), "nownote-desktop-store.json");
 }
 
-function defaultDesktopStore() {
-  return {
-    version: DESKTOP_STORE_VERSION,
-    updatedAt: null,
-    values: {},
-  };
-}
-
 function readDesktopStore() {
-  const storePath = desktopStorePath();
-  try {
-    if (!fs.existsSync(storePath)) {
-      return defaultDesktopStore();
-    }
-    const parsed = JSON.parse(fs.readFileSync(storePath, "utf8"));
-    return {
-      ...defaultDesktopStore(),
-      ...parsed,
-      values: parsed && typeof parsed.values === "object" && parsed.values ? parsed.values : {},
-    };
-  } catch {
-    return defaultDesktopStore();
-  }
-}
-
-function writeDesktopStore(store) {
-  const storePath = desktopStorePath();
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  fs.writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  return readStoreFile(desktopStorePath()).store;
 }
 
 function registerDesktopStorageHandlers() {
@@ -63,19 +36,23 @@ function registerDesktopStorageHandlers() {
   });
 
   ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
-    const store = readDesktopStore();
-    store.values[key] = value;
-    store.updatedAt = new Date().toISOString();
-    writeDesktopStore(store);
-    return { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+    const result = updateStoreFile(desktopStorePath(), (store) => {
+      store.values[key] = value;
+      return store;
+    });
+    return { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
   });
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
-    const store = readDesktopStore();
-    store.values[key] = value;
-    store.updatedAt = new Date().toISOString();
-    writeDesktopStore(store);
-    event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+    try {
+      const result = updateStoreFile(desktopStorePath(), (store) => {
+        store.values[key] = value;
+        return store;
+      });
+      event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
+    } catch (error) {
+      event.returnValue = { ok: false, error: error.message };
+    }
   });
 }
 
