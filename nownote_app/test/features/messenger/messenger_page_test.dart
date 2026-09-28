@@ -308,6 +308,17 @@ void main() {
 
     expect(service.sentBodies, isEmpty);
     expect(find.text('메신저 이용규칙'), findsOneWidget);
+    await tester.tap(find.text('취소'));
+    await tester.pumpAndSettle();
+    expect(service.sentBodies, isEmpty);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      '안녕하세요',
+    );
+
+    await tester.tap(find.byIcon(Icons.send));
+    await tester.pumpAndSettle();
+    expect(find.text('메신저 이용규칙'), findsOneWidget);
     await tester.tap(find.text('동의하고 보내기'));
     await tester.pumpAndSettle();
 

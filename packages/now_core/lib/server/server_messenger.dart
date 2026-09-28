@@ -232,6 +232,9 @@ class ServerMessengerApi {
         },
       );
     } on DioException catch (e) {
+      if (e.response?.statusCode == 503) {
+        throw Exception('신고를 접수하지 못했습니다. 잠시 후 다시 시도하세요');
+      }
       throw Exception(_serverErrorMessage(e, fallback: '신고 전송 실패'));
     }
   }
