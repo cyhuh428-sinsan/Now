@@ -189,7 +189,12 @@ def report_message(
     db: Session = Depends(get_db),
 ) -> dict:
     user = _messenger_user(db, owner_id=payload.owner_id, web_session_token=web_session_token, user_token=user_token)
-    room, _member = _require_room_member(db, room_id=room_id, user=user)
+    try:
+        room, _member = _require_room_member(db, room_id=room_id, user=user)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="room not found") from None
+        raise
     message = db.scalar(
         select(MessengerMessage).where(
             MessengerMessage.id == payload.message_id,
