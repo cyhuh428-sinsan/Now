@@ -1,8 +1,9 @@
 #include "vault-path.hpp"
 
 #include <winternl.h>
+#include <winioctl.h>
 
-#include <cctype>
+#include <cwctype>
 #include <iomanip>
 #include <sstream>
 
@@ -31,6 +32,15 @@ bool ValidComponent(const std::wstring& name) {
     if (ch < 32 || ch == L':' || ch == L'/' || ch == L'?' || ch == L'*' ||
         ch == L'"' || ch == L'<' || ch == L'>' || ch == L'|') return false;
   }
+  std::wstring stem = name.substr(0, name.find(L'.'));
+  for (wchar_t& ch : stem) ch = static_cast<wchar_t>(std::towupper(ch));
+  if (stem == L"CON" || stem == L"PRN" || stem == L"AUX" || stem == L"NUL" ||
+      stem == L"CONIN$" || stem == L"CONOUT$") return false;
+  if (stem.size() == 4 && (stem.substr(0, 3) == L"COM" || stem.substr(0, 3) == L"LPT")) {
+    const wchar_t suffix = stem[3];
+    if ((suffix >= L'1' && suffix <= L'9') || suffix == L'\u00b9' ||
+        suffix == L'\u00b2' || suffix == L'\u00b3') return false;
+  }
   return true;
 }
 
@@ -46,7 +56,7 @@ bool OpenDirectory(const std::wstring& name, HANDLE parent, HANDLE& opened) {
   IO_STATUS_BLOCK io{};
   const NTSTATUS status = NtCreateFile(
       &opened, FILE_READ_ATTRIBUTES | FILE_LIST_DIRECTORY | SYNCHRONIZE, &attributes, &io,
-      nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+      nullptr, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ | FILE_SHARE_WRITE,
       FILE_OPEN, FILE_DIRECTORY_FILE | FILE_OPEN_REPARSE_POINT | FILE_SYNCHRONOUS_IO_NONALERT,
       nullptr, 0);
   return status >= 0 && opened != INVALID_HANDLE_VALUE && opened != nullptr;
@@ -56,6 +66,26 @@ bool IsReparsePoint(HANDLE handle) {
   FILE_ATTRIBUTE_TAG_INFO info{};
   return !GetFileInformationByHandleEx(handle, FileAttributeTagInfo, &info, sizeof(info)) ||
          (info.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0;
+}
+
+bool IsLocalDisk(HANDLE handle, Error& error) {
+  struct DeviceInformation {
+    ULONG deviceType;
+    ULONG characteristics;
+  } info{};
+  using QueryVolume = NTSTATUS(NTAPI*)(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, ULONG);
+  const HMODULE ntdll = GetModuleHandleW(L"ntdll.dll");
+  const auto query = ntdll ? reinterpret_cast<QueryVolume>(
+      GetProcAddress(ntdll, "NtQueryVolumeInformationFile")) : nullptr;
+  IO_STATUS_BLOCK io{};
+  // FileFsDeviceInformation is class 4; FILE_REMOTE_DEVICE is bit 0x10.
+  if (!query || query(handle, &io, &info, sizeof(info), 4) < 0) {
+    return Fail(error, "DEVICE_QUERY_FAILED", "Cannot verify Vault device");
+  }
+  if (info.deviceType != FILE_DEVICE_DISK || (info.characteristics & 0x10) != 0) {
+    return Fail(error, "UNSUPPORTED_DRIVE", "Vault must be on a local disk");
+  }
+  return true;
 }
 
 std::string HexBytes(const BYTE* bytes, size_t size) {
@@ -81,11 +111,6 @@ bool RootHandles::Open(const std::string& utf8Root, RootIdentity& identity, Erro
   }
 
   const std::wstring drive = root.substr(0, 3);
-  const UINT type = GetDriveTypeW(drive.c_str());
-  if (type != DRIVE_FIXED && type != DRIVE_REMOVABLE) {
-    return Fail(error, "UNSUPPORTED_DRIVE", "Vault must be on a local drive");
-  }
-
   std::wstring ntDrive = L"\\??\\" + drive;
   HANDLE opened = INVALID_HANDLE_VALUE;
   if (!OpenDirectory(ntDrive, nullptr, opened)) {
@@ -115,6 +140,7 @@ bool RootHandles::Open(const std::string& utf8Root, RootIdentity& identity, Erro
     start = end + 1;
   }
 
+  if (!IsLocalDisk(handles_.back(), error)) return false;
   wchar_t filesystem[64]{};
   if (!GetVolumeInformationByHandleW(handles_.back(), nullptr, 0, nullptr, nullptr, nullptr,
                                       filesystem, static_cast<DWORD>(std::size(filesystem)))) {

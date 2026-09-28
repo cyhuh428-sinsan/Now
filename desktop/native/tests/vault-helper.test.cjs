@@ -71,11 +71,12 @@ test('probe rejects intermediate and final junction without touching target', as
   const outside = path.join(dir, 'outside');
   const link = path.join(dir, 'link');
   await fs.mkdir(outside);
+  await fs.mkdir(path.join(outside, 'child'));
   await fs.writeFile(path.join(outside, 'sentinel.txt'), 'unchanged');
   await fs.symlink(outside, link, 'junction');
   assertRejected(await probe(link));
   assertRejected(await probe(path.join(link, 'child')));
-  assert.deepEqual((await fs.readdir(outside)).sort(), ['sentinel.txt']);
+  assert.deepEqual((await fs.readdir(outside)).sort(), ['child', 'sentinel.txt']);
   assert.equal(await fs.readFile(path.join(outside, 'sentinel.txt'), 'utf8'), 'unchanged');
 });
 
@@ -87,7 +88,18 @@ test('probe rejects UNC and missing root without creating files', async (t) => {
   assert.deepEqual(await fs.readdir(dir), before);
 });
 
-test('probe rejects malformed and oversized JSON', async () => {
+test('probe rejects malformed and valid oversized JSON', async () => {
   assertRejected(await request('{'));
-  assertRejected(await request(' '.repeat(8 * 1024 * 1024 + 1)));
+  const oversized = JSON.stringify({ protocol: 1, operation: 'probe', root: 'D:\\', padding: 'a'.repeat(8 * 1024 * 1024) });
+  assert.equal((await request(oversized)).response.error.code, 'REQUEST_TOO_LARGE');
+});
+
+test('probe rejects Windows reserved device names before opening a component', async (t) => {
+  const dir = await fixture(t);
+  const before = await fs.readdir(dir);
+  for (const name of ['CON', 'nul.txt', 'PrN', 'AUX.md', 'COM1', 'lpt9.txt']) {
+    const result = await probe(path.join(dir, name));
+    assert.equal(result.response.error.code, 'INVALID_ROOT', name);
+  }
+  assert.deepEqual(await fs.readdir(dir), before);
 });
