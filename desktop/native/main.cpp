@@ -1,4 +1,5 @@
 #include "vault-path.hpp"
+#include "vault-ops.hpp"
 #include "third_party/json.hpp"
 
 #include <array>
@@ -26,7 +27,8 @@ json Handle(const std::string& input, bool tooLarge) {
   if (!request.contains("operation") || !request["operation"].is_string()) {
     return Failure("INVALID_OPERATION", "Operation is required");
   }
-  if (request["operation"] != "probe") {
+  const auto operation = request["operation"].get<std::string>();
+  if (operation != "probe" && operation != "list" && operation != "read") {
     return Failure("UNSUPPORTED_OPERATION", "Operation is not available");
   }
   if (!request.contains("root") || !request["root"].is_string()) {
@@ -37,6 +39,32 @@ json Handle(const std::string& input, bool tooLarge) {
   vault::Error error;
   if (!handles.Open(request["root"].get<std::string>(), identity, error)) {
     return {{"ok", false}, {"error", {{"code", error.code}, {"message", error.message}}}};
+  }
+  if (operation != "probe") {
+    if (!request.contains("rootIdentity") || !request["rootIdentity"].is_object() ||
+        !request["rootIdentity"].contains("volumeId") ||
+        !request["rootIdentity"].contains("fileId") ||
+        !request["rootIdentity"]["volumeId"].is_string() ||
+        !request["rootIdentity"]["fileId"].is_string()) {
+      return Failure("INVALID_IDENTITY", "Root identity is required");
+    }
+    const auto expected = request["rootIdentity"];
+    if (identity.volumeId != expected["volumeId"].get<std::string>() ||
+        identity.fileId != expected["fileId"].get<std::string>()) {
+      return Failure("ROOT_CHANGED", "Vault root identity changed");
+    }
+    json result;
+    const auto root = request["root"].get<std::string>();
+    const bool success = operation == "list"
+        ? vault::List(root, identity, result, error)
+        : request.contains("relativePath") && request["relativePath"].is_string()
+            ? vault::Read(root, identity, request["relativePath"].get<std::string>(), result, error)
+            : false;
+    if (!success) {
+      if (error.code.empty()) return Failure("INVALID_PATH", "Relative path is required");
+      return { {"ok", false}, {"error", {{"code", error.code}, {"message", error.message}}} };
+    }
+    return {{"ok", true}, {"result", result}};
   }
   return {{"ok", true},
           {"result", {{"rootIdentity", {{"volumeId", identity.volumeId},
