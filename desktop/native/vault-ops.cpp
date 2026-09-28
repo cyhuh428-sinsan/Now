@@ -15,6 +15,7 @@ namespace vault {
 namespace {
 
 constexpr uint64_t kMaxMarkdown = 5ULL * 1024 * 1024;
+constexpr size_t kMaxResponse = 16 * 1024 * 1024;
 constexpr size_t kMaxDepth = 128;
 constexpr size_t kMaxEntries = 100000;
 
@@ -193,6 +194,19 @@ struct DirectoryEntry {
   DWORD attributes;
 };
 
+bool AppendBounded(nlohmann::json& target, nlohmann::json item,
+                   size_t& responseBytes, size_t& itemCount, Error& error) {
+  if (itemCount >= kMaxEntries)
+    return Fail(error, "TOO_MANY_ENTRIES", "Vault has too many entries");
+  const size_t added = item.dump().size() + (target.empty() ? 0 : 1);
+  if (added > kMaxResponse - responseBytes)
+    return Fail(error, "RESPONSE_TOO_LARGE", "Vault listing exceeds 16 MiB");
+  target.push_back(std::move(item));
+  responseBytes += added;
+  ++itemCount;
+  return true;
+}
+
 bool Names(HANDLE directory, std::vector<DirectoryEntry>& names, Error& error) {
   std::vector<BYTE> buffer(64 * 1024);
   std::set<std::wstring> seen;
@@ -231,7 +245,8 @@ bool Names(HANDLE directory, std::vector<DirectoryEntry>& names, Error& error) {
 
 bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
           nlohmann::json& entries, nlohmann::json& recovery,
-          nlohmann::json& skipped, Error& error) {
+          nlohmann::json& skipped, size_t& responseBytes, size_t& itemCount,
+          Error& error) {
   if (depth > kMaxDepth) return Fail(error, "TOO_DEEP", "Vault nesting is too deep");
   std::vector<DirectoryEntry> names;
   if (!Names(directory, names, error)) return false;
@@ -241,13 +256,14 @@ bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
     if (!ToUtf8(name, utf8)) return Fail(error, "INVALID_NAME", "Invalid Vault filename");
     const std::string relative = prefix.empty() ? utf8 : prefix + "/" + utf8;
     if (name.size() >= 17 && _wcsnicmp(name.c_str(), L".nownote-pending-", 17) == 0) {
-      recovery.push_back(relative);
+      if (!AppendBounded(recovery, relative, responseBytes, itemCount, error)) return false;
       continue;
     }
     if (HiddenOrExcluded(name)) continue;
     if (!ValidName(name)) return Fail(error, "INVALID_NAME", "Invalid Vault filename");
     if ((item.attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0) {
-      skipped.push_back({{"relativePath", relative}, {"reason", "reparsePoint"}});
+      if (!AppendBounded(skipped, {{"relativePath", relative}, {"reason", "reparsePoint"}},
+                         responseBytes, itemCount, error)) return false;
       continue;
     }
     Handle child;
@@ -256,19 +272,36 @@ bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
       std::vector<DirectoryEntry> childNames;
       if (!Names(child.value, childNames, error)) return false;
       bool childHasIndex = false;
-      for (const auto& candidate : childNames)
-        if (_wcsicmp(candidate.name.c_str(), L"_index.md") == 0) childHasIndex = true;
-      if (!childHasIndex) entries.push_back({{"relativePath", relative}, {"kind", "directory"}, {"size", 0}});
+      for (const auto& candidate : childNames) {
+        if (_wcsicmp(candidate.name.c_str(), L"_index.md") != 0 ||
+            (candidate.attributes & (FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT)) != 0)
+          continue;
+        Handle index;
+        if (!OpenChild(child.value, candidate.name, false, index, error)) return false;
+        uint64_t indexSize = 0;
+        if (FileInfo(index.value, indexSize, error)) {
+          childHasIndex = true;
+        } else if (error.code == "UNSAFE_FILE" || error.code == "FILE_TOO_LARGE") {
+          error = {};
+        } else {
+          return false;
+        }
+      }
+      if (!childHasIndex &&
+          !AppendBounded(entries, {{"relativePath", relative}, {"kind", "directory"}, {"size", 0}},
+                         responseBytes, itemCount, error)) return false;
       // Enumeration above consumed the directory cursor. Reopen by handle for recursion.
       Handle recursive;
       if (!OpenChild(directory, name, true, recursive, error)) return false;
-      if (!Scan(recursive.value, relative, depth + 1, entries, recovery, skipped, error)) return false;
+      if (!Scan(recursive.value, relative, depth + 1, entries, recovery, skipped,
+                responseBytes, itemCount, error)) return false;
     } else if (Markdown(name)) {
       Handle file;
       if (!OpenChild(directory, name, false, file, error)) {
         if (error.code == "REPARSE_POINT") {
-          skipped.push_back({{"relativePath", relative}, {"reason", "reparsePoint"}});
           error = {};
+          if (!AppendBounded(skipped, {{"relativePath", relative}, {"reason", "reparsePoint"}},
+                             responseBytes, itemCount, error)) return false;
           continue;
         }
         return false;
@@ -276,17 +309,17 @@ bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
       uint64_t size = 0;
       if (!FileInfo(file.value, size, error)) {
         if (error.code == "UNSAFE_FILE" || error.code == "FILE_TOO_LARGE") {
-          skipped.push_back({{"relativePath", relative},
-                             {"reason", error.code == "FILE_TOO_LARGE" ? "tooLarge" : "hardlinkAlias"}});
+          const char* reason = error.code == "FILE_TOO_LARGE" ? "tooLarge" : "hardlinkAlias";
           error = {};
+          if (!AppendBounded(skipped, {{"relativePath", relative}, {"reason", reason}},
+                             responseBytes, itemCount, error)) return false;
           continue;
         }
         return false;
       }
-      entries.push_back({{"relativePath", relative}, {"kind", "file"}, {"size", size}});
+      if (!AppendBounded(entries, {{"relativePath", relative}, {"kind", "file"}, {"size", size}},
+                         responseBytes, itemCount, error)) return false;
     }
-    if (entries.size() + recovery.size() + skipped.size() > kMaxEntries)
-      return Fail(error, "TOO_MANY_ENTRIES", "Vault has too many entries");
   }
   return true;
 }
@@ -347,16 +380,20 @@ bool List(const std::string& root, const RootIdentity& expected, nlohmann::json&
   nlohmann::json entries = nlohmann::json::array();
   nlohmann::json recovery = nlohmann::json::array();
   nlohmann::json skipped = nlohmann::json::array();
-  if (!Scan(chain.back().value, "", 0, entries, recovery, skipped, error)) return false;
-  auto ordered = entries.get<std::vector<nlohmann::json>>();
-  std::sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) {
+  size_t responseBytes = nlohmann::json({{"ok", true}, {"result", {
+      {"entries", nlohmann::json::array()}, {"recovery", nlohmann::json::array()},
+      {"skipped", nlohmann::json::array()}}}}).dump().size();
+  size_t itemCount = 0;
+  if (!Scan(chain.back().value, "", 0, entries, recovery, skipped,
+            responseBytes, itemCount, error)) return false;
+  std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
     return a["relativePath"].template get<std::string>() < b["relativePath"].template get<std::string>();
   });
-  auto orderedSkipped = skipped.get<std::vector<nlohmann::json>>();
-  std::sort(orderedSkipped.begin(), orderedSkipped.end(), [](const auto& a, const auto& b) {
+  std::sort(skipped.begin(), skipped.end(), [](const auto& a, const auto& b) {
     return a["relativePath"].template get<std::string>() < b["relativePath"].template get<std::string>();
   });
-  result = {{"entries", ordered}, {"recovery", recovery}, {"skipped", orderedSkipped}};
+  result = {{"entries", std::move(entries)}, {"recovery", std::move(recovery)},
+            {"skipped", std::move(skipped)}};
   return true;
 }
 

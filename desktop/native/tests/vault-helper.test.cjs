@@ -317,11 +317,7 @@ test('list reports pending recovery names regardless of case', async (t) => {
   assert.deepEqual(listed.response.result.recovery, ['.NOWNOTE-PENDING-abc']);
 });
 
-test('list fails closed when a visible child directory cannot be opened', async (t) => {
-  const dir = await fixture(t);
-  const root = path.join(dir, 'vault');
-  const locked = path.join(root, 'locked');
-  await fs.mkdir(locked, { recursive: true });
+async function lockDirectory(locked) {
   const script = `
 Add-Type -TypeDefinition @'
 using System;
@@ -353,11 +349,22 @@ if ($handle.ToInt64() -eq -1) { throw 'fixture directory lock failed' }
     locker.once('close', (code) => reject(new Error(`fixture locker exited ${code}: ${output} ${errors}`)));
   });
   assert.match(ready, /READY/);
+  return async () => {
+    locker.stdin.end('\n');
+    await new Promise((resolve) => locker.once('close', resolve));
+  };
+}
+
+test('list fails closed when a visible child directory cannot be opened', async (t) => {
+  const dir = await fixture(t);
+  const root = path.join(dir, 'vault');
+  const locked = path.join(root, 'locked');
+  await fs.mkdir(locked, { recursive: true });
+  const release = await lockDirectory(locked);
   try {
     assertRejected(await operation('list', root, await identity(root)));
   } finally {
-    locker.stdin.end('\n');
-    await new Promise((resolve) => locker.once('close', resolve));
+    await release();
   }
 });
 
@@ -371,4 +378,51 @@ test('read hashes an empty markdown file without reading outside the handle', as
   assert.equal(read.response.result.contentBase64, '');
   assert.equal(read.response.result.fileHash,
     'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855');
+});
+
+test('unsafe index files do not suppress their folder candidates', async (t) => {
+  const dir = await fixture(t);
+  const root = path.join(dir, 'vault');
+  const linked = path.join(root, 'linked');
+  const large = path.join(root, 'large');
+  await fs.mkdir(linked, { recursive: true });
+  await fs.mkdir(large);
+  await fs.writeFile(path.join(linked, '_index.md'), 'linked index');
+  await fs.link(path.join(linked, '_index.md'), path.join(dir, 'outside-alias.md'));
+  await fs.writeFile(path.join(large, '_index.md'), Buffer.alloc(5 * 1024 * 1024 + 1));
+  const listed = await operation('list', root, await identity(root));
+  assert.equal(listed.response.ok, true);
+  assert.deepEqual(listed.response.result.entries, [
+    { relativePath: 'large', kind: 'directory', size: 0 },
+    { relativePath: 'linked', kind: 'directory', size: 0 },
+  ]);
+  assert.deepEqual(listed.response.result.skipped, [
+    { relativePath: 'large/_index.md', reason: 'tooLarge' },
+    { relativePath: 'linked/_index.md', reason: 'hardlinkAlias' },
+  ]);
+});
+
+test('list stops at the 16 MiB budget before visiting later entries', async (t) => {
+  const dir = await fixture(t);
+  const root = path.join(dir, 'vault');
+  await fs.mkdir(root);
+  let branch = path.join(root, 'a');
+  await fs.mkdir(branch);
+  for (let depth = 0; depth < 50; depth += 1) {
+    branch = path.join(branch, `long-${String(depth).padStart(2, '0')}-${'x'.repeat(208)}`);
+    await fs.mkdir(branch);
+  }
+  for (let index = 0; index < 1700; index += 1) {
+    await fs.writeFile(path.join(branch, `note-${String(index).padStart(4, '0')}.md`), 'x');
+  }
+  const locked = path.join(root, 'zlocked');
+  await fs.mkdir(locked);
+  const release = await lockDirectory(locked);
+  try {
+    const listed = await operation('list', root, await identity(root));
+    assertRejected(listed);
+    assert.equal(listed.response.error.code, 'RESPONSE_TOO_LARGE');
+  } finally {
+    await release();
+  }
 });
