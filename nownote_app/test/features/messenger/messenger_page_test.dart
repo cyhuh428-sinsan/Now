@@ -5,6 +5,7 @@ import 'package:now_core/now_core.dart';
 import 'package:nownote/features/messenger/messenger_page.dart';
 import 'package:nownote/features/messenger/messenger_providers.dart';
 import 'package:nownote/features/messenger/messenger_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 실제 서버를 부르지 않는다. [MessengerService]를 상속해 원하는 값을
 /// 돌려주는 가짜로 바꿔 끼운다 — `today_page_test.dart`가
@@ -128,6 +129,8 @@ Widget _wrap(MessengerService service) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('서버 설정이 없으면 안내 문구가 보이고 입력이 막힌다', (tester) async {
     final service = _FakeMessengerService(settings: _unconfiguredSettings());
 
@@ -289,10 +292,63 @@ void main() {
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
 
+    expect(service.sentBodies, isEmpty);
+    expect(find.text('메신저 이용규칙'), findsOneWidget);
+    await tester.tap(find.text('동의하고 보내기'));
+    await tester.pumpAndSettle();
+
     expect(service.sentBodies, ['안녕하세요']);
     expect(find.text('안녕하세요'), findsOneWidget);
 
     final textField = tester.widget<TextField>(find.byType(TextField));
     expect(textField.controller?.text, isEmpty);
+  });
+
+  testWidgets('타인 메시지를 차단하면 숨겨지고 목록에서 해제할 수 있다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'bob',
+            senderDisplayName: '밥',
+            body: '차단할 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('메시지 옵션'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('사용자 차단'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('차단', skipOffstage: false).last);
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsNothing);
+
+    await tester.tap(find.byTooltip('차단 목록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('차단 해제'));
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsOneWidget);
   });
 }
