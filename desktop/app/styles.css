@@ -3744,6 +3744,7 @@ kbd {
 
 .tree-map-canvas {
   position: relative;
+  height: min(520px, calc(100vh - 190px));
   min-height: 320px;
   overflow: auto;
   border: 1px solid var(--line);
@@ -3837,7 +3838,7 @@ kbd {
 }
 
 .tree-map-view-expanded .tree-map-canvas {
-  min-height: min(560px, calc(100vh - 190px));
+  height: min(560px, calc(100vh - 190px));
 }
 
 @media (max-width: 760px) {
@@ -3857,7 +3858,7 @@ kbd {
   }
 
   .tree-map-canvas {
-    min-height: 320px;
+    height: min(480px, calc(100vh - 180px));
   }
 
   .tree-map-view-expanded .tree-map-card {
@@ -3866,7 +3867,7 @@ kbd {
   }
 
   .tree-map-view-expanded .tree-map-canvas {
-    min-height: min(480px, calc(100vh - 180px));
+    height: min(480px, calc(100vh - 180px));
   }
 }
 

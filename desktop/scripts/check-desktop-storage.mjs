@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
-const EXE_PATH = path.join(ROOT, "dist", "win-unpacked", "NowNote.exe");
+const EXE_PATH = path.resolve(process.env.NOWNOTE_DESKTOP_EXE_PATH || path.join(ROOT, "dist", "win-unpacked", "NowNote.exe"));
 const STORE_FILE = "nownote-desktop-store.json";
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";

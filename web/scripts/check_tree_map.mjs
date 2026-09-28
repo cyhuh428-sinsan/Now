@@ -435,6 +435,10 @@ async function main() {
       const reset = document.querySelector('#treeMapZoomFitBtn');
       const sample = () => ({
         cardWidth: card.getBoundingClientRect().width,
+        cardHeight: card.getBoundingClientRect().height,
+        canvasHeight: canvas.getBoundingClientRect().height,
+        horizontalScroll: canvas.scrollWidth > canvas.clientWidth + 1,
+        verticalScroll: canvas.scrollHeight > canvas.clientHeight + 1,
         stageWidth: document.querySelector('.tree-map-stage').getBoundingClientRect().width,
         nodeWidth: document.querySelector('.tree-map-node').getBoundingClientRect().width,
         labelHeight: document.querySelector('.tree-map-node strong').getBoundingClientRect().height,
@@ -462,6 +466,11 @@ async function main() {
     assert(controls.maximum.nodeWidth >= controls.reset.nodeWidth * 1.9, "노드 크기도 배율과 함께 확대되어야 합니다.");
     assert(controls.maximum.labelHeight >= controls.reset.labelHeight * 1.9, "노드 글자도 배율과 함께 확대되어야 합니다.");
     assert(controls.reset.zoom === "100%", "100% 버튼이 배율을 초기화해야 합니다.");
+    assert(Math.abs(controls.minimum.canvasHeight - controls.reset.canvasHeight) < 2, "축소해도 캔버스 높이는 고정되어야 합니다.");
+    assert(Math.abs(controls.maximum.canvasHeight - controls.reset.canvasHeight) < 2, "확대해도 캔버스 높이는 고정되어야 합니다.");
+    assert(Math.abs(controls.minimum.cardHeight - controls.reset.cardHeight) < 2, "축소해도 팝업 높이는 고정되어야 합니다.");
+    assert(Math.abs(controls.maximum.cardHeight - controls.reset.cardHeight) < 2, "확대해도 팝업 높이는 고정되어야 합니다.");
+    assert(controls.maximum.horizontalScroll && controls.maximum.verticalScroll, "확대한 지도는 팝업 크기를 바꾸지 않고 캔버스 내부에서 좌우·상하 이동해야 합니다.");
 
     // [검증 2] 메모 노드를 클릭하면 state.selectedTreeId가 바뀐다.
     await evaluate(

@@ -32,6 +32,7 @@ web/**/*.pyc
 
 # Desktop installer artifacts
 desktop/dist/
+desktop/dist-*/
 desktop/node_modules/
 
 # Root script runtime artifacts
