@@ -3692,6 +3692,21 @@ kbd {
   width: min(880px, 100%);
 }
 
+.tree-map-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.tree-map-header-actions .icon-btn {
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
 .tree-map-toolbar {
   display: flex;
   align-items: center;
@@ -3705,10 +3720,33 @@ kbd {
   font-weight: 800;
 }
 
+.tree-map-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.tree-map-zoom-controls .icon-btn,
+.tree-map-zoom-controls .ghost-btn {
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0 8px;
+}
+
+.tree-map-zoom-value {
+  min-width: 52px;
+  color: var(--muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
 .tree-map-canvas {
   position: relative;
+  height: min(520px, calc(100vh - 190px));
   min-height: 320px;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid var(--line);
   border-radius: 8px;
   background:
@@ -3723,6 +3761,12 @@ kbd {
   inset: 0;
   width: 100%;
   height: 100%;
+}
+
+.tree-map-stage {
+  position: relative;
+  flex: 0 0 auto;
+  transform-origin: top left;
 }
 
 .tree-map-canvas line {
@@ -3782,6 +3826,49 @@ kbd {
 .tree-map-lock {
   color: var(--muted);
   font-size: 11px;
+}
+
+.tree-map-view-expanded {
+  padding: 16px;
+}
+
+.tree-map-view-expanded .tree-map-card {
+  width: min(1400px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+}
+
+.tree-map-view-expanded .tree-map-canvas {
+  height: min(560px, calc(100vh - 190px));
+}
+
+@media (max-width: 760px) {
+  .tree-map-card {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+    padding: 12px;
+  }
+
+  .tree-map-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .tree-map-zoom-controls {
+    margin-left: 0;
+  }
+
+  .tree-map-canvas {
+    height: min(480px, calc(100vh - 180px));
+  }
+
+  .tree-map-view-expanded .tree-map-card {
+    width: calc(100vw - 20px);
+    max-height: calc(100vh - 20px);
+  }
+
+  .tree-map-view-expanded .tree-map-canvas {
+    height: min(480px, calc(100vh - 180px));
+  }
 }
 
 .graph-insights section {

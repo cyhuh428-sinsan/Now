@@ -34,6 +34,7 @@ web/**/*.pyc
 
 # Desktop installer artifacts
 desktop/dist/
+desktop/dist-*/
 desktop/node_modules/
 
 # Root script runtime artifacts
@@ -52,6 +53,7 @@ now_app/**/*.pyc
 *.log
 # Local project documents, work logs, reports, drafts, and screenshots
 # Only explicitly maintained manuals and public README files are tracked.
+AGENTS.md
 docs/
 !docs/HELP.md
 !docs/HELP.en.md
