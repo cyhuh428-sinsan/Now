@@ -132,9 +132,8 @@ class ServerMessengerApi {
       final rooms = ((res.data?['rooms'] as List?) ?? const [])
           .whereType<Map>()
           .map(
-            (item) => ServerMessengerRoom.fromJson(
-              Map<String, dynamic>.from(item),
-            ),
+            (item) =>
+                ServerMessengerRoom.fromJson(Map<String, dynamic>.from(item)),
           )
           .where((room) => room.id > 0)
           .toList();
@@ -199,10 +198,7 @@ class ServerMessengerApi {
     try {
       final res = await dio.post<Map<String, dynamic>>(
         '/api/v1/messenger/rooms/$roomId/messages',
-        data: {
-          'owner_id': normalizeOwnerId(settings.ownerId),
-          'body': trimmed,
-        },
+        data: {'owner_id': normalizeOwnerId(settings.ownerId), 'body': trimmed},
       );
       final item = res.data?['item'];
       if (item is! Map) {
@@ -211,6 +207,34 @@ class ServerMessengerApi {
       return ServerMessengerMessage.fromJson(Map<String, dynamic>.from(item));
     } on DioException catch (e) {
       throw Exception(_serverErrorMessage(e, fallback: '메신저 메시지 전송 실패'));
+    }
+  }
+
+  static Future<void> reportMessengerMessage({
+    required Dio dio,
+    required ServerSettings settings,
+    required int roomId,
+    required int messageId,
+    required String target,
+    required String reason,
+    required String description,
+  }) async {
+    if (!settings.isConfigured) {
+      throw Exception('서버 주소가 없습니다');
+    }
+    try {
+      await dio.post<Map<String, dynamic>>(
+        '/api/v1/messenger/rooms/$roomId/reports',
+        data: {
+          'owner_id': normalizeOwnerId(settings.ownerId),
+          'message_id': messageId,
+          'target': target,
+          'reason': reason,
+          'description': description,
+        },
+      );
+    } on DioException catch (e) {
+      throw Exception(_serverErrorMessage(e, fallback: '신고 전송 실패'));
     }
   }
 

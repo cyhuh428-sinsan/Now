@@ -32,6 +32,8 @@ class _FakeMessengerService extends MessengerService {
   final Map<int, List<ServerMessengerMessage>> _messagesByRoom;
 
   final List<String> sentBodies = <String>[];
+  final List<String> reportedTargets = <String>[];
+  bool failReport = false;
   final List<int> markedReadRoomIds = <int>[];
   int loadRoomsCallCount = 0;
 
@@ -85,6 +87,19 @@ class _FakeMessengerService extends MessengerService {
     required int lastReadMessageId,
   }) async {
     markedReadRoomIds.add(roomId);
+  }
+
+  @override
+  Future<void> reportMessage(
+    ServerSettings settings, {
+    required int roomId,
+    required int messageId,
+    required String target,
+    required String reason,
+    required String description,
+  }) async {
+    if (failReport) throw Exception('메일 전송 실패');
+    reportedTargets.add(target);
   }
 }
 
@@ -350,5 +365,60 @@ void main() {
     await tester.tap(find.text('차단 해제'));
     await tester.pumpAndSettle();
     expect(find.text('차단할 메시지'), findsOneWidget);
+  });
+
+  testWidgets('메시지와 사용자를 앱 안에서 각각 신고할 수 있다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'bob',
+            senderDisplayName: '밥',
+            body: '신고할 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('메시지 옵션'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('메시지 신고'));
+    await tester.pumpAndSettle();
+    service.failReport = true;
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('메일 전송 실패'), findsOneWidget);
+    expect(find.text('신고 제출'), findsOneWidget);
+
+    service.failReport = false;
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(service.reportedTargets, ['message']);
+
+    await tester.tap(find.byTooltip('메시지 옵션'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('사용자 신고'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(service.reportedTargets, ['message', 'user']);
   });
 }

@@ -311,14 +311,56 @@ class _MessengerPageState extends ConsumerState<MessengerPage> {
     showModalBottomSheet<void>(
       context: context,
       builder: (sheetContext) => SafeArea(
-        child: ListTile(
-          leading: const Icon(Icons.block),
-          title: const Text('사용자 차단'),
-          onTap: () {
-            Navigator.pop(sheetContext);
-            _blockUser(message);
-          },
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: const Icon(Icons.flag_outlined),
+              title: const Text('메시지 신고'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showReportDialog(message, 'message');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.person_off_outlined),
+              title: const Text('사용자 신고'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _showReportDialog(message, 'user');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.block),
+              title: const Text('사용자 차단'),
+              onTap: () {
+                Navigator.pop(sheetContext);
+                _blockUser(message);
+              },
+            ),
+          ],
         ),
+      ),
+    );
+  }
+
+  void _showReportDialog(ServerMessengerMessage message, String target) {
+    final settings = _settings;
+    if (settings == null) return;
+    showDialog<void>(
+      context: context,
+      builder: (_) => _ReportDialog(
+        target: target,
+        onSubmit: (reason, description) => ref
+            .read(messengerServiceProvider)
+            .reportMessage(
+              settings,
+              roomId: message.roomId,
+              messageId: message.id,
+              target: target,
+              reason: reason,
+              description: description,
+            ),
       ),
     );
   }
@@ -665,6 +707,100 @@ class _ErrorBanner extends StatelessWidget {
           height: 1.35,
         ),
       ),
+    );
+  }
+}
+
+class _ReportDialog extends StatefulWidget {
+  const _ReportDialog({required this.target, required this.onSubmit});
+
+  final String target;
+  final Future<void> Function(String reason, String description) onSubmit;
+
+  @override
+  State<_ReportDialog> createState() => _ReportDialogState();
+}
+
+class _ReportDialogState extends State<_ReportDialog> {
+  final _descriptionCtrl = TextEditingController();
+  String _reason = 'harassment';
+  String? _error;
+  bool _submitting = false;
+
+  @override
+  void dispose() {
+    _descriptionCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _submit() async {
+    if (_submitting) return;
+    setState(() {
+      _submitting = true;
+      _error = null;
+    });
+    try {
+      await widget.onSubmit(_reason, _descriptionCtrl.text.trim());
+      if (!mounted) return;
+      final messenger = ScaffoldMessenger.of(context);
+      Navigator.pop(context);
+      messenger.showSnackBar(const SnackBar(content: Text('신고가 접수되었습니다')));
+    } catch (error) {
+      if (mounted) {
+        setState(
+          () => _error = error.toString().replaceFirst('Exception: ', ''),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _submitting = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.target == 'user' ? '사용자 신고' : '메시지 신고'),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: _reason,
+              decoration: const InputDecoration(labelText: '신고 사유'),
+              items: const [
+                DropdownMenuItem(value: 'harassment', child: Text('괴롭힘 또는 위협')),
+                DropdownMenuItem(value: 'sexual', child: Text('성적 콘텐츠')),
+                DropdownMenuItem(value: 'violence', child: Text('폭력')),
+                DropdownMenuItem(value: 'other', child: Text('기타')),
+              ],
+              onChanged: _submitting
+                  ? null
+                  : (value) => setState(() => _reason = value ?? 'other'),
+            ),
+            TextField(
+              controller: _descriptionCtrl,
+              maxLength: 500,
+              maxLines: 3,
+              decoration: const InputDecoration(labelText: '추가 설명 (선택)'),
+            ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: _submitting ? null : () => Navigator.pop(context),
+          child: const Text('취소'),
+        ),
+        FilledButton(
+          onPressed: _submitting ? null : _submit,
+          child: const Text('신고 제출'),
+        ),
+      ],
     );
   }
 }
