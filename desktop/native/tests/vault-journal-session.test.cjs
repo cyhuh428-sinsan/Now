@@ -5,7 +5,7 @@ const path = require("node:path");
 const { createHash } = require("node:crypto");
 const { createVaultJournalSession } = require("../../vault-journal-session.cjs");
 const { createVaultNativeClient } = require("../../vault-native-client.cjs");
-const { runVaultTransaction, recoveryStatus } = require("../../vault-transaction.cjs");
+const { runVaultTransaction, recoveryStatus, confirmRecovery } = require("../../vault-transaction.cjs");
 
 const QA_ROOT = "D:\\tmp\\nownote-239-vault-qa";
 const EXE = path.resolve(__dirname, "..", "out", "vault-journal-experiment.exe");
@@ -87,6 +87,108 @@ test("native journal binds distinct userData and Vault identities and artifact r
     await fs.rmdir(userData);
     await fs.rmdir(path.join(vault, "Topic"));
     await fs.rmdir(vault);
+    await fs.rmdir(parent);
+  }
+});
+
+test("native recovery confirmation cannot clear after Vault changes between inspection and clear", { timeout: 5000 }, async () => {
+  const parent = await fixture();
+  const userData = path.join(parent, "userData");
+  const vault = path.join(parent, "vault");
+  const topic = path.join(vault, "Topic");
+  await fs.mkdir(userData);
+  await fs.mkdir(vault);
+  await fs.mkdir(topic);
+  const note = path.join(topic, "note.md");
+  await fs.writeFile(note, "replacement");
+  let journal;
+  try {
+    journal = await createVaultJournalSession({ exePath: EXE, root: userData });
+    const client = createVaultNativeClient({
+      exePath: path.resolve(__dirname, "..", "out", "vault-helper-experiment.exe"),
+      fixtureRoot: QA_ROOT,
+    });
+    const vaultIdentity = (await client.probe(vault)).rootIdentity;
+    const entry = {
+      ...record(vault, vaultIdentity), userDataRootIdentity: journal.rootIdentity,
+      steps: [{ operation: "write", relativePath: "Topic/note.md", preHash: null,
+        postHash: createHash("sha256").update("replacement").digest("hex") }],
+    };
+    await journal.begin(entry);
+    await journal.advance(entry.operationId, { phase: "vaultConfirmed" });
+    const postStoreHash = "c".repeat(64);
+    await journal.advance(entry.operationId, { phase: "storeCommitted", postStoreHash });
+    await journal.kill();
+    journal = await createVaultJournalSession({ exePath: EXE, root: userData });
+    const recovery = {
+      journal: {
+        read: () => journal.read(), assertClear: () => journal.assertClear(),
+        clear: async (operationId) => {
+          await fs.writeFile(note, "changed-after-inspection");
+          return journal.clear(operationId);
+        },
+      },
+      operationId: entry.operationId,
+      inspectVault: async () => ({ rootIdentity: vaultIdentity, recovery: [], files: {
+        "Topic/note.md": (await client.read(vault, vaultIdentity, "Topic/note.md")).fileHash,
+      } }),
+      readStore: async () => ({ hash: postStoreHash }),
+    };
+    await assert.rejects(confirmRecovery(recovery), /changed|verification|native|recovery/i);
+    assert.equal((await journal.read()).operationId, entry.operationId);
+  } finally {
+    if (journal) await journal.kill();
+    await fs.unlink(note);
+    await fs.rmdir(topic);
+    await fs.rmdir(vault);
+    for (const entry of await fs.readdir(userData)) {
+      assert.equal(entry, "nownote-vault-journal.bin");
+      await fs.unlink(path.join(userData, entry));
+    }
+    await fs.rmdir(userData);
+    await fs.rmdir(parent);
+  }
+});
+
+test("held roots alone do not stop outside Vault creation or store replacement", { timeout: 5000 }, async () => {
+  const parent = await fixture();
+  const userData = path.join(parent, "userData");
+  const vault = path.join(parent, "vault");
+  const topic = path.join(vault, "Topic");
+  await fs.mkdir(userData);
+  await fs.mkdir(vault);
+  await fs.mkdir(topic);
+  const note = path.join(topic, "note.md");
+  const store = path.join(userData, "store.json");
+  const replacement = path.join(userData, "store-next.tmp");
+  await fs.writeFile(store, "before");
+  let journal;
+  try {
+    journal = await createVaultJournalSession({ exePath: EXE, root: userData });
+    const client = createVaultNativeClient({
+      exePath: path.resolve(__dirname, "..", "out", "vault-helper-experiment.exe"),
+      fixtureRoot: QA_ROOT,
+    });
+    const vaultIdentity = (await client.probe(vault)).rootIdentity;
+    await journal.begin({
+      ...record(vault, vaultIdentity), userDataRootIdentity: journal.rootIdentity,
+    });
+    await fs.writeFile(note, "outside-writer");
+    await fs.writeFile(replacement, "after");
+    await fs.rename(replacement, store);
+    assert.equal(await fs.readFile(note, "utf8"), "outside-writer");
+    assert.equal(await fs.readFile(store, "utf8"), "after");
+    assert.equal((await journal.read()).phase, "prepared");
+  } finally {
+    if (journal) await journal.kill();
+    await fs.unlink(note);
+    await fs.rmdir(topic);
+    await fs.rmdir(vault);
+    for (const entry of await fs.readdir(userData)) {
+      assert.ok(["store.json", "nownote-vault-journal.bin"].includes(entry));
+      await fs.unlink(path.join(userData, entry));
+    }
+    await fs.rmdir(userData);
     await fs.rmdir(parent);
   }
 });

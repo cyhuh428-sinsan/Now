@@ -76,6 +76,7 @@ class Session {
     if (!ReadLog()) return Failure("JOURNAL_CORRUPT", "Journal requires manual recovery");
     if (!record_.is_null() && !HoldVault(record_))
       return Failure("VAULT_CHANGED", "Recorded Vault identity cannot be held");
+    resumed_ = !record_.is_null();
     opened_ = true;
     return Success({{"rootIdentity", {{"volumeId", identity_.volumeId},
                                        {"fileId", identity_.fileId}}},
@@ -136,6 +137,8 @@ class Session {
     if (operation == "clear") {
       if (record_.is_null() || !MatchingId(request))
         return Failure("OPERATION_MISMATCH", "Journal operation ID mismatch");
+      if (resumed_)
+        return Failure("RECOVERY_REQUIRED", "Resumed journal requires native recovery verification");
       if (record_["phase"] != "storeCommitted")
         return Failure("RECOVERY_REQUIRED", "Journal cannot clear before confirmed store commit");
       return Append(nullptr);
@@ -457,6 +460,7 @@ class Session {
   HANDLE journal_ = INVALID_HANDLE_VALUE;
   bool owned_ = false;
   bool opened_ = false;
+  bool resumed_ = false;
   bool poisoned_ = false;
   uint64_t sequence_ = 0;
   json record_ = nullptr;
