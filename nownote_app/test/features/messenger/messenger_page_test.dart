@@ -352,7 +352,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('차단할 메시지'), findsOneWidget);
 
-    await tester.tap(find.byTooltip('메시지 옵션'));
+    expect(find.byTooltip('메시지 옵션'), findsOneWidget);
+    await tester.longPress(find.text('차단할 메시지'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('사용자 차단'));
     await tester.pumpAndSettle();
@@ -365,6 +366,44 @@ void main() {
     await tester.tap(find.text('차단 해제'));
     await tester.pumpAndSettle();
     expect(find.text('차단할 메시지'), findsOneWidget);
+  });
+
+  testWidgets('자기 메시지에는 신고와 차단 메뉴가 없다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'cyhuh',
+            senderDisplayName: '나',
+            body: '내 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('메시지 옵션'), findsNothing);
+    await tester.longPress(find.text('내 메시지'));
+    await tester.pumpAndSettle();
+    expect(find.text('메시지 신고'), findsNothing);
+    expect(find.text('사용자 차단'), findsNothing);
   });
 
   testWidgets('메시지와 사용자를 앱 안에서 각각 신고할 수 있다', (tester) async {
