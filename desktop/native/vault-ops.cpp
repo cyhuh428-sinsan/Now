@@ -16,6 +16,7 @@ namespace {
 
 constexpr uint64_t kMaxMarkdown = 5ULL * 1024 * 1024;
 constexpr size_t kMaxResponse = 16 * 1024 * 1024;
+constexpr size_t kMaxScanNameBytes = 4 * 1024 * 1024;
 constexpr size_t kMaxDepth = 128;
 constexpr size_t kMaxEntries = 100000;
 
@@ -194,6 +195,11 @@ struct DirectoryEntry {
   DWORD attributes;
 };
 
+struct NameBudget {
+  size_t bytes = 0;
+  size_t count = 0;
+};
+
 bool AppendBounded(nlohmann::json& target, nlohmann::json item,
                    size_t& responseBytes, size_t& itemCount, Error& error) {
   if (itemCount >= kMaxEntries)
@@ -207,7 +213,8 @@ bool AppendBounded(nlohmann::json& target, nlohmann::json item,
   return true;
 }
 
-bool Names(HANDLE directory, std::vector<DirectoryEntry>& names, Error& error) {
+bool Names(HANDLE directory, std::vector<DirectoryEntry>& names,
+           NameBudget& budget, Error& error) {
   std::vector<BYTE> buffer(64 * 1024);
   std::set<std::wstring> seen;
   while (true) {
@@ -224,8 +231,17 @@ bool Names(HANDLE directory, std::vector<DirectoryEntry>& names, Error& error) {
       if (item->FileNameLength % sizeof(wchar_t) != 0 ||
           offset + offsetof(FILE_ID_BOTH_DIR_INFO, FileName) + item->FileNameLength > buffer.size())
         return Fail(error, "LIST_FAILED", "Invalid directory name");
-      const std::wstring name(item->FileName, item->FileNameLength / sizeof(wchar_t));
-      if (name != L"." && name != L"..") {
+      const size_t length = item->FileNameLength / sizeof(wchar_t);
+      const bool dot = (length == 1 && item->FileName[0] == L'.') ||
+                       (length == 2 && item->FileName[0] == L'.' && item->FileName[1] == L'.');
+      if (!dot) {
+        if (budget.count >= kMaxEntries)
+          return Fail(error, "TOO_MANY_NAMES", "Vault scan has too many names");
+        if (item->FileNameLength > kMaxScanNameBytes - budget.bytes)
+          return Fail(error, "SCAN_NAME_BUDGET_EXCEEDED", "Vault scan names exceed 4 MiB");
+        budget.bytes += item->FileNameLength;
+        ++budget.count;
+        const std::wstring name(item->FileName, length);
         std::wstring lower = name;
         for (auto& ch : lower) ch = static_cast<wchar_t>(std::towlower(ch));
         if (!seen.insert(lower).second)
@@ -246,10 +262,10 @@ bool Names(HANDLE directory, std::vector<DirectoryEntry>& names, Error& error) {
 bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
           nlohmann::json& entries, nlohmann::json& recovery,
           nlohmann::json& skipped, size_t& responseBytes, size_t& itemCount,
-          Error& error) {
+          NameBudget& namesBudget, Error& error) {
   if (depth > kMaxDepth) return Fail(error, "TOO_DEEP", "Vault nesting is too deep");
   std::vector<DirectoryEntry> names;
-  if (!Names(directory, names, error)) return false;
+  if (!Names(directory, names, namesBudget, error)) return false;
   for (const auto& item : names) {
     const auto& name = item.name;
     std::string utf8;
@@ -270,7 +286,7 @@ bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
     if ((item.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0) {
       if (!OpenChild(directory, name, true, child, error)) return false;
       std::vector<DirectoryEntry> childNames;
-      if (!Names(child.value, childNames, error)) return false;
+      if (!Names(child.value, childNames, namesBudget, error)) return false;
       bool childHasIndex = false;
       for (const auto& candidate : childNames) {
         if (_wcsicmp(candidate.name.c_str(), L"_index.md") != 0 ||
@@ -294,7 +310,7 @@ bool Scan(HANDLE directory, const std::string& prefix, size_t depth,
       Handle recursive;
       if (!OpenChild(directory, name, true, recursive, error)) return false;
       if (!Scan(recursive.value, relative, depth + 1, entries, recovery, skipped,
-                responseBytes, itemCount, error)) return false;
+                responseBytes, itemCount, namesBudget, error)) return false;
     } else if (Markdown(name)) {
       Handle file;
       if (!OpenChild(directory, name, false, file, error)) {
@@ -344,9 +360,10 @@ bool SplitRelative(const std::string& path, std::vector<std::wstring>& parts, Er
   return true;
 }
 
-bool ExactName(HANDLE directory, const std::wstring& name, Error& error) {
+bool ExactName(HANDLE directory, const std::wstring& name,
+               NameBudget& budget, Error& error) {
   std::vector<DirectoryEntry> names;
-  if (!Names(directory, names, error)) return false;
+  if (!Names(directory, names, budget, error)) return false;
   if (std::find_if(names.begin(), names.end(), [&](const auto& entry) {
         return entry.name == name;
       }) == names.end())
@@ -384,8 +401,9 @@ bool List(const std::string& root, const RootIdentity& expected, nlohmann::json&
       {"entries", nlohmann::json::array()}, {"recovery", nlohmann::json::array()},
       {"skipped", nlohmann::json::array()}}}}).dump().size();
   size_t itemCount = 0;
+  NameBudget namesBudget;
   if (!Scan(chain.back().value, "", 0, entries, recovery, skipped,
-            responseBytes, itemCount, error)) return false;
+            responseBytes, itemCount, namesBudget, error)) return false;
   std::sort(entries.begin(), entries.end(), [](const auto& a, const auto& b) {
     return a["relativePath"].template get<std::string>() < b["relativePath"].template get<std::string>();
   });
@@ -403,14 +421,15 @@ bool Read(const std::string& root, const RootIdentity& expected,
   if (!SplitRelative(relativePath, parts, error)) return false;
   std::vector<Handle> chain;
   if (!OpenRoot(root, expected, chain, error)) return false;
+  NameBudget namesBudget;
   for (size_t i = 0; i + 1 < parts.size(); ++i) {
     Handle child;
-    if (!ExactName(chain.back().value, parts[i], error)) return false;
+    if (!ExactName(chain.back().value, parts[i], namesBudget, error)) return false;
     if (!OpenChild(chain.back().value, parts[i], true, child, error)) return false;
     chain.push_back(std::move(child));
   }
   Handle file;
-  if (!ExactName(chain.back().value, parts.back(), error)) return false;
+  if (!ExactName(chain.back().value, parts.back(), namesBudget, error)) return false;
   if (!OpenChild(chain.back().value, parts.back(), false, file, error)) return false;
   uint64_t size = 0;
   if (!FileInfo(file.value, size, error)) return false;

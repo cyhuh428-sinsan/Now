@@ -426,3 +426,19 @@ test('list stops at the 16 MiB budget before visiting later entries', async (t) 
     await release();
   }
 });
+
+test('list bounds excluded names across child pre-scan and recursive scan', async (t) => {
+  const dir = await fixture(t);
+  const root = path.join(dir, 'vault');
+  const child = path.join(root, 'a');
+  await fs.mkdir(child, { recursive: true });
+  const names = Array.from({ length: 4500 }, (_, index) =>
+    `.${String(index).padStart(5, '0')}-${'x'.repeat(233)}`);
+  for (let start = 0; start < names.length; start += 64) {
+    await Promise.all(names.slice(start, start + 64).map((name) =>
+      fs.writeFile(path.join(child, name), '')));
+  }
+  const listed = await operation('list', root, await identity(root));
+  assertRejected(listed);
+  assert.equal(listed.response.error.code, 'SCAN_NAME_BUDGET_EXCEEDED');
+});
