@@ -64,7 +64,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
     const vaultEntries = await scanVault(state.path);
     const plan = buildSyncPlan({ localNodes, vaultEntries, baselines: state.baselines || {}, direction });
     const planId = randomUUID();
-    pending = { planId, storeHash: hash, vaultPath: state.path, items: new Map(plan.items.map((item) => [item.itemId, item])), applied: new Set() };
+    pending = { planId, direction, storeHash: hash, vaultPath: state.path, items: new Map(plan.items.map((item) => [item.itemId, item])), applied: new Set() };
     return { planId, ...plan };
   }
 
@@ -88,6 +88,9 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
         if (current.hash !== pending.storeHash || vaultState(current.store).path !== pending.vaultPath) {
           throw new Error("NowNote store changed since preview");
         }
+        if (selection.action === "toVault" && pending.direction === "fromVault" || selection.action === "toNowNote" && pending.direction === "toVault") {
+          throw new Error("Vault action is outside the selected direction");
+        }
         const currentVault = await scanVault(pending.vaultPath);
         const source = item.vault && currentVault.find((entry) => entry.relativePath === item.vault.relativePath);
         if (item.vault && (!source || source.fileHash !== item.vault.fileHash)) throw new Error("Vault file changed since preview");
@@ -100,7 +103,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
         if (item.local && (!local || contentHash(local) !== contentHash(item.local) || local.relativePath !== item.local.relativePath)) {
           throw new Error("NowNote note changed since preview");
         }
-        if (item.classification === "skipped" || item.classification === "depthExceeded" || item.reason === "duplicateIdentityOrPath" || item.reason === "targetPathOccupied" || item.reason === "kindMismatch") {
+        if (item.classification === "skipped" || item.classification === "depthExceeded" && selection.action !== "toNowNote" || item.reason === "duplicateIdentityOrPath" || item.reason === "targetPathOccupied" || item.reason === "kindMismatch") {
           throw new Error("Vault item is blocked by a conflict or exclusion");
         }
         let entryId = item.id;

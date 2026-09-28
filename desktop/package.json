@@ -23,6 +23,8 @@
     "files": [
       "main.cjs",
       "preload.cjs",
+      "vault-*.cjs",
+      "store-file.cjs",
       "app/**/*"
     ],
     "asar": true,

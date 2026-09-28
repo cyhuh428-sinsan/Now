@@ -231,6 +231,36 @@ async function verifyTreeMap(page, title) {
   assert(result.expanded, "Desktop tree map did not expand.");
 }
 
+async function verifyVaultPanel(page, vaultRoot, title) {
+  await evaluate(page, `
+    (() => {
+      document.querySelector('#settingsView').classList.add('hidden');
+      document.querySelector('#settingsBtn').click();
+      return true;
+    })()
+  `);
+  await waitForCondition(page, `document.querySelector('#vaultPath').textContent === ${JSON.stringify(vaultRoot)}`, "Vault path render");
+  const before = await fs.readdir(vaultRoot);
+  assert(before.length === 0, "Vault fixture must start empty.");
+  await evaluate(page, `document.querySelector('#vaultPreviewBtn').click()`);
+  await waitForCondition(page, `Boolean(document.querySelector('#vaultItems .vault-item'))`, "Vault preview rows");
+  assert((await fs.readdir(vaultRoot)).length === 0, "Vault comparison changed files.");
+  const selected = await evaluate(page, `(() => {
+    const row = [...document.querySelectorAll('#vaultItems .vault-item')]
+      .find((item) => item.querySelector('.vault-item-name strong')?.textContent === ${JSON.stringify(title)});
+    if (!row) return false;
+    const action = row.querySelector('.vault-item-controls select');
+    action.value = 'toVault';
+    action.dispatchEvent(new Event('change', { bubbles: true }));
+    document.querySelector('#vaultApplyBtn').click();
+    return true;
+  })()`);
+  assert(selected, "Vault preview omitted the saved topic.");
+  const written = path.join(vaultRoot, title, "_index.md");
+  await waitForCondition(page, `document.querySelector('#vaultStatus').textContent.includes('적용 1')`, "Vault selected apply");
+  assert((await fs.readFile(written, "utf8")).includes("nownote_id:"), "Vault export did not write managed Markdown.");
+}
+
 async function verifyEditorTabIndent(page) {
   await evaluate(page, `
     (() => {
@@ -474,6 +504,9 @@ async function main() {
     assert(store.values?.[STORAGE_KEY]?.tree?.some((node) => node.title === title), "Saved note was not written to desktop store.");
     assert(store.values?.[STORAGE_KEY]?.worklogs?.[selectedWorklogDate]?.content === worklogBody, `Worklog was not written to desktop store for ${selectedWorklogDate}.`);
     store.values[SETTINGS_KEY] = { contextMenuActions: ["undo", "redo"] };
+    const vaultRoot = path.join(tempDir, "vault-fixture");
+    await fs.mkdir(vaultRoot);
+    store.values["nownote.vault.v1"] = { path: vaultRoot, baselines: {}, lastSuccessAt: null };
     await fs.writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
 
     second = await launchApp(tempDir);
@@ -489,6 +522,7 @@ async function main() {
     await verifySearchShortcuts(second.page);
     await verifyNoteFindMovement(second.page);
     await verifyEditorContextMenu(second.page);
+    await verifyVaultPanel(second.page, vaultRoot, title);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
@@ -499,6 +533,7 @@ async function main() {
     console.log("- In-note search movement passed");
     console.log("- Editor context menu passed");
     console.log("- Tree map zoom and expanded view passed in Electron");
+    console.log("- Vault preview made no file changes and selected export passed in Electron");
   } finally {
     first?.client?.close();
     second?.client?.close();

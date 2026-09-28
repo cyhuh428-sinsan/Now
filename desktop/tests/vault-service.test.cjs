@@ -132,3 +132,20 @@ test("a managed Vault-only note retains its existing identity when explicitly im
   assert.equal(tree[0].children[0].children[0].id, "remote-1");
   assert.equal((await service.previewVault({ direction: "both" })).items.find((item) => item.id === "remote-1").classification, "unchanged");
 });
+
+test("the selected direction cannot be bypassed and deep files need a target category", async (t) => {
+  const category = { id: "c", title: "Category", content: "", level: 2, status: "active", children: [], tags: [] };
+  const parent = topic();
+  parent.children.push(category);
+  const { root, service } = await fixture(t, [parent]);
+  await fs.mkdir(path.join(root, "one", "two", "three"), { recursive: true });
+  await fs.writeFile(path.join(root, "one", "two", "three", "deep.md"), "deep");
+  const plan = await service.previewVault({ direction: "fromVault" });
+  const blocked = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  assert.match(blocked.failed[0].message, /direction/);
+  const deep = plan.items.find((item) => item.classification === "depthExceeded");
+  const missingParent = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote" }] });
+  assert.equal(missingParent.failed.length, 1);
+  const accepted = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote", targetParentId: "c" }] });
+  assert.equal(accepted.applied.length, 1);
+});

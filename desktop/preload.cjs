@@ -9,4 +9,10 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
     write: (key, value) => ipcRenderer.invoke("nownote:desktop-store-write", key, value),
     writeSync: (key, value) => ipcRenderer.sendSync("nownote:desktop-store-write-sync", key, value),
   },
+  vault: {
+    choose: () => ipcRenderer.invoke("nownote:vault-choose"),
+    status: () => ipcRenderer.invoke("nownote:vault-status"),
+    preview: ({ direction }) => ipcRenderer.invoke("nownote:vault-preview", { direction }),
+    apply: ({ planId, selections }) => ipcRenderer.invoke("nownote:vault-apply", { planId, selections }),
+  },
 });

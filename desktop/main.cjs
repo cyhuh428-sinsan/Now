@@ -1,6 +1,7 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
 const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
+const { createVaultService } = require("./vault-service.cjs");
 
 const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
@@ -53,6 +54,34 @@ function registerDesktopStorageHandlers() {
     } catch (error) {
       event.returnValue = { ok: false, error: error.message };
     }
+  });
+}
+
+function registerVaultHandlers() {
+  const service = createVaultService({
+    storePath: desktopStorePath(),
+    backupDir: path.join(app.getPath("userData"), "vault-backups"),
+  });
+  ipcMain.handle("nownote:vault-choose", async () => {
+    const focused = BrowserWindow.getFocusedWindow();
+    const options = {
+      title: "Obsidian Vault 선택",
+      properties: ["openDirectory"],
+    };
+    const { canceled, filePaths } = focused ? await dialog.showOpenDialog(focused, options) : await dialog.showOpenDialog(options);
+    if (canceled || !filePaths?.[0]) return null;
+    return service.setVaultPath(filePaths[0]);
+  });
+  ipcMain.handle("nownote:vault-status", () => service.vaultStatus());
+  ipcMain.handle("nownote:vault-preview", (_event, input) => {
+    if (!input || !["toVault", "fromVault", "both"].includes(input.direction)) throw new Error("Invalid Vault direction");
+    return service.previewVault({ direction: input.direction });
+  });
+  ipcMain.handle("nownote:vault-apply", (_event, input) => {
+    if (!input || typeof input.planId !== "string" || !Array.isArray(input.selections) || input.selections.length > 5000) {
+      throw new Error("Invalid Vault selections");
+    }
+    return service.applyVault({ planId: input.planId, selections: input.selections });
   });
 }
 
@@ -166,6 +195,7 @@ function createMenu() {
 
 app.whenReady().then(() => {
   registerDesktopStorageHandlers();
+  registerVaultHandlers();
   Menu.setApplicationMenu(createMenu());
   createMainWindow();
 
