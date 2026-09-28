@@ -63,6 +63,23 @@ class MessengerService {
       lastReadMessageId: lastReadMessageId,
     );
   }
+
+  Future<void> reportMessage(
+    ServerSettings settings, {
+    required int roomId,
+    required int messageId,
+    required String target,
+    required String reason,
+  }) {
+    return ServerMessengerApi.reportMessengerMessage(
+      dio: _messengerDioBuilder(settings),
+      settings: settings,
+      roomId: roomId,
+      messageId: messageId,
+      target: target,
+      reason: reason,
+    );
+  }
 }
 
 /// Now의 `_dio`/`_messengerDio`(`server_sync_service.dart` 약 443~470번째 줄)와

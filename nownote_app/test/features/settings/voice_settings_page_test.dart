@@ -59,8 +59,7 @@ class _FakeLlmRepository implements LlmRepository {
   Future<String> chat(String prompt) async => '';
 
   @override
-  Future<String> chatWithImage(String prompt, LlmImageInput image) async =>
-      '';
+  Future<String> chatWithImage(String prompt, LlmImageInput image) async => '';
 
   @override
   Future<List<LlmExtractedItem>> extractItems(
@@ -139,13 +138,20 @@ void main() {
       _wrap(
         handler: (options) {
           expect(options.path, contains('/health'));
-          return _jsonBody({'status': 'ok', 'ready': true, 'engine': 'whisper'});
+          return _jsonBody({
+            'status': 'ok',
+            'ready': true,
+            'engine': 'whisper',
+          });
         },
       ),
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'http://192.168.0.10:8000');
+    await tester.enterText(
+      find.byType(TextField).first,
+      'http://192.168.0.10:8000',
+    );
     await tester.tap(find.text('STT 연결 확인'));
     await tester.pumpAndSettle();
 
@@ -164,7 +170,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField).first, 'http://192.168.0.10:8000');
+    await tester.enterText(
+      find.byType(TextField).first,
+      'http://192.168.0.10:8000',
+    );
     await tester.tap(find.text('STT 연결 확인'));
     await tester.pumpAndSettle();
 
@@ -202,6 +211,48 @@ void main() {
     expect(savedConfig.provider, LlmProvider.claude);
     final savedKey = await service.loadApiKey(LlmProvider.claude);
     expect(savedKey, 'sk-test-key');
+  });
+
+  testWidgets('DeepSeek selection becomes OmniRoute without reusing its key', (
+    tester,
+  ) async {
+    useTallViewport(tester);
+    FlutterSecureStorage.setMockInitialValues({
+      'llm_provider': 'deepseek',
+      'llm_api_key_deepseek': 'old-deepseek-key',
+    });
+    final service = LlmSettingsService();
+    await tester.pumpWidget(
+      _wrap(
+        llmSettingsService: service,
+        llmRepositoryBuilder: (config) => _FakeLlmRepository(config: config),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.text('OmniRoute'), findsOneWidget);
+    expect(find.text('DeepSeek'), findsNothing);
+    expect((await service.loadConfig()).provider, LlmProvider.omniRoute);
+    expect(await service.loadApiKey(LlmProvider.omniRoute), isEmpty);
+
+    await tester.enterText(
+      find.widgetWithText(TextField, 'OmniRoute API Key'),
+      'new-omni-key',
+    );
+    await tester.enterText(
+      find.widgetWithText(TextField, 'OmniRoute 모델'),
+      'auto',
+    );
+    final saveButton = find.widgetWithText(OutlinedButton, '저장');
+    await tester.ensureVisible(saveButton);
+    await tester.pumpAndSettle();
+    await tester.tap(saveButton);
+    await tester.pumpAndSettle();
+
+    final saved = await service.loadConfig();
+    expect(saved.provider, LlmProvider.omniRoute);
+    expect(saved.apiKey, 'new-omni-key');
+    expect(saved.omniRouteModel, 'auto');
   });
 
   testWidgets('연결 테스트를 누르면 가짜 repository의 testConnection이 호출된다', (

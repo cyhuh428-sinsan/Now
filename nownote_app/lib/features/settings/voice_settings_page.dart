@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:now_core/now_core.dart';
 
 import '../today/today_providers.dart';
+import 'nownote_llm_config.dart';
 import 'settings_providers.dart';
 
 /// 연결 확인 결과를 어떤 색으로 보여줄지.
@@ -49,6 +50,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
   final Map<LlmProvider, TextEditingController> _llmApiKeyControllers = {};
   final _ollamaUrlCtrl = TextEditingController();
   final _ollamaModelCtrl = TextEditingController();
+  final _omniRouteModelCtrl = TextEditingController();
 
   LlmProvider _selectedLlmProvider = LlmProvider.gemini;
   bool _llmLoaded = false;
@@ -59,7 +61,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
   @override
   void initState() {
     super.initState();
-    for (final provider in LlmProvider.values) {
+    for (final provider in nowNoteLlmProviders) {
       _llmApiKeyControllers[provider] = TextEditingController();
     }
     _load();
@@ -77,6 +79,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
     }
     _ollamaUrlCtrl.dispose();
     _ollamaModelCtrl.dispose();
+    _omniRouteModelCtrl.dispose();
     super.dispose();
   }
 
@@ -175,12 +178,13 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
 
   Future<void> _loadLlm() async {
     final service = ref.read(llmSettingsServiceProvider);
-    final config = await service.loadConfig();
+    final config = await loadNowNoteLlmConfig(service);
     if (!mounted) return;
     setState(() {
       _selectedLlmProvider = config.provider;
       _ollamaUrlCtrl.text = config.ollamaUrl;
       _ollamaModelCtrl.text = config.ollamaModel;
+      _omniRouteModelCtrl.text = config.omniRouteModel;
       _llmLoaded = true;
     });
     final apiKey = await service.loadApiKey(config.provider);
@@ -198,22 +202,28 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
       _llmApiKeyControllers[provider]?.text = apiKey;
     }
     ref.invalidate(llmConfigProvider);
+    ref.invalidate(llmRepositoryProvider);
   }
 
   Future<void> _saveLlm() async {
     final service = ref.read(llmSettingsServiceProvider);
+    await service.saveProvider(_selectedLlmProvider);
     if (_selectedLlmProvider == LlmProvider.ollama) {
       await service.saveOllamaSettings(
         url: _ollamaUrlCtrl.text.trim(),
         model: _ollamaModelCtrl.text.trim(),
       );
     } else {
+      if (_selectedLlmProvider == LlmProvider.omniRoute) {
+        await service.saveOmniRouteModel(_omniRouteModelCtrl.text);
+      }
       await service.saveApiKey(
         _selectedLlmProvider,
         _llmApiKeyControllers[_selectedLlmProvider]?.text.trim() ?? '',
       );
     }
     ref.invalidate(llmConfigProvider);
+    ref.invalidate(llmRepositoryProvider);
     if (!mounted) return;
     ScaffoldMessenger.of(
       context,
@@ -375,8 +385,8 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                   child: Card(
                     margin: EdgeInsets.zero,
                     child: Column(
-                      children: LlmProvider.values.map((provider) {
-                        final isLast = provider == LlmProvider.values.last;
+                      children: nowNoteLlmProviders.map((provider) {
+                        final isLast = provider == nowNoteLlmProviders.last;
                         return Column(
                           children: [
                             RadioListTile<LlmProvider>(
@@ -410,7 +420,18 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                       border: OutlineInputBorder(),
                     ),
                   ),
-                ] else
+                ] else ...[
+                  if (_selectedLlmProvider == LlmProvider.omniRoute) ...[
+                    TextField(
+                      controller: _omniRouteModelCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'OmniRoute 모델',
+                        hintText: 'auto',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   TextField(
                     controller: _llmApiKeyControllers[_selectedLlmProvider],
                     obscureText: true,
@@ -420,6 +441,7 @@ class _VoiceSettingsPageState extends ConsumerState<VoiceSettingsPage> {
                       border: const OutlineInputBorder(),
                     ),
                   ),
+                ],
                 const SizedBox(height: 16),
                 Row(
                   children: [

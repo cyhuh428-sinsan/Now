@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:now_core/now_core.dart';
 
+import '../photo_source_sheet.dart';
 import '../settings/settings_providers.dart';
 import 'tree_llm_providers.dart';
 import 'tree_voice_providers.dart';
@@ -168,9 +169,11 @@ class _TreeInputBarState extends ConsumerState<TreeInputBar> {
   }
 
   Future<void> _pickPhoto() async {
+    final source = await showPhotoSourceSheet(context);
+    if (source == null || !mounted) return;
     final picker = ImagePicker();
     final picked = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 85,
       maxWidth: 1600,
       maxHeight: 1600,
@@ -267,7 +270,7 @@ class _TreeInputBarState extends ConsumerState<TreeInputBar> {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       )
-                    : const Icon(Icons.camera_alt_outlined),
+                    : const Icon(Icons.add_photo_alternate_outlined),
                 onPressed: _isReadingPhoto ? null : _pickPhoto,
               ),
               IconButton(

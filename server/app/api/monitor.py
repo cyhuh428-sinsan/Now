@@ -1,7 +1,10 @@
 from datetime import datetime
+import hashlib
+import hmac
 from html import escape
 from pathlib import Path
 from secrets import compare_digest
+import time
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Query, Request, status
@@ -12,7 +15,7 @@ from sqlalchemy import func, select, text
 from app.core.capabilities import public_server_readiness_checks
 from app.core.config import get_settings
 from app.db import SessionLocal
-from app.models.note import AnalysisJob, MessengerAttachment, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
+from app.models.note import AnalysisJob, MessengerAttachment, MessengerMessage, Note, Recording, ReleaseEvidenceRecord, SyncLog, UserAccount, UserDevice, UserGroup
 from app.services.messenger_storage import (
     messenger_storage_state,
     messenger_storage_usage,
@@ -125,6 +128,82 @@ def _require_monitor_access(
         detail="admin token required",
         headers={"WWW-Authenticate": 'Basic realm="NowNote Admin"'},
     )
+
+
+def _require_messenger_moderation_access(
+    credentials: HTTPBasicCredentials | None = Depends(basic_security),
+) -> None:
+    expected = get_settings().api_token
+    if not expected:
+        raise HTTPException(status_code=503, detail="admin token not configured")
+    if credentials and compare_digest(credentials.password, expected):
+        return
+    raise HTTPException(
+        status_code=401,
+        detail="admin token required",
+        headers={"WWW-Authenticate": 'Basic realm="NowNote Admin"'},
+    )
+
+
+def _messenger_hide_csrf(message_id: int, slot: int) -> str:
+    secret = get_settings().api_token
+    if not secret:
+        raise HTTPException(status_code=503, detail="admin token not configured")
+    payload = f"messenger-hide:{message_id}:{slot}".encode()
+    return hmac.new(secret.encode(), payload, hashlib.sha256).hexdigest()
+
+
+@router.get("/admin/messenger", include_in_schema=False)
+def admin_messenger_message(
+    message_id: int | None = Query(default=None, ge=1),
+    _: None = Depends(_require_messenger_moderation_access),
+) -> HTMLResponse:
+    body = '<form method="get"><label>메시지 ID <input name="message_id" type="number" min="1" required></label><button type="submit">조회</button></form>'
+    if message_id is not None:
+        with SessionLocal() as db:
+            message = db.get(MessengerMessage, message_id)
+            if message is None:
+                body += "<p>메시지를 찾을 수 없습니다.</p>"
+            else:
+                context = list(db.scalars(
+                    select(MessengerMessage)
+                    .where(MessengerMessage.room_id == message.room_id, MessengerMessage.id <= message.id)
+                    .order_by(MessengerMessage.id.desc())
+                    .limit(5)
+                ).all())
+                body += f"<h2>방 {message.room_id} / 메시지 {message.id}</h2>"
+                body += "<ul>" + "".join(
+                    f"<li>#{item.id} {escape(item.sender_owner_id)}: {escape(item.body)}"
+                    f"{' (숨김)' if item.deleted_at else ''}</li>"
+                    for item in reversed(context)
+                ) + "</ul>"
+                if message.deleted_at is None:
+                    csrf = _messenger_hide_csrf(message.id, int(time.time() // 900))
+                    body += (
+                        f'<form method="post" action="/admin/messenger/messages/{message.id}/hide">'
+                        f'<input type="hidden" name="csrf_token" value="{csrf}">'
+                        '<button type="submit">메시지 숨김</button></form>'
+                    )
+    return HTMLResponse(f"<!doctype html><html lang='ko'><meta charset='utf-8'><title>메신저 조치</title><body><h1>메신저 조치</h1>{body}</body></html>")
+
+
+@router.post("/admin/messenger/messages/{message_id}/hide", include_in_schema=False)
+def admin_messenger_hide_message(
+    message_id: int,
+    csrf_token: str = Form(default=""),
+    _: None = Depends(_require_messenger_moderation_access),
+) -> RedirectResponse:
+    slot = int(time.time() // 900)
+    if not any(compare_digest(csrf_token, _messenger_hide_csrf(message_id, candidate)) for candidate in (slot, slot - 1)):
+        raise HTTPException(status_code=403, detail="invalid csrf token")
+    with SessionLocal() as db:
+        message = db.get(MessengerMessage, message_id)
+        if message is None:
+            raise HTTPException(status_code=404, detail="message not found")
+        if message.deleted_at is None:
+            message.deleted_at = datetime.utcnow()
+            db.commit()
+    return RedirectResponse(url=f"/admin/messenger?message_id={message_id}", status_code=303)
 
 
 @router.get("/admin", include_in_schema=False)

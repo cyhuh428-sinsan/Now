@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:now/features/settings/voice_settings_page.dart';
+import 'package:now_core/now_core.dart';
 
 void main() {
   group('VoiceSettingsPage', () {
@@ -42,6 +44,45 @@ void main() {
       await tester.pump();
 
       expect(container.read(sttTierProvider), 'tier1');
+    });
+
+    testWidgets('offers OmniRoute model and API key fields', (tester) async {
+      FlutterSecureStorage.setMockInitialValues({});
+      tester.view.physicalSize = const Size(800, 2000);
+      tester.view.devicePixelRatio = 1;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+      await tester.pumpWidget(
+        const ProviderScope(
+          child: MaterialApp(home: VoiceSettingsPage()),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('DeepSeek'), findsNothing);
+      await tester.tap(find.text('OmniRoute'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('OmniRoute 모델'), findsOneWidget);
+      expect(find.text('OmniRoute API Key'), findsOneWidget);
+
+      final modelField = find.byWidgetPredicate(
+        (widget) => widget is TextField &&
+            widget.decoration?.labelText == 'OmniRoute 모델',
+      );
+      final keyField = find.byWidgetPredicate(
+        (widget) => widget is TextField &&
+            widget.decoration?.labelText == 'OmniRoute API Key',
+      );
+      await tester.enterText(modelField, 'my-model');
+      await tester.enterText(keyField, 'new-omni-key');
+      await tester.tap(find.widgetWithText(OutlinedButton, '저장'));
+      await tester.pumpAndSettle();
+
+      final config = await LlmSettingsService().loadConfig();
+      expect(config.provider, LlmProvider.omniRoute);
+      expect(config.omniRouteModel, 'my-model');
+      expect(config.apiKey, 'new-omni-key');
     });
   });
 }

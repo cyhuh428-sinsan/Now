@@ -14,6 +14,8 @@ now_app/android/app/profile/
 now_app/android/app/release/
 now_app/android/key.properties
 now_app/android/upload-keystore.jks
+nownote_app/android/key.properties
+nownote_app/android/upload-keystore.jks
 
 # Server local/runtime artifacts
 server/.env

@@ -1,4 +1,6 @@
 from datetime import datetime, timezone
+import smtplib
+from typing import Literal
 
 from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse
@@ -21,6 +23,7 @@ from app.services.messenger_storage import (
     resolve_messenger_attachment_path,
     save_messenger_attachment,
 )
+from app.services.messenger_reports import allow_report_attempt, send_messenger_report_email
 from app.services.user_accounts import require_user_api_access
 
 router = APIRouter(prefix="/api/v1/messenger", tags=["messenger"])
@@ -40,6 +43,14 @@ class MessengerMessageCreate(BaseModel):
 class MessengerReadUpdate(BaseModel):
     owner_id: str = Field(max_length=80)
     last_read_message_id: int = Field(ge=0)
+
+
+class MessengerReportCreate(BaseModel):
+    owner_id: str = Field(max_length=80)
+    message_id: int = Field(gt=0)
+    target: Literal["message", "user"]
+    reason: Literal["harassment", "sexual", "violence", "other"]
+    description: str = Field(default="", max_length=500)
 
 
 @router.get("/policy")
@@ -169,6 +180,41 @@ def create_room(
     return {"status": "ok", "room": _room_payload(db, room, None, user.owner_id)}
 
 
+@router.post("/rooms/{room_id}/reports")
+def report_message(
+    room_id: int,
+    payload: MessengerReportCreate,
+    web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
+    user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
+    db: Session = Depends(get_db),
+) -> dict:
+    user = _messenger_user(db, owner_id=payload.owner_id, web_session_token=web_session_token, user_token=user_token)
+    room, _member = _require_room_member(db, room_id=room_id, user=user)
+    message = db.scalar(
+        select(MessengerMessage).where(
+            MessengerMessage.id == payload.message_id,
+            MessengerMessage.room_id == room.id,
+            MessengerMessage.deleted_at.is_(None),
+        )
+    )
+    if message is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="message not found")
+    if message.sender_owner_id == user.owner_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="cannot report own message")
+    if not allow_report_attempt(user.owner_id):
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail="report rate limit exceeded")
+    try:
+        send_messenger_report_email(
+            room_id=room.id,
+            message_id=message.id,
+            target=payload.target,
+            reason=payload.reason,
+        )
+    except (OSError, RuntimeError, smtplib.SMTPException):
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="report delivery unavailable") from None
+    return {"status": "ok"}
+
+
 @router.get("/rooms/{room_id}/messages")
 def list_messages(
     room_id: int,
@@ -277,7 +323,7 @@ def download_attachment(
     if attachment is None or attachment.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment not found")
     message = db.get(MessengerMessage, attachment.message_id)
-    if message is None:
+    if message is None or message.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="message not found")
     _require_room_member(db, room_id=message.room_id, user=user)
     target = resolve_messenger_attachment_path(attachment.storage_path)

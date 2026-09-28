@@ -16,6 +16,7 @@ class LlmSettingsService {
   static const keyApiKeyPrefix = 'llm_api_key_';
   static const keyOllamaUrl = 'llm_ollama_url';
   static const keyOllamaModel = 'llm_ollama_model';
+  static const keyOmniRouteModel = 'llm_omniroute_model';
 
   /// 현재 설정 전체 로드
   Future<LlmConfig> loadConfig() async {
@@ -32,11 +33,15 @@ class LlmSettingsService {
 
     final ollamaModel = await _storage.read(key: keyOllamaModel) ?? 'llama3';
 
+    final omniRouteModel =
+        await _storage.read(key: keyOmniRouteModel) ?? 'auto';
+
     return LlmConfig(
       provider: provider,
       apiKey: apiKey,
       ollamaUrl: ollamaUrl,
       ollamaModel: ollamaModel,
+      omniRouteModel: omniRouteModel,
     );
   }
 
@@ -53,6 +58,13 @@ class LlmSettingsService {
   /// API Key 로드 (해당 LLM별)
   Future<String> loadApiKey(LlmProvider provider) async {
     return await _storage.read(key: '$keyApiKeyPrefix${provider.key}') ?? '';
+  }
+
+  Future<void> saveOmniRouteModel(String model) async {
+    await _storage.write(
+      key: keyOmniRouteModel,
+      value: model.trim().isEmpty ? 'auto' : model.trim(),
+    );
   }
 
   /// Ollama 설정 전체 저장 (URL + Model)

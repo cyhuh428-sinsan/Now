@@ -178,12 +178,31 @@ void main() {
         return _jsonBody({});
       });
 
-      await service.markRoomRead(
+      await service.markRoomRead(_settings(), roomId: 7, lastReadMessageId: 9);
+
+      expect(adapter.requests, hasLength(1));
+    });
+
+    test('reportMessage는 대상과 사유를 신고 API로 보낸다', () async {
+      setHandler((options) {
+        expect(options.method, 'POST');
+        expect(options.path, '/api/v1/messenger/rooms/7/reports');
+        final data = options.data as Map;
+        expect(data['owner_id'], 'cyhuh');
+        expect(data['message_id'], 12);
+        expect(data['target'], 'user');
+        expect(data['reason'], 'harassment');
+        expect(data.containsKey('description'), isFalse);
+        return _jsonBody({'status': 'ok'});
+      });
+
+      await service.reportMessage(
         _settings(),
         roomId: 7,
-        lastReadMessageId: 9,
+        messageId: 12,
+        target: 'user',
+        reason: 'harassment',
       );
-
       expect(adapter.requests, hasLength(1));
     });
   });

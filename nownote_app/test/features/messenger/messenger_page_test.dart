@@ -5,6 +5,7 @@ import 'package:now_core/now_core.dart';
 import 'package:nownote/features/messenger/messenger_page.dart';
 import 'package:nownote/features/messenger/messenger_providers.dart';
 import 'package:nownote/features/messenger/messenger_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 실제 서버를 부르지 않는다. [MessengerService]를 상속해 원하는 값을
 /// 돌려주는 가짜로 바꿔 끼운다 — `today_page_test.dart`가
@@ -31,6 +32,8 @@ class _FakeMessengerService extends MessengerService {
   final Map<int, List<ServerMessengerMessage>> _messagesByRoom;
 
   final List<String> sentBodies = <String>[];
+  final List<String> reportedTargets = <String>[];
+  bool failReport = false;
   final List<int> markedReadRoomIds = <int>[];
   int loadRoomsCallCount = 0;
 
@@ -85,6 +88,18 @@ class _FakeMessengerService extends MessengerService {
   }) async {
     markedReadRoomIds.add(roomId);
   }
+
+  @override
+  Future<void> reportMessage(
+    ServerSettings settings, {
+    required int roomId,
+    required int messageId,
+    required String target,
+    required String reason,
+  }) async {
+    if (failReport) throw Exception('메일 전송 실패');
+    reportedTargets.add(target);
+  }
 }
 
 extension _FirstWhereOrNull<T> on Iterable<T> {
@@ -128,6 +143,8 @@ Widget _wrap(MessengerService service) {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('서버 설정이 없으면 안내 문구가 보이고 입력이 막힌다', (tester) async {
     final service = _FakeMessengerService(settings: _unconfiguredSettings());
 
@@ -289,10 +306,157 @@ void main() {
     await tester.tap(find.byIcon(Icons.send));
     await tester.pumpAndSettle();
 
+    expect(service.sentBodies, isEmpty);
+    expect(find.text('메신저 이용규칙'), findsOneWidget);
+    await tester.tap(find.text('동의하고 보내기'));
+    await tester.pumpAndSettle();
+
     expect(service.sentBodies, ['안녕하세요']);
     expect(find.text('안녕하세요'), findsOneWidget);
 
     final textField = tester.widget<TextField>(find.byType(TextField));
     expect(textField.controller?.text, isEmpty);
+  });
+
+  testWidgets('타인 메시지를 차단하면 숨겨지고 목록에서 해제할 수 있다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'bob',
+            senderDisplayName: '밥',
+            body: '차단할 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsOneWidget);
+
+    expect(find.byTooltip('메시지 옵션'), findsOneWidget);
+    await tester.longPress(find.text('차단할 메시지'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('사용자 차단'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('차단', skipOffstage: false).last);
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsNothing);
+
+    await tester.tap(find.byTooltip('차단 목록'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('차단 해제'));
+    await tester.pumpAndSettle();
+    expect(find.text('차단할 메시지'), findsOneWidget);
+  });
+
+  testWidgets('자기 메시지에는 신고와 차단 메뉴가 없다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'cyhuh',
+            senderDisplayName: '나',
+            body: '내 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+    expect(find.byTooltip('메시지 옵션'), findsNothing);
+    await tester.longPress(find.text('내 메시지'));
+    await tester.pumpAndSettle();
+    expect(find.text('메시지 신고'), findsNothing);
+    expect(find.text('사용자 차단'), findsNothing);
+  });
+
+  testWidgets('메시지와 사용자를 앱 안에서 각각 신고할 수 있다', (tester) async {
+    final service = _FakeMessengerService(
+      settings: _configuredSettings(),
+      rooms: const [
+        ServerMessengerRoom(
+          id: 1,
+          roomType: 'group',
+          name: '전체 채팅',
+          groupName: '개발팀',
+          lastMessageId: 3,
+          lastReadMessageId: 0,
+          unreadCount: 0,
+          members: [],
+        ),
+      ],
+      messagesByRoom: const {
+        1: [
+          ServerMessengerMessage(
+            id: 3,
+            roomId: 1,
+            senderOwnerId: 'bob',
+            senderDisplayName: '밥',
+            body: '신고할 메시지',
+            createdAt: '2026-08-24T00:00:00Z',
+          ),
+        ],
+      },
+    );
+    await tester.pumpWidget(_wrap(service));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('메시지 옵션'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('메시지 신고'));
+    await tester.pumpAndSettle();
+    service.failReport = true;
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('메일 전송 실패'), findsOneWidget);
+    expect(find.text('신고 제출'), findsOneWidget);
+
+    service.failReport = false;
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(service.reportedTargets, ['message']);
+
+    await tester.tap(find.byTooltip('메시지 옵션'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('사용자 신고'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('신고 제출'));
+    await tester.pumpAndSettle();
+    expect(service.reportedTargets, ['message', 'user']);
   });
 }
