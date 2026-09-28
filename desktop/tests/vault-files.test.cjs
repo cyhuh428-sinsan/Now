@@ -2,10 +2,11 @@ const test = require("node:test");
 const assert = require("node:assert/strict");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const os = require("node:os");
 const { createHash } = require("node:crypto");
 const { scanVault, writeVaultEntry, moveVaultEntry } = require("../vault-files.cjs");
 
-const QA_ROOT = "D:\\tmp\\nownote-239-vault-qa";
+const QA_ROOT = process.platform === "win32" ? "D:\\tmp\\nownote-239-vault-qa" : path.join(os.tmpdir(), "nownote-239-vault-qa");
 const hash = (text) => createHash("sha256").update(text).digest("hex");
 
 async function fixture(t) {

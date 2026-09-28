@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const { createVaultService } = require("../vault-service.cjs");
 const { renderManagedMarkdown } = require("../vault-markdown.cjs");
 
-const QA_ROOT = "D:\\tmp\\nownote-239-vault-qa";
+const QA_ROOT = process.platform === "win32" ? "D:\\tmp\\nownote-239-vault-qa" : path.join(os.tmpdir(), "nownote-239-vault-qa");
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 async function main() {
