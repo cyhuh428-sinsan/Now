@@ -434,6 +434,76 @@ def test_messenger_policy_endpoint(client: TestClient) -> None:
 
 # ── 헬퍼 ─────────────────────────────────────────────────────────────────────
 
+def test_messenger_admin_hide_requires_token_and_csrf(
+    client: TestClient,
+    user_sinsan: tuple[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import re
+    from app.core.config import get_settings
+
+    owner_id, token = user_sinsan
+    room_id = _get_group_room_id(client, owner_id, token)
+    message = client.post(
+        f"/api/v1/messenger/rooms/{room_id}/messages",
+        json={"owner_id": owner_id, "body": "<script>alert(1)</script>"},
+        headers={"X-Now-Web-Session": token},
+    ).json()["item"]
+    url = f"/admin/messenger/messages/{message['id']}/hide"
+    settings = get_settings()
+    monkeypatch.setattr(settings, "api_token", None)
+    assert client.get("/admin/messenger", params={"message_id": message["id"]}).status_code == 503
+    assert client.post(url, data={}, follow_redirects=False).status_code == 503
+
+    monkeypatch.setattr(settings, "api_token", "test-admin-token")
+    assert client.get("/admin/messenger", params={"message_id": message["id"]}).status_code == 401
+    auth = ("admin", "test-admin-token")
+    page = client.get("/admin/messenger", params={"message_id": message["id"]}, auth=auth)
+    assert page.status_code == 200
+    assert "&lt;script&gt;" in page.text
+    assert "<script>alert(1)</script>" not in page.text
+    csrf = re.search(r'name="csrf_token" value="([^"]+)"', page.text)
+    assert csrf is not None
+    assert client.post(url, data={}, auth=auth, follow_redirects=False).status_code == 403
+    assert client.post(url, data={"csrf_token": "invalid"}, auth=auth, follow_redirects=False).status_code == 403
+    assert client.post(url, data={"csrf_token": csrf.group(1)}, auth=auth, follow_redirects=False).status_code == 303
+
+    messages = client.get(
+        f"/api/v1/messenger/rooms/{room_id}/messages",
+        params={"owner_id": owner_id},
+        headers={"X-Now-Web-Session": token},
+    ).json()["items"]
+    assert message["id"] not in [item["id"] for item in messages]
+
+
+def test_hidden_messenger_attachment_cannot_be_downloaded(
+    client: TestClient,
+    user_sinsan: tuple[str, str],
+    db,
+) -> None:
+    from datetime import datetime
+    from app.models.note import MessengerMessage
+
+    owner_id, token = user_sinsan
+    room_id = _get_group_room_id(client, owner_id, token)
+    uploaded = client.post(
+        f"/api/v1/messenger/rooms/{room_id}/attachments",
+        params={"owner_id": owner_id, "body": "숨길 파일"},
+        files={"file": ("hidden.txt", b"hidden content", "text/plain")},
+        headers={"X-Now-Web-Session": token},
+    ).json()["item"]
+    attachment_id = uploaded["attachments"][0]["id"]
+    db.get(MessengerMessage, uploaded["id"]).deleted_at = datetime.utcnow()
+    db.commit()
+
+    response = client.get(
+        f"/api/v1/messenger/attachments/{attachment_id}",
+        params={"owner_id": owner_id},
+        headers={"X-Now-Web-Session": token},
+    )
+    assert response.status_code == 404
+
+
 def _get_group_room_id(client: TestClient, owner_id: str, token: str) -> int:
     res = client.get(
         "/api/v1/messenger/rooms",

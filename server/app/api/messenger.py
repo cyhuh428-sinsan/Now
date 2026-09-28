@@ -277,7 +277,7 @@ def download_attachment(
     if attachment is None or attachment.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment not found")
     message = db.get(MessengerMessage, attachment.message_id)
-    if message is None:
+    if message is None or message.deleted_at is not None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="message not found")
     _require_room_member(db, room_id=message.room_id, user=user)
     target = resolve_messenger_attachment_path(attachment.storage_path)
