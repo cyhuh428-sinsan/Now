@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const fsp = require("node:fs/promises");
 const path = require("node:path");
+const os = require("node:os");
 const { randomUUID } = require("node:crypto");
 const { mapNowTree, buildSyncPlan, contentHash } = require("./vault-plan.cjs");
 const { renderManagedMarkdown } = require("./vault-markdown.cjs");
@@ -10,6 +11,12 @@ const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
 const VAULT_KEY = "nownote.vault.v1";
 const DATA_KEY = "nownote.web.v1";
 const ACTIONS = new Set(["toVault", "toNowNote", "unlink", "skip"]);
+const QA_ROOT = process.platform === "win32" ? "D:\\tmp\\nownote-239-vault-qa" : path.join(os.tmpdir(), "nownote-239-vault-qa");
+
+function isWithin(candidate, root) {
+  const relative = path.relative(root, candidate);
+  return relative !== "" && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
+}
 
 function findNode(nodes, id) {
   for (const node of nodes) {
@@ -43,16 +50,31 @@ async function restoreVaultWrite(root, relativePath, written, backupDir) {
   await removeCreatedDirs(written.createdDirs || []);
 }
 
-function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
+function createVaultService({ storePath, backupDir, beforeStoreCommit, vaultTransaction }) {
   if (!path.isAbsolute(storePath) || !path.isAbsolute(backupDir)) throw new Error("Vault service requires absolute data paths");
+  if (vaultTransaction && (!isWithin(path.resolve(storePath), QA_ROOT) ||
+      !isWithin(path.resolve(backupDir), QA_ROOT) ||
+      typeof vaultTransaction.assertClear !== "function")) {
+    throw new Error("Vault transaction injection is limited to the QA fixture");
+  }
   let pending = null;
 
+  function assertRecoveryClear() {
+    vaultTransaction?.assertClear();
+  }
+
   function vaultStatus() {
+    if (vaultTransaction) {
+      try { assertRecoveryClear(); return { recoveryRequired: false }; }
+      catch { return { recoveryRequired: true }; }
+    }
     const state = vaultState(readStoreFile(storePath).store);
     return { path: state.path || null, lastSuccessAt: state.lastSuccessAt || null, lastResult: state.lastResult || null };
   }
 
   async function setVaultPath(candidate) {
+    assertRecoveryClear();
+    if (vaultTransaction) throw new Error("Vault transaction fixture requires native service integration");
     const real = await fsp.realpath(candidate);
     if (!(await fsp.stat(real)).isDirectory()) throw new Error("Vault is not a directory");
     updateStoreFile(storePath, (store) => {
@@ -65,6 +87,8 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
   }
 
   async function previewVault({ direction }) {
+    assertRecoveryClear();
+    if (vaultTransaction) throw new Error("Vault transaction fixture requires native service integration");
     const { store, hash } = readStoreFile(storePath);
     const state = vaultState(store);
     if (!state.path) throw new Error("Vault folder has not been selected");
@@ -79,6 +103,8 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
   }
 
   async function applyVault({ planId, selections }) {
+    assertRecoveryClear();
+    if (vaultTransaction) throw new Error("Vault transaction fixture requires native apply integration");
     if (!pending || pending.planId !== planId || !Array.isArray(selections)) throw new Error("Vault comparison expired; compare again");
     const result = { applied: [], skipped: [], failed: [], lastSuccessAt: null };
     const selected = new Set();

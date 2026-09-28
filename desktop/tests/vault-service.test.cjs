@@ -5,6 +5,7 @@ const path = require("node:path");
 const os = require("node:os");
 const { createVaultService } = require("../vault-service.cjs");
 const { renderManagedMarkdown } = require("../vault-markdown.cjs");
+const { createVaultJournal } = require("../vault-journal.cjs");
 
 const QA_ROOT = process.platform === "win32" ? "D:\\tmp\\nownote-239-vault-qa" : path.join(os.tmpdir(), "nownote-239-vault-qa");
 
@@ -28,6 +29,31 @@ async function fixture(t, tree) {
 function topic(body = "hello") {
   return { id: "t", title: "Topic", content: body, level: 1, status: "active", children: [], tags: [] };
 }
+
+test("fixture transaction journal blocks Vault selection, preview and apply after restart", async (t) => {
+  const { dir, root, storePath, backupDir } = await fixture(t, [topic()]);
+  const journal = createVaultJournal({ journalPath: path.join(dir, "userData", "vault-operation.json") });
+  const operationId = "test-operation";
+  journal.begin({
+    operationId, root, rootIdentity: { volumeId: "volume", fileId: "file" }, itemId: "t",
+    steps: [{ operation: "write", relativePath: "Topic/_index.md", preHash: null, postHash: "a".repeat(64) }],
+    phase: "prepared", preStoreHash: "b".repeat(64), createdAt: new Date().toISOString(), artifacts: {},
+  });
+  const service = createVaultService({ storePath, backupDir, vaultTransaction: { assertClear: () => journal.assertClear() } });
+  assert.equal(service.vaultStatus().recoveryRequired, true);
+  await assert.rejects(service.setVaultPath(root), /journal|recovery/i);
+  await assert.rejects(service.previewVault({ direction: "both" }), /journal|recovery/i);
+  await assert.rejects(service.applyVault({ planId: "none", selections: [] }), /journal|recovery/i);
+  journal.clear(operationId);
+  assert.equal(service.vaultStatus().recoveryRequired, false);
+  await assert.rejects(service.previewVault({ direction: "both" }), /fixture|native/i);
+  await assert.rejects(service.setVaultPath(root), /fixture|native/i);
+  await assert.rejects(service.applyVault({ planId: "none", selections: [] }), /native|fixture|experiment/i);
+  assert.throws(() => createVaultService({
+    storePath: path.join(path.parse(dir).root, "outside-store.json"), backupDir,
+    vaultTransaction: { assertClear: () => {} },
+  }), /fixture|QA/i);
+});
 
 test("preview is read-only and explicit apply exports a note with a durable baseline", async (t) => {
   const { root, storePath, backupDir, service } = await fixture(t, [topic()]);
@@ -53,7 +79,7 @@ test("desktop-store failure after a Vault write does not advance the baseline", 
   const result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
   assert.equal(result.failed.length, 1);
   assert.equal(result.applied.length, 0);
-  await assert.rejects(fs.readdir(path.join(root, "Topic")), { code: "ENOENT" });
+  assert.deepEqual(await fs.readdir(path.join(root, "Topic")), []);
   const retained = (await fs.readdir(root)).filter((name) => name.startsWith(".nownote-"));
   assert.equal(retained.length, 1);
   assert.match(retained[0], /^\.nownote-.*\.backup$/);
@@ -61,7 +87,7 @@ test("desktop-store failure after a Vault write does not advance the baseline", 
   const baselines = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines;
   assert.deepEqual(baselines, {});
   const next = await service.previewVault({ direction: "both" });
-  assert.equal(next.items.find((item) => item.id === "t").classification, "newLocal");
+  assert.equal(next.items.find((item) => item.id === "t").classification, "conflict");
 });
 
 test("a completed write reports a temporary cleanup warning without losing its baseline", async (t) => {

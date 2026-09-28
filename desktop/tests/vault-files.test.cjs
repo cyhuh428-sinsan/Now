@@ -4,7 +4,7 @@ const fs = require("node:fs/promises");
 const path = require("node:path");
 const os = require("node:os");
 const { createHash } = require("node:crypto");
-const { scanVault, writeVaultEntry, moveVaultEntry } = require("../vault-files.cjs");
+const { scanVault, writeVaultEntry, moveVaultEntry, removeCreatedDirs } = require("../vault-files.cjs");
 
 const QA_ROOT = process.platform === "win32" ? "D:\\tmp\\nownote-239-vault-qa" : path.join(os.tmpdir(), "nownote-239-vault-qa");
 const hash = (text) => createHash("sha256").update(text).digest("hex");
@@ -44,6 +44,14 @@ test("an empty folder is an unlinked topic candidate, not silently discarded", a
   assert.deepEqual(entries.map((entry) => entry.relativePath), ["Empty Topic/_index.md"]);
   assert.equal(entries[0].body, "");
   assert.equal(entries[0].folderCandidate, true);
+});
+
+test("rollback cleanup leaves an existing empty Vault folder intact", async (t) => {
+  const { root } = await fixture(t);
+  const existing = path.join(root, "Existing");
+  await fs.mkdir(existing);
+  assert.deepEqual(await removeCreatedDirs([existing]), { removed: [], deferred: true });
+  assert.equal((await fs.stat(existing)).isDirectory(), true);
 });
 
 test("invalid or oversized Markdown is excluded without hiding other valid notes", async (t) => {

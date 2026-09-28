@@ -26,6 +26,7 @@ class RootHandles {
   RootHandles& operator=(const RootHandles&) = delete;
 
   bool Open(const std::string& utf8Root, RootIdentity& identity, Error& error);
+  HANDLE Root() const { return handles_.empty() ? INVALID_HANDLE_VALUE : handles_.back(); }
 
  private:
   std::vector<HANDLE> handles_;

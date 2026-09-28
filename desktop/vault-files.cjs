@@ -304,13 +304,9 @@ async function moveVaultEntry(root, from, to, expectedHash, options = {}) {
 }
 
 async function removeCreatedDirs(createdDirs) {
-  for (const dir of [...createdDirs].reverse()) {
-    try {
-      await fs.rmdir(dir);
-    } catch (error) {
-      if (!["ENOTEMPTY", "ENOENT"].includes(error.code)) throw error;
-    }
-  }
+  // Folder paths alone cannot prove that this operation created them.
+  void createdDirs;
+  return { removed: [], deferred: true };
 }
 
 async function removeVaultEntry(root, relativePath, expectedHash) {
