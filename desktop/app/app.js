@@ -8,7 +8,7 @@ const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
 // #region nownote-only:desktop 2.3.9 릴리스 전 설치형 버전 표기
-const APP_VERSION = "2.3.8";
+const APP_VERSION = "2.3.9";
 // #endregion
 
 const LANGUAGES = {

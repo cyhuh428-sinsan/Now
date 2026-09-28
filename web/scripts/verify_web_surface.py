@@ -301,7 +301,7 @@ def main() -> None:
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
         ("hosted-web-only hidden", "group shared view menu hosted Web visibility guard"),
-        ("Web 2.3.7", "current Web version display"),
+        ("Web 2.3.9", "current Web version display"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
