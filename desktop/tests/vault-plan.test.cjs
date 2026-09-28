@@ -53,7 +53,8 @@ test("first connection needs identical content; divergent content conflicts", ()
   const same = vault("t", "topic", "Topic/_index.md", "same");
   same.title = "Topic";
   const initial = buildSyncPlan({ localNodes: local, vaultEntries: [same], baselines: {}, direction: "both" });
-  assert.equal(initial.items[0].classification, "unchanged");
+  assert.equal(initial.items[0].classification, "unlinkedMatch");
+  assert.equal(initial.items[0].defaultAction, "skip");
   same.body = "different";
   const divergent = buildSyncPlan({ localNodes: local, vaultEntries: [same], baselines: {}, direction: "both" });
   assert.equal(divergent.items[0].classification, "conflict");

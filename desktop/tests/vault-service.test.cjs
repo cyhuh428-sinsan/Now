@@ -52,11 +52,29 @@ test("desktop-store failure after a Vault write does not advance the baseline", 
   const result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
   assert.equal(result.failed.length, 1);
   assert.equal(result.applied.length, 0);
-  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /nownote_id: t/);
+  await assert.rejects(fs.readdir(path.join(root, "Topic")), { code: "ENOENT" });
   const baselines = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines;
   assert.deepEqual(baselines, {});
   const next = await service.previewVault({ direction: "both" });
-  assert.equal(next.items.find((item) => item.id === "t").classification, "unchanged");
+  assert.equal(next.items.find((item) => item.id === "t").classification, "newLocal");
+});
+
+test("desktop-store failure after a rename restores the original Vault file", async (t) => {
+  const { root, storePath, backupDir } = await fixture(t, [topic()]);
+  const initial = createVaultService({ storePath, backupDir });
+  const first = await initial.previewVault({ direction: "toVault" });
+  assert.equal((await initial.applyVault({ planId: first.planId, selections: [{ itemId: "t", action: "toVault" }] })).applied.length, 1);
+  const originalPath = path.join(root, "Topic", "_index.md");
+  const original = await fs.readFile(originalPath);
+  const store = JSON.parse(await fs.readFile(storePath, "utf8"));
+  store.values["nownote.web.v1"].tree[0].title = "Renamed";
+  await fs.writeFile(storePath, JSON.stringify(store));
+  const service = createVaultService({ storePath, backupDir, beforeStoreCommit: async () => { throw new Error("injected store failure"); } });
+  const plan = await service.previewVault({ direction: "toVault" });
+  const failed = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  assert.equal(failed.failed.length, 1);
+  assert.deepEqual(await fs.readFile(originalPath), original);
+  await assert.rejects(fs.readFile(path.join(root, "Renamed", "_index.md")), { code: "ENOENT" });
 });
 
 test("a file modified after preview is never overwritten or advanced", async (t) => {
@@ -133,6 +151,17 @@ test("a managed Vault-only note retains its existing identity when explicitly im
   assert.equal((await service.previewVault({ direction: "both" })).items.find((item) => item.id === "remote-1").classification, "unchanged");
 });
 
+test("equal first-contact content is shown as unlinked until explicitly confirmed", async (t) => {
+  const { root, storePath, service } = await fixture(t, [topic()]);
+  await fs.mkdir(path.join(root, "Topic"));
+  await fs.writeFile(path.join(root, "Topic", "_index.md"), renderManagedMarkdown({ id: "t", kind: "topic", title: "Topic", body: "hello", tags: [] }));
+  const first = await service.previewVault({ direction: "both" });
+  assert.equal(first.items.find((item) => item.id === "t").classification, "unlinkedMatch");
+  assert.deepEqual(JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines, {});
+  assert.equal((await service.applyVault({ planId: first.planId, selections: [{ itemId: "t", action: "toVault" }] })).applied.length, 1);
+  assert.equal((await service.previewVault({ direction: "both" })).items.find((item) => item.id === "t").classification, "unchanged");
+});
+
 test("the selected direction cannot be bypassed and deep files need a target category", async (t) => {
   const category = { id: "c", title: "Category", content: "", level: 2, status: "active", children: [], tags: [] };
   const parent = topic();
@@ -143,9 +172,56 @@ test("the selected direction cannot be bypassed and deep files need a target cat
   const plan = await service.previewVault({ direction: "fromVault" });
   const blocked = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
   assert.match(blocked.failed[0].message, /direction/);
-  const deep = plan.items.find((item) => item.classification === "depthExceeded");
+  const deep = plan.items.find((item) => item.paths.vault === "one/two/three/deep.md");
+  assert.equal(deep.classification, "depthExceeded");
   const missingParent = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote" }] });
   assert.equal(missingParent.failed.length, 1);
   const accepted = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote", targetParentId: "c" }] });
   assert.equal(accepted.applied.length, 1);
+});
+
+test("an empty Vault folder can be explicitly imported as a topic and gain an index", async (t) => {
+  const { root, storePath, service } = await fixture(t, []);
+  await fs.mkdir(path.join(root, "Empty Topic"));
+  const preview = await service.previewVault({ direction: "fromVault" });
+  const candidate = preview.items.find((item) => item.paths.vault === "Empty Topic/_index.md");
+  assert.equal(candidate.classification, "unlinked");
+  assert.equal(await fs.readdir(path.join(root, "Empty Topic")).then((names) => names.length), 0);
+  const applied = await service.applyVault({ planId: preview.planId, selections: [{ itemId: candidate.itemId, action: "toNowNote" }] });
+  assert.equal(applied.applied.length, 1);
+  const tree = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.web.v1"].tree;
+  assert.equal(tree[0].title, "Empty Topic");
+  assert.match(await fs.readFile(path.join(root, "Empty Topic", "_index.md"), "utf8"), /nownote_kind: topic/);
+  const next = await service.previewVault({ direction: "both" });
+  assert.equal(next.items.find((item) => item.id === tree[0].id).classification, "unchanged");
+});
+
+test("an unmanaged category index imports beneath the selected topic", async (t) => {
+  const { root, storePath, service } = await fixture(t, [topic()]);
+  await fs.mkdir(path.join(root, "Topic", "Vault Category"), { recursive: true });
+  await fs.writeFile(path.join(root, "Topic", "Vault Category", "_index.md"), "분류 본문");
+  const preview = await service.previewVault({ direction: "fromVault" });
+  const candidate = preview.items.find((item) => item.paths.vault === "Topic/Vault Category/_index.md");
+  const applied = await service.applyVault({ planId: preview.planId, selections: [{ itemId: candidate.itemId, action: "toNowNote", targetParentId: "t" }] });
+  assert.equal(applied.applied.length, 1);
+  const tree = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.web.v1"].tree;
+  assert.equal(tree[0].children[0].title, "Vault Category");
+  assert.equal(tree[0].children[0].content, "분류 본문");
+  assert.match(await fs.readFile(path.join(root, "Topic", "Vault Category", "_index.md"), "utf8"), /nownote_kind: category/);
+});
+
+test("a renamed NowNote topic moves its linked Vault index without leaving a duplicate identity", async (t) => {
+  const { root, storePath, service } = await fixture(t, [topic()]);
+  const initial = await service.previewVault({ direction: "toVault" });
+  assert.equal((await service.applyVault({ planId: initial.planId, selections: [{ itemId: "t", action: "toVault" }] })).applied.length, 1);
+  const store = JSON.parse(await fs.readFile(storePath, "utf8"));
+  store.values["nownote.web.v1"].tree[0].title = "Renamed";
+  await fs.writeFile(storePath, JSON.stringify(store));
+  const moved = await service.previewVault({ direction: "both" });
+  assert.equal(moved.items.find((item) => item.id === "t").classification, "localChanged");
+  const result = await service.applyVault({ planId: moved.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  assert.equal(result.applied.length, 1);
+  assert.match(await fs.readFile(path.join(root, "Renamed", "_index.md"), "utf8"), /nownote_id: t/);
+  assert.deepEqual(await fs.readdir(path.join(root, "Topic")), []);
+  assert.equal((await service.previewVault({ direction: "both" })).items.find((item) => item.id === "t").classification, "unchanged");
 });

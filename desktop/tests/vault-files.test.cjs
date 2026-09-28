@@ -30,8 +30,30 @@ test("scan reads only Markdown and never traverses Obsidian config or attachment
   await fs.writeFile(path.join(root, ".obsidian", "secret.md"), "private");
   await fs.writeFile(path.join(root, "image.png"), "binary");
   const entries = await scanVault(root);
-  assert.deepEqual(entries.map((entry) => entry.relativePath), ["Topic/Category/note.md"]);
-  assert.equal(entries[0].body, "# 한글\n");
+  assert.deepEqual(entries.filter((entry) => entry.fileHash).map((entry) => entry.relativePath), ["Topic/Category/note.md"]);
+  assert.equal(entries.find((entry) => entry.relativePath.endsWith("note.md")).body, "# 한글\n");
+  assert.ok(entries.some((entry) => entry.relativePath === "Topic/_index.md" && entry.folderCandidate));
+  assert.ok(entries.some((entry) => entry.relativePath === "Topic/Category/_index.md" && entry.folderCandidate));
+});
+
+test("an empty folder is an unlinked topic candidate, not silently discarded", async (t) => {
+  const { root } = await fixture(t);
+  await fs.mkdir(path.join(root, "Empty Topic"));
+  const entries = await scanVault(root);
+  assert.deepEqual(entries.map((entry) => entry.relativePath), ["Empty Topic/_index.md"]);
+  assert.equal(entries[0].body, "");
+  assert.equal(entries[0].folderCandidate, true);
+});
+
+test("invalid or oversized Markdown is excluded without hiding other valid notes", async (t) => {
+  const { root } = await fixture(t);
+  await fs.writeFile(path.join(root, "good.md"), "good");
+  await fs.writeFile(path.join(root, "bad.md"), "---\nnownote_id: x\n---\nbroken");
+  await fs.writeFile(path.join(root, "huge.md"), Buffer.alloc(5 * 1024 * 1024 + 1, 65));
+  const entries = await scanVault(root);
+  assert.equal(entries.find((entry) => entry.relativePath === "good.md").body, "good");
+  assert.equal(entries.find((entry) => entry.relativePath === "bad.md").excluded, "invalidMarkdown");
+  assert.equal(entries.find((entry) => entry.relativePath === "huge.md").excluded, "tooLarge");
 });
 
 test("traversal, absolute paths, hidden directories and symlink escape are rejected", async (t) => {
@@ -49,6 +71,27 @@ test("traversal, absolute paths, hidden directories and symlink escape are rejec
   }
   await assert.rejects(scanVault(root), /symbolic|symlink/i);
   await assert.rejects(writeVaultEntry(root, "link/out.md", "bad", null, { backupDir }), /symbolic|symlink/i);
+});
+
+test("a folder switched to a junction after listing is not read outside the Vault", async (t) => {
+  const { dir, root } = await fixture(t);
+  const inside = path.join(root, "Topic");
+  const outside = path.join(dir, "outside");
+  await fs.mkdir(inside);
+  await fs.mkdir(outside);
+  await fs.writeFile(path.join(inside, "memo.md"), "inside");
+  await fs.writeFile(path.join(outside, "memo.md"), "outside secret");
+  try {
+    const entries = await scanVault(root, { beforeRead: async (relativePath) => {
+      if (relativePath !== "Topic/memo.md") return;
+      await fs.rename(inside, path.join(root, "Topic-old"));
+      await fs.symlink(outside, inside, "junction");
+    } });
+    assert.fail(`Junction swap was accepted: ${JSON.stringify(entries)}`);
+  } catch (error) {
+    if (["EPERM", "EACCES"].includes(error.code)) return t.diagnostic("junction creation unavailable on this host");
+    assert.match(error.message, /Vault|symbolic|symlink|outside|escape/i);
+  }
 });
 
 test("compare-and-swap write backs up old bytes and refuses stale previews", async (t) => {

@@ -7,6 +7,11 @@ const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
 const DESKTOP_STORE_VERSION = 1;
+const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1"]);
+
+function assertRendererStoreKey(key) {
+  if (!RENDERER_STORE_KEYS.has(key)) throw new Error("Desktop storage key is not available to the renderer");
+}
 
 if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.NOWNOTE_DESKTOP_USER_DATA_DIR));
@@ -32,11 +37,13 @@ function registerDesktopStorageHandlers() {
   });
 
   ipcMain.handle("nownote:desktop-store-read", (_event, key) => {
+    assertRendererStoreKey(key);
     const store = readDesktopStore();
     return store.values[key] ?? null;
   });
 
   ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
+    assertRendererStoreKey(key);
     const result = updateStoreFile(desktopStorePath(), (store) => {
       store.values[key] = value;
       return store;
@@ -46,6 +53,7 @@ function registerDesktopStorageHandlers() {
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
     try {
+      assertRendererStoreKey(key);
       const result = updateStoreFile(desktopStorePath(), (store) => {
         store.values[key] = value;
         return store;

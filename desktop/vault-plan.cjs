@@ -95,7 +95,7 @@ function buildSyncPlan({ localNodes, vaultEntries, baselines = {}, direction }) 
       const localPathChanged = Boolean(baseline && (baseline.localPath || baseline.relativePath) !== local.relativePath);
       const vaultPathChanged = Boolean(baseline && (baseline.vaultPath || baseline.relativePath) !== remote.relativePath);
       if (!baseline) {
-        classification = localHash === vaultHash ? "unchanged" : "conflict";
+        classification = localHash === vaultHash ? "unlinkedMatch" : "conflict";
       } else {
         const localChanged = localHash !== baseline.localHash || localPathChanged;
         const vaultChanged = vaultHash !== baseline.vaultHash || vaultPathChanged;
@@ -108,7 +108,7 @@ function buildSyncPlan({ localNodes, vaultEntries, baselines = {}, direction }) 
   }
   for (const entry of vaultEntries.filter((candidate) => !candidate.id)) {
     const depth = String(entry.relativePath).split(/[\\/]/).length;
-    items.push({ itemId: `unlinked:${entry.relativePath}`, id: null, kind: null, classification: depth > 3 ? "depthExceeded" : "unlinked", reason: null, defaultAction: "skip", paths: { baseline: null, local: null, vault: entry.relativePath }, local: null, vault: entry });
+    items.push({ itemId: `unlinked:${entry.relativePath}`, id: null, kind: null, classification: entry.excluded ? "skipped" : depth > 3 ? "depthExceeded" : "unlinked", reason: entry.excluded || null, defaultAction: "skip", paths: { baseline: null, local: null, vault: entry.relativePath }, local: null, vault: entry });
   }
   const counts = Object.fromEntries([...new Set(items.map((item) => item.classification))].map((classification) => [classification, items.filter((item) => item.classification === classification).length]));
   return { items, counts };

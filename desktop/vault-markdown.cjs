@@ -8,7 +8,9 @@ function plainObject(value) {
 }
 
 function metadata(id, kind, schema, title, tags) {
-  if (typeof id !== "string" || !id.trim()) throw new Error("Invalid Vault metadata: nownote_id");
+  if (typeof id !== "string" || !id.trim() || ["__proto__", "constructor", "prototype"].includes(id)) {
+    throw new Error("Invalid Vault metadata: nownote_id");
+  }
   if (!KINDS.has(kind)) throw new Error("Invalid Vault metadata: nownote_kind");
   if (schema !== 1) throw new Error("Unsupported Vault metadata schema");
   if (typeof title !== "string") throw new Error("Invalid Vault metadata: title");

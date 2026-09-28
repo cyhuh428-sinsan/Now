@@ -240,6 +240,15 @@ async function verifyVaultPanel(page, vaultRoot, title) {
     })()
   `);
   await waitForCondition(page, `document.querySelector('#vaultPath').textContent === ${JSON.stringify(vaultRoot)}`, "Vault path render");
+  const boundary = await evaluate(page, `(async () => {
+    try {
+      await window.nownoteDesktop.storage.write('nownote.vault.v1', { path: 'C:\\\\', baselines: {} });
+      return { blocked: false, path: (await window.nownoteDesktop.vault.status()).path };
+    } catch {
+      return { blocked: true, path: (await window.nownoteDesktop.vault.status()).path };
+    }
+  })()`);
+  assert(boundary.blocked && boundary.path === vaultRoot, "Generic desktop storage IPC changed the selected Vault path.");
   const before = await fs.readdir(vaultRoot);
   assert(before.length === 0, "Vault fixture must start empty.");
   await evaluate(page, `document.querySelector('#vaultPreviewBtn').click()`);

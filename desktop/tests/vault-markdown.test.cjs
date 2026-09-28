@@ -39,6 +39,10 @@ test("invalid metadata and managed-key overrides are rejected", () => {
   assert.throws(() => renderManagedMarkdown({
     id: "x", kind: "note", title: "x", body: "", extraFrontmatter: { nownote_id: "other" },
   }), /nownote_id/i);
+  for (const unsafe of ["__proto__", "constructor", "prototype"]) {
+    assert.throws(() => renderManagedMarkdown({ id: unsafe, kind: "note", title: "x", body: "" }), /nownote_id/i);
+    assert.throws(() => parseManagedMarkdown(`---\nnownote_id: ${unsafe}\nnownote_kind: note\nnownote_schema: 1\n---\n`), /nownote_id/i);
+  }
 });
 
 test("encrypted note contents cannot be rendered into a Vault file", () => {

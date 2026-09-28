@@ -4,7 +4,7 @@ const path = require("node:path");
 const { randomUUID } = require("node:crypto");
 const { mapNowTree, buildSyncPlan, contentHash } = require("./vault-plan.cjs");
 const { renderManagedMarkdown } = require("./vault-markdown.cjs");
-const { scanVault, writeVaultEntry, moveVaultEntry } = require("./vault-files.cjs");
+const { scanVault, writeVaultEntry, moveVaultEntry, removeVaultEntry, removeCreatedDirs } = require("./vault-files.cjs");
 const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
 
 const VAULT_KEY = "nownote.vault.v1";
@@ -31,6 +31,16 @@ function backupStore(storePath, backupDir) {
   const backupPath = path.join(backupDir, `${Date.now()}-${randomUUID()}-nownote-desktop-store.json`);
   fs.copyFileSync(storePath, backupPath, fs.constants.COPYFILE_EXCL);
   return backupPath;
+}
+
+async function restoreVaultWrite(root, relativePath, written, backupDir) {
+  if (written.backupPath) {
+    const original = await fsp.readFile(written.backupPath, "utf8");
+    await writeVaultEntry(root, relativePath, original, written.fileHash, { backupDir });
+  } else {
+    await removeVaultEntry(root, relativePath, written.fileHash);
+  }
+  await removeCreatedDirs(written.createdDirs || []);
 }
 
 function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
@@ -83,6 +93,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
         continue;
       }
       const item = pending.items.get(itemId);
+      const undoVault = [];
       try {
         const current = readStoreFile(storePath);
         if (current.hash !== pending.storeHash || vaultState(current.store).path !== pending.vaultPath) {
@@ -116,9 +127,14 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
           const markdown = renderManagedMarkdown({ id: local.id, kind: local.kind, title: local.title, body: local.body, tags: local.tags, extraFrontmatter: item.vault?.extraFrontmatter || {} });
           relativePath = local.relativePath;
           if (item.vault && item.vault.relativePath !== relativePath) {
-            await moveVaultEntry(pending.vaultPath, item.vault.relativePath, relativePath, item.vault.fileHash, { backupDir });
+            const moved = await moveVaultEntry(pending.vaultPath, item.vault.relativePath, relativePath, item.vault.fileHash, { backupDir });
+            undoVault.push(async () => {
+              await moveVaultEntry(pending.vaultPath, relativePath, item.vault.relativePath, item.vault.fileHash, { backupDir });
+              await removeCreatedDirs(moved.createdDirs);
+            });
           }
           vaultWrite = await writeVaultEntry(pending.vaultPath, relativePath, markdown, item.vault?.fileHash || null, { backupDir });
+          undoVault.push(() => restoreVaultWrite(pending.vaultPath, relativePath, vaultWrite, backupDir));
         } else if (selection.action === "toNowNote") {
           if (!source) throw new Error("Vault source is missing");
           nextTree = structuredClone(nowTree);
@@ -130,16 +146,29 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
             node.tags = source.tags;
             node.updatedAt = new Date().toISOString();
           } else {
-            if (source.relativePath.endsWith("/_index.md")) throw new Error("Unlinked index needs explicit folder mapping");
-            const parent = findNode(nextTree, selection.targetParentId);
-            if (!parent || parent.level !== 2) throw new Error("A target category is required for this Vault note");
+            const isIndex = source.relativePath.endsWith("/_index.md");
+            const segments = source.relativePath.split("/");
+            const level = isIndex ? segments.length - 1 : 3;
+            if (isIndex && level > 2) throw new Error("Vault folder exceeds NowNote hierarchy");
+            const parent = selection.targetParentId ? findNode(nextTree, selection.targetParentId) : null;
+            if (level > 1 && (!parent || parent.level !== level - 1)) {
+              throw new Error(level === 2 ? "A target topic is required for this Vault category" : "A target category is required for this Vault note");
+            }
+            if (level === 1 && parent) throw new Error("Vault topic cannot have a parent");
             entryId = source.id || randomUUID();
-            const title = source.title || path.basename(source.relativePath, ".md");
-            parent.children ||= [];
-            parent.children.push({ id: entryId, title, content: source.body, tags: source.tags, parentId: parent.id, level: 3, children: [], status: "active", syncState: "pending", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+            const title = source.title || (isIndex ? segments.at(-2) : path.basename(source.relativePath, ".md"));
+            const created = { id: entryId, title, content: source.body, tags: source.tags, parentId: parent?.id || null, level, children: [], status: "active", syncState: "pending", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+            if (parent) {
+              parent.children ||= [];
+              parent.children.push(created);
+            } else {
+              nextTree.push(created);
+            }
             if (!source.managed) {
-              const markdown = renderManagedMarkdown({ id: entryId, kind: "note", title, body: source.body, tags: source.tags, extraFrontmatter: source.extraFrontmatter });
+              const kind = ["topic", "category", "note"][level - 1];
+              const markdown = renderManagedMarkdown({ id: entryId, kind, title, body: source.body, tags: source.tags, extraFrontmatter: source.extraFrontmatter });
               vaultWrite = await writeVaultEntry(pending.vaultPath, source.relativePath, markdown, source.fileHash, { backupDir });
+              undoVault.push(() => restoreVaultWrite(pending.vaultPath, source.relativePath, vaultWrite, backupDir));
             }
           }
         } else if (selection.action === "unlink") {
@@ -169,7 +198,11 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
         pending.applied.add(itemId);
         result.applied.push({ itemId, id: entryId, relativePath, backupPath: vaultWrite?.backupPath || storeBackupPath });
       } catch (error) {
-        result.failed.push({ itemId, message: error.message });
+        const rollbackErrors = [];
+        for (const undo of undoVault.reverse()) {
+          try { await undo(); } catch (rollbackError) { rollbackErrors.push(rollbackError.message); }
+        }
+        result.failed.push({ itemId, message: rollbackErrors.length ? `${error.message}; rollback incomplete: ${rollbackErrors.join("; ")}` : error.message });
       }
     }
     try {
