@@ -264,6 +264,17 @@ void main() {
     expect(find.byTooltip('서버로 받아쓰기 시작'), findsOneWidget);
   });
 
+  testWidgets('사진 입력에서 갤러리와 카메라를 고를 수 있다', (tester) async {
+    await tester.pumpWidget(_wrap(db));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byTooltip('사진으로 입력'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('갤러리에서 선택'), findsOneWidget);
+    expect(find.text('카메라로 촬영'), findsOneWidget);
+  });
+
   testWidgets('서버로 받아쓰기: 녹음 후 변환한 텍스트가 입력창에 들어간다', (tester) async {
     late Directory tempDir;
     // 임시 폴더 생성도 실제 파일 I/O다 — `runAsync`로 감싼다.

@@ -9,6 +9,7 @@ import 'package:now_core/now_core.dart';
 import 'package:table_calendar/table_calendar.dart';
 
 import '../ask/ask_sheet.dart';
+import '../photo_source_sheet.dart';
 import '../settings/settings_providers.dart';
 import 'today_memo_repository.dart';
 import 'today_providers.dart';
@@ -249,9 +250,11 @@ class _TodayMemoPageState extends ConsumerState<TodayMemoPage> {
   }
 
   Future<void> _pickPhoto() async {
+    final source = await showPhotoSourceSheet(context);
+    if (source == null || !mounted) return;
     final picker = ImagePicker();
     final XFile? picked = await picker.pickImage(
-      source: ImageSource.camera,
+      source: source,
       imageQuality: 85,
     );
     if (picked == null) return;
@@ -642,7 +645,7 @@ class _TodayInputBar extends StatelessWidget {
                     height: 20,
                     child: CircularProgressIndicator(strokeWidth: 2),
                   )
-                : const Icon(Icons.camera_alt_outlined),
+                : const Icon(Icons.add_photo_alternate_outlined),
             onPressed: onCamera,
           ),
           IconButton(

@@ -63,6 +63,8 @@ dependencies:
 
   # 사진 선택/촬영
   image_picker: ^1.1.2
+  image_picker_android: ^0.8.13+17
+  image_picker_platform_interface: ^2.11.1
 
   # 날짜/시간
   intl: ^0.19.0

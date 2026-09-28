@@ -493,6 +493,17 @@ void main() {
     expect(nodes.single.level, 1);
   });
 
+  testWidgets('사진 입력에서 갤러리와 카메라를 고를 수 있다', (tester) async {
+    await tester.pumpWidget(wrap());
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const Key('tree-input-camera')));
+    await tester.pumpAndSettle();
+
+    expect(find.text('갤러리에서 선택'), findsOneWidget);
+    expect(find.text('카메라로 촬영'), findsOneWidget);
+  });
+
   testWidgets('길게 눌러 삭제하면 삭제 대기로 옮기고 목록에서 사라진다', (tester) async {
     await _insertMemo(db, id: 't1', title: '지울 주제', level: 1);
 
