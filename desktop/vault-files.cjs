@@ -101,6 +101,41 @@ async function prepareBackup(rootReal, backupDir, relativePath, current) {
   return backupPath;
 }
 
+async function parkFile(target) {
+  const preservedPath = path.join(path.dirname(target), `.nownote-${randomUUID()}.backup`);
+  await fs.rename(target, preservedPath);
+  return preservedPath;
+}
+
+async function readParkedFile(rootReal, preservedPath, segments) {
+  return readCheckedFile(rootReal, preservedPath, [...segments.slice(0, -1), path.basename(preservedPath)]);
+}
+
+async function restoreParkedFile(preservedPath, target) {
+  try {
+    await fs.link(preservedPath, target);
+  } catch (error) {
+    if (error.code === "EEXIST") throw new Error(`Vault target changed; original preserved at ${preservedPath}`);
+    throw new Error(`Vault restore failed; original preserved at ${preservedPath}: ${error.message}`);
+  }
+}
+
+async function requireHardLinks(directory) {
+  const probe = path.join(directory, `.nownote-${randomUUID()}.probe`);
+  const linked = `${probe}.link`;
+  await fs.writeFile(probe, "", { flag: "wx" });
+  try {
+    try {
+      await fs.link(probe, linked);
+    } catch (error) {
+      throw new Error(`Vault filesystem cannot safely create hard links: ${error.code || error.message}`);
+    }
+  } finally {
+    await fs.rm(linked, { force: true });
+    await fs.rm(probe, { force: true });
+  }
+}
+
 async function scanVault(root, options = {}) {
   const rootReal = await fs.realpath(root);
   const entries = [];
@@ -167,6 +202,10 @@ async function writeVaultEntry(root, relativePath, content, expectedHash, option
   if (current ? fileHash(current) !== expectedHash : expectedHash !== null) throw new Error("Vault file changed since preview");
   const backupPath = await prepareBackup(rootReal, options.backupDir, relativePath, current);
   const temp = path.join(path.dirname(target), `.${randomUUID()}.tmp`);
+  let preservedPath = null;
+  let linked = false;
+  let tempCleanupPath = null;
+  let failure = null;
   try {
     const tempHandle = await fs.open(temp, "wx");
     try {
@@ -178,11 +217,42 @@ async function writeVaultEntry(root, relativePath, content, expectedHash, option
     if (typeof options.beforeRename === "function") await options.beforeRename();
     const latest = await readExisting(rootReal, await entryState(rootReal, segments), segments);
     if (latest ? fileHash(latest) !== expectedHash : expectedHash !== null) throw new Error("Vault file changed since preview");
-    await fs.rename(temp, target);
+    if (typeof options.beforeMutation === "function") await options.beforeMutation();
+    if (current) {
+      await requireHardLinks(path.dirname(target));
+      preservedPath = await parkFile(target);
+      if (typeof options.afterPark === "function") await options.afterPark(preservedPath);
+      if (fileHash(await readParkedFile(rootReal, preservedPath, segments)) !== expectedHash) {
+        throw new Error(`Vault file changed during apply; original preserved at ${preservedPath}`);
+      }
+    }
+    try {
+      await fs.link(temp, target);
+    } catch (error) {
+      if (error.code === "EEXIST") throw new Error("Vault target changed during apply");
+      throw error;
+    }
+    linked = true;
+  } catch (error) {
+    failure = error;
+    if (preservedPath && !linked) {
+      try {
+        await restoreParkedFile(preservedPath, target);
+      } catch (restoreError) {
+        failure = new Error(`${error.message}; ${restoreError.message}`);
+      }
+    }
+    throw failure;
   } finally {
-    await fs.rm(temp, { force: true });
+    try {
+      await fs.rm(temp, { force: true });
+    } catch (error) {
+      if (linked) tempCleanupPath = temp;
+      else if (failure) failure.message += `; temporary file preserved at ${temp}: ${error.message}`;
+      else throw error;
+    }
   }
-  return { relativePath, fileHash: fileHash(Buffer.from(content)), backupPath, createdDirs };
+  return { relativePath, fileHash: fileHash(Buffer.from(content)), backupPath, preservedPath, tempCleanupPath, createdDirs };
 }
 
 async function moveVaultEntry(root, from, to, expectedHash, options = {}) {
@@ -199,8 +269,38 @@ async function moveVaultEntry(root, from, to, expectedHash, options = {}) {
   const backupPath = await prepareBackup(rootReal, options.backupDir, from, current);
   if (fileHash(await readCheckedFile(rootReal, await entryState(rootReal, fromSegments), fromSegments)) !== expectedHash) throw new Error("Vault file changed since preview");
   await entryState(rootReal, toSegments);
-  await fs.rename(source, target);
-  return { relativePath: to, fileHash: expectedHash, backupPath, createdDirs };
+  if (typeof options.beforeMutation === "function") await options.beforeMutation();
+  await requireHardLinks(path.dirname(target));
+  let preservedPath = null;
+  try {
+    preservedPath = await parkFile(source);
+    if (typeof options.afterPark === "function") await options.afterPark(preservedPath);
+    if (fileHash(await readParkedFile(rootReal, preservedPath, fromSegments)) !== expectedHash) {
+      throw new Error(`Vault source changed during move; original preserved at ${preservedPath}`);
+    }
+    try {
+      await fs.link(preservedPath, target);
+    } catch (error) {
+      if (error.code === "EEXIST") throw new Error("Vault move target changed during apply");
+      throw error;
+    }
+    try {
+      await fs.unlink(preservedPath);
+      preservedPath = null;
+    } catch (error) {
+      if (error.code === "ENOENT") preservedPath = null;
+    }
+  } catch (error) {
+    if (preservedPath) {
+      try {
+        await restoreParkedFile(preservedPath, source);
+      } catch (restoreError) {
+        throw new Error(`${error.message}; ${restoreError.message}`);
+      }
+    }
+    throw error;
+  }
+  return { relativePath: to, fileHash: expectedHash, backupPath, preservedPath, createdDirs };
 }
 
 async function removeCreatedDirs(createdDirs) {
@@ -215,10 +315,25 @@ async function removeCreatedDirs(createdDirs) {
 
 async function removeVaultEntry(root, relativePath, expectedHash) {
   const rootReal = await fs.realpath(root);
-  const target = await entryState(rootReal, checkedSegments(relativePath));
-  const current = await readExisting(rootReal, target, checkedSegments(relativePath));
+  const segments = checkedSegments(relativePath);
+  const target = await entryState(rootReal, segments);
+  const current = await readExisting(rootReal, target, segments);
   if (!current || fileHash(current) !== expectedHash) throw new Error("Vault file changed before rollback");
-  await fs.unlink(target);
+  const preservedPath = await parkFile(target);
+  let parkedBytes;
+  try {
+    parkedBytes = await readParkedFile(rootReal, preservedPath, segments);
+  } catch (error) {
+    await restoreParkedFile(preservedPath, target);
+    throw error;
+  }
+  if (fileHash(parkedBytes) !== expectedHash) {
+    await restoreParkedFile(preservedPath, target);
+    throw new Error("Vault file changed during rollback");
+  }
+  if (path.dirname(preservedPath) !== rootReal) {
+    await fs.rename(preservedPath, path.join(rootReal, `.nownote-${randomUUID()}.backup`));
+  }
 }
 
 module.exports = { fileHash, scanVault, writeVaultEntry, moveVaultEntry, removeVaultEntry, removeCreatedDirs };

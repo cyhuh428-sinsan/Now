@@ -318,6 +318,10 @@ A topic or category becomes a folder with an `_index.md` file. Empty folders app
 
 Before changing an existing file, the app saves a recovery copy in `vault-backups` beside the file shown under **Display Settings > PC Local Storage**. To restore, close the app, preserve the current original separately, and copy the recovery file back to its original location. The same applies to a `nownote-desktop-store.json` recovery copy. Compare again after restoration.
 
+To avoid overwriting an external edit, the app also retains the previous file as a hidden `.nownote-*.backup` copy inside the Vault. If a concurrent change is detected, check the copy path shown in the result. A copy of a new file rolled back after a storage failure may remain at the Vault root. These copies are not deleted automatically; keep them until you have checked the sync result and the original.
+
+If the Vault filesystem does not support safe hard links, changes and moves of existing files stop before moving the original. If the result reports a temporary-file cleanup warning, review the sync result and backups before manually removing the indicated hidden `.tmp` file.
+
 ## Encrypted Storage
 
 Knowledge notes can be encrypted note by note when needed.

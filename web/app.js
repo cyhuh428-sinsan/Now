@@ -6281,6 +6281,8 @@ function vaultText(key) {
       targetTopic: "가져올 주제 선택", targetCategory: "가져올 분류 선택",
       compareBodies: "양쪽 내용 비교", latest: "최근 성공",
       compared: "개 항목 비교 완료", applied: "적용", failed: "실패", skipped: "건너뜀",
+      cleanupPending: "임시 파일 정리 필요",
+      retainedOriginal: "보존된 원본",
       local: "NowNote", remote: "Obsidian",
     },
     en: {
@@ -6290,6 +6292,8 @@ function vaultText(key) {
       targetTopic: "Select target topic", targetCategory: "Select target category",
       compareBodies: "Compare both versions", latest: "Last success",
       compared: "items compared", applied: "Applied", failed: "Failed", skipped: "Skipped",
+      cleanupPending: "Temporary file cleanup needed",
+      retainedOriginal: "Retained original",
       local: "NowNote", remote: "Obsidian",
     },
   };
@@ -6372,9 +6376,15 @@ async function applyVaultChanges() {
   try {
     const result = await window.nownoteDesktop.vault.apply({ planId: vaultPreview.planId, selections });
     vaultResultText = `${vaultText("applied")} ${result.applied.length} · ${vaultText("failed")} ${result.failed.length} · ${vaultText("skipped")} ${result.skipped.length}`;
+    const cleanupPaths = result.applied.map((item) => item.tempCleanupPath).filter(Boolean);
+    if (cleanupPaths.length) vaultResultText += ` · ${vaultText("cleanupPending")}: ${cleanupPaths.join(", ")}`;
+    const preservedPaths = result.applied.map((item) => item.preservedPath).filter(Boolean);
+    if (preservedPaths.length) vaultResultText += ` · ${vaultText("retainedOriginal")}: ${preservedPaths.join(", ")}`;
     if (result.failed.length) {
       vaultResultText += ` · ${result.failed.map((item) => item.message).join("; ")}`;
       showNotice(vaultResultText, "error");
+    } else if (cleanupPaths.length) {
+      showNotice(vaultText("cleanupPending"), "error");
     }
     if (result.applied.some((item) => selections.find((choice) => choice.itemId === item.itemId)?.action === "toNowNote")) {
       const refreshed = await readStorage(STORAGE_KEY);

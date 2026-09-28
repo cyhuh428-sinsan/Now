@@ -54,10 +54,50 @@ test("desktop-store failure after a Vault write does not advance the baseline", 
   assert.equal(result.failed.length, 1);
   assert.equal(result.applied.length, 0);
   await assert.rejects(fs.readdir(path.join(root, "Topic")), { code: "ENOENT" });
+  const retained = (await fs.readdir(root)).filter((name) => name.startsWith(".nownote-"));
+  assert.equal(retained.length, 1);
+  assert.match(retained[0], /^\.nownote-.*\.backup$/);
+  assert.match(await fs.readFile(path.join(root, retained[0]), "utf8"), /nownote_id: t/);
   const baselines = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines;
   assert.deepEqual(baselines, {});
   const next = await service.previewVault({ direction: "both" });
   assert.equal(next.items.find((item) => item.id === "t").classification, "newLocal");
+});
+
+test("a completed write reports a temporary cleanup warning without losing its baseline", async (t) => {
+  const { root, storePath, service } = await fixture(t, [topic()]);
+  const originalRm = fs.rm;
+  fs.rm = async (target, options) => {
+    if (String(target).endsWith(".tmp")) { const error = new Error("injected cleanup failure"); error.code = "EPERM"; throw error; }
+    return originalRm(target, options);
+  };
+  let result;
+  try {
+    const plan = await service.previewVault({ direction: "toVault" });
+    result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  } finally {
+    fs.rm = originalRm;
+  }
+  assert.equal(result.applied.length, 1);
+  assert.equal(result.failed.length, 0);
+  assert.ok(result.applied[0].tempCleanupPath);
+  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /nownote_id: t/);
+  assert.ok(JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines.t);
+});
+
+test("a successful replacement reports the retained original path", async (t) => {
+  const { root, storePath, service } = await fixture(t, [topic()]);
+  const first = await service.previewVault({ direction: "toVault" });
+  assert.equal((await service.applyVault({ planId: first.planId, selections: [{ itemId: "t", action: "toVault" }] })).applied.length, 1);
+  const store = JSON.parse(await fs.readFile(storePath, "utf8"));
+  store.values["nownote.web.v1"].tree[0].content = "updated body";
+  await fs.writeFile(storePath, JSON.stringify(store));
+  const second = await service.previewVault({ direction: "toVault" });
+  const result = await service.applyVault({ planId: second.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  assert.equal(result.applied.length, 1);
+  assert.ok(result.applied[0].preservedPath);
+  assert.match(await fs.readFile(result.applied[0].preservedPath, "utf8"), /hello/);
+  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /updated body/);
 });
 
 test("desktop-store failure after a rename restores the original Vault file", async (t) => {

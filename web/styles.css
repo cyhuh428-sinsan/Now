@@ -1167,6 +1167,7 @@ body.resizing {
 
 .vault-status {
   min-height: 16px;
+  overflow-wrap: anywhere;
 }
 
 .vault-items {

@@ -196,7 +196,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit }) {
         }, pending.storeHash);
         pending.storeHash = saved.hash;
         pending.applied.add(itemId);
-        result.applied.push({ itemId, id: entryId, relativePath, backupPath: vaultWrite?.backupPath || storeBackupPath });
+        result.applied.push({ itemId, id: entryId, relativePath, backupPath: vaultWrite?.backupPath || storeBackupPath, preservedPath: vaultWrite?.preservedPath || null, tempCleanupPath: vaultWrite?.tempCleanupPath || null });
       } catch (error) {
         const rollbackErrors = [];
         for (const undo of undoVault.reverse()) {
