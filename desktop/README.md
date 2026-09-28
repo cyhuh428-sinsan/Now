@@ -43,6 +43,14 @@ cd desktop
 npm run check:storage
 ```
 
+## Obsidian Vault 수동 동기화 (2.3.9 개발 후보)
+
+설치형 화면 설정에서 Vault 폴더를 고른 뒤 **변경 내용 비교**를 실행합니다. 비교는 파일과 메모를 변경하지 않습니다. 목록의 기본 작업은 보류이며, 항목별 방향을 선택하고 **선택 항목 동기화**를 눌러야 반영됩니다. 주제·분류 본문은 각 폴더의 `_index.md`에 저장됩니다. Vault에만 있는 파일이나 빈 폴더는 가져올 상위 항목을 지정할 수 있습니다.
+
+충돌·중복 ID·기존 무표식 `_index.md`는 자동 덮어쓰지 않습니다. 적용 결과의 실패 항목은 다시 비교합니다. 기존 파일을 바꾸기 전에 데스크톱 userData의 `vault-backups`에 복구 사본을 남깁니다. 복구는 프로그램을 종료한 뒤 원본을 따로 보관하고 해당 사본을 원래 위치에 복사한 후 재비교합니다. 실제 사용자 Vault로 테스트하지 말고 `D:\tmp\nownote-239-vault-qa` 같은 격리 폴더와 `NOWNOTE_DESKTOP_USER_DATA_DIR`을 사용합니다.
+
+검증 명령: `node --test tests/vault-*.test.cjs tests/store-file.test.cjs`, `node scripts/check-vault-sync.mjs`. 후자는 임시 Vault/userData만 생성·삭제합니다.
+
 ## 빌드 산출물 관리
 
 아래 폴더는 생성물이라 Git에 올리지 않습니다.

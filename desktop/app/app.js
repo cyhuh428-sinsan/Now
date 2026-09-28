@@ -2486,6 +2486,11 @@ let groupMessengerRefreshRunning = false;
 let groupMessengerLastRefreshAt = 0;
 let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
+let vaultInfo = null;
+let vaultPreview = null;
+let vaultBusy = false;
+let vaultResultText = "";
+const vaultChoices = new Map();
 let webLoginMode = "login";
 let pendingCaptureAttachment = null;
 let pendingMessengerAttachment = null;
@@ -3468,6 +3473,14 @@ const elements = {
   desktopStorageRow: $("#desktopStorageRow"),
   desktopStorageStatus: $("#desktopStorageStatus"),
   desktopStoragePath: $("#desktopStoragePath"),
+  vaultSettingsRow: $("#vaultSettingsRow"),
+  vaultPath: $("#vaultPath"),
+  vaultChooseBtn: $("#vaultChooseBtn"),
+  vaultDirectionSelect: $("#vaultDirectionSelect"),
+  vaultPreviewBtn: $("#vaultPreviewBtn"),
+  vaultApplyBtn: $("#vaultApplyBtn"),
+  vaultStatus: $("#vaultStatus"),
+  vaultItems: $("#vaultItems"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
   settingsHelpBtn: $("#settingsHelpBtn"),
@@ -5653,6 +5666,15 @@ function bindEvents() {
     closeSettingsPopup();
   });
 
+  elements.vaultChooseBtn?.addEventListener("click", chooseVaultFolder);
+  elements.vaultPreviewBtn?.addEventListener("click", previewVaultChanges);
+  elements.vaultApplyBtn?.addEventListener("click", applyVaultChanges);
+  elements.vaultDirectionSelect?.addEventListener("change", () => {
+    vaultPreview = null;
+    vaultChoices.clear();
+    renderVaultSettings();
+  });
+
   elements.languageSelect.addEventListener("change", () => {
     state.settings.language = elements.languageSelect.value;
     persistSettings();
@@ -6227,6 +6249,7 @@ function toggleSettings() {
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
     refreshMailSettingsStatus();
+    refreshVaultStatus();
   } else {
     elements.settingsView.classList.add("hidden");
   }
@@ -6265,6 +6288,220 @@ function renderDesktopStorageStatus() {
   elements.desktopStoragePath.textContent = `${desktopStorageInfo?.path || ""}${updatedText}`;
 }
 
+function vaultText(key) {
+  const copies = {
+    ko: {
+      description: "로컬 폴더의 Markdown과 선택한 메모만 비교·동기화합니다.",
+      noPath: "선택된 폴더 없음", choose: "폴더 선택", both: "양방향",
+      compare: "변경 내용 비교", apply: "선택 항목 동기화", skip: "보류",
+      targetTopic: "가져올 주제 선택", targetCategory: "가져올 분류 선택",
+      compareBodies: "양쪽 내용 비교", latest: "최근 성공",
+      compared: "개 항목 비교 완료", applied: "적용", failed: "실패", skipped: "건너뜀",
+      local: "NowNote", remote: "Obsidian",
+    },
+    en: {
+      description: "Compare local Markdown and sync only selected notes.",
+      noPath: "No folder selected", choose: "Choose Folder", both: "Both directions",
+      compare: "Compare Changes", apply: "Sync Selected Items", skip: "Skip",
+      targetTopic: "Select target topic", targetCategory: "Select target category",
+      compareBodies: "Compare both versions", latest: "Last success",
+      compared: "items compared", applied: "Applied", failed: "Failed", skipped: "Skipped",
+      local: "NowNote", remote: "Obsidian",
+    },
+  };
+  return copies[state.settings.language === "en" ? "en" : "ko"][key] || key;
+}
+
+function vaultClassification(key) {
+  const labels = {
+    ko: { unchanged: "변경 없음", unlinkedMatch: "연결 대기", localChanged: "NowNote 변경", vaultChanged: "Vault 변경", conflict: "충돌", missingVault: "Vault 파일 누락", missingLocal: "NowNote 메모 누락", newLocal: "새 NowNote 메모", unlinked: "미연결", depthExceeded: "계층 초과", skipped: "제외" },
+    en: { unchanged: "Unchanged", unlinkedMatch: "Link pending", localChanged: "NowNote changed", vaultChanged: "Vault changed", conflict: "Conflict", missingVault: "Vault file missing", missingLocal: "NowNote note missing", newLocal: "New NowNote note", unlinked: "Unlinked", depthExceeded: "Depth exceeded", skipped: "Excluded" },
+  };
+  return labels[state.settings.language === "en" ? "en" : "ko"][key] || key;
+}
+
+function vaultReason(key) {
+  const labels = {
+    ko: { tooLarge: "파일 크기 초과", invalidMarkdown: "Markdown 메타데이터 오류", duplicateIdentityOrPath: "ID 또는 경로 중복", targetPathOccupied: "대상 경로 사용 중", kindMismatch: "메모 종류 불일치", localExcluded: "암호화 또는 삭제 메모" },
+    en: { tooLarge: "File too large", invalidMarkdown: "Invalid Markdown metadata", duplicateIdentityOrPath: "Duplicate ID or path", targetPathOccupied: "Target path occupied", kindMismatch: "Note kind mismatch", localExcluded: "Encrypted or deleted note" },
+  };
+  return labels[state.settings.language === "en" ? "en" : "ko"][key] || key;
+}
+
+async function refreshVaultStatus() {
+  if (!isDesktopClient() || !window.nownoteDesktop?.vault) return;
+  try {
+    vaultInfo = await window.nownoteDesktop.vault.status();
+    vaultResultText = "";
+  } catch (error) {
+    vaultResultText = error.message;
+  }
+  renderVaultSettings();
+}
+
+async function chooseVaultFolder() {
+  if (!isDesktopClient() || vaultBusy) return;
+  vaultBusy = true;
+  renderVaultSettings();
+  try {
+    const selected = await window.nownoteDesktop.vault.choose();
+    if (selected) {
+      vaultInfo = selected;
+      vaultPreview = null;
+      vaultChoices.clear();
+      vaultResultText = "";
+    }
+  } catch (error) {
+    vaultResultText = error.message;
+    showNotice(error.message, "error");
+  } finally {
+    vaultBusy = false;
+    renderVaultSettings();
+  }
+}
+
+async function previewVaultChanges() {
+  if (!isDesktopClient() || !vaultInfo?.path || vaultBusy) return;
+  vaultBusy = true;
+  vaultPreview = null;
+  vaultChoices.clear();
+  renderVaultSettings();
+  try {
+    vaultPreview = await window.nownoteDesktop.vault.preview({ direction: elements.vaultDirectionSelect.value });
+    vaultResultText = `${vaultPreview.items.length} ${vaultText("compared")}`;
+  } catch (error) {
+    vaultResultText = error.message;
+    showNotice(error.message, "error");
+  } finally {
+    vaultBusy = false;
+    renderVaultSettings();
+  }
+}
+
+async function applyVaultChanges() {
+  if (!isDesktopClient() || !vaultPreview || vaultBusy) return;
+  const selections = [...vaultChoices].filter(([, choice]) => choice.action !== "skip")
+    .map(([itemId, choice]) => ({ itemId, action: choice.action, targetParentId: choice.targetParentId || undefined }));
+  if (!selections.length) return;
+  vaultBusy = true;
+  renderVaultSettings();
+  try {
+    const result = await window.nownoteDesktop.vault.apply({ planId: vaultPreview.planId, selections });
+    vaultResultText = `${vaultText("applied")} ${result.applied.length} · ${vaultText("failed")} ${result.failed.length} · ${vaultText("skipped")} ${result.skipped.length}`;
+    if (result.failed.length) {
+      vaultResultText += ` · ${result.failed.map((item) => item.message).join("; ")}`;
+      showNotice(vaultResultText, "error");
+    }
+    if (result.applied.some((item) => selections.find((choice) => choice.itemId === item.itemId)?.action === "toNowNote")) {
+      const refreshed = await readStorage(STORAGE_KEY);
+      state.data = typeof refreshed === "string" ? JSON.parse(refreshed) : refreshed;
+      normalizeData();
+      render();
+    }
+    vaultInfo = await window.nownoteDesktop.vault.status();
+    vaultPreview = null;
+    vaultChoices.clear();
+  } catch (error) {
+    vaultResultText = error.message;
+    showNotice(error.message, "error");
+  } finally {
+    vaultBusy = false;
+    renderVaultSettings();
+  }
+}
+
+function renderVaultSettings() {
+  if (!elements.vaultSettingsRow) return;
+  const available = isDesktopClient() && Boolean(window.nownoteDesktop?.vault);
+  elements.vaultSettingsRow.classList.toggle("hidden", !available);
+  if (!available) return;
+  $("#vaultSettingsDesc").textContent = vaultText("description");
+  elements.vaultChooseBtn.textContent = vaultText("choose");
+  elements.vaultPreviewBtn.textContent = vaultText("compare");
+  elements.vaultApplyBtn.textContent = vaultText("apply");
+  elements.vaultDirectionSelect.querySelector('[value="both"]').textContent = vaultText("both");
+  elements.vaultPath.textContent = vaultInfo?.path || vaultText("noPath");
+  elements.vaultPath.title = vaultInfo?.path || "";
+  elements.vaultStatus.textContent = vaultResultText || (vaultInfo?.lastSuccessAt ? `${vaultText("latest")}: ${formatDateTime(vaultInfo.lastSuccessAt)}` : "");
+  elements.vaultChooseBtn.disabled = vaultBusy;
+  elements.vaultPreviewBtn.disabled = vaultBusy || !vaultInfo?.path;
+  elements.vaultApplyBtn.disabled = vaultBusy || !vaultPreview || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+  if (!vaultPreview) {
+    elements.vaultItems.replaceChildren();
+    return;
+  }
+  const topics = flattenTree(state.data.tree).filter((node) => node.level === 1 && node.status !== "deleted");
+  const categories = flattenTree(state.data.tree).filter((node) => node.level === 2 && node.status !== "deleted");
+  const rows = vaultPreview.items.map((item) => {
+    const row = document.createElement("div");
+    row.className = "vault-item";
+    const name = document.createElement("div");
+    name.className = "vault-item-name";
+    const strong = document.createElement("strong");
+    strong.textContent = item.local?.title || item.vault?.title || item.paths.vault || item.id;
+    const meta = document.createElement("small");
+    meta.textContent = `${vaultClassification(item.classification)}${item.reason ? ` · ${vaultReason(item.reason)}` : ""} · ${item.paths.local || item.paths.vault || ""}`;
+    name.append(strong, meta);
+    const controls = document.createElement("div");
+    controls.className = "vault-item-controls";
+    const action = document.createElement("select");
+    action.className = "settings-select";
+    action.setAttribute("aria-label", `${strong.textContent} 동기화 작업`);
+    const blocked = item.reason || item.classification === "skipped";
+    const choices = [["skip", vaultText("skip")]];
+    if (!blocked && item.local && elements.vaultDirectionSelect.value !== "fromVault") choices.push(["toVault", "NowNote → Obsidian"]);
+    if (!blocked && item.vault && elements.vaultDirectionSelect.value !== "toVault") choices.push(["toNowNote", "Obsidian → NowNote"]);
+    for (const [value, label] of choices) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      action.append(option);
+    }
+    const saved = vaultChoices.get(item.itemId) || { action: "skip", targetParentId: "" };
+    if (!choices.some(([value]) => value === saved.action)) saved.action = "skip";
+    action.value = saved.action;
+    vaultChoices.set(item.itemId, saved);
+    const target = document.createElement("select");
+    target.className = "settings-select";
+    const indexParts = (item.paths.vault || "").split("/");
+    const indexKind = indexParts.at(-1) === "_index.md" ? indexParts.length - 1 : 0;
+    target.setAttribute("aria-label", `${strong.textContent} 가져올 상위 항목`);
+    const empty = document.createElement("option");
+    empty.value = "";
+    empty.textContent = vaultText(indexKind === 2 ? "targetTopic" : "targetCategory");
+    target.append(empty);
+    for (const category of indexKind === 2 ? topics : categories) {
+      const option = document.createElement("option");
+      option.value = category.id;
+      option.textContent = category.title;
+      target.append(option);
+    }
+    target.value = saved.targetParentId || "";
+    target.classList.toggle("hidden", Boolean(item.local) || indexKind === 1 || action.value !== "toNowNote");
+    action.addEventListener("change", () => {
+      saved.action = action.value;
+      target.classList.toggle("hidden", Boolean(item.local) || indexKind === 1 || action.value !== "toNowNote");
+      elements.vaultApplyBtn.disabled = ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+    });
+    target.addEventListener("change", () => { saved.targetParentId = target.value; });
+    controls.append(action, target);
+    row.append(name, controls);
+    if (item.classification === "conflict") {
+      const details = document.createElement("details");
+      details.className = "vault-item-details";
+      const summary = document.createElement("summary");
+      summary.textContent = vaultText("compareBodies");
+      const content = document.createElement("pre");
+      content.textContent = `${vaultText("local")}:\n${item.local?.body || ""}\n\n${vaultText("remote")}:\n${item.vault?.body || ""}`;
+      details.append(summary, content);
+      row.append(details);
+    }
+    return row;
+  });
+  elements.vaultItems.replaceChildren(...rows);
+  elements.vaultApplyBtn.disabled = vaultBusy || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+}
+
 function renderSettings() {
   renderLanguageOptions();
   elements.languageSelect.value = state.settings.language;
@@ -6285,6 +6522,7 @@ function renderSettings() {
   renderServerSettings();
   renderLlmVoiceSettings();
   renderDesktopStorageStatus();
+  renderVaultSettings();
   renderShortcutEditor();
   renderContextMenuSettings();
   renderFeatureSettings();

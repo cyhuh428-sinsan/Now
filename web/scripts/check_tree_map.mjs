@@ -347,6 +347,12 @@ async function main() {
     await page.send("Page.navigate", { url: appUrl });
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#treeMapBtn'))", "지식맵 버튼");
+    const webVaultHidden = await evaluate(page, `(() => {
+      renderVaultSettings();
+      const panel = document.querySelector('#vaultSettingsRow');
+      return !window.nownoteDesktop && panel?.classList.contains('hidden') && getComputedStyle(panel).display === 'none';
+    })()`);
+    assert(webVaultHidden, "Web에서 설치형 Vault 패널 또는 브리지가 노출되면 안 됩니다.");
 
     // 트리를 만든다:
     //   주제A(레벨1) - 분류A1(레벨2, 메모A1a/A1b) - 분류A2(레벨2, 메모A2a/A2b)  => 7개 노드
