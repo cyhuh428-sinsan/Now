@@ -649,6 +649,30 @@
             </div>
           </section>
 
+          <section id="vaultSettingsRow" class="settings-row vault-settings-row hidden">
+            <div>
+              <h3 id="vaultSettingsTitle">Obsidian Vault</h3>
+              <p id="vaultSettingsDesc">로컬 폴더의 Markdown과 선택한 메모만 비교·동기화합니다.</p>
+            </div>
+            <div class="vault-settings-panel">
+              <div class="vault-settings-toolbar">
+                <span id="vaultPath" class="desktop-storage-path">선택된 폴더 없음</span>
+                <button id="vaultChooseBtn" class="secondary-btn" type="button">폴더 선택</button>
+              </div>
+              <div class="vault-settings-toolbar">
+                <select id="vaultDirectionSelect" class="settings-select" aria-label="Vault 동기화 방향">
+                  <option value="both">양방향</option>
+                  <option value="toVault">NowNote → Obsidian</option>
+                  <option value="fromVault">Obsidian → NowNote</option>
+                </select>
+                <button id="vaultPreviewBtn" class="secondary-btn" type="button">변경 내용 비교</button>
+                <button id="vaultApplyBtn" class="primary-btn" type="button" disabled>선택 항목 동기화</button>
+              </div>
+              <p id="vaultStatus" class="vault-status" role="status"></p>
+              <div id="vaultItems" class="vault-items"></div>
+            </div>
+          </section>
+
           <section class="settings-row server-settings-row">
             <div>
               <h3 id="serverSettingTitle">서버 연결</h3>

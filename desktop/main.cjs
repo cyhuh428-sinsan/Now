@@ -1,11 +1,17 @@
-const { app, BrowserWindow, Menu, ipcMain, shell } = require("electron");
-const fs = require("fs");
+const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
+const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
+const { createVaultService } = require("./vault-service.cjs");
 
 const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
 const DESKTOP_STORE_VERSION = 1;
+const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1"]);
+
+function assertRendererStoreKey(key) {
+  if (!RENDERER_STORE_KEYS.has(key)) throw new Error("Desktop storage key is not available to the renderer");
+}
 
 if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.NOWNOTE_DESKTOP_USER_DATA_DIR));
@@ -15,35 +21,8 @@ function desktopStorePath() {
   return path.join(app.getPath("userData"), "nownote-desktop-store.json");
 }
 
-function defaultDesktopStore() {
-  return {
-    version: DESKTOP_STORE_VERSION,
-    updatedAt: null,
-    values: {},
-  };
-}
-
 function readDesktopStore() {
-  const storePath = desktopStorePath();
-  try {
-    if (!fs.existsSync(storePath)) {
-      return defaultDesktopStore();
-    }
-    const parsed = JSON.parse(fs.readFileSync(storePath, "utf8"));
-    return {
-      ...defaultDesktopStore(),
-      ...parsed,
-      values: parsed && typeof parsed.values === "object" && parsed.values ? parsed.values : {},
-    };
-  } catch {
-    return defaultDesktopStore();
-  }
-}
-
-function writeDesktopStore(store) {
-  const storePath = desktopStorePath();
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  fs.writeFileSync(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf8");
+  return readStoreFile(desktopStorePath()).store;
 }
 
 function registerDesktopStorageHandlers() {
@@ -58,24 +37,59 @@ function registerDesktopStorageHandlers() {
   });
 
   ipcMain.handle("nownote:desktop-store-read", (_event, key) => {
+    assertRendererStoreKey(key);
     const store = readDesktopStore();
     return store.values[key] ?? null;
   });
 
   ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
-    const store = readDesktopStore();
-    store.values[key] = value;
-    store.updatedAt = new Date().toISOString();
-    writeDesktopStore(store);
-    return { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+    assertRendererStoreKey(key);
+    const result = updateStoreFile(desktopStorePath(), (store) => {
+      store.values[key] = value;
+      return store;
+    });
+    return { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
   });
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
-    const store = readDesktopStore();
-    store.values[key] = value;
-    store.updatedAt = new Date().toISOString();
-    writeDesktopStore(store);
-    event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: store.updatedAt };
+    try {
+      assertRendererStoreKey(key);
+      const result = updateStoreFile(desktopStorePath(), (store) => {
+        store.values[key] = value;
+        return store;
+      });
+      event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
+    } catch (error) {
+      event.returnValue = { ok: false, error: error.message };
+    }
+  });
+}
+
+function registerVaultHandlers() {
+  const service = createVaultService({
+    storePath: desktopStorePath(),
+    backupDir: path.join(app.getPath("userData"), "vault-backups"),
+  });
+  ipcMain.handle("nownote:vault-choose", async () => {
+    const focused = BrowserWindow.getFocusedWindow();
+    const options = {
+      title: "Obsidian Vault 선택",
+      properties: ["openDirectory"],
+    };
+    const { canceled, filePaths } = focused ? await dialog.showOpenDialog(focused, options) : await dialog.showOpenDialog(options);
+    if (canceled || !filePaths?.[0]) return null;
+    return service.setVaultPath(filePaths[0]);
+  });
+  ipcMain.handle("nownote:vault-status", () => service.vaultStatus());
+  ipcMain.handle("nownote:vault-preview", (_event, input) => {
+    if (!input || !["toVault", "fromVault", "both"].includes(input.direction)) throw new Error("Invalid Vault direction");
+    return service.previewVault({ direction: input.direction });
+  });
+  ipcMain.handle("nownote:vault-apply", (_event, input) => {
+    if (!input || typeof input.planId !== "string" || !Array.isArray(input.selections) || input.selections.length > 5000) {
+      throw new Error("Invalid Vault selections");
+    }
+    return service.applyVault({ planId: input.planId, selections: input.selections });
   });
 }
 
@@ -189,6 +203,7 @@ function createMenu() {
 
 app.whenReady().then(() => {
   registerDesktopStorageHandlers();
+  registerVaultHandlers();
   Menu.setApplicationMenu(createMenu());
   createMainWindow();
 
