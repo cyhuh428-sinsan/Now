@@ -72,22 +72,83 @@ test("preview is read-only and explicit apply exports a note with a durable base
   assert.equal(createVaultService({ storePath, backupDir }).vaultStatus().path, root);
 });
 
-test("desktop-store failure after a Vault write does not advance the baseline", async (t) => {
+test("a corrupt desktop store is reported as blocking Vault sync", async (t) => {
+  const { storePath, service } = await fixture(t, [topic()]);
+  await fs.writeFile(storePath, "{invalid json");
+  assert.equal(service.vaultStatus().recoveryRequired, true);
+  await assert.rejects(service.previewVault({ direction: "both" }));
+});
+
+test("desktop-store failure after a Vault write preserves the result for manual recovery", async (t) => {
   const { root, storePath, backupDir } = await fixture(t, [topic()]);
   const service = createVaultService({ storePath, backupDir, beforeStoreCommit: async () => { throw new Error("injected store failure"); } });
   const plan = await service.previewVault({ direction: "toVault" });
   const result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
   assert.equal(result.failed.length, 1);
   assert.equal(result.applied.length, 0);
-  assert.deepEqual(await fs.readdir(path.join(root, "Topic")), []);
-  const retained = (await fs.readdir(root)).filter((name) => name.startsWith(".nownote-"));
-  assert.equal(retained.length, 1);
-  assert.match(retained[0], /^\.nownote-.*\.backup$/);
-  assert.match(await fs.readFile(path.join(root, retained[0]), "utf8"), /nownote_id: t/);
+  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /nownote_id: t/);
+  assert.equal(service.vaultStatus().recoveryRequired, true);
   const baselines = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines;
   assert.deepEqual(baselines, {});
-  const next = await service.previewVault({ direction: "both" });
-  assert.equal(next.items.find((item) => item.id === "t").classification, "conflict");
+  await assert.rejects(service.previewVault({ direction: "both" }), /recovery|journal/i);
+});
+
+test("uncertain Vault write remains blocked across service restart", async (t) => {
+  const { root, storePath, backupDir } = await fixture(t, [topic()]);
+  const service = createVaultService({ storePath, backupDir, beforeStoreCommit: async () => {
+    throw new Error("injected store failure");
+  } });
+  const plan = await service.previewVault({ direction: "toVault" });
+  const result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+
+  assert.equal(result.applied.length, 0);
+  assert.equal(result.failed.length, 1);
+  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /nownote_id: t/);
+  assert.equal(service.vaultStatus().recoveryRequired, true);
+
+  const restarted = createVaultService({ storePath, backupDir });
+  assert.equal(restarted.vaultStatus().recoveryRequired, true);
+  await assert.rejects(restarted.previewVault({ direction: "both" }), /recovery|journal/i);
+  await assert.rejects(restarted.setVaultPath(root), /recovery|journal/i);
+  assert.deepEqual(JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.vault.v1"].baselines, {});
+});
+
+test("manual recovery confirmation rejects mixed state and accepts a verified rollback", async (t) => {
+  const { root, storePath, backupDir } = await fixture(t, [topic()]);
+  const service = createVaultService({ storePath, backupDir, beforeStoreCommit: async () => {
+    throw new Error("injected store failure");
+  } });
+  const plan = await service.previewVault({ direction: "toVault" });
+  await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  const restarted = createVaultService({ storePath, backupDir });
+  const operationId = restarted.vaultStatus().recovery.operationId;
+
+  assert.equal((await restarted.recoveryStatus()).reason, "mixedState");
+  await assert.rejects(restarted.confirmRecovery({ operationId }), /recovery state/i);
+  await fs.unlink(path.join(root, "Topic", "_index.md"));
+  const status = await restarted.recoveryStatus();
+  assert.equal(status.beforeMatches, true);
+  assert.equal(status.afterMatches, false);
+  await restarted.confirmRecovery({ operationId });
+  assert.equal(restarted.vaultStatus().recoveryRequired, false);
+  assert.ok(await restarted.previewVault({ direction: "both" }));
+});
+
+test("manual recovery confirmation accepts a fully committed result after interrupted acknowledgement", async (t) => {
+  const { root, storePath, backupDir } = await fixture(t, [topic()]);
+  const service = createVaultService({ storePath, backupDir, afterStoreCommit: async () => {
+    throw new Error("injected acknowledgement failure");
+  } });
+  const plan = await service.previewVault({ direction: "toVault" });
+  const result = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
+  assert.equal(result.recoveryRequired, true);
+  const restarted = createVaultService({ storePath, backupDir });
+  const status = await restarted.recoveryStatus();
+  assert.equal(status.afterMatches, true);
+  await restarted.confirmRecovery({ operationId: status.record.operationId });
+  assert.equal(restarted.vaultStatus().recoveryRequired, false);
+  assert.equal((await restarted.previewVault({ direction: "both" })).items.find((item) => item.id === "t").classification, "unchanged");
+  assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /nownote_id: t/);
 });
 
 test("a completed write reports a temporary cleanup warning without losing its baseline", async (t) => {
@@ -126,7 +187,7 @@ test("a successful replacement reports the retained original path", async (t) =>
   assert.match(await fs.readFile(path.join(root, "Topic", "_index.md"), "utf8"), /updated body/);
 });
 
-test("desktop-store failure after a rename restores the original Vault file", async (t) => {
+test("desktop-store failure after a rename retains a recoverable original", async (t) => {
   const { root, storePath, backupDir } = await fixture(t, [topic()]);
   const initial = createVaultService({ storePath, backupDir });
   const first = await initial.previewVault({ direction: "toVault" });
@@ -140,8 +201,12 @@ test("desktop-store failure after a rename restores the original Vault file", as
   const plan = await service.previewVault({ direction: "toVault" });
   const failed = await service.applyVault({ planId: plan.planId, selections: [{ itemId: "t", action: "toVault" }] });
   assert.equal(failed.failed.length, 1);
-  assert.deepEqual(await fs.readFile(originalPath), original);
-  await assert.rejects(fs.readFile(path.join(root, "Renamed", "_index.md")), { code: "ENOENT" });
+  assert.equal(service.vaultStatus().recoveryRequired, true);
+  await assert.rejects(service.previewVault({ direction: "both" }), /recovery|journal/i);
+  await assert.rejects(fs.readFile(originalPath), { code: "ENOENT" });
+  assert.match(await fs.readFile(path.join(root, "Renamed", "_index.md"), "utf8"), /Renamed/);
+  const backups = await Promise.all((await fs.readdir(backupDir)).map((name) => fs.readFile(path.join(backupDir, name))));
+  assert.ok(backups.some((backup) => backup.equals(original)));
 });
 
 test("a file modified after preview is never overwritten or advanced", async (t) => {
@@ -197,7 +262,7 @@ test("unlinked Vault notes require an explicit parent and do not auto-import", a
   const rejected = await service.applyVault({ planId: plan.planId, selections: [{ itemId: unlinked.itemId, action: "toNowNote" }] });
   assert.equal(rejected.failed.length, 1);
   const accepted = await service.applyVault({ planId: plan.planId, selections: [{ itemId: unlinked.itemId, action: "toNowNote", targetParentId: "c" }] });
-  assert.equal(accepted.applied.length, 1);
+  assert.equal(accepted.applied.length, 1, JSON.stringify(accepted.failed));
   const tree = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.web.v1"].tree;
   assert.equal(tree[0].children[0].children[0].content, "new note\n");
   const second = await service.previewVault({ direction: "both" });
@@ -244,7 +309,7 @@ test("the selected direction cannot be bypassed and deep files need a target cat
   const missingParent = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote" }] });
   assert.equal(missingParent.failed.length, 1);
   const accepted = await service.applyVault({ planId: plan.planId, selections: [{ itemId: deep.itemId, action: "toNowNote", targetParentId: "c" }] });
-  assert.equal(accepted.applied.length, 1);
+  assert.equal(accepted.applied.length, 1, JSON.stringify(accepted.failed));
 });
 
 test("an empty Vault folder can be explicitly imported as a topic and gain an index", async (t) => {
@@ -255,7 +320,7 @@ test("an empty Vault folder can be explicitly imported as a topic and gain an in
   assert.equal(candidate.classification, "unlinked");
   assert.equal(await fs.readdir(path.join(root, "Empty Topic")).then((names) => names.length), 0);
   const applied = await service.applyVault({ planId: preview.planId, selections: [{ itemId: candidate.itemId, action: "toNowNote" }] });
-  assert.equal(applied.applied.length, 1);
+  assert.equal(applied.applied.length, 1, JSON.stringify(applied.failed));
   const tree = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.web.v1"].tree;
   assert.equal(tree[0].title, "Empty Topic");
   assert.match(await fs.readFile(path.join(root, "Empty Topic", "_index.md"), "utf8"), /nownote_kind: topic/);
@@ -270,7 +335,7 @@ test("an unmanaged category index imports beneath the selected topic", async (t)
   const preview = await service.previewVault({ direction: "fromVault" });
   const candidate = preview.items.find((item) => item.paths.vault === "Topic/Vault Category/_index.md");
   const applied = await service.applyVault({ planId: preview.planId, selections: [{ itemId: candidate.itemId, action: "toNowNote", targetParentId: "t" }] });
-  assert.equal(applied.applied.length, 1);
+  assert.equal(applied.applied.length, 1, JSON.stringify(applied.failed));
   const tree = JSON.parse(await fs.readFile(storePath, "utf8")).values["nownote.web.v1"].tree;
   assert.equal(tree[0].children[0].title, "Vault Category");
   assert.equal(tree[0].children[0].content, "분류 본문");

@@ -91,6 +91,13 @@ function registerVaultHandlers() {
     }
     return service.applyVault({ planId: input.planId, selections: input.selections });
   });
+  ipcMain.handle("nownote:vault-recovery-status", () => service.recoveryStatus());
+  ipcMain.handle("nownote:vault-confirm-recovery", (_event, input) => {
+    if (!input || typeof input.operationId !== "string" || !/^[a-f0-9-]{36}$/i.test(input.operationId)) {
+      throw new Error("Invalid Vault recovery operation ID");
+    }
+    return service.confirmRecovery({ operationId: input.operationId });
+  });
 }
 
 function loadAppFile(filePath) {

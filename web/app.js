@@ -2478,6 +2478,7 @@ let hostedWebSyncSuspended = false;
 let desktopStorageInfo = null;
 let vaultInfo = null;
 let vaultPreview = null;
+let vaultRecoveryInfo = null;
 let vaultBusy = false;
 let vaultResultText = "";
 const vaultChoices = new Map();
@@ -3470,6 +3471,11 @@ const elements = {
   vaultPreviewBtn: $("#vaultPreviewBtn"),
   vaultApplyBtn: $("#vaultApplyBtn"),
   vaultStatus: $("#vaultStatus"),
+  vaultRecoveryPanel: $("#vaultRecoveryPanel"),
+  vaultRecoveryMessage: $("#vaultRecoveryMessage"),
+  vaultRecoveryDetails: $("#vaultRecoveryDetails"),
+  vaultRefreshRecoveryBtn: $("#vaultRefreshRecoveryBtn"),
+  vaultConfirmRecoveryBtn: $("#vaultConfirmRecoveryBtn"),
   vaultItems: $("#vaultItems"),
   sidebarAssistToggle: $("#sidebarAssistToggle"),
   resetSettingsBtn: $("#resetSettingsBtn"),
@@ -5659,6 +5665,8 @@ function bindEvents() {
   elements.vaultChooseBtn?.addEventListener("click", chooseVaultFolder);
   elements.vaultPreviewBtn?.addEventListener("click", previewVaultChanges);
   elements.vaultApplyBtn?.addEventListener("click", applyVaultChanges);
+  elements.vaultRefreshRecoveryBtn?.addEventListener("click", refreshVaultStatus);
+  elements.vaultConfirmRecoveryBtn?.addEventListener("click", confirmVaultRecovery);
   elements.vaultDirectionSelect?.addEventListener("change", () => {
     vaultPreview = null;
     vaultChoices.clear();
@@ -6283,6 +6291,10 @@ function vaultText(key) {
       compared: "개 항목 비교 완료", applied: "적용", failed: "실패", skipped: "건너뜀",
       cleanupPending: "임시 파일 정리 필요",
       retainedOriginal: "보존된 원본",
+      recoveryRequired: "Vault 작업 결과 확인 필요. 변경 전 상태 또는 양쪽 완료 상태로 직접 확인한 뒤 다시 검사하세요.",
+      recoveryReady: "현재 파일과 저장소가 기록된 상태와 일치합니다. 확인하면 동기화 차단을 해제합니다.",
+      recoveryCheck: "다시 검사", recoveryConfirm: "복구 확인",
+      recoveryPrompt: "Vault 파일과 복구 사본을 직접 확인했습니까? 작업 기록을 해제합니다.",
       local: "NowNote", remote: "Obsidian",
     },
     en: {
@@ -6294,6 +6306,10 @@ function vaultText(key) {
       compared: "items compared", applied: "Applied", failed: "Failed", skipped: "Skipped",
       cleanupPending: "Temporary file cleanup needed",
       retainedOriginal: "Retained original",
+      recoveryRequired: "Vault operation requires review. Restore the previous state or complete both sides, then check again.",
+      recoveryReady: "Vault and store match the recorded state. Confirm to unlock synchronization.",
+      recoveryCheck: "Check Again", recoveryConfirm: "Confirm Recovery",
+      recoveryPrompt: "Have you reviewed the Vault file and recovery copies? This clears the operation record.",
       local: "NowNote", remote: "Obsidian",
     },
   };
@@ -6320,9 +6336,12 @@ async function refreshVaultStatus() {
   if (!isDesktopClient() || !window.nownoteDesktop?.vault) return;
   try {
     vaultInfo = await window.nownoteDesktop.vault.status();
+    vaultRecoveryInfo = vaultInfo?.recoveryRequired ? await window.nownoteDesktop.vault.recoveryStatus() : null;
     vaultResultText = "";
   } catch (error) {
     vaultResultText = error.message;
+    vaultInfo = { ...vaultInfo, recoveryRequired: true };
+    vaultRecoveryInfo = null;
   }
   renderVaultSettings();
 }
@@ -6335,6 +6354,7 @@ async function chooseVaultFolder() {
     const selected = await window.nownoteDesktop.vault.choose();
     if (selected) {
       vaultInfo = selected;
+      vaultRecoveryInfo = null;
       vaultPreview = null;
       vaultChoices.clear();
       vaultResultText = "";
@@ -6342,6 +6362,13 @@ async function chooseVaultFolder() {
   } catch (error) {
     vaultResultText = error.message;
     showNotice(error.message, "error");
+    try {
+      vaultInfo = await window.nownoteDesktop.vault.status();
+      vaultRecoveryInfo = vaultInfo?.recoveryRequired ? await window.nownoteDesktop.vault.recoveryStatus() : null;
+    } catch {
+      vaultInfo = { ...vaultInfo, recoveryRequired: true };
+      vaultRecoveryInfo = null;
+    }
   } finally {
     vaultBusy = false;
     renderVaultSettings();
@@ -6393,8 +6420,36 @@ async function applyVaultChanges() {
       render();
     }
     vaultInfo = await window.nownoteDesktop.vault.status();
+    vaultRecoveryInfo = vaultInfo?.recoveryRequired ? await window.nownoteDesktop.vault.recoveryStatus() : null;
     vaultPreview = null;
     vaultChoices.clear();
+  } catch (error) {
+    vaultResultText = error.message;
+    showNotice(error.message, "error");
+    vaultPreview = null;
+    vaultChoices.clear();
+    try {
+      vaultInfo = await window.nownoteDesktop.vault.status();
+      vaultRecoveryInfo = vaultInfo?.recoveryRequired ? await window.nownoteDesktop.vault.recoveryStatus() : null;
+    } catch {
+      vaultInfo = { ...vaultInfo, recoveryRequired: true };
+      vaultRecoveryInfo = null;
+    }
+  } finally {
+    vaultBusy = false;
+    renderVaultSettings();
+  }
+}
+
+async function confirmVaultRecovery() {
+  const record = vaultRecoveryInfo?.record;
+  if (!record || !vaultInfo?.recoveryRequired || !vaultRecoveryInfo.beforeMatches && !vaultRecoveryInfo.afterMatches || vaultBusy) return;
+  if (!await confirmAction(vaultText("recoveryPrompt"))) return;
+  vaultBusy = true;
+  renderVaultSettings();
+  try {
+    await window.nownoteDesktop.vault.confirmRecovery({ operationId: record.operationId });
+    await refreshVaultStatus();
   } catch (error) {
     vaultResultText = error.message;
     showNotice(error.message, "error");
@@ -6417,9 +6472,24 @@ function renderVaultSettings() {
   elements.vaultPath.textContent = vaultInfo?.path || vaultText("noPath");
   elements.vaultPath.title = vaultInfo?.path || "";
   elements.vaultStatus.textContent = vaultResultText || (vaultInfo?.lastSuccessAt ? `${vaultText("latest")}: ${formatDateTime(vaultInfo.lastSuccessAt)}` : "");
-  elements.vaultChooseBtn.disabled = vaultBusy;
-  elements.vaultPreviewBtn.disabled = vaultBusy || !vaultInfo?.path;
-  elements.vaultApplyBtn.disabled = vaultBusy || !vaultPreview || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+  const recoveryRequired = Boolean(vaultInfo?.recoveryRequired);
+  elements.vaultRecoveryPanel.classList.toggle("hidden", !recoveryRequired);
+  if (recoveryRequired) {
+    const canConfirm = Boolean(vaultRecoveryInfo?.record && (vaultRecoveryInfo.beforeMatches || vaultRecoveryInfo.afterMatches));
+    elements.vaultRecoveryMessage.textContent = vaultText(canConfirm ? "recoveryReady" : "recoveryRequired");
+    const record = vaultRecoveryInfo?.record || vaultInfo.recovery;
+    elements.vaultRecoveryDetails.textContent = [record?.root, record?.backupDir || vaultInfo.recovery?.backupDir,
+      record?.artifacts?.sourceBackupPath, record?.artifacts?.backupPath,
+      record?.artifacts?.storeBackupPath, record?.artifacts?.preservedPath,
+      record?.artifacts?.tempPath].filter(Boolean).join(" · ");
+    elements.vaultRefreshRecoveryBtn.textContent = vaultText("recoveryCheck");
+    elements.vaultConfirmRecoveryBtn.textContent = vaultText("recoveryConfirm");
+    elements.vaultRefreshRecoveryBtn.disabled = vaultBusy;
+    elements.vaultConfirmRecoveryBtn.disabled = vaultBusy || !canConfirm;
+  }
+  elements.vaultChooseBtn.disabled = vaultBusy || recoveryRequired;
+  elements.vaultPreviewBtn.disabled = vaultBusy || recoveryRequired || !vaultInfo?.path;
+  elements.vaultApplyBtn.disabled = vaultBusy || recoveryRequired || !vaultPreview || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
   if (!vaultPreview) {
     elements.vaultItems.replaceChildren();
     return;
@@ -6475,7 +6545,7 @@ function renderVaultSettings() {
     action.addEventListener("change", () => {
       saved.action = action.value;
       target.classList.toggle("hidden", Boolean(item.local) || indexKind === 1 || action.value !== "toNowNote");
-      elements.vaultApplyBtn.disabled = ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+      elements.vaultApplyBtn.disabled = vaultBusy || vaultInfo?.recoveryRequired || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
     });
     target.addEventListener("change", () => { saved.targetParentId = target.value; });
     controls.append(action, target);
@@ -6493,7 +6563,7 @@ function renderVaultSettings() {
     return row;
   });
   elements.vaultItems.replaceChildren(...rows);
-  elements.vaultApplyBtn.disabled = vaultBusy || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
+  elements.vaultApplyBtn.disabled = vaultBusy || recoveryRequired || ![...vaultChoices.values()].some((choice) => choice.action !== "skip");
 }
 
 function renderSettings() {
