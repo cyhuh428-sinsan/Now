@@ -303,6 +303,25 @@ Export rules:
 - Daily notes and archived daily notes are included together.
 - Both Korean and English Markdown files exported from NowNote can be imported back.
 
+### Manual Obsidian Vault Sync (Windows Desktop)
+
+This is separate from one-time Markdown import and export. The Web and mobile apps cannot access a local Vault folder.
+
+1. In the desktop app, open **Display Settings > Obsidian Vault** and choose a Vault folder. Choosing a folder does not modify its files.
+2. Choose a direction and click **Compare Changes**. The comparison only reads NowNote notes and Vault `.md` files.
+3. Review the paths and classifications. Explicitly choose `NowNote → Obsidian` or `Obsidian → NowNote` for each item; the default is to skip it. A Vault-only file may need a target topic or category.
+4. For a conflict, expand the side-by-side content, choose the version to keep, or skip it. Click **Sync Selected Items**, then review applied and failed counts. Compare again before retrying failures.
+
+Even identical content is shown as **Link Pending** on first contact. Choose a direction and apply it once to record the last successful baseline.
+
+A topic or category becomes a folder with an `_index.md` file. Empty folders appear as candidates but are not linked until selected. The sync never automatically deletes files or rewrites links. Encrypted notes, `.obsidian`, and attachments are excluded. Missing files, filename conflicts, and permission failures are not silently overwritten.
+
+Before changing an existing file, the app saves a recovery copy in `vault-backups` beside the file shown under **Display Settings > PC Local Storage**. To restore, close the app, preserve the current original separately, and copy the recovery file back to its original location. The same applies to a `nownote-desktop-store.json` recovery copy. Compare again after restoration.
+
+To avoid overwriting an external edit, the app also retains the previous file as a hidden `.nownote-*.backup` copy inside the Vault. If a concurrent change is detected, check the copy path shown in the result. A copy of a new file rolled back after a storage failure may remain at the Vault root. These copies are not deleted automatically; keep them until you have checked the sync result and the original.
+
+If the Vault filesystem does not support safe hard links, changes and moves of existing files stop before moving the original. If the result reports a temporary-file cleanup warning, review the sync result and backups before manually removing the indicated hidden `.tmp` file.
+
 ## Encrypted Storage
 
 Knowledge notes can be encrypted note by note when needed.
