@@ -802,9 +802,40 @@ async function runOnce() {
     const realKeyAltRedo = await evaluate(page, "elements.treeContent.value");
     report.realKey = { realKeyUndo, realKeyRedo, realKeyAltRedo };
 
+    report.securityMenu = await evaluate(page, pageScript(`
+      return (async () => {
+        seed("security-menu", "보호할 메모");
+        const states = () => Object.fromEntries(
+          ["encrypt", "lock", "unlock", "decrypt"].map((action) => [action, isContextMenuActionDisabled(action)]),
+        );
+        const plain = states();
+        const selected = getSelectedTreeNode();
+        selected.content = await encryptPlainText("보호할 메모", "test-key");
+        renderTreeEditor();
+        const locked = states();
+        unlockedEncryptedNotes.set(selected.id, { key: "test-key", plain: "보호할 메모" });
+        renderTreeEditor();
+        const unlocked = states();
+        runEditorCommand("lock");
+        const lockWorked = !isEncryptedNodeUnlocked(selected);
+        unlockedEncryptedNotes.set(selected.id, { key: "test-key", plain: "보호할 메모" });
+        await runEditorCommand("decrypt");
+        return { plain, locked, unlocked, lockWorked, decryptWorked: selected.content === "보호할 메모" };
+      })();
+    `));
+
     console.log(JSON.stringify(report, null, 2));
 
     // --- 판정 ---
+    const securityMenu = report.securityMenu;
+    assert(JSON.stringify(securityMenu.plain) === JSON.stringify({ encrypt: false, lock: true, unlock: true, decrypt: true }),
+      `일반 메모 보안 메뉴 상태가 다릅니다: ${JSON.stringify(securityMenu.plain)}`);
+    assert(JSON.stringify(securityMenu.locked) === JSON.stringify({ encrypt: true, lock: true, unlock: false, decrypt: false }),
+      `잠긴 암호화 메모 보안 메뉴 상태가 다릅니다: ${JSON.stringify(securityMenu.locked)}`);
+    assert(JSON.stringify(securityMenu.unlocked) === JSON.stringify({ encrypt: true, lock: false, unlock: true, decrypt: false }),
+      `열린 암호화 메모 보안 메뉴 상태가 다릅니다: ${JSON.stringify(securityMenu.unlocked)}`);
+    assert(securityMenu.lockWorked && securityMenu.decryptWorked, "보안 메뉴 명령이 메모에 적용되지 않았습니다.");
+
     const settings = report.settings;
     assert(settings.ko.title === "실행 취소 단계", `설정 제목이 다릅니다: ${settings.ko.title}`);
     assert(

@@ -13763,10 +13763,13 @@ function isContextMenuActionDisabled(actionId) {
     case "sendMail":
       return !isMailSendEnabled();
     case "encrypt":
+      return isReadOnlyTreeNode(selected) || isEncryptedContent(selected.content);
     case "lock":
+      return !isEncryptedNodeUnlocked(selected);
     case "unlock":
+      return !isEncryptedContent(selected.content) || isEncryptedNodeUnlocked(selected);
     case "decrypt":
-      return true;
+      return isReadOnlyTreeNode(selected) || !isEncryptedContent(selected.content);
     default:
       return false;
   }
@@ -13856,6 +13859,14 @@ function runEditorCommand(actionId) {
       return printCurrentNote();
     case "sendMail":
       return sendCurrentNoteMail();
+    case "encrypt":
+      return encryptSelectedNote();
+    case "lock":
+      return lockSelectedNote();
+    case "unlock":
+      return unlockSelectedNote();
+    case "decrypt":
+      return decryptSelectedNote();
     default:
       return false;
   }
