@@ -344,6 +344,35 @@ void main() {
     });
   });
 
+  group('reportMessengerMessage', () {
+    test('신고 메일을 보낼 수 없으면 재시도 안내를 보여준다', () async {
+      final adapter = _FakeAdapter((options) {
+        expect(options.path, '/api/v1/messenger/rooms/7/reports');
+        return _jsonBody({
+          'detail': 'report delivery unavailable',
+        }, status: 503);
+      });
+
+      await expectLater(
+        ServerMessengerApi.reportMessengerMessage(
+          dio: _dioFor('http://server.test:8750', adapter),
+          settings: _settings(),
+          roomId: 7,
+          messageId: 10,
+          target: 'message',
+          reason: 'spam',
+        ),
+        throwsA(
+          predicate(
+            (error) =>
+                error.toString().contains('신고를 접수하지 못했습니다. 잠시 후 다시 시도하세요') &&
+                !error.toString().contains('report delivery unavailable'),
+          ),
+        ),
+      );
+    });
+  });
+
   group('markMessengerRoomRead', () {
     test('서버 주소가 없으면 요청을 보내지 않는다', () async {
       final adapter = _FakeAdapter((_) {

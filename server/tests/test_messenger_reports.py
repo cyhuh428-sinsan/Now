@@ -1,6 +1,8 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 from types import SimpleNamespace
+from uuid import uuid4
 
 
 @pytest.fixture(autouse=True)
@@ -109,6 +111,44 @@ def test_report_cannot_reference_another_room(client, user_sinsan, user_member, 
         f"/api/v1/messenger/rooms/{room_id}/reports",
         json={**payload, "message_id": outsider_message},
         headers=headers,
+    )
+    assert response.status_code == 404
+    response = client.post(
+        f"/api/v1/messenger/rooms/{outsider_room}/reports",
+        json={**payload, "message_id": outsider_message},
+        headers=headers,
+    )
+    assert response.status_code == 404
+    assert sent == []
+
+
+def test_report_hides_same_group_room_from_nonmember(client, db: Session, user_sinsan, user_member, monkeypatch):
+    from app.services.user_accounts import create_user_account
+
+    third_id = f"third_{uuid4().hex[:8]}"
+    create_user_account(
+        db, owner_id=third_id, password="Aa12345678!", email=f"{third_id}@test.com", group_name="testgroup"
+    )
+    db.commit()
+    reporter_id, reporter_token = user_sinsan
+    sender_id, sender_token = user_member
+    sender_headers = {"X-Now-Web-Session": sender_token}
+    room = client.post(
+        "/api/v1/messenger/rooms",
+        json={"owner_id": sender_id, "member_owner_ids": [third_id]},
+        headers=sender_headers,
+    ).json()["room"]["id"]
+    message_id = client.post(
+        f"/api/v1/messenger/rooms/{room}/messages",
+        json={"owner_id": sender_id, "body": "private"},
+        headers=sender_headers,
+    ).json()["item"]["id"]
+    sent = []
+    monkeypatch.setattr("app.api.messenger.send_messenger_report_email", lambda **kw: sent.append(kw))
+    response = client.post(
+        f"/api/v1/messenger/rooms/{room}/reports",
+        json={"owner_id": reporter_id, "message_id": message_id, "target": "message", "reason": "other"},
+        headers={"X-Now-Web-Session": reporter_token},
     )
     assert response.status_code == 404
     assert sent == []
