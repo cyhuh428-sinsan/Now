@@ -1170,6 +1170,20 @@ body.resizing {
   overflow-wrap: anywhere;
 }
 
+.vault-recovery {
+  border-left: 3px solid var(--warning, #d38a28);
+  padding: 4px 0 4px 10px;
+  overflow-wrap: anywhere;
+}
+
+.vault-recovery p {
+  margin: 0 0 8px;
+}
+
+.vault-recovery button {
+  margin-right: 6px;
+}
+
 .vault-items {
   display: grid;
   max-height: 260px;

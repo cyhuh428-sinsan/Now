@@ -14,5 +14,7 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
     status: () => ipcRenderer.invoke("nownote:vault-status"),
     preview: ({ direction }) => ipcRenderer.invoke("nownote:vault-preview", { direction }),
     apply: ({ planId, selections }) => ipcRenderer.invoke("nownote:vault-apply", { planId, selections }),
+    recoveryStatus: () => ipcRenderer.invoke("nownote:vault-recovery-status"),
+    confirmRecovery: ({ operationId }) => ipcRenderer.invoke("nownote:vault-confirm-recovery", { operationId }),
   },
 });

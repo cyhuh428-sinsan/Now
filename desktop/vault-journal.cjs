@@ -8,7 +8,7 @@ const FIELDS = new Set([
   "preStoreHash", "postStoreHash", "createdAt", "artifacts",
 ]);
 const STEP_FIELDS = new Set(["operation", "relativePath", "from", "to", "preHash", "postHash"]);
-const ARTIFACT_FIELDS = new Set(["backupPath", "pendingPath", "preservedPath", "tempPath"]);
+const ARTIFACT_FIELDS = new Set(["backupPath", "sourceBackupPath", "storeBackupPath", "pendingPath", "preservedPath", "tempPath"]);
 const PHASES = new Set(["prepared", "vaultConfirmed", "storeCommitted", "rollingBack", "recoveryRequired"]);
 const NEXT_PHASES = {
   prepared: new Set(["prepared", "vaultConfirmed", "rollingBack", "recoveryRequired"]),
