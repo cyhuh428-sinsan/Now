@@ -622,6 +622,10 @@ const I18N = {
     "settings.llm.apiKeyLabel": "API 키",
     "settings.llm.ollamaUrlLabel": "Ollama 서버 주소",
     "settings.llm.ollamaModelLabel": "Ollama 모델",
+    "settings.llm.omniUrlLabel": "OmniRoute 엔드포인트",
+    "settings.llm.omniModelLabel": "OmniRoute 모델 또는 Combo",
+    "settings.llm.omniReasoningLabel": "추론 등급",
+    "settings.llm.omniReasoningDefault": "사용 안 함",
     "settings.llm.testBtn": "LLM 연결 테스트",
     "settings.llm.testing": "LLM 연결을 확인하는 중입니다.",
     "settings.llm.ok": "{provider} 연결 확인됨",
@@ -1450,6 +1454,10 @@ const I18N = {
     "settings.llm.apiKeyLabel": "API key",
     "settings.llm.ollamaUrlLabel": "Ollama server address",
     "settings.llm.ollamaModelLabel": "Ollama model",
+    "settings.llm.omniUrlLabel": "OmniRoute endpoint",
+    "settings.llm.omniModelLabel": "OmniRoute model or Combo",
+    "settings.llm.omniReasoningLabel": "Reasoning effort",
+    "settings.llm.omniReasoningDefault": "Not set",
     "settings.llm.testBtn": "Test LLM connection",
     "settings.llm.testing": "Checking the LLM connection.",
     "settings.llm.ok": "{provider} connection verified",
@@ -2874,7 +2882,7 @@ const LLM_PROVIDERS = [
   { id: "claude", label: "Anthropic Claude" },
   { id: "groq", label: "Groq" },
   { id: "grok", label: "xAI Grok" },
-  { id: "deepseek", label: "DeepSeek" },
+  { id: "omniroute", label: "OmniRoute" },
   { id: "ollama", label: "로컬 Ollama" },
 ];
 
@@ -2886,6 +2894,10 @@ function defaultLlmSettings() {
   return {
     provider: "openai",
     apiKey: "",
+    omniApiKey: "",
+    omniUrl: "",
+    omniModel: "auto",
+    omniReasoning: "",
     ollamaUrl: "",
     ollamaModel: "llama3.1",
     lastStatus: "idle",
@@ -2895,8 +2907,20 @@ function defaultLlmSettings() {
 
 function normalizeLlmSettings(llm = {}, defaults = defaultLlmSettings()) {
   const normalized = { ...defaults, ...(llm && typeof llm === "object" ? llm : {}) };
-  normalized.provider = LLM_PROVIDERS.some((item) => item.id === normalized.provider) ? normalized.provider : defaults.provider;
+  const legacyDeepSeek = normalized.provider === "deepseek";
+  normalized.provider = legacyDeepSeek ? "omniroute"
+    : LLM_PROVIDERS.some((item) => item.id === normalized.provider) ? normalized.provider : defaults.provider;
   normalized.apiKey = typeof normalized.apiKey === "string" ? normalized.apiKey : "";
+  normalized.omniApiKey = typeof normalized.omniApiKey === "string" ? normalized.omniApiKey : "";
+  if (legacyDeepSeek) {
+    normalized.apiKey = "";
+    normalized.omniApiKey = "";
+    normalized.lastStatus = "idle";
+    normalized.lastMessage = "";
+  }
+  normalized.omniUrl = typeof normalized.omniUrl === "string" ? normalized.omniUrl : "";
+  normalized.omniModel = typeof normalized.omniModel === "string" && normalized.omniModel.trim() ? normalized.omniModel : defaults.omniModel;
+  normalized.omniReasoning = ["", "low", "medium", "high"].includes(normalized.omniReasoning) ? normalized.omniReasoning : "";
   normalized.ollamaUrl = typeof normalized.ollamaUrl === "string" ? normalized.ollamaUrl : "";
   normalized.ollamaModel = typeof normalized.ollamaModel === "string" && normalized.ollamaModel.trim() ? normalized.ollamaModel : defaults.ollamaModel;
   normalized.lastStatus = ["idle", "testing", "ok", "bad"].includes(normalized.lastStatus) ? normalized.lastStatus : "idle";
@@ -2906,7 +2930,23 @@ function normalizeLlmSettings(llm = {}, defaults = defaultLlmSettings()) {
 
 function isLlmConfigured(llm) {
   if (llm.provider === "ollama") return Boolean(llm.ollamaUrl.trim()) && Boolean(llm.ollamaModel.trim());
+  if (llm.provider === "omniroute") {
+    try {
+      return Boolean(omniRouteBaseUrl(llm.omniUrl)) && Boolean(llm.omniModel.trim()) && Boolean(llm.omniApiKey.trim());
+    } catch {
+      return false;
+    }
+  }
   return Boolean(llm.apiKey.trim());
+}
+
+function omniRouteBaseUrl(raw) {
+  const url = new URL(String(raw || "").trim());
+  if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) {
+    throw new Error("Invalid OmniRoute endpoint");
+  }
+  const base = `${url.origin}${url.pathname.replace(/\/+$/, "")}`;
+  return /\/v1$/i.test(base) ? base : `${base}/v1`;
 }
 
 function defaultVoiceSettings() {
@@ -2968,10 +3008,11 @@ async function llmChatRequest(provider, config, prompt) {
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
     }),
-    deepseek: () => fetch("https://api.deepseek.com/chat/completions", {
+    omniroute: () => fetch(`${omniRouteBaseUrl(config.omniUrl)}/chat/completions`, {
       method: "POST",
-      headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "deepseek-chat", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+      headers: { Authorization: `Bearer ${config.omniApiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: config.omniModel.trim(), messages: [{ role: "user", content: prompt }],
+        ...(config.omniReasoning ? { reasoning_effort: config.omniReasoning } : {}), stream: false }),
     }),
     grok: () => fetch("https://api.x.ai/v1/chat/completions", {
       method: "POST",
@@ -3655,6 +3696,12 @@ const elements = {
   llmOllamaUrlInput: $("#llmOllamaUrlInput"),
   llmOllamaModelField: $("#llmOllamaModelField"),
   llmOllamaModelInput: $("#llmOllamaModelInput"),
+  llmOmniUrlField: $("#llmOmniUrlField"),
+  llmOmniUrlInput: $("#llmOmniUrlInput"),
+  llmOmniModelField: $("#llmOmniModelField"),
+  llmOmniModelInput: $("#llmOmniModelInput"),
+  llmOmniReasoningField: $("#llmOmniReasoningField"),
+  llmOmniReasoningSelect: $("#llmOmniReasoningSelect"),
   llmTestBtn: $("#llmTestBtn"),
   llmStatusText: $("#llmStatusText"),
   ttsBaseUrlInput: $("#ttsBaseUrlInput"),
@@ -5982,7 +6029,8 @@ function bindEvents() {
     renderLlmVoiceSettings();
   });
   elements.llmApiKeyInput.addEventListener("input", () => {
-    state.settings.llm.apiKey = elements.llmApiKeyInput.value;
+    const key = state.settings.llm.provider === "omniroute" ? "omniApiKey" : "apiKey";
+    state.settings.llm[key] = elements.llmApiKeyInput.value;
     persistSettings();
   });
   elements.llmOllamaUrlInput.addEventListener("input", () => {
@@ -5991,6 +6039,18 @@ function bindEvents() {
   });
   elements.llmOllamaModelInput.addEventListener("input", () => {
     state.settings.llm.ollamaModel = elements.llmOllamaModelInput.value;
+    persistSettings();
+  });
+  elements.llmOmniUrlInput.addEventListener("input", () => {
+    state.settings.llm.omniUrl = elements.llmOmniUrlInput.value;
+    persistSettings();
+  });
+  elements.llmOmniModelInput.addEventListener("input", () => {
+    state.settings.llm.omniModel = elements.llmOmniModelInput.value;
+    persistSettings();
+  });
+  elements.llmOmniReasoningSelect.addEventListener("change", () => {
+    state.settings.llm.omniReasoning = elements.llmOmniReasoningSelect.value;
     persistSettings();
   });
   elements.llmTestBtn.addEventListener("click", testLlmConnection);
@@ -6862,13 +6922,20 @@ function renderServerSettings() {
 function renderLlmVoiceSettings() {
   const llm = state.settings.llm || defaultLlmSettings();
   if (elements.llmProviderSelect) elements.llmProviderSelect.value = llm.provider;
-  if (elements.llmApiKeyInput) elements.llmApiKeyInput.value = llm.apiKey;
+  if (elements.llmApiKeyInput) elements.llmApiKeyInput.value = llm.provider === "omniroute" ? llm.omniApiKey : llm.apiKey;
   if (elements.llmOllamaUrlInput) elements.llmOllamaUrlInput.value = llm.ollamaUrl;
   if (elements.llmOllamaModelInput) elements.llmOllamaModelInput.value = llm.ollamaModel;
+  if (elements.llmOmniUrlInput) elements.llmOmniUrlInput.value = llm.omniUrl;
+  if (elements.llmOmniModelInput) elements.llmOmniModelInput.value = llm.omniModel;
+  if (elements.llmOmniReasoningSelect) elements.llmOmniReasoningSelect.value = llm.omniReasoning;
   const isOllama = llm.provider === "ollama";
+  const isOmni = llm.provider === "omniroute";
   elements.llmApiKeyField?.classList.toggle("hidden", isOllama);
   elements.llmOllamaUrlField?.classList.toggle("hidden", !isOllama);
   elements.llmOllamaModelField?.classList.toggle("hidden", !isOllama);
+  elements.llmOmniUrlField?.classList.toggle("hidden", !isOmni);
+  elements.llmOmniModelField?.classList.toggle("hidden", !isOmni);
+  elements.llmOmniReasoningField?.classList.toggle("hidden", !isOmni);
   if (elements.llmStatusText) {
     elements.llmStatusText.textContent = llm.lastMessage || t("settings.llm.idle");
     elements.llmStatusText.classList.remove("ok", "warn", "bad");
@@ -10328,6 +10395,10 @@ function applyLanguage() {
   setText("#llmApiKeyLabel", t("settings.llm.apiKeyLabel"));
   setText("#llmOllamaUrlLabel", t("settings.llm.ollamaUrlLabel"));
   setText("#llmOllamaModelLabel", t("settings.llm.ollamaModelLabel"));
+  setText("#llmOmniUrlLabel", t("settings.llm.omniUrlLabel"));
+  setText("#llmOmniModelLabel", t("settings.llm.omniModelLabel"));
+  setText("#llmOmniReasoningLabel", t("settings.llm.omniReasoningLabel"));
+  setText("#llmOmniReasoningDefault", t("settings.llm.omniReasoningDefault"));
   setText("#llmTestBtn", t("settings.llm.testBtn"));
   setText("#voiceSettingTitle", t("settings.voice.title"));
   setText("#ttsUrlLabel", t("settings.voice.ttsUrlLabel"));
