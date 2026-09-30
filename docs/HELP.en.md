@@ -339,6 +339,12 @@ Principles:
 
 If you forget the key, NowNote cannot recover the content.
 
+## Ask With OmniRoute
+
+In the Web or Windows app, open **Display Settings > Voice and LLM Settings** and choose **OmniRoute**. Enter its API key, endpoint, and model, then run **Test LLM Connection**. For a local server, an endpoint example is `http://localhost:20128/v1`; you can also enter a remote endpoint. Browser security or the server's CORS policy may block local HTTP requests from the hosted Web app.
+
+Enter a provider-qualified model such as `groq/llama-3.3-70b`, `auto`, or a Combo name created in OmniRoute. **Reasoning effort** is optional: when unset, NowNote omits `reasoning_effort`. A selected level works only if the routed model supports it. The OmniRoute API key is stored separately from other LLM provider keys. A previous DeepSeek key is not carried over; enter your OmniRoute key explicitly.
+
 ## Recommended Start
 
 You can start as a standalone user.

@@ -344,6 +344,74 @@ async function runOnce() {
     if (!ollamaFieldsHiddenForOpenai) failures.push("OpenAI로 되돌렸는데 Ollama 필드가 여전히 보입니다.");
     await evaluate(page, `(() => { state.settings.llm.apiKey = "test-key"; persistSettings(); return true; })()`);
 
+    // [2-4] OmniRoute는 독립 키와 사용자가 고른 라우팅 모델·추론 등급을 보낸다.
+    const omniControlsExist = await evaluate(page, `Boolean(
+      document.querySelector('#llmProviderSelect option[value="omniroute"]')
+      && document.querySelector('#llmOmniUrlInput')
+      && document.querySelector('#llmOmniModelInput')
+      && document.querySelector('#llmOmniReasoningSelect')
+      && !document.querySelector('#llmProviderSelect option[value="deepseek"]')
+    )`);
+    if (!omniControlsExist) {
+      failures.push("DeepSeek 대신 OmniRoute의 주소·모델·추론 등급 입력이 있어야 합니다.");
+    } else {
+      const omni = await evaluate(page, `(async () => {
+        state.settings.llm = { ...defaultLlmSettings(), apiKey: 'other-provider-key' };
+        renderLlmVoiceSettings();
+        elements.llmProviderSelect.value = 'omniroute';
+        elements.llmProviderSelect.dispatchEvent(new Event('change'));
+        const visible = ['#llmApiKeyField', '#llmOmniUrlField', '#llmOmniModelField', '#llmOmniReasoningField']
+          .every((selector) => getComputedStyle(document.querySelector(selector)).display !== 'none');
+        const ollamaHidden = getComputedStyle(document.querySelector('#llmOllamaUrlField')).display === 'none';
+        const keyInitiallyBlank = elements.llmApiKeyInput.value === '';
+        elements.llmApiKeyInput.value = 'omni-test-key';
+        elements.llmApiKeyInput.dispatchEvent(new Event('input'));
+        elements.llmOmniUrlInput.value = 'http://localhost:20128/v1/';
+        elements.llmOmniUrlInput.dispatchEvent(new Event('input'));
+        elements.llmOmniModelInput.value = 'groq/llama-3.3-70b';
+        elements.llmOmniModelInput.dispatchEvent(new Event('input'));
+        elements.llmOmniReasoningSelect.value = 'high';
+        elements.llmOmniReasoningSelect.dispatchEvent(new Event('change'));
+        const requests = [];
+        window.fetch = (url, options) => {
+          requests.push({ url: String(url), authorization: options.headers.Authorization, body: JSON.parse(options.body) });
+          return Promise.resolve({ ok: true, json: async () => ({ choices: [{ message: { content: 'ok' } }] }) });
+        };
+        await llmChatRequest('omniroute', state.settings.llm, 'test');
+        state.settings.llm.omniModel = 'auto';
+        state.settings.llm.omniReasoning = '';
+        await llmChatRequest('omniroute', state.settings.llm, 'test');
+        state.settings.llm.omniModel = 'writing-combo';
+        await llmChatRequest('omniroute', state.settings.llm, 'test');
+        await testLlmConnection();
+        const connectionStatus = state.settings.llm.lastStatus;
+        const invalidEndpointAccepted = isLlmConfigured({ ...state.settings.llm, omniUrl: 'javascript:alert(1)' });
+        const legacy = normalizeLlmSettings({ provider: 'deepseek', apiKey: 'old-deepseek-key',
+          lastStatus: 'ok', lastMessage: 'DeepSeek connected' });
+        return { visible, ollamaHidden, keyInitiallyBlank, cloudKey: state.settings.llm.apiKey,
+          omniKey: state.settings.llm.omniApiKey, requests, legacy, connectionStatus, invalidEndpointAccepted };
+      })()`);
+      if (!omni.visible || !omni.ollamaHidden || !omni.keyInitiallyBlank) failures.push("OmniRoute 필드 표시나 키 분리가 올바르지 않습니다.");
+      if (omni.cloudKey !== "other-provider-key" || omni.omniKey !== "omni-test-key") failures.push("OmniRoute 키가 다른 제공업체 키를 덮어썼습니다.");
+      if (omni.requests.length !== 4 || omni.requests.some((request) => request.url !== "http://localhost:20128/v1/chat/completions"
+        || request.authorization !== "Bearer omni-test-key")) failures.push("OmniRoute 엔드포인트 또는 인증 헤더가 잘못됐습니다.");
+      if (omni.requests[0]?.body.model !== "groq/llama-3.3-70b" || omni.requests[0]?.body.reasoning_effort !== "high"
+        || omni.requests[1]?.body.model !== "auto" || "reasoning_effort" in (omni.requests[1]?.body || {})
+        || omni.requests[2]?.body.model !== "writing-combo") failures.push("OmniRoute 모델 또는 선택형 추론 등급이 잘못 전달됐습니다.");
+      if (omni.legacy.provider !== "omniroute" || omni.legacy.apiKey || omni.legacy.omniApiKey
+        || omni.legacy.lastStatus !== "idle" || omni.legacy.lastMessage) {
+        failures.push("기존 DeepSeek 선택과 키를 안전하게 전환하지 못했습니다.");
+      }
+      if (omni.connectionStatus !== "ok" || omni.invalidEndpointAccepted) {
+        failures.push("OmniRoute 연결 테스트 또는 엔드포인트 검증이 올바르지 않습니다.");
+      }
+    }
+    await evaluate(page, `(() => {
+      state.settings.llm = { ...defaultLlmSettings(), provider: 'openai', apiKey: 'test-key' };
+      renderLlmVoiceSettings();
+      return true;
+    })()`);
+
     // [3] 질문 길이 상한.
     const tooLongResult = await evaluate(page, `(() => {
       elements.askQuestionInput.value = "가".repeat(1001);

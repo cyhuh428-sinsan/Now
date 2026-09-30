@@ -133,7 +133,7 @@ async function evaluate(page, expression) {
     returnByValue: true,
   });
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || "Runtime.evaluate failed");
+    throw new Error(`${result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Runtime.evaluate failed"}\nExpression: ${expression.slice(0, 300)}`);
   }
   return result.result?.value;
 }
@@ -268,6 +268,55 @@ async function verifyVaultPanel(page, vaultRoot, title) {
   const written = path.join(vaultRoot, title, "_index.md");
   await waitForCondition(page, `document.querySelector('#vaultStatus').textContent.includes('적용 1')`, "Vault selected apply");
   assert((await fs.readFile(written, "utf8")).includes("nownote_id:"), "Vault export did not write managed Markdown.");
+  await evaluate(page, `document.querySelector('#vaultPreviewBtn').click()`);
+  await waitForCondition(page, `Boolean(document.querySelector('#vaultItems .vault-item'))`, "Vault linked preview rows");
+  const linked = await evaluate(page, `(() => {
+    const row = [...document.querySelectorAll('#vaultItems .vault-item')]
+      .find((item) => item.querySelector('.vault-item-name strong')?.textContent === ${JSON.stringify(title)});
+    const action = row?.querySelector('.vault-item-controls select');
+    return { classification: row?.querySelector('.vault-item-name small')?.textContent, label: action?.selectedOptions[0]?.textContent,
+      disabled: action?.disabled, options: [...(action?.options || [])].map((option) => option.value) };
+  })()`);
+  assert(linked.classification?.includes("변경 없음") && linked.label === "동기화 불필요" && !linked.disabled
+    && linked.options.includes("toVault") && linked.options.includes("toNowNote"),
+    `Linked unchanged Vault note still appears pending: ${JSON.stringify(linked)}`);
+}
+
+async function verifyOmniRoutePanel(page) {
+  const available = await evaluate(page, `Boolean(
+    document.querySelector('#llmProviderSelect option[value="omniroute"]')
+    && !document.querySelector('#llmProviderSelect option[value="deepseek"]')
+    && document.querySelector('#llmOmniUrlInput')
+    && document.querySelector('#llmOmniModelInput')
+    && document.querySelector('#llmOmniReasoningSelect')
+  )`);
+  assert(available, "Desktop OmniRoute settings are missing or DeepSeek is still selectable.");
+  await evaluate(page, `(() => {
+    elements.llmProviderSelect.value = 'omniroute';
+    elements.llmProviderSelect.dispatchEvent(new Event('change'));
+    elements.llmApiKeyInput.value = 'isolated-omni-key';
+    elements.llmApiKeyInput.dispatchEvent(new Event('input'));
+    elements.llmOmniUrlInput.value = 'http://localhost:20128/v1';
+    elements.llmOmniUrlInput.dispatchEvent(new Event('input'));
+    elements.llmOmniModelInput.value = 'auto';
+    elements.llmOmniModelInput.dispatchEvent(new Event('input'));
+    elements.llmOmniReasoningSelect.value = 'medium';
+    elements.llmOmniReasoningSelect.dispatchEvent(new Event('change'));
+    return true;
+  })()`);
+  const saved = await evaluate(page, `window.nownoteDesktop.storage.read(${JSON.stringify(SETTINGS_KEY)})`);
+  assert(saved?.llm?.provider === "omniroute" && saved.llm.omniUrl === "http://localhost:20128/v1"
+    && saved.llm.omniModel === "auto" && saved.llm.omniReasoning === "medium"
+    && saved.llm.omniApiKey === "isolated-omni-key" && !saved.llm.apiKey,
+  "Desktop OmniRoute settings were not saved separately.");
+  await page.send("Page.reload", { ignoreCache: true });
+  await waitForCondition(page, `typeof state !== 'undefined' && state.settings?.llm?.provider === 'omniroute'`, "OmniRoute settings reload");
+  const restored = await evaluate(page, `({ provider: elements.llmProviderSelect.value,
+    url: elements.llmOmniUrlInput.value, model: elements.llmOmniModelInput.value,
+    reasoning: elements.llmOmniReasoningSelect.value, key: elements.llmApiKeyInput.value })`);
+  assert(restored.provider === "omniroute" && restored.url === "http://localhost:20128/v1"
+    && restored.model === "auto" && restored.reasoning === "medium" && restored.key === "isolated-omni-key",
+  "Desktop OmniRoute settings were not restored after reload.");
 }
 
 async function verifyEditorTabIndent(page) {
@@ -532,6 +581,7 @@ async function main() {
     await verifyNoteFindMovement(second.page);
     await verifyEditorContextMenu(second.page);
     await verifyVaultPanel(second.page, vaultRoot, title);
+    await verifyOmniRoutePanel(second.page);
 
     console.log("NowNote desktop storage check passed");
     console.log(`- Store path: ${storePath}`);
@@ -543,6 +593,7 @@ async function main() {
     console.log("- Editor context menu passed");
     console.log("- Tree map zoom and expanded view passed in Electron");
     console.log("- Vault preview made no file changes and selected export passed in Electron");
+    console.log("- OmniRoute settings persisted and restored in Electron");
   } finally {
     first?.client?.close();
     second?.client?.close();
