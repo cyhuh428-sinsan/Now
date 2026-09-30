@@ -6301,7 +6301,7 @@ function vaultText(key) {
     ko: {
       description: "로컬 폴더의 Markdown과 선택한 메모만 비교·동기화합니다.",
       noPath: "선택된 폴더 없음", choose: "폴더 선택", both: "양방향",
-      compare: "변경 내용 비교", apply: "선택 항목 동기화", skip: "보류",
+      compare: "변경 내용 비교", apply: "선택 항목 동기화", skip: "보류", noAction: "동기화 불필요",
       targetTopic: "가져올 주제 선택", targetCategory: "가져올 분류 선택",
       compareBodies: "양쪽 내용 비교", latest: "최근 성공",
       compared: "개 항목 비교 완료", applied: "적용", failed: "실패", skipped: "건너뜀",
@@ -6316,7 +6316,7 @@ function vaultText(key) {
     en: {
       description: "Compare local Markdown and sync only selected notes.",
       noPath: "No folder selected", choose: "Choose Folder", both: "Both directions",
-      compare: "Compare Changes", apply: "Sync Selected Items", skip: "Skip",
+      compare: "Compare Changes", apply: "Sync Selected Items", skip: "Skip", noAction: "No sync needed",
       targetTopic: "Select target topic", targetCategory: "Select target category",
       compareBodies: "Compare both versions", latest: "Last success",
       compared: "items compared", applied: "Applied", failed: "Failed", skipped: "Skipped",
@@ -6527,8 +6527,9 @@ function renderVaultSettings() {
     const action = document.createElement("select");
     action.className = "settings-select";
     action.setAttribute("aria-label", `${strong.textContent} 동기화 작업`);
+    const unchanged = item.classification === "unchanged";
     const blocked = item.reason || item.classification === "skipped";
-    const choices = [["skip", vaultText("skip")]];
+    const choices = [["skip", vaultText(unchanged ? "noAction" : "skip")]];
     if (!blocked && item.local && elements.vaultDirectionSelect.value !== "fromVault") choices.push(["toVault", "NowNote → Obsidian"]);
     if (!blocked && item.vault && elements.vaultDirectionSelect.value !== "toVault") choices.push(["toNowNote", "Obsidian → NowNote"]);
     for (const [value, label] of choices) {

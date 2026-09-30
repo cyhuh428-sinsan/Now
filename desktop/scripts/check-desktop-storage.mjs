@@ -133,7 +133,7 @@ async function evaluate(page, expression) {
     returnByValue: true,
   });
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text || "Runtime.evaluate failed");
+    throw new Error(`${result.exceptionDetails.exception?.description || result.exceptionDetails.text || "Runtime.evaluate failed"}\nExpression: ${expression.slice(0, 300)}`);
   }
   return result.result?.value;
 }
@@ -268,6 +268,18 @@ async function verifyVaultPanel(page, vaultRoot, title) {
   const written = path.join(vaultRoot, title, "_index.md");
   await waitForCondition(page, `document.querySelector('#vaultStatus').textContent.includes('적용 1')`, "Vault selected apply");
   assert((await fs.readFile(written, "utf8")).includes("nownote_id:"), "Vault export did not write managed Markdown.");
+  await evaluate(page, `document.querySelector('#vaultPreviewBtn').click()`);
+  await waitForCondition(page, `Boolean(document.querySelector('#vaultItems .vault-item'))`, "Vault linked preview rows");
+  const linked = await evaluate(page, `(() => {
+    const row = [...document.querySelectorAll('#vaultItems .vault-item')]
+      .find((item) => item.querySelector('.vault-item-name strong')?.textContent === ${JSON.stringify(title)});
+    const action = row?.querySelector('.vault-item-controls select');
+    return { classification: row?.querySelector('.vault-item-name small')?.textContent, label: action?.selectedOptions[0]?.textContent,
+      disabled: action?.disabled, options: [...(action?.options || [])].map((option) => option.value) };
+  })()`);
+  assert(linked.classification?.includes("변경 없음") && linked.label === "동기화 불필요" && !linked.disabled
+    && linked.options.includes("toVault") && linked.options.includes("toNowNote"),
+    `Linked unchanged Vault note still appears pending: ${JSON.stringify(linked)}`);
 }
 
 async function verifyEditorTabIndent(page) {
