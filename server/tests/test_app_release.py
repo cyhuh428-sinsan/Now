@@ -5,7 +5,9 @@
 - asset 이름이 NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md의 규칙과 일치하는지
 - 자동 업데이트용 엔드포인트(`/api/v1/app/update`)로 오해될 경로를 만들지 않았는지
 """
+import json
 import re
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -62,6 +64,12 @@ def test_app_release_body_shape(client: TestClient) -> None:
 def test_app_release_version_looks_like_semver(client: TestClient) -> None:
     body = client.get("/api/v1/app/release").json()
     assert re.fullmatch(r"\d+\.\d+\.\d+", body["latest_version"])
+
+
+def test_app_release_matches_desktop_version(client: TestClient) -> None:
+    desktop_package = Path(__file__).resolve().parents[2] / "desktop" / "package.json"
+    desktop_version = json.loads(desktop_package.read_text(encoding="utf-8"))["version"]
+    assert client.get("/api/v1/app/release").json()["latest_version"] == desktop_version
 
 
 def test_app_release_path_is_not_the_declared_absent_update_path() -> None:
