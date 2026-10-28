@@ -11,6 +11,7 @@ from app.db import get_db
 from app.models.note import Note, NoteAttachment
 from app.schemas.note import NoteIn, NoteOut, NoteSyncRequest, NoteSyncResponse
 from app.services.note_attachment_storage import resolve_note_attachment_path, save_note_attachment
+from app.services.note_history import capture_change, lock_note_writes, prepare_history, raw_snapshot
 from app.services.note_sync import (
     as_naive_utc,
     group_shared_owner_ids,
@@ -84,6 +85,7 @@ def upsert_note(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    lock_note_writes(db, [payload.owner_id])
     require_active_user_device(db, owner_id=payload.owner_id, device_id=payload.device_id)
     note = save_note(payload, db)
     db.commit()
@@ -149,13 +151,17 @@ def delete_note(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    lock_note_writes(db, [owner_id])
     stmt = select(Note).where(Note.owner_id == owner_id, Note.local_id == local_id)
     if device_id is not None:
         stmt = stmt.where(Note.device_id == device_id)
     note = db.scalar(stmt)
     if note is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="note not found")
+    prepare_history(db, owner_id, local_id)
+    before = raw_snapshot(note)
     note.deleted_at = datetime.utcnow()
+    capture_change(db, note, before, "delete")
     db.commit()
     db.refresh(note)
     return note
@@ -177,6 +183,7 @@ def sync_notes(
             access_token=user_token,
             web_session_token=web_session_token,
         )
+    lock_note_writes(db, owner_ids)
     for item in sort_notes_for_upsert(payload.notes):
         require_active_user_device(db, owner_id=item.owner_id, device_id=item.device_id)
         saved.append(save_note(item, db))

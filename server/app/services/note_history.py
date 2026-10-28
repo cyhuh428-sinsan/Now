@@ -1,0 +1,162 @@
+"""Capture Note operations at the caller's natural flush, without committing."""
+import hashlib
+import json
+from datetime import datetime, timezone
+from uuid import uuid4
+
+from sqlalchemy import event, select, text
+from sqlalchemy.orm import Session
+
+from app.models.note import Note
+from app.models.note_history import NoteHead, NoteInventory, NoteRevision
+
+FIELDS = tuple(column.name for column in Note.__table__.columns)
+MEANING = ("note_type", "title", "content", "parent_local_id", "level", "tags", "source", "deleted_at")
+QUEUE = "now_note_history_queue"
+LOCKS = "now_note_history_locks"
+
+
+def lock_note_writes(db, owners):
+    transaction = db.get_transaction()
+    state = db.info.get(LOCKS)
+    if state is None or state[0] is not transaction:
+        connection = db.connection()
+        transaction = db.get_transaction()
+        if connection.dialect.name == "sqlite" and not connection.connection.driver_connection.in_transaction:
+            db.execute(text("BEGIN IMMEDIATE"))
+        state = (transaction, set())
+        db.info[LOCKS] = state
+    for owner in sorted(set(owners)):
+        if owner in state[1]:
+            continue
+        if db.bind.dialect.name == "postgresql":
+            key = int.from_bytes(hashlib.sha256(("note-history:" + owner).encode()).digest()[:8], "big", signed=True)
+            db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+        state[1].add(owner)
+
+
+def raw_snapshot(note):
+    return {field: getattr(note, field) for field in FIELDS}
+
+
+def encoded(raw):
+    def date(value):
+        if value is None:
+            return None
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc).isoformat(timespec="microseconds").replace("+00:00", "Z")
+    values = {key: date(value) if isinstance(value, datetime) else value for key, value in raw.items()}
+    return json.dumps({"schema_version": 1, "note": values}, ensure_ascii=False, separators=(",", ":"))
+
+
+def prepare_history(db, owner, local_id):
+    lock_note_writes(db, [owner])
+    queue = db.info.setdefault(QUEUE, {"baselines": {}, "events": []})
+    key = (owner, local_id)
+    if key not in queue["baselines"]:
+        rows = db.scalars(select(Note).where(Note.owner_id == owner, Note.local_id == local_id)).all()
+        queue["baselines"][key] = [raw_snapshot(row) for row in rows]
+
+
+def capture_change(db, note, before, reason="write"):
+    db.info[QUEUE]["events"].append((note, before, raw_snapshot(note), reason))
+
+
+def pending_or_get(db, model, key):
+    for row in db.new:
+        if isinstance(row, model) and tuple(getattr(row, column.name) for column in model.__table__.primary_key) == key:
+            return row
+    return db.get(model, key)
+
+
+def inventories(db, owner, local_id):
+    rows = list(db.scalars(select(NoteInventory).where(
+        NoteInventory.owner_id == owner, NoteInventory.local_id == local_id)))
+    rows.extend(row for row in db.new if isinstance(row, NoteInventory)
+                and row.owner_id == owner and row.local_id == local_id)
+    return rows
+
+
+def representative(rows):
+    if not rows:
+        return "coherent", None
+    notes = [(row, json.loads(row.snapshot_json)["note"]) for row in rows]
+    if len({note["note_type"] for _, note in notes}) > 1:
+        return "ambiguous", None
+    def sort_key(pair):
+        note = pair[1]
+        stamp = note["client_updated_at"] or note["updated_at"] or note["created_at"]
+        return datetime.fromisoformat(stamp.replace("Z", "+00:00")), note["id"]
+    return "coherent", max(notes, key=sort_key)[0].revision_id
+
+
+def add_revision(db, raw, reason, parent=None, before=None):
+    revision = NoteRevision(id=str(uuid4()), owner_id=raw["owner_id"], local_id=raw["local_id"],
+                            note_id=raw["id"], reason=reason, parent_revision_id=parent,
+                            snapshot_json=encoded(raw), before_snapshot_json=encoded(before) if before else None)
+    db.add(revision)
+    return revision.id
+
+
+@event.listens_for(Session, "after_flush_postexec")
+def finalize_history(db, flush_context):
+    queue = db.info.pop(QUEUE, None)
+    if queue is None:
+        return
+    for key, snapshots in queue["baselines"].items():
+        head = pending_or_get(db, NoteHead, key)
+        initial = head is None
+        if initial:
+            head = NoteHead(owner_id=key[0], local_id=key[1], version=0, identity_state="coherent")
+            db.add(head)
+        for raw in snapshots:
+            if pending_or_get(db, NoteInventory, (*key, raw["id"])) is None:
+                revision_id = add_revision(db, raw, "baseline")
+                db.add(NoteInventory(owner_id=key[0], local_id=key[1], note_id=raw["id"],
+                                     revision_id=revision_id, snapshot_json=encoded(raw)))
+        if initial:
+            head.identity_state, head.head_revision_id = representative(inventories(db, *key))
+
+    for note, before, after, reason in queue["events"]:
+        # Defaults/onupdate now exist; content keeps each pre-flush accepted step.
+        for field in ("id", "created_at", "updated_at"):
+            after[field] = getattr(note, field)
+        key = (after["owner_id"], after["local_id"])
+        head = pending_or_get(db, NoteHead, key)
+        inventory = pending_or_get(db, NoteInventory, (*key, after["id"]))
+        changed = before is None or any(before[field] != after[field] for field in MEANING)
+        if changed:
+            revision_id = add_revision(db, after, reason, inventory.revision_id if inventory else None, before)
+        else:
+            revision_id = inventory.revision_id
+        if inventory is None:
+            inventory = NoteInventory(owner_id=key[0], local_id=key[1], note_id=after["id"], revision_id=revision_id)
+            db.add(inventory)
+        inventory.revision_id = revision_id
+        inventory.snapshot_json = encoded(after)
+        state, pointer = representative(inventories(db, *key))
+        if changed or state != head.identity_state or pointer != head.head_revision_id:
+            head.version += 1
+        head.identity_state, head.head_revision_id = state, pointer
+
+
+@event.listens_for(Session, "after_soft_rollback")
+def discard_history(db, previous_transaction):
+    db.info.pop(QUEUE, None)
+    # PostgreSQL releases advisory locks acquired after a rolled-back savepoint.
+    db.info.pop(LOCKS, None)
+
+
+@event.listens_for(Session, "before_commit")
+def capture_read_only_baseline(db):
+    # A stale request has no dirty Note, so SQLAlchemy would skip flush entirely.
+    if QUEUE in db.info and not (db.new or db.dirty or db.deleted):
+        finalize_history(db, None)
+
+
+@event.listens_for(Session, "after_transaction_end")
+def end_history_transaction(db, transaction):
+    if transaction.parent is None:
+        db.info.pop(QUEUE, None)
+        db.info.pop(LOCKS, None)

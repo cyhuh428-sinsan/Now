@@ -11,6 +11,7 @@ from app.schemas.note import SyncRequest, SyncResponse
 from app.services.note_sync import as_naive_utc, list_changed_notes, sort_notes_for_upsert, upsert_note
 from app.services.user_accounts import require_user_api_access
 from app.services.user_devices import require_active_user_device
+from app.services.note_history import lock_note_writes
 
 router = APIRouter(
     prefix="/api/v1/sync",
@@ -35,6 +36,7 @@ def sync(
     # Validate the whole batch before device registration or any Note access.
     if any(note.owner_id != payload.owner_id for note in payload.notes):
         raise HTTPException(status_code=403, detail="owner_mismatch")
+    lock_note_writes(db, [payload.owner_id])
     require_active_user_device(db, owner_id=payload.owner_id, device_id=payload.device_id)
 
     pushed: list[Note] = []

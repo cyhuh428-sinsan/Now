@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.capabilities import MAX_TREE_NOTE_LEVEL
 from app.models.note import Note, UserAccount
 from app.schemas.note import NoteIn
+from app.services.note_history import capture_change, prepare_history, raw_snapshot
 
 
 def validate_note(payload: NoteIn) -> None:
@@ -46,7 +47,9 @@ def sort_notes_for_upsert(notes: list[NoteIn]) -> list[NoteIn]:
 
 def upsert_note(payload: NoteIn, db: Session) -> Note:
     validate_note(payload)
+    prepare_history(db, payload.owner_id, payload.local_id)
     validate_tree_parent(payload, db)
+    prepare_history(db, payload.owner_id, payload.local_id)
     payload_data = _normalized_note_data(payload)
     note = db.scalar(
         select(Note)
@@ -69,6 +72,7 @@ def upsert_note(payload: NoteIn, db: Session) -> Note:
     if note is None:
         note = Note(**payload_data)
         db.add(note)
+        capture_change(db, note, None)
         return note
 
     if (
@@ -78,8 +82,10 @@ def upsert_note(payload: NoteIn, db: Session) -> Note:
     ):
         return note
 
+    before = raw_snapshot(note)
     for key, value in payload_data.items():
         setattr(note, key, value)
+    capture_change(db, note, before)
     return note
 
 
