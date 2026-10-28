@@ -32,6 +32,9 @@ def sync(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    # Validate the whole batch before device registration or any Note access.
+    if any(note.owner_id != payload.owner_id for note in payload.notes):
+        raise HTTPException(status_code=403, detail="owner_mismatch")
     require_active_user_device(db, owner_id=payload.owner_id, device_id=payload.device_id)
 
     pushed: list[Note] = []
