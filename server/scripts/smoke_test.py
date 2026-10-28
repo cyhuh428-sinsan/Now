@@ -808,6 +808,8 @@ def main() -> None:
             "analysis_jobs",
             "sync_logs",
             "release_evidence_records",
+            "library_resources",
+            "library_mutations",
         ]
     )
     require(
@@ -835,7 +837,7 @@ def main() -> None:
         args.token,
     )
     require(data.get("name") == "now_note_server_backup", "전체 백업 이름이 올바르지 않습니다")
-    require(data.get("backup_schema_version") == 1, "전체 백업 스키마 버전이 올바르지 않습니다")
+    require(data.get("backup_schema_version") == 2, "전체 백업 스키마 버전이 올바르지 않습니다")
     require(data.get("api_version") == API_VERSION, "전체 백업 API 버전이 올바르지 않습니다")
     require(data.get("includes_recording_files") is False, "전체 백업의 녹음 파일 포함 여부가 올바르지 않습니다")
     require(data.get("includes_deleted_notes") is True, "전체 백업의 삭제 표시 메모 포함 여부가 올바르지 않습니다")
@@ -856,6 +858,8 @@ def main() -> None:
     require(checksum == recalculated_checksum, "전체 백업 체크섬이 본문 내용과 일치하지 않습니다")
     require("notes" in data.get("items", {}), "전체 백업에 메모 항목이 없습니다")
     require("devices" in data.get("items", {}), "전체 백업에 기기 항목이 없습니다")
+    require("library_resources" in data.get("items", {}), "전체 백업에 사용자 저장 자원이 없습니다")
+    require("library_mutations" in data.get("items", {}), "전체 백업에 사용자 저장 재시도 원장이 없습니다")
     require("release_evidence_records" in data.get("items", {}), "전체 백업에 수동 증빙 기록 항목이 없습니다")
     full_backup = data
     print(

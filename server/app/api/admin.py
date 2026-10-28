@@ -11,6 +11,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.core.capabilities import API_VERSION, public_server_readiness_checks
+from app.models.library import LibraryResource, LibraryMutation
 from app.core.config import get_settings
 from app.core.security import require_api_token
 from app.db import get_db
@@ -259,6 +260,8 @@ def export_devices(
 
 @router.get("/export/all")
 def export_all(db: Session = Depends(get_db)) -> JSONResponse:
+    from app.services.library_backup import export_library
+    library_snapshot = export_library(db)
     settings = get_settings()
     exported_at = datetime.utcnow()
     notes = list(db.scalars(select(Note).order_by(Note.updated_at.desc(), Note.id.desc())).all())
@@ -301,7 +304,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
     )
     payload = {
         "name": "now_note_server_backup",
-        "backup_schema_version": 1,
+        "backup_schema_version": 2,
         "api_version": API_VERSION,
         "server": settings.server_name,
         "exported_at": exported_at,
@@ -309,6 +312,7 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
         "includes_deleted_notes": True,
         "summary": _export_summary_counts(db),
         "items": {
+            **library_snapshot,
             "notes": [_model_to_dict(row) for row in notes],
             "recordings": [_model_to_dict(row) for row in recordings],
             "users": [_model_to_dict(row) for row in users],
@@ -934,8 +938,8 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
         ),
         _verify_check(
             "스키마 버전",
-            payload.get("backup_schema_version") == 1,
-            "1",
+            payload.get("backup_schema_version") in (1, 2),
+            "1 또는 2",
             str(payload.get("backup_schema_version")),
         ),
         _verify_check(
@@ -1008,6 +1012,13 @@ def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
             f"{len(token_leaks)}건 발견" if token_leaks else "정상",
         )
     )
+    from app.services.library_backup import validate_library_backup
+    try:
+        validate_library_backup(payload)
+        library_valid = True
+    except Exception:
+        library_valid = False
+    checks.append(_verify_check("Stage D 자원", library_valid, "자원과 원장 검증", "정상" if library_valid else "오류"))
     return checks
 
 
@@ -1026,6 +1037,10 @@ def _backup_verify_summary(payload: dict) -> dict:
         value = items.get(section)
         summary[section] = len(value) if isinstance(value, list) else None
     summary["exported_at"] = payload.get("exported_at")
+    if payload.get("backup_schema_version") == 2:
+        for section in ("library_resources", "library_mutations"):
+            value = items.get(section)
+            summary[section] = len(value) if isinstance(value, list) else None
     summary["content_sha256"] = payload.get("content_sha256")
     return summary
 
@@ -1085,6 +1100,8 @@ def _export_summary_counts(db: Session) -> dict:
     analysis_jobs = db.scalar(select(func.count()).select_from(AnalysisJob)) or 0
     sync_logs = db.scalar(select(func.count()).select_from(SyncLog)) or 0
     release_evidence_records = db.scalar(select(func.count()).select_from(ReleaseEvidenceRecord)) or 0
+    library_resources = db.scalar(select(func.count()).select_from(LibraryResource)) or 0
+    library_mutations = db.scalar(select(func.count()).select_from(LibraryMutation)) or 0
     recording_storage_paths = list(db.scalars(select(Recording.storage_path)).all())
     recording_orphan_files = _recording_storage_orphan_files(
         settings.storage_dir,
@@ -1108,6 +1125,8 @@ def _export_summary_counts(db: Session) -> dict:
         "analysis_jobs": analysis_jobs,
         "sync_logs": sync_logs,
         "release_evidence_records": release_evidence_records,
+        "library_resources": library_resources,
+        "library_mutations": library_mutations,
         "total_export_items": (
             note_total
             + recordings
@@ -1116,6 +1135,8 @@ def _export_summary_counts(db: Session) -> dict:
             + analysis_jobs
             + sync_logs
             + release_evidence_records
+            + library_resources
+            + library_mutations
         ),
     }
 
