@@ -5,7 +5,7 @@ import { launchApp, evaluate, stopProcess } from '../../desktop/scripts/check-de
 const base='D:/tmp/now-240-stage-d';
 const accounts=JSON.parse(await fs.readFile(`${base}/synthetic-accounts.json`,'utf8'));
 const dir=await fs.mkdtemp(`${base}/review-shared-`);
-let first,second,third;
+let first,third;
 const until=async(app,expr)=>{for(let i=0;i<200;i++){if(await evaluate(app.page,expr))return;await delay(30);}throw Error('Timeout: '+expr);};
 const stop=app=>{app?.client?.close();stopProcess(app?.app);};
 const remote=async(id,method='GET',body)=>{
@@ -14,19 +14,18 @@ const remote=async(id,method='GET',body)=>{
 };
 try {
   first=await launchApp(dir);await until(first,'Boolean(libraryStore)');
-  second=await launchApp(dir);await until(second,'Boolean(libraryStore)');
-  assert.notEqual(first.app.pid,second.app.pid);
   const firstId=await evaluate(first.page,`libraryStore.put('templates',null,{name:'first process pending',content_template:'durable first'})`);
-  const rejected=await evaluate(second.page,`(async()=>{try{await libraryStore.put('templates',null,{name:'second process pending',content_template:'preserve in memory'});return false;}catch(e){return e.message;}})()`);
+  // The app singleton is tested separately. A stale renderer must still fail its key CAS.
+  const rejected=await evaluate(first.page,`(async()=>{window.__reviewStaleStore=NowLibrary.create({context:libraryContext,request:requestLibrary,write:value=>window.nownoteDesktop.storage.write('nownote.library.v1',value,{expectedValue:null})});try{await window.__reviewStaleStore.put('templates',null,{name:'second process pending',content_template:'preserve in memory'});return false;}catch(e){return e.message;}})()`);
   assert.ok(String(rejected).includes('다른 실행'),String(rejected));
-  const stored=await evaluate(second.page,`window.nownoteDesktop.storage.read('nownote.library.v1')`);
+  const stored=await evaluate(first.page,`window.nownoteDesktop.storage.read('nownote.library.v1')`);
   assert.equal(Object.values(stored.contexts).flatMap(c=>c.outbox).length,1);
   assert.equal(Object.values(stored.contexts).flatMap(c=>c.outbox)[0].id,firstId);
-  assert.ok(JSON.stringify(await evaluate(second.page,'libraryStore.export()')).includes('second process pending'));
-  const bypass=await evaluate(second.page,`window.nownoteDesktop.storage.writeSync('nownote.library.v1',{})`);
+  assert.ok(JSON.stringify(await evaluate(first.page,'window.__reviewStaleStore.export()')).includes('second process pending'));
+  const bypass=await evaluate(first.page,`window.nownoteDesktop.storage.writeSync('nownote.library.v1',{})`);
   assert.equal(bypass.ok,false);
-  await evaluate(second.page,`window.nownoteDesktop.storage.write('nownote.web.v1',{tree:[]})`);
-  stop(second);second=null;stop(first);first=null;await delay(400);
+  await evaluate(first.page,`window.nownoteDesktop.storage.write('nownote.web.v1',{tree:[]})`);
+  stop(first);first=null;await delay(400);
   third=await launchApp(dir);await until(third,'Boolean(libraryStore)');
   assert.equal(await evaluate(third.page,`libraryStore.list('templates')[0].id`),firstId);
   const run=s=>evaluate(third.page,s);
@@ -66,7 +65,7 @@ try {
   await until(third,`Boolean(libraryStore.status().conflicts['templates/${id}'])`);
   assert.equal(await run(`libraryStore.status().outbox.find(o=>o.id==='${id}').body.base_version`),deleteViewed);
   assert.equal((await remote()).items.find(r=>r.id===id).deleted_at,null);
-  const result={sameUserDataTwoProcesses:true,staleIPCRejected:true,firstOutboxSurvivesRestart:true,failedSecondDraftExportable:true,syncBypassBlocked:true,displayedVersionCAS:true,conflictReselectionRequired:true,staleDeleteCAS:true,actualHTTP:true};
+  const result={staleRendererSameStore:true,staleIPCRejected:true,firstOutboxSurvivesRestart:true,failedSecondDraftExportable:true,syncBypassBlocked:true,displayedVersionCAS:true,conflictReselectionRequired:true,staleDeleteCAS:true,actualHTTP:true};
   await fs.writeFile(`${base}/review-electron-http.json`,JSON.stringify(result,null,2));
   console.log('Stage D independent-review regressions:',result);
-} finally {stop(first);stop(second);stop(third);await delay(500);await fs.rm(dir,{recursive:true,force:true});}
+} finally {stop(first);stop(third);await delay(500);await fs.rm(dir,{recursive:true,force:true});}

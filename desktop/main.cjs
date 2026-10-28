@@ -1,5 +1,6 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
+const fs = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
 const { readStoreFile, updateStoreFile, compareAndSetStoreValue } = require("./store-file.cjs");
@@ -17,6 +18,33 @@ function assertRendererStoreKey(key) {
 
 if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.NOWNOTE_DESKTOP_USER_DATA_DIR));
+}
+
+// 같은 물리 데이터 폴더는 별칭 경로로 실행해도 하나의 소유자만 둔다.
+fs.mkdirSync(app.getPath("userData"), { recursive: true });
+app.setPath("userData", fs.realpathSync.native(app.getPath("userData")));
+let mainWindow = null;
+let desktopReady = false;
+let activationPending = false;
+let quitting = false;
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+else app.on("second-instance", () => activateMainWindow());
+app.on("before-quit", () => { quitting = true; });
+
+function activateMainWindow() {
+  if (quitting) return;
+  if (!desktopReady) { activationPending = true; return; }
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createMainWindow();
+  if (window.isMinimized()) {
+    window.once("restore", () => {
+      if (!quitting && !window.isDestroyed()) { window.show(); window.focus(); }
+    });
+    window.restore();
+  }
+  window.show();
+  window.focus();
+  activationPending = false;
 }
 
 function desktopStorePath() {
@@ -138,6 +166,8 @@ function createMainWindow(startFile = APP_INDEX) {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+  mainWindow = window;
+  window.on("closed", () => { if (mainWindow === window) mainWindow = null; });
 
   window.loadFile(startFile);
 
@@ -211,7 +241,7 @@ function createMenu() {
   ]);
 }
 
-app.whenReady().then(() => {
+if (primaryInstance) app.whenReady().then(() => {
   ipcMain.handle("nownote:open-document-file", async (event, input) => {
     if (event.senderFrame?.parent || event.senderFrame?.url.split("?")[0] !== pathToFileURL(APP_INDEX).href) throw new Error("허용되지 않은 문서 요청입니다.");
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -238,7 +268,9 @@ app.whenReady().then(() => {
   registerDesktopStorageHandlers();
   registerVaultHandlers();
   Menu.setApplicationMenu(createMenu());
+  desktopReady = true;
   createMainWindow();
+  if (activationPending) activateMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

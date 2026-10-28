@@ -185,9 +185,9 @@ function stopProcess(proc) {
   }
 }
 
-async function launchApp(userDataDir) {
+async function launchApp(userDataDir, extraArgs = []) {
   const debugPort = await freePort();
-  const app = spawn(EXE_PATH, [`--remote-debugging-port=${debugPort}`], {
+  const app = spawn(EXE_PATH, [`--remote-debugging-port=${debugPort}`, ...extraArgs], {
     env: {
       ...process.env,
       NOWNOTE_DESKTOP_USER_DATA_DIR: userDataDir,
@@ -604,7 +604,7 @@ async function main() {
   }
 }
 
-export { launchApp, evaluate, stopProcess };
+export { launchApp, evaluate, stopProcess, CdpClient, freePort };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) main().catch((error) => {
   console.error(`NowNote desktop storage check failed: ${error.message}`);

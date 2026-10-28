@@ -1,7 +1,6 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
-const lockfile = require("proper-lockfile");
 
 function hashBytes(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -37,23 +36,11 @@ function writeStoreFile(storePath, store) {
 }
 
 function updateStoreFile(storePath, update, expectedHash) {
-  fs.mkdirSync(path.dirname(storePath), { recursive: true });
-  let release;
-  const deadline = Date.now() + 2000;
-  while (!release) {
-    try { release = lockfile.lockSync(storePath, { realpath: false, stale: 30000, update: 10000 }); }
-    catch (error) {
-      if (error.code !== "ELOCKED" || Date.now() >= deadline) throw error;
-      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
-    }
-  }
-  try {
-    const { store, hash } = readStoreFile(storePath);
-    if (expectedHash !== undefined && hash !== expectedHash) throw new Error("NowNote store changed since preview");
-    const next = update(store);
-    next.updatedAt = new Date().toISOString();
-    return { store: next, hash: writeStoreFile(storePath, next) };
-  } finally { release(); }
+  const { store, hash } = readStoreFile(storePath);
+  if (expectedHash !== undefined && hash !== expectedHash) throw new Error("NowNote store changed since preview");
+  const next = update(store);
+  next.updatedAt = new Date().toISOString();
+  return { store: next, hash: writeStoreFile(storePath, next) };
 }
 
 function compareAndSetStoreValue(storePath, key, value, expected) {
