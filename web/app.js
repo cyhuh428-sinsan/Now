@@ -557,6 +557,7 @@ window.NowMarkdown = (() => {
   }
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    let generation = 0;
     let writeChain = Promise.resolve();
     const locks = new Map();
     const readable = () => data?.schema_version === 1 && object(data.contexts) && Object.values(data.contexts).every(c => object(c) && object(c.resources) && Array.isArray(c.outbox) && object(c.conflicts));
@@ -621,9 +622,9 @@ window.NowMarkdown = (() => {
       await save();
       return id;
     }
-    async function run(ctx) {
+    async function run(ctx, epoch) {
       const k = key(ctx), c = bucket(ctx);
-      const active = () => key(context()) === k && context().enabled && context().auth === ctx.auth;
+      const active = () => generation === epoch && key(context()) === k && context().enabled && context().auth === ctx.auth;
       const pull = async kind => {
         if (!active()) return false;
         const result = await request(ctx, kind, null, 'GET');
@@ -676,10 +677,10 @@ window.NowMarkdown = (() => {
     }
     async function sync() {
       writable();
-      const ctx = { ...context() }, k = key(ctx);
+      const ctx = { ...context() }, epoch = generation, k = `${key(ctx)}:${epoch}`;
       if (!ctx.enabled || !ctx.auth) return;
       if (locks.has(k)) return locks.get(k);
-      const running = run(ctx).finally(() => locks.delete(k));
+      const running = run(ctx, epoch).finally(() => locks.delete(k));
       locks.set(k, running);
       return running;
     }
@@ -703,6 +704,7 @@ window.NowMarkdown = (() => {
       export: () => copy(data), readonly: () => !readable(),
       status: () => readable() ? copy(bucket(context())) : { error: '지원하지 않는 보관 형식: 원본 보존, 읽기 전용' },
       import: async (value, { restore = false } = {}) => {
+        generation++;
         data = copy(value);
         // Restoring an old cache is a user edit, not permission to overwrite a newer server copy.
         if (restore && readable()) for (const [scope, c] of Object.entries(data.contexts)) {

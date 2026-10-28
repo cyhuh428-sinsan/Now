@@ -123,4 +123,19 @@ const writerB = L.guardedWriter({ initial: null, read: () => browserRaw, write: 
 await writerA({ outbox: ['alice pending'] });
 await assert.rejects(writerB({ outbox: ['bob pending'] }));
 assert.equal(browserRaw, JSON.stringify({ outbox: ['alice pending'] }));
+let releasePull, startedPull;
+const gate = new Promise(resolve => { releasePull = resolve; });
+const started = new Promise(resolve => { startedPull = resolve; });
+let oldWrites = 0;
+const importing = L.create({ context: () => context, write: async () => {}, request: async (ctx, kind, id, method, body) => {
+  if (method === 'GET') { startedPull(); await gate; return { items: [] }; }
+  oldWrites++; return request(ctx, kind, id, method, body);
+} });
+await importing.put('templates', null, { name: 'old journal before restore', content_template: 'do not dispatch after replacement' });
+const inFlight = importing.sync();
+await started;
+await importing.import({ schema_version: 1, contexts: {} });
+releasePull();
+await inFlight;
+assert.equal(oldWrites, 0, 'replacing a backup while GET is in flight must stop the replaced journal from dispatching later');
 console.log('Stage D library state: retry/restart/CAS/tombstone/context/unknown/variables/query PASS');
