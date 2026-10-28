@@ -14657,8 +14657,8 @@ function addChildToSelectedTreeNode() {
 }
 
 function renderTreeListOnly() {
-  const scrollTop = elements.treeList?.scrollTop || 0;
-  const scrollLeft = elements.treeList?.scrollLeft || 0;
+  const scrollTop = elements.treePanel?.scrollTop || 0;
+  const scrollLeft = elements.treePanel?.scrollLeft || 0;
   state.sharedView = normalizeSharedView(state.sharedView);
   const roots = sharedViewTreeRoots();
   if (roots.length === 0) {
@@ -14680,12 +14680,11 @@ function renderTreeListOnly() {
 
 function restoreTreeListScroll(scrollTop, scrollLeft) {
   const restore = () => {
-    if (!elements.treeList) return;
-    elements.treeList.scrollTop = scrollTop;
-    elements.treeList.scrollLeft = scrollLeft;
+    if (!elements.treePanel) return;
+    elements.treePanel.scrollTop = scrollTop;
+    elements.treePanel.scrollLeft = scrollLeft;
   };
   restore();
-  window.requestAnimationFrame(restore);
 }
 
 function sharedViewTreeRoots() {
@@ -14801,7 +14800,12 @@ function treeNodeElement(node) {
   labelButton.addEventListener("click", () => {
     state.selectedTreeId = node.id;
     expandAncestors(node.id);
-    renderTree();
+    // Keep the clicked row and native focus while changing the document.
+    elements.treeList.querySelectorAll(".tree-row").forEach((item) => {
+      item.classList.toggle("active", item.parentElement.dataset.nodeId === node.id);
+    });
+    renderTreeEditor();
+    renderOpenTreeTabs();
   });
 
   const metaParts = [
@@ -14811,6 +14815,7 @@ function treeNodeElement(node) {
     node.tags.length ? `#${node.tags.slice(0, 2).join(" #")}` : "",
   ].filter(Boolean);
   const nodeTitle = noteTitle(node.title);
+  labelButton.title = nodeTitle;
   // #region nownote-only:web 아이콘 없는 트리 라벨 마크업. 설치형은 nownote-only:desktop 쪽을 쓴다
   labelButton.innerHTML = `<div class="tree-title">${escapeHtml(node.favorite ? `★ ${nodeTitle}` : nodeTitle)}</div><div class="tree-meta">${escapeHtml(metaParts.join(" · "))}</div>`;
   // #endregion
