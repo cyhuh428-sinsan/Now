@@ -11,7 +11,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     <section id="libraryConflicts" aria-label="충돌 비교"></section>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  let kind = 'templates', selectedId = null, dirty = false, boundContext = '', busy = false;
+  let kind = 'templates', selectedId = null, displayed = null, dirty = false, boundContext = '', busy = false;
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const button = (action, label) => `<button type="button" class="secondary-btn" data-action="${action}">${label}</button>`;
   const field = (name, label, value, type = 'text') => `<label>${label}<input class="settings-input" name="${name}" type="${type}" value="${esc(value)}"></label>`;
@@ -78,6 +78,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     $('[data-action="capture"]').hidden = kind !== 'templates';
     renderList(); renderConflicts();
     const row = current(), detail = $('#libraryDetail');
+    displayed = row ? structuredClone(row) : null;
     if (api.store.readonly()) { detail.textContent = '지원하지 않는 보관 형식입니다. 원본을 백업한 뒤 호환되는 버전에서 열어주세요.'; status(); return; }
     if (!row) { detail.textContent = '선택한 자료 없음'; status(); return; }
     if (row.readonly) { detail.innerHTML = `<h3>지원하지 않는 형식 · 읽기 전용</h3><pre>${esc(JSON.stringify(row, null, 2))}</pre>`; status(); return; }
@@ -124,13 +125,13 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   async function sync() { if (busy) return; busy = true; status(); try { await api.store.sync(); } finally { busy = false; if (dialog.open) { status(); if (!dirty && current()) render(); } } }
   async function action(name) {
     if (boundContext !== api.contextKey()) { render(); throw new Error('사용자 또는 서버가 변경되어 선택을 초기화했습니다.'); }
-    const row = current();
+    const row = displayed;
     if (name === 'preview') return preview();
     if (name === 'save' || name === 'clone') {
-      selectedId = await api.store.put(kind, name === 'clone' || row.builtin ? null : row.id, payload());
+      selectedId = await api.store.put(kind, name === 'clone' || row.builtin ? null : row.id, payload(), { baseVersion: name === 'clone' || row.builtin ? 0 : row.version });
       dirty = false; render(); await sync();
     }
-    if (name === 'delete' && await ask('이 자료를 삭제할까요?')) { await api.store.remove(kind, row.id); selectedId = null; dirty = false; render(); await sync(); }
+    if (name === 'delete' && await ask('이 자료를 삭제할까요?')) { await api.store.remove(kind, row.id, { baseVersion: row.version }); selectedId = null; dirty = false; render(); await sync(); }
     if (name === 'create-note' || name === 'insert') {
       const value = NowLibrary.applyTemplate(payload(), api.noteTitle());
       if (await api.apply(value, name === 'insert')) message('메모에 적용했습니다.');
@@ -150,7 +151,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       section.append(title, compare);
       for (const [choice, text] of [['local', conflict.remote?.deleted_at ? '내 변경을 새 사본으로 저장' : '내 변경으로 다시 저장'], ['remote', '서버 현재본 사용']]) {
         const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = text;
-        b.onclick = safe(async () => { if (!await clean()) return; await api.store.resolve(resourceKind, id, choice); dirty = false; selectedId = null; render(); await sync(); }); section.append(b);
+        b.onclick = safe(async () => { if (!await clean()) return; await api.store.resolve(resourceKind, id, choice, { remoteVersion: conflict.remote?.version || 0 }); dirty = false; selectedId = null; render(); await sync(); }); section.append(b);
       }
       target.append(section);
     }

@@ -29,7 +29,7 @@ await page.waitForFunction(() => state.selectedTreeId === null);
 assert.deepEqual(await page.evaluate(() => libraryStore.export()), before);
 // An explicit snapshot restore must keep old content as a CAS conflict, not discard it on pull.
 const snapshotId = await page.evaluate(() => createRecoverySnapshot('stage-d-restore').id);
-await page.evaluate(`(async()=>{const r=libraryStore.list('templates').find(r=>r.id==='${seed.template.id}'); await libraryStore.put('templates',r.id,{...r.payload,content_template:'스냅샷 이후 수정'});await libraryStore.sync();renderRecoveryPanel();document.querySelector('#snapshotSelect').value='${snapshotId}';void restoreSelectedSnapshot();})()`);
+await page.evaluate(`(async()=>{const r=libraryStore.list('templates').find(r=>r.id==='${seed.template.id}'); await libraryStore.put('templates',r.id,{...r.payload,content_template:'스냅샷 이후 수정'},{baseVersion:r.version});await libraryStore.sync();renderRecoveryPanel();document.querySelector('#snapshotSelect').value='${snapshotId}';void restoreSelectedSnapshot();})()`);
 await page.waitForFunction(() => !document.querySelector('#confirmDialog').classList.contains('hidden'));
 await page.click('#confirmOkBtn');
 await page.waitForFunction(() => libraryStore.status().outbox.length > 0);

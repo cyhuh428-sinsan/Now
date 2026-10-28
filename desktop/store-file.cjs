@@ -1,6 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const { createHash, randomUUID } = require("node:crypto");
+const lockfile = require("proper-lockfile");
 
 function hashBytes(bytes) {
   return createHash("sha256").update(bytes).digest("hex");
@@ -36,11 +37,33 @@ function writeStoreFile(storePath, store) {
 }
 
 function updateStoreFile(storePath, update, expectedHash) {
-  const { store, hash } = readStoreFile(storePath);
-  if (expectedHash !== undefined && hash !== expectedHash) throw new Error("NowNote store changed since preview");
-  const next = update(store);
-  next.updatedAt = new Date().toISOString();
-  return { store: next, hash: writeStoreFile(storePath, next) };
+  fs.mkdirSync(path.dirname(storePath), { recursive: true });
+  let release;
+  const deadline = Date.now() + 2000;
+  while (!release) {
+    try { release = lockfile.lockSync(storePath, { realpath: false, stale: 30000, update: 10000 }); }
+    catch (error) {
+      if (error.code !== "ELOCKED" || Date.now() >= deadline) throw error;
+      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
+    }
+  }
+  try {
+    const { store, hash } = readStoreFile(storePath);
+    if (expectedHash !== undefined && hash !== expectedHash) throw new Error("NowNote store changed since preview");
+    const next = update(store);
+    next.updatedAt = new Date().toISOString();
+    return { store: next, hash: writeStoreFile(storePath, next) };
+  } finally { release(); }
 }
 
-module.exports = { readStoreFile, writeStoreFile, updateStoreFile };
+function compareAndSetStoreValue(storePath, key, value, expected) {
+  return updateStoreFile(storePath, store => {
+    if (JSON.stringify(store.values[key] ?? null) !== JSON.stringify(expected)) {
+      throw new Error("다른 실행에서 저장 자료를 변경했습니다. 이 창의 변경을 백업한 후 다시 열어주세요. 덮어쓰지 않았습니다.");
+    }
+    store.values[key] = value;
+    return store;
+  });
+}
+
+module.exports = { readStoreFile, writeStoreFile, updateStoreFile, compareAndSetStoreValue };

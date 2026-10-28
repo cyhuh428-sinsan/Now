@@ -34,7 +34,7 @@ try {
     state.settings.server.mode='local'; persistSettings();
     const q=libraryStore.list('saved-queries').find(q=>q.id==='${seed.query.id}');
     q.payload.filter.text='Electron 오프라인 재시작';
-    await libraryStore.put('saved-queries',q.id,q.payload);
+    await libraryStore.put('saved-queries',q.id,q.payload,{baseVersion:q.version});
     return libraryStore.status().outbox.find(o=>o.id===q.id);
   })()`);
   first.client.close(); stopProcess(first.app); first = null;

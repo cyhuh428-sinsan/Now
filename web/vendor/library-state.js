@@ -124,15 +124,17 @@
       return [...map.values()].filter(r => !r.deleted_at).map(r => ({ ...r, conflict: copy(c.conflicts[resourceKey(kind, r.id)] || null) }))
         .sort((a, b) => (a.payload?.order || 0) - (b.payload?.order || 0) || String(a.payload?.name || a.id).localeCompare(String(b.payload?.name || b.id), 'ko'));
     };
-    async function enqueue(kind, id, method, payload) {
+    async function enqueue(kind, id, method, payload, { baseVersion } = {}) {
       writable();
       if (!kinds.includes(kind)) throw new Error('지원하지 않는 자원입니다.');
       const ctx = context(), c = bucket(ctx);
       id ||= uuid();
       const k = resourceKey(kind, id), remote = c.resources[k], existing = list(kind).find(r => r.id === id);
+      if (baseVersion !== undefined && (!Number.isInteger(baseVersion) || baseVersion < 0)) throw new Error('편집 기준 버전이 올바르지 않습니다.');
       if (remote?.deleted_at || existing?.readonly) throw new Error('삭제되었거나 지원하지 않는 자료입니다. 새 사본으로 저장하세요.');
       if (c.conflicts[k]) throw new Error('충돌 내용을 먼저 비교하고 선택하세요.');
       const pending = c.outbox.filter(o => o.kind === kind && o.id === id);
+      if (remote && !pending.length && baseVersion === undefined) throw new Error('편집 화면의 기준 버전이 필요합니다. 다시 열고 저장하세요.');
       if (method === 'DELETE' && !remote && pending.length && pending.every(o => !o.sent)) {
         c.outbox = c.outbox.filter(o => !(o.kind === kind && o.id === id));
         await save();
@@ -150,7 +152,7 @@
         if (method === 'PUT') previous.body.payload = payload; else delete previous.body.payload;
       } else {
         c.outbox.push({ kind, id, method, sent: false, body: { owner_id: ctx.owner, schema_version: 1,
-          base_version: previous ? null : remote?.version || 0, mutation_id: uuid(), ...(method === 'PUT' ? { payload } : {}) } });
+          base_version: previous ? null : baseVersion ?? remote?.version ?? 0, mutation_id: uuid(), ...(method === 'PUT' ? { payload } : {}) } });
       }
       await save();
       return id;
@@ -198,9 +200,10 @@
           } catch (error) {
             op.error = { code: error.code || 'connection_error', message: error.message };
             if (error.status === 409 && ['version_conflict', 'resource_deleted'].includes(error.code)) {
-              c.conflicts[rk] = { code: error.code, local: copy(c.outbox.filter(o => o.kind === op.kind && o.id === op.id)), remote: copy(c.resources[rk] || null) };
+              const conflict = { code: error.code, local: copy(c.outbox.filter(o => o.kind === op.kind && o.id === op.id)), remote: copy(c.resources[rk] || null) };
+              c.conflicts[rk] = conflict;
               await pull(op.kind);
-              c.conflicts[rk].remote = copy(c.resources[rk] || null);
+              if (c.conflicts[rk] === conflict) conflict.remote = copy(c.resources[rk] || null);
             }
             await save();
             if (!error.status || [401, 403].includes(error.status)) return;
@@ -217,15 +220,29 @@
       locks.set(k, running);
       return running;
     }
-    async function resolve(kind, id, choice) {
+    async function resolve(kind, id, choice, { remoteVersion } = {}) {
       const ctx = context(), c = bucket(ctx), rk = resourceKey(kind, id), conflict = c.conflicts[rk];
       if (!conflict) return;
+      const compared = conflict.remote;
+      if (remoteVersion !== undefined && remoteVersion !== (compared?.version || 0)) throw new Error('비교본이 변경되었습니다. 다시 비교하고 선택하세요.');
+      const epoch = generation;
+      if (!ctx.enabled || !ctx.auth) throw new Error('서버에 연결한 뒤 다시 비교하고 선택하세요.');
+      const latest = await request(ctx, kind, null, 'GET');
+      if (generation !== epoch || key(context()) !== key(ctx) || context().auth !== ctx.auth || !context().enabled) throw new Error('사용자·서버 또는 복원 상태가 변경되었습니다. 다시 비교하세요.');
+      if (c.conflicts[rk] !== conflict) throw new Error('충돌 상태가 변경되었습니다. 다시 비교하세요.');
+      merge(c, kind, latest.items, ctx.owner);
+      if ((c.resources[rk]?.version || 0) !== (compared?.version || 0)) {
+        conflict.remote = copy(c.resources[rk] || null);
+        await save();
+        throw new Error('서버 현재본이 변경되었습니다. 다시 비교하고 선택하세요.');
+      }
       const local = c.outbox.filter(o => o.kind === kind && o.id === id).at(-1);
       if (!['local', 'remote'].includes(choice)) throw new Error('명시적으로 선택하세요.');
+      if (choice === 'local' && compared && !supported(compared)) throw new Error('지원하지 않는 서버 형식입니다. 원본과 로컬 변경을 보존했습니다.');
       c.outbox = c.outbox.filter(o => !(o.kind === kind && o.id === id));
       delete c.conflicts[rk];
       if (choice === 'local' && local) {
-        const remote = c.resources[rk];
+        const remote = compared;
         if (local.method === 'PUT') {
           const newId = remote?.deleted_at ? uuid() : id;
           c.outbox.push({ kind, id: newId, method: 'PUT', sent: false, body: { owner_id: ctx.owner, schema_version: 1, base_version: remote?.deleted_at ? 0 : remote?.version || 0, mutation_id: uuid(), payload: copy(local.body.payload) } });
@@ -233,7 +250,7 @@
       }
       await save();
     }
-    return { list, put: (kind, id, payload) => enqueue(kind, id, 'PUT', payload), remove: (kind, id) => enqueue(kind, id, 'DELETE'), sync, resolve,
+    return { list, put: (kind, id, payload, options) => enqueue(kind, id, 'PUT', payload, options), remove: (kind, id, options) => enqueue(kind, id, 'DELETE', undefined, options), sync, resolve,
       export: () => copy(data), readonly: () => !readable(),
       status: () => readable() ? copy(bucket(context())) : { error: '지원하지 않는 보관 형식: 원본 보존, 읽기 전용' },
       import: async (value, { restore = false } = {}) => {

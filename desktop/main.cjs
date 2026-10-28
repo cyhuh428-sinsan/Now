@@ -2,7 +2,7 @@ const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron")
 const path = require("path");
 const { pathToFileURL } = require("node:url");
 const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
-const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
+const { readStoreFile, updateStoreFile, compareAndSetStoreValue } = require("./store-file.cjs");
 const { createVaultService } = require("./vault-service.cjs");
 
 const APP_TITLE = "NowNote";
@@ -44,27 +44,28 @@ function registerDesktopStorageHandlers() {
     return store.values[key] ?? null;
   });
 
-  ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
-    assertRendererStoreKey(key);
-    const result = updateStoreFile(desktopStorePath(), (store) => {
-      store.values[key] = value;
-      return store;
-    });
+  ipcMain.handle("nownote:desktop-store-write", (_event, key, value, options) => {
+    const result = updateRendererStoreValue(key, value, options);
     return { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
   });
 
-  ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
+  ipcMain.on("nownote:desktop-store-write-sync", (event, key, value, options) => {
     try {
-      assertRendererStoreKey(key);
-      const result = updateStoreFile(desktopStorePath(), (store) => {
-        store.values[key] = value;
-        return store;
-      });
+      const result = updateRendererStoreValue(key, value, options);
       event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
     } catch (error) {
       event.returnValue = { ok: false, error: error.message };
     }
   });
+}
+
+function updateRendererStoreValue(key, value, options) {
+  assertRendererStoreKey(key);
+  if (key === "nownote.library.v1") {
+    if (!options || !Object.hasOwn(options, "expectedValue")) throw new Error("Library writes require an expected value");
+    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
+  }
+  return updateStoreFile(desktopStorePath(), store => { store.values[key] = value; return store; });
 }
 
 function registerVaultHandlers() {
