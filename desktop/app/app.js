@@ -464,6 +464,436 @@ window.NowMarkdown = (() => {
   return { render, headings };
 })();
 
+;
+/* NowNote 사용자 템플릿·저장조건. Note 동기화와 분리된 durable outbox. */
+(() => {
+  'use strict';
+  const kinds = ['templates', 'saved-queries'];
+  const copy = value => structuredClone(value);
+  const uuid = () => crypto.randomUUID();
+  const key = ctx => JSON.stringify([String(ctx.url || '').replace(/\/+$/, ''), ctx.owner || 'local']);
+  const object = v => v && typeof v === 'object' && !Array.isArray(v);
+  const fields = (v, allowed) => {
+    if (!object(v) || Object.keys(v).some(k => !allowed.includes(k))) throw new Error('지원하지 않는 형식입니다. 원본을 보존합니다.');
+  };
+  const strings = v => Array.isArray(v) && v.every(s => typeof s === 'string');
+  function validate(kind, payload) {
+    if (!kinds.includes(kind)) throw new Error('지원하지 않는 자원입니다.');
+    fields(payload, kind === 'templates' ? ['name', 'description', 'title_template', 'content_template', 'properties', 'variables'] : ['name', 'order', 'filter', 'sort']);
+    if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.length > 240) throw new Error('이름은 1~240자로 입력하세요.');
+    if (kind === 'templates') {
+      if (typeof payload.content_template !== 'string') throw new Error('템플릿 본문이 필요합니다.');
+      for (const field of ['description', 'title_template']) if (payload[field] !== undefined && typeof payload[field] !== 'string') throw new Error('템플릿 문자열 형식 오류');
+      if (JSON.stringify(payload).includes('NOW_ENCRYPTED_V1:')) throw new Error('암호화 메모는 템플릿으로 저장할 수 없습니다.');
+      if (payload.properties !== undefined && (!object(payload.properties) || !Object.values(payload.properties).every(v => typeof v === 'string'))) throw new Error('속성은 문자열 사전이어야 합니다.');
+      if (payload.variables !== undefined && (!strings(payload.variables) || payload.variables.some(v => !['date', 'time', 'title'].includes(v)))) throw new Error('지원하지 않는 변수입니다.');
+    } else {
+      if (payload.order !== undefined && !Number.isInteger(payload.order)) throw new Error('목록 순서는 정수입니다.');
+      const f = payload.filter || {};
+      fields(f, ['text', 'tags', 'scope', 'favorite', 'updated']);
+      if (f.text !== undefined && typeof f.text !== 'string') throw new Error('검색어 형식 오류');
+      if (f.tags !== undefined) {
+        fields(f.tags, ['all', 'any']);
+        for (const v of Object.values(f.tags)) if (!strings(v)) throw new Error('태그 형식 오류');
+      }
+      if (f.scope !== undefined) {
+        fields(f.scope, ['topic_id', 'category_id']);
+        if (Object.values(f.scope).some(v => v !== null && typeof v !== 'string')) throw new Error('범위 형식 오류');
+      }
+      if (f.favorite !== undefined && f.favorite !== null && typeof f.favorite !== 'boolean') throw new Error('즐겨찾기 형식 오류');
+      if (f.updated !== undefined) {
+        fields(f.updated, ['from', 'to']);
+        for (const v of Object.values(f.updated)) if (v !== null && (typeof v !== 'string' || !/(Z|[+-]\d\d:\d\d)$/.test(v) || !Number.isFinite(Date.parse(v)))) throw new Error('수정 기간에는 시간대가 있는 날짜를 입력하세요.');
+        if (f.updated.from && f.updated.to && Date.parse(f.updated.from) > Date.parse(f.updated.to)) throw new Error('시작일이 종료일보다 늦습니다.');
+      }
+      if (payload.sort !== undefined) {
+        fields(payload.sort, ['field', 'direction']);
+        if (!['updated_at', 'title'].includes(payload.sort.field || 'updated_at') || !['asc', 'desc'].includes(payload.sort.direction || 'desc')) throw new Error('정렬 형식 오류');
+      }
+    }
+    if (new TextEncoder().encode(JSON.stringify(payload)).length > (kind === 'templates' ? 1048576 : 16384)) throw new Error('저장 용량 한도를 초과했습니다. 내용을 자르지 않았습니다.');
+    return copy(payload);
+  }
+  const supported = r => {
+    try { if (r.schema_version !== 1) return false; if (!r.deleted_at) validate(r.kind, r.payload); return true; } catch { return false; }
+  };
+  function applyTemplate(payload, title, date = new Date()) {
+    const pad = n => String(n).padStart(2, '0');
+    const vars = { title, date: `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`, time: `${pad(date.getHours())}:${pad(date.getMinutes())}` };
+    const replace = s => String(s || '').replace(/\{\{(date|time|title)\}\}/g, (_, name) => vars[name]);
+    return { title: replace(payload.title_template || payload.name), content: replace(payload.content_template),
+      properties: Object.fromEntries(Object.entries(payload.properties || {}).map(([k, v]) => [k, replace(v)])) };
+  }
+  function evaluate(query, notes, scopeIds) {
+    validate('saved-queries', query);
+    const f = query.filter || {}, scope = f.scope || {}, sort = query.sort || {};
+    const required = [scope.topic_id, scope.category_id].filter(Boolean);
+    if (required.some(id => !scopeIds.has(id))) return [];
+    const text = String(f.text || '').toLocaleLowerCase();
+    return notes.filter(n => {
+      if (n.deleted || n.authorized === false) return false;
+      if (required.some(id => n.id !== id && !(n.ancestors || []).includes(id))) return false;
+      if (text && !`${n.title || ''}\n${n.content || ''}`.toLocaleLowerCase().includes(text)) return false;
+      const tags = new Set(n.tags || []);
+      if ((f.tags?.all || []).some(t => !tags.has(t))) return false;
+      if (f.tags?.any?.length && !f.tags.any.some(t => tags.has(t))) return false;
+      if (typeof f.favorite === 'boolean' && Boolean(n.favorite) !== f.favorite) return false;
+      const stamp = Date.parse(n.updated_at);
+      if ((f.updated?.from && !(stamp >= Date.parse(f.updated.from))) || (f.updated?.to && !(stamp <= Date.parse(f.updated.to)))) return false;
+      return true;
+    }).sort((a, b) => {
+      const value = sort.field === 'title' ? String(a.title || '').localeCompare(String(b.title || ''), 'ko') : (Date.parse(a.updated_at) || 0) - (Date.parse(b.updated_at) || 0);
+      return (sort.direction === 'asc' ? value : -value) || String(a.id).localeCompare(String(b.id));
+    });
+  }
+  function guardedWriter({ initial, read, write, lock = action => action() }) {
+    let previous = initial;
+    return async value => lock(() => {
+      if (read() !== previous) throw new Error('다른 탭에서 저장 자료를 변경했습니다. 이 창의 변경을 백업한 후 다시 열어주세요. 덮어쓰지 않았습니다.');
+      const next = JSON.stringify(value);
+      write(next);
+      previous = next;
+    });
+  }
+  function create({ initial, context, request, write, change = () => {} }) {
+    let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    let writeChain = Promise.resolve();
+    const locks = new Map();
+    const readable = () => data?.schema_version === 1 && object(data.contexts) && Object.values(data.contexts).every(c => object(c) && object(c.resources) && Array.isArray(c.outbox) && object(c.conflicts));
+    const writable = () => { if (!readable()) throw new Error('지원하지 않는 보관 형식입니다. 백업 원본을 보존했습니다.'); };
+    const save = () => {
+      const value = copy(data);
+      writeChain = writeChain.catch(() => {}).then(() => write(value));
+      return writeChain.then(() => change());
+    };
+    const bucket = ctx => {
+      writable();
+      const k = key(ctx);
+      return data.contexts[k] ||= { resources: {}, outbox: [], conflicts: {} };
+    };
+    const resourceKey = (kind, id) => `${kind}/${id}`;
+    const merge = (c, kind, rows, owner) => {
+      for (const row of rows) {
+        if (row.owner_id !== owner || typeof row.id !== 'string' || !Number.isInteger(row.version)) throw new Error('서버 응답의 소유자/버전이 일치하지 않습니다.');
+        const k = resourceKey(kind, row.id), old = c.resources[k];
+        if (!old || row.version >= old.version) c.resources[k] = copy({ ...row, kind });
+      }
+    };
+    const list = kind => {
+      if (!readable()) return [];
+      const c = bucket(context()), map = new Map();
+      for (const r of Object.values(c.resources)) if (r.kind === kind) map.set(r.id, { ...copy(r), readonly: !supported(r) });
+      for (const op of c.outbox) if (op.kind === kind) {
+        const old = map.get(op.id) || { id: op.id, version: 0, schema_version: 1, kind };
+        map.set(op.id, { ...old, payload: copy(op.body.payload), deleted_at: op.method === 'DELETE' ? 'pending' : null, pending: true, error: op.error, readonly: !supported({ ...old, payload: op.body.payload, deleted_at: op.method === 'DELETE' ? 'pending' : null }) });
+      }
+      return [...map.values()].filter(r => !r.deleted_at).map(r => ({ ...r, conflict: copy(c.conflicts[resourceKey(kind, r.id)] || null) }))
+        .sort((a, b) => (a.payload?.order || 0) - (b.payload?.order || 0) || String(a.payload?.name || a.id).localeCompare(String(b.payload?.name || b.id), 'ko'));
+    };
+    async function enqueue(kind, id, method, payload) {
+      writable();
+      if (!kinds.includes(kind)) throw new Error('지원하지 않는 자원입니다.');
+      const ctx = context(), c = bucket(ctx);
+      id ||= uuid();
+      const k = resourceKey(kind, id), remote = c.resources[k], existing = list(kind).find(r => r.id === id);
+      if (remote?.deleted_at || existing?.readonly) throw new Error('삭제되었거나 지원하지 않는 자료입니다. 새 사본으로 저장하세요.');
+      if (c.conflicts[k]) throw new Error('충돌 내용을 먼저 비교하고 선택하세요.');
+      const pending = c.outbox.filter(o => o.kind === kind && o.id === id);
+      if (method === 'DELETE' && !remote && pending.length && pending.every(o => !o.sent)) {
+        c.outbox = c.outbox.filter(o => !(o.kind === kind && o.id === id));
+        await save();
+        return id;
+      }
+      if (method === 'PUT') {
+        payload = validate(kind, payload);
+        if (!existing && list(kind).length >= 100) throw new Error('종류별 최대 100개입니다.');
+      }
+      const previous = c.outbox.filter(o => o.kind === kind && o.id === id).at(-1);
+      if (previous && !previous.sent) {
+        previous.method = method;
+        previous.body.mutation_id = uuid();
+        delete previous.error;
+        if (method === 'PUT') previous.body.payload = payload; else delete previous.body.payload;
+      } else {
+        c.outbox.push({ kind, id, method, sent: false, body: { owner_id: ctx.owner, schema_version: 1,
+          base_version: previous ? null : remote?.version || 0, mutation_id: uuid(), ...(method === 'PUT' ? { payload } : {}) } });
+      }
+      await save();
+      return id;
+    }
+    async function run(ctx) {
+      const k = key(ctx), c = bucket(ctx);
+      const active = () => key(context()) === k && context().enabled && context().auth === ctx.auth;
+      const pull = async kind => {
+        if (!active()) return false;
+        const result = await request(ctx, kind, null, 'GET');
+        merge(c, kind, result.items, ctx.owner);
+        await save();
+        return active();
+      };
+      try {
+        for (const kind of kinds) if (!await pull(kind)) return;
+        delete c.error;
+        // One immutable request at a time; subsequent local edits wait for its actual receipt version.
+        const attempted = new Set();
+        while (true) {
+          const op = c.outbox.find(item => !attempted.has(item));
+          if (!op) break;
+          attempted.add(op);
+          const rk = resourceKey(op.kind, op.id);
+          if (!active()) return;
+          if (c.conflicts[rk] || op.body.base_version === null) continue;
+          try {
+            fields(op.body, ['owner_id', 'schema_version', 'base_version', 'mutation_id', ...(op.method === 'PUT' ? ['payload'] : [])]);
+            if (!kinds.includes(op.kind) || !['PUT', 'DELETE'].includes(op.method) || op.body.owner_id !== ctx.owner || op.body.schema_version !== 1 || !Number.isInteger(op.body.base_version) || op.body.base_version < 0) throw new Error('지원하지 않는 전송 형식입니다. 원본을 보존합니다.');
+            if (op.method === 'PUT') validate(op.kind, op.body.payload);
+          } catch (error) { op.error = { code: 'unsupported_outbox', message: error.message }; await save(); continue; }
+          op.sent = true;
+          delete op.error;
+          await save();
+          try {
+            if (!active()) return;
+            const result = await request(ctx, op.kind, op.id, op.method, copy(op.body));
+            if (result.resource.id !== op.id || result.resource.owner_id !== ctx.owner) throw new Error('서버 응답이 요청과 다릅니다.');
+            merge(c, op.kind, [result.resource], ctx.owner);
+            c.outbox.splice(c.outbox.indexOf(op), 1);
+            const next = c.outbox.find(o => o.kind === op.kind && o.id === op.id);
+            if (next?.body.base_version === null) next.body.base_version = result.resource.version;
+            await save();
+            if (!await pull(op.kind)) return;
+          } catch (error) {
+            op.error = { code: error.code || 'connection_error', message: error.message };
+            if (error.status === 409 && ['version_conflict', 'resource_deleted'].includes(error.code)) {
+              c.conflicts[rk] = { code: error.code, local: copy(c.outbox.filter(o => o.kind === op.kind && o.id === op.id)), remote: copy(c.resources[rk] || null) };
+              await pull(op.kind);
+              c.conflicts[rk].remote = copy(c.resources[rk] || null);
+            }
+            await save();
+            if (!error.status || [401, 403].includes(error.status)) return;
+          }
+        }
+      } catch (error) { c.error = error.message; await save(); }
+    }
+    async function sync() {
+      writable();
+      const ctx = { ...context() }, k = key(ctx);
+      if (!ctx.enabled || !ctx.auth) return;
+      if (locks.has(k)) return locks.get(k);
+      const running = run(ctx).finally(() => locks.delete(k));
+      locks.set(k, running);
+      return running;
+    }
+    async function resolve(kind, id, choice) {
+      const ctx = context(), c = bucket(ctx), rk = resourceKey(kind, id), conflict = c.conflicts[rk];
+      if (!conflict) return;
+      const local = c.outbox.filter(o => o.kind === kind && o.id === id).at(-1);
+      if (!['local', 'remote'].includes(choice)) throw new Error('명시적으로 선택하세요.');
+      c.outbox = c.outbox.filter(o => !(o.kind === kind && o.id === id));
+      delete c.conflicts[rk];
+      if (choice === 'local' && local) {
+        const remote = c.resources[rk];
+        if (local.method === 'PUT') {
+          const newId = remote?.deleted_at ? uuid() : id;
+          c.outbox.push({ kind, id: newId, method: 'PUT', sent: false, body: { owner_id: ctx.owner, schema_version: 1, base_version: remote?.deleted_at ? 0 : remote?.version || 0, mutation_id: uuid(), payload: copy(local.body.payload) } });
+        } else if (remote && !remote.deleted_at) c.outbox.push({ kind, id, method: 'DELETE', sent: false, body: { owner_id: ctx.owner, schema_version: 1, base_version: remote.version, mutation_id: uuid() } });
+      }
+      await save();
+    }
+    return { list, put: (kind, id, payload) => enqueue(kind, id, 'PUT', payload), remove: (kind, id) => enqueue(kind, id, 'DELETE'), sync, resolve,
+      export: () => copy(data), readonly: () => !readable(),
+      status: () => readable() ? copy(bucket(context())) : { error: '지원하지 않는 보관 형식: 원본 보존, 읽기 전용' },
+      import: async (value, { restore = false } = {}) => {
+        data = copy(value);
+        // Restoring an old cache is a user edit, not permission to overwrite a newer server copy.
+        if (restore && readable()) for (const [scope, c] of Object.entries(data.contexts)) {
+          let owner;
+          try { owner = JSON.parse(scope)[1]; } catch { continue; }
+          for (const r of Object.values(c.resources)) {
+            if (!supported(r) || r.deleted_at || r.owner_id !== owner || c.outbox.some(o => o.kind === r.kind && o.id === r.id) || c.conflicts[resourceKey(r.kind, r.id)]) continue;
+            c.outbox.push({ kind: r.kind, id: r.id, method: 'PUT', sent: false, body: { owner_id: owner, schema_version: 1,
+              base_version: r.version, mutation_id: uuid(), payload: copy(r.payload) } });
+          }
+        }
+        await save();
+      } };
+  }
+  globalThis.NowLibrary = { create, validate, applyTemplate, evaluate, key, guardedWriter };
+})();
+
+;
+/* 공통 Web/Electron 관리 화면. 인증·메모 접근은 호출자가 제공한다. */
+globalThis.mountNowLibrary = function mountNowLibrary(api) {
+  const dialog = document.createElement('dialog');
+  dialog.id = 'libraryDialog'; dialog.className = 'library-dialog';
+  dialog.setAttribute('aria-labelledby', 'libraryTitle');
+  dialog.innerHTML = `<header class="library-header"><h2 id="libraryTitle">템플릿·저장조건</h2><button type="button" data-action="close" class="ghost-btn">닫기</button></header>
+    <div class="library-tabs" role="tablist" aria-label="자료 종류"><button type="button" role="tab" data-kind="templates">문서 템플릿</button><button type="button" role="tab" data-kind="saved-queries">저장조건</button></div>
+    <div class="library-toolbar"><button type="button" data-action="new" class="secondary-btn">새로 만들기</button><button type="button" data-action="capture" class="secondary-btn">현재 메모로 만들기</button><button type="button" data-action="sync" class="secondary-btn">동기화</button></div>
+    <p id="libraryStatus" role="status" aria-live="polite"></p>
+    <div class="library-layout"><nav id="libraryList" aria-label="저장 자료"></nav><section id="libraryDetail" role="tabpanel" aria-label="선택 자료"></section></div>
+    <section id="libraryConflicts" aria-label="충돌 비교"></section>`;
+  document.body.append(dialog);
+  const $ = s => dialog.querySelector(s);
+  let kind = 'templates', selectedId = null, dirty = false, boundContext = '', busy = false;
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const button = (action, label) => `<button type="button" class="secondary-btn" data-action="${action}">${label}</button>`;
+  const field = (name, label, value, type = 'text') => `<label>${label}<input class="settings-input" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+  const area = (name, label, value) => `<label class="library-wide">${label}<textarea class="settings-input" name="${name}" rows="${name === 'content' ? 8 : 3}">${esc(value)}</textarea></label>`;
+  const select = (name, label, value, options) => `<label>${label}<select class="settings-select" name="${name}">${options.map(([v, t]) => `<option value="${esc(v)}" ${String(v) === String(value) ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></label>`;
+  const rows = () => kind === 'templates' ? [...api.builtins(), ...api.store.list(kind)] : api.store.list(kind);
+  const current = () => rows().find(r => r.id === selectedId);
+  let confirmation = null;
+  function ask(text) {
+    if (confirmation) return Promise.resolve(false);
+    return new Promise(resolve => {
+      const previous = document.activeElement, siblings = [...dialog.children];
+      siblings.forEach(node => { node.inert = true; });
+      const prompt = document.createElement('section'); prompt.className = 'library-confirm';
+      prompt.setAttribute('role', 'alertdialog'); prompt.setAttribute('aria-label', text);
+      const p = document.createElement('p'); p.textContent = text;
+      const cancel = document.createElement('button'), ok = document.createElement('button');
+      cancel.type = ok.type = 'button'; cancel.className = ok.className = 'secondary-btn';
+      cancel.textContent = '취소'; ok.textContent = '확인';
+      const finish = value => {
+        siblings.forEach(node => { node.inert = false; }); prompt.remove(); confirmation = null;
+        previous?.focus(); resolve(value);
+      };
+      confirmation = finish; cancel.onclick = () => finish(false); ok.onclick = () => finish(true);
+      prompt.onkeydown = event => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); finish(false); } };
+      prompt.append(p, cancel, ok); dialog.prepend(prompt); cancel.focus(); prompt.scrollIntoView({ block: 'nearest' });
+    });
+  }
+  const clean = async () => !dirty || await ask('저장하지 않은 변경을 버릴까요?');
+  const message = (text, error = false) => { $('#libraryStatus').textContent = text; $('#libraryStatus').dataset.error = String(error); };
+  const safe = action => async () => { try { await action(); } catch (e) { message(e.message, true); } };
+  function status() {
+    if (boundContext !== api.contextKey()) {
+      selectedId = null; dirty = false; boundContext = api.contextKey(); render(); return;
+    }
+    const s = api.store.status();
+    const error = s.error || s.outbox?.find(o => o.error)?.error?.message;
+    message(error || `${api.contextLabel()} · ${s.outbox?.length || 0}건 전송 대기${busy ? ' · 동기화 중' : ''}`, Boolean(error));
+    renderList(); renderConflicts();
+  }
+  function renderList() {
+    $('#libraryList').replaceChildren();
+    for (const row of rows()) {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = 'library-item'; b.dataset.id = row.id;
+      b.setAttribute('aria-current', String(selectedId === row.id));
+      const title = document.createElement('strong'); title.textContent = row.payload?.name || row.id;
+      const info = document.createElement('small');
+      info.textContent = row.builtin ? '기본 양식' : row.readonly ? '지원하지 않는 형식 · 원본 보존' : row.conflict ? '충돌 · 비교 필요' : row.pending ? '전송 대기' : `버전 ${row.version}`;
+      b.append(title, info);
+      b.onclick = safe(async () => { if (!await clean()) return; selectedId = row.id; dirty = false; render(); });
+      $('#libraryList').append(b);
+    }
+    if (!rows().length) $('#libraryList').textContent = '저장된 자료 없음';
+  }
+  function scopeOptions(level, value) {
+    const options = [['', '전체'], ...api.notes().filter(n => n.level === level).map(n => [n.id, n.title || '제목 없음'])];
+    if (value && !options.some(([id]) => id === value)) options.push([value, `없거나 접근할 수 없는 범위 (${value})`]);
+    return options;
+  }
+  function render() {
+    boundContext = api.contextKey();
+    dialog.querySelectorAll('[data-kind]').forEach(b => b.setAttribute('aria-selected', String(b.dataset.kind === kind)));
+    $('[data-action="capture"]').hidden = kind !== 'templates';
+    renderList(); renderConflicts();
+    const row = current(), detail = $('#libraryDetail');
+    if (api.store.readonly()) { detail.textContent = '지원하지 않는 보관 형식입니다. 원본을 백업한 뒤 호환되는 버전에서 열어주세요.'; status(); return; }
+    if (!row) { detail.textContent = '선택한 자료 없음'; status(); return; }
+    if (row.readonly) { detail.innerHTML = `<h3>지원하지 않는 형식 · 읽기 전용</h3><pre>${esc(JSON.stringify(row, null, 2))}</pre>`; status(); return; }
+    const p = row.payload;
+    const shared = field('name', '이름', p.name);
+    if (kind === 'templates') {
+      detail.innerHTML = `<form id="libraryForm"><div class="library-fields">${shared}${field('title', '메모 제목', p.title_template || '')}${area('description', '설명', p.description || '')}${area('content', '본문', p.content_template)}${area('properties', '속성 (JSON)', JSON.stringify(p.properties || {}, null, 2))}</div><div class="library-actions">${button('save', row.builtin ? '사본 저장' : '저장')}${button('clone', '복제')}${row.builtin ? '' : button('delete', '삭제')}${button('preview', '미리보기')}${button('create-note', '새 메모 생성')}${button('insert', '현재 메모에 삽입')}</div></form><section id="libraryPreview" class="markdown-preview" aria-label="템플릿 미리보기"></section>`;
+    } else {
+      const f = p.filter || {}, scope = f.scope || {};
+      const localDate = v => v ? new Date(Date.parse(v) - new Date(v).getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '';
+      detail.innerHTML = `<form id="libraryForm"><div class="library-fields">${shared}${field('order', '목록 순서', p.order || 0, 'number')}${field('text', '제목·본문 검색어', f.text || '')}${field('tagsAll', '모두 포함할 태그 (쉼표 구분)', (f.tags?.all || []).join(', '))}${field('tagsAny', '하나 이상 포함할 태그 (쉼표 구분)', (f.tags?.any || []).join(', '))}${select('topic', '주제', scope.topic_id || '', scopeOptions(1, scope.topic_id))}${select('category', '분류', scope.category_id || '', scopeOptions(2, scope.category_id))}${select('favorite', '즐겨찾기', typeof f.favorite === 'boolean' ? String(f.favorite) : '', [['', '전체'], ['true', '즐겨찾기만'], ['false', '즐겨찾기 제외']])}${field('from', '수정 시작 (현지 시간)', localDate(f.updated?.from), 'datetime-local')}${field('to', '수정 종료 (현지 시간)', localDate(f.updated?.to), 'datetime-local')}${select('sortField', '결과 정렬', p.sort?.field || 'updated_at', [['updated_at', '수정일'], ['title', '제목']])}${select('direction', '정렬 방향', p.sort?.direction || 'desc', [['asc', '오름차순'], ['desc', '내림차순']])}</div><div class="library-actions">${button('save', '저장')}${button('clone', '복제')}${button('delete', '삭제')}${button('preview', '결과 새로고침')}</div></form><section id="libraryPreview" aria-label="불러온 메모 결과"></section>`;
+    }
+    $('#libraryForm').onsubmit = e => e.preventDefault();
+    $('#libraryForm').oninput = () => { dirty = true; };
+    detail.querySelectorAll('[data-action]').forEach(b => { b.onclick = safe(() => action(b.dataset.action)); });
+    preview(); status();
+  }
+  function payload() {
+    const form = $('#libraryForm'), val = name => form.elements[name].value;
+    if (kind === 'templates') return NowLibrary.validate(kind, { name: val('name'), title_template: val('title'), content_template: val('content'), description: val('description'), properties: JSON.parse(val('properties')), variables: ['date', 'time', 'title'] });
+    const tags = name => val(name).split(',').map(s => s.trim()).filter(Boolean);
+    return NowLibrary.validate(kind, { name: val('name'), order: Number(val('order')), filter: { text: val('text'), tags: { all: tags('tagsAll'), any: tags('tagsAny') }, scope: { topic_id: val('topic') || null, category_id: val('category') || null }, favorite: val('favorite') === '' ? null : val('favorite') === 'true', updated: { from: val('from') ? new Date(val('from')).toISOString() : null, to: val('to') ? new Date(val('to')).toISOString() : null } }, sort: { field: val('sortField'), direction: val('direction') } });
+  }
+  function preview() {
+    const target = $('#libraryPreview'); if (!target) return;
+    const p = payload();
+    if (kind === 'templates') {
+      const value = NowLibrary.applyTemplate(p, api.noteTitle());
+      const inert = document.createElement('template');
+      inert.innerHTML = `<h3>${esc(value.title)}</h3>${NowMarkdown.render(value.content)}`;
+      // Preview links never open a file/network or hydrate remote attachments.
+      inert.content.querySelectorAll('img').forEach(img => img.remove());
+      inert.content.querySelectorAll('a').forEach(a => { a.removeAttribute('href'); });
+      target.replaceChildren(inert.content);
+    } else {
+      const notes = api.notes(), results = NowLibrary.evaluate(p, notes, new Set(notes.map(n => n.id)));
+      target.replaceChildren();
+      const title = document.createElement('h3'); title.textContent = `불러온 메모 ${results.length}개`;
+      target.append(title);
+      if (!results.length) { const empty = document.createElement('p'); empty.textContent = '조건에 맞는 메모 없음'; target.append(empty); }
+      for (const n of results) { const b = document.createElement('button'); b.type = 'button'; b.className = 'library-result'; b.textContent = n.path || n.title || '제목 없음'; b.onclick = safe(async () => { if (!await clean()) return; dialog.close(); api.selectNote(n.id); }); target.append(b); }
+    }
+  }
+  async function sync() { if (busy) return; busy = true; status(); try { await api.store.sync(); } finally { busy = false; if (dialog.open) { status(); if (!dirty && current()) render(); } } }
+  async function action(name) {
+    if (boundContext !== api.contextKey()) { render(); throw new Error('사용자 또는 서버가 변경되어 선택을 초기화했습니다.'); }
+    const row = current();
+    if (name === 'preview') return preview();
+    if (name === 'save' || name === 'clone') {
+      selectedId = await api.store.put(kind, name === 'clone' || row.builtin ? null : row.id, payload());
+      dirty = false; render(); await sync();
+    }
+    if (name === 'delete' && await ask('이 자료를 삭제할까요?')) { await api.store.remove(kind, row.id); selectedId = null; dirty = false; render(); await sync(); }
+    if (name === 'create-note' || name === 'insert') {
+      const value = NowLibrary.applyTemplate(payload(), api.noteTitle());
+      if (await api.apply(value, name === 'insert')) message('메모에 적용했습니다.');
+    }
+  }
+  function renderConflicts() {
+    const target = $('#libraryConflicts'); target.replaceChildren();
+    const conflicts = api.store.status().conflicts || {};
+    for (const [rk, conflict] of Object.entries(conflicts)) {
+      const [resourceKind, id] = rk.split('/');
+      const section = document.createElement('section'); section.className = 'library-conflict';
+      const title = document.createElement('h3'); title.textContent = `충돌: ${conflict.code}`;
+      const compare = document.createElement('div'); compare.className = 'library-compare';
+      for (const [label, value] of [['내 변경', conflict.local], ['서버 현재본', conflict.remote]]) {
+        const pane = document.createElement('div'), h = document.createElement('h4'), pre = document.createElement('pre'); h.textContent = label; pre.textContent = JSON.stringify(value, null, 2); pane.append(h, pre); compare.append(pane);
+      }
+      section.append(title, compare);
+      for (const [choice, text] of [['local', conflict.remote?.deleted_at ? '내 변경을 새 사본으로 저장' : '내 변경으로 다시 저장'], ['remote', '서버 현재본 사용']]) {
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'secondary-btn'; b.textContent = text;
+        b.onclick = safe(async () => { if (!await clean()) return; await api.store.resolve(resourceKind, id, choice); dirty = false; selectedId = null; render(); await sync(); }); section.append(b);
+      }
+      target.append(section);
+    }
+  }
+  dialog.querySelectorAll(':scope > .library-toolbar [data-action], :scope > .library-header [data-action]').forEach(b => {
+    b.onclick = safe(async () => {
+      const name = b.dataset.action;
+      if (name === 'close') { if (await clean()) dialog.close(); return; }
+      if (name === 'sync') { await sync(); return; }
+      if (!await clean()) return;
+      kind = name === 'capture' ? 'templates' : kind;
+      const p = name === 'capture' ? api.capture() : kind === 'templates' ? { name: '새 템플릿', content_template: '' } : { name: '새 저장조건', order: api.store.list(kind).length, filter: {}, sort: { field: 'updated_at', direction: 'desc' } };
+      selectedId = await api.store.put(kind, null, p); dirty = false; render();
+    });
+  });
+  dialog.querySelectorAll('[data-kind]').forEach(b => { b.onclick = safe(async () => { if (!await clean()) return; kind = b.dataset.kind; selectedId = null; dirty = false; render(); }); });
+  dialog.addEventListener('cancel', e => { e.preventDefault(); safe(async () => { if (await clean()) dialog.close(); })(); });
+  return { open: async () => { if (dialog.open) return; boundContext = api.contextKey(); selectedId = rows()[0]?.id || null; dirty = false; render(); dialog.showModal(); await sync(); }, refresh: () => { if (dialog.open) status(); }, close: () => { confirmation?.(false); dialog.close(); }, requestConfirmation: ask, sync };
+};
+
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
@@ -471,7 +901,7 @@ const CONTEXT_MENU_SETTINGS_VERSION = 2;
 const WEB_SESSION_KEY = "nownote.web.session.v1";
 const WEB_LOGOUT_KEY = "nownote.web.logout.v1";
 const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
-const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY]);
+const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY, "nownote.library.v1"]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
 // #region nownote-only:desktop 2.3.9 릴리스 전 설치형 버전 표기
@@ -4647,6 +5077,8 @@ function saveWebSession(session) {
 
 function clearWebSession() {
   sessionStorage.removeItem(WEB_SESSION_KEY);
+  libraryNotesContext = "";
+  libraryUI?.close();
 }
 
 function markWebLoggedOut() {
@@ -5090,10 +5522,108 @@ async function handleWebLogout() {
   }
 }
 
+const LIBRARY_STORAGE_KEY = "nownote.library.v1";
+let libraryStore = null;
+let libraryUI = null;
+let libraryNotesContext = "";
+
+function libraryContext() {
+  const server = state.settings.server || defaultServerSettings();
+  const headers = serverAuthHeaders(server);
+  const auth = headers["X-Now-Web-Session"] || headers["X-Now-User-Token"] || "";
+  const session = isHostedWebClient() ? loadWebSession() : null;
+  const active = !isHostedWebClient() || Boolean(session && isWebAuthActive()
+    && normalizeOwnerId(session.ownerId) === normalizeOwnerId(server.ownerId)
+    && session.token === server.webSessionToken);
+  return { url: server.url || "", owner: normalizeOwnerId(server.ownerId), headers,
+    enabled: active && server.mode === "server" && Boolean(server.url && auth), auth };
+}
+
+async function requestLibrary(ctx, kind, id, method, body) {
+  const path = "/api/v1/" + kind + (id ? "/" + encodeURIComponent(id) : "?owner_id=" + encodeURIComponent(ctx.owner) + "&include_deleted=true");
+  const response = await fetch(ctx.url + path, { method, headers: { ...ctx.headers, ...(body ? { "Content-Type": "application/json" } : {}) },
+    ...(body ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000) });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    const code = result.detail?.code || (typeof result.detail === "string" ? result.detail : "request_error");
+    throw Object.assign(new Error("HTTP " + response.status + ": " + code), { status: response.status, code });
+  }
+  return result;
+}
+
+function libraryNotes() {
+  const key = NowLibrary.key(libraryContext());
+  if (isHostedWebClient() && (!libraryContext().enabled || libraryNotesContext !== key)) return [];
+  return flattenTree(state.data.tree).filter(node => {
+    if (node.groupSharedReadOnly && (libraryNotesContext !== key || !libraryContext().enabled)) return false;
+    return node.status !== "deleted";
+  }).map(node => ({
+    id: node.id, title: node.title, content: isEncryptedTreeNodeLocked(node) ? "" : visibleContentForNode(node),
+    tags: isEncryptedTreeNodeLocked(node) ? [] : node.tags || [], favorite: node.favorite,
+    updated_at: node.updatedAt, level: node.level,
+    ancestors: treePathNodes(node.id).slice(0, -1).map(parent => parent.id),
+    path: treePathNodes(node.id).map(parent => parent.title).join(" / "),
+  }));
+}
+
+async function initializeLibrary() {
+  let initial = await readStorage(LIBRARY_STORAGE_KEY);
+  const webWrite = isDesktopClient() ? null : NowLibrary.guardedWriter({
+    initial, read: () => localStorage.getItem(LIBRARY_STORAGE_KEY),
+    write: raw => localStorage.setItem(LIBRARY_STORAGE_KEY, raw),
+    lock: action => navigator.locks ? navigator.locks.request(LIBRARY_STORAGE_KEY, action) : action(),
+  });
+  if (typeof initial === "string") {
+    try { initial = JSON.parse(initial); } catch { initial = { schema_version: "unreadable", raw: initial }; }
+  }
+  libraryStore = NowLibrary.create({ initial, context: libraryContext, request: requestLibrary,
+    write: async value => {
+      if (isDesktopClient()) await window.nownoteDesktop.storage.write(LIBRARY_STORAGE_KEY, value);
+      else await webWrite(value);
+    }, change: () => libraryUI?.refresh() });
+  libraryUI = mountNowLibrary({
+    store: libraryStore, contextKey: () => NowLibrary.key(libraryContext()),
+    contextLabel: () => libraryContext().owner + (libraryContext().enabled ? " · 서버 연결" : " · 오프라인"),
+    notes: libraryNotes, noteTitle: () => getSelectedTreeNode()?.title || "새 메모",
+    builtins: () => Object.entries(WRITING_TEMPLATES).map(([id, p]) => ({ id: "builtin:" + id, builtin: true,
+      payload: { name: p.label, title_template: p.title, content_template: p.content, properties: structuredClone(p.properties) } })),
+    capture: () => {
+      const node = getSelectedTreeNode();
+      if (!node || !libraryNotes().some(n => n.id === node.id)) throw new Error("사용할 수 있는 현재 메모가 없습니다.");
+      if (isEncryptedContent(node.content)) throw new Error("암호화 원문은 잠금 해제 상태에서도 템플릿으로 저장할 수 없습니다.");
+      return { name: node.title || "새 템플릿", title_template: node.title || "", content_template: node.content || "",
+        properties: structuredClone(node.properties || {}) };
+    },
+    apply: async (value, insert) => {
+      if (isHostedWebClient() && !libraryContext().enabled) throw new Error("현재 로그인과 서버 연결을 확인하세요.");
+      const selected = getSelectedTreeNode();
+      if (insert) {
+        if (!selected || isReadOnlyTreeNode(selected) || isEncryptedContent(selected.content)) throw new Error("쓰기 가능한 일반 메모를 선택하세요.");
+        if (selected.content && !await libraryUI.requestConfirmation("현재 메모에 삽입할까요? 선택한 본문이 있으면 해당 부분을 대체합니다.")) return false;
+        insertTextIntoTreeContent(value.content);
+        selected.properties = normalizeNoteProperties({ ...selected.properties, ...value.properties });
+        markTreeNodeChanged(selected);
+      } else {
+        const parent = selected && !isReadOnlyTreeNode(selected) && selected.level < 3 ? selected : null;
+        const node = createNode(value.title, value.content, parent?.id || null, parent ? parent.level + 1 : 1);
+        node.properties = normalizeNoteProperties(structuredClone(value.properties));
+        if (parent) { parent.children.push(node); state.expandedTreeIds.add(parent.id); } else state.data.tree.push(node);
+        state.selectedTreeId = node.id;
+      }
+      persist(); renderTree();
+      return true;
+    },
+    selectNote: id => { if (libraryNotes().some(n => n.id === id)) selectTreeNode(id); },
+  });
+  $("#libraryBtn")?.addEventListener("click", () => libraryUI.open().catch(error => showNotice(error.message, "error")));
+  window.addEventListener("online", () => libraryStore.sync().catch(error => showNotice(error.message, "error")));
+}
+
 async function initializeApp() {
   bindHostedAuthEvents();
   await load();
   await loadSettings();
+  await initializeLibrary();
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
   bindEvents();
@@ -8234,6 +8764,7 @@ async function verifyWebSession() {
 
 async function loadServerSharedNotes({ replace = false, message = t("settings.server.syncing") } = {}) {
   const server = state.settings.server;
+  const libraryLoadContext = NowLibrary.key(libraryContext());
   if (!prepareServerRequest(server)) return;
   renderServerStatus("testing", message);
   const payload = await requestServerJson(server, "/api/v1/sync", {
@@ -8256,6 +8787,8 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
       state.selectedDeletedTreeIds.clear();
     }
     const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+    libraryNotesContext = libraryLoadContext === NowLibrary.key(libraryContext()) ? libraryLoadContext : "";
+    libraryStore?.sync().catch(error => showNotice(error.message, "error"));
     markServerSyncedNotes();
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
@@ -8594,6 +9127,7 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       return;
     }
 
+    const librarySyncContext = NowLibrary.key(libraryContext());
     const notes = buildServerSyncNotes(server);
     renderServerStatus("testing", message);
     const response = await fetch(`${server.url}/api/v1/sync`, {
@@ -8617,6 +9151,8 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       ...(payload.pulled_notes || []),
     ];
     const mergeResult = applyPulledServerNotes(serverAcceptedNotes);
+    libraryNotesContext = librarySyncContext === NowLibrary.key(libraryContext()) ? librarySyncContext : "";
+    libraryStore?.sync().catch(error => showNotice(error.message, "error"));
     const pushedCount = payload.pushed_notes?.length || 0;
     const pulledCount = (payload.pulled_notes || []).length;
     markServerSyncedNotes(payload.pushed_notes || []);
@@ -17700,6 +18236,7 @@ function normalizeRecoverySnapshot(snapshot = {}) {
     createdAt: snapshot.createdAt || new Date().toISOString(),
     summary: isPlainObject(snapshot.summary) ? snapshot.summary : backupSummary(snapshot.data || {}),
     data: isBackupData(snapshot.data) ? backupDataShape(snapshot.data, { includeRecoveryMeta: false }) : defaultData(),
+    ...(Object.hasOwn(snapshot, "library") ? { library: structuredClone(snapshot.library) } : {}),
   };
 }
 
@@ -18043,6 +18580,7 @@ function importData(event) {
       const preservedSnapshots = state.data.snapshots;
       const preservedReports = state.data.importReports;
       downloadCurrentBackup("nownote-before-import");
+      if (Object.hasOwn(parsed, "library")) await libraryStore.import(parsed.library, { restore: true });
       state.data = backupDataShape(imported.data);
       state.data.snapshots = preservedSnapshots;
       state.data.importReports = preservedReports;
@@ -18383,6 +18921,7 @@ function createRecoverySnapshot(reason = "manual") {
     createdAt: new Date().toISOString(),
     summary: backupSummary(state.data),
     data: backupDataShape(state.data, { includeRecoveryMeta: false }),
+    library: libraryStore?.export(),
   };
   state.data.snapshots = [snapshot, ...(state.data.snapshots || [])].slice(0, 12);
   return snapshot;
@@ -18396,6 +18935,7 @@ async function restoreSelectedSnapshot() {
   createRecoverySnapshot("before-restore");
   const preservedSnapshots = state.data.snapshots;
   const preservedReports = state.data.importReports;
+  if (Object.hasOwn(snapshot, "library")) await libraryStore.import(snapshot.library, { restore: true });
   state.data = backupDataShape(snapshot.data);
   state.data.snapshots = preservedSnapshots;
   state.data.importReports = preservedReports;
@@ -18993,9 +19533,10 @@ function formatBackupTime(value) {
 function downloadCurrentBackup(prefix = "nownote") {
   const backup = {
     app: "NowNote Web",
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     data: state.data,
+    library: libraryStore?.export(),
     settings: state.settings,
   };
   downloadText(`${prefix}-${fileTimestamp(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json");

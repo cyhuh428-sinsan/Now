@@ -1,3 +1,39 @@
+.library-dialog { width: min(1080px, calc(100vw - 32px)); height: min(820px, calc(100dvh - 32px)); max-height: calc(100dvh - 32px); margin: auto; padding: 16px; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); color: var(--text); overflow: auto; }
+.library-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+.library-header, .library-toolbar, .library-actions, .library-tabs { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.library-header { justify-content: space-between; }
+.library-header h2 { margin: 0; font-size: 20px; }
+.library-tabs { margin-top: 16px; border-bottom: 1px solid var(--line); }
+.library-tabs button { padding: 8px 12px; background: transparent; border: 0; color: var(--muted); }
+.library-tabs button[aria-selected="true"] { color: var(--blue); border-bottom: 2px solid var(--blue); }
+.library-toolbar { margin-top: 12px; }
+#libraryStatus { min-height: 20px; margin: 8px 0; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+#libraryStatus[data-error="true"] { color: var(--red); }
+.library-layout { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 16px; min-height: 380px; }
+#libraryList { border-right: 1px solid var(--line); padding-right: 12px; overflow: auto; max-height: 560px; }
+.library-item { display: block; width: 100%; min-height: 52px; padding: 8px; text-align: left; border: 0; border-radius: 4px; background: transparent; color: var(--text); }
+.library-item[aria-current="true"] { background: var(--blue-soft); color: var(--blue); }
+.library-item small { display: block; margin-top: 3px; color: var(--muted); }
+.library-item strong { display: block; overflow-wrap: anywhere; }
+.library-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.library-fields label { display: flex; flex-direction: column; gap: 5px; min-width: 0; font-size: 12px; color: var(--muted); }
+.library-fields :is(input, select, textarea) { box-sizing: border-box; width: 100%; max-width: 100%; color: var(--text); font-size: 14px; }
+.library-fields textarea { resize: vertical; min-height: 72px; }
+.library-wide { grid-column: 1 / -1; }
+.library-actions { margin-top: 12px; }
+#libraryPreview { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 8px; overflow-wrap: anywhere; }
+#libraryPreview h3, .library-conflict h3 { font-size: 16px; }
+.library-result { display: block; border: 0; border-bottom: 1px solid var(--line); padding: 10px 4px; background: transparent; width: 100%; color: var(--blue); text-align: left; overflow-wrap: anywhere; }
+.library-dialog :is(button, input, textarea, select):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.library-dialog button { cursor: pointer; }
+.library-dialog button:hover { filter: brightness(.92); }
+.library-compare { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.library-dialog pre { max-height: 240px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.library-conflict { margin-top: 20px; padding-top: 12px; border-top: 1px solid var(--line); }
+.library-conflict > button { margin: 4px; }
+.library-confirm { position: sticky; top: 0; z-index: 1; padding: 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 4px; }
+.library-confirm button { margin-right: 8px; }
+@media (max-width: 680px) { .library-dialog { padding: 12px; width: calc(100vw - 16px); height: calc(100dvh - 16px); max-height: calc(100dvh - 16px); box-sizing: border-box; } .library-layout { grid-template-columns: minmax(0, 1fr); } #libraryList { max-height: 160px; border-right: 0; border-bottom: 1px solid var(--line); padding-right: 0; } .library-fields, .library-compare { grid-template-columns: minmax(0, 1fr); } }
 .document-mode {
   display: flex;
   flex: 0 0 auto;

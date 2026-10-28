@@ -9,7 +9,7 @@ const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
 const DESKTOP_STORE_VERSION = 1;
-const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1"]);
+const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1", "nownote.library.v1"]);
 
 function assertRendererStoreKey(key) {
   if (!RENDERER_STORE_KEYS.has(key)) throw new Error("Desktop storage key is not available to the renderer");

@@ -1,0 +1,58 @@
+import assert from 'node:assert/strict';
+import { promises as fs } from 'node:fs';
+const task = await taskSpace('NowNote Stage D');
+const page = task.page(JSON.parse(await fs.readFile('D:/tmp/now-240-stage-d/hosted-page.json', 'utf8')).page);
+const seed = JSON.parse(await fs.readFile('D:/tmp/now-240-stage-d/web-http-seed.json', 'utf8'));
+await page.click('#libraryDialog [data-kind="templates"]');
+await page.click(`#libraryList [data-id="${seed.template.id}"]`);
+await page.fill('#libraryForm [name="content"]', 'Web 충돌 보존 원문');
+await page.click('#libraryDetail [data-action="save"]');
+await page.waitForSelector('.library-conflict');
+const compare = await page.evaluate(() => document.querySelector('#libraryConflicts').textContent);
+assert.ok(compare.includes('Web 충돌 보존 원문'));
+assert.ok(compare.includes('Electron 작성 현재본'));
+await page.screenshot({ path: 'D:/tmp/now-240-stage-d/conflict.png' });
+await page.click('.library-conflict button >> nth=0');
+await page.waitForFunction(version => libraryStore.list('templates').some(r => r.payload.content_template === 'Web 충돌 보존 원문' && r.version === version && !r.pending), seed.template.version + 2);
+// New code is now loaded, retaining the actual signed-in session and scoped store.
+await page.reload();
+await page.waitForFunction(() => Boolean(libraryStore && libraryUI));
+await page.click('#libraryBtn');
+const before = await page.evaluate(() => libraryStore.export());
+// Version-2 backup import must leave library contents/outbox intact.
+await fs.writeFile('D:/tmp/now-240-stage-d/legacy-backup.json', JSON.stringify({ app: 'NowNote Web', version: 2, data: { daily: {}, tree: [] } }));
+await page.click('#libraryDialog [data-action="close"]');
+await page.setInputFiles('#importInput', ['D:/tmp/now-240-stage-d/legacy-backup.json']);
+await page.waitForFunction(() => !document.querySelector('#confirmDialog').classList.contains('hidden'));
+await page.click('#confirmOkBtn');
+await page.waitForFunction(() => state.selectedTreeId === null);
+assert.deepEqual(await page.evaluate(() => libraryStore.export()), before);
+// An explicit snapshot restore must keep old content as a CAS conflict, not discard it on pull.
+const snapshotId = await page.evaluate(() => createRecoverySnapshot('stage-d-restore').id);
+await page.evaluate(`(async()=>{const r=libraryStore.list('templates').find(r=>r.id==='${seed.template.id}'); await libraryStore.put('templates',r.id,{...r.payload,content_template:'스냅샷 이후 수정'});await libraryStore.sync();renderRecoveryPanel();document.querySelector('#snapshotSelect').value='${snapshotId}';void restoreSelectedSnapshot();})()`);
+await page.waitForFunction(() => !document.querySelector('#confirmDialog').classList.contains('hidden'));
+await page.click('#confirmOkBtn');
+await page.waitForFunction(() => libraryStore.status().outbox.length > 0);
+await page.evaluate(() => libraryStore.sync());
+const restored = await page.evaluate(`libraryStore.list('templates').find(r=>r.id==='${seed.template.id}')`);
+assert.equal(restored.payload.content_template, 'Web 충돌 보존 원문');
+assert.equal(restored.conflict.code, 'version_conflict');
+// Keep a pending operation through actual logout and another user's login.
+await page.evaluate(`(async()=>{await libraryStore.resolve('templates','${seed.template.id}','remote');state.settings.server.mode='local';await libraryStore.put('templates',null,{name:'로그아웃 대기 자료',content_template:'alice draft only'});})()`);
+const pendingId = await page.evaluate(() => libraryStore.list('templates').find(r => r.payload.name === '로그아웃 대기 자료').id);
+await page.evaluate(() => { void handleWebLogout(); });
+await page.waitForSelector('#webLoginOwnerInput');
+await page.fill('#webLoginOwnerInput', 'qa_library_bob');
+await page.fill('#webLoginPasswordInput', 'StageD-synthetic-only-42!');
+await page.click('#webLoginSubmitBtn');
+await page.waitForFunction(() => state.settings.server.ownerId === 'qa_library_bob' && document.querySelector('#libraryBtn')?.offsetParent);
+await page.click('#libraryBtn');
+assert.equal(await page.evaluate(() => libraryStore.list('templates').some(r => r.payload.name === '로그아웃 대기 자료')), false);
+const accounts = JSON.parse(await fs.readFile('D:/tmp/now-240-stage-d/synthetic-accounts.json', 'utf8'));
+const response = await fetch('http://127.0.0.1:8750/api/v1/templates?owner_id=qa_library_alice&include_deleted=true', { headers: { 'X-Now-Web-Session': accounts.qa_library_alice.session } });
+assert.equal(response.status, 200);
+assert.equal((await response.json()).items.some(r => r.id === pendingId), false);
+const durable = await page.evaluate(() => libraryStore.export());
+assert.ok(Object.values(durable.contexts).some(c => c.outbox.some(o => o.id === pendingId)));
+await fs.writeFile('D:/tmp/now-240-stage-d/hosted-boundaries.json', JSON.stringify({ hosted: true, concurrent409Comparison: true, explicitLocalChoice: true, legacyImportPreserved: true, snapshotRestoreConflict: true, actualLogoutLoginIsolation: true }, null, 2));
+console.log('Stage D hosted Web: cross-client 409/choice/legacy import/snapshot restore/actual logout-login isolation PASS');
