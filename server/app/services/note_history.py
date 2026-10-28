@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from sqlalchemy import event, select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.orm.attributes import set_committed_value
 
 from app.models.note import Note
 from app.models.note_history import NoteHead, NoteInventory, NoteRevision
@@ -99,6 +100,30 @@ def add_revision(db, raw, reason, parent=None, before=None):
     return revision.id
 
 
+def persist_history(db):
+    # Do not defer these rows to another ORM flush: a subsequent SAVEPOINT may
+    # otherwise roll back history belonging to an already-flushed outer Note.
+    models = (NoteHead, NoteRevision, NoteInventory)
+    connection = db.connection()
+    for row in list(db.new) + list(db.dirty):
+        if not isinstance(row, models):
+            continue
+        table = row.__table__
+        values = {column.name: getattr(row, column.name) for column in table.columns}
+        if row in db.new:
+            if isinstance(row, NoteRevision) and values["captured_at"] is None:
+                values.pop("captured_at")
+            connection.execute(table.insert().values(**values))
+            db.expunge(row)
+        else:
+            statement = table.update()
+            for column in table.primary_key:
+                statement = statement.where(column == values[column.name])
+            connection.execute(statement.values(**values))
+            for field, value in values.items():
+                set_committed_value(row, field, value)
+
+
 @event.listens_for(Session, "after_flush_postexec")
 def finalize_history(db, flush_context):
     queue = db.info.pop(QUEUE, None)
@@ -139,6 +164,7 @@ def finalize_history(db, flush_context):
         if changed or state != head.identity_state or pointer != head.head_revision_id:
             head.version += 1
         head.identity_state, head.head_revision_id = state, pointer
+    persist_history(db)
 
 
 @event.listens_for(Session, "after_soft_rollback")

@@ -159,18 +159,18 @@ def test_history_insert_failure_rolls_back_note_and_session_queue(history_db):
     row = upsert_note(item, history_db)
     history_db.commit()
 
-    def fail(mapper, connection, target):
-        if target.owner_id == owner:
+    def fail(connection, cursor, statement, parameters, context, executemany):
+        if statement.startswith("INSERT INTO note_revisions"):
             raise RuntimeError("synthetic revision insert failure")
 
-    event.listen(NoteRevision, "before_insert", fail)
+    event.listen(history_db.bind, "before_cursor_execute", fail)
     try:
         upsert_note(item.model_copy(update={"content": "must rollback"}), history_db)
         with pytest.raises(RuntimeError, match="synthetic revision"):
             history_db.commit()
         history_db.rollback()
     finally:
-        event.remove(NoteRevision, "before_insert", fail)
+        event.remove(history_db.bind, "before_cursor_execute", fail)
     history_db.add(SyncLog(owner_id=owner, device_id="after-failure", pushed_count=0,
                            pulled_count=0, include_deleted=0, succeeded=0))
     history_db.commit()
@@ -213,6 +213,23 @@ def test_nested_rollback_preserves_outer_session(history_db):
     head, revisions, _ = history(history_db, owner)
     assert head.version == 2 and len(revisions) == 2
     assert {json.loads(r.snapshot_json)["note"]["content"] for r in revisions} == {"first", "outer accepted"}
+
+
+def test_outer_new_note_history_survives_inner_savepoint_rollback(history_db):
+    from app.services.note_sync import upsert_note
+    owner = "e1_" + uuid4().hex
+    item = payload(owner)
+    upsert_note(item, history_db)
+    with pytest.raises(ValueError):
+        with history_db.begin_nested():
+            upsert_note(item.model_copy(update={"content": "inner discard"}), history_db)
+            history_db.flush()
+            raise ValueError("nested failure after outer natural flush")
+    history_db.commit()
+    head, revisions, inventory = history(history_db, owner)
+    assert head is not None and head.version == 1
+    assert len(revisions) == len(inventory) == 1
+    assert json.loads(revisions[0].snapshot_json)["note"]["content"] == "first"
 
 
 def test_fallback_and_timestamp_only_representative_change(history_db):
