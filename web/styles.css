@@ -1,3 +1,31 @@
+.document-mode {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0;
+  margin: 4px 0 8px;
+}
+.document-mode button {
+  border: 1px solid var(--line);
+  border-radius: 0;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--muted);
+}
+.document-mode button[aria-pressed="true"] {
+  background: var(--blue-soft);
+  color: var(--blue);
+}
+.document-mode button:focus-visible { outline: 2px solid var(--blue); }
+.memo-editor-surface.hidden { display: none; }
+.markdown-preview details { margin: 8px 0; }
+.markdown-preview summary { cursor: pointer; }
+.markdown-preview summary > :is(h1,h2,h3,h4,h5,h6) { display: inline; }
+.markdown-preview .document-section { border: 0; }
+.markdown-preview table { border-collapse: collapse; max-width: 100%; }
+.markdown-preview :is(th,td) { border: 1px solid var(--line); padding: 5px 8px; }
+.local-file-link { border: 0; background: transparent; color: var(--blue); text-decoration: underline; cursor: pointer; padding: 0; }
+@media print { .document-mode { display: none; } }
+
 :root {
   color-scheme: light;
   --bg: #f4f7fb;

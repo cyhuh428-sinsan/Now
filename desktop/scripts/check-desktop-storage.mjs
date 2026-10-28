@@ -604,7 +604,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+export { launchApp, evaluate, stopProcess };
+
+if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) main().catch((error) => {
   console.error(`NowNote desktop storage check failed: ${error.message}`);
   process.exit(1);
 });

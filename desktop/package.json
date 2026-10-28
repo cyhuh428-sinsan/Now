@@ -25,6 +25,7 @@
       "preload.cjs",
       "vault-*.cjs",
       "store-file.cjs",
+      "document-links.cjs",
       "app/**/*"
     ],
     "asar": true,

@@ -1,5 +1,7 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
+const { pathToFileURL } = require("node:url");
+const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
 const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
 const { createVaultService } = require("./vault-service.cjs");
 
@@ -209,6 +211,29 @@ function createMenu() {
 }
 
 app.whenReady().then(() => {
+  ipcMain.handle("nownote:open-document-file", async (event, input) => {
+    if (event.senderFrame?.parent || event.senderFrame?.url.split("?")[0] !== pathToFileURL(APP_INDEX).href) throw new Error("허용되지 않은 문서 요청입니다.");
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (isRelativeDocumentReference(input)) {
+      const choice = await dialog.showOpenDialog(owner, {
+        title: "상대 링크의 문서 선택: " + input,
+        defaultPath: path.basename(input), properties: ["openFile"],
+      });
+      if (choice.canceled || !choice.filePaths[0]) return { opened: false };
+      input = choice.filePaths[0];
+    }
+    const target = await resolveDocumentPath(input);
+    const answer = await dialog.showMessageBox(owner, {
+      type: "question", title: "로컬 문서 열기", message: "기본 프로그램으로 이 문서를 열까요?", detail: target,
+      buttons: ["취소", "열기"], defaultId: 0, cancelId: 0,
+    });
+    if (answer.response !== 1) return { opened: false };
+    // 확인을 기다리는 동안 경로가 바뀌었으면 다시 확인한다.
+    if (await resolveDocumentPath(target) !== target) throw new Error("파일 경로가 변경되었습니다.");
+    const error = await shell.openPath(target);
+    if (error) throw new Error(error);
+    return { opened: true };
+  });
   registerDesktopStorageHandlers();
   registerVaultHandlers();
   Menu.setApplicationMenu(createMenu());
