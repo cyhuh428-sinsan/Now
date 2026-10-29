@@ -165,4 +165,46 @@ for (const phase of ['import', 'put']) {
   await waiting; isolated.invalidate(); block = false; resume(); await operation;
   assert.deepEqual(sent, [], `${phase}: context invalidation during storage must prevent a not-yet-sent request`);
 }
+{
+  let durable, sends=0;
+  const options={context:()=>ctx,write:async value=>{durable=structuredClone(value);},request:async()=>{sends++;throw new Error('v2 blocked');}};
+  let isolated=H.create({...options,initial:null});
+  assert.equal(typeof isolated.beginLegacy,'function','v1 uncertainty must have a durable journal boundary');
+  const body={owner_id:ctx.owner,device_id:ctx.device,notes:[note('V1_IN_FLIGHT')],updated_after:null,include_deleted:true};
+  const pending=await isolated.beginLegacy(body);
+  body.notes[0].content='must not mutate captured request';
+  await isolated.track(note('NEW_DRAFT'),null,{needsBaseline:true});await isolated.seal('daily:/원문');
+  await isolated.sync();assert.equal(sends,0);
+  isolated=H.create({...options,initial:durable});
+  assert.equal(isolated.legacyPending().body.notes[0].content,'V1_IN_FLIGHT');
+  await isolated.sync();assert.equal(sends,0,'v1 uncertainty survives cold restart');
+  await assert.rejects(isolated.compare('daily:/원문'),/기존 동기화/);
+  await assert.rejects(isolated.importPending('daily:/원문'),/기존 동기화/);
+  await assert.rejects(isolated.completeLegacy('different-id'),/요청/);
+  assert.equal(isolated.legacyPending().id,pending.id);
+  await isolated.completeLegacy(pending.id);assert.equal(isolated.legacyPending(),null);
+}
+for (const phase of ['compare', 'import', 'target', 'restore']) {
+  let releasePhase, entered;
+  const waiting = new Promise(resolve => { entered = resolve; });
+  let current = {head_version:1, head_revision_id:webcrypto.randomUUID(), inventory_revision_ids:[],crypto_epoch:0,replica_count:1,
+    snapshot:{schema_version:1,note:note('CURRENT')}};
+  current.inventory_revision_ids=[current.head_revision_id];
+  const compared=structuredClone(current), target={schema_version:1,note:note('TARGET')};
+  let paused=false;
+  const isolated=H.create({initial:null,context:()=>ctx,write:async()=>{},request:async(_ctx,path,method,body)=>{
+    const point=path==='current'&&method==='GET'?'compare':path==='revision'?'target':path==='revisions/import'?'import':path;
+    if(point===phase&&!paused){paused=true;entered();await new Promise(resolve=>{releasePhase=resolve;});}
+    if(path==='current')return structuredClone(current);
+    if(path==='revisions/import')return {imported_refs:body.entries.map(r=>({kind:'offline_branch',id:r.revision_id}))};
+    if(path==='revision')return structuredClone(target);
+    const id=webcrypto.randomUUID();current={...current,head_version:2,head_revision_id:id,inventory_revision_ids:[id],snapshot:target};
+    return {mutation_id:body.mutation_id,result_head_version:2,result_revision_id:id,result_inventory_revision_ids:[id],crypto_epoch:0};
+  }});
+  await isolated.track(note('CURRENT'),current);await isolated.edit(note('START_DRAFT'));
+  const operation=isolated.restore('daily:/원문',{kind:'note_revision',id:compared.head_revision_id},compared);
+  await waiting;await isolated.edit(note('FOLLOWUP_DRAFT'));releasePhase();await operation;
+  assert.equal(isolated.view('daily:/원문').draft.content,'FOLLOWUP_DRAFT',`${phase}: later edit must survive the entire restore operation`);
+  assert.ok(isolated.view('daily:/원문').revisions.some(r=>r.snapshot.note.content==='START_DRAFT'),`${phase}: restore-start draft must remain visible in history`);
+}
 console.log('E3 journal: draft durability, immutable retry/restart, CAS conflict, raw DTO, account isolation, failure retention PASS');

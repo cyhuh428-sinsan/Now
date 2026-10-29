@@ -1,7 +1,7 @@
 // Run with ego-browser nodejs after check_note_history_web.mjs in the same task.
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
-const task = await taskSpace(17), page = task.page('p1');
+const task = await taskSpace(globalThis.NOWNOTE_HISTORY_QA_TASK || 'NowNote E3 history QA 20261029'), page = task.page('p1');
 await page.reload();
 await page.waitForFunction(() => Boolean(noteHistory));
 if (!await page.evaluate(() => noteHistoryContext().enabled)) {
@@ -53,5 +53,5 @@ assert.equal(scheduled.stable,true);assert.equal(scheduled.revisions,0);
 await page.waitForFunction(id=>noteHistory.view(id).revisions.length>0,scheduled.id,{timeout:35000});
 const timerResult=await page.evaluate(({id,started})=>({elapsed:performance.now()-started,content:noteHistory.view(id).revisions.at(-1).snapshot.note.content}),scheduled);
 assert.equal(timerResult.content,'second timer draft');assert.ok(timerResult.elapsed>=29000&&timerResult.elapsed<35000);
-await fs.writeFile('D:/tmp/now-240-stage-e3/final-web-boundaries.json',JSON.stringify({unsupported,lateBaseline:'actual clearWebSession logout boundary + delayed fetch rejection preserves journal; actual reauthentication recovers draft',timer:timerResult},null,2));
+await fs.writeFile((globalThis.NOWNOTE_HISTORY_QA_BASE || 'D:/tmp/now-240-stage-e3')+'/final-web-boundaries.json',JSON.stringify({unsupported,lateBaseline:'actual clearWebSession logout boundary + delayed fetch rejection preserves journal; actual reauthentication recovers draft',timer:timerResult},null,2));
 console.log('actual hosted Web: unsupported/malformed v1 POST0 + durable bytes/export preserved; logout late baseline rejection + reauthentication PASS');

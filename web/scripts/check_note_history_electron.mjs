@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
 import { setTimeout as delay } from 'node:timers/promises';
 import { launchApp, evaluate, stopProcess } from '../../desktop/scripts/check-desktop-storage.mjs';
-const base = 'D:/tmp/now-240-stage-e3';
+import { checkLegacyRaces } from './note_history_legacy_race_cases.mjs';
+const base = process.env.NOWNOTE_HISTORY_QA_DIR || 'D:/tmp/now-240-stage-e3';
 const accounts = JSON.parse(await fs.readFile(base + '/synthetic-accounts.json', 'utf8'));
 const profile = await fs.mkdtemp(base + '/electron-');
 let app;
@@ -49,11 +50,14 @@ try {
   assert.equal(await run(`noteHistory.view(${JSON.stringify(id)}).dirty`), false);
   assert.equal((await run(`noteHistoryRequest(noteHistoryContext(),'current','GET',{local_id:${JSON.stringify(id)}})`)).snapshot.note.content, '두 번째 본문\n');
   results.push('actual edit back to pre-restore value creates a new server revision');
+  for (const phase of ['target', 'restore']) {
   await run(`noteHistoryUI.open(${JSON.stringify(id)})`);
+  await run(`(() => {const select=document.querySelector('#noteHistoryDialog [name=after]');select.value=JSON.stringify({kind:'note_revision',id:${JSON.stringify(first.base.head_revision_id)}});select.dispatchEvent(new Event('change',{bubbles:true}));})()`);
+  await until('document.querySelector("#noteHistoryDialog .history-diff").textContent.includes("첫 본문")');
   await run(`(() => {
     const fetcher=globalThis.fetch;globalThis.__e3FetchRestore=fetcher;
-    globalThis.fetch=(...args)=>String(args[0]).includes('/api/v2/notes/restore')&&args[1]?.method==='POST'?new Promise(resolve=>{globalThis.__e3ReleaseRestore=()=>resolve(fetcher(...args));}):fetcher(...args);
-    const select=document.querySelector('#noteHistoryDialog [name=after]');select.value=JSON.stringify({kind:'note_revision',id:${JSON.stringify(first.base.head_revision_id)}});select.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#noteHistoryDialog [data-action=restore]').click();
+    globalThis.fetch=(...args)=>String(args[0]).includes(${JSON.stringify(phase==='target'?'/api/v2/notes/revision?':'/api/v2/notes/restore')})?new Promise(resolve=>{globalThis.__e3ReleaseRestore=()=>resolve(fetcher(...args));}):fetcher(...args);
+    document.querySelector('#noteHistoryDialog [data-action=restore]').click();
   })()`);
   await until('Boolean(document.querySelector("#noteHistoryDialog [role=alertdialog]"))');
   await run('document.querySelector("#noteHistoryDialog [role=alertdialog] button:last-child").click()');
@@ -63,10 +67,11 @@ try {
   await until('document.querySelector("#noteHistoryDialog .history-status").textContent.includes("복원 완료")');
   assert.equal(await run(`noteHistory.view(${JSON.stringify(id)}).draft.content`), 'restore in-flight draft');
   assert.equal(await run(`findTreeNode(state.data.tree,${JSON.stringify(id)}).content`), 'restore in-flight draft', 'restore UI must not project over a later edit');
-  results.push('actual restore in-flight edit retained in journal and editor');
+  results.push('actual restore '+phase+' in-flight edit retained in journal and editor');
   await run('noteHistoryUI.close()');
   await run(`elements.treeContent.value=${JSON.stringify('두 번째 본문\n')};flushTreeContentInput();noteHistoryCaptureChain`);
   await run('noteHistoryFlush()');
+  }
   app.client.close(); stopProcess(app.app); app = null; await delay(500);
   app = await launchApp(profile);
   await until('Boolean(noteHistory && noteHistoryUI)');
@@ -113,6 +118,9 @@ try {
   assert.ok(unshare.current.snapshot.note.deleted_at, 'shared server copy must become a tombstone on unshare');
   assert.equal(unshare.local.content, '오프라인 재시작 보존\n', 'unshare must preserve local body');
   results.push('actual unshare tombstone keeps local private body');
+  results.push(...await checkLegacyRaces({run,until,restart:async()=>{
+    app.client.close();stopProcess(app.app);app=null;await delay(500);app=await launchApp(profile);await until('Boolean(noteHistory && noteHistoryUI)');
+  }}));
   await fs.writeFile(base + '/electron-history-result.json', JSON.stringify({ results }, null, 2));
   console.log(results.join('\n'));
 } finally {

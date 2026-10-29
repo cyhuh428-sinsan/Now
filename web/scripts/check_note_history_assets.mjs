@@ -31,6 +31,6 @@ for (const path of ['diff.js', 'note-history-state.js', 'note-history-ui.js']) {
   assert.ok(app.includes(source.replace(/\r\n/g, '\n')), path + ' runtime must be bundled exactly');
   hashes['web/vendor/' + path] = sha(Buffer.from(source));
 }
-await fs.writeFile('D:/tmp/now-240-stage-e3/final-asset-hashes.json', JSON.stringify(hashes, null, 2));
+await fs.writeFile((process.env.NOWNOTE_HISTORY_QA_DIR || 'D:/tmp/now-240-stage-e3')+'/final-asset-hashes.json', JSON.stringify(hashes, null, 2));
 console.log('served Web == source; Electron asar == source; journal/diff runtimes embedded byte-for-byte PASS');
 console.log(JSON.stringify(hashes));

@@ -1,8 +1,9 @@
 // Run with ego-browser nodejs; requires the disposable run_note_history_qa.py API.
 import assert from 'node:assert/strict';
 import { promises as fs } from 'node:fs';
-const base = 'D:/tmp/now-240-stage-e3';
-const task = await taskSpace('NowNote E3 history QA 20261029'), page = task.page('p1');
+import { checkLegacyRaces } from './note_history_legacy_race_cases.mjs';
+const base = globalThis.NOWNOTE_HISTORY_QA_BASE || 'D:/tmp/now-240-stage-e3';
+const task = await taskSpace(globalThis.NOWNOTE_HISTORY_QA_TASK || 'NowNote E3 history QA 20261029'), page = task.page('p1');
 await page.cdp('Emulation.setDeviceMetricsOverride', {width:1440,height:900,deviceScaleFactor:1,mobile:false});
 await page.goto('http://localhost.:8750');
 await page.waitForFunction(() => typeof noteHistoryContext === 'function' && Boolean(noteHistory) && (!loadWebSession()?.token || noteHistoryContext().enabled));
@@ -12,6 +13,10 @@ if (!await page.evaluate(() => noteHistoryContext().enabled)) {
   await page.waitForFunction(() => noteHistoryContext().enabled);
 }
 const accounts = JSON.parse(await fs.readFile(base + '/synthetic-accounts.json', 'utf8'));
+if(await page.evaluate(()=>Boolean(noteHistory.legacyPending()))) {
+  await page.evaluate(()=>syncWebNotesToServer(undefined,{skipFormSave:true}));
+  assert.equal(await page.evaluate(()=>noteHistory.legacyPending()),null,'resume the previous immutable v1 request before starting another QA note');
+}
 const results = [];
 const record = async value => { results.push(value); console.log(value); await page.evaluate(value => { globalThis.__E3_QA_PHASE__ = value; }, value); };
 const seed = await page.evaluate(async () => {
@@ -89,6 +94,24 @@ await page.fill('#webLoginOwnerInput', 'qa_history_alice'); await page.fill('#we
 await page.waitForFunction(() => noteHistoryContext().enabled && !noteHistory.suspended());
 assert.equal(await page.evaluate(id => noteHistory.view(id).draft.content, seed.id), 'clean peer update\n');
 await record('logout memory released; Bob isolated; Alice actual reauthentication restores journal');
+await page.evaluate(async id=>{state.selectedTreeId=id;render();await noteHistoryUI.open(id);},seed.id);
+await page.selectOption('#noteHistoryDialog [name=after]',JSON.stringify({kind:'note_revision',id:restoreRef}));
+await page.waitForFunction(()=>document.querySelector('#noteHistoryDialog .history-diff').textContent==='clean peer update\n');
+await page.evaluate(()=>{const fetcher=globalThis.fetch;globalThis.__e3TargetFetcher=fetcher;globalThis.fetch=(...args)=>String(args[0]).includes('/api/v2/notes/revision?')?new Promise(resolve=>{globalThis.__e3TargetRelease=()=>resolve(fetcher(...args));}):fetcher(...args);});
+await page.click('#noteHistoryDialog [data-action=restore]');
+await page.waitForSelector('#noteHistoryDialog [role=alertdialog]');await page.click('#noteHistoryDialog [role=alertdialog] button:last-child');
+await page.waitForFunction(()=>typeof globalThis.__e3TargetRelease==='function');
+await page.evaluate(async id=>{const node=findTreeNode(state.data.tree,id);node.content='TARGET_GET_FOLLOWUP';markTreeNodeChanged(node);persist();await noteHistoryCaptureChain;},seed.id);
+await page.evaluate(()=>{globalThis.__e3TargetRelease();globalThis.fetch=globalThis.__e3TargetFetcher;delete globalThis.__e3TargetRelease;delete globalThis.__e3TargetFetcher;});
+await page.waitForFunction(()=>document.querySelector('#noteHistoryDialog .history-status').textContent.includes('복원 완료'));
+assert.equal(await page.evaluate(id=>noteHistory.view(id).draft.content,seed.id),'TARGET_GET_FOLLOWUP');
+assert.equal(await page.evaluate(id=>findTreeNode(state.data.tree,id).content,seed.id),'TARGET_GET_FOLLOWUP');
+await page.click('#noteHistoryDialog [data-action=close]');await page.evaluate(()=>noteHistoryFlush());
+await record('actual target revision GET delay retains later asynchronous edit in journal and editor');
+for(const result of await checkLegacyRaces({run:expression=>page.evaluate(expression),
+  until:expression=>page.waitForFunction(code=>(0,eval)(code),expression),restart:async()=>{
+    await page.reload();await page.waitForFunction(()=>typeof noteHistoryContext==='function'&&noteHistoryContext().enabled&&!noteHistory.suspended());
+  }}))await record(result);
 await fs.writeFile(base + '/final-web-result.json', JSON.stringify({ id: seed.id, results }, null, 2));
 console.log(results.join('\n'));
 console.log(await page.snapshot());

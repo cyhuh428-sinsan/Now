@@ -13,7 +13,9 @@
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
     const readable = () => data?.schema_version === 1 && record(data.contexts)
-      && Object.values(data.contexts).every(c => record(c) && record(c.notes) && Object.values(c.notes).every(item =>
+      && Object.values(data.contexts).every(c => record(c) && record(c.notes)
+        && (!c.legacy_pending || (typeof c.legacy_pending.id === 'string' && record(c.legacy_pending.body) && Array.isArray(c.legacy_pending.body.notes)))
+        && Object.values(c.notes).every(item =>
         record(item) && record(item.raw) && record(item.draft) && record(item.base)
         && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
         && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
@@ -35,6 +37,10 @@
       return writes.then(() => { failed = null; change(); }, error => { failed = error; change(); throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
+    const legacyPending = () => context().enabled ? copy(bucket(context())?.legacy_pending || null) : null;
+    const requireSettledLegacy = () => {
+      if (legacyPending()) throw new Error('기존 동기화 응답을 확인하지 못했습니다. 같은 계정에서 다시 동기화하세요. 편집본은 보존했습니다.');
+    };
     const active = (ctx, epoch) => epoch === generation && context().enabled && key(context()) === key(ctx) && context().auth === ctx.auth;
     const common = (ctx, id, base) => ({ schema_version: 1, owner_id: ctx.owner, local_id: id,
       device_id: ctx.device, mutation_id: uuid(), crypto_epoch: base.crypto_epoch || 0 });
@@ -73,6 +79,7 @@
     async function edit(note) {
       const ctx = requireWritable(), item = entry(note.local_id);
       if (!item || note.owner_id !== ctx.owner) throw new Error('메모 이력 기준을 먼저 확인하세요.');
+      if (!same(item.draft, note)) item.edit_generation = (item.edit_generation || 0) + 1;
       item.draft = copy(note);
       item.dirty = !same(item.raw, note) || item.outbox.length > 0 || (!item.revisions.length && !item.base.head_revision_id);
       await save();
@@ -97,6 +104,7 @@
       if (running) return running;
       if (!context().enabled || context().online === false || !readable() || failed) return;
       const ctx = { ...context() }, epoch = generation;
+      if (legacyPending()) return;
       running = (async () => {
         for (const [id, item] of Object.entries(bucket(ctx)?.notes || {})) {
           if (!active(ctx, epoch) || failed) return;
@@ -141,7 +149,7 @@
               }
               if (op.restored_snapshot) {
                 item.raw = copy(op.restored_snapshot.note);
-                if (same(item.draft, op.previous_draft)) item.draft = copy(item.raw);
+                if ((item.edit_generation || 0) === (op.draft_generation || 0) && same(item.draft, op.previous_draft)) item.draft = copy(item.raw);
               }
               item.completed_outbox ||= [];
               item.completed_outbox.push(copy(op));
@@ -182,6 +190,7 @@
       return running;
     }
     async function compare(id) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
       let remote;
@@ -196,6 +205,7 @@
     const equalBase = (a, b) => a?.head_version === b?.head_version && a?.head_revision_id === b?.head_revision_id
       && a?.crypto_epoch === b?.crypto_epoch && JSON.stringify(a?.inventory_revision_ids) === JSON.stringify(b?.inventory_revision_ids);
     async function importPending(id) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item || failed) throw new Error(failed?.message || '메모 이력 기준이 없습니다.');
       for (const revision of item.revisions) {
@@ -213,11 +223,14 @@
       }
     }
     async function restore(id, targetRef, compared) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
+      const previousDraft = copy(item.draft), editGeneration = item.edit_generation || 0;
+      await seal(id, 'before_restore');
+      if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
       const latest = await compare(id);
       if (!active(ctx, epoch) || !equalBase(latest.remote, compared)) throw new Error('비교본이 변경되었습니다. 다시 비교하고 선택하세요.');
-      await seal(id, 'before_restore');
       await importPending(id);
       if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
       if (item.outbox.some(op => op.sent) && !item.conflict) throw new Error('결과를 확인하지 못한 전송이 있습니다. 먼저 재연결하세요.');
@@ -227,7 +240,7 @@
       item.archived_outbox ||= [];
       item.archived_outbox.push(...item.outbox);
       item.outbox = [{ id: uuid(), operation: 'restore', sent: false, waiting_for: null,
-        previous_draft: copy(item.draft), restored_snapshot: copy(target.snapshot),
+        previous_draft: previousDraft, draft_generation: editGeneration, restored_snapshot: copy(target.snapshot),
         body: { ...common(ctx, id, compared), ...baseFields(compared), target_ref: copy(targetRef) } }];
       const mutationId = item.outbox[0].body.mutation_id;
       item.conflict = null;
@@ -245,6 +258,23 @@
     }
     return {
       track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      legacyPending,
+      async beginLegacy(body) {
+        const ctx = requireWritable();
+        if (body.owner_id !== ctx.owner || !Array.isArray(body.notes)) throw new Error('기존 동기화 요청의 소유자가 다릅니다.');
+        const c = bucket(ctx, true);
+        if (!c.legacy_pending) {
+          c.legacy_pending = {id: uuid(), body: copy(body)};
+          await save();
+        }
+        return copy(c.legacy_pending);
+      },
+      async completeLegacy(id) {
+        const ctx = requireWritable(), c = bucket(ctx);
+        if (!c?.legacy_pending || c.legacy_pending.id !== id) throw new Error('기존 동기화 요청이 변경되었습니다.');
+        delete c.legacy_pending;
+        await save();
+      },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
       view: id => context().enabled && readable() && entry(id) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(bucket(context())?.notes || {}) : {},

@@ -962,7 +962,9 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
     const readable = () => data?.schema_version === 1 && record(data.contexts)
-      && Object.values(data.contexts).every(c => record(c) && record(c.notes) && Object.values(c.notes).every(item =>
+      && Object.values(data.contexts).every(c => record(c) && record(c.notes)
+        && (!c.legacy_pending || (typeof c.legacy_pending.id === 'string' && record(c.legacy_pending.body) && Array.isArray(c.legacy_pending.body.notes)))
+        && Object.values(c.notes).every(item =>
         record(item) && record(item.raw) && record(item.draft) && record(item.base)
         && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
         && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
@@ -984,6 +986,10 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       return writes.then(() => { failed = null; change(); }, error => { failed = error; change(); throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
+    const legacyPending = () => context().enabled ? copy(bucket(context())?.legacy_pending || null) : null;
+    const requireSettledLegacy = () => {
+      if (legacyPending()) throw new Error('기존 동기화 응답을 확인하지 못했습니다. 같은 계정에서 다시 동기화하세요. 편집본은 보존했습니다.');
+    };
     const active = (ctx, epoch) => epoch === generation && context().enabled && key(context()) === key(ctx) && context().auth === ctx.auth;
     const common = (ctx, id, base) => ({ schema_version: 1, owner_id: ctx.owner, local_id: id,
       device_id: ctx.device, mutation_id: uuid(), crypto_epoch: base.crypto_epoch || 0 });
@@ -1022,6 +1028,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     async function edit(note) {
       const ctx = requireWritable(), item = entry(note.local_id);
       if (!item || note.owner_id !== ctx.owner) throw new Error('메모 이력 기준을 먼저 확인하세요.');
+      if (!same(item.draft, note)) item.edit_generation = (item.edit_generation || 0) + 1;
       item.draft = copy(note);
       item.dirty = !same(item.raw, note) || item.outbox.length > 0 || (!item.revisions.length && !item.base.head_revision_id);
       await save();
@@ -1046,6 +1053,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       if (running) return running;
       if (!context().enabled || context().online === false || !readable() || failed) return;
       const ctx = { ...context() }, epoch = generation;
+      if (legacyPending()) return;
       running = (async () => {
         for (const [id, item] of Object.entries(bucket(ctx)?.notes || {})) {
           if (!active(ctx, epoch) || failed) return;
@@ -1090,7 +1098,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
               }
               if (op.restored_snapshot) {
                 item.raw = copy(op.restored_snapshot.note);
-                if (same(item.draft, op.previous_draft)) item.draft = copy(item.raw);
+                if ((item.edit_generation || 0) === (op.draft_generation || 0) && same(item.draft, op.previous_draft)) item.draft = copy(item.raw);
               }
               item.completed_outbox ||= [];
               item.completed_outbox.push(copy(op));
@@ -1131,6 +1139,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       return running;
     }
     async function compare(id) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
       let remote;
@@ -1145,6 +1154,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     const equalBase = (a, b) => a?.head_version === b?.head_version && a?.head_revision_id === b?.head_revision_id
       && a?.crypto_epoch === b?.crypto_epoch && JSON.stringify(a?.inventory_revision_ids) === JSON.stringify(b?.inventory_revision_ids);
     async function importPending(id) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item || failed) throw new Error(failed?.message || '메모 이력 기준이 없습니다.');
       for (const revision of item.revisions) {
@@ -1162,11 +1172,14 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       }
     }
     async function restore(id, targetRef, compared) {
+      requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
+      const previousDraft = copy(item.draft), editGeneration = item.edit_generation || 0;
+      await seal(id, 'before_restore');
+      if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
       const latest = await compare(id);
       if (!active(ctx, epoch) || !equalBase(latest.remote, compared)) throw new Error('비교본이 변경되었습니다. 다시 비교하고 선택하세요.');
-      await seal(id, 'before_restore');
       await importPending(id);
       if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
       if (item.outbox.some(op => op.sent) && !item.conflict) throw new Error('결과를 확인하지 못한 전송이 있습니다. 먼저 재연결하세요.');
@@ -1176,7 +1189,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       item.archived_outbox ||= [];
       item.archived_outbox.push(...item.outbox);
       item.outbox = [{ id: uuid(), operation: 'restore', sent: false, waiting_for: null,
-        previous_draft: copy(item.draft), restored_snapshot: copy(target.snapshot),
+        previous_draft: previousDraft, draft_generation: editGeneration, restored_snapshot: copy(target.snapshot),
         body: { ...common(ctx, id, compared), ...baseFields(compared), target_ref: copy(targetRef) } }];
       const mutationId = item.outbox[0].body.mutation_id;
       item.conflict = null;
@@ -1194,6 +1207,23 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     }
     return {
       track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      legacyPending,
+      async beginLegacy(body) {
+        const ctx = requireWritable();
+        if (body.owner_id !== ctx.owner || !Array.isArray(body.notes)) throw new Error('기존 동기화 요청의 소유자가 다릅니다.');
+        const c = bucket(ctx, true);
+        if (!c.legacy_pending) {
+          c.legacy_pending = {id: uuid(), body: copy(body)};
+          await save();
+        }
+        return copy(c.legacy_pending);
+      },
+      async completeLegacy(id) {
+        const ctx = requireWritable(), c = bucket(ctx);
+        if (!c?.legacy_pending || c.legacy_pending.id !== id) throw new Error('기존 동기화 요청이 변경되었습니다.');
+        delete c.legacy_pending;
+        await save();
+      },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
       view: id => context().enabled && readable() && entry(id) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(bucket(context())?.notes || {}) : {},
@@ -6079,6 +6109,7 @@ function noteHistoryContext() {
 
 async function noteHistoryRequest(ctx, path, method, body) {
   if (!ctx.online) throw new Error("서버에 연결한 뒤 다시 시도하세요.");
+  if (noteHistory?.legacyPending()) throw new Error("기존 동기화 응답을 먼저 확인해야 합니다. 편집본은 보존했습니다.");
   const query = new URLSearchParams({ owner_id: ctx.owner });
   if (method === "GET") Object.entries(body || {}).forEach(([name, value]) => { if (value != null) query.set(name, String(value)); });
   const response = await fetch(ctx.url + "/api/v2/notes/" + path + (method === "GET" ? "?" + query : ""), {
@@ -6174,7 +6205,8 @@ function noteHistoryCaptureDrafts() {
       if (!item) {
         const tree = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
         const localOnly = Boolean(tree && !isTreeNodeSharedForServer(tree) && !tree.serverShared);
-        const original = noteHistoryRemoteCache.get(scope)?.get(note.local_id);
+        const original = noteHistoryRemoteCache.get(scope)?.get(note.local_id)
+          || noteHistory.legacyPending()?.body.notes.find(previous => previous.local_id === note.local_id && previous.note_type === note.note_type);
         const initialDraft = original ? { ...note, ...original, title: note.title === noteTitle(original.title) ? original.title : note.title,
           content: note.content, parent_local_id: note.parent_local_id, level: note.level, note_type: note.note_type, deleted_at: note.deleted_at,
           tags: JSON.stringify(tagsFromServerNote(original)) === JSON.stringify(tagsFromServerNote(note)) ? original.tags : note.tags } : note;
@@ -9903,14 +9935,15 @@ async function issueDeviceToken() {
 }
 
 async function syncWebNotesToServer(message = t("settings.server.syncing"), options = {}) {
-  await noteHistoryCaptureChain;
-  await noteHistory?.sync();
-  await noteHistoryController?.resume();
   if (serverSyncRunning) {
     serverSyncQueued = true;
     return;
   }
   serverSyncRunning = true;
+  let syncContext = null, syncEpoch = noteHistoryCaptureEpoch;
+  const isCurrent = () => !syncContext || (syncEpoch === noteHistoryCaptureEpoch
+    && NowNoteHistory.key(syncContext) === NowNoteHistory.key(noteHistoryContext())
+    && syncContext.auth === noteHistoryContext().auth && noteHistoryContext().enabled);
   try {
     if (noteHistory && (noteHistory.status().unsupported || noteHistory.status().failed || noteHistory.suspended())) {
       throw new Error(noteHistory.failure() || "이력 원장을 확인할 수 없어 전송을 중지했습니다. 편집본과 원본을 내보내세요.");
@@ -9918,6 +9951,10 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
     if (!options.skipFormSave) {
       saveServerSettingsFromForm(message, options.messageKey || (message === t("settings.server.syncing") ? "settings.server.syncing" : ""));
     }
+    syncContext = noteHistoryContext();
+    syncEpoch = noteHistoryCaptureEpoch;
+    await noteHistoryCaptureChain;
+    if (!isCurrent()) return;
     const server = state.settings.server;
     if (server.mode !== "server") {
       setServerMessage(server, "idle", "settings.server.local");
@@ -9931,9 +9968,21 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       renderServerSettings();
       return;
     }
-
+    const pending = noteHistory?.legacyPending();
+    if (!pending) {
+      await noteHistory?.sync();
+      if (!isCurrent()) return;
+      await noteHistoryController?.resume();
+      if (!isCurrent()) return;
+    }
     const librarySyncContext = NowLibrary.key(libraryContext());
-    const notes = buildServerSyncNotes(server);
+    const notes = pending?.body.notes || buildServerSyncNotes(server);
+    const body = pending?.body || {
+      owner_id: normalizeOwnerId(server.ownerId), device_id: server.deviceId,
+      updated_after: server.lastSyncedAt, include_deleted: true, notes,
+    };
+    const legacy = noteHistory ? await noteHistory.beginLegacy(body) : null;
+    if (!isCurrent()) return;
     renderServerStatus("testing", message);
     const response = await fetch(`${server.url}/api/v1/sync`, {
       method: "POST",
@@ -9941,26 +9990,23 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
         "Content-Type": "application/json",
         ...serverAuthHeaders(server),
       },
-      body: JSON.stringify({
-        owner_id: normalizeOwnerId(server.ownerId),
-        device_id: server.deviceId,
-        updated_after: server.lastSyncedAt,
-        include_deleted: true,
-        notes,
-      }),
+      body: JSON.stringify(legacy?.body || body),
     });
     if (!response.ok) throw new Error(await serverResponseError(response));
     const payload = await response.json();
+    if (!isCurrent()) return;
     const serverAcceptedNotes = [
       ...(payload.pushed_notes || []),
       ...(payload.pulled_notes || []),
     ];
     const mergeResult = applyPulledServerNotes(serverAcceptedNotes);
+    if (legacy) await noteHistory.completeLegacy(legacy.id);
+    if (!isCurrent()) return;
     libraryNotesContext = librarySyncContext === NowLibrary.key(libraryContext()) ? librarySyncContext : "";
     libraryStore?.sync().catch(error => showNotice(error.message, "error"));
     const pushedCount = payload.pushed_notes?.length || 0;
     const pulledCount = (payload.pulled_notes || []).length;
-    markServerSyncedNotes(payload.pushed_notes || []);
+    markServerSyncedNotes((payload.pushed_notes || []).filter(note => !noteHistory?.manages(note.local_id)));
     server.lastCheckedAt = new Date().toISOString();
     server.lastSyncedAt = payload.server_time || server.lastCheckedAt;
     if (notes.length === 0 && pushedCount === 0 && pulledCount === 0 && mergeResult.applied === 0) {
@@ -9973,6 +10019,7 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
     render();
     renderServerMeta();
   } catch (error) {
+    if (!isCurrent()) return;
     const server = state.settings.server;
     server.lastCheckedAt = new Date().toISOString();
     const action = classifySyncFailureAction(error);

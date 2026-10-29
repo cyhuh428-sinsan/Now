@@ -5,7 +5,11 @@ from pathlib import Path
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE = Path('D:/tmp/now-240-stage-e3')
+BASE = Path(os.environ.get('NOWNOTE_HISTORY_QA_DIR', 'D:/tmp/now-240-stage-e3'))
+QA_ROOT = Path('D:/tmp/now-240-stage-e3').resolve()
+BASE = BASE.resolve()
+if BASE != QA_ROOT and QA_ROOT not in BASE.parents:
+    raise ValueError('QA directory must remain inside the disposable E3 root')
 BASE.mkdir(parents=True, exist_ok=True)
 os.environ.update({
     'NOW_DATABASE_URL': f"sqlite:///{(BASE / 'history-qa.db').as_posix()}",
