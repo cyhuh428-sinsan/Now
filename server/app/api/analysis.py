@@ -7,6 +7,7 @@ from app.db import get_db
 from app.models.note import AnalysisJob
 from app.schemas.analysis import AnalysisJobCreate, AnalysisJobOut, AnalysisJobUpdate
 from app.services.user_accounts import require_user_api_access
+from app.services import related_text as linked
 
 router = APIRouter(
     prefix="/api/v1/analysis",
@@ -35,6 +36,7 @@ RESTARTABLE_STATUSES = {"failed", "cancelled", "done"}
 def list_jobs(
     owner_id: str = Query(default="local_user"),
     status_filter: str | None = Query(default=None, alias="status"),
+    note_local_id: str | None = Query(default=None),
     user_token: str | None = Header(default=None, alias="X-Now-User-Token"),
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
@@ -46,10 +48,14 @@ def list_jobs(
         web_session_token=web_session_token,
     )
     stmt = select(AnalysisJob).where(AnalysisJob.owner_id == owner_id)
+    if note_local_id is not None:
+        stmt = stmt.where(AnalysisJob.note_local_id == note_local_id)
     if status_filter is not None:
         stmt = stmt.where(AnalysisJob.status == status_filter)
     stmt = stmt.order_by(AnalysisJob.created_at.desc()).limit(100)
-    return list(db.scalars(stmt).all())
+    rows = list(db.scalars(stmt).all())
+    linked.legacy_read(db, rows)
+    return rows
 
 
 @router.post("/jobs", response_model=AnalysisJobOut)
@@ -67,10 +73,13 @@ def create_job(
     )
     if payload.job_type not in ALLOWED_JOB_TYPES:
         raise HTTPException(status_code=400, detail="unsupported analysis job type")
+    if payload.note_local_id is not None:
+        linked.guard(db, [(payload.owner_id, payload.note_local_id)])
     job = AnalysisJob(**payload.model_dump(), status="queued")
     db.add(job)
     db.commit()
     db.refresh(job)
+    linked.legacy_read(db, [job])
     return job
 
 
@@ -90,6 +99,7 @@ def get_job(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    linked.legacy_read(db, [job])
     return job
 
 
@@ -112,11 +122,14 @@ def update_job(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    if job.note_local_id is not None:
+        linked.guard(db, [(job.owner_id, job.note_local_id)])
     job.status = payload.status
     job.result_json = payload.result_json
     job.error_message = payload.error_message
     db.commit()
     db.refresh(job)
+    linked.legacy_read(db, [job])
     return job
 
 
@@ -136,12 +149,15 @@ def cancel_job(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    if job.note_local_id is not None:
+        linked.guard(db, [(job.owner_id, job.note_local_id)])
     if job.status not in {"queued", "running"}:
         raise HTTPException(status_code=400, detail="analysis job cannot be cancelled")
-    job.status = "cancelled"
-    job.error_message = "cancelled by user"
+    with linked.worker_write(db, job.id):
+        job.status = "cancelled"
     db.commit()
     db.refresh(job)
+    linked.legacy_read(db, [job])
     return job
 
 
@@ -161,11 +177,20 @@ def retry_job(
         access_token=user_token,
         web_session_token=web_session_token,
     )
+    if job.note_local_id is not None:
+        linked.guard(db, [(job.owner_id, job.note_local_id)])
     if job.status not in RESTARTABLE_STATUSES:
         raise HTTPException(status_code=400, detail="analysis job cannot be retried")
     job.status = "queued"
     job.result_json = None
     job.error_message = None
+    from app.models.note_related import AnalysisRun
+    from uuid import uuid4
+    run = db.get(AnalysisRun, job.id)
+    if run is not None:
+        run.run_id, run.receipt_json, run.claimed_by, run.claimed_until = str(uuid4()), None, None, None
+        run.dispatched = False; run.run_version += 1
     db.commit()
     db.refresh(job)
+    linked.legacy_read(db, [job])
     return job

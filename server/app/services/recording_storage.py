@@ -25,9 +25,13 @@ async def save_recording_file(
 
     file_name = f"{_safe_name(local_id)}_{uuid4().hex}_{_safe_name(upload.filename or 'audio.aac')}"
     target = base / file_name
-    with target.open("wb") as output:
-        while chunk := await upload.read(1024 * 1024):
-            output.write(chunk)
+    try:
+        with target.open("wb") as output:
+            while chunk := await upload.read(1024 * 1024):
+                output.write(chunk)
+    except Exception:
+        delete_recording_file(str(target))
+        raise
 
     return file_name, str(target)
 

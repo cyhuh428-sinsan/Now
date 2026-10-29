@@ -50,6 +50,7 @@ def authenticate_actor(db, owner, device):
 
 
 def base_state(db, owner, local, *, baseline=True):
+    from app.services.related_text import exists as related_exists
     rows = list(db.scalars(select(Note).where(Note.owner_id == owner, Note.local_id == local)))
     fence = active_fence(db, owner, local)
     head = db.get(NoteHead, (owner, local))
@@ -75,7 +76,8 @@ def base_state(db, owner, local, *, baseline=True):
             or head.identity_state != ("ambiguous" if ambiguous else "coherent")
             or head.head_revision_id != expected_pointer):
             error("inconsistent_history")
-    elif inventory or (head and (head.head_revision_id is not None or head.identity_state != "branch_only")):
+    elif inventory or (head and (head.head_revision_id is not None or head.identity_state != (
+        "branch_only" if branches else "related_only" if related_exists(db, owner, local) else "branch_only"))):
         error("inconsistent_history")
     return {"head_version": head.version if head else 0, "head_revision_id": head.head_revision_id if head else None,
             "crypto_epoch": head.crypto_epoch if head else 0, "history_generation": head.history_generation if head else 0,
@@ -138,12 +140,16 @@ def result(db, row):
     from app.models.note_crypto import NoteCryptoUpload, NoteCryptoChunk
     uploads = list(db.scalars(select(NoteCryptoUpload).where(NoteCryptoUpload.transition_id == row.id)))
     chunks = list(db.scalars(select(NoteCryptoChunk.chunk_index).where(NoteCryptoChunk.transition_id == row.id)))
-    return {"transition_id": row.id, "state": row.state, "lease_version": row.lease_version,
+    value = {"transition_id": row.id, "state": row.state, "lease_version": row.lease_version,
             "expires_at": row.expires_at.isoformat(timespec="microseconds") + "Z",
             "server_instance_id": condition["server_instance_id"], "manifest_digest": row.manifest_digest,
             "expected_count": len(list(db.scalars(select(NoteCryptoEntry.key_json).where(NoteCryptoEntry.transition_id == row.id)))),
             "preparation_only": True, "base": condition["base"], "target_epoch": condition["request"]["target_epoch"],
             "uploaded_chunks": len(chunks), "sealed_entries": sum(u.ciphertext_sha256 is not None for u in uploads)}
+    if condition.get("schema_version") == 2:
+        from app.services.related_conversion import status_fields
+        value.update(status_fields(row))
+    return value
 
 
 def owned(db, owner, local, device, transition_id, purpose="conversion"):
@@ -167,14 +173,11 @@ def status(db, owner, local, device, transition_id=None):
 
 
 def related_plaintext(db, owner, local):
-    jobs = select(AnalysisJob.id).where(AnalysisJob.owner_id == owner, AnalysisJob.note_local_id == local,
-        (AnalysisJob.input_text.is_not(None)
-         | AnalysisJob.result_json.is_not(None)
-         | AnalysisJob.error_message.is_not(None)
-         | AnalysisJob.status.in_(["queued", "running"]))).limit(1)
-    transcripts = select(Recording.id).where(Recording.owner_id == owner, Recording.note_local_id == local,
-        Recording.transcript.is_not(None)).limit(1)
-    return db.scalar(jobs) is not None or db.scalar(transcripts) is not None
+    from app.services import related_text as linked
+    if db.scalar(select(AnalysisJob.id).where(AnalysisJob.owner_id == owner, AnalysisJob.note_local_id == local,
+        AnalysisJob.status.in_(("queued", "running", "client_pending", "client_running"))).limit(1)) is not None:
+        return True
+    return any(m.representation_kind == "plain_text_v1" for k, target, m, raw in linked.slots(db, owner, local))
 
 
 def catalog(db, owner, local, epoch):
@@ -246,10 +249,19 @@ def prepare(db, body):
             error("idempotency_mismatch")
         base_state(db, body.owner_id, body.local_id, baseline=False)
         return {"created": False, **result(db, previous)}
+    from app.services import related_text as linked
+    schema2, drainer, ready_base = body.schema_version == 2, None, None
+    if schema2:
+        from app.services.related_drain import ready
+        drainer, ready_base = ready(db, body)
+    elif linked.exists(db, body.owner_id, body.local_id):
+        error("related_representation_required")
     require_unfenced(db, [(body.owner_id, body.local_id)])
-    if related_plaintext(db, body.owner_id, body.local_id):
+    if not schema2 and related_plaintext(db, body.owner_id, body.local_id):
         error("related_plaintext_unresolved")
     base = base_state(db, body.owner_id, body.local_id)
+    if schema2 and base != ready_base:
+        error("version_conflict")
     if body.crypto_epoch != base["crypto_epoch"] or body.target_epoch != base["crypto_epoch"] + 1:
         error("crypto_epoch_changed")
     if (body.base_head_version != base["head_version"] or body.base_revision_id != base["head_revision_id"]
@@ -262,13 +274,18 @@ def prepare(db, body):
         entries.append({"key": {"kind": "reserved_offline_snapshot", "id": entry.revision_id, "slot": "snapshot"},
                         "source_etag": str(uuid4()), "source_kind": "client_pending", "output_kind": "history_envelope_v1",
                         "representation_epoch": base["crypto_epoch"]})
+    nullable = null_slots(db, body.owner_id, body.local_id)
+    from app.services.note_operation_origin import conversion_expectations
+    origin_expectations = conversion_expectations(db, body.owner_id, body.local_id, entries, nullable)
+    if schema2:
+        from app.services.related_conversion import collect
+        extra, extra_null = collect(db, body.owner_id, body.local_id)
+        entries += extra
+        nullable += extra_null
     entries.sort(key=lambda item: canonical(item["key"]))
-    if not entries:
+    if not entries and not (schema2 and nullable):
         error("no_transition_representations")
     stamp, ident = database_now(db), str(uuid4())
-    from app.services.note_operation_origin import conversion_expectations
-    nullable = null_slots(db, body.owner_id, body.local_id)
-    origin_expectations = conversion_expectations(db, body.owner_id, body.local_id, entries, nullable)
     row = NoteCryptoTransition(id=ident, owner_id=body.owner_id, local_id=body.local_id,
         mutation_id=body.mutation_id, actor_device_id=body.device_id,
         conditions_json=canonical({"request": body.model_dump(), "server_instance_id": identity, "base": base,
@@ -283,6 +300,11 @@ def prepare(db, body):
         db.add(NoteCryptoEntry(transition_id=ident, key_json=canonical(item["key"]),
                               binding_json=canonical(expected_binding(db, row, item["key"])),
                               **{k: v for k, v in item.items() if k != "key"}))
+    db.flush()
+    if schema2:
+        from app.services.related_conversion import finish_prepare
+        finish_prepare(db, row)
+        drainer.state, drainer.transition_id = "promoted", row.id
     db.add(NoteCryptoFence(owner_id=body.owner_id, local_id=body.local_id, transition_id=ident))
     db.flush()
     return {"created": True, **result(db, row)}
@@ -319,8 +341,11 @@ def entry_result(row):
 
 
 @transactional
-def manifest(db, owner, local, device, transition_id, limit, cursor, purpose="conversion"):
+def manifest(db, owner, local, device, transition_id, limit, cursor, purpose="conversion", manifest_schema=None, metadata_digest=None):
     row = owned(db, owner, local, device, transition_id, purpose)
+    if json.loads(row.conditions_json).get("request", {}).get("schema_version") == 2:
+        from app.services.related_conversion import manifest as read_manifest
+        return read_manifest(row, limit, cursor, manifest_schema, metadata_digest)
     current = base_state(db, owner, local, baseline=False)
     condition = json.loads(row.conditions_json)
     if "null_slots" not in condition:
@@ -350,8 +375,13 @@ def manifest(db, owner, local, device, transition_id, limit, cursor, purpose="co
 
 
 @transactional
-def source(db, owner, local, device, transition_id, key, etag):
+def source(db, owner, local, device, transition_id, key, etag, source_schema=None, metadata_digest=None):
     row = owned(db, owner, local, device, transition_id)
+    if json.loads(row.conditions_json).get("schema_version") == 2:
+        if row.actor_device_id != device:
+            error("transition_actor_mismatch", 403)
+        from app.services.related_conversion import source as linked_source
+        return linked_source(db, row, key, etag, source_schema, metadata_digest)
     if row.state == "expired":
         error("transition_expired", 410)
     if row.state not in ACTIVE_STATES:

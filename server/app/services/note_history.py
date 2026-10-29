@@ -69,6 +69,11 @@ def require_legacy_writes(db, refs):
     lock_note_writes(db, [owner for owner, _ in refs])
     from app.services.note_crypto_fence import require_unfenced
     require_unfenced(db, refs)
+    from app.services.related_text import active_drain
+    for owner, local in refs:
+        if active_drain(db, owner, local) is not None:
+            from app.services.note_crypto_fence import error
+            error("related_drain_in_progress", 423)
     for ref in sorted(refs):
         head = db.get(NoteHead, ref)
         if head and (head.protection_state != "legacy" or head.crypto_epoch != 0):

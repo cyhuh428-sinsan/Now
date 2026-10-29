@@ -203,7 +203,7 @@ def test_related_text_and_strict_owner_actor_cas(client, subject):
     s["db"].add(AnalysisJob(owner_id=s["owner"], note_local_id=b["local_id"], job_type="memo_summary", input_text="private"))
     s["db"].commit()
     r = client.post(ROOT, json=b, headers=s["headers"])
-    assert r.status_code == 409 and r.json()["detail"]["code"] == "related_plaintext_unresolved"
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "related_representation_required"
     b, t = prepare(client, s, "safe", local_branches=[{"revision_id": str(uuid4()), "parent_ref": None, "origin_device_id": "actor"}])
     actor = s["db"].scalar(select(UserDevice).where(UserDevice.owner_id == s["owner"], UserDevice.device_id == "actor"))
     actor.is_active = 0; s["db"].commit()

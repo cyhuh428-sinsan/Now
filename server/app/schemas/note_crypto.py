@@ -31,17 +31,20 @@ class TransitionAction(Strict):
 
 
 class RepresentationKey(Strict):
-    kind: Literal["note_body", "revision_snapshot", "revision_before", "inventory_snapshot", "offline_snapshot", "reserved_offline_snapshot"]
+    kind: Literal["note_body", "revision_snapshot", "revision_before", "inventory_snapshot", "offline_snapshot", "reserved_offline_snapshot",
+                  "analysis_input", "analysis_result", "analysis_error", "recording_transcript"]
     id: str = Field(min_length=1, max_length=36)
-    slot: Literal["content", "after", "before", "current", "snapshot"]
+    slot: Literal["content", "after", "before", "current", "snapshot", "input_text", "result_json", "error_message", "transcript"]
 
     @model_validator(mode="after")
     def key_shape(self):
         slots = {"note_body": "content", "revision_snapshot": "after", "revision_before": "before",
-                 "inventory_snapshot": "current", "offline_snapshot": "snapshot", "reserved_offline_snapshot": "snapshot"}
+                 "inventory_snapshot": "current", "offline_snapshot": "snapshot", "reserved_offline_snapshot": "snapshot",
+                 "analysis_input": "input_text", "analysis_result": "result_json", "analysis_error": "error_message",
+                 "recording_transcript": "transcript"}
         if self.slot != slots[self.kind]:
             raise ValueError("invalid representation slot")
-        if self.kind in ("note_body", "inventory_snapshot"):
+        if self.kind in ("note_body", "inventory_snapshot", "analysis_input", "analysis_result", "analysis_error", "recording_transcript"):
             if not self.id.isascii() or not self.id.isdigit() or int(self.id) < 1 or str(int(self.id)) != self.id:
                 raise ValueError("invalid physical identifier")
         else:

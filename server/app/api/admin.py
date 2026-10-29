@@ -131,7 +131,10 @@ def export_recordings(
         stmt = stmt.where(Recording.transcript.is_not(None))
     elif transcript_status == "without":
         stmt = stmt.where(Recording.transcript.is_(None))
-    return _export_payload("recordings", list(db.scalars(stmt).all()))
+    rows = list(db.scalars(stmt).all())
+    from app.services.related_text import legacy_read
+    legacy_read(db, rows)
+    return _export_payload("recordings", rows)
 
 
 @router.get("/export/recording-orphans")
@@ -177,7 +180,10 @@ def export_analysis_jobs(
         stmt = stmt.where(AnalysisJob.status == status_filter)
     if job_type:
         stmt = stmt.where(AnalysisJob.job_type == job_type)
-    return _export_payload("analysis_jobs", list(db.scalars(stmt).all()))
+    rows = list(db.scalars(stmt).all())
+    from app.services.related_text import legacy_read
+    legacy_read(db, rows)
+    return _export_payload("analysis_jobs", rows)
 
 
 @router.get("/export/sync-logs")
@@ -299,6 +305,8 @@ def export_all(db: Session = Depends(get_db)) -> JSONResponse:
             select(AnalysisJob).order_by(AnalysisJob.updated_at.desc(), AnalysisJob.id.desc())
         ).all()
     )
+    from app.services.related_text import legacy_read
+    legacy_read(db, recordings + analysis_jobs)
     sync_logs = list(
         db.scalars(select(SyncLog).order_by(SyncLog.created_at.desc(), SyncLog.id.desc())).all()
     )

@@ -379,6 +379,8 @@ def commit(db, body):
             origin_device_id=n["origin_device_id"], representation_kind="history_envelope_v1",
             representation_epoch=c["target_epoch"], snapshot_json=text))
     head.history_generation += len(inserts)
+    if inserts and head.identity_state == "related_only":
+        head.identity_state = "branch_only"
     origin.install(db, row)
     try:
         db.flush()

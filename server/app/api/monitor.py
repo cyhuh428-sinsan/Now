@@ -1484,7 +1484,7 @@ def _analysis_job_detail_rows(jobs: list[AnalysisJob]) -> str:
         f"<td>{_status_badge(job.status)}</td>"
         f"<td>{escape(job.job_type)}</td>"
         f"<td>{escape(job.note_local_id or '-')}</td>"
-        f"<td class=\"mono\">{_short_text(job.input_text)}</td>"
+        f"<td class=\"mono\">{_related_preview(job, job.input_text)}</td>"
         f"<td class=\"mono\">{_job_output(job)}</td>"
         f"<td>{_format_datetime(job.updated_at)}</td>"
         "</tr>"
@@ -1503,8 +1503,23 @@ def _status_badge(value: str) -> str:
 
 def _job_output(job: AnalysisJob) -> str:
     if job.error_message:
-        return _short_text(job.error_message)
-    return _short_text(job.result_json)
+        return _related_preview(job, job.error_message)
+    return _related_preview(job, job.result_json)
+
+
+def _related_preview(row, value, limit=180):
+    from sqlalchemy.orm import object_session
+    from app.services.related_text import legacy_read
+    from fastapi import HTTPException
+    db = object_session(row)
+    if row.note_local_id is not None:
+        if db is None:
+            return "[보호된 텍스트]"
+        try:
+            legacy_read(db, [row])
+        except HTTPException:
+            return "[보호된 텍스트]"
+    return _short_text(value, limit)
 
 
 def _short_text(value: str | None, limit: int = 180) -> str:
@@ -2226,7 +2241,7 @@ def _admin_recording_rows(recordings: list[Recording]) -> str:
         f"<td class=\"mono\">{escape(recording.file_name)}</td>"
         f"<td>{escape(recording.content_type)}</td>"
         f"<td>{escape(recording.note_local_id or '-')}</td>"
-        f"<td class=\"mono\">{_short_text(recording.transcript, 140)}</td>"
+        f"<td class=\"mono\">{_related_preview(recording, recording.transcript, 140)}</td>"
         f"<td class=\"mono\">{escape(recording.owner_id)} / {escape(recording.device_id)}</td>"
         f"<td>{_format_datetime(recording.updated_at)}</td>"
         "</tr>"

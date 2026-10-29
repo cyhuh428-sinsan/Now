@@ -27,6 +27,8 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.note_related import LinkedSchema, LinkedText, RelatedDrain, AnalysisRun  # noqa: F401
+    from app.services.related_text import initialize as initialize_related
     from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk, NoteRepresentationOrigin  # noqa: F401
     from app.services.note_crypto import initialize_identity
     from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
@@ -59,6 +61,7 @@ def create_tables() -> None:
             Base.metadata.create_all(bind=conn)
             migrate_schema(conn)
             initialize_identity(conn)
+            initialize_related(conn)
         return
 
     with engine.begin() as conn:
@@ -67,6 +70,7 @@ def create_tables() -> None:
         Base.metadata.create_all(bind=conn)
         migrate_schema(conn)
         initialize_identity(conn)
+        initialize_related(conn)
 
 
 def migrate_schema(conn: Connection | None = None) -> None:

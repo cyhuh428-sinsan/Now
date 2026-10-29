@@ -149,7 +149,8 @@ def quote(db, body):
         error("ambiguous_note_identity")
     if body.operation == "create":
         from app.models.note_v2 import NoteOfflineBranch
-        if base["current_exists"] or base["head_version"] or base["history_generation"] or db.scalar(select(NoteOfflineBranch.id).where(
+        related_create = base["identity_state"] == "related_only" and base["crypto_epoch"] > 0
+        if base["current_exists"] or (not related_create and (base["head_version"] or base["history_generation"])) or db.scalar(select(NoteOfflineBranch.id).where(
             NoteOfflineBranch.owner_id == body.owner_id, NoteOfflineBranch.local_id == body.local_id).limit(1)):
             error("wrong_operation_state")
     elif base["crypto_epoch"] < 1 or body.operation == "put" and not base["current_exists"]:

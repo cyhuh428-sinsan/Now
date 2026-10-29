@@ -61,7 +61,8 @@ def destination(key):
 
 def references(db, owner, local, key, request=None):
     kind, ident = key["kind"], key["id"]
-    if kind == "note_body":
+    from app.services.related_text import SLOTS
+    if kind == "note_body" or kind in SLOTS:
         return None, None
     if kind == "reserved_offline_snapshot":
         reservation = next((b for b in request["local_branches"] if b["revision_id"] == ident), None)
@@ -107,7 +108,8 @@ def entry_metadata(db, row, entry):
     from app.services import note_operation_origin as origin
     origin.upgrade_pending(db, row)
     condition = json.loads(row.conditions_json)
-    semantic_origin = None if condition.get("origin_metadata_legacy") == origin.LEGACY else origin.expected_origin(db, row, destination(key))
+    from app.services.related_text import SLOTS
+    semantic_origin = None if key["kind"] in SLOTS or condition.get("origin_metadata_legacy") == origin.LEGACY else origin.expected_origin(db, row, destination(key))
     return {**preparation.entry_result(entry), "destination_key": destination(key), "operation_origin": semantic_origin,
             "expected_binding": expected_binding(db, row, key), "uploaded_chunks": len(chunks),
             "sealed": upload is not None and upload.ciphertext_sha256 is not None,
@@ -131,6 +133,9 @@ def active(db, owner, local, device, ident, purpose="conversion"):
         error("manifest_changed")
     from app.services.note_operation_origin import upgrade_pending
     upgrade_pending(db, row)
+    if json.loads(row.conditions_json).get("schema_version") == 2:
+        from app.services.related_conversion import validate
+        validate(db, row)
     if purpose == "protected_write":
         from app.services.note_protected_write import validate_sources
         validate_sources(db, row)
@@ -220,11 +225,13 @@ def validate_output(data, kind, epoch, binding):
             if not encrypted(text):
                 raise ValueError("invalid current cipher")
             return None
+        if kind not in ("history_envelope_v1", "linked_text_envelope_v1"):
+            raise ValueError("invalid output kind")
         value = json.loads(text, object_pairs_hook=strict_object)
         if (set(value) != {"schema_version", "kind", "crypto_epoch", "binding", "ciphertext"}
             or type(value["schema_version"]) is not int or value["schema_version"] != 1
             or type(value["crypto_epoch"]) is not int or value["crypto_epoch"] != epoch
-            or value["kind"] != "history_envelope_v1" or canonical_bytes(value["binding"]) != canonical_bytes(binding)
+            or value["kind"] != kind or canonical_bytes(value["binding"]) != canonical_bytes(binding)
             or not encrypted(value["ciphertext"])):
             raise ValueError("invalid envelope")
         return value
@@ -255,7 +262,7 @@ def seal(db, body, purpose="conversion"):
 
 
 @atomic
-def staged(db, owner, local, device, transition_id, key, etag, index, purpose="conversion"):
+def staged(db, owner, local, device, transition_id, key, etag, index, purpose="conversion", read_schema=None, metadata_digest=None):
     # Terminal stage reads are closed even for the original creator.
     known = preparation.owned(db, owner, local, device, transition_id, purpose)
     if known.state not in ACTIVE_STATES:
@@ -267,11 +274,17 @@ def staged(db, owner, local, device, transition_id, key, etag, index, purpose="c
     chunk = db.get(NoteCryptoChunk, (row.id, entry.key_json, index))
     if upload is None or chunk is None:
         error("chunk_not_found", 404)
-    return {"entry_key": key, "source_etag": etag, "target_epoch": epoch, "chunk_index": index,
+    result = {"entry_key": key, "source_etag": etag, "target_epoch": epoch, "chunk_index": index,
             "operation_origin": entry_metadata(db, row, entry)["operation_origin"],
             "total_chunks": upload.total_chunks, "total_bytes": upload.total_bytes, "chunk_sha256": chunk.chunk_sha256,
             "ciphertext_sha256": upload.ciphertext_sha256, "data_base64": base64.b64encode(chunk.data).decode(),
             "sealed": upload.ciphertext_sha256 is not None}
+    if json.loads(row.conditions_json).get("schema_version") == 2:
+        from app.services.related_conversion import checked_schema, context
+        c = checked_schema(row, read_schema, metadata_digest)
+        result.update(metadata_context=context(row, c), metadata_manifest_digest=row.manifest_digest,
+            slot_version=next(e["slot_version"] for e in c["metadata_sets"]["entries"] if e["key"] == key))
+    return result
 
 
 def current_context(db, owner, local):
@@ -291,10 +304,14 @@ def committed_result(db, row):
     latest = current_context(db, row.owner_id, row.local_id)
     fields = ("server_instance_id", "crypto_epoch", "head_version", "head_revision_id", "history_generation",
               "identity_state", "current_exists", "protection_state", "inventory_revision_ids")
-    return {"schema_version": 1, "status": "ok", "state": "committed", "preparation_only": False,
+    result = {"schema_version": 1, "status": "ok", "state": "committed", "preparation_only": False,
             "transition_id": row.id, "mutation_id": json.loads(row.commit_conditions_json)["mutation_id"],
             "receipt": receipt, "current_context": latest,
             "receipt_matches_current": latest["active_transition_id"] is None and all(receipt[f] == latest[f] for f in fields)}
+    if conditions.get("schema_version") == 2:
+        from app.services.related_conversion import status_fields
+        result.update(status_fields(row))
+    return result
 
 
 def check_manifest(db, row):
@@ -302,6 +319,9 @@ def check_manifest(db, row):
     base, request = conditions["base"], conditions["request"]
     if preparation.base_state(db, row.owner_id, row.local_id, baseline=False) != base:
         error("version_conflict")
+    if conditions.get("schema_version") == 2:
+        from app.services.related_conversion import validate
+        return validate(db, row)
     if "null_slots" in conditions and preparation.null_slots(db, row.owner_id, row.local_id) != conditions["null_slots"]:
         error("manifest_changed")
     if preparation.related_plaintext(db, row.owner_id, row.local_id):
@@ -335,6 +355,12 @@ def commit(db, body):
         error("transition_actor_mismatch", 403)
     if body.server_instance_id != preparation.initialize_identity(db.connection()):
         error("server_instance_changed")
+    prepared = json.loads(row.conditions_json)["request"]
+    if body.schema_version != prepared["schema_version"]:
+        error("manifest_changed")
+    if body.schema_version == 2 and any(getattr(body, field) != prepared[field]
+        for field in ("drain_id", "drain_version", "linked_metadata_version")):
+        error("drain_changed")
     core = canonical(body.model_dump())
     if row.state == "committed":
         if row.commit_conditions_json != core:
@@ -372,7 +398,11 @@ def commit(db, body):
     # Core Note UPDATE bypasses natural history capture and pins onupdate time.
     for key, text in replacements:
         kind, ident = key["kind"], key["id"]
-        if kind == "note_body":
+        from app.services.related_text import SLOTS
+        if kind in SLOTS:
+            from app.services.related_conversion import publish
+            publish(db, row, key, text)
+        elif kind == "note_body":
             db.execute(Note.__table__.update().where(Note.id == int(ident), Note.owner_id == row.owner_id,
                 Note.local_id == row.local_id).values(content=text, updated_at=Note.updated_at))
         elif kind in ("revision_snapshot", "revision_before"):
@@ -394,6 +424,9 @@ def commit(db, body):
                 parent_kind=parent["kind"] if parent else None, parent_id=parent["id"] if parent else None,
                 origin_device_id=reserved["origin_device_id"], snapshot_json=text,
                 representation_kind="history_envelope_v1", representation_epoch=body.target_epoch))
+    if condition.get("schema_version") == 2:
+        from app.services.related_conversion import publish_nulls
+        publish_nulls(db, row)
     head = db.get(NoteHead, (row.owner_id, row.local_id))
     if head is None:
         head = NoteHead(owner_id=row.owner_id, local_id=row.local_id, version=0, history_generation=0,
@@ -406,6 +439,9 @@ def commit(db, body):
     db.execute(delete(NoteCryptoFence).where(NoteCryptoFence.transition_id == row.id))
     db.flush()
     expected_counts, applied_counts = {kind: 0 for kind in KINDS}, {kind: 0 for kind in KINDS}
+    if condition.get("schema_version") == 2:
+        from app.services.related_text import SLOTS
+        expected_counts.update({k: 0 for k in SLOTS}); applied_counts.update({k: 0 for k in SLOTS})
     for key, _ in replacements:
         expected_counts[key["kind"]] += 1
         applied_counts[destination(key)["kind"]] += 1
@@ -417,6 +453,16 @@ def commit(db, body):
         "ciphertext_manifest_digest": cipher_digest, "expected_counts": expected_counts, "applied_counts": applied_counts,
         "reserved_branch_ids": sorted(b["revision_id"] for b in request["local_branches"]),
         "origin_metadata_version": 1, "origin_expectations_digest": origin.expectations_digest(row)})
+    if condition.get("schema_version") == 2:
+        from app.services.related_conversion import hash_value, status_fields
+        receipt = json.loads(row.receipt_json)
+        null_counts = {}
+        for k in condition["null_slots"]:
+            null_counts[k["kind"]] = null_counts.get(k["kind"], 0) + 1
+        receipt.update(linked_metadata_version=1, linked_expectations_digest=hash_value(condition["linked_expectations"]),
+            linked_counts=status_fields(row)["linked_counts"], null_expected_counts=null_counts, null_applied_counts=null_counts,
+            full_protection_complete=False, protected_analysis_execution_v1=False)
+        row.receipt_json = canonical(receipt)
     return committed_result(db, row)
 
 
@@ -472,6 +518,10 @@ def live_entries(db, owner, local):
         add("inventory_snapshot", inv.note_id, "current", inv.snapshot_json, inv, inv.note_id, inv.revision_id)
     for branch in db.scalars(select(NoteOfflineBranch).where(NoteOfflineBranch.owner_id == owner, NoteOfflineBranch.local_id == local)):
         add("offline_snapshot", branch.id, "snapshot", branch.snapshot_json, branch)
+    from app.services.related_text import slots
+    from app.services.related_conversion import descriptor
+    for key, target, meta, raw in slots(db, owner, local):
+        rows.append(descriptor(db, owner, local, key, target, meta, raw))
     return sorted(rows, key=lambda pair: key_order(pair[0]["key"]))
 
 
@@ -512,7 +562,11 @@ def representations(db, owner, local, device, limit=100, cursor=None, expected=N
     page = candidates[:limit]
     next_cursor = base64.urlsafe_b64encode(canonical_bytes({"context": context, "owner": owner, "local": local,
                                                          "after": page[-1]["key"]})).decode() if len(candidates) > limit else None
-    counts = {kind: sum(item["key"]["kind"] == kind for item, _ in rows) for kind in KINDS if kind != "reserved_offline_snapshot"}
+    kinds = [kind for kind in KINDS if kind != "reserved_offline_snapshot"]
+    from app.services.related_text import SLOTS
+    if any(item["key"]["kind"] in SLOTS for item, raw in rows):
+        kinds += list(SLOTS)
+    counts = {kind: sum(item["key"]["kind"] == kind for item, _ in rows) for kind in kinds}
     return {"context": context, "items": page, "next_cursor": next_cursor, "counts": counts,
             "catalog_digest": context["catalog_digest"], "coverage": {"scope": "note_history", "scope_complete": True,
                 "supported_kinds": list(counts), "full_protection_complete": False}}
