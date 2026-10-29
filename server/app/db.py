@@ -27,6 +27,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.protected_analysis import ProtectedAnalysisClaim  # noqa: F401
     from app.models.note_related import LinkedSchema, LinkedText, RelatedDrain, AnalysisRun  # noqa: F401
     from app.services.related_text import initialize as initialize_related
     from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk, NoteRepresentationOrigin  # noqa: F401

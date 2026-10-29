@@ -7,7 +7,7 @@ from app.schemas.note_crypto import PrepareTransition, CommitTransition
 
 
 class DrainPrepare(Strict):
-    schema_version: Literal[1]
+    schema_version: Literal[1, 2]
     owner_id: str = Field(min_length=1, max_length=80)
     local_id: str = Field(max_length=120)
     device_id: str = Field(min_length=1, max_length=120)

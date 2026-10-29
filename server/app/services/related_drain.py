@@ -54,10 +54,14 @@ def own(db, owner, local, device, ident, instance):
 
 def result(db, row):
     c = json.loads(row.conditions_json)
+    from app.services import protected_analysis as client_runs
+    schema = c["request"]["schema_version"]
+    client_current, client_pending = client_runs.progress(db, row.owner_id, row.local_id, c.get("accepted_claims", []),
+        check_new=row.state in ("draining", "ready"))
     if row.state in ("draining", "ready") and db.scalar(select(AnalysisJob.id).where(AnalysisJob.owner_id == row.owner_id,
         AnalysisJob.note_local_id == row.local_id, AnalysisJob.status.in_(("client_pending", "client_running"))).limit(1)) is not None:
         error("related_jobs_unsettled")
-    current, pending = [], 0
+    current, pending = [], client_pending
     for accepted in c["accepted_runs"]:
         run = db.get(AnalysisRun, accepted["job_id"])
         job = db.get(AnalysisJob, accepted["job_id"])
@@ -89,11 +93,14 @@ def result(db, row):
             row.state, ready_base = "draining", None
         c["ready_base"] = ready_base
         row.conditions_json = linked.canonical(c)
-    return {"schema_version": 1, "drain_id": row.id, "drain_version": row.drain_version, "state": row.state,
+    output = {"schema_version": schema, "drain_id": row.id, "drain_version": row.drain_version, "state": row.state,
         "lease_version": row.lease_version, "expires_at": row.expires_at.isoformat(timespec="microseconds") + "Z",
         "server_instance_id": c["server_instance_id"], "base_epoch": c["request"]["crypto_epoch"],
         "accepted_runs": c["accepted_runs"], "current_runs": current, "pending_count": pending,
         "ready_base": c.get("ready_base"), "transition_id": row.transition_id}
+    if schema == 2:
+        output.update(accepted_claims=c["accepted_claims"], current_claims=client_current)
+    return output
 
 
 @store.atomic
@@ -115,6 +122,10 @@ def prepare(db, body):
     if base["history_generation"] != body.expected_history_generation:
         error("version_conflict")
     linked.slots(db, body.owner_id, body.local_id)
+    from app.services import protected_analysis as client_runs
+    accepted_claims = client_runs.cohort(db, body.owner_id, body.local_id)
+    if accepted_claims and body.schema_version != 2:
+        error("client_claims_require_drain_v2")
     accepted = []
     for job in db.scalars(select(AnalysisJob).where(AnalysisJob.owner_id == body.owner_id,
         AnalysisJob.note_local_id == body.local_id).order_by(AnalysisJob.id)):
@@ -133,7 +144,8 @@ def prepare(db, body):
     row = RelatedDrain(id=str(uuid4()), owner_id=body.owner_id, local_id=body.local_id, actor_device_id=body.device_id,
         mutation_id=body.mutation_id, state="draining", drain_version=1, lease_version=1,
         expires_at=database_now(db) + timedelta(minutes=30), conditions_json=linked.canonical({"request": body.model_dump(),
-            "server_instance_id": body.server_instance_id, "accepted_runs": accepted, "ready_base": None}))
+            "server_instance_id": body.server_instance_id, "accepted_runs": accepted, "ready_base": None,
+            **({"accepted_claims": accepted_claims} if body.schema_version == 2 else {})}))
     db.add(row); db.flush()
     return {"created": True, **result(db, row)}
 

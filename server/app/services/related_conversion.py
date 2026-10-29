@@ -261,6 +261,21 @@ def descriptor(db, owner, local, k, target, meta, raw):
         op = db.get(NoteCryptoTransition, meta.storage_operation_id)
         if op is None or op.owner_id != owner or op.local_id != local or op.state != "committed":
             error("inconsistent_related_text")
+        if op.purpose in ("protected_analysis_write", "protected_transcript_write"):
+            from app.services.related_writes import validate_live
+            binding = validate_live(op, k, meta, raw)
+            if binding["server_instance_id"] != prep.initialize_identity(db.connection()):
+                error("server_instance_changed")
+            data = b"" if raw is None else raw.encode("utf-8")
+            if raw is not None:
+                store.validate_output(data, "linked_text_envelope_v1", meta.representation_epoch, binding)
+            return {"key": k, "representation_kind": "linked_text_envelope_v1", "representation_epoch": meta.representation_epoch,
+                "representation_etag": hash_value([k, meta.representation_epoch, store.sha(data) if raw is not None else None, meta.slot_version]),
+                "is_null": raw is None, "slot_version": meta.slot_version, "total_bytes": len(data),
+                "total_chunks": (len(data) + store.CHUNK_BYTES - 1) // store.CHUNK_BYTES,
+                "ciphertext_sha256": store.sha(data) if raw is not None else None, "expected_binding": binding,
+                "revision_ref": None, "parent_ref": None, "physical_note_id": None, "inventory_revision_id": None,
+                "operation_origin": None}, data
         c = fixed(op); receipt = json.loads(op.receipt_json)
         if c["server_instance_id"] != prep.initialize_identity(db.connection()):
             error("server_instance_changed")

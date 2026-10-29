@@ -142,6 +142,9 @@ def active(db, owner, local, device, ident, purpose="conversion"):
     elif purpose == "protected_import":
         from app.services.note_protected_import import validate_sources
         validate_sources(db, row)
+    elif purpose in ("protected_analysis_write", "protected_transcript_write"):
+        from app.services.related_writes import validate_sources
+        validate_sources(db, row)
     return row
 
 

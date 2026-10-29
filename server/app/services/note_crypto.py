@@ -254,8 +254,14 @@ def prepare(db, body):
     if schema2:
         from app.services.related_drain import ready
         drainer, ready_base = ready(db, body)
-    elif linked.exists(db, body.owner_id, body.local_id):
-        error("related_representation_required")
+    else:
+        if linked.active_drain(db, body.owner_id, body.local_id) is not None:
+            error("related_drain_in_progress", 423)
+        from app.services.protected_analysis import unsettled
+        if unsettled(db, body.owner_id, body.local_id):
+            error("client_claims_require_drain_v2")
+        if linked.exists(db, body.owner_id, body.local_id):
+            error("related_representation_required")
     require_unfenced(db, [(body.owner_id, body.local_id)])
     if not schema2 and related_plaintext(db, body.owner_id, body.local_id):
         error("related_plaintext_unresolved")

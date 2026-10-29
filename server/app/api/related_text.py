@@ -57,6 +57,11 @@ def typed_rows(db, owner, local, device, model, ident=None):
                   "slot_descriptors": []}
         if isinstance(row, AnalysisJob):
             fields.update(job_type=row.job_type, status=row.status, execution_mode="client_cipher" if protected else "server_plain")
+            if protected:
+                from app.services.related_writes import job_origin
+                write_id, origin = job_origin(db, owner, local, row.id)
+                fields.update(storage_write_id=write_id, execution_id=origin["execution_id"] if origin else None,
+                    source_job_id=origin["source_job_id"] if origin else None, source_context=origin["source_context"] if origin else None)
         else:
             fields.update(file_name=row.file_name, content_type=row.content_type, local_id=row.local_id)
         for k, target, meta, raw in slots:
@@ -66,7 +71,7 @@ def typed_rows(db, owner, local, device, model, ident=None):
                 "key": k, "representation_kind": meta.representation_kind, "representation_epoch": 0,
                 "slot_version": meta.slot_version, "is_null": meta.is_null})
         result.append(fields)
-    return {"schema_version": 2, "items": result, "protected_analysis_execution_v1": False, "full_protection_complete": False}
+    return {"schema_version": 2, "items": result, "protected_analysis_execution_v1": True, "full_protection_complete": False}
 
 
 @router.get("/api/v2/analysis/jobs")
