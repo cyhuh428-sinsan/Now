@@ -248,6 +248,36 @@ This software is provided by the copyright holders and contributors “as is” 
    See the License for the specific language governing permissions and
    limitations under the License.
 
+BSD 3-Clause License
+
+Copyright (c) 2009-2015, Kevin Decker <kpdecker@gmail.com>
+All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+   contributors may be used to endorse or promote products derived from
+   this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 */
 /**
  * marked v18.1.2 - a markdown parser
@@ -914,6 +944,477 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   return { open: async () => { if (dialog.open) return; boundContext = api.contextKey(); selectedId = rows()[0]?.id || null; dirty = false; render(); dialog.showModal(); await sync(); }, refresh: () => { if (dialog.open) status(); }, close: () => { confirmation?.(false); dialog.close(); }, requestConfirmation: ask, sync };
 };
 
+;
+((global,factory)=>{"object"==typeof exports&&"undefined"!=typeof module?factory(exports):"function"==typeof define&&define.amd?define(["exports"],factory):factory((global="undefined"!=typeof globalThis?globalThis:global||self).Diff={})})(this,function(exports){class Diff{diff(oldStr,newStr,options={}){let callback;"function"==typeof options?(callback=options,options={}):"callback"in options&&(callback=options.callback);oldStr=this.castInput(oldStr,options),newStr=this.castInput(newStr,options),oldStr=this.removeEmpty(this.tokenize(oldStr,options)),newStr=this.removeEmpty(this.tokenize(newStr,options));return this.diffWithOptionsObj(oldStr,newStr,options,callback)}diffWithOptionsObj(oldTokens,newTokens,options,callback){let _a,done=value=>{if(value=this.postProcess(value,options),!callback)return value;setTimeout(function(){callback(value)},0)},newLen=newTokens.length,oldLen=oldTokens.length,editLength=1,maxEditLength=newLen+oldLen;null!=options.maxEditLength&&(maxEditLength=Math.min(maxEditLength,options.maxEditLength));var maxExecutionTime=null!=(_a=options.timeout)?_a:1/0;let abortAfterTimestamp=Date.now()+maxExecutionTime,bestPath=[{oldPos:-1,lastComponent:void 0}],newPos=this.extractCommon(bestPath[0],newTokens,oldTokens,0,options);if(bestPath[0].oldPos+1>=oldLen&&newPos+1>=newLen)return done(this.buildValues(bestPath[0].lastComponent,newTokens,oldTokens));let minDiagonalToConsider=-1/0,maxDiagonalToConsider=1/0,execEditLength=()=>{for(let diagonalPath=Math.max(minDiagonalToConsider,-editLength);diagonalPath<=Math.min(maxDiagonalToConsider,editLength);diagonalPath+=2){let basePath;var removePath=bestPath[diagonalPath-1],addPath=bestPath[diagonalPath+1];removePath&&(bestPath[diagonalPath-1]=void 0);let canAdd=!1;addPath&&(addPathNewPos=addPath.oldPos-diagonalPath,canAdd=addPath&&0<=addPathNewPos&&addPathNewPos<newLen);var addPathNewPos=removePath&&removePath.oldPos+1<oldLen;if(canAdd||addPathNewPos){if(basePath=!addPathNewPos||canAdd&&removePath.oldPos<addPath.oldPos?this.addToPath(addPath,!0,!1,0,options):this.addToPath(removePath,!1,!0,1,options),newPos=this.extractCommon(basePath,newTokens,oldTokens,diagonalPath,options),basePath.oldPos+1>=oldLen&&newPos+1>=newLen)return done(this.buildValues(basePath.lastComponent,newTokens,oldTokens))||!0;(bestPath[diagonalPath]=basePath).oldPos+1>=oldLen&&(maxDiagonalToConsider=Math.min(maxDiagonalToConsider,diagonalPath-1)),newPos+1>=newLen&&(minDiagonalToConsider=Math.max(minDiagonalToConsider,diagonalPath+1))}else bestPath[diagonalPath]=void 0}editLength++};if(callback)!function exec(){setTimeout(function(){if(editLength>maxEditLength||Date.now()>abortAfterTimestamp)return callback(void 0);execEditLength()||exec()},0)}();else for(;editLength<=maxEditLength&&Date.now()<=abortAfterTimestamp;){var ret=execEditLength();if(ret)return ret}}addToPath(path,added,removed,oldPosInc,options){var last=path.lastComponent;return last&&!options.oneChangePerToken&&last.added===added&&last.removed===removed?{oldPos:path.oldPos+oldPosInc,lastComponent:{count:last.count+1,added:added,removed:removed,previousComponent:last.previousComponent}}:{oldPos:path.oldPos+oldPosInc,lastComponent:{count:1,added:added,removed:removed,previousComponent:last}}}extractCommon(basePath,newTokens,oldTokens,diagonalPath,options){var newLen=newTokens.length,oldLen=oldTokens.length;let oldPos=basePath.oldPos,newPos=oldPos-diagonalPath,commonCount=0;for(;newPos+1<newLen&&oldPos+1<oldLen&&this.equals(oldTokens[oldPos+1],newTokens[newPos+1],options);)newPos++,oldPos++,commonCount++,options.oneChangePerToken&&(basePath.lastComponent={count:1,previousComponent:basePath.lastComponent,added:!1,removed:!1});return commonCount&&!options.oneChangePerToken&&(basePath.lastComponent={count:commonCount,previousComponent:basePath.lastComponent,added:!1,removed:!1}),basePath.oldPos=oldPos,newPos}equals(left,right,options){return options.comparator?options.comparator(left,right):left===right||!!options.ignoreCase&&left.toLowerCase()===right.toLowerCase()}removeEmpty(array){var ret=[];for(let i=0;i<array.length;i++)array[i]&&ret.push(array[i]);return ret}castInput(value,options){return value}tokenize(value,options){return Array.from(value)}join(chars){return chars.join("")}postProcess(changeObjects,options){return changeObjects}get useLongestToken(){return!1}buildValues(lastComponent,newTokens,oldTokens){for(var nextComponent,components=[];lastComponent;)components.push(lastComponent),nextComponent=lastComponent.previousComponent,delete lastComponent.previousComponent,lastComponent=nextComponent;components.reverse();var componentLen=components.length;let componentPos=0,newPos=0,oldPos=0;for(;componentPos<componentLen;componentPos++){var component=components[componentPos];if(component.removed)component.value=this.join(oldTokens.slice(oldPos,oldPos+component.count)),oldPos+=component.count;else{if(!component.added&&this.useLongestToken){let value=newTokens.slice(newPos,newPos+component.count);value=value.map(function(value,i){i=oldTokens[oldPos+i];return i.length>value.length?i:value}),component.value=this.join(value)}else component.value=this.join(newTokens.slice(newPos,newPos+component.count));newPos+=component.count,component.added||(oldPos+=component.count)}}return components}}class CharacterDiff extends Diff{}let characterDiff=new CharacterDiff;function longestCommonPrefix(str1,str2){let i;for(i=0;i<str1.length&&i<str2.length;i++)if(str1[i]!=str2[i])return str1.slice(0,i);return str1.slice(0,i)}function longestCommonSuffix(str1,str2){let i;if(!str1||!str2||str1[str1.length-1]!=str2[str2.length-1])return"";for(i=0;i<str1.length&&i<str2.length;i++)if(str1[str1.length-(i+1)]!=str2[str2.length-(i+1)])return str1.slice(-i);return str1.slice(-i)}function replacePrefix(string,oldPrefix,newPrefix){if(string.slice(0,oldPrefix.length)!=oldPrefix)throw Error(`string ${JSON.stringify(string)} doesn't start with prefix ${JSON.stringify(oldPrefix)}; this is a bug`);return newPrefix+string.slice(oldPrefix.length)}function replaceSuffix(string,oldSuffix,newSuffix){if(!oldSuffix)return string+newSuffix;if(string.slice(-oldSuffix.length)!=oldSuffix)throw Error(`string ${JSON.stringify(string)} doesn't end with suffix ${JSON.stringify(oldSuffix)}; this is a bug`);return string.slice(0,-oldSuffix.length)+newSuffix}function removePrefix(string,oldPrefix){return replacePrefix(string,oldPrefix,"")}function removeSuffix(string,oldSuffix){return replaceSuffix(string,oldSuffix,"")}function maximumOverlap(string1,string2){return string2.slice(0,((a,b)=>{let startA=0,endB=(a.length>b.length&&(startA=a.length-b.length),b.length),map=(a.length<b.length&&(endB=a.length),Array(endB)),k=0;map[0]=0;for(let j=1;j<endB;j++){for(b[j]==b[k]?map[j]=map[k]:map[j]=k;0<k&&b[j]!=b[k];)k=map[k];b[j]==b[k]&&k++}k=0;for(let i=startA;i<a.length;i++){for(;0<k&&a[i]!=b[k];)k=map[k];a[i]==b[k]&&k++}return k})(string1,string2))}function trailingWs(string){let i;for(i=string.length-1;0<=i&&string[i].match(/\s/);i--);return string.substring(i+1)}function leadingWs(string){string=string.match(/^\s*/);return string?string[0]:""}let extendedWordChars="a-zA-Z0-9_\\u{C0}-\\u{FF}\\u{D8}-\\u{F6}\\u{F8}-\\u{2C6}\\u{2C8}-\\u{2D7}\\u{2DE}-\\u{2FF}\\u{1E00}-\\u{1EFF}",tokenizeIncludingWhitespace=new RegExp(`[${extendedWordChars}]+|\\s+|[^${extendedWordChars}]`,"ug");class WordDiff extends Diff{equals(left,right,options){return options.ignoreCase&&(left=left.toLowerCase(),right=right.toLowerCase()),left.trim()===right.trim()}tokenize(value,options={}){let parts;if(options.intlSegmenter){options=options.intlSegmenter;if("word"!=options.resolvedOptions().granularity)throw new Error('The segmenter passed must have a granularity of "word"');parts=Array.from(options.segment(value),segment=>segment.segment)}else parts=value.match(tokenizeIncludingWhitespace)||[];let tokens=[],prevPart=null;return parts.forEach(part=>{/\s/.test(part)?null==prevPart?tokens.push(part):tokens.push(tokens.pop()+part):null!=prevPart&&/\s/.test(prevPart)?tokens[tokens.length-1]==prevPart?tokens.push(tokens.pop()+part):tokens.push(prevPart+part):tokens.push(part),prevPart=part}),tokens}join(tokens){return tokens.map((token,i)=>0==i?token:token.replace(/^\s+/,"")).join("")}postProcess(changes,options){if(changes&&!options.oneChangePerToken){let lastKeep=null,insertion=null,deletion=null;changes.forEach(change=>{change.added?insertion=change:deletion=change.removed?change:((insertion||deletion)&&dedupeWhitespaceInChangeObjects(lastKeep,deletion,insertion,change),lastKeep=change,insertion=null)}),(insertion||deletion)&&dedupeWhitespaceInChangeObjects(lastKeep,deletion,insertion,null)}return changes}}let wordDiff=new WordDiff;function dedupeWhitespaceInChangeObjects(startKeep,deletion,insertion,endKeep){if(deletion&&insertion){var oldWsPrefix=leadingWs(deletion.value),oldWsSuffix=trailingWs(deletion.value),newWsPrefix=leadingWs(insertion.value),newWsSuffix=trailingWs(insertion.value);startKeep&&(oldWsPrefix=longestCommonPrefix(oldWsPrefix,newWsPrefix),startKeep.value=replaceSuffix(startKeep.value,newWsPrefix,oldWsPrefix),deletion.value=removePrefix(deletion.value,oldWsPrefix),insertion.value=removePrefix(insertion.value,oldWsPrefix)),endKeep&&(newWsPrefix=longestCommonSuffix(oldWsSuffix,newWsSuffix),endKeep.value=replacePrefix(endKeep.value,newWsSuffix,newWsPrefix),deletion.value=removeSuffix(deletion.value,newWsPrefix),insertion.value=removeSuffix(insertion.value,newWsPrefix))}else if(insertion){if(startKeep&&(oldWsPrefix=leadingWs(insertion.value),insertion.value=insertion.value.substring(oldWsPrefix.length)),endKeep){let ws=leadingWs(endKeep.value);endKeep.value=endKeep.value.substring(ws.length)}}else if(startKeep&&endKeep){oldWsSuffix=leadingWs(endKeep.value),newWsSuffix=leadingWs(deletion.value),newWsPrefix=trailingWs(deletion.value),insertion=longestCommonPrefix(oldWsSuffix,newWsSuffix),oldWsPrefix=(deletion.value=removePrefix(deletion.value,insertion),longestCommonSuffix(removePrefix(oldWsSuffix,insertion),newWsPrefix));deletion.value=removeSuffix(deletion.value,oldWsPrefix),endKeep.value=replacePrefix(endKeep.value,oldWsSuffix,oldWsPrefix),startKeep.value=replaceSuffix(startKeep.value,oldWsSuffix,oldWsSuffix.slice(0,oldWsSuffix.length-oldWsPrefix.length))}else if(endKeep){newWsSuffix=leadingWs(endKeep.value),insertion=maximumOverlap(trailingWs(deletion.value),newWsSuffix);deletion.value=removeSuffix(deletion.value,insertion)}else if(startKeep){let overlap=maximumOverlap(trailingWs(startKeep.value),leadingWs(deletion.value));deletion.value=removePrefix(deletion.value,overlap)}}class WordsWithSpaceDiff extends Diff{tokenize(value){var regex=new RegExp(`(\\r?\\n)|[${extendedWordChars}]+|[^\\S\\n\\r]+|[^${extendedWordChars}]`,"ug");return value.match(regex)||[]}}let wordsWithSpaceDiff=new WordsWithSpaceDiff;function diffWordsWithSpace(oldStr,newStr,options){return wordsWithSpaceDiff.diff(oldStr,newStr,options)}class LineDiff extends Diff{constructor(){super(...arguments),this.tokenize=tokenize}equals(left,right,options){return options.ignoreWhitespace?(options.newlineIsToken&&left.includes("\n")||(left=left.trim()),options.newlineIsToken&&right.includes("\n")||(right=right.trim())):options.ignoreNewlineAtEof&&!options.newlineIsToken&&(left.endsWith("\n")&&(left=left.slice(0,-1)),right.endsWith("\n"))&&(right=right.slice(0,-1)),super.equals(left,right,options)}}let lineDiff=new LineDiff;function diffLines(oldStr,newStr,options){return lineDiff.diff(oldStr,newStr,options)}function tokenize(value,options){var retLines=[],linesAndNewlines=(value=options.stripTrailingCr?value.replace(/\r\n/g,"\n"):value).split(/(\n|\r\n)/);linesAndNewlines[linesAndNewlines.length-1]||linesAndNewlines.pop();for(let i=0;i<linesAndNewlines.length;i++){var line=linesAndNewlines[i];i%2&&!options.newlineIsToken?retLines[retLines.length-1]+=line:retLines.push(line)}return retLines}class SentenceDiff extends Diff{tokenize(value){var _a,char,result=[];let tokenStartI=0;for(let i=0;i<value.length;i++){if(i==value.length-1){result.push(value.slice(tokenStartI));break}if(("."==(char=value[i])||"!"==char||"?"==char)&&value[i+1].match(/\s/)){for(result.push(value.slice(tokenStartI,i+1)),i=tokenStartI=i+1;null!=(_a=value[i+1])&&_a.match(/\s/);)i++;result.push(value.slice(tokenStartI,i+1)),tokenStartI=i+1}}return result}}let sentenceDiff=new SentenceDiff;class CssDiff extends Diff{tokenize(value){return value.split(/([{}:;,]|\s+)/)}}let cssDiff=new CssDiff;class JsonDiff extends Diff{constructor(){super(...arguments),this.tokenize=tokenize}get useLongestToken(){return!0}castInput(value,options){let{undefinedReplacement,stringifyReplacer=(k,v)=>void 0===v?undefinedReplacement:v}=options;return"string"==typeof value?value:JSON.stringify(canonicalize(value,null,null,stringifyReplacer),null,"  ")}equals(left,right,options){return super.equals(left.replace(/,([\r\n])/g,"$1"),right.replace(/,([\r\n])/g,"$1"),options)}}let jsonDiff=new JsonDiff;function canonicalize(obj,stack,replacementStack,replacer,key){stack=stack||[],replacementStack=replacementStack||[],replacer&&(obj=replacer(void 0===key?"":key,obj));let i;for(i=0;i<stack.length;i+=1)if(stack[i]===obj)return replacementStack[i];let canonicalizedObj;if("[object Array]"===Object.prototype.toString.call(obj)){for(stack.push(obj),canonicalizedObj=new Array(obj.length),replacementStack.push(canonicalizedObj),i=0;i<obj.length;i+=1)canonicalizedObj[i]=canonicalize(obj[i],stack,replacementStack,replacer,String(i));stack.pop(),replacementStack.pop()}else if("object"==typeof(obj=obj&&obj.toJSON?obj.toJSON():obj)&&null!==obj){stack.push(obj),canonicalizedObj={},replacementStack.push(canonicalizedObj);var sortedKeys=[];let key;for(key in obj)Object.prototype.hasOwnProperty.call(obj,key)&&sortedKeys.push(key);for(sortedKeys.sort(),i=0;i<sortedKeys.length;i+=1)key=sortedKeys[i],canonicalizedObj[key]=canonicalize(obj[key],stack,replacementStack,replacer,key);stack.pop(),replacementStack.pop()}else canonicalizedObj=obj;return canonicalizedObj}class ArrayDiff extends Diff{tokenize(value){return value.slice()}join(value){return value}removeEmpty(value){return value}}let arrayDiff=new ArrayDiff;function parsePatch(uniDiff){let diffstr=uniDiff.split(/\n/),list=[],i=0;function parseIndex(){var index={};for(list.push(index);i<diffstr.length;){var line=diffstr[i];if(/^(---|\+\+\+|@@)\s/.test(line))break;line=/^(?:Index:|diff(?: -r \w+)+)\s+(.+?)\s*$/.exec(line);line&&(index.index=line[1]),i++}for(parseFileHeader(index),parseFileHeader(index),index.hunks=[];i<diffstr.length;){let line=diffstr[i];if(/^(Index:\s|diff\s|---\s|\+\+\+\s|===================================================================)/.test(line))break;if(/^@@/.test(line))index.hunks.push((()=>{var chunkHeaderIndex=i,chunkHeaderLine=diffstr[i++],hunk={oldStart:+(chunkHeaderLine=chunkHeaderLine.split(/@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/))[1],oldLines:void 0===chunkHeaderLine[2]?1:+chunkHeaderLine[2],newStart:+chunkHeaderLine[3],newLines:void 0===chunkHeaderLine[4]?1:+chunkHeaderLine[4],lines:[]};0===hunk.oldLines&&(hunk.oldStart+=1),0===hunk.newLines&&(hunk.newStart+=1);let addCount=0,removeCount=0;for(;i<diffstr.length&&(removeCount<hunk.oldLines||addCount<hunk.newLines||null!=(_a=diffstr[i])&&_a.startsWith("\\"));i++){var _a=0==diffstr[i].length&&i!=diffstr.length-1?" ":diffstr[i][0];if("+"!==_a&&"-"!==_a&&" "!==_a&&"\\"!==_a)throw new Error(`Hunk at line ${chunkHeaderIndex+1} contained invalid line `+diffstr[i]);hunk.lines.push(diffstr[i]),"+"===_a?addCount++:"-"===_a?removeCount++:" "===_a&&(addCount++,removeCount++)}if(addCount||1!==hunk.newLines||(hunk.newLines=0),removeCount||1!==hunk.oldLines||(hunk.oldLines=0),addCount!==hunk.newLines)throw new Error("Added line count did not match for hunk at line "+(chunkHeaderIndex+1));if(removeCount===hunk.oldLines)return hunk;throw new Error("Removed line count did not match for hunk at line "+(chunkHeaderIndex+1))})());else{if(line)throw new Error("Unknown line "+(i+1)+" "+JSON.stringify(line));i++}}}function parseFileHeader(index){var fileHeader=/^(---|\+\+\+)\s+(.*)\r?$/.exec(diffstr[i]);if(fileHeader){var data=fileHeader[2].split("\t",2),header=(data[1]||"").trim();let fileName=data[0].replace(/\\\\/g,"\\");/^".*"$/.test(fileName)&&(fileName=fileName.substr(1,fileName.length-2)),"---"===fileHeader[1]?(index.oldFileName=fileName,index.oldHeader=header):(index.newFileName=fileName,index.newHeader=header),i++}}for(;i<diffstr.length;)parseIndex();return list}function applyPatch(source,patch,options={}){let patches;if(1<(patches="string"==typeof patch?parsePatch(patch):Array.isArray(patch)?patch:[patch]).length)throw new Error("applyPatch only works with a single input.");return((source,patch,options={})=>{!options.autoConvertLineEndings&&null!=options.autoConvertLineEndings||((string=>string.includes("\r\n")&&!string.startsWith("\n")&&!string.match(/[^\r]\n/))(source)&&(patch=>!(patch=Array.isArray(patch)?patch:[patch]).some(index=>index.hunks.some(hunk=>hunk.lines.some(line=>!line.startsWith("\\")&&line.endsWith("\r")))))(patch)?patch=function unixToWin(patch){return Array.isArray(patch)?patch.map(p=>unixToWin(p)):Object.assign(Object.assign({},patch),{hunks:patch.hunks.map(hunk=>Object.assign(Object.assign({},hunk),{lines:hunk.lines.map((line,i)=>line.startsWith("\\")||line.endsWith("\r")||null!=(i=hunk.lines[i+1])&&i.startsWith("\\")?line:line+"\r")}))})}(patch):(string=>!string.includes("\r\n")&&string.includes("\n"))(source)&&(patch=>(patch=Array.isArray(patch)?patch:[patch]).some(index=>index.hunks.some(hunk=>hunk.lines.some(line=>line.endsWith("\r"))))&&patch.every(index=>index.hunks.every(hunk=>hunk.lines.every((line,i)=>line.startsWith("\\")||line.endsWith("\r")||(null==(line=hunk.lines[i+1])?void 0:line.startsWith("\\"))))))(patch)&&(patch=function winToUnix(patch){return Array.isArray(patch)?patch.map(p=>winToUnix(p)):Object.assign(Object.assign({},patch),{hunks:patch.hunks.map(hunk=>Object.assign(Object.assign({},hunk),{lines:hunk.lines.map(line=>line.endsWith("\r")?line.substring(0,line.length-1):line)}))})}(patch)));let lines=source.split("\n"),hunks=patch.hunks,compareLine=options.compareLine||((lineNumber,line,operation,patchContent)=>line===patchContent),fuzzFactor=options.fuzzFactor||0,minLine=0;if(fuzzFactor<0||!Number.isInteger(fuzzFactor))throw new Error("fuzzFactor must be a non-negative integer");if(!hunks.length)return source;let prevLine="",removeEOFNL=!1,addEOFNL=!1;for(let i=0;i<hunks[hunks.length-1].lines.length;i++){var line=hunks[hunks.length-1].lines[i];"\\"==line[0]&&("+"==prevLine[0]?removeEOFNL=!0:"-"==prevLine[0]&&(addEOFNL=!0)),prevLine=line}if(removeEOFNL){if(addEOFNL){if(!fuzzFactor&&""==lines[lines.length-1])return!1}else if(""==lines[lines.length-1])lines.pop();else if(!fuzzFactor)return!1}else if(addEOFNL)if(""!=lines[lines.length-1])lines.push("");else if(!fuzzFactor)return!1;let resultLines=[],prevHunkOffset=0;for(let i=0;i<hunks.length;i++){var hunk=hunks[i];let hunkResult;var maxLine=lines.length-hunk.oldLines+fuzzFactor;let toPos;for(let maxErrors=0;maxErrors<=fuzzFactor;maxErrors++){for(var iterator=((start,minLine,maxLine)=>{let wantForward=!0,backwardExhausted=!1,forwardExhausted=!1,localOffset=1;return function iterator(){if(wantForward&&!forwardExhausted){if(backwardExhausted?localOffset++:wantForward=!1,start+localOffset<=maxLine)return start+localOffset;forwardExhausted=!0}if(!backwardExhausted)return forwardExhausted||(wantForward=!0),minLine<=start-localOffset?start-localOffset++:(backwardExhausted=!0,iterator())}})(toPos=hunk.oldStart+prevHunkOffset-1,minLine,maxLine);void 0!==toPos&&!(hunkResult=function applyHunk(hunkLines,toPos,maxErrors,hunkLinesI=0,lastContextLineMatched=!0,patchedLines=[],patchedLinesLength=0){let nConsecutiveOldContextLines=0,nextContextLineMustMatch=!1;for(;hunkLinesI<hunkLines.length;hunkLinesI++){var operation=0<(hunkLine=hunkLines[hunkLinesI]).length?hunkLine[0]:" ",hunkLine=0<hunkLine.length?hunkLine.substr(1):hunkLine;if("-"===operation){if(!compareLine(toPos+1,lines[toPos],operation,hunkLine))return maxErrors&&null!=lines[toPos]?(patchedLines[patchedLinesLength]=lines[toPos],applyHunk(hunkLines,toPos+1,maxErrors-1,hunkLinesI,!1,patchedLines,patchedLinesLength+1)):null;toPos++,nConsecutiveOldContextLines=0}if("+"===operation){if(!lastContextLineMatched)return null;patchedLines[patchedLinesLength]=hunkLine,patchedLinesLength++,nConsecutiveOldContextLines=0,nextContextLineMustMatch=!0}if(" "===operation){if(nConsecutiveOldContextLines++,patchedLines[patchedLinesLength]=lines[toPos],!compareLine(toPos+1,lines[toPos],operation,hunkLine))return nextContextLineMustMatch||!maxErrors?null:lines[toPos]&&(applyHunk(hunkLines,toPos+1,maxErrors-1,hunkLinesI+1,!1,patchedLines,patchedLinesLength+1)||applyHunk(hunkLines,toPos+1,maxErrors-1,hunkLinesI,!1,patchedLines,patchedLinesLength+1))||applyHunk(hunkLines,toPos,maxErrors-1,hunkLinesI+1,!1,patchedLines,patchedLinesLength);patchedLinesLength++,lastContextLineMatched=!0,nextContextLineMustMatch=!1,toPos++}}return patchedLinesLength-=nConsecutiveOldContextLines,toPos-=nConsecutiveOldContextLines,patchedLines.length=patchedLinesLength,{patchedLines:patchedLines,oldLineLastI:toPos-1}}(hunk.lines,toPos,maxErrors));toPos=iterator());if(hunkResult)break}if(!hunkResult)return!1;for(let i=minLine;i<toPos;i++)resultLines.push(lines[i]);for(let i=0;i<hunkResult.patchedLines.length;i++){var line=hunkResult.patchedLines[i];resultLines.push(line)}minLine=hunkResult.oldLineLastI+1,prevHunkOffset=toPos+1-hunk.oldStart}for(let i=minLine;i<lines.length;i++)resultLines.push(lines[i]);return resultLines.join("\n")})(source,patches[0],options)}function structuredPatch(oldFileName,newFileName,oldStr,newStr,oldHeader,newHeader,options){let optionsObj,context=(void 0===(optionsObj=options?"function"==typeof options?{callback:options}:options:{}).context&&(optionsObj.context=4),optionsObj.context);if(optionsObj.newlineIsToken)throw new Error("newlineIsToken may not be used with patch-generation functions, only with diffing functions");if(!optionsObj.callback)return diffLinesResultToPatch(diffLines(oldStr,newStr,optionsObj));{let callback=optionsObj.callback;diffLines(oldStr,newStr,Object.assign(Object.assign({},optionsObj),{callback:diff=>{diff=diffLinesResultToPatch(diff);callback(diff)}}))}function diffLinesResultToPatch(diff){if(diff){diff.push({value:"",lines:[]});var hunks=[];let oldRangeStart=0,newRangeStart=0,curRange=[],oldLine=1,newLine=1;for(let i=0;i<diff.length;i++){var line,current=diff[i],lines=current.lines||(text=>{var hasTrailingNl=text.endsWith("\n"),text=text.split("\n").map(line=>line+"\n");return hasTrailingNl?text.pop():text.push(text.pop().slice(0,-1)),text})(current.value);if(current.lines=lines,current.added||current.removed){oldRangeStart||(prev=diff[i-1],oldRangeStart=oldLine,newRangeStart=newLine,prev&&(curRange=0<context?contextLines(prev.lines.slice(-context)):[],oldRangeStart-=curRange.length,newRangeStart-=curRange.length));for(line of lines)curRange.push((current.added?"+":"-")+line);current.added?newLine+=lines.length:oldLine+=lines.length}else{if(oldRangeStart)if(lines.length<=2*context&&i<diff.length-2)for(let line of contextLines(lines))curRange.push(line);else{var prev=Math.min(lines.length,context);for(let line of contextLines(lines.slice(0,prev)))curRange.push(line);var hunk={oldStart:oldRangeStart,oldLines:oldLine-oldRangeStart+prev,newStart:newRangeStart,newLines:newLine-newRangeStart+prev,lines:curRange};hunks.push(hunk),oldRangeStart=0,newRangeStart=0,curRange=[]}oldLine+=lines.length,newLine+=lines.length}}for(let hunk of hunks)for(let i=0;i<hunk.lines.length;i++)hunk.lines[i].endsWith("\n")?hunk.lines[i]=hunk.lines[i].slice(0,-1):(hunk.lines.splice(i+1,0,"\\ No newline at end of file"),i++);return{oldFileName:oldFileName,newFileName:newFileName,oldHeader:oldHeader,newHeader:newHeader,hunks:hunks};function contextLines(lines){return lines.map(function(entry){return" "+entry})}}}}function formatPatch(patch){if(Array.isArray(patch))return patch.map(formatPatch).join("\n");var ret=[];patch.oldFileName==patch.newFileName&&ret.push("Index: "+patch.oldFileName),ret.push("==================================================================="),ret.push("--- "+patch.oldFileName+(void 0===patch.oldHeader?"":"\t"+patch.oldHeader)),ret.push("+++ "+patch.newFileName+(void 0===patch.newHeader?"":"\t"+patch.newHeader));for(let i=0;i<patch.hunks.length;i++){var line,hunk=patch.hunks[i];0===hunk.oldLines&&--hunk.oldStart,0===hunk.newLines&&--hunk.newStart,ret.push("@@ -"+hunk.oldStart+","+hunk.oldLines+" +"+hunk.newStart+","+hunk.newLines+" @@");for(line of hunk.lines)ret.push(line)}return ret.join("\n")+"\n"}function createTwoFilesPatch(oldFileName,newFileName,oldStr,newStr,oldHeader,newHeader,options){if(null!=(options="function"==typeof options?{callback:options}:options)&&options.callback){let callback=options.callback;structuredPatch(oldFileName,newFileName,oldStr,newStr,oldHeader,newHeader,Object.assign(Object.assign({},options),{callback:patchObj=>{patchObj?callback(formatPatch(patchObj)):callback(void 0)}}))}else{oldFileName=structuredPatch(oldFileName,newFileName,oldStr,newStr,oldHeader,newHeader,options);if(oldFileName)return formatPatch(oldFileName)}}exports.Diff=Diff,exports.applyPatch=applyPatch,exports.applyPatches=function(uniDiff,options){let spDiff="string"==typeof uniDiff?parsePatch(uniDiff):uniDiff,currentIndex=0;!function processIndex(){let index=spDiff[currentIndex++];if(!index)return options.complete();options.loadFile(index,function(err,data){if(err)return options.complete(err);err=applyPatch(data,index,options),options.patched(index,err,function(err){if(err)return options.complete(err);processIndex()})})}()},exports.arrayDiff=arrayDiff,exports.canonicalize=canonicalize,exports.characterDiff=characterDiff,exports.convertChangesToDMP=function(changes){var ret=[];let change,operation;for(let i=0;i<changes.length;i++)change=changes[i],operation=change.added?1:change.removed?-1:0,ret.push([operation,change.value]);return ret},exports.convertChangesToXML=function(changes){var ret=[];for(let i=0;i<changes.length;i++){var change=changes[i];change.added?ret.push("<ins>"):change.removed&&ret.push("<del>"),ret.push((s=>{let n=s;return n=(n=(n=(n=n.replace(/&/g,"&amp;")).replace(/</g,"&lt;")).replace(/>/g,"&gt;")).replace(/"/g,"&quot;")})(change.value)),change.added?ret.push("</ins>"):change.removed&&ret.push("</del>")}return ret.join("")},exports.createPatch=function(fileName,oldStr,newStr,oldHeader,newHeader,options){return createTwoFilesPatch(fileName,fileName,oldStr,newStr,oldHeader,newHeader,options)},exports.createTwoFilesPatch=createTwoFilesPatch,exports.cssDiff=cssDiff,exports.diffArrays=function(oldArr,newArr,options){return arrayDiff.diff(oldArr,newArr,options)},exports.diffChars=function(oldStr,newStr,options){return characterDiff.diff(oldStr,newStr,options)},exports.diffCss=function(oldStr,newStr,options){return cssDiff.diff(oldStr,newStr,options)},exports.diffJson=function(oldStr,newStr,options){return jsonDiff.diff(oldStr,newStr,options)},exports.diffLines=diffLines,exports.diffSentences=function(oldStr,newStr,options){return sentenceDiff.diff(oldStr,newStr,options)},exports.diffTrimmedLines=function(oldStr,newStr,options){return options=((options,defaults)=>{if("function"==typeof options)defaults.callback=options;else if(options)for(var name in options)Object.prototype.hasOwnProperty.call(options,name)&&(defaults[name]=options[name]);return defaults})(options,{ignoreWhitespace:!0}),lineDiff.diff(oldStr,newStr,options)},exports.diffWords=function(oldStr,newStr,options){return null==(null==options?void 0:options.ignoreWhitespace)||options.ignoreWhitespace?wordDiff.diff(oldStr,newStr,options):diffWordsWithSpace(oldStr,newStr,options)},exports.diffWordsWithSpace=diffWordsWithSpace,exports.formatPatch=formatPatch,exports.jsonDiff=jsonDiff,exports.lineDiff=lineDiff,exports.parsePatch=parsePatch,exports.reversePatch=function reversePatch(structuredPatch){return Array.isArray(structuredPatch)?structuredPatch.map(patch=>reversePatch(patch)).reverse():Object.assign(Object.assign({},structuredPatch),{oldFileName:structuredPatch.newFileName,oldHeader:structuredPatch.newHeader,newFileName:structuredPatch.oldFileName,newHeader:structuredPatch.oldHeader,hunks:structuredPatch.hunks.map(hunk=>({oldLines:hunk.newLines,oldStart:hunk.newStart,newLines:hunk.oldLines,newStart:hunk.oldStart,lines:hunk.lines.map(l=>l.startsWith("-")?"+"+l.slice(1):l.startsWith("+")?"-"+l.slice(1):l)}))})},exports.sentenceDiff=sentenceDiff,exports.structuredPatch=structuredPatch,exports.wordDiff=wordDiff,exports.wordsWithSpaceDiff=wordsWithSpaceDiff});
+;
+/* Note history journal. Display projections and authentication are not persisted. */
+(() => {
+  'use strict';
+  const copy = value => structuredClone(value);
+  const key = ctx => JSON.stringify([String(ctx.url || '').replace(/\/+$/, ''), String(ctx.owner || '')]);
+  const meaningFields = ['note_type', 'title', 'content', 'parent_local_id', 'level', 'tags', 'source', 'deleted_at'];
+  const meaning = note => Object.fromEntries(meaningFields.map(field => [field, note[field] ?? (field === 'level' ? 1 : null)]));
+  const same = (a, b) => JSON.stringify(meaning(a)) === JSON.stringify(meaning(b));
+  const uuid = () => crypto.randomUUID();
+  const emptyBase = () => ({ head_version: 0, head_revision_id: null, inventory_revision_ids: [], crypto_epoch: 0, replica_count: 0 });
+  const record = value => value && typeof value === 'object' && !Array.isArray(value);
+  function create({ initial, context, request, write, change = () => {} }) {
+    let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    let generation = 0, failed = null, writes = Promise.resolve(), running = null;
+    const readable = () => data?.schema_version === 1 && record(data.contexts)
+      && Object.values(data.contexts).every(c => record(c) && record(c.notes) && Object.values(c.notes).every(item =>
+        record(item) && record(item.raw) && record(item.draft) && record(item.base)
+        && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
+        && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
+        && Array.isArray(item.outbox) && item.outbox.every(op => record(op) && record(op.body)) && Array.isArray(item.receipts)));
+    const requireWritable = () => {
+      if (!readable()) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+      const ctx = context();
+      if (!ctx.enabled || !ctx.owner) throw new Error('본인 계정으로 다시 인증하세요.');
+      return ctx;
+    };
+    const bucket = (ctx, createBucket = false) => {
+      if (!readable()) return null;
+      if (createBucket) data.contexts[key(ctx)] ||= { notes: {} };
+      return data.contexts[key(ctx)] || null;
+    };
+    const save = () => {
+      const snapshot = copy(data);
+      writes = writes.catch(() => {}).then(() => write(snapshot));
+      return writes.then(() => { failed = null; change(); }, error => { failed = error; change(); throw error; });
+    };
+    const entry = id => bucket(context())?.notes[id] || null;
+    const active = (ctx, epoch) => epoch === generation && context().enabled && key(context()) === key(ctx) && context().auth === ctx.auth;
+    const common = (ctx, id, base) => ({ schema_version: 1, owner_id: ctx.owner, local_id: id,
+      device_id: ctx.device, mutation_id: uuid(), crypto_epoch: base.crypto_epoch || 0 });
+    const baseFields = base => ({ base_head_version: base.head_version, base_revision_id: base.head_revision_id,
+      expected_inventory_revision_ids: copy(base.inventory_revision_ids),
+      ...(base.replica_count > 1 ? { replica_policy: 'selected_head_only' } : {}) });
+    const fromReceipt = (receipt, base) => ({ ...base, head_version: receipt.result_head_version,
+      head_revision_id: receipt.result_revision_id, inventory_revision_ids: copy(receipt.result_inventory_revision_ids),
+      crypto_epoch: receipt.crypto_epoch, history_generation: receipt.history_generation,
+      replica_count: receipt.result_inventory_revision_ids.length });
+    async function track(note, current, { localOnly = false, needsBaseline = false, original = null } = {}) {
+      const ctx = requireWritable();
+      if (note.owner_id !== ctx.owner) throw new Error('이력 소유자가 현재 계정과 다릅니다.');
+      const c = bucket(ctx, true);
+      if (c.notes[note.local_id]) return;
+      c.notes[note.local_id] = { raw: copy(current?.snapshot?.note || original || note), draft: copy(note),
+        base: copy(current || emptyBase()), revisions: [], outbox: [], receipts: [], conflict: null,
+        dirty: !current, localOnly, needsBaseline, replicaSelected: (current?.replica_count || 0) < 2 };
+      await save();
+    }
+    async function bindBaseline(id, current) {
+      requireWritable(); const item = entry(id);
+      if (!item || !item.needsBaseline) return;
+      if (item.outbox.some(op => op.sent)) throw new Error('전송한 요청의 기준은 바꿀 수 없습니다.');
+      if (current?.snapshot && !same(item.raw, current.snapshot.note)) item.conflict = {
+        code: 'baseline_selection_required', local: copy(item.draft), remote: copy(current), base: copy(item.base),
+      };
+      item.base = copy(current || emptyBase());
+      if (current?.snapshot) item.raw = copy(current.snapshot.note);
+      item.needsBaseline = false;
+      item.replicaSelected = (current?.replica_count || 0) < 2;
+      const first = item.outbox[0];
+      if (first && !first.sent && !first.waiting_for) first.body = { ...first.body, ...baseFields(item.base), crypto_epoch: item.base.crypto_epoch };
+      await save();
+    }
+    async function edit(note) {
+      const ctx = requireWritable(), item = entry(note.local_id);
+      if (!item || note.owner_id !== ctx.owner) throw new Error('메모 이력 기준을 먼저 확인하세요.');
+      item.draft = copy(note);
+      item.dirty = !same(item.raw, note) || item.outbox.length > 0 || (!item.revisions.length && !item.base.head_revision_id);
+      await save();
+    }
+    async function seal(id, reason = 'edit') {
+      const ctx = requireWritable(), item = entry(id);
+      if (!item || !item.dirty) return;
+      const last = item.revisions.at(-1);
+      if (last && same(last.snapshot.note, item.draft)
+        && (item.localOnly || item.outbox.some(op => op.revision_id === last.revision_id))) return;
+      const revision = { revision_id: uuid(), parent_ref: last ? { kind: 'offline_branch', id: last.revision_id }
+        : item.base.head_revision_id ? { kind: 'note_revision', id: item.base.head_revision_id } : null,
+        snapshot: { schema_version: 1, note: copy(item.draft) }, reason, created_at: new Date().toISOString(), imported: false };
+      item.revisions.push(revision);
+      const previous = item.outbox.at(-1);
+      item.outbox.push({ id: uuid(), revision_id: revision.revision_id, sent: false, operation: 'put',
+        body: { ...common(ctx, id, item.base), ...baseFields(item.base), note: meaning(item.draft) },
+        waiting_for: previous?.body.mutation_id || null });
+      await save();
+    }
+    async function sync() {
+      if (running) return running;
+      if (!context().enabled || context().online === false || !readable() || failed) return;
+      const ctx = { ...context() }, epoch = generation;
+      running = (async () => {
+        for (const [id, item] of Object.entries(bucket(ctx)?.notes || {})) {
+          if (!active(ctx, epoch) || failed) return;
+          if (item.needsBaseline) {
+            try {
+              let current = null;
+              try { current = await request(ctx, 'current', 'GET', { local_id: id }); }
+              catch (error) { if (error.status !== 404) throw error; }
+              if (!active(ctx, epoch)) return;
+              await bindBaseline(id, current);
+            } catch (error) {
+              if (!active(ctx, epoch)) return;
+              item.error = { code: error.code || 'baseline_unavailable', message: error.message }; await save(); continue;
+            }
+          }
+          if (item.conflict || !item.replicaSelected || item.localOnly) continue;
+          try { await importPending(id); }
+          catch (error) {
+            if (!active(ctx, epoch)) return;
+            item.error = { code: error.code || 'import_failed', message: error.message };
+            if (error.status === 409 || error.status === 423) item.conflict = { code: error.code, local: copy(item.draft), remote: null };
+            await save(); continue;
+          }
+          while (item.outbox.length) {
+            if (!active(ctx, epoch) || failed) return;
+            const op = item.outbox[0];
+            if (op.waiting_for) break;
+            op.sent = true;
+            await save();
+            if (!active(ctx, epoch) || failed) return;
+            let receipt;
+            try {
+              receipt = await request(ctx, op.operation === 'restore' ? 'restore' : 'current', op.operation === 'restore' ? 'POST' : 'PUT', copy(op.body));
+              if (!active(ctx, epoch)) return;
+              if (receipt.mutation_id !== op.body.mutation_id || !Array.isArray(receipt.result_inventory_revision_ids)) throw new Error('이력 저장 응답이 요청과 다릅니다.');
+              item.receipts.push(copy(receipt));
+              item.base = fromReceipt(receipt, item.base);
+              const revision = item.revisions.find(r => r.revision_id === op.revision_id);
+              if (revision) {
+                revision.server_ref = { kind: 'note_revision', id: receipt.result_revision_id };
+                item.raw = copy(revision.snapshot.note);
+              }
+              if (op.restored_snapshot) {
+                item.raw = copy(op.restored_snapshot.note);
+                if (same(item.draft, op.previous_draft)) item.draft = copy(item.raw);
+              }
+              item.completed_outbox ||= [];
+              item.completed_outbox.push(copy(op));
+              item.outbox.shift();
+              const next = item.outbox[0];
+              if (next?.waiting_for === op.body.mutation_id && !next.sent) {
+                next.body = { ...next.body, ...baseFields(item.base), crypto_epoch: item.base.crypto_epoch };
+                next.waiting_for = null;
+              }
+              item.dirty = !same(item.draft, item.raw);
+              await save();
+            } catch (error) {
+              if (!active(ctx, epoch)) return;
+              item.error = { code: error.code || 'request_failed', message: error.message };
+              if (error.status === 409 || error.status === 423 || error.status === 401 || error.status === 403) {
+                item.conflict = { code: error.code || 'version_conflict', base: copy(item.base), local: copy(item.draft), remote: null };
+              }
+              await save();
+              break;
+            }
+          }
+          if (!item.outbox.length && !item.dirty && !item.conflict && active(ctx, epoch)) {
+            const previousDraft = copy(item.draft);
+            try {
+              const current = await request(ctx, 'current', 'GET', { local_id: id });
+              if (!active(ctx, epoch)) return;
+              if (!item.outbox.length && !item.dirty && same(previousDraft, item.draft)) {
+                item.raw = copy(current.snapshot.note); item.draft = copy(current.snapshot.note); item.base = copy(current);
+                item.replicaSelected = current.replica_count < 2;
+                await save();
+              }
+            } catch (error) {
+              if (active(ctx, epoch)) { item.error = { code: error.code || 'refresh_failed', message: error.message }; await save(); }
+            }
+          }
+        }
+      })().finally(() => { running = null; });
+      return running;
+    }
+    async function compare(id) {
+      const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
+      if (!item) throw new Error('메모 이력 기준이 없습니다.');
+      let remote;
+      try { remote = await request(ctx, 'current', 'GET', { local_id: id }); }
+      catch (error) { if (error.status !== 404) throw error; remote = emptyBase(); }
+      if (!active(ctx, epoch)) throw new Error('사용자·서버 또는 복원 상태가 변경되었습니다.');
+      item.comparison = copy(remote);
+      if (item.conflict) item.conflict.remote = copy(remote);
+      await save();
+      return { local: copy(item.draft), remote: copy(remote), base: copy(item.base) };
+    }
+    const equalBase = (a, b) => a?.head_version === b?.head_version && a?.head_revision_id === b?.head_revision_id
+      && a?.crypto_epoch === b?.crypto_epoch && JSON.stringify(a?.inventory_revision_ids) === JSON.stringify(b?.inventory_revision_ids);
+    async function importPending(id) {
+      const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
+      if (!item || failed) throw new Error(failed?.message || '메모 이력 기준이 없습니다.');
+      for (const revision of item.revisions) {
+        if (!active(ctx, epoch) || failed) return;
+        if (revision.imported) continue;
+        revision.import_request ||= { ...common(ctx, id, item.base), entries: [{ revision_id: revision.revision_id,
+          parent_ref: copy(revision.parent_ref), snapshot: copy(revision.snapshot) }] };
+        await save();
+        if (!active(ctx, epoch) || failed) return;
+        const result = await request(ctx, 'revisions/import', 'POST', copy(revision.import_request));
+        if (!active(ctx, epoch)) return;
+        if (!result.imported_refs?.some(ref => ref.kind === 'offline_branch' && ref.id === revision.revision_id)) throw new Error('분기 수신 응답이 일치하지 않습니다.');
+        revision.imported = true;
+        await save();
+      }
+    }
+    async function restore(id, targetRef, compared) {
+      const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
+      if (!item) throw new Error('메모 이력 기준이 없습니다.');
+      const latest = await compare(id);
+      if (!active(ctx, epoch) || !equalBase(latest.remote, compared)) throw new Error('비교본이 변경되었습니다. 다시 비교하고 선택하세요.');
+      await seal(id, 'before_restore');
+      await importPending(id);
+      if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
+      if (item.outbox.some(op => op.sent) && !item.conflict) throw new Error('결과를 확인하지 못한 전송이 있습니다. 먼저 재연결하세요.');
+      const target = await request(ctx, 'revision', 'GET', { local_id: id, revision_kind: targetRef.kind, revision_id: targetRef.id });
+      if (!active(ctx, epoch)) throw new Error('사용자·서버가 변경되었습니다.');
+      // Superseded requests remain archived; immutable revision bodies are never deleted.
+      item.archived_outbox ||= [];
+      item.archived_outbox.push(...item.outbox);
+      item.outbox = [{ id: uuid(), operation: 'restore', sent: false, waiting_for: null,
+        previous_draft: copy(item.draft), restored_snapshot: copy(target.snapshot),
+        body: { ...common(ctx, id, compared), ...baseFields(compared), target_ref: copy(targetRef) } }];
+      const mutationId = item.outbox[0].body.mutation_id;
+      item.conflict = null;
+      item.replicaSelected = true;
+      await save();
+      await sync();
+      return copy(item.receipts.find(receipt => receipt.mutation_id === mutationId) || null);
+    }
+    async function restoreLocal(id, snapshot) {
+      requireWritable();
+      await seal(id, 'before_restore');
+      if (!snapshot?.note || snapshot.note.owner_id !== context().owner || snapshot.note.local_id !== id) throw new Error('복원 대상이 이 메모와 다릅니다.');
+      await edit(snapshot.note);
+      await seal(id, 'restore');
+    }
+    return {
+      track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      manages: id => Boolean(context().enabled && readable() && entry(id)),
+      view: id => context().enabled && readable() && entry(id) ? copy(entry(id)) : null,
+      entries: () => context().enabled && readable() ? copy(bucket(context())?.notes || {}) : {},
+      export: () => copy(data),
+      failure: () => failed?.message || '',
+      status() {
+        const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}) : [];
+        return { pending: notes.filter(item => !item.localOnly && (item.dirty || item.outbox.length)).length,
+          conflicts: notes.filter(item => item.conflict).length, revisions: notes.reduce((sum, item) => sum + item.revisions.length, 0),
+          failed: Boolean(failed), unsupported: data !== null && !readable() };
+      },
+      invalidate() { generation++; },
+      suspend() { generation++; data = null; failed = null; },
+      suspended: () => data === null,
+      hydrate(value) { if (!context().enabled) throw new Error('본인 계정으로 다시 인증하세요.'); generation++; data = value == null ? { schema_version: 1, contexts: {} } : copy(value); },
+      async localOnly(id, value) { requireWritable(); const item = entry(id); if (item && item.localOnly !== value) { item.localOnly = value; await save(); } },
+      async import(value) {
+        requireWritable(); generation++;
+        if (!value || value.schema_version !== 1 || !value.contexts) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+        const previous = copy(data), next = copy(value);
+        next.recovery_archives = [...(previous.recovery_archives || []), ...(next.recovery_archives || []),
+          { restored_at: new Date().toISOString(), contexts: previous.contexts }];
+        for (const c of Object.values(next.contexts)) for (const item of Object.values(c.notes || {})) {
+          if (item.outbox?.length && !item.conflict) item.conflict = { code: 'backup_restored', local: copy(item.draft), remote: null };
+        }
+        data = next; await save();
+      },
+      async selectReplica(id, current) {
+        requireWritable(); const item = entry(id);
+        if (!item || JSON.stringify(item.base.inventory_revision_ids) !== JSON.stringify(current.inventory_revision_ids)
+          || item.base.head_version !== current.head_version || item.base.head_revision_id !== current.head_revision_id) throw new Error('비교본이 변경되었습니다. 다시 선택하세요.');
+        item.replicaSelected = true; await save();
+      },
+    };
+  }
+  globalThis.NowNoteHistory = { create, key, meaning, same };
+})();
+
+;
+/* History is a plain-text inspection surface, never a Markdown execution surface. */
+globalThis.mountNoteHistory = function mountNoteHistory(api) {
+  const dialog = document.createElement('dialog');
+  dialog.id = 'noteHistoryDialog'; dialog.className = 'library-dialog note-history-dialog';
+  dialog.setAttribute('aria-labelledby', 'noteHistoryTitle');
+  dialog.innerHTML = `<header class="library-header"><h2 id="noteHistoryTitle">메모 이력</h2><button type="button" data-action="close" class="ghost-btn">닫기</button></header>
+    <p class="history-status" role="status" aria-live="polite"></p>
+    <div class="history-controls"><label>기준 시점<select class="settings-select" name="before"></select></label><label>비교 시점<select class="settings-select" name="after"></select></label>
+    <button class="secondary-btn" data-action="refresh" type="button">새로고침</button><button class="secondary-btn" data-action="more" type="button">더 보기</button></div>
+    <div class="history-actions"><button class="secondary-btn" data-action="decrypt" type="button">잠금 해제 후 비교</button><button class="primary-btn" data-action="restore" type="button">선택 시점 복원</button><button class="secondary-btn" data-action="replica" type="button">현재 대표만 저장</button></div>
+    <section class="history-metadata" aria-label="메타데이터 차이"></section><pre class="history-diff" tabindex="0" aria-label="본문 차이"></pre>`;
+  document.body.append(dialog);
+  const $ = selector => dialog.querySelector(selector);
+  let id = '', rows = [], cursor = null, current = null, busy = false, run = 0, bound = '', previousFocus = null, confirmation = null;
+  const cache = new Map(), plain = new Map();
+  const reasons = { baseline: '이력 기록 시작', write: '저장', edit: '편집', delete: '삭제', restore: '복원', before_restore: '복원 직전', offline_import: '오프라인 분기' };
+  const status = value => { $('.history-status').textContent = value; };
+  const valid = token => dialog.open && token === run && bound === api.contextKey();
+  const refKey = ref => JSON.stringify(ref);
+  const option = (key, text) => { const node = document.createElement('option'); node.value = key; node.textContent = text; return node; };
+  function ask(message, secret = false) {
+    return new Promise(resolve => {
+      const siblings = [...dialog.children], focus = document.activeElement;
+      siblings.forEach(node => { node.inert = true; });
+      const prompt = document.createElement('section'); prompt.className = 'library-confirm';
+      prompt.setAttribute('role', 'alertdialog'); prompt.setAttribute('aria-label', message);
+      const text = document.createElement('p'); text.textContent = message;
+      const input = document.createElement('input'); input.type = 'password'; input.autocomplete = 'off'; input.className = 'settings-input'; input.setAttribute('aria-label', '과거 암호화 메모 비밀번호');
+      const cancel = document.createElement('button'), ok = document.createElement('button');
+      cancel.type = ok.type = 'button'; cancel.className = ok.className = 'secondary-btn';
+      cancel.textContent = '취소'; ok.textContent = secret ? '잠금 해제' : '복원';
+      confirmation = value => { const result = secret ? (value ? input.value : null) : value; input.value = ''; siblings.forEach(node => { node.inert = false; }); prompt.remove(); confirmation = null; focus?.focus(); resolve(result); };
+      cancel.addEventListener('click', () => confirmation?.(false)); ok.addEventListener('click', () => confirmation?.(true));
+      prompt.append(text); if (secret) prompt.append(input); prompt.append(cancel, ok); dialog.append(prompt); (secret ? input : cancel).focus();
+    });
+  }
+  function updateOptions() {
+    for (const name of ['before', 'after']) {
+      const select = $(`[name="${name}"]`), selected = select.value;
+      select.replaceChildren(...rows.map(row => option(row.key, row.label)));
+      if (rows.some(row => row.key === selected)) select.value = selected;
+      else select.selectedIndex = name === 'before' ? 0 : Math.min(1, rows.length - 1);
+    }
+    $('[data-action="more"]').disabled = !cursor;
+    $('[data-action="replica"]').hidden = !(current?.replica_count > 1);
+  }
+  async function snapshot(key) {
+    if (!dialog.open || bound !== api.contextKey()) return null;
+    if (cache.has(key)) return cache.get(key);
+    const row = rows.find(item => item.key === key);
+    if (!row?.ref) return null;
+    const token = run;
+    const result = await api.request('revision', 'GET', { local_id: id, revision_kind: row.ref.kind, revision_id: row.ref.id });
+    if (!valid(token)) return null;
+    cache.set(key, result.snapshot);
+    return result.snapshot;
+  }
+  async function showDiff() {
+    const token = ++run, leftKey = $('[name="before"]').value, rightKey = $('[name="after"]').value;
+    const left = await snapshot(leftKey), right = await snapshot(rightKey);
+    if (!valid(token) || !left || !right) return;
+    const metadata = $('.history-metadata'); metadata.replaceChildren();
+    for (const field of ['title', 'note_type', 'parent_local_id', 'level', 'tags', 'source', 'deleted_at']) {
+      if (left.note[field] === right.note[field]) continue;
+      const row = document.createElement('p'); row.textContent = `${field}: ${JSON.stringify(left.note[field])} → ${JSON.stringify(right.note[field])}`; metadata.append(row);
+    }
+    const encrypted = value => String(value || '').startsWith('NOW_ENCRYPTED_V1:');
+    const a = encrypted(left.note.content) ? plain.get(leftKey) : left.note.content;
+    const b = encrypted(right.note.content) ? plain.get(rightKey) : right.note.content;
+    const output = $('.history-diff'); output.replaceChildren();
+    $('[data-action="decrypt"]').hidden = !(encrypted(left.note.content) || encrypted(right.note.content));
+    if (a === undefined || b === undefined) { output.textContent = '암호화된 본문입니다.'; return; }
+    const changes = Diff.diffLines(a, b, { timeout: 1500 });
+    if (!changes) { output.textContent = '비교 시간이 초과되었습니다. 원문은 보존되어 있습니다.'; return; }
+    for (const part of changes) {
+      const node = document.createElement(part.added ? 'ins' : part.removed ? 'del' : 'span');
+      node.textContent = part.value; output.append(node);
+    }
+    if (a === b) status('두 시점의 본문이 같습니다.');
+    else if (a.endsWith('\n') !== b.endsWith('\n')) status('마지막 줄바꿈이 다릅니다.');
+  }
+  async function load(more = false) {
+    if (busy) return;
+    busy = true; const token = ++run;
+    try {
+      status('이력 조회 중…');
+      if (!more) {
+        rows = []; cache.clear(); plain.clear(); cursor = null;
+        const item = api.store.view(id);
+        if (!item) throw new Error('현재 계정에서 사용할 수 없는 메모입니다.');
+        rows.push({ key: 'draft', label: '현재 로컬 편집본' }); cache.set('draft', { schema_version: 1, note: item.draft });
+        for (const revision of [...item.revisions].reverse()) {
+          const key = 'local:' + revision.revision_id;
+          rows.push({ key, ref: { kind: 'offline_branch', id: revision.revision_id }, local: true,
+            label: `${revision.created_at} · ${reasons[revision.reason] || revision.reason} · 로컬` });
+          cache.set(key, revision.snapshot);
+        }
+        if (!api.online(id)) {
+          current = null; updateOptions(); status('오프라인 · 복원은 로컬 분기로 보존됩니다.'); return;
+        }
+        try { current = (await api.store.compare(id)).remote; }
+        catch (error) { if (error.code !== 'ambiguous_note_identity') throw error; current = null; }
+        if (!valid(token)) return;
+      }
+      const page = await api.request('revisions', 'GET', { local_id: id, limit: 50, ...(cursor ? { cursor } : {}) });
+      if (!valid(token)) return;
+      for (const row of page.items) {
+        const key = refKey(row.revision_ref);
+        if (rows.some(item => item.key === key)) continue;
+        rows.push({ key, ref: row.revision_ref, label: `${row.captured_at} · ${reasons[row.reason] || row.reason} · ${row.revision_ref.kind === 'offline_branch' ? '분기' : '서버'}` });
+      }
+      cursor = page.next_cursor; updateOptions();
+      const item = api.store.view(id);
+      const bytes = new TextEncoder().encode(JSON.stringify(item)).length;
+      status(item?.conflict ? '충돌 · 로컬 편집본과 서버 이력을 보존했습니다.' : `${rows.length}개 시점 · ${current?.replica_count || 0}개 물리 복제본 · 로컬 ${(bytes / 1024).toFixed(1)} KiB`);
+    } finally { busy = false; }
+    await showDiff();
+  }
+  async function execute(action) {
+    if (action === 'close') { dialog.close(); return; }
+    if (busy) return;
+    if (action === 'refresh') return load();
+    if (action === 'more') return load(true);
+    busy = true;
+    try {
+      if (action === 'replica') {
+        await api.store.selectReplica(id, (await api.store.compare(id)).remote);
+        await api.store.sync(); status('현재 대표만 저장 대상으로 선택했습니다. 다른 복제본은 보존됩니다.');
+      } else if (action === 'decrypt') {
+        const token = run;
+        for (const name of ['before', 'after']) {
+          const key = $(`[name="${name}"]`).value, value = await snapshot(key);
+          if (String(value?.note.content || '').startsWith('NOW_ENCRYPTED_V1:')) {
+            let password = await ask('이 시점의 메모 비밀번호를 입력하세요.', true);
+            if (!password || !valid(token)) return;
+            const text = await api.decrypt(value.note.content, password);
+            password = '';
+            if (text == null || !valid(token)) return;
+            plain.set(key, text);
+          }
+        }
+        await showDiff();
+      } else if (action === 'restore') {
+        const token = run;
+        const row = rows.find(item => item.key === $('[name="after"]').value), target = await snapshot(row?.key);
+        if (!target || !row?.ref) throw new Error('복원할 과거 시점을 선택하세요.');
+        if (!await ask('현재 편집본을 보존하고 선택한 시점으로 복원할까요?' + (current?.replica_count > 1 ? ' 현재 대표만 바꾸고 나머지 복제본은 그대로 보존합니다.' : ''))) return;
+        if (!valid(token)) return;
+        if (api.online(id)) {
+          if (!current) throw new Error('현재 기준을 다시 조회하세요.');
+          const receipt = await api.store.restore(id, row.ref, current);
+          if (!valid(token)) return;
+          const item = api.store.view(id);
+          if (!receipt || item.conflict || item.outbox.length) throw new Error(item.conflict?.code || item.error?.message || '복원 결과를 확인하지 못했습니다. 재연결하세요.');
+          const latest = await api.request('current', 'GET', { local_id: id });
+          if (!valid(token)) return;
+          if (latest.head_revision_id !== receipt.result_revision_id) throw new Error('복원 뒤 다른 변경이 도착했습니다. 최신본과 다시 비교하세요.');
+          const pending = api.store.view(id);
+          await api.apply(pending.dirty ? pending.draft : latest.snapshot.note);
+          status('서버 복원 완료 · 복원 직전본은 이력에 보존했습니다.' + (pending.dirty ? ' 이후 편집본은 별도로 보존했습니다.' : ''));
+        } else {
+          await api.store.restoreLocal(id, target); await api.apply(target.note);
+          status('로컬 복원 분기 보존 완료 · 서버 채택 전입니다.');
+        }
+      }
+    } finally { busy = false; }
+  }
+  dialog.addEventListener('click', event => {
+    const button = event.target.closest('[data-action]');
+    if (button) execute(button.dataset.action).catch(error => status(error.message));
+  });
+  dialog.addEventListener('change', event => {
+    if (event.target.matches('select[name=before],select[name=after]')) showDiff().catch(error => status(error.message));
+  });
+  dialog.addEventListener('cancel', event => { if (confirmation) { event.preventDefault(); confirmation(false); } });
+  dialog.addEventListener('close', () => { confirmation?.(false); run++; plain.clear(); cache.clear(); rows = []; $('.history-diff').replaceChildren(); $('.history-metadata').replaceChildren(); previousFocus?.focus(); });
+  return {
+    async open(localId) { id = localId; bound = api.contextKey(); previousFocus = document.activeElement; dialog.showModal(); await load().catch(error => status(error.message)); },
+    close() { if (dialog.open) dialog.close(); plain.clear(); cache.clear(); },
+  };
+};
+
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
@@ -921,7 +1422,7 @@ const CONTEXT_MENU_SETTINGS_VERSION = 2;
 const WEB_SESSION_KEY = "nownote.web.session.v1";
 const WEB_LOGOUT_KEY = "nownote.web.logout.v1";
 const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
-const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY, "nownote.library.v1"]);
+const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY, "nownote.library.v1", "nownote.history.v1"]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
 // #region nownote-only:desktop 2.3.9 릴리스 전 설치형 버전 표기
@@ -5096,6 +5597,14 @@ function saveWebSession(session) {
 }
 
 function clearWebSession() {
+  noteHistoryAuthenticated = false;
+  noteHistory?.invalidate();
+  noteHistoryController?.lock();
+  noteHistoryRemoteCache.clear();
+  unlockedEncryptedNotes.clear();
+  for (const timer of encryptedSaveTimers.values()) clearTimeout(timer);
+  encryptedSaveTimers.clear();
+  resetTreeEditorHistory(null, "");
   sessionStorage.removeItem(WEB_SESSION_KEY);
   libraryNotesContext = "";
   libraryUI?.close();
@@ -5173,6 +5682,8 @@ function showWebLogin(message = t("web.login.ready"), status = "") {
 }
 
 function hideWebLogin() {
+  noteHistoryAuthenticated = true;
+  noteHistoryController?.resume().catch(error => showNotice(error.message, "error"));
   setHostedAppShellVisible(true);
   elements.webLoginView?.classList.add("hidden");
 }
@@ -5542,6 +6053,253 @@ async function handleWebLogout() {
   }
 }
 
+const NOTE_HISTORY_KEY = "nownote.history.v1";
+let noteHistory = null;
+let noteHistoryController = null;
+let noteHistoryUI = null;
+let noteHistoryAuthenticated = false;
+const noteHistoryEnrolling = new Set();
+const noteHistoryTimers = new Map();
+let noteHistoryCaptureChain = Promise.resolve();
+let noteHistoryProjection = false;
+let noteHistoryLastError = "";
+let noteHistoryCaptureEpoch = 0;
+let noteHistoryProjectionScope = "";
+const noteHistoryRemoteCache = new Map();
+
+function noteHistoryContext() {
+  const library = libraryContext();
+  const server = state.settings.server || {};
+  const local = server.mode !== "server";
+  return { ...library, owner: local ? (server.ownerId || "local") : library.owner,
+    device: server.deviceId || "web-client",
+    enabled: !isHostedWebClient() || (noteHistoryAuthenticated && library.enabled),
+    online: !local && library.enabled && navigator.onLine };
+}
+
+async function noteHistoryRequest(ctx, path, method, body) {
+  if (!ctx.online) throw new Error("서버에 연결한 뒤 다시 시도하세요.");
+  const query = new URLSearchParams({ owner_id: ctx.owner });
+  if (method === "GET") Object.entries(body || {}).forEach(([name, value]) => { if (value != null) query.set(name, String(value)); });
+  const response = await fetch(ctx.url + "/api/v2/notes/" + path + (method === "GET" ? "?" + query : ""), {
+    method, cache: "no-store", headers: { ...ctx.headers, ...(method !== "GET" ? { "Content-Type": "application/json" } : {}) },
+    ...(method !== "GET" ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000),
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok) throw Object.assign(new Error(result.detail?.code || "HTTP " + response.status),
+    { status: response.status, code: result.detail?.code });
+  return result;
+}
+
+function noteHistoryWireNotes() {
+  const ctx = noteHistoryContext(), server = { ...state.settings.server, ownerId: ctx.owner, deviceId: ctx.device };
+  const now = new Date().toISOString();
+  return [
+    ...Object.values(state.data.daily).map(note => dailyNoteToServerNote(note, server)),
+    ...Object.values(state.data.worklogs || {}).map(note => worklogNoteToServerNote(note, server)),
+    ...state.data.archivedDaily.map(note => archivedDailyNoteToServerNote(note, server)),
+    ...flattenTree(state.data.tree).filter(node => !isReadOnlyTreeNode(node)).map(node => treeNodeToServerNote(node, server, node.serverShared ? treeNodeDeletedAtForServer(node) : null)),
+    ...state.data.deletedTree.filter(node => !node.groupSharedReadOnly).map(node => treeNodeToServerNote(node, server, node.deletedAt || now)),
+  ].filter(Boolean).map(note => ({ id: null, created_at: now, updated_at: now, ...note, owner_id: ctx.owner }));
+}
+
+function noteHistoryProject(note) {
+  if (!note || note.owner_id !== noteHistoryContext().owner) return;
+  const managed = noteHistory?.view(note.local_id);
+  if (note.note_type === "tree") {
+    const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
+    if (note.parent_local_id && !parent) throw new Error("상위 메모를 먼저 불러와야 합니다. 원문은 이력에 보존했습니다.");
+    let node = findTreeNode(state.data.tree, note.local_id);
+    if (note.deleted_at) {
+      if (node && !isTreeNodeSharedForServer(node) && node.status !== "deleted") {
+        node.serverShared = false; node.syncState = "local"; return;
+      }
+      if (node) { detachTreeNode(note.local_id); state.data.deletedTree.push({ ...node, deletedAt: note.deleted_at }); }
+      return;
+    }
+    if (!node) {
+      node = createNode(note.title, note.content, note.parent_local_id, note.level);
+      node.id = note.local_id;
+      node.shared = !managed?.localOnly;
+      (parent ? parent.children : state.data.tree).push(node);
+    } else if (node.parentId !== note.parent_local_id) {
+      detachTreeNode(node.id);
+      (parent ? parent.children : state.data.tree).push(node);
+    }
+    Object.assign(node, { title: note.title, content: note.content, parentId: note.parent_local_id, level: note.level,
+      updatedAt: note.client_updated_at || note.updated_at, tags: tagsFromServerNote(note), status: "active",
+      serverShared: !managed?.localOnly && Boolean(managed?.base.head_revision_id),
+      syncState: managed?.localOnly ? "local" : managed?.outbox.length ? "pending" : "synced" });
+    state.data.deletedTree = state.data.deletedTree.filter(item => item.id !== node.id);
+  } else if (note.note_type === "daily" || note.note_type === "worklog") {
+    const date = note.note_type === "worklog" ? worklogDateFromServerNote(note) : dailyDateFromServerNote(note);
+    if (!date) throw new Error("날짜를 해석할 수 없습니다. 원문은 이력에 보존했습니다.");
+    if (String(note.local_id).startsWith("daily-archive:")) { applyPulledArchivedDailyNote(note, date); return; }
+    const collection = note.note_type === "worklog" ? (state.data.worklogs ||= {}) : state.data.daily;
+    if (note.deleted_at) delete collection[date];
+    else collection[date] = { date, content: note.content, updatedAt: note.client_updated_at || note.updated_at, status: "active", syncState: "synced" };
+  }
+}
+
+function noteHistoryAcceptRemote(note) {
+  if (note.owner_id !== noteHistoryContext().owner) return true;
+  const scope = NowNoteHistory.key(noteHistoryContext());
+  if (!noteHistoryRemoteCache.has(scope)) noteHistoryRemoteCache.set(scope, new Map());
+  noteHistoryRemoteCache.get(scope).set(note.local_id, structuredClone(note));
+  return !noteHistoryEnrolling.has(note.local_id) && !noteHistory?.manages(note.local_id);
+}
+
+function noteHistoryCaptureDrafts() {
+  if (!noteHistory || noteHistoryProjection || !noteHistoryContext().enabled) return;
+  const ctx = noteHistoryContext(), scope = NowNoteHistory.key(ctx), epoch = noteHistoryCaptureEpoch;
+  if (noteHistoryProjectionScope && scope !== noteHistoryProjectionScope) {
+    noteHistoryLastError = "계정·서버가 변경되었습니다. 기존 원문을 보존했으며 새 서버 자료를 먼저 불러오세요.";
+    return;
+  }
+  const notes = noteHistoryWireNotes();
+  const seen = new Set(notes.map(note => note.local_id));
+  for (const [id, item] of Object.entries(noteHistory.entries())) {
+    if (!seen.has(id) && !item.draft.deleted_at) notes.push({ ...item.draft, content: "", deleted_at: new Date().toISOString() });
+  }
+  for (const note of notes) {
+    const old = noteHistory.view(note.local_id);
+    const treeNode = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
+    const sharingChanged = treeNode && old && old.localOnly !== (!isTreeNodeSharedForServer(treeNode) && !treeNode.serverShared);
+    if (!old && findLocalNoteForServerNote(note)?.syncState !== "pending" && !note.deleted_at) continue;
+    if (old && NowNoteHistory.same(old.draft, note) && !sharingChanged) continue;
+    noteHistoryEnrolling.add(note.local_id);
+    noteHistoryCaptureChain = noteHistoryCaptureChain.catch(() => {}).then(async () => {
+      if (epoch !== noteHistoryCaptureEpoch || ctx.auth !== noteHistoryContext().auth || scope !== NowNoteHistory.key(noteHistoryContext()) || !noteHistoryContext().enabled) return;
+      let item = noteHistory.view(note.local_id);
+      if (!item) {
+        const tree = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
+        const localOnly = Boolean(tree && !isTreeNodeSharedForServer(tree) && !tree.serverShared);
+        const original = noteHistoryRemoteCache.get(scope)?.get(note.local_id);
+        const initialDraft = original ? { ...note, ...original, title: note.title === noteTitle(original.title) ? original.title : note.title,
+          content: note.content, parent_local_id: note.parent_local_id, level: note.level, note_type: note.note_type, deleted_at: note.deleted_at,
+          tags: JSON.stringify(tagsFromServerNote(original)) === JSON.stringify(tagsFromServerNote(note)) ? original.tags : note.tags } : note;
+        await noteHistory.track(initialDraft, null, { localOnly, needsBaseline: ctx.online && !localOnly, original });
+        item = noteHistory.view(note.local_id);
+      }
+      // Only edits to UI-owned semantic fields replace the preserved raw DTO.
+      const draft = { ...item.draft, ...NowNoteHistory.meaning(note), source: item.draft.source, client_updated_at: note.client_updated_at };
+      if (note.title === noteTitle(item.draft.title)) draft.title = item.draft.title;
+      if (item.raw.tags === item.draft.tags && JSON.stringify(tagsFromServerNote(item.raw)) === JSON.stringify(tagsFromServerNote(note))) draft.tags = item.raw.tags;
+      await noteHistory.edit(draft);
+      noteHistoryLastError = "";
+      const tree = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
+      if (tree) await noteHistory.localOnly(note.local_id, !isTreeNodeSharedForServer(tree) && !tree.serverShared);
+      if (!noteHistoryTimers.has(note.local_id)) noteHistoryTimers.set(note.local_id, setTimeout(() => {
+        noteHistoryTimers.delete(note.local_id);
+        noteHistoryFlush().catch(error => showNotice(error.message, "error"));
+      }, 30000));
+    }).catch(error => { noteHistoryLastError = error.message; renderSyncStatusIndicator(state.settings.server, "bad"); showNotice("이력 저장 실패: " + error.message, "error"); }).finally(() => noteHistoryEnrolling.delete(note.local_id));
+  }
+}
+
+async function noteHistoryFlush() {
+  await noteHistoryCaptureChain;
+  if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
+  while (serverSyncRunning) await new Promise(resolve => setTimeout(resolve, 30));
+  for (const timer of noteHistoryTimers.values()) clearTimeout(timer);
+  noteHistoryTimers.clear();
+  for (const id of Object.keys(noteHistory?.entries() || {})) await noteHistory.seal(id);
+  await noteHistory?.sync();
+  await noteHistoryController?.resume();
+}
+
+async function initializeNoteHistory() {
+  noteHistoryProjectionScope = NowNoteHistory.key(noteHistoryContext());
+  let initial = await readStorage(NOTE_HISTORY_KEY), expected = initial;
+  if (typeof initial === "string") { try { initial = JSON.parse(initial); } catch { initial = { schema_version: "unreadable", raw: initial }; } }
+  const webWriter = isDesktopClient() ? null : NowLibrary.guardedWriter({
+    initial: localStorage.getItem(NOTE_HISTORY_KEY), read: () => localStorage.getItem(NOTE_HISTORY_KEY),
+    write: value => localStorage.setItem(NOTE_HISTORY_KEY, value),
+    lock: action => {
+      if (!navigator.locks) throw new Error("이 브라우저는 안전한 동시 저장을 지원하지 않습니다. 편집본을 내보내세요.");
+      return navigator.locks.request(NOTE_HISTORY_KEY, action);
+    },
+  });
+  noteHistory = NowNoteHistory.create({ initial, context: noteHistoryContext, request: noteHistoryRequest,
+    change: () => renderSyncStatusIndicator(state.settings.server, state.settings.server.lastStatus),
+    write: async value => {
+      if (isDesktopClient()) {
+        const result = await window.nownoteDesktop.storage.write(NOTE_HISTORY_KEY, value, { expectedValue: expected });
+        if (!result?.ok) throw new Error(result?.error || "이력 저장 실패");
+        expected = structuredClone(value);
+      } else await webWriter(value);
+    },
+  });
+  noteHistoryController = {
+    lock() { noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close(); },
+    async resume() {
+      if (!noteHistoryContext().enabled) return;
+      if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
+      if (noteHistory.suspended()) {
+        let restored = await readStorage(NOTE_HISTORY_KEY);
+        if (typeof restored === "string") { try { restored = JSON.parse(restored); } catch { restored = { schema_version: "unreadable", raw: restored }; } }
+        noteHistory.hydrate(restored);
+      }
+      noteHistoryProjection = true;
+      try {
+        const drafts = Object.values(noteHistory.entries()).map(item => item.draft).sort((a, b) => a.level - b.level);
+        drafts.forEach(noteHistoryProject);
+        render();
+      } finally { noteHistoryProjection = false; }
+    },
+  };
+  noteHistoryUI = mountNoteHistory({
+    store: noteHistory, contextKey: () => NowNoteHistory.key(noteHistoryContext()),
+    online: id => noteHistoryContext().online && !noteHistory.view(id)?.localOnly,
+    request: (path, method, body) => noteHistoryRequest(noteHistoryContext(), path, method, body),
+    decrypt: (content, password) => decryptPlainText(content, password),
+    apply: async note => {
+      noteHistoryProjection = true;
+      try { noteHistoryProject(note); resetTreeEditorHistory(null, ""); persist(); render(); }
+      finally { noteHistoryProjection = false; }
+    },
+  });
+  for (const [selector, resolveId] of [
+    ["#noteActionMenu", () => getSelectedTreeNode()?.id],
+    ["#dailyContent", () => "daily:" + state.selectedDate],
+    ["#worklogContent", () => "worklog:" + state.selectedWorklogDate],
+  ]) {
+    const anchor = document.querySelector(selector);
+    if (!anchor) continue;
+    const button = document.createElement("button");
+    button.type = "button"; button.className = "secondary-btn"; button.textContent = "메모 이력";
+    button.addEventListener("click", async () => {
+      try {
+        const id = resolveId(); if (!id) return;
+        noteHistoryCaptureDrafts(); await noteHistoryFlush();
+        await noteHistoryUI.open(id);
+      } catch (error) { showNotice(error.message, "error"); }
+    });
+    if (selector === "#noteActionMenu") anchor.append(button); else anchor.parentElement.insertBefore(button, anchor);
+  }
+  document.addEventListener("focusout", event => {
+    if (event.target.matches("#treeContent,#treeTitleInput,#dailyContent,#worklogContent")) noteHistoryFlush().catch(error => showNotice(error.message, "error"));
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) noteHistoryFlush().catch(error => showNotice(error.message, "error"));
+  });
+  document.addEventListener("compositionend", event => {
+    if (!event.target.matches("#treeContent,#treeTitleInput,#dailyContent,#worklogContent")) return;
+    const epoch = noteHistoryCaptureEpoch;
+    queueMicrotask(() => {
+      if (epoch === noteHistoryCaptureEpoch) noteHistoryFlush().catch(error => showNotice(error.message, "error"));
+    });
+  });
+  window.addEventListener("online", () => noteHistoryFlush().catch(error => showNotice(error.message, "error")));
+  document.addEventListener("keydown", event => {
+    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s" && !event.isComposing) {
+      event.preventDefault(); noteHistoryFlush().catch(error => showNotice(error.message, "error"));
+    }
+  });
+  if (!isHostedWebClient()) await noteHistoryController.resume();
+}
+
+
 const LIBRARY_STORAGE_KEY = "nownote.library.v1";
 let libraryStore = null;
 let libraryUI = null;
@@ -5648,6 +6406,7 @@ async function initializeApp() {
   await load();
   await loadSettings();
   await initializeLibrary();
+  await initializeNoteHistory();
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
   bindEvents();
@@ -8127,6 +8886,18 @@ function renderSyncStatusIndicator(server, status) {
   if (!elements.syncStatusBtn || !elements.syncStatusBtnLabel) return;
   elements.syncStatusDot?.classList.remove("ok", "warn", "bad");
   elements.syncStatusBtn.removeAttribute("title");
+  const history = noteHistory?.status();
+  if (history?.failed || history?.unsupported || noteHistoryLastError) {
+    elements.syncStatusDot?.classList.add("bad");
+    elements.syncStatusBtnLabel.textContent = "이력 저장 실패";
+    elements.syncStatusBtn.title = noteHistoryLastError || noteHistory.failure() || "지원하지 않는 이력 형식";
+    return;
+  }
+  if (history?.pending || history?.conflicts) {
+    elements.syncStatusDot?.classList.add("warn");
+    elements.syncStatusBtnLabel.textContent = history.conflicts ? "이력 충돌 · 원본 보존" : "이력 전송 대기";
+    return;
+  }
   if (server.mode !== "server") {
     elements.syncStatusBtnLabel.textContent = t("settings.server.syncIndicator.local");
     return;
@@ -8804,6 +9575,9 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
   hostedWebSyncSuspended = true;
   try {
     if (replace) {
+      noteHistoryCaptureEpoch++;
+      noteHistoryRemoteCache.clear();
+      noteHistoryProjectionScope = NowNoteHistory.key(noteHistoryContext());
       state.data = defaultData();
       state.selectedTreeId = null;
       if (isHostedWebClient()) state.sharedView = "group-tree";
@@ -8811,6 +9585,7 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
       state.selectedDeletedTreeIds.clear();
     }
     const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
+    await noteHistoryController?.resume();
     libraryNotesContext = libraryLoadContext === NowLibrary.key(libraryContext()) ? libraryLoadContext : "";
     libraryStore?.sync().catch(error => showNotice(error.message, "error"));
     markServerSyncedNotes();
@@ -9128,12 +9903,18 @@ async function issueDeviceToken() {
 }
 
 async function syncWebNotesToServer(message = t("settings.server.syncing"), options = {}) {
+  await noteHistoryCaptureChain;
+  await noteHistory?.sync();
+  await noteHistoryController?.resume();
   if (serverSyncRunning) {
     serverSyncQueued = true;
     return;
   }
   serverSyncRunning = true;
   try {
+    if (noteHistory && (noteHistory.status().unsupported || noteHistory.status().failed || noteHistory.suspended())) {
+      throw new Error(noteHistory.failure() || "이력 원장을 확인할 수 없어 전송을 중지했습니다. 편집본과 원본을 내보내세요.");
+    }
     if (!options.skipFormSave) {
       saveServerSettingsFromForm(message, options.messageKey || (message === t("settings.server.syncing") ? "settings.server.syncing" : ""));
     }
@@ -10304,7 +11085,7 @@ async function serverResponseError(response) {
 
 function applyPulledServerNotes(serverNotes) {
   const result = { applied: 0, skipped: 0 };
-  const notes = Array.isArray(serverNotes) ? serverNotes : [];
+  const notes = (Array.isArray(serverNotes) ? serverNotes : []).filter(note => noteHistoryAcceptRemote(note));
   const dailyNotes = notes.filter((note) => note.note_type === "daily");
   const worklogNotes = notes.filter((note) => note.note_type === "worklog");
   const activeTreeNotes = notes
@@ -10658,6 +11439,8 @@ function removePulledDeletedTreeNote(id) {
 }
 
 function buildServerSyncNotes(server) {
+  if (noteHistory && (noteHistory.status().unsupported || noteHistory.status().failed || noteHistory.suspended())) return [];
+  if (noteHistory && noteHistoryProjectionScope !== NowNoteHistory.key(noteHistoryContext())) return [];
   const changedOnly = Boolean(server.lastSyncedAt);
   const notes = [
     ...Object.values(state.data.daily)
@@ -10680,7 +11463,7 @@ function buildServerSyncNotes(server) {
         treeNodeDeletedAtForServer(node),
       )),
   ];
-  return notes.filter(Boolean);
+  return notes.filter(note => note && !noteHistoryEnrolling.has(note.local_id) && !noteHistory?.manages(note.local_id));
 }
 
 function shouldSendServerNote(item, changedOnly) {
@@ -14773,6 +15556,7 @@ function normalizeSharedView(value) {
 }
 
 function selectTreeNode(id) {
+  noteHistoryFlush().catch(error => showNotice(error.message, "error"));
   state.selectedTreeId = id;
   expandAncestors(id);
   closeSelectionOverlays();
@@ -16930,8 +17714,18 @@ function renderEncryptionControls(node) {
   elements.lockNoteBtn.classList.toggle("hidden", !encrypted || !unlocked);
 }
 
+function historyProtectionTransitionBlocked(node) {
+  return Boolean(node && noteHistory && noteHistoryContext().enabled && (
+    state.settings.server.mode === "server" || noteHistory.manages(node.id) || noteHistoryEnrolling.has(node.id)
+    || noteHistory.status().unsupported || noteHistory.status().failed));
+}
+
 async function encryptSelectedNote() {
   const selected = getSelectedTreeNode();
+  if (historyProtectionTransitionBlocked(selected)) {
+    showNotice("전체 과거 이력 암호화 전환(E4)이 연결되기 전에는 암호화 모드를 바꿀 수 없습니다. 현재 이력은 보존했습니다.", "error");
+    return;
+  }
   if (!selected || isEncryptedContent(selected.content)) return;
   const plain = elements.treeContent.value || selected.content || "";
   if (!plain.trim()) {
@@ -16980,6 +17774,10 @@ function lockSelectedNote() {
 
 async function decryptSelectedNote() {
   const selected = getSelectedTreeNode();
+  if (historyProtectionTransitionBlocked(selected)) {
+    showNotice("이력 보호 전환(E4) 전에는 영구 복호화를 할 수 없습니다. 잠금 해제는 사용할 수 있습니다.", "error");
+    return;
+  }
   if (!selected || !isEncryptedContent(selected.content)) return;
   let unlocked = unlockedEncryptedNotes.get(selected.id);
   if (!unlocked) {
@@ -17009,7 +17807,11 @@ function scheduleEncryptedNoteSave(node) {
     const latest = findTreeNode(state.data.tree, node.id);
     const latestUnlocked = unlockedEncryptedNotes.get(node.id);
     if (!latest || !latestUnlocked) return;
-    latest.content = await encryptPlainText(latestUnlocked.plain, latestUnlocked.key);
+    const plain = latestUnlocked.plain, key = latestUnlocked.key;
+    const scope = NowNoteHistory.key(noteHistoryContext());
+    const ciphertext = await encryptPlainText(plain, key);
+    if (scope !== NowNoteHistory.key(noteHistoryContext()) || unlockedEncryptedNotes.get(node.id) !== latestUnlocked || latestUnlocked.plain !== plain) return;
+    latest.content = ciphertext;
     latest.tags = [];
     markTreeNodeChanged(latest);
     persist();
@@ -18261,6 +19063,7 @@ function normalizeRecoverySnapshot(snapshot = {}) {
     summary: isPlainObject(snapshot.summary) ? snapshot.summary : backupSummary(snapshot.data || {}),
     data: isBackupData(snapshot.data) ? backupDataShape(snapshot.data, { includeRecoveryMeta: false }) : defaultData(),
     ...(Object.hasOwn(snapshot, "library") ? { library: structuredClone(snapshot.library) } : {}),
+    ...(Object.hasOwn(snapshot, "history") ? { history: structuredClone(snapshot.history) } : {}),
   };
 }
 
@@ -18380,6 +19183,7 @@ function mergeOverflowTreeChildren(content, children) {
 }
 
 function persist() {
+  noteHistoryCaptureDrafts();
   if (!isHostedWebClient()) {
     writeStorage(STORAGE_KEY, state.data);
   }
@@ -18604,6 +19408,7 @@ function importData(event) {
       const preservedSnapshots = state.data.snapshots;
       const preservedReports = state.data.importReports;
       downloadCurrentBackup("nownote-before-import");
+      if (Object.hasOwn(parsed, "history")) { noteHistoryCaptureEpoch++; await noteHistory.import(parsed.history); }
       if (Object.hasOwn(parsed, "library")) await libraryStore.import(parsed.library, { restore: true });
       state.data = backupDataShape(imported.data);
       state.data.snapshots = preservedSnapshots;
@@ -18944,8 +19749,9 @@ function createRecoverySnapshot(reason = "manual") {
     reason,
     createdAt: new Date().toISOString(),
     summary: backupSummary(state.data),
-    data: backupDataShape(state.data, { includeRecoveryMeta: false }),
+    data: structuredClone(backupDataShape(state.data, { includeRecoveryMeta: false })),
     library: libraryStore?.export(),
+    history: noteHistory?.export(),
   };
   state.data.snapshots = [snapshot, ...(state.data.snapshots || [])].slice(0, 12);
   return snapshot;
@@ -18959,6 +19765,7 @@ async function restoreSelectedSnapshot() {
   createRecoverySnapshot("before-restore");
   const preservedSnapshots = state.data.snapshots;
   const preservedReports = state.data.importReports;
+  if (Object.hasOwn(snapshot, "history")) { noteHistoryCaptureEpoch++; await noteHistory.import(snapshot.history); }
   if (Object.hasOwn(snapshot, "library")) await libraryStore.import(snapshot.library, { restore: true });
   state.data = backupDataShape(snapshot.data);
   state.data.snapshots = preservedSnapshots;
@@ -19488,6 +20295,7 @@ function titleFromMarkdownFile(fileName, content) {
 function backupDataShape(data, options = {}) {
   const shape = {
     daily: data.daily,
+    worklogs: data.worklogs || {},
     archivedDaily: data.archivedDaily,
     deletedTree: data.deletedTree,
     canvases: data.canvases,
@@ -19561,12 +20369,20 @@ function downloadCurrentBackup(prefix = "nownote") {
     exportedAt: new Date().toISOString(),
     data: state.data,
     library: libraryStore?.export(),
+    history: noteHistory?.export(),
     settings: state.settings,
   };
   downloadText(`${prefix}-${fileTimestamp(new Date())}.json`, JSON.stringify(backup, null, 2), "application/json");
 }
 
 function showSaved(label) {
+  if (noteHistory) {
+    label.textContent = "저장 중";
+    noteHistoryCaptureChain.then(() => {
+      label.textContent = noteHistoryLastError || noteHistory.failure() ? "저장 실패 · 편집본 보존" : t("saved");
+    });
+    return;
+  }
   label.textContent = t("saved");
   label.animate(
     [

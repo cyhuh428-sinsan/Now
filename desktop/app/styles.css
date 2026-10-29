@@ -5438,3 +5438,18 @@ kbd {
 }
 
 
+
+/* Note history uses the editor's existing panel, field and action tokens. */
+.note-history-dialog { width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.history-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto auto; gap: 8px; align-items: end; }
+.history-controls label { display: grid; gap: 4px; min-width: 0; }
+.history-controls select { width: 100%; min-width: 0; }
+.history-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-block: 12px; }
+.history-status { min-height: 24px; overflow-wrap: anywhere; }
+.history-metadata { max-height: 140px; overflow: auto; overflow-wrap: anywhere; }
+.history-metadata p { margin-block: 4px; }
+.history-diff { white-space: pre-wrap; overflow: auto; overflow-wrap: anywhere; min-height: 240px; max-height: 48dvh; padding: 12px; border: 1px solid var(--border, #465160); border-radius: 6px; background: var(--bg, #111827); color: var(--text, #e5e7eb); tab-size: 4; }
+.history-diff ins { background: #133b2c; color: #d6f9e3; text-decoration: none; }
+.history-diff del { background: #512431; color: #ffe1e9; text-decoration: line-through; }
+@media(max-width: 680px) { .history-controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } .note-history-dialog { width: calc(100vw - 16px); } }
+
