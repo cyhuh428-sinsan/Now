@@ -211,6 +211,44 @@ def checked_run(db, task):
     return run, job
 
 
+def cancel(db, job):
+    run = run_for(db, job, create=job.status == "queued")
+    if run is None:
+        error("worker_protocol_required")
+    if (run.receipt_json or (run.owner_id, run.local_id) != (job.owner_id, job.note_local_id)
+        or current_input(db, job) != (run.source_epoch, run.input_slot_version)):
+        error("stale_execution")
+    from datetime import datetime
+    with linked.worker_write(db, job.id):
+        job.status = "cancelled"
+        job.updated_at = datetime.utcnow()
+    if not run.dispatched:
+        terminal_receipt(db, job, run)
+
+
+def require_settled_retry(db, job, run):
+    if run is None:
+        return
+    try:
+        receipt = json.loads(run.receipt_json) if run.receipt_json else {}
+        if (not isinstance(receipt, dict) or receipt.get("settled") is not True or receipt.get("run_id") != run.run_id
+            or type(receipt.get("terminal_run_version")) is not int or receipt["terminal_run_version"] != run.run_version
+            or receipt.get("outcome") != job.status or (run.owner_id, run.local_id) != (job.owner_id, job.note_local_id)
+            or type(receipt.get("job_id")) is not int or receipt["job_id"] != job.id
+            or type(receipt.get("source_epoch")) is not int or receipt["source_epoch"] != run.source_epoch
+            or current_input(db, job) != (run.source_epoch, run.input_slot_version)
+            or receipt.get("job_updated_at") != job.updated_at.isoformat(timespec="microseconds") + "Z"):
+            error("related_jobs_unsettled")
+        versions = {k["slot"]: m.slot_version for k, target, m, raw in linked.slots(db, job.owner_id, job.note_local_id)
+                    if isinstance(target, AnalysisJob) and target.id == job.id} if job.note_local_id is not None else {}
+        for field, slot in (("input_slot_version", "input_text"), ("result_slot_version", "result_json"), ("error_slot_version", "error_message")):
+            expected = versions.get(slot)
+            if receipt.get(field) != expected or (expected is not None and type(receipt.get(field)) is not int):
+                error("related_jobs_unsettled")
+    except (ValueError, TypeError):
+        error("related_jobs_unsettled")
+
+
 @store.atomic
 def dispatch(db, task):
     run, job = checked_run(db, task)
@@ -242,6 +280,10 @@ def finish(db, task, *, result_json=None, error_message=None):
             job.status = "failed" if error_message is not None else "done"
             job.result_json, job.error_message = result_json, error_message
         job.updated_at = datetime.utcnow()
+    return terminal_receipt(db, job, run)
+
+
+def terminal_receipt(db, job, run):
     run.run_version += 1
     versions = {k["slot"]: m.slot_version for k, row, m, value in linked.slots(db, job.owner_id, job.note_local_id)
                 if k["id"] == str(job.id) and isinstance(row, AnalysisJob)} if job.note_local_id is not None else {}

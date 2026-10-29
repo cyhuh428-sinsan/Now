@@ -623,13 +623,13 @@ def test_monitor_preview_cannot_bypass_fence_or_lost_metadata(client, subject):
     s, local = subject, "monitor-fenced"
     ident, _ = related(client, s, local)
     row = s["db"].get(AnalysisJob, ident)
-    assert "raw" in _related_preview(row, row.input_text)
+    assert "raw" in _related_preview(row, "input_text")
     s["db"].rollback()
     prepare(client, s, local)
     s["db"].expire_all()
-    assert _related_preview(row, row.input_text) == "[보호된 텍스트]"
+    assert _related_preview(row, "input_text") == "[보호된 텍스트]"
     s["db"].expunge(row)
-    assert _related_preview(row, row.input_text) == "[보호된 텍스트]"
+    assert _related_preview(row, "input_text") == "[보호된 텍스트]"
 
 
 def test_ready_requires_actual_terminal_slot_versions(client, subject):
@@ -661,7 +661,9 @@ def test_write_response_rechecks_after_commit(client, subject, monkeypatch, oper
     s, local = subject, "response-race"
     ident, _ = related(client, s, local)
     if operation == "cancel":
-        assert client.patch(f"/api/v1/analysis/jobs/{ident}", json={"status": "running"}, headers=s["headers"]).status_code == 200
+        from app.services import related_drain as runs
+        assert client.post(f"/api/v1/analysis/jobs/{ident}/retry", headers=s["headers"]).status_code == 200
+        assert runs.claim(s["db"], ident, "response-worker") is not None
     original, fired = s["db"].refresh, []
     def after_commit(row, *args, **kwargs):
         if not fired and isinstance(row, (AnalysisJob, Recording)):

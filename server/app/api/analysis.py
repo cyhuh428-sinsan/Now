@@ -32,6 +32,19 @@ ALLOWED_STATUSES = {"queued", "running", "done", "failed", "cancelled"}
 RESTARTABLE_STATUSES = {"failed", "cancelled", "done"}
 
 
+def locked_job(db, job_id):
+    from app.services.note_history import lock_note_writes
+    identity = db.execute(select(AnalysisJob.owner_id, AnalysisJob.note_local_id).where(AnalysisJob.id == job_id)).first()
+    if identity is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    lock_note_writes(db, [identity[0]])
+    db.expire_all()
+    job = db.get(AnalysisJob, job_id)
+    if job is None or (job.owner_id, job.note_local_id) != tuple(identity):
+        linked.error("related_identity_changed")
+    return job
+
+
 @router.get("/jobs", response_model=list[AnalysisJobOut])
 def list_jobs(
     owner_id: str = Query(default="local_user"),
@@ -140,7 +153,7 @@ def cancel_job(
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> AnalysisJob:
-    job = db.get(AnalysisJob, job_id)
+    job = locked_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
     require_user_api_access(
@@ -153,8 +166,8 @@ def cancel_job(
         linked.guard(db, [(job.owner_id, job.note_local_id)])
     if job.status not in {"queued", "running"}:
         raise HTTPException(status_code=400, detail="analysis job cannot be cancelled")
-    with linked.worker_write(db, job.id):
-        job.status = "cancelled"
+    from app.services.related_drain import cancel
+    cancel(db, job)
     db.commit()
     db.refresh(job)
     linked.legacy_read(db, [job])
@@ -168,7 +181,7 @@ def retry_job(
     web_session_token: str | None = Header(default=None, alias="X-Now-Web-Session"),
     db: Session = Depends(get_db),
 ) -> AnalysisJob:
-    job = db.get(AnalysisJob, job_id)
+    job = locked_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="job not found")
     require_user_api_access(
@@ -181,12 +194,14 @@ def retry_job(
         linked.guard(db, [(job.owner_id, job.note_local_id)])
     if job.status not in RESTARTABLE_STATUSES:
         raise HTTPException(status_code=400, detail="analysis job cannot be retried")
+    from app.models.note_related import AnalysisRun
+    from app.services.related_drain import require_settled_retry
+    from uuid import uuid4
+    run = db.get(AnalysisRun, job.id)
+    require_settled_retry(db, job, run)
     job.status = "queued"
     job.result_json = None
     job.error_message = None
-    from app.models.note_related import AnalysisRun
-    from uuid import uuid4
-    run = db.get(AnalysisRun, job.id)
     if run is not None:
         run.run_id, run.receipt_json, run.claimed_by, run.claimed_until = str(uuid4()), None, None, None
         run.dispatched = False; run.run_version += 1
