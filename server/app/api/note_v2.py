@@ -1,12 +1,13 @@
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, Header, Query
+from fastapi import APIRouter, Body, Depends, Header, Query
 from sqlalchemy.orm import Session
 
 from app.core.security import require_client_api_access
 from app.db import get_db
 from app.schemas.note_v2 import ImportBranches, PutNote, RestoreNote, RevisionRef
+from app.schemas.note_protected_import import ImportCommit
 from app.services import note_v2 as service
 from app.services.library import library_user
 
@@ -106,5 +107,9 @@ def restore(body: RestoreNote, auth=Depends(access)):
 
 
 @router.post("/revisions/import")
-def import_branches(body: ImportBranches, auth=Depends(access)):
+def import_branches(body: Annotated[ImportBranches | ImportCommit, Body(discriminator="schema_version")], auth=Depends(access)):
+    if isinstance(body, ImportCommit):
+        from app.api.note_protected_write import response
+        from app.services.note_protected_import import commit
+        return response(commit(auth(body.owner_id), body))
     return service.mutate(auth(body.owner_id), body, "import")

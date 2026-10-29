@@ -103,7 +103,7 @@ def expectations_digest(row):
 
 def operation(db, ident, owner, local, *, active_id=None):
     row = db.get(NoteCryptoTransition, ident)
-    if (row is None or row.owner_id != owner or row.local_id != local or row.purpose != "protected_write"
+    if (row is None or row.owner_id != owner or row.local_id != local or row.purpose not in ("protected_write", "protected_import")
         or not (row.state == "committed" or row.id == active_id and row.state in ACTIVE_STATES + ("aborted", "expired", "stale"))):
         error("inconsistent_history")
     # Only own intent metadata opts in. Live representation readers require committed.
@@ -117,6 +117,10 @@ def operation(db, ident, owner, local, *, active_id=None):
                 or receipt.get("origin_expectations_digest") != expectations_digest(row)):
                 error("inconsistent_history")
         request = c["request"]
+        if row.purpose == "protected_import":
+            from app.services.note_protected_import import condition, meaning
+            condition(row)
+            return meaning(row)
         value = {"purpose": "protected_write", "quote_id": row.id, "mutation_id": row.mutation_id,
                  "operation": request["operation"], "restore_source_ref": request["target_ref"],
                  "target_ciphertext_sha256": request["target_ciphertext_sha256"]}
@@ -179,7 +183,7 @@ def semantic_id(db, owner, local, key, raw):
             error("inconsistent_history")
         return None
     item = expectation(row, key)
-    if (row.purpose not in ("conversion", "protected_write") or receipt.get("origin_metadata_version") != 1
+    if (row.purpose not in ("conversion", "protected_write", "protected_import") or receipt.get("origin_metadata_version") != 1
         or type(receipt.get("origin_metadata_version")) is not int
         or receipt.get("origin_expectations_digest") != expectations_digest(row)
         or item["is_null"] != (raw is None) or not item["origin_row_required"]):

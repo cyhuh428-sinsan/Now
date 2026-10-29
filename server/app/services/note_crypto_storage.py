@@ -121,9 +121,9 @@ def active(db, owner, local, device, ident, purpose="conversion"):
     if json.loads(row.conditions_json)["server_instance_id"] != preparation.initialize_identity(db.connection()):
         error("server_instance_changed")
     if row.state == "expired":
-        error("quote_expired" if purpose == "protected_write" else "transition_expired", 410)
+        error({"protected_write": "quote_expired", "protected_import": "import_expired"}.get(purpose, "transition_expired"), 410)
     if row.state not in ACTIVE_STATES:
-        error("quote_not_active" if purpose == "protected_write" else "transition_not_active")
+        error({"protected_write": "quote_not_active", "protected_import": "import_not_active"}.get(purpose, "transition_not_active"))
     fence = active_fence(db, owner, local)
     if fence is None or fence.id != row.id:
         error("inconsistent_crypto_fence")
@@ -133,6 +133,9 @@ def active(db, owner, local, device, ident, purpose="conversion"):
     upgrade_pending(db, row)
     if purpose == "protected_write":
         from app.services.note_protected_write import validate_sources
+        validate_sources(db, row)
+    elif purpose == "protected_import":
+        from app.services.note_protected_import import validate_sources
         validate_sources(db, row)
     return row
 
