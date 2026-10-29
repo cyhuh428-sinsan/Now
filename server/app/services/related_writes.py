@@ -339,6 +339,11 @@ def commit(db, body, purpose):
             "output_kind": "linked_text_envelope_v1", "target_epoch": body.target_epoch, "total_bytes": len(raw), "ciphertext_sha256": store.sha(raw)})
     if body.client_verified_ciphertext_manifest_digest != h(records):
         error("verification_manifest_mismatch")
+    if purpose == ANALYSIS and c["request_type"] == "initial":
+        original_claim = db.get(claims.ClaimRow, c["execution_id"])
+        original_bundle = json.loads(original_claim.progress_json)["terminal_bundle"]
+        if records != original_bundle["ciphertext_manifest"]:
+            error("original_cipher_bundle_mismatch")
     try:
         if purpose == ANALYSIS:
             claim = db.get(claims.ClaimRow, c["execution_id"])

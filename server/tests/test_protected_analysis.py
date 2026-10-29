@@ -660,3 +660,35 @@ def test_pk_rollback_gap_preserves_latest_terminal_under_owner_lock(client, subj
     else:
         assert first["http_status"] == 409 and row.receipt_json is None and second["state"] == "aborted"
         assert s["db"].get(AnalysisJob, candidate).input_text == "owned synthetic occupier"
+
+
+@pytest.mark.parametrize("slot_name", ["input_text", "result_json"])
+def test_initial_commit_rejects_other_valid_cipher_than_original_bundle(client, subject, slot_name):
+    from app.models.note import AnalysisJob
+    from app.models.note_crypto import NoteCryptoTransition, NoteCryptoUpload
+    from app.models.note_history import NoteHead
+    from app.models.protected_analysis import ProtectedAnalysisClaim
+    from app.services.note_crypto_storage import assembled
+    s, local = subject, "c2-original-cipher"
+    b, intent, bm, original = prepared(client, s, local)
+    s["db"].expire_all()
+    before = s["db"].get(ProtectedAnalysisClaim, b["execution_id"]).progress_json
+    changed = dict(original)
+    key = next(k for k in original if json.loads(k)["slot"] == slot_name)
+    outer = json.loads(original[key]); inner = json.loads(decrypt(outer["ciphertext"], bm["original_epoch"]))
+    inner["value"] = "different valid value\r\n"
+    inner["semantic_sha256"] = digest(inner["value"].encode())
+    outer["ciphertext"] = encrypt(canonical(inner), bm["original_epoch"])
+    changed[key] = canonical(outer).encode()
+    assert changed[key] != original[key] and outer["binding"] == json.loads(original[key])["binding"]
+    cb = upload(client, s, local, PA, b, intent, changed)
+    r = client.post(PA + "/commit", json=cb, headers=s["headers"])
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "original_cipher_bundle_mismatch", r.text
+    s["db"].expire_all()
+    assert s["db"].get(AnalysisJob, bm["original_job_id"]) is None
+    assert s["db"].get(NoteHead, (s["owner"], local)).history_generation == b["base"]["history_generation"]
+    row = s["db"].get(NoteCryptoTransition, intent["write_id"])
+    assert row.state == "ready" and row.receipt_json is None
+    assert s["db"].get(ProtectedAnalysisClaim, b["execution_id"]).progress_json == before
+    stored = s["db"].get(NoteCryptoUpload, (intent["write_id"], key))
+    assert assembled(s["db"], stored) == changed[key]
