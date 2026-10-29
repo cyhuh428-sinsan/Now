@@ -270,5 +270,61 @@ class WriteCommit(Commit):
     plain_before: SnapshotNote | None
 
 
+class ImportProvenance(Strict):
+    origin_server_instance_id: UID
+    origin_owner_id: str = Field(min_length=1, max_length=80)
+
+
+class DraftProvenance(ImportProvenance):
+    kind: Literal["post_plain_draft"]
+    mode_operation_id: UID
+    mode_receipt_digest: str = Field(pattern=HEX)
+
+
+class CipherProvenance(ImportProvenance):
+    kind: Literal["cipher_branch"]
+    origin_storage_operation_id: UID | None
+
+
+class PlainProvenance(ImportProvenance):
+    kind: Literal["plain_branch"]
+    origin_revision_ref: RevisionRef | None
+
+
+class MixedImportEntry(Strict):
+    revision_id: UID
+    parent_ref: RevisionRef | None
+    origin_device_id: str = Field(min_length=1, max_length=120)
+    source_kind: Literal["snapshot_v1", "history_envelope_v1"]
+    source_epoch: int = Field(ge=0)
+    target_kind: Literal["snapshot_v1", "history_envelope_v1"]
+    target_epoch: int = Field(ge=0)
+    expected_existing: MixedDescriptor | None
+    provenance: Annotated[DraftProvenance | CipherProvenance | PlainProvenance, Field(discriminator="kind")]
+
+
+class MixedImportPrepare(Access):
+    mutation_id: UID
+    base: MixedBase
+    expected_catalog_digest: str = Field(pattern=HEX)
+    entries: list[MixedImportEntry] = Field(min_length=1)
+
+
+class PlainImportEntry(Strict):
+    revision_id: UID
+    snapshot: SnapshotNote
+
+
+class ExistingCipherEntry(Strict):
+    revision_id: UID
+    ciphertext_sha256: str = Field(pattern=HEX)
+
+
+class MixedImportCommit(Commit):
+    client_verified_existing_set_digest: str = Field(pattern=HEX)
+    plain_entries: list[PlainImportEntry]
+    existing_ciphertexts: list[ExistingCipherEntry]
+
+
 class ConversionCommit(Commit):
     target_epoch: int = Field(ge=1)

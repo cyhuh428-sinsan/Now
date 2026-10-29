@@ -46,6 +46,9 @@ def binding(owner, local, instance, ident, epoch, key, ref, parent):
 
 
 def fixed(row):
+    if row.purpose == "mixed_offline_import":
+        from app.services.note_mixed_import import fixed as import_fixed
+        return import_fixed(row)
     if row.purpose == "mixed_note_write":
         from app.services.note_mixed_write import fixed as write_fixed
         return write_fixed(row)
@@ -92,11 +95,14 @@ def latest(db, owner, local, device, instance):
 
 
 def counts(m):
-    return {name: read.count([v["descriptor"] for v in m[name]] if name == "S" else m[name],
-        "destination_key" if name in ("DSET", "O") else "key") for name in (("S", "DSET", "P", "O", "existing", "verified_existing") if m["purpose"] == "mixed_note_write" else ("S", "DSET", "P", "O"))}
+    return {name: read.count([v["descriptor"] for v in m[name]] if name in ("S", "existing", "verified_existing") else m[name],
+        "destination_key" if name in ("DSET", "O") else "key") for name in (("S", "DSET", "P", "O", "existing", "verified_existing") if m["purpose"] in ("mixed_note_write", "mixed_offline_import") else ("S", "DSET", "P", "O"))}
 
 
 def result(db, row):
+    if row.purpose == "mixed_offline_import":
+        from app.services.note_mixed_import import result as import_result
+        return import_result(db, row)
     if row.purpose == "mixed_note_write":
         from app.services.note_mixed_write import result as write_result
         return write_result(db, row)
@@ -282,10 +288,10 @@ def active(db, body, purpose):
         check_parent(db, WriteQuote.model_validate(json.loads(row.conditions_json)["request"]))
     c = read.context(db, row.owner_id, row.local_id, row.actor_device_id, m["server_instance_id"])
     if c["context"] != m["base"]:
-        error("context_changed" if purpose == "mixed_note_write" else "version_conflict")
+        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import") else "version_conflict")
     current = read.descriptors(db, row.owner_id, row.local_id)
     if current != [s["descriptor"] for s in m["S"]]:
-        error("context_changed" if purpose == "mixed_note_write" else "source_changed")
+        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import") else "source_changed")
     if row_signatures(db, row.owner_id, row.local_id) != json.loads(row.conditions_json).get("source_row_signatures"):
         error("source_changed")
     if hasattr(body, "metadata_manifest_digest") and body.metadata_manifest_digest != row.manifest_digest:
@@ -326,7 +332,7 @@ def manifest(db, body, purpose):
     entries = m[section]
     scope = meta.h({"server_instance_id": body.server_instance_id, "owner_id": body.owner_id, "local_id": body.local_id,
         "actor_device_id": body.device_id, "operation_id": row.id, "metadata_manifest_digest": row.manifest_digest, "section": section})
-    get_key = lambda e: e["descriptor"]["key"] if section == "S" else e["key"] if section == "P" else e["destination_key"]
+    get_key = lambda e: e["descriptor"]["key"] if section in ("S", "existing") else e["key"] if section in ("P", "verified_existing") else e["destination_key"]
     if body.cursor:
         try:
             cursor = read.decode(body.cursor)
@@ -339,7 +345,7 @@ def manifest(db, body, purpose):
             error("invalid_cursor", 422)
     page = entries[start:start + body.limit]
     cursor = read.encode({"schema_version": 3, "scope_digest": scope, "section": section, "last_key": get_key(page[-1])}) if start + len(page) < len(entries) else None
-    sections = ("S", "DSET", "P", "O", "existing", "verified_existing") if purpose == "mixed_note_write" else ("S", "DSET", "P", "O")
+    sections = ("S", "DSET", "P", "O", "existing", "verified_existing") if purpose in ("mixed_note_write", "mixed_offline_import") else ("S", "DSET", "P", "O")
     return {"schema_version": 3, "metadata_header": {k: v for k, v in m.items() if k not in sections},
         "counts": counts(m), "set_digests": {k: meta.h(m[k]) for k in sections},
         "metadata_manifest_digest": row.manifest_digest, "section": section, "entries": page, "next_cursor": cursor}
@@ -358,6 +364,8 @@ def source(db, body, purpose):
     row, m = active(db, body, purpose)
     k = body_key(body)
     s = next((s for s in m["S"] if s["descriptor"]["key"] == k), None)
+    if purpose == "mixed_offline_import" and not any(v["key"] == k for v in m["verified_existing"]):
+        error("source_not_on_server", 404)
     if s is None:
         error("source_not_on_server", 404)
     if s["source_etag"] != body.source_etag:

@@ -18,7 +18,7 @@ from app.services.note_crypto_storage import strict_object
 class MixedRoute(APIRoute):
     def get_route_handler(self):
         handler = super().get_route_handler()
-        large_plain_commit = self.path.endswith(("/current-plain/commit", "/mixed-writes/commit"))
+        large_plain_commit = self.path.endswith(("/current-plain/commit", "/mixed-writes/commit", "/mixed-imports/commit"))
 
         async def invoke(request):
             try:
@@ -98,53 +98,77 @@ def write_quote(body: wire.WriteQuote, auth=Depends(access)):
     return response(prepare(auth(body.owner_id), body))
 
 
+@operations_router.post("/mixed-imports/prepare")
+def import_prepare(body: wire.MixedImportPrepare, auth=Depends(access)):
+    from app.services.note_mixed_import import prepare
+    return response(prepare(auth(body.owner_id), body))
+
+
+def semantic_purpose(request):
+    return "mixed_offline_import" if "/mixed-imports/" in request.url.path else "mixed_note_write"
+
+
+@operations_router.get("/mixed-imports/status")
 @operations_router.get("/mixed-writes/status")
 def write_status(request: Request, auth=Depends(access)):
     b = query(request, wire.Operation)
-    return response(ops.status(auth(b.owner_id), b, "mixed_note_write"))
+    return response(ops.status(auth(b.owner_id), b, semantic_purpose(request)))
 
 
+@operations_router.get("/mixed-imports/manifest")
 @operations_router.get("/mixed-writes/manifest")
 def write_manifest(request: Request, auth=Depends(access)):
     b = query(request, wire.WriteManifest)
-    return response(ops.manifest(auth(b.owner_id), b, "mixed_note_write"))
+    return response(ops.manifest(auth(b.owner_id), b, semantic_purpose(request)))
 
 
+@operations_router.get("/mixed-imports/source")
 @operations_router.get("/mixed-writes/source")
 def write_source(request: Request, auth=Depends(access)):
     b = query(request, wire.Source)
-    return response(ops.source(auth(b.owner_id), b, "mixed_note_write"))
+    return response(ops.source(auth(b.owner_id), b, semantic_purpose(request)))
 
 
+@operations_router.get("/mixed-imports/staged")
 @operations_router.get("/mixed-writes/staged")
 def write_staged(request: Request, auth=Depends(access)):
     b = query(request, wire.Staged)
-    return response(ops.staged(auth(b.owner_id), b, "mixed_note_write"))
+    return response(ops.staged(auth(b.owner_id), b, semantic_purpose(request)))
 
 
+@operations_router.post("/mixed-imports/renew")
 @operations_router.post("/mixed-writes/renew")
-def write_renew(body: wire.Action, auth=Depends(access)):
-    return response(ops.action(auth(body.owner_id), body, "mixed_note_write", "renew"))
+def write_renew(request: Request, body: wire.Action, auth=Depends(access)):
+    return response(ops.action(auth(body.owner_id), body, semantic_purpose(request), "renew"))
 
 
+@operations_router.post("/mixed-imports/abort")
 @operations_router.post("/mixed-writes/abort")
-def write_abort(body: wire.Action, auth=Depends(access)):
-    return response(ops.action(auth(body.owner_id), body, "mixed_note_write", "abort"))
+def write_abort(request: Request, body: wire.Action, auth=Depends(access)):
+    return response(ops.action(auth(body.owner_id), body, semantic_purpose(request), "abort"))
 
 
+@operations_router.put("/mixed-imports/chunks")
 @operations_router.put("/mixed-writes/chunks")
-def write_upload(body: wire.Upload, auth=Depends(access)):
-    return response(ops.upload(auth(body.owner_id), body, "mixed_note_write"))
+def write_upload(request: Request, body: wire.Upload, auth=Depends(access)):
+    return response(ops.upload(auth(body.owner_id), body, semantic_purpose(request)))
 
 
+@operations_router.post("/mixed-imports/entries/seal")
 @operations_router.post("/mixed-writes/entries/seal")
-def write_seal(body: wire.Seal, auth=Depends(access)):
-    return response(ops.seal(auth(body.owner_id), body, "mixed_note_write"))
+def write_seal(request: Request, body: wire.Seal, auth=Depends(access)):
+    return response(ops.seal(auth(body.owner_id), body, semantic_purpose(request)))
 
 
 @operations_router.post("/mixed-writes/commit")
 def write_commit(body: wire.WriteCommit, auth=Depends(access)):
     from app.services.note_mixed_write import commit
+    return response(commit(auth(body.owner_id), body))
+
+
+@operations_router.post("/mixed-imports/commit")
+def import_commit(body: wire.MixedImportCommit, auth=Depends(access)):
+    from app.services.note_mixed_import import commit
     return response(commit(auth(body.owner_id), body))
 
 

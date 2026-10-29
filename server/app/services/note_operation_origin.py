@@ -103,6 +103,14 @@ def expectations_digest(row):
 
 def operation(db, ident, owner, local, *, active_id=None):
     row = db.get(NoteCryptoTransition, ident)
+    if row is not None and row.purpose == "mixed_offline_import":
+        from app.services.note_mixed_import import fixed
+        if (row.owner_id, row.local_id) != (owner, local) or row.state != "committed" or row.receipt_json is None:
+            error("inconsistent_history")
+        m = fixed(row)
+        if json.loads(row.receipt_json).get("origin_expectations_digest") != hashlib.sha256(canonical(m["O"]).encode()).hexdigest():
+            error("inconsistent_history")
+        return m["operation_origin"]
     if row is not None and row.purpose == "mixed_note_write":
         from app.services.note_mixed_write import fixed
         if (row.owner_id, row.local_id) != (owner, local) or row.state != "committed" or row.receipt_json is None:
@@ -158,7 +166,7 @@ def storage_row(db, owner, local, key, raw):
     side = db.get(MixedSlot, (owner, local, canonical(key)))
     if side is not None:
         storage = db.get(NoteCryptoTransition, side.storage_operation_id)
-        if storage is not None and storage.purpose in ("current_plain_transition", "mixed_conversion", "mixed_note_write"):
+        if storage is not None and storage.purpose in ("current_plain_transition", "mixed_conversion", "mixed_note_write", "mixed_offline_import"):
             from app.services.note_mixed_operations import verify_live
             verify_live(db, storage, key, raw, side)
             return storage
@@ -192,7 +200,7 @@ def semantic_id(db, owner, local, key, raw):
             error("inconsistent_history")
         return None
     row = storage_row(db, owner, local, key, raw)
-    if row.purpose in ("current_plain_transition", "mixed_conversion", "mixed_note_write"):
+    if row.purpose in ("current_plain_transition", "mixed_conversion", "mixed_note_write", "mixed_offline_import"):
         from app.models.note_mixed import MixedSlot
         side = db.get(MixedSlot, (owner, local, canonical(key)))
         if side is None:
