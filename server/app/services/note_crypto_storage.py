@@ -311,7 +311,7 @@ def check_manifest(db, row):
                for b in request["local_branches"]]
     entries = list(db.scalars(select(NoteCryptoEntry).where(NoteCryptoEntry.transition_id == row.id)))
     from app.services.note_operation_origin import conversion_expectations
-    if conditions.get("origin_metadata_version") != 1 or conditions.get("origin_expectations") != conversion_expectations(
+    if type(conditions.get("origin_metadata_version")) is not int or conditions.get("origin_metadata_version") != 1 or conditions.get("origin_expectations") != conversion_expectations(
         db, row.owner_id, row.local_id, actual, conditions["null_slots"]):
         error("inconsistent_history")
     fields = ("key", "source_kind", "output_kind", "representation_epoch")

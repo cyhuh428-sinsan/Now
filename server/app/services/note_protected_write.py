@@ -251,6 +251,8 @@ def action(db, body, operation):
         if row.state == "committed":
             error("quote_already_committed")
         if row.state in ACTIVE_STATES:
+            if row.lease_version != body.lease_version:
+                error("lease_changed")
             row.state = "aborted"
             db.execute(delete(NoteCryptoFence).where(NoteCryptoFence.transition_id == row.id))
     else:

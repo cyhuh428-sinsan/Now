@@ -153,6 +153,8 @@ def test_fence_batch_direct_capture_renew_abort_and_expiry(client, subject):
     assert r.status_code == 200 and r.json()["lease_version"] == t["lease_version"] + 1
     assert client.post(ROOT + "/renew", json=action, headers=s["headers"]).status_code == 409
     r = client.post(ROOT + "/abort", json=action, headers=s["headers"])
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "lease_changed"
+    r = client.post(ROOT + "/abort", json={**action, "lease_version": t["lease_version"] + 1}, headers=s["headers"])
     assert r.status_code == 200 and r.json()["state"] == "aborted"
     assert client.post(ROOT + "/abort", json=action, headers=s["headers"]).status_code == 200
     b, t = prepare(client, s, local)
@@ -311,8 +313,23 @@ def test_concurrent_prepare_and_renew_abort(client, subject):
                 return exc.status_code
     with ThreadPoolExecutor(2) as pool:
         results = list(pool.map(run_action, ["renew", "abort"]))
-    assert "aborted" in results and all(v in ("prepared", "aborted", 409) for v in results)
+    from app.models.note_crypto import NoteCryptoFence
+    state = client.get(ROOT + "/status", params=query(s, "race", transition_id=ident), headers=s["headers"]).json()
+    s["db"].expire_all()
+    fence = s["db"].get(NoteCryptoFence, (s["owner"], "race"))
+    if results[0] == "prepared":
+        assert results == ["prepared", 409]
+        assert state["state"] == "prepared" and state["lease_version"] == 2
+        assert fence is not None and fence.transition_id == ident
+        r = client.post(ROOT + "/abort", json=action.model_copy(update={"lease_version": 2}).model_dump(), headers=s["headers"])
+        assert r.status_code == 200 and r.json()["state"] == "aborted"
+    else:
+        assert results == [409, "aborted"]
+        assert state["state"] == "aborted" and state["lease_version"] == 1
+        assert fence is None
     assert client.get(ROOT + "/status", params=query(s, "race", transition_id=ident), headers=s["headers"]).json()["state"] == "aborted"
+    s["db"].expire_all()
+    assert s["db"].get(NoteCryptoFence, (s["owner"], "race")) is None
 
 
 def test_fence_other_legacy_routes_read_and_backup(client, subject):
