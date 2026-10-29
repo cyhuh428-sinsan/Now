@@ -27,7 +27,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
-    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence  # noqa: F401
+    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk  # noqa: F401
     from app.services.note_crypto import initialize_identity
     from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
     from app.models.note_history import NoteHead, NoteRevision, NoteInventory  # noqa: F401
@@ -80,6 +80,10 @@ def migrate_schema(conn: Connection | None = None) -> None:
                        "history_generation": "INTEGER NOT NULL DEFAULT 0"},
         "note_revisions": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
                            "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
+        "note_inventory": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
+                           "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
+        "note_crypto_transitions": {"commit_conditions_json": "TEXT", "receipt_json": "TEXT"},
+        "note_crypto_entries": {"binding_json": "TEXT"},
     }
     for table, definitions in history_columns.items():
         if table in table_names:

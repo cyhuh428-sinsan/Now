@@ -91,6 +91,8 @@ def current(db, owner, local):
         head, rows = scope(db, owner, local)
         if not rows:
             error("note_not_found", 404)
+        if protected(head):
+            error("unsupported_representation")
         from app.services.note_crypto_fence import active_fence
         transition = active_fence(db, owner, local)
         if transition is None:
@@ -325,6 +327,8 @@ def mutate(db, body, operation):
         require_unfenced(db, [(body.owner_id, body.local_id)])
         check_epoch(head, body.crypto_epoch)
         require_active_user_device(db, owner_id=body.owner_id, device_id=body.device_id)
+        if protected(head):
+            error("history_envelope_required")
         previous = replay(db, body, operation, head)
         if previous is not None:
             db.commit()

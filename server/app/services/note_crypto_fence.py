@@ -6,6 +6,9 @@ from sqlalchemy import delete, text
 
 from app.models.note_crypto import NoteCryptoFence, NoteCryptoTransition
 
+ACTIVE_STATES = ("prepared", "staging", "ready")
+TERMINAL_STATES = ("committed", "expired", "aborted")
+
 
 def error(code, status=409):
     raise HTTPException(status_code=status, detail={"code": code}, headers={"Cache-Control": "no-store"})
@@ -18,7 +21,7 @@ def database_now(db):
 
 
 def expire(db, transition):
-    if transition.state == "prepared" and database_now(db) >= transition.expires_at:
+    if transition.state in ACTIVE_STATES and database_now(db) >= transition.expires_at:
         transition.state = "expired"
         db.execute(delete(NoteCryptoFence).where(NoteCryptoFence.transition_id == transition.id))
     return transition
@@ -32,7 +35,9 @@ def active_fence(db, owner, local):
     if transition is None:
         error("inconsistent_crypto_fence")
     expire(db, transition)
-    return transition if transition.state == "prepared" else None
+    if transition.state not in ACTIVE_STATES + TERMINAL_STATES:
+        error("inconsistent_crypto_fence")
+    return transition if transition.state in ACTIVE_STATES else None
 
 
 def require_unfenced(db, refs):

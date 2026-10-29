@@ -40,3 +40,5 @@ class NoteInventory(Base):
     note_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     revision_id: Mapped[str] = mapped_column(String(36))
     snapshot_json: Mapped[str] = mapped_column(Text)
+    representation_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    representation_kind: Mapped[str] = mapped_column(String(32), default="snapshot_v1", server_default="snapshot_v1")

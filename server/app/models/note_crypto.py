@@ -1,7 +1,7 @@
-"""Preparation metadata only. No plaintext or ciphertext staging in E4a1."""
+"""Transition metadata and ciphertext-only immutable upload storage."""
 from datetime import datetime
 
-from sqlalchemy import CheckConstraint, ForeignKey, String, Text, UniqueConstraint
+from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db import Base
@@ -28,6 +28,8 @@ class NoteCryptoTransition(Base):
     lease_version: Mapped[int] = mapped_column(default=1)
     expires_at: Mapped[datetime] = mapped_column()
     created_at: Mapped[datetime] = mapped_column()
+    commit_conditions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    receipt_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class NoteCryptoEntry(Base):
@@ -38,6 +40,7 @@ class NoteCryptoEntry(Base):
     source_kind: Mapped[str] = mapped_column(String(32))
     output_kind: Mapped[str] = mapped_column(String(32))
     representation_epoch: Mapped[int] = mapped_column()
+    binding_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class NoteCryptoFence(Base):
@@ -45,3 +48,21 @@ class NoteCryptoFence(Base):
     owner_id: Mapped[str] = mapped_column(String(80), primary_key=True)
     local_id: Mapped[str] = mapped_column(String(120), primary_key=True)
     transition_id: Mapped[str] = mapped_column(ForeignKey("note_crypto_transitions.id"), unique=True)
+
+
+class NoteCryptoUpload(Base):
+    __tablename__ = "note_crypto_uploads"
+    transition_id: Mapped[str] = mapped_column(ForeignKey("note_crypto_transitions.id"), primary_key=True)
+    key_json: Mapped[str] = mapped_column(String(220), primary_key=True)
+    total_chunks: Mapped[int] = mapped_column()
+    total_bytes: Mapped[int] = mapped_column()
+    ciphertext_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
+class NoteCryptoChunk(Base):
+    __tablename__ = "note_crypto_chunks"
+    transition_id: Mapped[str] = mapped_column(ForeignKey("note_crypto_transitions.id"), primary_key=True)
+    key_json: Mapped[str] = mapped_column(String(220), primary_key=True)
+    chunk_index: Mapped[int] = mapped_column(primary_key=True)
+    chunk_sha256: Mapped[str] = mapped_column(String(64))
+    data: Mapped[bytes] = mapped_column(LargeBinary)

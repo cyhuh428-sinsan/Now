@@ -12,7 +12,7 @@ from app.models.note import AnalysisJob, Note, Recording
 from app.models.note_crypto import NoteCryptoEntry, NoteCryptoFence, NoteCryptoTransition, ServerIdentity
 from app.models.note_history import NoteHead, NoteInventory, NoteRevision
 from app.models.note_v2 import NoteOfflineBranch
-from app.services.note_crypto_fence import active_fence, database_now, error, expire, require_unfenced
+from app.services.note_crypto_fence import ACTIVE_STATES, active_fence, database_now, error, expire, require_unfenced
 from app.services.note_history import finalize_history, inventories, lock_note_writes, prepare_history
 from app.services.note_v2 import canonical
 from app.services.note_sync import _note_sort_key
@@ -97,6 +97,8 @@ def validate_existing_graph(rows, inventory, native, branches, head):
         revision = revisions.get(item.revision_id)
         if item.note_id not in physical or revision is None or revision.note_id != item.note_id:
             error("inconsistent_history")
+        if head and item.representation_epoch != head.crypto_epoch:
+            error("inconsistent_history")
     for row in native:
         if row.note_id not in physical or (head and row.representation_epoch != head.crypto_epoch):
             error("inconsistent_history")
@@ -127,12 +129,19 @@ def validate_existing_graph(rows, inventory, native, branches, head):
 
 def result(db, row):
     expire(db, row)
+    if row.state == "committed":
+        from app.services.note_crypto_storage import committed_result
+        return committed_result(db, row)
     condition = json.loads(row.conditions_json)
+    from app.models.note_crypto import NoteCryptoUpload, NoteCryptoChunk
+    uploads = list(db.scalars(select(NoteCryptoUpload).where(NoteCryptoUpload.transition_id == row.id)))
+    chunks = list(db.scalars(select(NoteCryptoChunk.chunk_index).where(NoteCryptoChunk.transition_id == row.id)))
     return {"transition_id": row.id, "state": row.state, "lease_version": row.lease_version,
             "expires_at": row.expires_at.isoformat(timespec="microseconds") + "Z",
             "server_instance_id": condition["server_instance_id"], "manifest_digest": row.manifest_digest,
             "expected_count": len(list(db.scalars(select(NoteCryptoEntry.key_json).where(NoteCryptoEntry.transition_id == row.id)))),
-            "preparation_only": True, "base": condition["base"], "target_epoch": condition["request"]["target_epoch"]}
+            "preparation_only": True, "base": condition["base"], "target_epoch": condition["request"]["target_epoch"],
+            "uploaded_chunks": len(chunks), "sealed_entries": sum(u.ciphertext_sha256 is not None for u in uploads)}
 
 
 def owned(db, owner, local, device, transition_id):
@@ -155,12 +164,12 @@ def status(db, owner, local, device, transition_id=None):
 
 def related_plaintext(db, owner, local):
     jobs = select(AnalysisJob.id).where(AnalysisJob.owner_id == owner, AnalysisJob.note_local_id == local,
-        ((AnalysisJob.input_text.is_not(None) & (AnalysisJob.input_text != ""))
-         | (AnalysisJob.result_json.is_not(None) & (AnalysisJob.result_json != ""))
-         | (AnalysisJob.error_message.is_not(None) & (AnalysisJob.error_message != ""))
+        (AnalysisJob.input_text.is_not(None)
+         | AnalysisJob.result_json.is_not(None)
+         | AnalysisJob.error_message.is_not(None)
          | AnalysisJob.status.in_(["queued", "running"]))).limit(1)
     transcripts = select(Recording.id).where(Recording.owner_id == owner, Recording.note_local_id == local,
-        Recording.transcript.is_not(None), Recording.transcript != "").limit(1)
+        Recording.transcript.is_not(None)).limit(1)
     return db.scalar(jobs) is not None or db.scalar(transcripts) is not None
 
 
@@ -179,7 +188,7 @@ def catalog(db, owner, local, epoch):
         if row.before_snapshot_json is not None:
             add("revision_before", row.id, "before", row.representation_kind)
     for row in inventories(db, owner, local):
-        add("inventory_snapshot", row.note_id, "current")
+        add("inventory_snapshot", row.note_id, "current", row.representation_kind)
     for row in db.scalars(select(NoteOfflineBranch).where(NoteOfflineBranch.owner_id == owner, NoteOfflineBranch.local_id == local)):
         if row.representation_epoch != epoch:
             error("crypto_epoch_changed")
@@ -210,6 +219,12 @@ def validate_reservations(db, body):
             parent = entries[node].parent_ref
             node = parent.id if parent and parent.kind == "offline_branch" else None
         completed.update(seen)
+
+
+def null_slots(db, owner, local):
+    ids = db.scalars(select(NoteRevision.id).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local,
+                                                  NoteRevision.before_snapshot_json.is_(None)))
+    return [{"kind": "revision_before", "id": ident, "slot": "before"} for ident in sorted(ids)]
 
 
 @transactional
@@ -247,13 +262,16 @@ def prepare(db, body):
     stamp, ident = database_now(db), str(uuid4())
     row = NoteCryptoTransition(id=ident, owner_id=body.owner_id, local_id=body.local_id,
         mutation_id=body.mutation_id, actor_device_id=body.device_id,
-        conditions_json=canonical({"request": body.model_dump(), "server_instance_id": identity, "base": base}),
+        conditions_json=canonical({"request": body.model_dump(), "server_instance_id": identity, "base": base,
+                                   "null_slots": null_slots(db, body.owner_id, body.local_id)}),
         manifest_digest=hashlib.sha256(canonical(entries).encode()).hexdigest(), state="prepared", lease_version=1,
         created_at=stamp, expires_at=stamp + timedelta(minutes=30))
     db.add(row)
     db.flush()
+    from app.services.note_crypto_storage import expected_binding
     for item in entries:
         db.add(NoteCryptoEntry(transition_id=ident, key_json=canonical(item["key"]),
+                              binding_json=canonical(expected_binding(db, row, item["key"])),
                               **{k: v for k, v in item.items() if k != "key"}))
     db.add(NoteCryptoFence(owner_id=body.owner_id, local_id=body.local_id, transition_id=ident))
     db.flush()
@@ -266,15 +284,15 @@ def action(db, body, operation):
     if row.actor_device_id != body.device_id:
         error("transition_actor_mismatch", 403)
     if operation == "abort":
-        if row.state not in ("prepared", "aborted", "expired"):
+        if row.state not in ACTIVE_STATES + ("aborted", "expired"):
             error("transition_not_active")
-        if row.state == "prepared":
+        if row.state in ACTIVE_STATES:
             row.state = "aborted"
             db.execute(delete(NoteCryptoFence).where(NoteCryptoFence.transition_id == row.id))
     else:
         if row.state == "expired":
             error("transition_expired", 410)
-        if row.state != "prepared":
+        if row.state not in ACTIVE_STATES:
             error("transition_not_active")
         if row.lease_version != body.lease_version:
             error("lease_changed")
@@ -291,7 +309,13 @@ def entry_result(row):
 @transactional
 def manifest(db, owner, local, device, transition_id, limit, cursor):
     row = owned(db, owner, local, device, transition_id)
-    base_state(db, owner, local, baseline=False)
+    current = base_state(db, owner, local, baseline=False)
+    condition = json.loads(row.conditions_json)
+    if "null_slots" not in condition:
+        if current != condition["base"]:
+            error("binding_metadata_unavailable")
+        condition["null_slots"] = null_slots(db, owner, local)
+        row.conditions_json = canonical(condition)
     after = ""
     binding = [transition_id, owner, local, row.manifest_digest]
     if cursor:
@@ -305,8 +329,12 @@ def manifest(db, owner, local, device, transition_id, limit, cursor):
     rows = list(db.scalars(select(NoteCryptoEntry).where(NoteCryptoEntry.transition_id == row.id,
         NoteCryptoEntry.key_json > after).order_by(NoteCryptoEntry.key_json).limit(limit + 1)))
     next_cursor = base64.urlsafe_b64encode(canonical(binding + [rows[limit - 1].key_json]).encode()).decode() if len(rows) > limit else None
-    return {"items": [entry_result(e) for e in rows[:limit]], "next_cursor": next_cursor,
-            "manifest_digest": row.manifest_digest, "state": row.state}
+    from app.services.note_crypto_storage import entry_metadata
+    after_ids = {json.loads(e.key_json)["id"] for e in rows[:limit] if json.loads(e.key_json)["kind"] == "revision_snapshot"}
+    return {"items": [entry_metadata(db, row, e) for e in rows[:limit]], "next_cursor": next_cursor,
+            "manifest_digest": row.manifest_digest, "state": row.state,
+            "null_count": len(condition["null_slots"]),
+            "null_slots": [{"key": key, "is_null": True} for key in condition["null_slots"] if key["id"] in after_ids]}
 
 
 @transactional
@@ -314,7 +342,7 @@ def source(db, owner, local, device, transition_id, key, etag):
     row = owned(db, owner, local, device, transition_id)
     if row.state == "expired":
         error("transition_expired", 410)
-    if row.state != "prepared":
+    if row.state not in ACTIVE_STATES:
         error("source_unavailable")
     entry = db.get(NoteCryptoEntry, (row.id, canonical(key)))
     if entry is None or entry.source_etag != etag:

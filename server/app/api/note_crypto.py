@@ -8,15 +8,16 @@ from starlette.requests import Request
 
 from app.api.note_v2 import access
 from app.core.security import require_client_api_access
-from app.schemas.note_crypto import PrepareTransition, TransitionAction
+from app.schemas.note_crypto import PrepareTransition, TransitionAction, UploadChunk, SealEntry, CommitTransition, RepresentationKey
 from app.services import note_crypto as service
+from app.services import note_crypto_storage as storage
 
 class MetadataRoute(APIRoute):
     def get_route_handler(self):
         handler = super().get_route_handler()
 
         async def limited(request):
-            if request.method != "POST":
+            if request.method not in ("POST", "PUT"):
                 return await handler(request)
             chunks, size = [], 0
             async for chunk in request.stream():
@@ -80,3 +81,28 @@ def renew(body: TransitionAction, auth=Depends(access)):
 @router.post("/abort")
 def abort(body: TransitionAction, auth=Depends(access)):
     return service.action(auth(body.owner_id), body, "abort")
+
+
+@router.put("/chunks")
+def upload_chunk(body: UploadChunk, auth=Depends(access)):
+    return storage.put_chunk(auth(body.owner_id), body)
+
+
+@router.post("/entries/seal")
+def seal(body: SealEntry, auth=Depends(access)):
+    return storage.seal(auth(body.owner_id), body)
+
+
+@router.post("/commit")
+def commit(body: CommitTransition, auth=Depends(access)):
+    return storage.commit(auth(body.owner_id), body)
+
+
+@router.get("/staged")
+def staged(transition_id: UUID, kind: str, representation_id: str, slot: str, source_etag: UUID,
+           chunk_index: int = Query(ge=0), args=Depends(keys)):
+    try:
+        key = RepresentationKey(kind=kind, id=representation_id, slot=slot)
+    except ValueError:
+        storage.error("invalid_representation_key", 422)
+    return storage.staged(*args, str(transition_id), key.model_dump(), str(source_etag), chunk_index)

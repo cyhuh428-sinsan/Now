@@ -130,6 +130,9 @@ def persist_history(db):
             continue
         table = row.__table__
         values = {column.name: getattr(row, column.name) for column in table.columns}
+        if isinstance(row, NoteInventory) and row in db.new:
+            values["representation_epoch"] = row.representation_epoch or 0
+            values["representation_kind"] = row.representation_kind or "snapshot_v1"
         if row in db.new:
             if isinstance(row, NoteRevision) and values["captured_at"] is None:
                 values.pop("captured_at")
@@ -216,7 +219,7 @@ def fence_natural_note_writes(db, flush_context, instances):
         if owner is not None and local is not None:
             refs.append((owner, local))
     if refs:
-        require_unfenced(db, refs)
+        require_legacy_writes(db, refs)
         for ident, expected in originals:
             actual = db.connection().execute(select(Note.owner_id, Note.local_id).where(Note.id == ident)).first()
             if actual is None or tuple(actual) != expected:

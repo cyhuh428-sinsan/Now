@@ -118,7 +118,12 @@ def test_identity_and_metadata_only_complete_manifest(client, subject):
     for entry in s["db"].scalars(select(NoteCryptoEntry).where(NoteCryptoEntry.transition_id == stored.id)):
         assert "SENTINEL" not in json.dumps({c.name: getattr(entry, c.name) for c in entry.__table__.columns})
     assert context(client, s)["server_instance_id"] == b["server_instance_id"]
-    assert client.post(ROOT + "/commit", json=b, headers=s["headers"]).status_code in (404, 405)
+    # A2a adds commit, but a preparation body is never a valid commit request.
+    invalid_commit = client.post(ROOT + "/commit", json=b, headers=s["headers"])
+    assert invalid_commit.status_code == 422
+    assert context(client, s)["crypto_epoch"] == 0
+    s["db"].expire_all()
+    assert s["db"].get(NoteCryptoTransition, stored.id).receipt_json is None
 
 
 def test_fence_batch_direct_capture_renew_abort_and_expiry(client, subject):
