@@ -14,7 +14,7 @@ from app.services.note_crypto_fence import error, database_now
 from app.services.note_v2 import canonical
 
 UPDATING = "mixed_updating"
-NEW_PURPOSES = ("current_plain_transition", "mixed_conversion")
+NEW_PURPOSES = ("current_plain_transition", "mixed_conversion", "mixed_note_write")
 
 
 def h(value):

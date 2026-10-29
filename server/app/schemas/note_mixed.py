@@ -8,6 +8,7 @@ from app.schemas.protected_analysis import BaseContext
 from app.schemas.note_v2 import RevisionRef, SnapshotNote
 from app.schemas.note_crypto import RepresentationKey
 from pydantic import model_validator
+from app.schemas.note_protected_write import Structure, Projection, ParentBase
 
 HEX = r"^[0-9a-f]{64}$"
 UID = Annotated[str, Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
@@ -40,6 +41,12 @@ class MixedBase(Strict):
         if type(value) is not int:
             raise ValueError("integer metadata version required")
         return value
+
+
+class ParentQuery(Access):
+    parent_local_id: str = Field(max_length=120)
+    child_level: int = Field(ge=1, le=3)
+    child_deleted: bool
 
 
 class Read(Access):
@@ -177,6 +184,90 @@ class Commit(Action):
 
 class PlainCommit(Commit):
     plain_current: SnapshotNote
+
+
+class LegacyParent(Strict):
+    kind: Literal["legacy"]
+    parent_base: ParentBase
+    structure_signature: "ParentSignature"
+
+
+class ParentSignature(Strict):
+    physical_note_id: int = Field(ge=1)
+    note_type: str = Field(max_length=40)
+    parent_local_id: str | None = Field(max_length=120)
+    level: int = Field(ge=1, le=3)
+    deleted_at: str | None
+    device_id: str = Field(max_length=120)
+    created_at: str
+    updated_at: str
+    client_updated_at: str | None
+
+
+class MixedParent(Strict):
+    kind: Literal["mixed"]
+    local_id: str
+    context: MixedBase
+    catalog_digest: str = Field(pattern=HEX)
+
+
+class MixedBinding(Strict):
+    server_instance_id: UID
+    owner_id: str = Field(min_length=1, max_length=80)
+    local_id: str = Field(max_length=120)
+    transition_id: UID
+    crypto_epoch: int = Field(ge=1)
+    destination_key: RepresentationKey
+    revision_ref: RevisionRef | None
+    parent_ref: RevisionRef | None
+
+
+class MixedDescriptor(Strict):
+    key: RepresentationKey
+    representation_kind: Literal["snapshot_v1", "history_envelope_v1", "content_encrypted_v1", "linked_text_envelope_v1", "plain_text_v1"]
+    representation_epoch: int = Field(ge=0)
+    is_null: bool
+    representation_version: int = Field(ge=1)
+    representation_etag: UID
+    storage_operation_id: UID | None
+    semantic_origin_id: UID | None
+    origin_validator: Literal["body_v1", "native_v1", "a2a_pre_origin_v0", "linked_v1", "body_mixed_v1", "native_mixed_v1", "linked_mixed_v1"]
+    origin_row_required: bool
+    expected_binding: MixedBinding | None
+    revision_ref: RevisionRef | None
+    parent_ref: RevisionRef | None
+    physical_note_id: int | None = Field(ge=1)
+    inventory_revision_id: UID | None
+    linked_slot_version: int | None = Field(ge=0)
+    ciphertext_sha256: str | None = Field(pattern=HEX)
+
+
+class RestoreSource(Strict):
+    revision_ref: RevisionRef
+    descriptor: MixedDescriptor
+
+
+class WriteQuote(Access):
+    mutation_id: UID
+    base: MixedBase
+    expected_catalog_digest: str = Field(pattern=HEX)
+    operation: Literal["put", "delete", "create", "restore"]
+    target_current_mode: Literal["plain", "protected"]
+    selection: Selection | None
+    replica_policy: Literal["selected_head_only"]
+    structure: Structure
+    parent_context: LegacyParent | MixedParent | None
+    restore_source: RestoreSource | None
+
+
+class WriteManifest(Manifest):
+    section: Literal["S", "DSET", "P", "O", "existing", "verified_existing"]
+
+
+class WriteCommit(Commit):
+    projection: Projection
+    plain_after: SnapshotNote | None
+    plain_before: SnapshotNote | None
 
 
 class ConversionCommit(Commit):

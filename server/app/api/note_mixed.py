@@ -18,7 +18,7 @@ from app.services.note_crypto_storage import strict_object
 class MixedRoute(APIRoute):
     def get_route_handler(self):
         handler = super().get_route_handler()
-        large_plain_commit = self.path.endswith("/current-plain/commit")
+        large_plain_commit = self.path.endswith(("/current-plain/commit", "/mixed-writes/commit"))
 
         async def invoke(request):
             try:
@@ -65,11 +65,15 @@ def query(request, model):
         error("invalid_request", 422)
     values = dict(request.query_params)
     try:
-        for field in ("schema_version", "limit", "chunk_index", "target_epoch"):
+        for field in ("schema_version", "limit", "chunk_index", "target_epoch", "child_level"):
             if field in values:
                 if str(int(values[field])) != values[field]:
                     raise ValueError()
                 values[field] = int(values[field])
+        if "child_deleted" in values:
+            if values["child_deleted"] not in ("true", "false"):
+                raise ValueError()
+            values["child_deleted"] = values["child_deleted"] == "true"
         return model.model_validate(values)
     except (ValidationError, ValueError):
         error("invalid_request", 422)
@@ -79,6 +83,69 @@ def query(request, model):
 def context(request: Request, auth=Depends(access)):
     b = query(request, wire.Access)
     return read.context(auth(b.owner_id), b.owner_id, b.local_id, b.device_id, b.server_instance_id)
+
+
+@operations_router.get("/mixed-writes/parent-context")
+def parent_context(request: Request, auth=Depends(access)):
+    from app.services.note_mixed_write import parent_lookup as lookup
+    b = query(request, wire.ParentQuery)
+    return lookup(auth(b.owner_id), b)
+
+
+@operations_router.post("/mixed-writes/quote")
+def write_quote(body: wire.WriteQuote, auth=Depends(access)):
+    from app.services.note_mixed_write import prepare
+    return response(prepare(auth(body.owner_id), body))
+
+
+@operations_router.get("/mixed-writes/status")
+def write_status(request: Request, auth=Depends(access)):
+    b = query(request, wire.Operation)
+    return response(ops.status(auth(b.owner_id), b, "mixed_note_write"))
+
+
+@operations_router.get("/mixed-writes/manifest")
+def write_manifest(request: Request, auth=Depends(access)):
+    b = query(request, wire.WriteManifest)
+    return response(ops.manifest(auth(b.owner_id), b, "mixed_note_write"))
+
+
+@operations_router.get("/mixed-writes/source")
+def write_source(request: Request, auth=Depends(access)):
+    b = query(request, wire.Source)
+    return response(ops.source(auth(b.owner_id), b, "mixed_note_write"))
+
+
+@operations_router.get("/mixed-writes/staged")
+def write_staged(request: Request, auth=Depends(access)):
+    b = query(request, wire.Staged)
+    return response(ops.staged(auth(b.owner_id), b, "mixed_note_write"))
+
+
+@operations_router.post("/mixed-writes/renew")
+def write_renew(body: wire.Action, auth=Depends(access)):
+    return response(ops.action(auth(body.owner_id), body, "mixed_note_write", "renew"))
+
+
+@operations_router.post("/mixed-writes/abort")
+def write_abort(body: wire.Action, auth=Depends(access)):
+    return response(ops.action(auth(body.owner_id), body, "mixed_note_write", "abort"))
+
+
+@operations_router.put("/mixed-writes/chunks")
+def write_upload(body: wire.Upload, auth=Depends(access)):
+    return response(ops.upload(auth(body.owner_id), body, "mixed_note_write"))
+
+
+@operations_router.post("/mixed-writes/entries/seal")
+def write_seal(body: wire.Seal, auth=Depends(access)):
+    return response(ops.seal(auth(body.owner_id), body, "mixed_note_write"))
+
+
+@operations_router.post("/mixed-writes/commit")
+def write_commit(body: wire.WriteCommit, auth=Depends(access)):
+    from app.services.note_mixed_write import commit
+    return response(commit(auth(body.owner_id), body))
 
 
 @router.get("/catalog")

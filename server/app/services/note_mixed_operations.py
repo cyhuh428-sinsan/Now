@@ -46,6 +46,9 @@ def binding(owner, local, instance, ident, epoch, key, ref, parent):
 
 
 def fixed(row):
+    if row.purpose == "mixed_note_write":
+        from app.services.note_mixed_write import fixed as write_fixed
+        return write_fixed(row)
     from app.schemas.note_mixed import PlainQuote, ConversionPrepare
     try:
         c = json.loads(row.conditions_json)
@@ -90,10 +93,13 @@ def latest(db, owner, local, device, instance):
 
 def counts(m):
     return {name: read.count([v["descriptor"] for v in m[name]] if name == "S" else m[name],
-        "destination_key" if name in ("DSET", "O") else "key") for name in ("S", "DSET", "P", "O")}
+        "destination_key" if name in ("DSET", "O") else "key") for name in (("S", "DSET", "P", "O", "existing", "verified_existing") if m["purpose"] == "mixed_note_write" else ("S", "DSET", "P", "O"))}
 
 
 def result(db, row):
+    if row.purpose == "mixed_note_write":
+        from app.services.note_mixed_write import result as write_result
+        return write_result(db, row)
     m = fixed(row)
     receipt = json.loads(row.receipt_json) if row.receipt_json else None
     c = latest(db, row.owner_id, row.local_id, row.actor_device_id, m["server_instance_id"])
@@ -270,12 +276,16 @@ def active(db, body, purpose):
     if fence is None or fence.id != row.id:
         error("inconsistent_crypto_fence")
     m = fixed(row)
+    if purpose == "mixed_note_write":
+        from app.schemas.note_mixed import WriteQuote
+        from app.services.note_mixed_write import check_parent
+        check_parent(db, WriteQuote.model_validate(json.loads(row.conditions_json)["request"]))
     c = read.context(db, row.owner_id, row.local_id, row.actor_device_id, m["server_instance_id"])
     if c["context"] != m["base"]:
-        error("version_conflict")
+        error("context_changed" if purpose == "mixed_note_write" else "version_conflict")
     current = read.descriptors(db, row.owner_id, row.local_id)
     if current != [s["descriptor"] for s in m["S"]]:
-        error("source_changed")
+        error("context_changed" if purpose == "mixed_note_write" else "source_changed")
     if row_signatures(db, row.owner_id, row.local_id) != json.loads(row.conditions_json).get("source_row_signatures"):
         error("source_changed")
     if hasattr(body, "metadata_manifest_digest") and body.metadata_manifest_digest != row.manifest_digest:
@@ -329,8 +339,9 @@ def manifest(db, body, purpose):
             error("invalid_cursor", 422)
     page = entries[start:start + body.limit]
     cursor = read.encode({"schema_version": 3, "scope_digest": scope, "section": section, "last_key": get_key(page[-1])}) if start + len(page) < len(entries) else None
-    return {"schema_version": 3, "metadata_header": {k: v for k, v in m.items() if k not in ("S", "DSET", "P", "O")},
-        "counts": counts(m), "set_digests": {k: meta.h(m[k]) for k in ("S", "DSET", "P", "O")},
+    sections = ("S", "DSET", "P", "O", "existing", "verified_existing") if purpose == "mixed_note_write" else ("S", "DSET", "P", "O")
+    return {"schema_version": 3, "metadata_header": {k: v for k, v in m.items() if k not in sections},
+        "counts": counts(m), "set_digests": {k: meta.h(m[k]) for k in sections},
         "metadata_manifest_digest": row.manifest_digest, "section": section, "entries": page, "next_cursor": cursor}
 
 

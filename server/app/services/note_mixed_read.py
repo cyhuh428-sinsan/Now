@@ -60,7 +60,7 @@ def descriptors(db, owner, local):
         result.append({"key": k, "representation_kind": kind, "representation_epoch": epoch, "is_null": raw is None,
             "representation_version": side.representation_version, "representation_etag": side.representation_etag,
             "storage_operation_id": side.storage_operation_id, "semantic_origin_id": side.semantic_origin_id,
-            "origin_validator": side.origin_validator, "origin_row_required": side.origin_validator == "native_v1",
+            "origin_validator": side.origin_validator, "origin_row_required": side.origin_validator in ("native_v1", "native_mixed_v1"),
             "expected_binding": binding, "revision_ref": ref, "parent_ref": parent, "physical_note_id": physical,
             "inventory_revision_id": getattr(target, "revision_id", None), "linked_slot_version": getattr(target, "slot_version", None),
             "ciphertext_sha256": store.sha(raw.encode()) if raw is not None and epoch > 0 else None})
