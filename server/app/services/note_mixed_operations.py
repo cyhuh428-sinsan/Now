@@ -46,6 +46,9 @@ def binding(owner, local, instance, ident, epoch, key, ref, parent):
 
 
 def fixed(row):
+    if row.purpose in ("mixed_analysis_write", "mixed_transcript_write"):
+        from app.services.note_mixed_related import fixed as linked_fixed
+        return linked_fixed(row)
     if row.purpose == "mixed_offline_import":
         from app.services.note_mixed_import import fixed as import_fixed
         return import_fixed(row)
@@ -96,10 +99,13 @@ def latest(db, owner, local, device, instance):
 
 def counts(m):
     return {name: read.count([v["descriptor"] for v in m[name]] if name in ("S", "existing", "verified_existing") else m[name],
-        "destination_key" if name in ("DSET", "O") else "key") for name in (("S", "DSET", "P", "O", "existing", "verified_existing") if m["purpose"] in ("mixed_note_write", "mixed_offline_import") else ("S", "DSET", "P", "O"))}
+        "destination_key" if name in ("DSET", "O") else "key") for name in (("S", "DSET", "P", "O", "existing", "verified_existing") if m["purpose"] in ("mixed_note_write", "mixed_offline_import", "mixed_analysis_write", "mixed_transcript_write") else ("S", "DSET", "P", "O"))}
 
 
 def result(db, row):
+    if row.purpose in ("mixed_analysis_write", "mixed_transcript_write"):
+        from app.services.note_mixed_related import result as linked_result
+        return linked_result(db, row)
     if row.purpose == "mixed_offline_import":
         from app.services.note_mixed_import import result as import_result
         return import_result(db, row)
@@ -205,8 +211,10 @@ def prepare(db, body, purpose):
         m["target_epoch"] = body.target_epoch
         for d in sources:
             k = d["key"]
-            kind = "content_encrypted_v1" if k["kind"] == "note_body" else "linked_text_envelope_v1" if d["origin_validator"] == "linked_v1" else "history_envelope_v1"
+            kind = "content_encrypted_v1" if k["kind"] == "note_body" else "linked_text_envelope_v1" if d["origin_validator"] in ("linked_v1", "linked_mixed_v1") else "history_envelope_v1"
             expected = None if k["kind"] == "note_body" else binding(owner, local, instance, ident, body.target_epoch, k, d["revision_ref"], d["parent_ref"])
+            if d["is_null"] and d["origin_validator"] == "linked_mixed_v1":
+                expected = None
             m["DSET"].append(output(k, [k], kind, body.target_epoch, d["is_null"], expected))
         reserve(db, body, m)
     by_key = {meta.canonical(d["key"]): d for d in sources}
@@ -214,10 +222,12 @@ def prepare(db, body, purpose):
         k = d["destination_key"]
         validator = "body_v1" if k["kind"] == "note_body" else "linked_v1" if d["output_kind"] == "linked_text_envelope_v1" else "native_v1"
         original = by_key.get(meta.canonical(d["source_keys"][0]))
+        if validator == "linked_v1" and original and original["origin_validator"] == "linked_mixed_v1":
+            validator = "linked_mixed_v1"
         semantic = original["semantic_origin_id"] if original else None
         if purpose == CP and k["kind"] in ("revision_snapshot", "inventory_snapshot"):
             semantic = ident
-        if validator != "native_v1":
+        if validator not in ("native_v1", "linked_mixed_v1"):
             semantic = None
         m["O"].append({"destination_key": k, "is_null": d["is_null"], "origin_validator": validator,
             "origin_row_required": validator == "native_v1", "storage_operation_id": ident, "semantic_origin_id": semantic})
@@ -288,10 +298,13 @@ def active(db, body, purpose):
         check_parent(db, WriteQuote.model_validate(json.loads(row.conditions_json)["request"]))
     c = read.context(db, row.owner_id, row.local_id, row.actor_device_id, m["server_instance_id"])
     if c["context"] != m["base"]:
-        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import") else "version_conflict")
+        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import", "mixed_analysis_write", "mixed_transcript_write") else "version_conflict")
     current = read.descriptors(db, row.owner_id, row.local_id)
-    if current != [s["descriptor"] for s in m["S"]]:
-        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import") else "source_changed")
+    frozen = [s["descriptor"] for s in m["S"]]
+    if purpose == "mixed_transcript_write":
+        frozen = sorted(frozen + m["P"], key=lambda d: store.key_order(d["key"]))
+    if current != frozen:
+        error("context_changed" if purpose in ("mixed_note_write", "mixed_offline_import", "mixed_analysis_write", "mixed_transcript_write") else "source_changed")
     if row_signatures(db, row.owner_id, row.local_id) != json.loads(row.conditions_json).get("source_row_signatures"):
         error("source_changed")
     if hasattr(body, "metadata_manifest_digest") and body.metadata_manifest_digest != row.manifest_digest:
@@ -345,7 +358,7 @@ def manifest(db, body, purpose):
             error("invalid_cursor", 422)
     page = entries[start:start + body.limit]
     cursor = read.encode({"schema_version": 3, "scope_digest": scope, "section": section, "last_key": get_key(page[-1])}) if start + len(page) < len(entries) else None
-    sections = ("S", "DSET", "P", "O", "existing", "verified_existing") if purpose in ("mixed_note_write", "mixed_offline_import") else ("S", "DSET", "P", "O")
+    sections = ("S", "DSET", "P", "O", "existing", "verified_existing") if purpose in ("mixed_note_write", "mixed_offline_import", "mixed_analysis_write", "mixed_transcript_write") else ("S", "DSET", "P", "O")
     return {"schema_version": 3, "metadata_header": {k: v for k, v in m.items() if k not in sections},
         "counts": counts(m), "set_digests": {k: meta.h(m[k]) for k in sections},
         "metadata_manifest_digest": row.manifest_digest, "section": section, "entries": page, "next_cursor": cursor}
@@ -483,12 +496,14 @@ def verify_live(db, row, k, raw, side):
     if o["semantic_origin_id"] is not None:
         from app.services.note_operation_origin import operation
         operation(db, o["semantic_origin_id"], row.owner_id, row.local_id)
-    if o["origin_validator"] == "linked_v1":
+    if o["origin_validator"] in ("linked_v1", "linked_mixed_v1"):
         from app.models.note_related import LinkedText
         linked = db.get(LinkedText, (row.owner_id, row.local_id, meta.canonical(k)))
         source = next((s["descriptor"] for s in m["S"] if s["descriptor"]["key"] == k), None)
-        if (linked is None or source is None or linked.storage_operation_id != row.id
-            or linked.slot_version != source["linked_slot_version"] + 1 or linked.is_null != (raw is None)):
+        version = source["linked_slot_version"] + 1 if source else 1
+        if (linked is None or source is None and row.purpose != "mixed_analysis_write" or linked.storage_operation_id != row.id
+            or linked.slot_version != version or linked.is_null != (raw is None)
+            or linked.representation_kind != d["output_kind"] or linked.representation_epoch != d["output_epoch"]):
             error("inconsistent_related_text")
     if raw is not None and d["output_epoch"] > 0:
         u = db.get(NoteCryptoUpload, (row.id, meta.canonical(k)))

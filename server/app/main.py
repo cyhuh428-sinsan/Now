@@ -25,6 +25,7 @@ from app.api.note_protected_import import router as note_protected_import_router
 from app.api.related_text import router as related_text_router
 from app.api.protected_analysis import router as protected_analysis_router, transcript_router as protected_transcript_router
 from app.api.mixed_analysis import router as mixed_analysis_router
+from app.api.mixed_related import router as mixed_related_router, transcript_router as mixed_transcript_router
 from app.api.public_pages import router as public_pages_router
 from app.api.recordings import router as recordings_router
 from app.api.server import router as server_router
@@ -93,6 +94,8 @@ def create_app() -> FastAPI:
     app.include_router(related_text_router)
     app.include_router(protected_analysis_router)
     app.include_router(mixed_analysis_router)
+    app.include_router(mixed_related_router)
+    app.include_router(mixed_transcript_router)
     app.include_router(protected_transcript_router)
     app.include_router(recordings_router)
     app.include_router(sync_router)

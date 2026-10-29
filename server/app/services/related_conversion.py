@@ -261,7 +261,7 @@ def descriptor(db, owner, local, k, target, meta, raw):
         op = db.get(NoteCryptoTransition, meta.storage_operation_id)
         if op is None or op.owner_id != owner or op.local_id != local or op.state != "committed":
             error("inconsistent_related_text")
-        if op.purpose == "mixed_conversion":
+        if op.purpose in ("mixed_conversion", "mixed_analysis_write", "mixed_transcript_write"):
             from app.models.note_mixed import MixedSlot
             from app.services.note_mixed_operations import fixed as mixed_fixed, verify_live
             side = db.get(MixedSlot, (owner, local, linked.canonical(k)))
