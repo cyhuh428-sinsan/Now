@@ -197,16 +197,30 @@ def finalize_history(db, flush_context):
 @event.listens_for(Session, "before_flush")
 def fence_natural_note_writes(db, flush_context, instances):
     from app.services.note_crypto_fence import require_unfenced
-    refs = []
+    from app.services.note_crypto_fence import error
+    refs, originals = [], []
     for row in list(db.new) + list(db.dirty) + list(db.deleted):
         if not isinstance(row, Note):
             continue
         state = inspect(row)
-        owners = [row.owner_id, *state.attrs.owner_id.history.deleted]
-        locals_ = [row.local_id, *state.attrs.local_id.history.deleted]
-        refs.extend((owner, local) for owner in owners for local in locals_ if owner is not None and local is not None)
+        original = None
+        if state.identity is not None:
+            # Attribute history can be empty after an expired/deferred assignment.
+            original = db.connection().execute(select(Note.owner_id, Note.local_id).where(Note.id == state.identity[0])).first()
+            if original is None:
+                error("note_identity_changed")
+            refs.append(tuple(original))
+            originals.append((state.identity[0], tuple(original)))
+        owner = state.dict.get("owner_id", original[0] if original else None)
+        local = state.dict.get("local_id", original[1] if original else None)
+        if owner is not None and local is not None:
+            refs.append((owner, local))
     if refs:
         require_unfenced(db, refs)
+        for ident, expected in originals:
+            actual = db.connection().execute(select(Note.owner_id, Note.local_id).where(Note.id == ident)).first()
+            if actual is None or tuple(actual) != expected:
+                error("note_identity_changed")
 
 
 @event.listens_for(Session, "after_soft_rollback")

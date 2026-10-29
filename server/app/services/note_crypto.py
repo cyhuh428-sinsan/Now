@@ -4,7 +4,7 @@ import hashlib
 import json
 from datetime import timedelta
 from functools import wraps
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 from sqlalchemy import delete, select
 
@@ -52,11 +52,20 @@ def authenticate_actor(db, owner, device):
 def base_state(db, owner, local, *, baseline=True):
     rows = list(db.scalars(select(Note).where(Note.owner_id == owner, Note.local_id == local)))
     fence = active_fence(db, owner, local)
-    if baseline and rows and fence is None:
-        prepare_history(db, owner, local)
-        finalize_history(db, None)
     head = db.get(NoteHead, (owner, local))
     inventory = inventories(db, owner, local)
+    native = list(db.scalars(select(NoteRevision).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local)))
+    branches = list(db.scalars(select(NoteOfflineBranch).where(NoteOfflineBranch.owner_id == owner, NoteOfflineBranch.local_id == local)))
+    pristine = head is None and not inventory and not native and not branches
+    if baseline and rows and fence is None and pristine:
+        prepare_history(db, owner, local)
+        finalize_history(db, None)
+        head = db.get(NoteHead, (owner, local))
+        inventory = inventories(db, owner, local)
+        native = list(db.scalars(select(NoteRevision).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local)))
+    if head is None and (inventory or native or branches):
+        error("inconsistent_history")
+    validate_existing_graph(rows, inventory, native, branches, head)
     if rows:
         indexed = {item.note_id: item for item in inventory}
         ambiguous = len({row.note_type for row in rows}) > 1
@@ -73,6 +82,47 @@ def base_state(db, owner, local, *, baseline=True):
             "protection_state": head.protection_state if head else "legacy",
             "inventory_revision_ids": sorted(item.revision_id for item in inventory),
             "identity_state": head.identity_state if head else "empty", "current_exists": bool(rows)}
+
+
+def validate_existing_graph(rows, inventory, native, branches, head):
+    physical = {row.id: row for row in rows}
+    revisions = {row.id: row for row in native}
+    graph = {}
+    for row in native + branches:
+        try:
+            UUID(row.id)
+        except (ValueError, TypeError, AttributeError):
+            error("inconsistent_history")
+    for item in inventory:
+        revision = revisions.get(item.revision_id)
+        if item.note_id not in physical or revision is None or revision.note_id != item.note_id:
+            error("inconsistent_history")
+    for row in native:
+        if row.note_id not in physical or (head and row.representation_epoch != head.crypto_epoch):
+            error("inconsistent_history")
+        parent = revisions.get(row.parent_revision_id) if row.parent_revision_id is not None else None
+        if row.parent_revision_id is not None and (parent is None or parent.note_id != row.note_id):
+            error("inconsistent_history")
+        graph[("note_revision", row.id)] = ("note_revision", row.parent_revision_id) if parent else None
+    for row in branches:
+        if head and row.representation_epoch != head.crypto_epoch:
+            error("inconsistent_history")
+        if (row.parent_id is None) != (row.parent_kind is None):
+            error("inconsistent_history")
+        if row.parent_id is not None and row.parent_kind not in ("note_revision", "offline_branch"):
+            error("inconsistent_history")
+        graph[("offline_branch", row.id)] = (row.parent_kind, row.parent_id) if row.parent_id is not None else None
+    if head and head.head_revision_id is not None and head.head_revision_id not in revisions:
+        error("inconsistent_history")
+    completed = set()
+    for start in graph:
+        seen, node = set(), start
+        while node is not None and node not in completed:
+            if node not in graph or node in seen:
+                error("inconsistent_history")
+            seen.add(node)
+            node = graph[node]
+        completed.update(seen)
 
 
 def result(db, row):
@@ -98,6 +148,7 @@ def status(db, owner, local, device, transition_id=None):
     authenticate_actor(db, owner, device)
     identity = initialize_identity(db.connection())
     if transition_id:
+        base_state(db, owner, local, baseline=False)
         return result(db, owned(db, owner, local, device, transition_id))
     return {"server_instance_id": identity, "preparation_only": True, **base_state(db, owner, local)}
 
@@ -172,6 +223,7 @@ def prepare(db, body):
     if previous:
         if json.loads(previous.conditions_json)["request"] != body.model_dump():
             error("idempotency_mismatch")
+        base_state(db, body.owner_id, body.local_id, baseline=False)
         return {"created": False, **result(db, previous)}
     require_unfenced(db, [(body.owner_id, body.local_id)])
     if related_plaintext(db, body.owner_id, body.local_id):
@@ -190,6 +242,8 @@ def prepare(db, body):
                         "source_etag": str(uuid4()), "source_kind": "client_pending", "output_kind": "history_envelope_v1",
                         "representation_epoch": base["crypto_epoch"]})
     entries.sort(key=lambda item: canonical(item["key"]))
+    if not entries:
+        error("no_transition_representations")
     stamp, ident = database_now(db), str(uuid4())
     row = NoteCryptoTransition(id=ident, owner_id=body.owner_id, local_id=body.local_id,
         mutation_id=body.mutation_id, actor_device_id=body.device_id,
@@ -237,6 +291,7 @@ def entry_result(row):
 @transactional
 def manifest(db, owner, local, device, transition_id, limit, cursor):
     row = owned(db, owner, local, device, transition_id)
+    base_state(db, owner, local, baseline=False)
     after = ""
     binding = [transition_id, owner, local, row.manifest_digest]
     if cursor:

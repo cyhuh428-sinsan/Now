@@ -197,7 +197,7 @@ def test_related_text_and_strict_owner_actor_cas(client, subject):
     s["db"].commit()
     r = client.post(ROOT, json=b, headers=s["headers"])
     assert r.status_code == 409 and r.json()["detail"]["code"] == "related_plaintext_unresolved"
-    b, t = prepare(client, s, "safe")
+    b, t = prepare(client, s, "safe", local_branches=[{"revision_id": str(uuid4()), "parent_ref": None, "origin_device_id": "actor"}])
     actor = s["db"].scalar(select(UserDevice).where(UserDevice.owner_id == s["owner"], UserDevice.device_id == "actor"))
     actor.is_active = 0; s["db"].commit()
     assert client.post(ROOT, json=b, headers=s["web"]).status_code == 403
@@ -245,7 +245,7 @@ def test_reserved_branches_dag_cursor_owner_and_source_isolation(client, subject
                    representation_id=item["key"]["id"], slot=item["key"]["slot"], source_etag=item["source_etag"])
     assert client.get(ROOT + "/source", params=params, headers=s["headers"]).status_code == 409
     assert client.get(ROOT + "/manifest", params=query(s, "different", transition_id=t["transition_id"]), headers=s["headers"]).status_code == 404
-    _, other = prepare(client, s, "second-reserved")
+    _, other = prepare(client, s, "second-reserved", local_branches=[{"revision_id": str(uuid4()), "parent_ref": None, "origin_device_id": "actor"}])
     assert client.get(ROOT + "/manifest", params=query(s, "second-reserved", transition_id=other["transition_id"], cursor=page["next_cursor"]), headers=s["headers"]).status_code == 409
     assert client.get(ROOT + "/manifest", params=query(s, "reserved", transition_id=t["transition_id"], cursor="not base64!"), headers=s["headers"]).status_code == 422
     s["db"].expire_all()
@@ -286,7 +286,7 @@ def test_concurrent_prepare_and_renew_abort(client, subject):
     from app.services import note_crypto as service
     from app.schemas.note_crypto import PrepareTransition, TransitionAction
     s = subject
-    b = prepare_body(client, s, "race")
+    b = prepare_body(client, s, "race", local_branches=[{"revision_id": str(uuid4()), "parent_ref": None, "origin_device_id": "actor"}])
     def run_prepare(i):
         with Session(s["engine"], autoflush=False) as db:
             try:
@@ -389,3 +389,169 @@ def test_concurrent_additive_startup_identity_survives(client, tmp_path, monkeyp
             with admin.begin() as c:
                 c.execute(DropSchema(schema, cascade=True))
             admin.dispose()
+
+
+@pytest.mark.parametrize("damage", ["missing_native", "native_owner", "native_local", "native_note",
+                                    "native_parent_missing", "native_parent_foreign", "native_parent_empty", "native_cycle",
+                                    "branch_parent_missing", "branch_parent_kind", "branch_parent_empty", "branch_cycle",
+                                    "missing_inventory", "missing_head"])
+def test_wr1_existing_graph_damage_is_not_lazy_repaired(client, subject, damage):
+    from app.models.note import Note
+    from app.models.note_history import NoteHead, NoteInventory, NoteRevision
+    from app.models.note_v2 import NoteOfflineBranch
+    from app.models.note_crypto import NoteCryptoFence, NoteCryptoTransition
+    from sqlalchemy import delete
+    s, local = subject, "wr1"
+    assert client.put("/api/v2/notes/current", json=body(s, local, "KEEP_ORIGINAL"), headers=s["headers"]).status_code == 200
+    b = prepare_body(client, s, local)
+    s["db"].expire_all()
+    head = s["db"].get(NoteHead, (s["owner"], local))
+    revision = s["db"].get(NoteRevision, head.head_revision_id)
+    branch_id = str(uuid4())
+    if damage == "missing_native":
+        s["db"].delete(revision)
+    elif damage == "native_owner":
+        revision.owner_id = s["other"]
+    elif damage == "native_local":
+        revision.local_id = "another"
+    elif damage == "native_note":
+        revision.note_id = 2147483647
+    elif damage == "native_parent_missing":
+        revision.parent_revision_id = str(uuid4())
+    elif damage == "native_parent_empty":
+        revision.parent_revision_id = ""
+    elif damage == "native_parent_foreign":
+        foreign_id = str(uuid4())
+        s["db"].add(NoteRevision(id=foreign_id, owner_id=s["other"], local_id=local, note_id=revision.note_id,
+            reason="synthetic", snapshot_json=revision.snapshot_json))
+        revision.parent_revision_id = foreign_id
+    elif damage == "native_cycle":
+        revision.parent_revision_id = revision.id
+    elif damage.startswith("branch_"):
+        s["db"].add(NoteOfflineBranch(id=branch_id, owner_id=s["owner"], local_id=local, origin_device_id="actor",
+            snapshot_json=revision.snapshot_json, parent_kind="unknown" if damage == "branch_parent_kind" else "offline_branch",
+            parent_id=branch_id if damage == "branch_cycle" else "" if damage == "branch_parent_empty" else str(uuid4())))
+    elif damage == "missing_inventory":
+        s["db"].execute(delete(NoteInventory).where(NoteInventory.owner_id == s["owner"], NoteInventory.local_id == local))
+    else:
+        s["db"].delete(head)
+    s["db"].commit()
+    original = list(s["db"].scalars(select(NoteRevision.id).where(NoteRevision.owner_id == s["owner"], NoteRevision.local_id == local)))
+    for method in ("status", "prepare"):
+        r = (client.get(ROOT + "/status", params=query(s, local), headers=s["headers"]) if method == "status"
+             else client.post(ROOT, json=b, headers=s["headers"]))
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "inconsistent_history", (damage, method, r.text)
+    s["db"].expire_all()
+    assert sorted(s["db"].scalars(select(NoteRevision.id).where(NoteRevision.owner_id == s["owner"], NoteRevision.local_id == local))) == sorted(original)
+    assert s["db"].get(NoteCryptoFence, (s["owner"], local)) is None
+    assert s["db"].scalar(select(NoteCryptoTransition).where(NoteCryptoTransition.owner_id == s["owner"])) is None
+    assert s["db"].scalar(select(Note.content).where(Note.owner_id == s["owner"], Note.local_id == local)) == "KEEP_ORIGINAL"
+
+
+def test_wr1_prepared_status_replay_and_live_source_revalidate_graph(client, subject):
+    from app.models.note_history import NoteRevision
+    s, local = subject, "damaged_after_prepare"
+    assert client.put("/api/v2/notes/current", json=body(s, local), headers=s["headers"]).status_code == 200
+    b, t = prepare(client, s, local)
+    item = client.get(ROOT + "/manifest", params=query(s, local, transition_id=t["transition_id"]), headers=s["headers"]).json()["items"][0]
+    s["db"].expire_all()
+    s["db"].delete(s["db"].get(NoteRevision, b["base_revision_id"])); s["db"].commit()
+    requests = [client.get(ROOT + "/status", params=query(s, local, transition_id=t["transition_id"]), headers=s["headers"]),
+                client.post(ROOT, json=b, headers=s["headers"]),
+                client.get(ROOT + "/source", params=query(s, local, transition_id=t["transition_id"],
+                    kind=item["key"]["kind"], representation_id=item["key"]["id"], slot=item["key"]["slot"], source_etag=item["source_etag"]), headers=s["headers"])]
+    for r in requests:
+        assert r.status_code == 409 and r.json()["detail"]["code"] == "inconsistent_history", r.text
+    action = {"schema_version": 1, **query(s, local), "transition_id": t["transition_id"], "lease_version": 1}
+    assert client.post(ROOT + "/abort", json=action, headers=s["headers"]).status_code == 200
+
+
+@pytest.mark.parametrize("attribute,loading", [("local_id", "expired"), ("owner_id", "expired"),
+                                               ("local_id", "deferred"), ("owner_id", "deferred"), ("both", "expired")])
+def test_wr2_expired_deferred_old_ref_fence_and_session_reuse(client, subject, attribute, loading):
+    from fastapi import HTTPException
+    from sqlalchemy import inspect
+    from sqlalchemy.orm import defer
+    from app.models.note import Note
+    from app.services.note_history import QUEUE, LOCKS, prepare_history
+    from app.services.note_sync import upsert_note
+    from app.schemas.note import NoteIn
+    s, local = subject, "wr2"
+    assert client.put("/api/v2/notes/current", json=body(s, local, "ORIGINAL"), headers=s["headers"]).status_code == 200
+    prepare(client, s, local)
+    attributes = ["owner_id", "local_id"] if attribute == "both" else [attribute]
+    with Session(s["engine"], autoflush=False) as db:
+        stmt = select(Note).where(Note.owner_id == s["owner"], Note.local_id == local)
+        if loading == "deferred":
+            stmt = stmt.options(*(defer(getattr(Note, field)) for field in attributes))
+        row = db.scalar(stmt)
+        if loading == "expired":
+            db.expire(row, attributes)
+        for field in attributes:
+            setattr(row, field, s["other"] if field == "owner_id" else "moved")
+            assert not inspect(row).attrs[field].history.deleted
+        row.content = "MUST_NOT_PERSIST"
+        prepare_history(db, s["owner"], "unrelated")
+        assert QUEUE in db.info
+        with pytest.raises(HTTPException) as raised:
+            db.commit()
+        assert raised.value.status_code == 423
+        db.rollback()
+        assert QUEUE not in db.info and LOCKS not in db.info
+        original = db.get(Note, inspect(row).identity)
+        assert (original.owner_id, original.local_id, original.content) == (s["owner"], local, "ORIGINAL")
+        upsert_note(NoteIn(owner_id=s["owner"], local_id="reused", device_id="actor", note_type="daily", title="ok", content="reused"), db)
+        db.commit()
+        assert db.scalar(select(Note.content).where(Note.owner_id == s["owner"], Note.local_id == "reused")) == "reused"
+
+
+def test_empty_prepare_rejected_without_fence_or_head(client, subject):
+    from app.models.note_crypto import NoteCryptoFence, NoteCryptoTransition
+    from app.models.note_history import NoteHead
+    s, local = subject, "empty"
+    b = prepare_body(client, s, local)
+    r = client.post(ROOT, json=b, headers=s["headers"])
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "no_transition_representations"
+    s["db"].expire_all()
+    assert s["db"].get(NoteHead, (s["owner"], local)) is None
+    assert s["db"].get(NoteCryptoFence, (s["owner"], local)) is None
+    assert s["db"].scalar(select(NoteCryptoTransition).where(NoteCryptoTransition.owner_id == s["owner"])) is None
+
+
+@pytest.mark.parametrize("damage", ["inventory_physical_link", "native_parent_physical_link"])
+def test_wr1_cross_replica_native_links_are_not_a_valid_graph(client, subject, damage):
+    from app.models.note import Note
+    from app.models.note_history import NoteInventory, NoteRevision
+    s, local = subject, "physical-links"
+    for device in ("replica-one", "replica-two"):
+        s["db"].add(Note(owner_id=s["owner"], device_id=device, local_id=local, note_type="daily", title="original", content=device))
+    s["db"].commit()
+    b = prepare_body(client, s, local)
+    s["db"].expire_all()
+    inv = list(s["db"].scalars(select(NoteInventory).where(NoteInventory.owner_id == s["owner"], NoteInventory.local_id == local).order_by(NoteInventory.note_id)))
+    one, two = (s["db"].get(NoteRevision, row.revision_id) for row in inv)
+    if damage == "inventory_physical_link":
+        one.note_id = two.note_id
+    else:
+        one.parent_revision_id = two.id
+    s["db"].commit()
+    r = client.post(ROOT, json=b, headers=s["headers"])
+    assert r.status_code == 409 and r.json()["detail"]["code"] == "inconsistent_history"
+
+
+def test_wr2_new_ref_is_still_fenced(client, subject):
+    from fastapi import HTTPException
+    from app.models.note import Note
+    s = subject
+    for local in ("unfenced-old", "fenced-new"):
+        assert client.put("/api/v2/notes/current", json=body(s, local), headers=s["headers"]).status_code == 200
+    prepare(client, s, "fenced-new")
+    with Session(s["engine"], autoflush=False) as db:
+        row = db.scalar(select(Note).where(Note.owner_id == s["owner"], Note.local_id == "unfenced-old"))
+        db.expire(row, ["local_id"])
+        row.local_id = "fenced-new"
+        with pytest.raises(HTTPException) as raised:
+            db.commit()
+        assert raised.value.status_code == 423
+        db.rollback()
+        assert row.local_id == "unfenced-old"
