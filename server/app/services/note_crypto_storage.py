@@ -118,6 +118,8 @@ def entry_metadata(db, row, entry):
 
 def active(db, owner, local, device, ident, purpose="conversion"):
     row = preparation.owned(db, owner, local, device, ident, purpose)
+    from app.services.note_mixed_metadata import require_old_wire
+    require_old_wire(db, owner, local)
     if row.actor_device_id != device:
         error("transition_actor_mismatch", 403)
     if json.loads(row.conditions_json)["server_instance_id"] != preparation.initialize_identity(db.connection()):
@@ -398,6 +400,8 @@ def commit(db, body):
     cipher_digest = sha(canonical_bytes(records))
     if cipher_digest != body.client_verified_ciphertext_manifest_digest:
         error("verification_manifest_mismatch")
+    from app.services import note_mixed_metadata as mixed
+    mixed.begin_update(db, row.owner_id, row.local_id)
     # Core Note UPDATE bypasses natural history capture and pins onupdate time.
     for key, text in replacements:
         kind, ident = key["kind"], key["id"]
@@ -466,11 +470,19 @@ def commit(db, body):
             linked_counts=status_fields(row)["linked_counts"], null_expected_counts=null_counts, null_applied_counts=null_counts,
             full_protection_complete=False, protected_analysis_execution_v1=False)
         row.receipt_json = canonical(receipt)
+    mixed.install_homogeneous(db, row.owner_id, row.local_id)
     return committed_result(db, row)
 
 
 def live_entries(db, owner, local):
     """Current storage only; includes null-before metadata, never transition stage."""
+    from app.services.note_mixed_metadata import require_old_wire, validate
+    from app.models.note_mixed import MixedScope, MixedSchema
+    if db.get(MixedScope, (owner, local)) is not None or db.get(MixedSchema, 1) is not None:
+        head = db.get(NoteHead, (owner, local))
+        if head is not None and head.crypto_epoch > 0:
+            validate(db, owner, local)
+    require_old_wire(db, owner, local)
     head = db.get(NoteHead, (owner, local))
     if head is None or head.protection_state != "protected" or head.crypto_epoch <= 0:
         error("unsupported_representation")

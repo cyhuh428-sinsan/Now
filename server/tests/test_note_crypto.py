@@ -27,6 +27,11 @@ def subject(client, tmp_path, monkeypatch):
         from app.models.note import UserAccount, UserDevice, WebSession
         engine = create_engine(url)
         Base.metadata.create_all(engine)
+        from app.services.note_mixed_metadata import initialize
+        with engine.begin() as connection:
+            from app.models.note_mixed import MixedSchema
+            if connection.scalar(select(MixedSchema.id).where(MixedSchema.id == 1)) is None:
+                initialize(connection)
         # Only copy this fixture's freshly generated synthetic auth rows.
         with Session(engine) as target:
             for model in (UserAccount, UserDevice, WebSession):

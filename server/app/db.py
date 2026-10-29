@@ -27,6 +27,8 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.note_mixed import MixedSchema, MixedScope, MixedSlot  # noqa: F401
+    from app.services.note_mixed_metadata import initialize as initialize_mixed
     from app.models.protected_analysis import ProtectedAnalysisClaim  # noqa: F401
     from app.models.note_related import LinkedSchema, LinkedText, RelatedDrain, AnalysisRun  # noqa: F401
     from app.services.related_text import initialize as initialize_related
@@ -63,6 +65,7 @@ def create_tables() -> None:
             migrate_schema(conn)
             initialize_identity(conn)
             initialize_related(conn)
+            initialize_mixed(conn)
         return
 
     with engine.begin() as conn:
@@ -72,6 +75,7 @@ def create_tables() -> None:
         migrate_schema(conn)
         initialize_identity(conn)
         initialize_related(conn)
+        initialize_mixed(conn)
 
 
 def migrate_schema(conn: Connection | None = None) -> None:
@@ -82,7 +86,8 @@ def migrate_schema(conn: Connection | None = None) -> None:
     legacy_origin_upgrade = "note_crypto_transitions" in table_names and "purpose" not in {
         column["name"] for column in inspector.get_columns("note_crypto_transitions")}
     history_columns = {
-        "note_heads": {"protection_state": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
+        "note_heads": {"current_mode": "VARCHAR(16) NULL",
+                       "protection_state": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
                        "crypto_epoch": "INTEGER NOT NULL DEFAULT 0",
                        "history_generation": "INTEGER NOT NULL DEFAULT 0"},
         "note_revisions": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",

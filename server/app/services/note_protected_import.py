@@ -213,6 +213,8 @@ def prepare(db, body):
         if previous.purpose != PURPOSE or condition(previous)["request"] != body.model_dump():
             error("idempotency_mismatch")
         return {"created": False, **result(db, own(db, body.owner_id, body.local_id, body.device_id, previous.id))}
+    from app.services.note_mixed_metadata import require_old_wire
+    require_old_wire(db, body.owner_id, body.local_id)
     if db.get(NoteMutation, (body.owner_id, body.mutation_id)) is not None:
         error("idempotency_mismatch")
     require_unfenced(db, [(body.owner_id, body.local_id)])
@@ -365,6 +367,8 @@ def commit(db, body):
         inserts.append((n, raw.decode()))
     if body.client_verified_ciphertext_manifest_digest != hashed(records):
         error("verification_manifest_mismatch")
+    from app.services import note_mixed_metadata as mixed
+    mixed.begin_update(db, row.owner_id, row.local_id)
     head = db.get(NoteHead, (row.owner_id, row.local_id))
     if head is None:
         head = NoteHead(owner_id=row.owner_id, local_id=row.local_id, version=0, head_revision_id=None,
@@ -404,4 +408,5 @@ def commit(db, body):
         "metadata_manifest_digest": row.manifest_digest, "ciphertext_manifest_digest": hashed(records),
         "existing_set_digest": hashed(verified_existing(c)), "origin_metadata_version": 1,
         "origin_expectations_digest": origin.expectations_digest(row)})
+    mixed.install_homogeneous(db, row.owner_id, row.local_id)
     return result(db, row)

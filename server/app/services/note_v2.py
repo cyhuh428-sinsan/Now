@@ -89,6 +89,8 @@ def representation(row, head):
 def current(db, owner, local):
     try:
         head, rows = scope(db, owner, local)
+        from app.services.note_mixed_metadata import require_old_wire
+        require_old_wire(db, owner, local)
         if not rows:
             error("note_not_found", 404)
         if protected(head):

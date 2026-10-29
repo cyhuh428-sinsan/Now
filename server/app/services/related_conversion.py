@@ -261,6 +261,22 @@ def descriptor(db, owner, local, k, target, meta, raw):
         op = db.get(NoteCryptoTransition, meta.storage_operation_id)
         if op is None or op.owner_id != owner or op.local_id != local or op.state != "committed":
             error("inconsistent_related_text")
+        if op.purpose == "mixed_conversion":
+            from app.models.note_mixed import MixedSlot
+            from app.services.note_mixed_operations import fixed as mixed_fixed, verify_live
+            side = db.get(MixedSlot, (owner, local, linked.canonical(k)))
+            if side is None:
+                error("inconsistent_related_text")
+            verify_live(db, op, k, raw, side)
+            d = next(d for d in mixed_fixed(op)["DSET"] if d["destination_key"] == k)
+            data = b"" if raw is None else raw.encode("utf-8")
+            return {"key": k, "representation_kind": meta.representation_kind, "representation_epoch": meta.representation_epoch,
+                "representation_etag": hash_value([k, meta.representation_epoch, store.sha(data) if raw is not None else None, meta.slot_version]),
+                "is_null": raw is None, "slot_version": meta.slot_version, "total_bytes": len(data),
+                "total_chunks": (len(data) + store.CHUNK_BYTES - 1) // store.CHUNK_BYTES,
+                "ciphertext_sha256": store.sha(data) if raw is not None else None, "expected_binding": d["expected_binding"],
+                "revision_ref": None, "parent_ref": None, "physical_note_id": None, "inventory_revision_id": None,
+                "operation_origin": None}, data
         if op.purpose in ("protected_analysis_write", "protected_transcript_write"):
             from app.services.related_writes import validate_live
             binding = validate_live(op, k, meta, raw)

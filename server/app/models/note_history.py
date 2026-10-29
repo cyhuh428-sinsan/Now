@@ -16,6 +16,7 @@ class NoteHead(Base):
     protection_state: Mapped[str] = mapped_column(String(20), default="legacy", server_default="legacy")
     crypto_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     history_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    current_mode: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
 
 class NoteRevision(Base):

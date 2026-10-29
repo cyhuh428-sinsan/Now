@@ -344,6 +344,8 @@ def commit(db, body, purpose):
         original_bundle = json.loads(original_claim.progress_json)["terminal_bundle"]
         if records != original_bundle["ciphertext_manifest"]:
             error("original_cipher_bundle_mismatch")
+    from app.services import note_mixed_metadata as mixed
+    mixed.begin_update(db, row.owner_id, row.local_id)
     try:
         if purpose == ANALYSIS:
             claim = db.get(claims.ClaimRow, c["execution_id"])
@@ -400,6 +402,7 @@ def commit(db, body, purpose):
             return stale(db, row, "provisional_job_id_conflict")
         error("storage_integrity_error", 500)
     db.expire_all()
+    mixed.install_homogeneous(db, row.owner_id, row.local_id)
     return response(db, db.get(NoteCryptoTransition, row.id))
 
 

@@ -103,6 +103,14 @@ def expectations_digest(row):
 
 def operation(db, ident, owner, local, *, active_id=None):
     row = db.get(NoteCryptoTransition, ident)
+    if row is not None and row.purpose == "current_plain_transition":
+        from app.services.note_mixed_operations import fixed, mode_origin
+        if (row.owner_id, row.local_id) != (owner, local) or row.state != "committed" or row.receipt_json is None:
+            error("inconsistent_history")
+        m = fixed(row)
+        if json.loads(row.receipt_json).get("origin_expectations_digest") != hashlib.sha256(canonical(m["O"]).encode()).hexdigest():
+            error("inconsistent_history")
+        return mode_origin(row)
     if (row is None or row.owner_id != owner or row.local_id != local or row.purpose not in ("protected_write", "protected_import")
         or not (row.state == "committed" or row.id == active_id and row.state in ACTIVE_STATES + ("aborted", "expired", "stale"))):
         error("inconsistent_history")
@@ -138,6 +146,14 @@ def expected_origin(db, row, key):
 
 
 def storage_row(db, owner, local, key, raw):
+    from app.models.note_mixed import MixedSlot
+    side = db.get(MixedSlot, (owner, local, canonical(key)))
+    if side is not None:
+        storage = db.get(NoteCryptoTransition, side.storage_operation_id)
+        if storage is not None and storage.purpose in ("current_plain_transition", "mixed_conversion"):
+            from app.services.note_mixed_operations import verify_live
+            verify_live(db, storage, key, raw, side)
+            return storage
     if raw is None:
         revision = db.get(NoteRevision, key["id"])
         if revision is None or revision.owner_id != owner or revision.local_id != local:
@@ -168,6 +184,14 @@ def semantic_id(db, owner, local, key, raw):
             error("inconsistent_history")
         return None
     row = storage_row(db, owner, local, key, raw)
+    if row.purpose in ("current_plain_transition", "mixed_conversion"):
+        from app.models.note_mixed import MixedSlot
+        side = db.get(MixedSlot, (owner, local, canonical(key)))
+        if side is None:
+            error("inconsistent_history")
+        if side.semantic_origin_id is not None:
+            operation(db, side.semantic_origin_id, owner, local)
+        return side.semantic_origin_id
     c = json.loads(row.conditions_json)
     receipt = json.loads(row.receipt_json) if row.receipt_json else {}
     if c.get("origin_metadata_legacy") == LEGACY:

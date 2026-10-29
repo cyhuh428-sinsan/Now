@@ -428,7 +428,7 @@ def test_origin_purpose_migration_positive_marker_is_one_time(client, subject, t
     from app.models.note import Note
     from app.models.note_history import NoteHead, NoteInventory, NoteRevision
     from app.models.note_v2 import NoteOfflineBranch
-    from app.models.note_crypto import NoteCryptoTransition, NoteCryptoEntry, ServerIdentity
+    from app.models.note_crypto import NoteCryptoTransition, NoteCryptoEntry, NoteCryptoUpload, NoteCryptoChunk, ServerIdentity
     from app.services.note_crypto_storage import live_entries
     s, local = subject, "old-schema"
     seed(client, s, local)
@@ -453,14 +453,17 @@ def test_origin_purpose_migration_positive_marker_is_one_time(client, subject, t
     try:
         database.Base.metadata.create_all(engine)
         with engine.begin() as conn:
-            for model in (ServerIdentity, Note, NoteHead, NoteInventory, NoteRevision, NoteOfflineBranch, NoteCryptoTransition, NoteCryptoEntry):
+            for model in (ServerIdentity, Note, NoteHead, NoteInventory, NoteRevision, NoteOfflineBranch, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoUpload, NoteCryptoChunk):
                 query = select(model.__table__)
-                if model is NoteCryptoEntry:
+                if model in (NoteCryptoEntry, NoteCryptoUpload, NoteCryptoChunk):
                     query = query.where(model.transition_id == cb["transition_id"])
                 elif model is not ServerIdentity:
                     query = query.where(model.owner_id == s["owner"])
                 for raw in s["db"].execute(query).mappings():
                     value = dict(raw)
+                    if model is NoteHead:
+                        # A pre-M1 database has no current-mode classification.
+                        value.pop("current_mode", None)
                     if model is NoteCryptoTransition:
                         c = json.loads(value["conditions_json"])
                         receipt = json.loads(value["receipt_json"]) if value["receipt_json"] else None
@@ -473,6 +476,15 @@ def test_origin_purpose_migration_positive_marker_is_one_time(client, subject, t
                     conn.execute(model.__table__.insert().values(**value))
             conn.execute(text("ALTER TABLE note_crypto_transitions DROP COLUMN purpose"))
         monkeypatch.setattr(database, "engine", engine)
+        if phase == "malformed":
+            # M1 now rejects unproven protected provenance during startup itself.
+            with pytest.raises(HTTPException) as raised:
+                database.create_tables()
+            assert raised.value.status_code == 409
+            with engine.connect() as conn:
+                stored = conn.scalar(text("SELECT conditions_json FROM note_crypto_transitions WHERE id=:id"), {"id": cb["transition_id"]})
+                assert "origin_metadata_legacy" not in json.loads(stored)
+            return
         database.create_tables()
         with Session(engine) as db:
             row = db.get(NoteCryptoTransition, cb["transition_id"])
@@ -490,7 +502,12 @@ def test_origin_purpose_migration_positive_marker_is_one_time(client, subject, t
             else:
                 assert "origin_metadata_legacy" not in c, "Unproven old request must not gain legacy admission"
             row.conditions_json = canonical(c); db.commit()
-        database.create_tables()
+        if phase == "committed":
+            with pytest.raises(HTTPException) as raised:
+                database.create_tables()
+            assert raised.value.status_code == 409
+        else:
+            database.create_tables()
         with Session(engine) as db:
             assert "origin_metadata_legacy" not in json.loads(db.get(NoteCryptoTransition, cb["transition_id"]).conditions_json)
             with pytest.raises(HTTPException) as raised:

@@ -19,6 +19,7 @@ from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
 from app.api.note_v2 import router as note_v2_router
 from app.api.note_crypto import router as note_crypto_router
+from app.api.note_mixed import router as note_mixed_router, operations_router as mixed_operations_router
 from app.api.note_protected_write import router as note_protected_write_router
 from app.api.note_protected_import import router as note_protected_import_router
 from app.api.related_text import router as related_text_router
@@ -84,6 +85,8 @@ def create_app() -> FastAPI:
     app.include_router(notes_router)
     app.include_router(note_v2_router)
     app.include_router(note_crypto_router)
+    app.include_router(note_mixed_router)
+    app.include_router(mixed_operations_router)
     app.include_router(note_protected_write_router)
     app.include_router(note_protected_import_router)
     app.include_router(related_text_router)

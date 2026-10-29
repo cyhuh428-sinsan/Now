@@ -234,6 +234,7 @@ def fence_natural_note_writes(db, flush_context, instances):
 @event.listens_for(Session, "after_soft_rollback")
 def discard_history(db, previous_transaction):
     db.info.pop(QUEUE, None)
+    db.info.pop("mixed_updating", None)
     # PostgreSQL releases advisory locks acquired after a rolled-back savepoint.
     db.info.pop(LOCKS, None)
 
@@ -248,5 +249,6 @@ def capture_read_only_baseline(db):
 @event.listens_for(Session, "after_transaction_end")
 def end_history_transaction(db, transaction):
     if transaction.parent is None:
+        db.info.pop("mixed_updating", None)
         db.info.pop(QUEUE, None)
         db.info.pop(LOCKS, None)

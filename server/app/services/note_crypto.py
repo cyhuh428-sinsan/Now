@@ -66,7 +66,9 @@ def base_state(db, owner, local, *, baseline=True):
         native = list(db.scalars(select(NoteRevision).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local)))
     if head is None and (inventory or native or branches):
         error("inconsistent_history")
-    validate_existing_graph(rows, inventory, native, branches, head)
+    from app.services.note_mixed_metadata import UPDATING, lineage
+    independent = (owner, local) in db.info.get(UPDATING, set()) or lineage(db, owner, local)
+    validate_existing_graph(rows, inventory, native, branches, head, independent=independent)
     if rows:
         indexed = {item.note_id: item for item in inventory}
         ambiguous = len({row.note_type for row in rows}) > 1
@@ -79,6 +81,11 @@ def base_state(db, owner, local, *, baseline=True):
     elif inventory or (head and (head.head_revision_id is not None or head.identity_state != (
         "branch_only" if branches else "related_only" if related_exists(db, owner, local) else "branch_only"))):
         error("inconsistent_history")
+    if head is not None and head.crypto_epoch > 0:
+        from app.models.note_mixed import MixedScope, MixedSchema
+        from app.services.note_mixed_metadata import validate
+        if db.get(MixedScope, (owner, local)) is not None or db.get(MixedSchema, 1) is not None:
+            validate(db, owner, local)
     return {"head_version": head.version if head else 0, "head_revision_id": head.head_revision_id if head else None,
             "crypto_epoch": head.crypto_epoch if head else 0, "history_generation": head.history_generation if head else 0,
             "protection_state": head.protection_state if head else "legacy",
@@ -86,7 +93,7 @@ def base_state(db, owner, local, *, baseline=True):
             "identity_state": head.identity_state if head else "empty", "current_exists": bool(rows)}
 
 
-def validate_existing_graph(rows, inventory, native, branches, head):
+def validate_existing_graph(rows, inventory, native, branches, head, *, independent=False):
     physical = {row.id: row for row in rows}
     revisions = {row.id: row for row in native}
     graph = {}
@@ -99,17 +106,17 @@ def validate_existing_graph(rows, inventory, native, branches, head):
         revision = revisions.get(item.revision_id)
         if item.note_id not in physical or revision is None or revision.note_id != item.note_id:
             error("inconsistent_history")
-        if head and item.representation_epoch != head.crypto_epoch:
+        if head and not independent and item.representation_epoch != head.crypto_epoch:
             error("inconsistent_history")
     for row in native:
-        if row.note_id not in physical or (head and row.representation_epoch != head.crypto_epoch):
+        if row.note_id not in physical or (head and not independent and row.representation_epoch != head.crypto_epoch):
             error("inconsistent_history")
         parent = revisions.get(row.parent_revision_id) if row.parent_revision_id is not None else None
         if row.parent_revision_id is not None and (parent is None or parent.note_id != row.note_id):
             error("inconsistent_history")
         graph[("note_revision", row.id)] = ("note_revision", row.parent_revision_id) if parent else None
     for row in branches:
-        if head and row.representation_epoch != head.crypto_epoch:
+        if head and not independent and row.representation_epoch != head.crypto_epoch:
             error("inconsistent_history")
         if (row.parent_id is None) != (row.parent_kind is None):
             error("inconsistent_history")
@@ -249,6 +256,8 @@ def prepare(db, body):
             error("idempotency_mismatch")
         base_state(db, body.owner_id, body.local_id, baseline=False)
         return {"created": False, **result(db, previous)}
+    from app.services.note_mixed_metadata import require_old_wire
+    require_old_wire(db, body.owner_id, body.local_id)
     from app.services import related_text as linked
     schema2, drainer, ready_base = body.schema_version == 2, None, None
     if schema2:

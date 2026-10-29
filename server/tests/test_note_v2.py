@@ -26,6 +26,9 @@ def subject(client, tmp_path, monkeypatch):
         url = f"sqlite:///{(tmp_path / 'v2.db').as_posix()}"
     engine = create_engine(url)
     Base.metadata.create_all(engine)
+    from app.services.note_mixed_metadata import initialize
+    with engine.begin() as connection:
+        initialize(connection)
     monkeypatch.setattr(get_settings(), "api_token", "")
     monkeypatch.setattr(get_settings(), "user_token_required", False)
     owner, other = "e2_a_" + uuid4().hex, "e2_b_" + uuid4().hex

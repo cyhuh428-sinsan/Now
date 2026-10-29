@@ -138,6 +138,8 @@ def quote(db, body):
             error("idempotency_mismatch")
         previous = own(db, body.owner_id, body.local_id, body.device_id, previous.id, creator=True)
         return {"created": False, **result(db, previous)}
+    from app.services.note_mixed_metadata import require_old_wire
+    require_old_wire(db, body.owner_id, body.local_id)
     require_unfenced(db, [(body.owner_id, body.local_id)])
     base = prep.base_state(db, body.owner_id, body.local_id)
     if body.crypto_epoch != base["crypto_epoch"] or body.target_epoch != (base["crypto_epoch"] or 1):
@@ -361,6 +363,8 @@ def commit(db, body):
         error("verification_manifest_mismatch")
     server = c["server_fields"]
     new_current = not base["current_exists"]
+    from app.services import note_mixed_metadata as mixed
+    mixed.begin_update(db, row.owner_id, row.local_id)
     try:
         with db.begin_nested():
             # Only live writes are inside the savepoint; conflicts leave a valid outer ledger transaction.
@@ -407,4 +411,5 @@ def commit(db, body):
         "protection_state": "protected", "manifest_digest": row.manifest_digest, "ciphertext_manifest_digest": cipher_digest,
         "committed_at": date(database_now(db)), "origin_metadata_version": 1, "origin_expectations_digest": origin.expectations_digest(row)}
     row.receipt_json = canonical(receipt)
+    mixed.install_homogeneous(db, row.owner_id, row.local_id)
     return current_result(db, row)

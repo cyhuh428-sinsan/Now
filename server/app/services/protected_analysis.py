@@ -104,7 +104,10 @@ def result(db, row):
     if p.get("terminal_receipt") is not None or row.state in TERMINAL:
         receipt(row)
     current = store.current_context(db, row.owner_id, row.local_id)
-    sc, _ = source_now(db, row.owner_id, row.local_id)
+    from app.services.note_mixed_metadata import lineage
+    sc = None
+    if not lineage(db, row.owner_id, row.local_id):
+        sc, _ = source_now(db, row.owner_id, row.local_id)
     receipts = [json.loads(r.receipt_json) for r in db.scalars(select(NoteCryptoTransition).where(
         NoteCryptoTransition.owner_id == row.owner_id, NoteCryptoTransition.local_id == row.local_id,
         NoteCryptoTransition.purpose == "protected_analysis_write", NoteCryptoTransition.state == "committed"))

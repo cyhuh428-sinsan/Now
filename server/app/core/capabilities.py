@@ -1,4 +1,5 @@
 API_VERSION = "v1"
+MIXED_MUTATIONS_ENABLED = False
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record", "worklog"]
@@ -191,6 +192,9 @@ def messenger_attachment_capabilities() -> dict:
 
 def server_capabilities() -> dict:
     capabilities = dict(SERVER_CAPABILITIES)
+    capabilities.update(mixed_representation_read_v1=True, mixed_representation_schema=3,
+        mixed_current_plain_v1=False, mixed_full_conversion_v1=False, mixed_note_write_v1=False,
+        mixed_offline_import_v1=False, mixed_analysis_source_v1=False, full_protection_complete=False)
     capabilities["supported_note_types"] = list(SERVER_CAPABILITIES["supported_note_types"])
     capabilities["connection_probe_endpoints"] = list(CONNECTION_PROBE_ENDPOINTS)
     capabilities.update(messenger_attachment_capabilities())
