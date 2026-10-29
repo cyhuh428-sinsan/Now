@@ -7,7 +7,7 @@ from sqlalchemy import delete, text
 from app.models.note_crypto import NoteCryptoFence, NoteCryptoTransition
 
 ACTIVE_STATES = ("prepared", "staging", "ready")
-TERMINAL_STATES = ("committed", "expired", "aborted")
+TERMINAL_STATES = ("committed", "expired", "aborted", "stale")
 
 
 def error(code, status=409):

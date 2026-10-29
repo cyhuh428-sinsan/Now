@@ -104,27 +104,36 @@ def entry_metadata(db, row, entry):
     upload = db.get(NoteCryptoUpload, (row.id, entry.key_json))
     chunks = list(db.scalars(select(NoteCryptoChunk.chunk_index).where(NoteCryptoChunk.transition_id == row.id,
                                                                    NoteCryptoChunk.key_json == entry.key_json)))
-    return {**preparation.entry_result(entry), "destination_key": destination(key),
+    from app.services import note_operation_origin as origin
+    origin.upgrade_pending(db, row)
+    condition = json.loads(row.conditions_json)
+    semantic_origin = None if condition.get("origin_metadata_legacy") == origin.LEGACY else origin.expected_origin(db, row, destination(key))
+    return {**preparation.entry_result(entry), "destination_key": destination(key), "operation_origin": semantic_origin,
             "expected_binding": expected_binding(db, row, key), "uploaded_chunks": len(chunks),
             "sealed": upload is not None and upload.ciphertext_sha256 is not None,
             "ciphertext_sha256": upload.ciphertext_sha256 if upload else None}
 
 
-def active(db, owner, local, device, ident):
-    row = preparation.owned(db, owner, local, device, ident)
+def active(db, owner, local, device, ident, purpose="conversion"):
+    row = preparation.owned(db, owner, local, device, ident, purpose)
     if row.actor_device_id != device:
         error("transition_actor_mismatch", 403)
     if json.loads(row.conditions_json)["server_instance_id"] != preparation.initialize_identity(db.connection()):
         error("server_instance_changed")
     if row.state == "expired":
-        error("transition_expired", 410)
+        error("quote_expired" if purpose == "protected_write" else "transition_expired", 410)
     if row.state not in ACTIVE_STATES:
-        error("transition_not_active")
+        error("quote_not_active" if purpose == "protected_write" else "transition_not_active")
     fence = active_fence(db, owner, local)
     if fence is None or fence.id != row.id:
         error("inconsistent_crypto_fence")
     if preparation.base_state(db, owner, local, baseline=False) != json.loads(row.conditions_json)["base"]:
         error("manifest_changed")
+    from app.services.note_operation_origin import upgrade_pending
+    upgrade_pending(db, row)
+    if purpose == "protected_write":
+        from app.services.note_protected_write import validate_sources
+        validate_sources(db, row)
     return row
 
 
@@ -145,8 +154,8 @@ def transport(db, row, entry, body):
 
 
 @atomic
-def put_chunk(db, body):
-    row = active(db, body.owner_id, body.local_id, body.device_id, body.transition_id)
+def put_chunk(db, body, purpose="conversion"):
+    row = active(db, body.owner_id, body.local_id, body.device_id, body.transition_id, purpose)
     key = body.entry_key.model_dump()
     entry = entry_for(db, row, key, body.source_etag, body.target_epoch)
     try:
@@ -221,8 +230,8 @@ def validate_output(data, kind, epoch, binding):
 
 
 @atomic
-def seal(db, body):
-    row = active(db, body.owner_id, body.local_id, body.device_id, body.transition_id)
+def seal(db, body, purpose="conversion"):
+    row = active(db, body.owner_id, body.local_id, body.device_id, body.transition_id, purpose)
     key = body.entry_key.model_dump()
     entry = entry_for(db, row, key, body.source_etag, body.target_epoch)
     upload = transport(db, row, entry, body)
@@ -243,12 +252,12 @@ def seal(db, body):
 
 
 @atomic
-def staged(db, owner, local, device, transition_id, key, etag, index):
+def staged(db, owner, local, device, transition_id, key, etag, index, purpose="conversion"):
     # Terminal stage reads are closed even for the original creator.
-    known = preparation.owned(db, owner, local, device, transition_id)
+    known = preparation.owned(db, owner, local, device, transition_id, purpose)
     if known.state not in ACTIVE_STATES:
         error("source_unavailable", 410 if known.state == "expired" else 409)
-    row = active(db, owner, local, device, transition_id)
+    row = active(db, owner, local, device, transition_id, purpose)
     epoch = json.loads(row.conditions_json)["request"]["target_epoch"]
     entry = entry_for(db, row, key, etag, epoch)
     upload = db.get(NoteCryptoUpload, (row.id, entry.key_json))
@@ -256,6 +265,7 @@ def staged(db, owner, local, device, transition_id, key, etag, index):
     if upload is None or chunk is None:
         error("chunk_not_found", 404)
     return {"entry_key": key, "source_etag": etag, "target_epoch": epoch, "chunk_index": index,
+            "operation_origin": entry_metadata(db, row, entry)["operation_origin"],
             "total_chunks": upload.total_chunks, "total_bytes": upload.total_bytes, "chunk_sha256": chunk.chunk_sha256,
             "ciphertext_sha256": upload.ciphertext_sha256, "data_base64": base64.b64encode(chunk.data).decode(),
             "sealed": upload.ciphertext_sha256 is not None}
@@ -300,6 +310,10 @@ def check_manifest(db, row):
                 "source_kind": "client_pending", "output_kind": "history_envelope_v1", "representation_epoch": base["crypto_epoch"]}
                for b in request["local_branches"]]
     entries = list(db.scalars(select(NoteCryptoEntry).where(NoteCryptoEntry.transition_id == row.id)))
+    from app.services.note_operation_origin import conversion_expectations
+    if conditions.get("origin_metadata_version") != 1 or conditions.get("origin_expectations") != conversion_expectations(
+        db, row.owner_id, row.local_id, actual, conditions["null_slots"]):
+        error("inconsistent_history")
     fields = ("key", "source_kind", "output_kind", "representation_epoch")
     expected = sorted([canonical({k: preparation.entry_result(e)[k] for k in fields}) for e in entries])
     if expected != sorted(canonical({k: item[k] for k in fields}) for item in actual):
@@ -393,10 +407,13 @@ def commit(db, body):
         expected_counts[key["kind"]] += 1
         applied_counts[destination(key)["kind"]] += 1
     latest = current_context(db, row.owner_id, row.local_id)
+    from app.services import note_operation_origin as origin
+    origin.install(db, row)
     row.receipt_json = canonical({k: v for k, v in latest.items() if k != "active_transition_id"} | {
         "owner_id": row.owner_id, "local_id": row.local_id, "metadata_manifest_digest": row.manifest_digest,
         "ciphertext_manifest_digest": cipher_digest, "expected_counts": expected_counts, "applied_counts": applied_counts,
-        "reserved_branch_ids": sorted(b["revision_id"] for b in request["local_branches"])})
+        "reserved_branch_ids": sorted(b["revision_id"] for b in request["local_branches"]),
+        "origin_metadata_version": 1, "origin_expectations_digest": origin.expectations_digest(row)})
     return committed_result(db, row)
 
 
@@ -438,6 +455,8 @@ def live_entries(db, owner, local):
                 "ciphertext_sha256": sha(data) if not is_null else None, "expected_binding": binding,
                 "revision_ref": ref, "parent_ref": parent, "physical_note_id": physical,
                 "inventory_revision_id": inventory_id}
+        from app.services.note_operation_origin import read
+        item["operation_origin"] = read(db, owner, local, key, raw)
         rows.append((item, data))
     inventory = {i.note_id: i for i in inventories(db, owner, local)}
     for note in db.scalars(select(Note).where(Note.owner_id == owner, Note.local_id == local)):
@@ -534,6 +553,8 @@ def typed_current(db, owner, local, device):
     raw = next(data for item, data in representations if item["key"] == key)
     return {"schema_version": 2, "status": "ok", "note": json.loads(encoded(raw_snapshot(note)))["note"],
             "current_representation": json.loads(raw), "head_revision_ref": {"kind": "note_revision", "id": state["head_revision_id"]},
+            "current_representation_metadata": {"operation_origin": next(item["operation_origin"] for item, _ in representations if item["key"] == key)},
+            "note_body_metadata": {"operation_origin": None},
             "base_fields": state, **state}
 
 
@@ -553,5 +574,14 @@ def typed_revision(db, owner, local, device, ref):
     if selected is None:
         error("revision_not_found", 404)
     item, data = selected
+    before = None
+    if ref.kind == "note_revision":
+        before_key = {"kind": "revision_before", "id": ref.id, "slot": "before"}
+        before_item, before_data = next((i, d) for i, d in rows if i["key"] == before_key)
+        if not before_item["is_null"]:
+            before = {"kind": before_item["representation_kind"], "crypto_epoch": state["crypto_epoch"],
+                      "envelope": json.loads(before_data), "operation_origin": before_item["operation_origin"]}
     return {"schema_version": 2, "status": "ok", "revision_ref": ref.model_dump(), "parent_ref": item["parent_ref"],
-            "representation": {"kind": item["representation_kind"], "crypto_epoch": state["crypto_epoch"], "envelope": json.loads(data)}}
+            "before_representation": before,
+            "representation": {"kind": item["representation_kind"], "crypto_epoch": state["crypto_epoch"],
+                               "envelope": json.loads(data), "operation_origin": item["operation_origin"]}}

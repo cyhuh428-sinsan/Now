@@ -27,7 +27,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
-    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk  # noqa: F401
+    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk, NoteRepresentationOrigin  # noqa: F401
     from app.services.note_crypto import initialize_identity
     from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
     from app.models.note_history import NoteHead, NoteRevision, NoteInventory  # noqa: F401
@@ -74,6 +74,8 @@ def migrate_schema(conn: Connection | None = None) -> None:
     inspector = inspect(bind)
     table_names = inspector.get_table_names()
     migrations = []
+    legacy_origin_upgrade = "note_crypto_transitions" in table_names and "purpose" not in {
+        column["name"] for column in inspector.get_columns("note_crypto_transitions")}
     history_columns = {
         "note_heads": {"protection_state": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
                        "crypto_epoch": "INTEGER NOT NULL DEFAULT 0",
@@ -82,7 +84,8 @@ def migrate_schema(conn: Connection | None = None) -> None:
                            "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
         "note_inventory": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
                            "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
-        "note_crypto_transitions": {"commit_conditions_json": "TEXT", "receipt_json": "TEXT"},
+        "note_crypto_transitions": {"commit_conditions_json": "TEXT", "receipt_json": "TEXT",
+                                    "purpose": "VARCHAR(32) NOT NULL DEFAULT 'conversion'"},
         "note_crypto_entries": {"binding_json": "TEXT"},
     }
     for table, definitions in history_columns.items():
@@ -145,7 +148,13 @@ def migrate_schema(conn: Connection | None = None) -> None:
     if conn is not None:
         for table, name, definition in migrations:
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+        if legacy_origin_upgrade:
+            from app.services.note_operation_origin import classify_legacy
+            classify_legacy(conn)
         return
     with engine.begin() as fallback_conn:
         for table, name, definition in migrations:
             fallback_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+        if legacy_origin_upgrade:
+            from app.services.note_operation_origin import classify_legacy
+            classify_legacy(fallback_conn)

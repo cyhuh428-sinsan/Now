@@ -30,6 +30,7 @@ class NoteCryptoTransition(Base):
     created_at: Mapped[datetime] = mapped_column()
     commit_conditions_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     receipt_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    purpose: Mapped[str] = mapped_column(String(32), default="conversion", server_default="conversion")
 
 
 class NoteCryptoEntry(Base):
@@ -66,3 +67,11 @@ class NoteCryptoChunk(Base):
     chunk_index: Mapped[int] = mapped_column(primary_key=True)
     chunk_sha256: Mapped[str] = mapped_column(String(64))
     data: Mapped[bytes] = mapped_column(LargeBinary)
+
+
+class NoteRepresentationOrigin(Base):
+    __tablename__ = "note_representation_origins"
+    owner_id: Mapped[str] = mapped_column(String(80), primary_key=True)
+    local_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    key_json: Mapped[str] = mapped_column(String(220), primary_key=True)
+    semantic_origin_id: Mapped[str | None] = mapped_column(String(36), nullable=True)

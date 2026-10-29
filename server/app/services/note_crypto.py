@@ -129,6 +129,8 @@ def validate_existing_graph(rows, inventory, native, branches, head):
 
 def result(db, row):
     expire(db, row)
+    from app.services.note_operation_origin import upgrade_pending
+    upgrade_pending(db, row)
     if row.state == "committed":
         from app.services.note_crypto_storage import committed_result
         return committed_result(db, row)
@@ -144,11 +146,13 @@ def result(db, row):
             "uploaded_chunks": len(chunks), "sealed_entries": sum(u.ciphertext_sha256 is not None for u in uploads)}
 
 
-def owned(db, owner, local, device, transition_id):
+def owned(db, owner, local, device, transition_id, purpose="conversion"):
     authenticate_actor(db, owner, device)
     row = db.get(NoteCryptoTransition, transition_id)
     if row is None or row.owner_id != owner or row.local_id != local:
         error("transition_not_found", 404)
+    if row.purpose != purpose:
+        error("operation_mismatch")
     return expire(db, row)
 
 
@@ -236,6 +240,8 @@ def prepare(db, body):
     previous = db.scalar(select(NoteCryptoTransition).where(NoteCryptoTransition.owner_id == body.owner_id,
                                                            NoteCryptoTransition.mutation_id == body.mutation_id))
     if previous:
+        if previous.purpose != "conversion":
+            error("idempotency_mismatch")
         if json.loads(previous.conditions_json)["request"] != body.model_dump():
             error("idempotency_mismatch")
         base_state(db, body.owner_id, body.local_id, baseline=False)
@@ -260,10 +266,14 @@ def prepare(db, body):
     if not entries:
         error("no_transition_representations")
     stamp, ident = database_now(db), str(uuid4())
+    from app.services.note_operation_origin import conversion_expectations
+    nullable = null_slots(db, body.owner_id, body.local_id)
+    origin_expectations = conversion_expectations(db, body.owner_id, body.local_id, entries, nullable)
     row = NoteCryptoTransition(id=ident, owner_id=body.owner_id, local_id=body.local_id,
         mutation_id=body.mutation_id, actor_device_id=body.device_id,
         conditions_json=canonical({"request": body.model_dump(), "server_instance_id": identity, "base": base,
-                                   "null_slots": null_slots(db, body.owner_id, body.local_id)}),
+                                   "null_slots": nullable, "origin_metadata_version": 1,
+                                   "origin_expectations": origin_expectations}),
         manifest_digest=hashlib.sha256(canonical(entries).encode()).hexdigest(), state="prepared", lease_version=1,
         created_at=stamp, expires_at=stamp + timedelta(minutes=30))
     db.add(row)
@@ -307,8 +317,8 @@ def entry_result(row):
 
 
 @transactional
-def manifest(db, owner, local, device, transition_id, limit, cursor):
-    row = owned(db, owner, local, device, transition_id)
+def manifest(db, owner, local, device, transition_id, limit, cursor, purpose="conversion"):
+    row = owned(db, owner, local, device, transition_id, purpose)
     current = base_state(db, owner, local, baseline=False)
     condition = json.loads(row.conditions_json)
     if "null_slots" not in condition:
@@ -364,4 +374,5 @@ def source(db, owner, local, device, transition_id, key, etag):
         original = db.get(NoteOfflineBranch, ident); value = original.snapshot_json if original else None
     if original is None or original.owner_id != owner or original.local_id != local or value is None:
         error("manifest_changed")
-    return {**entry_result(entry), "value": value}
+    from app.services.note_crypto_storage import entry_metadata
+    return {**entry_metadata(db, row, entry), "value": value}

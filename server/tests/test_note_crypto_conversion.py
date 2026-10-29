@@ -85,7 +85,9 @@ def stage(client, s, local, t, items, *, alter=None):
                 value = json.loads(raw)
                 if value.get("kind") == "history_envelope_v1":
                     assert item["source_kind"] == "history_envelope_v1", "manifest must declare the actual encrypted source kind"
-                    value = json.loads(decrypt(value["ciphertext"], t["target_epoch"] - 1))["snapshot"]
+                    previous = json.loads(decrypt(value["ciphertext"], t["target_epoch"] - 1))
+                    assert previous.get("origin") == item.get("operation_origin")
+                    value = previous["snapshot"]
                 else:
                     assert item["source_kind"] == "snapshot_v1"
                     if value["note"]["content"].startswith("NOW_ENCRYPTED_V1:"):
@@ -97,6 +99,7 @@ def stage(client, s, local, t, items, *, alter=None):
             assert "expected_binding" in item, "A2a manifest must specify expected binding"
             binding = item["expected_binding"]
             inner = {"schema_version": 1, "binding": binding, "snapshot": value,
+                     "origin": item.get("operation_origin"),
                      "content_origin_kind": "semantic", "semantic_sha256": digest(canonical(value).encode())}
             wrapper = {"schema_version": 1, "kind": "history_envelope_v1", "crypto_epoch": t["target_epoch"],
                        "binding": binding, "ciphertext": encrypt(canonical(inner), t["target_epoch"])}
