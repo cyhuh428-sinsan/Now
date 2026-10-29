@@ -65,6 +65,9 @@ def source_now(db, owner, local):
 def fixed(row):
     try:
         c = json.loads(row.conditions_json)
+        if c["request"].get("schema_version") == 3:
+            from app.services.mixed_analysis import fixed as mixed_fixed
+            return mixed_fixed(row)
         request = Claim.model_validate(c["request"]).model_dump()
         expected = h({k: request[k] for k in ("source_context", "source_keys", "job_type", "prompt_version", "source_job_id")})
         if (request != c["request"] or (row.owner_id, row.local_id, row.actor_device_id, row.mutation_id) !=
@@ -89,6 +92,8 @@ def own(db, owner, local, device, instance, ident, *, creator=False):
     row = db.get(ClaimRow, ident)
     if row is None or (row.owner_id, row.local_id) != (owner, local):
         error("execution_not_found", 404)
+    if json.loads(row.conditions_json)["request"].get("schema_version") != 1:
+        error("execution_schema_mismatch")
     c = fixed(row)
     if c["request"]["server_instance_id"] != instance:
         error("server_instance_changed")
@@ -189,6 +194,9 @@ def dispatch(db, body):
 
 
 def receipt(row):
+    if json.loads(row.conditions_json)["request"].get("schema_version") == 3:
+        from app.services.mixed_analysis import receipt as mixed_receipt
+        return mixed_receipt(row)
     c, p = fixed(row), json.loads(row.progress_json)
     tr = p.get("terminal_receipt")
     if tr is None:
