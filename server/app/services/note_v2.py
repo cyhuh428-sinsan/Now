@@ -91,7 +91,12 @@ def current(db, owner, local):
         head, rows = scope(db, owner, local)
         if not rows:
             error("note_not_found", 404)
-        head = baseline(db, owner, local)
+        from app.services.note_crypto_fence import active_fence
+        transition = active_fence(db, owner, local)
+        if transition is None:
+            head = baseline(db, owner, local)
+        elif head is None or {item.note_id for item in inventories(db, owner, local)} != {row.id for row in rows}:
+            error("crypto_transition_in_progress", 423)
         if head.identity_state != "coherent":
             db.commit()  # Retain the non-destructive baseline, not a chosen body.
             error("ambiguous_note_identity")
@@ -106,6 +111,8 @@ def current(db, owner, local):
                   "protection_state": head.protection_state, "history_generation": head.history_generation,
                   "replica_count": len(rows), "inventory_revision_ids": sorted(item.revision_id for item in inventory),
                   "has_replica_variants": len(set(bodies)) > 1}
+        if transition:
+            result["crypto_transition"] = {"transition_id": transition.id, "state": transition.state, "preparation_only": True}
         db.commit()
         return result
     except Exception:
@@ -314,6 +321,8 @@ def import_branches(db, body, head):
 def mutate(db, body, operation):
     try:
         head, rows = scope(db, body.owner_id, body.local_id)
+        from app.services.note_crypto_fence import require_unfenced
+        require_unfenced(db, [(body.owner_id, body.local_id)])
         check_epoch(head, body.crypto_epoch)
         require_active_user_device(db, owner_id=body.owner_id, device_id=body.device_id)
         previous = replay(db, body, operation, head)

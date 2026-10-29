@@ -27,6 +27,8 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence  # noqa: F401
+    from app.services.note_crypto import initialize_identity
     from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
     from app.models.note_history import NoteHead, NoteRevision, NoteInventory  # noqa: F401
     from app.models.library import LibraryResource, LibraryMutation  # noqa: F401
@@ -56,10 +58,15 @@ def create_tables() -> None:
             conn.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": SCHEMA_MIGRATION_LOCK_ID})
             Base.metadata.create_all(bind=conn)
             migrate_schema(conn)
+            initialize_identity(conn)
         return
 
-    Base.metadata.create_all(bind=engine)
-    migrate_schema()
+    with engine.begin() as conn:
+        if not conn.connection.driver_connection.in_transaction:
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
+        Base.metadata.create_all(bind=conn)
+        migrate_schema(conn)
+        initialize_identity(conn)
 
 
 def migrate_schema(conn: Connection | None = None) -> None:

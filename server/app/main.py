@@ -18,6 +18,7 @@ from app.api.messenger import router as messenger_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
 from app.api.note_v2 import router as note_v2_router
+from app.api.note_crypto import router as note_crypto_router
 from app.api.public_pages import router as public_pages_router
 from app.api.recordings import router as recordings_router
 from app.api.server import router as server_router
@@ -78,6 +79,7 @@ def create_app() -> FastAPI:
     app.include_router(auth_api_router)
     app.include_router(notes_router)
     app.include_router(note_v2_router)
+    app.include_router(note_crypto_router)
     app.include_router(recordings_router)
     app.include_router(sync_router)
     app.include_router(users_router)

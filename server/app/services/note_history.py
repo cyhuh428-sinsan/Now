@@ -8,6 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import event, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
+from sqlalchemy import inspect
 
 from app.models.note import Note
 from app.models.note_history import NoteHead, NoteInventory, NoteRevision
@@ -53,6 +54,8 @@ def encoded(raw):
 
 
 def prepare_history(db, owner, local_id):
+    from app.services.note_crypto_fence import require_unfenced
+    require_unfenced(db, [(owner, local_id)])
     lock_note_writes(db, [owner])
     queue = db.info.setdefault(QUEUE, {"baselines": {}, "events": []})
     key = (owner, local_id)
@@ -64,6 +67,8 @@ def prepare_history(db, owner, local_id):
 def require_legacy_writes(db, refs):
     refs = set(refs)
     lock_note_writes(db, [owner for owner, _ in refs])
+    from app.services.note_crypto_fence import require_unfenced
+    require_unfenced(db, refs)
     for ref in sorted(refs):
         head = db.get(NoteHead, ref)
         if head and (head.protection_state != "legacy" or head.crypto_epoch != 0):
@@ -72,6 +77,8 @@ def require_legacy_writes(db, refs):
 
 
 def capture_change(db, note, before, reason="write"):
+    from app.services.note_crypto_fence import require_unfenced
+    require_unfenced(db, [(note.owner_id, note.local_id)])
     db.info[QUEUE]["events"].append((note, before, raw_snapshot(note), reason))
 
 
@@ -142,6 +149,8 @@ def finalize_history(db, flush_context):
     queue = db.info.pop(QUEUE, None)
     if queue is None:
         return
+    from app.services.note_crypto_fence import require_unfenced
+    require_unfenced(db, list(queue["baselines"]) + [(after["owner_id"], after["local_id"]) for _, _, after, _ in queue["events"]])
     for key, snapshots in queue["baselines"].items():
         head = pending_or_get(db, NoteHead, key)
         initial = head is None
@@ -183,6 +192,21 @@ def finalize_history(db, flush_context):
             head.version += 1
         head.identity_state, head.head_revision_id = state, pointer
     persist_history(db)
+
+
+@event.listens_for(Session, "before_flush")
+def fence_natural_note_writes(db, flush_context, instances):
+    from app.services.note_crypto_fence import require_unfenced
+    refs = []
+    for row in list(db.new) + list(db.dirty) + list(db.deleted):
+        if not isinstance(row, Note):
+            continue
+        state = inspect(row)
+        owners = [row.owner_id, *state.attrs.owner_id.history.deleted]
+        locals_ = [row.local_id, *state.attrs.local_id.history.deleted]
+        refs.extend((owner, local) for owner in owners for local in locals_ if owner is not None and local is not None)
+    if refs:
+        require_unfenced(db, refs)
 
 
 @event.listens_for(Session, "after_soft_rollback")

@@ -260,6 +260,14 @@ def export_devices(
 
 @router.get("/export/all")
 def export_all(db: Session = Depends(get_db)) -> JSONResponse:
+    from app.models.note_crypto import NoteCryptoFence
+    from app.models.note_history import NoteHead
+    from app.services.note_crypto_fence import require_unfenced
+    from app.services.note_history import lock_note_writes
+    owners = set(db.scalars(select(Note.owner_id))) | set(db.scalars(select(NoteHead.owner_id))) | set(db.scalars(select(NoteCryptoFence.owner_id)))
+    lock_note_writes(db, sorted(owners))
+    refs = list(db.execute(select(NoteCryptoFence.owner_id, NoteCryptoFence.local_id)))
+    require_unfenced(db, refs)
     from app.services.library_backup import export_library
     library_snapshot = export_library(db)
     settings = get_settings()
