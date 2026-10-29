@@ -27,6 +27,7 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
     from app.models.note_history import NoteHead, NoteRevision, NoteInventory  # noqa: F401
     from app.models.library import LibraryResource, LibraryMutation  # noqa: F401
     from app.models.note import (  # noqa: F401
@@ -66,6 +67,17 @@ def migrate_schema(conn: Connection | None = None) -> None:
     inspector = inspect(bind)
     table_names = inspector.get_table_names()
     migrations = []
+    history_columns = {
+        "note_heads": {"protection_state": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
+                       "crypto_epoch": "INTEGER NOT NULL DEFAULT 0",
+                       "history_generation": "INTEGER NOT NULL DEFAULT 0"},
+        "note_revisions": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
+                           "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
+    }
+    for table, definitions in history_columns.items():
+        if table in table_names:
+            present = {column["name"] for column in inspector.get_columns(table)}
+            migrations.extend((table, name, definition) for name, definition in definitions.items() if name not in present)
     if "user_accounts" in table_names:
         account_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
         account_migrations = {

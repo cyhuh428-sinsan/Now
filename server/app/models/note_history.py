@@ -13,6 +13,9 @@ class NoteHead(Base):
     version: Mapped[int] = mapped_column(Integer, default=0)
     identity_state: Mapped[str] = mapped_column(String(20), default="coherent")
     head_revision_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    protection_state: Mapped[str] = mapped_column(String(20), default="legacy", server_default="legacy")
+    crypto_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    history_generation: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class NoteRevision(Base):
@@ -26,6 +29,8 @@ class NoteRevision(Base):
     captured_at: Mapped[datetime] = mapped_column(default=datetime.utcnow)
     snapshot_json: Mapped[str] = mapped_column(Text)
     before_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    representation_epoch: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    representation_kind: Mapped[str] = mapped_column(String(32), default="snapshot_v1", server_default="snapshot_v1")
 
 
 class NoteInventory(Base):

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
@@ -17,6 +17,7 @@ from app.api.group_messages import router as group_messages_router
 from app.api.messenger import router as messenger_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
+from app.api.note_v2 import router as note_v2_router
 from app.api.public_pages import router as public_pages_router
 from app.api.recordings import router as recordings_router
 from app.api.server import router as server_router
@@ -41,6 +42,18 @@ def _web_app_dir() -> Path | None:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.server_name)
+    @app.middleware("http")
+    async def note_history_no_store(request, call_next):
+        try:
+            response = await call_next(request)
+        except Exception:
+            if request.url.path.startswith("/api/v2/notes"):
+                return JSONResponse({"detail": {"code": "internal_error"}}, status_code=500,
+                                    headers={"Cache-Control": "no-store"})
+            raise
+        if request.url.path.startswith("/api/v2/notes"):
+            response.headers["Cache-Control"] = "no-store"
+        return response
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -64,6 +77,7 @@ def create_app() -> FastAPI:
     app.include_router(app_release_router)
     app.include_router(auth_api_router)
     app.include_router(notes_router)
+    app.include_router(note_v2_router)
     app.include_router(recordings_router)
     app.include_router(sync_router)
     app.include_router(users_router)

@@ -4,6 +4,7 @@ import json
 from datetime import datetime, timezone
 from uuid import uuid4
 
+from fastapi import HTTPException
 from sqlalchemy import event, select, text
 from sqlalchemy.orm import Session
 from sqlalchemy.orm.attributes import set_committed_value
@@ -60,6 +61,16 @@ def prepare_history(db, owner, local_id):
         queue["baselines"][key] = [raw_snapshot(row) for row in rows]
 
 
+def require_legacy_writes(db, refs):
+    refs = set(refs)
+    lock_note_writes(db, [owner for owner, _ in refs])
+    for ref in sorted(refs):
+        head = db.get(NoteHead, ref)
+        if head and (head.protection_state != "legacy" or head.crypto_epoch != 0):
+            raise HTTPException(status_code=409, detail={"code": "protected_note_requires_upgrade"},
+                                headers={"Cache-Control": "no-store"})
+
+
 def capture_change(db, note, before, reason="write"):
     db.info[QUEUE]["events"].append((note, before, raw_snapshot(note), reason))
 
@@ -93,9 +104,11 @@ def representative(rows):
 
 
 def add_revision(db, raw, reason, parent=None, before=None):
+    head = pending_or_get(db, NoteHead, (raw["owner_id"], raw["local_id"]))
     revision = NoteRevision(id=str(uuid4()), owner_id=raw["owner_id"], local_id=raw["local_id"],
                             note_id=raw["id"], reason=reason, parent_revision_id=parent,
-                            snapshot_json=encoded(raw), before_snapshot_json=encoded(before) if before else None)
+                            snapshot_json=encoded(raw), before_snapshot_json=encoded(before) if before else None,
+                            representation_epoch=head.crypto_epoch if head else 0, representation_kind="snapshot_v1")
     db.add(revision)
     return revision.id
 
@@ -133,13 +146,15 @@ def finalize_history(db, flush_context):
         head = pending_or_get(db, NoteHead, key)
         initial = head is None
         if initial:
-            head = NoteHead(owner_id=key[0], local_id=key[1], version=0, identity_state="coherent")
+            head = NoteHead(owner_id=key[0], local_id=key[1], version=0, identity_state="coherent",
+                            protection_state="legacy", crypto_epoch=0, history_generation=0)
             db.add(head)
         for raw in snapshots:
             if pending_or_get(db, NoteInventory, (*key, raw["id"])) is None:
                 revision_id = add_revision(db, raw, "baseline")
                 db.add(NoteInventory(owner_id=key[0], local_id=key[1], note_id=raw["id"],
                                      revision_id=revision_id, snapshot_json=encoded(raw)))
+                head.history_generation += 1
         if initial:
             head.identity_state, head.head_revision_id = representative(inventories(db, *key))
 
@@ -158,8 +173,11 @@ def finalize_history(db, flush_context):
         if inventory is None:
             inventory = NoteInventory(owner_id=key[0], local_id=key[1], note_id=after["id"], revision_id=revision_id)
             db.add(inventory)
+        next_snapshot = encoded(after)
+        if inventory.snapshot_json != next_snapshot:
+            head.history_generation += 1
         inventory.revision_id = revision_id
-        inventory.snapshot_json = encoded(after)
+        inventory.snapshot_json = next_snapshot
         state, pointer = representative(inventories(db, *key))
         if changed or state != head.identity_state or pointer != head.head_revision_id:
             head.version += 1
