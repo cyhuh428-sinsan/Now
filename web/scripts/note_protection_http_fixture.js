@@ -58,7 +58,7 @@
     assert(initial.protection_record&&!JSON.stringify(initial).includes('HTTP-QA-EDITED-'),'fresh_editor_journal_not_ciphertext');
     const editor=dialog().querySelector('.protection-draft');assert(editor.value==='HTTP-QA-EDITED-'+run+'\n','fresh_editor_wrong_current');
     editor.value='HTTP-QA-FRESH-EDITOR-'+run+'\n';editor.dispatchEvent(new Event('input',{bubbles:true}));await drive(()=>status().includes('초안 저장됨'),'fresh_draft');
-    await action('save',()=>status().includes('전환 준비 가능'));
+    await action('save',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='complete')&&!dialog().querySelector('.protection-draft').value);
     const after=await inspectNoteProtection();assert(after.catalog.context.base.head_version===6,'fresh_editor_save_not_single_write');
     const descriptor=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
     const current=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
