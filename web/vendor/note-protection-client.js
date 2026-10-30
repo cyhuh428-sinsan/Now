@@ -304,9 +304,18 @@
       snapshots.set(e.revision_id,snapshot);
     }
     const origins=clone(i.source_origins||[]),existing=await remote.readSources(scope,p,password,localStores,resolveKey,origins);
+    const existingCiphertexts=[];
     for(const old of m.existing) {
       const rows=existing.filter(r=>r.key.kind==='offline_snapshot' && r.key.id===old.revision_id);
       if(rows.length!==1 || !eq(rows[0].value,snapshots.get(old.revision_id))) fail('import_existing_meaning');
+      if(old.comparison==='cipher_exact') {
+        const rep=local.find(r=>r.revision_id===old.revision_id)?.representation;
+        const proof=m.verified_existing.find(v=>v.key.id===old.revision_id);
+        const hash=rep && await Q().sha256(rep.raw);
+        if(!rep || !proof || hash!==proof.ciphertext_sha256 || new TextEncoder().encode(rep.raw).length!==proof.total_bytes)
+          fail('import_existing_cipher');
+        existingCiphertexts.push({revision_id:old.revision_id,ciphertext_sha256:hash});
+      }
     }
     const transfers=[],records=[],plain=[];
     for(const e of entries) {
@@ -336,7 +345,7 @@
     return {transfers,source_origins:origins,branches:clone(local),commit:{...access(scope),operation_id:p.id,mutation_id:i.prepare.mutation_id,
       lease_version:p.response.lease_version,base:clone(i.prepare.base),metadata_manifest_digest:p.digest,client_decryption_verified:true,
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_verified_existing_set_digest:await Q().hashJson(m.verified_existing),
-      plain_entries:plain,existing_ciphertexts:m.verified_existing.filter(v=>v.descriptor.representation_epoch>0).map(v=>({revision_id:v.key.id,ciphertext_sha256:v.ciphertext_sha256}))}};
+      plain_entries:plain,existing_ciphertexts:existingCiphertexts}};
   }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {

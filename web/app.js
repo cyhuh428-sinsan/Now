@@ -2752,6 +2752,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
       async stage(s,p,work,password,localStores = [],resolveKey) {
+        const importing=p.response.purpose==='mixed_offline_import';
+        if(importing) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
         const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
@@ -2760,6 +2762,31 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const resolve = resolveKey || keyResolver || (async () => password);
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
+        const imported=new Map();
+        if(importing) {
+          const entries=p.response.metadata_header.control.entries,branches=work.branches;
+          if(!Array.isArray(branches) || !eq(branches.map(r=>r.revision_id),entries.map(e=>e.revision_id))) fail('import_branch_set');
+          for(let n=0;n<entries.length;n++) {
+            const e=entries[n],r=branches[n],value=protocol().validateSnapshot(r.snapshot);
+            if(!eq(r.parent_ref,e.parent_ref) || r.origin_device_id!==e.origin_device_id || value.note.owner_id!==s.owner || value.note.local_id!==s.local_id)
+              fail('import_branch');
+            if(fixed.DSET.some(d=>d.destination_key.id===e.revision_id) && value.note.id!==null) fail('import_destination');
+            imported.set(e.revision_id,value);
+          }
+          for(const old of fixed.existing) {
+            if(!semanticEq(meaning.get(json(old.descriptor.key)),imported.get(old.revision_id))) fail('import_existing_meaning');
+          }
+          const plain=entries.filter(e=>e.target_epoch===0).map(e=>({revision_id:e.revision_id,snapshot:imported.get(e.revision_id).note}));
+          const cipher=[];
+          for(const v of fixed.verified_existing.filter(v=>v.descriptor.representation_epoch>0)) {
+            const rep=branches.find(r=>r.revision_id===v.key.id)?.representation;
+            const hash=rep && typeof rep.raw==='string' && await protocol().sha256(rep.raw);
+            if(!rep || hash!==v.ciphertext_sha256 || new TextEncoder().encode(rep.raw).length!==v.total_bytes) fail('import_existing_cipher');
+            cipher.push({revision_id:v.key.id,ciphertext_sha256:hash});
+          }
+          if(work.commit.client_verified_existing_set_digest!==await protocol().hashJson(fixed.verified_existing)
+            || !semanticEq(work.commit.plain_entries,plain) || !semanticEq(work.commit.existing_ciphertexts,cipher)) fail('import_commit');
+        }
         let after=null;
         if(writing) {
           const h=p.response.metadata_header,c=h.control;
@@ -2798,7 +2825,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          const expected=writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+          const expected=importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
             : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
           if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -3151,9 +3178,18 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       snapshots.set(e.revision_id,snapshot);
     }
     const origins=clone(i.source_origins||[]),existing=await remote.readSources(scope,p,password,localStores,resolveKey,origins);
+    const existingCiphertexts=[];
     for(const old of m.existing) {
       const rows=existing.filter(r=>r.key.kind==='offline_snapshot' && r.key.id===old.revision_id);
       if(rows.length!==1 || !eq(rows[0].value,snapshots.get(old.revision_id))) fail('import_existing_meaning');
+      if(old.comparison==='cipher_exact') {
+        const rep=local.find(r=>r.revision_id===old.revision_id)?.representation;
+        const proof=m.verified_existing.find(v=>v.key.id===old.revision_id);
+        const hash=rep && await Q().sha256(rep.raw);
+        if(!rep || !proof || hash!==proof.ciphertext_sha256 || new TextEncoder().encode(rep.raw).length!==proof.total_bytes)
+          fail('import_existing_cipher');
+        existingCiphertexts.push({revision_id:old.revision_id,ciphertext_sha256:hash});
+      }
     }
     const transfers=[],records=[],plain=[];
     for(const e of entries) {
@@ -3183,7 +3219,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     return {transfers,source_origins:origins,branches:clone(local),commit:{...access(scope),operation_id:p.id,mutation_id:i.prepare.mutation_id,
       lease_version:p.response.lease_version,base:clone(i.prepare.base),metadata_manifest_digest:p.digest,client_decryption_verified:true,
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_verified_existing_set_digest:await Q().hashJson(m.verified_existing),
-      plain_entries:plain,existing_ciphertexts:m.verified_existing.filter(v=>v.descriptor.representation_epoch>0).map(v=>({revision_id:v.key.id,ciphertext_sha256:v.ciphertext_sha256}))}};
+      plain_entries:plain,existing_ciphertexts:existingCiphertexts}};
   }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {
