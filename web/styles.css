@@ -5419,6 +5419,8 @@ kbd {
 .protection-editor label { display: grid; gap: 6px; min-width: 0; }
 .protection-draft { width: 100%; min-height: 180px; height: 32dvh; max-height: 48dvh; resize: vertical; }
 .protection-editor > button { justify-self: start; }
+.protection-editor .hidden { display: none; }
+.protection-preview { min-height: 180px; height: auto; max-height: 48dvh; overflow: auto; overflow-wrap: anywhere; }
 .protection-copies { display: grid; gap: 8px; max-height: 24dvh; overflow: auto; }
 .protection-copies label { display: flex; gap: 8px; align-items: start; overflow-wrap: anywhere; }
 .protection-copies input { flex: 0 0 auto; }

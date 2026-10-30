@@ -368,6 +368,34 @@
       }finally{release?.();navigator.locks.request=request;}
       await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
     }
+    if(config.editorView) {
+      const editor=dialog().querySelector('.protection-draft'),original=editor.value;
+      editor.focus();editor.setSelectionRange(editor.value.length,editor.value.length);
+      document.execCommand('insertText',false,'\n## HTTP-QA-VIEW-'+run+'\n\n<details><summary>Fold</summary>\n\n**Bold**\n\n</details>\n\nhttps://example.invalid/qa\n\n<script>globalThis.__QA_BAD_VIEW__=true</script>');
+      await drive(()=>status().includes('초안 저장됨'),'view_draft');
+      const edited=editor.value,selection=[editor.selectionStart,editor.selectionEnd],beforeView=JSON.stringify(noteHistory.export());
+      await action('editor-preview',()=>!dialog().querySelector('.protection-preview').classList.contains('hidden'));
+      const preview=dialog().querySelector('.protection-preview');
+      assert(preview.querySelector('h2')?.textContent==='HTTP-QA-VIEW-'+run,'view_heading_missing');
+      assert([...preview.querySelectorAll('summary')].some(s=>s.textContent.trim()==='Fold')&&preview.querySelector('strong')?.textContent==='Bold','view_details_bold_missing');
+      assert([...preview.querySelectorAll('a')].some(a=>a.href==='https://example.invalid/qa'),'view_url_missing');
+      assert(!preview.querySelector('script,[onerror],iframe,img[src]')&&!globalThis.__QA_BAD_VIEW__,'view_unsafe_html');
+      assert(getComputedStyle(editor.parentElement).display==='none'&&editor.value===edited&&JSON.stringify(noteHistory.export())===beforeView,'view_modified_source_or_journal');
+      globalThis.__HTTP_CAPTURE_DONE__=false;emit({stage:'editor_view_ready',owner:a.owner,local_id:target});
+      for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
+      assert(globalThis.__HTTP_CAPTURE_DONE__===true,'view_capture_failed');
+      await action('editor-source',()=>dialog().querySelector('.protection-preview').classList.contains('hidden'));
+      assert(editor.selectionStart===selection[0]&&editor.selectionEnd===selection[1],'view_selection_changed');
+      editor.focus();assert(document.execCommand('undo'),'view_native_undo_failed');
+      await drive(()=>status().includes('초안 저장됨'),'view_undo_draft');assert(editor.value===original,'view_undo_lost_source');
+      assert(document.execCommand('redo'),'view_native_redo_failed');
+      await drive(()=>status().includes('초안 저장됨'),'view_redo_draft');assert(editor.value===edited,'view_redo_changed_source');
+      button('lock').click();assert(!editor.value&&!preview.textContent,'view_lock_retained_plaintext');
+      const clean=dialog().querySelector('.protection-draft');assert(clean!==editor&&!clean.value,'view_lock_retained_native_history');
+      await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+      assert(dialog().querySelector('.protection-draft').value===edited,'view_cipher_draft_not_recovered');
+      emit({stage:'editor_view_source_undo_verified',owner:a.owner,local_id:target});
+    }
     peerPlain='HTTP-QA-EDITED-'+run+'\n';
     const editor=dialog().querySelector('.protection-draft');
     editor.value=peerPlain;editor.dispatchEvent(new Event('input',{bubbles:true}));

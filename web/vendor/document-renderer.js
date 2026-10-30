@@ -1,7 +1,7 @@
 /* 원문을 변경하지 않는 문서 변환. 외부 HTML은 정제 후 DOM으로 구성한다. */
 window.NowMarkdown = (() => {
   const tags = ['p','br','hr','strong','em','del','blockquote','ul','ol','li','pre','code','h1','h2','h3','h4','h5','h6','a','img','table','thead','tbody','tr','th','td','details','summary','input','span'];
-  const clean = html => DOMPurify.sanitize(html, { ALLOWED_TAGS: tags, ALLOWED_ATTR: ['href','src','alt','title','open','start','type','checked','disabled','align','data-note-attachment-key'], ALLOW_DATA_ATTR: false });
+  const clean = (html, images = true) => DOMPurify.sanitize(html, { ALLOWED_TAGS: images ? tags : tags.filter(tag => tag !== 'img'), ALLOWED_ATTR: ['href','src','alt','title','open','start','type','checked','disabled','align','data-note-attachment-key'], ALLOW_DATA_ATTR: false });
   const escape = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function scanHeadings(source) {
     const result = []; let offset = 0, fence = null, previous = '', previousOffset = 0;
@@ -22,6 +22,7 @@ window.NowMarkdown = (() => {
     return result;
   }
   function render(source, options = {}) {
+    const sanitize = html => clean(html, options.images !== false);
     const localPaths = [];
     const renderer = new marked.Renderer();
     renderer.link = function(token) {
@@ -34,17 +35,17 @@ window.NowMarkdown = (() => {
     };
     renderer.image = token => options.image ? options.image(escape(token.text), escape(token.href)) : '';
     const root = document.createElement('div');
-    root.innerHTML = clean(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
+    root.innerHTML = sanitize(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
     // details raw block 안에 남은 텍스트도 같은 Markdown parser로 처리한다.
     for (const node of [...root.querySelectorAll('details, blockquote')]) {
       for (const text of [...node.childNodes]) {
         if (text.nodeType !== Node.TEXT_NODE || !text.textContent.trim()) continue;
         const fragment = document.createElement('div');
-        fragment.innerHTML = clean(marked.parse(text.textContent, { renderer, gfm: true, breaks: true }));
+        fragment.innerHTML = sanitize(marked.parse(text.textContent, { renderer, gfm: true, breaks: true }));
         text.replaceWith(...fragment.childNodes);
       }
     }
-    root.innerHTML = clean(root.innerHTML);
+    root.innerHTML = sanitize(root.innerHTML);
     root.querySelectorAll('span[title^="nownote-local-"]').forEach(span => {
       const index = Number(span.title.slice('nownote-local-'.length));
       const button = document.createElement('button'); button.type = 'button'; button.className = 'local-file-link';

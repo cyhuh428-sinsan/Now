@@ -376,7 +376,7 @@ function a(e,t){return n(e)||r(e,t)||o(e,t)||i()}function o(e,n){if(e){if(typeof
 /* 원문을 변경하지 않는 문서 변환. 외부 HTML은 정제 후 DOM으로 구성한다. */
 window.NowMarkdown = (() => {
   const tags = ['p','br','hr','strong','em','del','blockquote','ul','ol','li','pre','code','h1','h2','h3','h4','h5','h6','a','img','table','thead','tbody','tr','th','td','details','summary','input','span'];
-  const clean = html => DOMPurify.sanitize(html, { ALLOWED_TAGS: tags, ALLOWED_ATTR: ['href','src','alt','title','open','start','type','checked','disabled','align','data-note-attachment-key'], ALLOW_DATA_ATTR: false });
+  const clean = (html, images = true) => DOMPurify.sanitize(html, { ALLOWED_TAGS: images ? tags : tags.filter(tag => tag !== 'img'), ALLOWED_ATTR: ['href','src','alt','title','open','start','type','checked','disabled','align','data-note-attachment-key'], ALLOW_DATA_ATTR: false });
   const escape = value => String(value).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
   function scanHeadings(source) {
     const result = []; let offset = 0, fence = null, previous = '', previousOffset = 0;
@@ -397,6 +397,7 @@ window.NowMarkdown = (() => {
     return result;
   }
   function render(source, options = {}) {
+    const sanitize = html => clean(html, options.images !== false);
     const localPaths = [];
     const renderer = new marked.Renderer();
     renderer.link = function(token) {
@@ -409,17 +410,17 @@ window.NowMarkdown = (() => {
     };
     renderer.image = token => options.image ? options.image(escape(token.text), escape(token.href)) : '';
     const root = document.createElement('div');
-    root.innerHTML = clean(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
+    root.innerHTML = sanitize(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
     // details raw block 안에 남은 텍스트도 같은 Markdown parser로 처리한다.
     for (const node of [...root.querySelectorAll('details, blockquote')]) {
       for (const text of [...node.childNodes]) {
         if (text.nodeType !== Node.TEXT_NODE || !text.textContent.trim()) continue;
         const fragment = document.createElement('div');
-        fragment.innerHTML = clean(marked.parse(text.textContent, { renderer, gfm: true, breaks: true }));
+        fragment.innerHTML = sanitize(marked.parse(text.textContent, { renderer, gfm: true, breaks: true }));
         text.replaceWith(...fragment.childNodes);
       }
     }
-    root.innerHTML = clean(root.innerHTML);
+    root.innerHTML = sanitize(root.innerHTML);
     root.querySelectorAll('span[title^="nownote-local-"]').forEach(span => {
       const index = Number(span.title.slice('nownote-local-'.length));
       const button = document.createElement('button'); button.type = 'button'; button.className = 'local-file-link';
@@ -3482,27 +3483,45 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="compare">미전송 내용 비교</button></div>
     <section class="protection-comparison hidden" aria-label="미전송 내용 비교"></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
-    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><label>본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
+    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><div class="history-actions" role="group" aria-label="본문 보기"><button type="button" class="secondary-btn" data-action="editor-source" aria-pressed="true">원문 편집</button><button type="button" class="secondary-btn" data-action="editor-preview" aria-pressed="false">서식 보기</button></div><label class="protection-source-label">본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><article class="markdown-preview protection-preview hidden" aria-label="보호 메모 서식 보기" tabindex="0"></article><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="imports">미전송 이력 조회</button></div>
     <section class="protection-imports hidden" aria-label="가져올 원 이력"><div class="protection-import-rows protection-copies"></div><button type="button" class="primary-btn" data-action="import-selected">선택 이력 가져오기</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null};
   const keys = new Map();
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
     state.compared=null;$('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');
-    state.editorNote=null;state.composing=false;$('.protection-title').value='';$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
+    state.editorNote=null;state.composing=false;state.editorSelection=null;
+    // Replacing cleared inputs also discards the browser's native Undo history.
+    for(const selector of ['.protection-title','.protection-draft']) {
+      const old=$(selector);old.value='';old.defaultValue='';const next=old.cloneNode(false);old.readOnly=true;old.replaceWith(next);
+    }
+    bindEditors();editorView(false);$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
     state.importRows=[];$('.protection-import-rows').replaceChildren();$('.protection-imports').classList.add('hidden');
     askCancel?.(); api.lock();
   }
   function valid(token) {
     if (dialog.open && state.bound===api.contextKey() && state.run===token) return true;
     wipe(); return false;
+  }
+  function editorView(preview) {
+    const editor=$('.protection-draft'),view=$('.protection-preview');
+    if(preview) {
+      state.editorSelection=[editor.selectionStart,editor.selectionEnd,editor.selectionDirection,editor.scrollTop];
+      view.innerHTML=NowMarkdown.render(editor.value,{sections:true,images:false});
+    } else view.replaceChildren();
+    view.classList.toggle('hidden',!preview);$('.protection-source-label').classList.toggle('hidden',preview);
+    $('[data-action="editor-source"]').setAttribute('aria-pressed',String(!preview));
+    $('[data-action="editor-preview"]').setAttribute('aria-pressed',String(preview));
+    if(!preview && state.editorNote && state.editorSelection) {
+      const [start,end,direction,top]=state.editorSelection;editor.focus();editor.setSelectionRange(start,end,direction);editor.scrollTop=top;
+    }
   }
   function controls() {
     const unlocked = api.canMutate(), info=state.info;
@@ -3524,6 +3543,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       if(button)button.disabled=state.busy || !unlocked || Boolean(info.pending) || !state.compared;
     }
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
+    for(const mode of ['source','preview'])$('[data-action="editor-'+mode+'"]').disabled=state.busy || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
     $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog
       || row?.kind!=='typed' || !['revision_snapshot','offline_snapshot'].includes(d?.key.kind) || d.is_null || !d.revision_ref;
@@ -3652,9 +3672,12 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           if(!password || !valid(token))return;
           status('선택한 내용 저장 중');await api.resolvePending(state.info,choice,compared,password,resolveKey(token));
           if(valid(token))await load();
+        } else if(name==='editor-source'||name==='editor-preview') {
+          if(!state.editorNote || state.composing)throw Error('입력을 마친 뒤 보기를 전환하세요.');
+          editorView(name==='editor-preview');
         } else if(name==='edit'||name==='create') {
           const note=await api[name](state.info,resolveKey(token));
-          if(valid(token)){state.editorNote=note;$('.protection-title').value=note.title;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
+          if(valid(token)){state.editorNote=note;state.editorSelection=null;$('.protection-title').value=note.title;$('.protection-draft').value=note.content;editorView(false);$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
         } else if(name==='save') {
           if(!state.editorNote || state.composing)throw Error('입력을 마친 뒤 저장하세요.');
           const note=structuredClone(state.editorNote),password=await ask('write-bundle',true,token);
@@ -3697,11 +3720,21 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const token=state.run;status('초안 저장 중');
     void api.draft(state.info,structuredClone(state.editorNote)).then(()=>{if(valid(token))status('초안 저장됨');},error=>{if(valid(token))status(error.message||'초안 저장 실패');});
   }
-  for(const editor of [$('.protection-draft'),$('.protection-title')]){
+  function bindEditors() {for(const editor of [$('.protection-draft'),$('.protection-title')]){
     editor.addEventListener('input',draftInput);
     editor.addEventListener('compositionstart',()=>{state.composing=true;controls();});
     editor.addEventListener('compositionend',()=>{state.composing=false;draftInput();controls();});
-  }
+  }}
+  bindEditors();
+  $('.protection-preview').addEventListener('click',e=>{
+    if(!valid(state.run))return;
+    const file=e.target.closest('[data-local-path]');
+    if(file){e.preventDefault();void api.openFile?.(file.dataset.localPath);return;}
+    const wiki=e.target.closest('[data-wiki-link]');
+    if(wiki){e.preventDefault();void api.openWiki?.(wiki.dataset.wikiLink);return;}
+    const anchor=e.target.closest('a[href^="#"]');
+    if(anchor){e.preventDefault();$('.protection-preview').querySelector('#'+CSS.escape(anchor.getAttribute('href').slice(1)))?.scrollIntoView({block:'nearest'});}
+  });
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   $('[name="representation"]').addEventListener('change',controls);
   $('.protection-import-rows').addEventListener('change',controls);
@@ -8964,7 +8997,7 @@ async function openNoteProtection({discover=false}={}) {
       if(!protectionTargets().includes(id))throw new Error("현재 계정의 보호 대상이 아닙니다.");
       noteProtectionTargetId=id;
     },
-    inspect:inspectNoteProtection,copies:scope=>noteProtectionClient.copies(scope),
+    inspect:inspectNoteProtection,copies:scope=>noteProtectionClient.copies(scope),openFile:openDocumentFile,openWiki:openWikiLink,
     confirm:async(scope,list,ids)=>{
       protectionApplying=true;
       try {await Promise.all([...storagePendingWrites]);await noteProtectionClient.confirm(scope,list,ids);}
