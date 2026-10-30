@@ -55,7 +55,7 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of probe?[0]:process.argv.includes('--editor-restart')?[1,2,3]:[1,2]) {
+    for(const phase of probe?[0]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       await fs.writeFile(config,JSON.stringify({root,source,profile,mode,phase,result,secrets,envFile,run,manifestFile,probe,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:process.argv.includes('--editor-write')||process.argv.includes('--editor-restart'),editorRestart:process.argv.includes('--editor-restart')}));

@@ -76,6 +76,18 @@
     return {ok:true,mode:config.mode,phase:1,owner:a.owner,local_id:target,serverEpoch:1,localPhase:'applying',accountIsolation:true};
   }
   state.selectedTreeId=findTreeNode(state.data.tree,target)?target:null;render();await settle();await open();
+  if(config.phase===4){
+    const before=await inspectNoteProtection();assert(before.catalog.context.base.head_version===5,'draft_only_restart_changed_server');
+    await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    assert(dialog().querySelector('.protection-draft').value==='HTTP-QA-DRAFT-ONLY-'+run+'\n','draft_only_cold_restart_lost_content');
+    await action('save',()=>status().includes('전환 준비 가능'));
+    const after=await inspectNoteProtection();assert(after.catalog.context.base.head_version===6,'recovered_draft_not_saved_once');
+    const descriptor=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
+    const current=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
+    assert(current.value.note.content==='HTTP-QA-DRAFT-ONLY-'+run+'\n','recovered_draft_server_meaning_changed');
+    emit({stage:'draft_only_restart_saved_once',owner:a.owner,local_id:target,phase:'complete',server_instance_id:after.scope.instance});
+    clearWebSession();return {ok:true,mode:config.mode,phase:4,serverEpoch:2,headVersion:6,draftOnlyColdRestart:true,compositionEventsOnly:true};
+  }
   assert(status().includes('적용 필요'),'real_cold_restart_lost_pending');
   if(config.phase===3){
     const select=dialog().querySelector('[name="representation"]');
@@ -92,7 +104,18 @@
     const current=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
     assert(current.value.note.content==='HTTP-QA-EDITED-'+run+'\n','MW_resume_changed_editor_content');
     emit({stage:'MW_restart_same_operation_complete',owner:a.owner,local_id:target,operation_id:original.prepared.id,local_operation_id:pending.id,phase:'complete',server_instance_id:after.scope.instance});
-    clearWebSession();return {ok:true,mode:config.mode,phase:3,serverEpoch:2,headVersion:5,originalOperationResumed:true,recoveredCipherDraft:true};
+    await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    const editor=dialog().querySelector('.protection-draft'),beforeDraft=JSON.stringify(noteHistory.export());
+    editor.dispatchEvent(new CompositionEvent('compositionstart',{bubbles:true,data:'QA'}));
+    editor.value='HTTP-QA-DRAFT-ONLY-'+run+'\n';editor.dispatchEvent(new InputEvent('input',{bubbles:true,isComposing:true,data:'QA'}));
+    assert(button('save').disabled,'composition_allowed_server_save');
+    assert(JSON.stringify(noteHistory.export())===beforeDraft,'composition_sealed_before_end');
+    editor.dispatchEvent(new CompositionEvent('compositionend',{bubbles:true,data:'QA'}));
+    await drive(()=>status().includes('초안 저장됨'),'composition_draft');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-DRAFT-ONLY-'+run),'draft_only_persisted_plaintext');
+    button('lock').click();assert(!editor.value,'draft_only_lock_retained_plaintext');
+    emit({stage:'draft_only_cipher_durable_before_restart',owner:a.owner,local_id:target});
+    clearWebSession();return {ok:true,mode:config.mode,phase:3,serverEpoch:2,headVersion:5,originalOperationResumed:true,recoveredCipherDraft:true,draftOnlyPersisted:true,compositionEventsOnly:true};
   }
   await action('resume',()=>status().includes('operation')||status().includes('decrypt')||status().includes('실패'),'wrong-key');
   assert(Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'),'wrong_key_changed_pending');
