@@ -3551,14 +3551,14 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     }
     if(['client_pending','expired'].includes(e.state)&&(dr!==null||e.run_version!==1))fail('dispatch_state');
     if(e.state==='client_running'&&(dr===null||e.run_version!==2))fail('dispatch_state');
-    if(e.state==='cancel_requested'&&(dr===null||e.run_version!==3))fail('dispatch_state');
+    if(e.state==='cancel_requested'&&(dr===null||e.run_version<3))fail('dispatch_state');
     if(tr===null){if(bm!==null||['client_settled','result_unavailable','cancelled'].includes(e.state))fail('terminal_missing');return e;}
     exact(tr,['schema_version','execution_id','original_job_id','dispatch_id','source_digest','terminal_run_version','outcome','bundle_digest','client_reported','external_settled','result_server_persisted']);
     const outcome=e.state==='client_settled'?bm?.outcome:e.state;
     if(!['done','failed','result_unavailable','cancelled'].includes(outcome)||!same(tr,{schema_version:3,execution_id:e.execution_id,original_job_id:e.job_id,dispatch_id:dr?.dispatch_id??null,source_digest:e.source_digest,terminal_run_version:e.run_version,outcome,bundle_digest:bm?.bundle_digest??null,client_reported:true,external_settled:true,result_server_persisted:false}))fail('terminal_receipt');
     if(outcome==='cancelled'){if(dr!==null||bm!==null||e.run_version!==2)fail('terminal_state');}
     else {
-      if(dr===null||![3,4].includes(e.run_version))fail('terminal_state');
+      if(dr===null||e.run_version<3)fail('terminal_state');
       if(outcome==='result_unavailable'){if(bm!==null)fail('unavailable_bundle');}
       else await validateBundle(e,bm);
     }

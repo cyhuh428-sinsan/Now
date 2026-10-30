@@ -34,6 +34,9 @@ const running={...copy(pending),state:'client_running',run_version:2,dispatch_re
 await A.validateExecution(scope,request,running);checks++;
 const unavailable={...copy(running),state:'result_unavailable',run_version:3,source_matches_current:false,latest_context:{...base,base:{...base.base,history_generation:9}},terminal_receipt:{schema_version:3,execution_id:uid(4),original_job_id:12,dispatch_id:uid(5),source_digest,terminal_run_version:3,outcome:'result_unavailable',bundle_digest:null,client_reported:true,external_settled:true,result_server_persisted:false}};
 await A.validateExecution(scope,request,unavailable);checks++;
+await A.validateExecution(scope,request,{...copy(running),state:'cancel_requested',run_version:4});checks++;
+const repeatedCancelTerminal=copy(unavailable);repeatedCancelTerminal.run_version=5;repeatedCancelTerminal.terminal_receipt.terminal_run_version=5;
+await A.validateExecution(scope,request,repeatedCancelTerminal);checks++;
 for(const changed of [{result_server_persisted:true},{external_settled:false},{bundle_digest:'a'.repeat(64)},{terminal_run_version:2},{dispatch_id:uid(9)}]) {
   const r=copy(unavailable);Object.assign(r.terminal_receipt,changed);await assert.rejects(()=>A.validateExecution(scope,request,r));checks++;
 }
