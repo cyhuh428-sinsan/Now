@@ -481,17 +481,28 @@
     }
     async function normalized(s,p,response,work) {
       const writing=p.response.purpose==='mixed_note_write';
+      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing;
       if ((response.operation_id || response.transition_id) !== p.id) fail('operation_identity');
+      if(mutation && (response.schema_version!==3 || response.purpose!==p.response.purpose || response.mutation_id!==p.response.mutation_id)) fail('receipt_identity');
       if (response.state === 'committed') {
         const r = response.receipt;
         if (!r || r.owner_id !== s.owner || r.local_id !== s.local_id || r.server_instance_id !== s.instance || r.metadata_manifest_digest !== p.digest) fail('receipt_binding');
         if (p.version === 3 && r.operation_id !== p.id) fail('receipt_identity');
-        if(writing) {
+        if(mutation) {
           protocol().validateContext(response.latest_context);
-          if(r.schema_version!==3 || r.purpose!=='mixed_note_write' || r.mutation_id!==p.response.mutation_id
+          if(r.schema_version!==3 || r.purpose!==p.response.purpose || r.mutation_id!==p.response.mutation_id
             || !eq(r.result,response.latest_context) || r.ciphertext_manifest_digest!==work?.commit.client_verified_ciphertext_manifest_digest) fail('receipt_binding');
           for(const name of ['S','DSET','P','O','existing','verified_existing']) {
             if(r.set_digests?.[name]!==await protocol().hashJson(p.manifest[name])) fail('receipt_manifest');
+          }
+          if(importing) {
+            const expected=copy(p.response.metadata_header.base);
+            if(p.manifest.DSET.length) {
+              expected.base.head_version++;expected.base.history_generation++;
+              if(!expected.base.current_exists) expected.base.identity_state='branch_only';
+            }
+            if(!eq(r.result,expected) || r.origin_expectations_digest!==await protocol().hashJson(p.manifest.O)
+              || work?.commit.client_verified_existing_set_digest!==await protocol().hashJson(p.manifest.verified_existing)) fail('import_receipt');
           }
         } else {
         if (response.receipt_matches_current !== true) fail('committed_not_current');
@@ -537,6 +548,15 @@
         } while (cursor !== null);
         const actual = await protocol().verifyCatalog(received,{ schema_version:p.version === 3 ? 3 : 2,
           server_instance_id:s.instance, owner_id:s.owner,local_id:s.local_id,device_id:s.device,context,catalog_digest:digest });
+        if(importing) {
+          if(actual.length!==p.manifest.P.length+p.manifest.DSET.length
+            || p.manifest.P.some(old=>!actual.some(d=>eq(d,old)))) fail('import_published_preserved');
+          for(const output of p.manifest.DSET) {
+            const d=actual.find(d=>eq(d.key,output.destination_key)),o=p.manifest.O.find(o=>eq(o.destination_key,output.destination_key));
+            if(!d || !o || !eq(Object.fromEntries(['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'].map(k=>[k,d[k]])),
+              Object.fromEntries(['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'].map(k=>[k,o[k]])))) fail('import_published_origin');
+          }
+        }
         const destinations = p.version === 3 ? p.manifest.DSET : p.manifest.entries.map(e => ({ destination_key:e.destination_key,
           output_kind:e.output_kind,output_epoch:p.response.target_epoch,is_null:false,expected_binding:e.expected_binding }));
         for (const output of destinations) {
@@ -548,9 +568,9 @@
           if (!output.is_null && output.output_epoch > 0 && (!t || d.ciphertext_sha256 !== t.descriptor.ciphertext_sha256)) fail('published_cipher_changed');
         }
       }
-      // MW's wire has latest_context, not the conversion receipt_matches_current field.
+      // Mutation wires have latest_context, not the conversion receipt_matches_current field.
       // This internal flag is emitted only after the original receipt and fresh publication checks.
-      return writing && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
+      return mutation && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
       async prepareImport(s,intent) {
@@ -811,8 +831,19 @@
           if(!Array.isArray(branches) || !eq(branches.map(r=>r.revision_id),entries.map(e=>e.revision_id))) fail('import_branch_set');
           for(let n=0;n<entries.length;n++) {
             const e=entries[n],r=branches[n],value=protocol().validateSnapshot(r.snapshot);
+            fields(r,['revision_id','parent_ref','origin_device_id','snapshot','representation']);
             if(!eq(r.parent_ref,e.parent_ref) || r.origin_device_id!==e.origin_device_id || value.note.owner_id!==s.owner || value.note.local_id!==s.local_id)
               fail('import_branch');
+            if(e.source_epoch>0) {
+              const rep=r.representation,key={kind:'offline_snapshot',id:e.revision_id,slot:'snapshot'};
+              if(!rep) fail('import_cipher_source');fields(rep,['descriptor','raw','origin']);
+              const d=protocol().validateDescriptor(rep.descriptor,3);
+              if(!eq(d.key,key) || d.is_null || d.representation_kind!==e.source_kind || d.representation_epoch!==e.source_epoch
+                || !eq(d.parent_ref,e.parent_ref) || !eq(d.revision_ref,{kind:'offline_branch',id:e.revision_id})
+                || d.expected_binding?.server_instance_id!==s.instance) fail('import_cipher_source');
+              const original=await protocol().decryptRepresentation(rep.raw,d,rep.origin,resolve,3);
+              if(!semanticEq(original,value)) fail('import_cipher_meaning');
+            } else if(r.representation!==null) fail('import_plain_source');
             if(fixed.DSET.some(d=>d.destination_key.id===e.revision_id) && value.note.id!==null) fail('import_destination');
             imported.set(e.revision_id,value);
           }

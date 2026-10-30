@@ -171,8 +171,43 @@ nonceIntent.local_branches[0].representation.descriptor.ciphertext_sha256=await 
 await assert.rejects(box.NowNoteProtectionClient.buildImportWork(scope,identicalPrepared,nonceIntent,'cipher-key',remote),/import_existing_cipher/);
 const nonceWork=structuredClone(identicalWork);nonceWork.branches=nonceIntent.local_branches;
 await assert.rejects(remote.stage(scope,identicalPrepared,nonceWork,'cipher-key'),/import_existing_cipher/);
+sampleManifest=structuredClone(originalPrepared.manifest);sampleHeader=structuredClone(originalPrepared.response.metadata_header);
+sourceRaw=Q.canonicalJson({schema_version:1,note:full});
+const rebound=await remote.prepareImport(scope,originalIntent);
+const rewritten=structuredClone(originalWork),rewrittenTransfer=rewritten.transfers[0];
+rewritten.branches[1].snapshot.note.content='rewritten after build';
+rewrittenTransfer.semantic=rewritten.branches[1].snapshot;
+rewrittenTransfer.raw=await Q.encryptRepresentation(rewrittenTransfer.semantic,{key:newKey,output_kind:'history_envelope_v1',output_epoch:2,is_null:false,
+  expected_binding:binding,operation_origin:originalPrepared.response.metadata_header.operation_origin},'new-key');
+rewrittenTransfer.descriptor.ciphertext_sha256=await Q.sha256(rewrittenTransfer.raw);
+rewritten.commit.client_verified_ciphertext_manifest_digest=await Q.hashJson([{entry_key:newKey,destination_key:newKey,source_etag:uid(21),output_kind:'history_envelope_v1',
+  target_epoch:2,total_bytes:new TextEncoder().encode(rewrittenTransfer.raw).length,ciphertext_sha256:rewrittenTransfer.descriptor.ciphertext_sha256}]);
+await assert.rejects(remote.stage(scope,rebound,rewritten,'new-key',[],keys),/import_cipher_meaning/);
+let receiptCase={p:originalPrepared,work:originalWork},receiptDamage=null;
+const receiptRemote=P.createRemote({request:async(s,path)=>{
+  const {p,work}=receiptCase,hasNew=p.manifest.DSET.length>0;
+  const published={...base,base:{...base.base,head_version:base.base.head_version+(hasNew?1:0),history_generation:base.base.history_generation+(hasNew?1:0)}};
+  if(receiptDamage==='result')published.base.head_version++;
+  const descriptors=structuredClone([...p.manifest.P,...work.transfers.map(t=>t.descriptor)]);
+  if(receiptDamage==='preserved')descriptors[0].representation_etag=uid(99);
+  const publishedDigest=await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:published,entries:descriptors});
+  const receipt={schema_version:3,purpose:'mixed_offline_import',operation_id:p.id,mutation_id:uid(4),server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,
+    result:published,metadata_manifest_digest:p.digest,set_digests:Object.fromEntries(await Promise.all(sections.map(async k=>[k,await Q.hashJson(p.manifest[k])]))),
+    ciphertext_manifest_digest:work.commit.client_verified_ciphertext_manifest_digest,origin_expectations_digest:receiptDamage==='origin'?'0'.repeat(64):await Q.hashJson(p.manifest.O),committed_at:'2026-10-31T00:00:00.000001Z'};
+  if(path.endsWith('/status'))return {schema_version:3,purpose:'mixed_offline_import',operation_id:p.id,mutation_id:uid(4),state:'committed',receipt,latest_context:published};
+  if(path.endsWith('/context'))return {schema_version:3,server_instance_id:scope.instance,context:published,catalog_digest:publishedDigest};
+  if(path.endsWith('/catalog'))return {schema_version:3,context:published,catalog_digest:publishedDigest,counts:count(descriptors),
+    coverage:{supported_kinds:kinds,scope_complete:true,full_protection_complete:false},entries:descriptors,next_cursor:null};
+  throw Error('unexpected_receipt');
+}});
+assert.equal((await receiptRemote.status(scope,originalPrepared,originalWork)).receipt_matches_current,true);
+for(const bad of ['result','preserved','origin']){receiptDamage=bad;await assert.rejects(receiptRemote.status(scope,originalPrepared,originalWork),/receipt|import|published/);}
+receiptDamage=null;receiptCase={p:identicalPrepared,work:identicalWork};
+assert.equal((await receiptRemote.status(scope,identicalPrepared,identicalWork)).receipt_matches_current,true);
 console.log('MI prepare: 10 PASS (synthetic six-section metadata contract; no HTTP/UI)');
 console.log('MI existing source: 6 PASS (actual WebCrypto and multi-chunk synthetic transport; no server/UI)');
 console.log('MI semantic work: 8 PASS (actual old/new epoch crypto, original FULL15/parent/device and V3 digest; synthetic transport, no commit/UI)');
 console.log('MI stage: 3 PASS (synthetic upload/readback and existing/plain commit verification; no server/UI)');
 console.log('MI I1: exact existing local/server cipher bytes required, same meaning/different nonce rejected in build and stage');
+console.log('MI I2: original new-branch cipher is re-decrypted at stage; rewritten snapshot/output/digest rejected');
+console.log('MI receipt: 5 PASS (new/existing-only result, preserved old descriptors and exact receipt; synthetic wire, no server/UI)');
