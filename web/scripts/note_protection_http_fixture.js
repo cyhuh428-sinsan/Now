@@ -177,6 +177,29 @@
     return {ok:true,mode:config.mode,phase:1,owner:a.owner,local_id:target,serverEpoch:1,localPhase:'applying',accountIsolation:true};
   }
   state.selectedTreeId=findTreeNode(state.data.tree,target)?target:null;render();await settle();await open();
+  if(config.phase===8||config.phase===9){
+    const before=await inspectNoteProtection();assert(before.catalog.context.base.head_version===5,'offline_draft_changed_server_before_reconnect');
+    await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    const editor=dialog().querySelector('.protection-draft'),content='HTTP-QA-OFFLINE-DRAFT-'+run+'\n';
+    if(config.phase===8){
+      emit({stage:'offline_draft_start',owner:a.owner,local_id:target});
+      for(let i=0;i<100&&!globalThis.__HTTP_QA_OFFLINE_ACK__;i++)await wait();
+      assert(globalThis.__HTTP_QA_OFFLINE_ACK__===true,'offline_transport_not_blocked');
+      let blocked=false;try{await fetch(url+'/health/ready',{cache:'no-store'});}catch{blocked=true;}
+      assert(blocked,'offline_transport_still_available');
+      editor.value=content;editor.dispatchEvent(new Event('input',{bubbles:true}));
+      await drive(()=>status().includes('초안 저장됨'),'offline_local_draft');
+      for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-OFFLINE-DRAFT-'+run),'offline_draft_plaintext_persisted');
+      button('lock').click();assert(!editor.value,'offline_draft_lock_retained_plaintext');
+      clearWebSession();return {ok:true,mode:config.mode,phase:8,transportBlocked:true,cipherDraftPersisted:true,headVersion:5};
+    }
+    assert(editor.value===content,'offline_draft_cold_restart_lost_content');
+    await action('save',()=>status().includes('전환 준비 가능'));
+    const after=await inspectNoteProtection(),d=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(after.catalog.context.selected_physical_note_id));
+    const current=await noteProtectionReader.read(after.scope,after.catalog,d,async()=>password);
+    assert(after.catalog.context.base.head_version===6&&current.value.note.content===content,'offline_draft_reconnect_not_saved_once');
+    button('lock').click();clearWebSession();return {ok:true,mode:config.mode,phase:9,coldRestartRecovered:true,reconnectedSave:true,headVersion:6};
+  }
   if(config.phase===4){
     const before=await inspectNoteProtection();assert(before.catalog.context.base.head_version===5,'draft_only_restart_changed_server');
     await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
