@@ -332,7 +332,9 @@
       },
     };
   }
-  function createWrite({context,journal,remote,capture,settle,apply,change=()=>{}}) {
+  function createWrite(options) {return createMutation(options,'mixed_note_write');}
+  function createImport(options) {return createMutation(options,'mixed_offline_import');}
+  function createMutation({context,journal,remote,capture,settle,apply,change=()=>{}},purpose) {
     let generation=0,running=false;
     const same=(a,b)=>protocol().canonicalJson(a)===protocol().canonicalJson(b);
     const own=scope=>{
@@ -368,14 +370,14 @@
       const b=protocol().parseJson(await protocol().decryptContent(marker.cipher_bundle,password));
       fields(b,['schema_version','operation_id','scope','intent','local','prepared','work','receipt']);
       if(b.schema_version!==1 || b.operation_id!==marker.id || !same(b.scope,marker.scope)
-        || b.intent?.schema_version!==3 || b.intent.purpose!=='mixed_note_write') fail('bundle_binding');
+        || b.intent?.schema_version!==3 || b.intent.purpose!==purpose) fail('bundle_binding');
       return b;
     }
     return {
       async start(scope,intent,password) {
         if(!password) fail('key_required');scope=copy(scope);intent=copy(intent);
         const ctx=own(scope),epoch=generation;
-        if(intent.schema_version!==3 || intent.purpose!=='mixed_note_write') fail('work_purpose');
+        if(intent.schema_version!==3 || intent.purpose!==purpose) fail('work_purpose');
         if(running) fail('busy');if(pending(scope)) fail('operation_exists');running=true;
         try {
           const local=await capture(copy(scope),()=>active(ctx,epoch),copy(intent));active(ctx,epoch);
@@ -393,7 +395,7 @@
           const persist=()=>save(marker,b,password,ctx,epoch);
           if(marker.phase==='complete') return copy(b.receipt);
           if(marker.phase==='preparing') {
-            b.prepared=await remote.prepareWrite(copy(marker.scope),copy(b.intent));active(ctx,epoch);
+            b.prepared=await remote[purpose==='mixed_offline_import'?'prepareImport':'prepareWrite'](copy(marker.scope),copy(b.intent));active(ctx,epoch);
             marker.phase='promoted';await persist();
           }
           if(marker.phase==='promoted') {
@@ -942,5 +944,5 @@
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
 })();
