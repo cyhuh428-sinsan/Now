@@ -27,7 +27,7 @@ def after_cursor(value, owner, instance):
         if (not isinstance(body, dict) or set(body) != {"schema_version", "owner_id", "server_instance_id", "after"}
             or type(body["schema_version"]) is not int or body["schema_version"] != 3
             or body["owner_id"] != owner or body["server_instance_id"] != instance
-            or not isinstance(body["after"], str) or not 1 <= len(body["after"]) <= 120 or encode(body) != value):
+            or not isinstance(body["after"], str) or len(body["after"]) > 120 or encode(body) != value):
             raise ValueError()
         return body["after"]
     except (ValueError, TypeError, UnicodeError, binascii.Error):
@@ -55,7 +55,7 @@ def list_targets(db, body):
     items = []
     for head, exists in rows[:body.limit]:
         mode = head.current_mode if head.crypto_epoch > 0 else ("plain" if exists else "absent")
-        if (not head.local_id or len(head.local_id) > 120 or type(head.crypto_epoch) is not int or head.crypto_epoch < 0
+        if (not isinstance(head.local_id, str) or len(head.local_id) > 120 or type(head.crypto_epoch) is not int or head.crypto_epoch < 0
             or head.identity_state not in ("empty", "coherent", "ambiguous", "branch_only", "related_only")
             or head.protection_state not in ("legacy", "protected", "updating", "mixed_updating")
             or mode not in ("plain", "protected", "absent") or (mode == "absent") != (not exists)):

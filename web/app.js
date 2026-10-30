@@ -3549,11 +3549,16 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   };
   async function load() {
     wipe(); state.info=null; state.copies=[];
+    $('.protection-scope').replaceChildren();
     const token=++state.run;
     status('보호 상태 조회 중');
     const targets=$('[name="target"]');targets.replaceChildren();
-    for(const id of api.targets()) {const o=document.createElement('option');o.value=id;o.textContent=id;targets.append(o);}
-    targets.value=api.target();
+    const ids=await api.targets();if(!valid(token))return;
+    if(!ids.length)throw Error('현재 계정의 보호 대상이 없습니다.');
+    for(const id of ids) {const o=document.createElement('option');o.value=id;o.textContent=api.targetLabel?.(id)||id;targets.append(o);}
+    const chosen=ids.includes(api.target())?api.target():ids[0];
+    if(chosen!==api.target()){api.selectTarget(chosen);state.bound=api.contextKey();}
+    targets.value=chosen;
     const info=await api.inspect(); if (!valid(token)) return;
     state.info=info;
     const dl=$('.protection-scope');dl.replaceChildren();
@@ -8344,6 +8349,8 @@ const noteHistoryRemoteCache = new Map();
 let noteProtection = null;
 let noteProtectionIdentity = null;
 let noteProtectionTargetId = null;
+let noteProtectionDiscoveredTargets = null;
+let noteProtectionDiscoveryOnly = false;
 let noteProtectionRemote = null;
 let noteProtectionReader = null;
 let noteProtectionClient = null;
@@ -8841,14 +8848,65 @@ async function mutateProtectedCurrent(info,operation,row,password,resolveKey) {
   guard();return writeProtectedCurrent(info,input,password,resolveKey,{operation,restore_source});
 }
 
-function protectionTargetId() { return noteProtectionTargetId || getSelectedTreeNode()?.id || ""; }
+function protectionTargetId() { return noteProtectionTargetId ?? getSelectedTreeNode()?.id ?? ""; }
 
 function protectionTargets() {
-  const c=noteHistoryContext(),selected=getSelectedTreeNode(),ids=new Set(selected?[selected.id]:[]);
+  const c=noteHistoryContext(),selected=noteProtectionDiscoveryOnly?null:getSelectedTreeNode(),ids=new Set(selected?[selected.id]:[]);
+  if(!c.enabled)return [];
   for(const marker of Object.values(noteHistory?.protectionOperations() || {})) {
     if(marker.scope.owner===c.owner && marker.scope.url===c.url)ids.add(marker.scope.local_id);
   }
+  if(noteProtectionDiscoveredTargets?.binding===protectionDiscoveryBinding(c))
+    for(const row of noteProtectionDiscoveredTargets.items)ids.add(row.local_id);
   return [...ids];
+}
+
+function protectionDiscoveryBinding(ctx=noteHistoryContext()) {
+  return JSON.stringify([ctx.url,ctx.owner,ctx.device,ctx.auth]);
+}
+
+async function refreshProtectionTargets() {
+  const ctx=noteHistoryContext(),binding=protectionDiscoveryBinding(ctx),guard=protectionActionGuard();
+  noteProtectionDiscoveredTargets=null;
+  if(!ctx.enabled || !ctx.online || !ctx.url || !ctx.auth)throw Error("note_protection:targets_auth");
+  const exact=(value,keys)=>value && typeof value==="object" && !Array.isArray(value)
+    && Object.keys(value).length===keys.length && keys.every(key=>Object.hasOwn(value,key));
+  const items=[],seen=new Set(),cursors=new Set();let cursor=null,instance=null;
+  do {
+    const page=await noteHistoryRequest(ctx,"protection-targets","GET",{schema_version:3,device_id:ctx.device,limit:100,...(cursor?{cursor}:{})});guard();
+    const now=noteHistoryContext();
+    if(!now.enabled || !now.online || binding!==protectionDiscoveryBinding(now))throw Error("note_protection:targets_auth");
+    if(!exact(page,["schema_version","server_instance_id","items","next_cursor"]) || page.schema_version!==3
+      || !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(page.server_instance_id)
+      || !Array.isArray(page.items) || page.items.length>100)throw Error("note_protection:targets_schema");
+    if(instance!==null && instance!==page.server_instance_id)throw Error("note_protection:targets_instance");
+    instance=page.server_instance_id;
+    for(const row of page.items) {
+      if(!exact(row,["local_id","identity_state","protection_state","crypto_epoch","current_mode","current_exists"])
+        || typeof row.local_id!=="string" || [...row.local_id].length>120
+        || !["empty","coherent","ambiguous","branch_only","related_only"].includes(row.identity_state)
+        || !["legacy","protected","updating","mixed_updating"].includes(row.protection_state)
+        || !Number.isSafeInteger(row.crypto_epoch) || row.crypto_epoch<0
+        || !["plain","protected","absent"].includes(row.current_mode) || typeof row.current_exists!=="boolean"
+        || (row.current_mode==="absent")!==!row.current_exists)throw Error("note_protection:targets_schema");
+      if(seen.has(row.local_id))throw Error("note_protection:targets_duplicate");
+      NowNoteProtectionProtocol.canonicalJson(row.local_id);
+      seen.add(row.local_id);items.push(structuredClone(row));
+    }
+    cursor=page.next_cursor;
+    if(cursor!==null) {
+      if(typeof cursor!=="string" || !cursor || cursor.length>4096 || !page.items.length || cursors.has(cursor))throw Error("note_protection:targets_cursor");
+      cursors.add(cursor);
+    }
+  }while(cursor!==null);
+  guard();noteProtectionDiscoveredTargets={binding,instance,items};
+  return protectionTargets();
+}
+
+function protectionTargetLabel(id) {
+  const cache=noteProtectionDiscoveredTargets;
+  const item=cache?.binding===protectionDiscoveryBinding()?cache.items.find(row=>row.local_id===id):null;
+  return item?(id||"(빈 ID)")+" · "+(item.identity_state==="related_only"?"연결 자료만":item.identity_state==="branch_only"?"분기 이력만":item.current_mode==="protected"?"보호":item.current_mode==="plain"?"평문":"현재 메모 없음"):id;
 }
 
 function protectionViewKey() {
@@ -8858,9 +8916,12 @@ function protectionViewKey() {
 
 async function inspectNoteProtection() {
   const id=protectionTargetId(), bound=protectionViewKey(), ctx=noteHistoryContext();
-  if (!id || !ctx.enabled || !ctx.online) throw new Error("인증된 서버와 메모를 선택하세요.");
+  if (typeof id!=="string" || !ctx.enabled || !ctx.online) throw new Error("인증된 서버와 메모를 선택하세요.");
   const status=await noteHistoryRequest(ctx,"crypto-transitions/status","GET",{local_id:id,device_id:ctx.device});
   if (bound!==protectionViewKey()) throw new Error("보호 대상이 변경되었습니다.");
+  const discovered=noteProtectionDiscoveredTargets;
+  if(discovered?.binding===protectionDiscoveryBinding(ctx) && discovered.items.some(row=>row.local_id===id)
+    && discovered.instance!==status.server_instance_id)throw Error("보호 대상 목록의 서버 식별이 변경되었습니다. 다시 조회하세요.");
   noteProtectionIdentity={instance:status.server_instance_id};
   const scope={url:ctx.url,owner:ctx.owner,instance:status.server_instance_id,local_id:id,device:ctx.device};
   const pending=Object.values(noteHistory.protectionOperations()).find(m=>m.phase!=="complete"
@@ -8875,12 +8936,13 @@ async function inspectNoteProtection() {
   ]};
 }
 
-async function openNoteProtection() {
+async function openNoteProtection({discover=false}={}) {
   if (!noteProtectionClient) {showNotice("보호 저장소를 먼저 초기화하세요.","error");return;}
-  noteProtectionTargetId=getSelectedTreeNode()?.id || protectionTargets()[0] || null;
+  noteProtectionDiscoveryOnly=discover;
+  noteProtectionTargetId=discover?null:getSelectedTreeNode()?.id || protectionTargets()[0] || null;
   noteProtectionUI ||= mountNoteProtection({
     contextKey:protectionViewKey,canMutate:()=>noteProtectionInternalEnabled===true,
-    targets:protectionTargets,target:protectionTargetId,selectTarget:id=>{
+    targets:refreshProtectionTargets,target:protectionTargetId,targetLabel:protectionTargetLabel,selectTarget:id=>{
       if(!protectionTargets().includes(id))throw new Error("현재 계정의 보호 대상이 아닙니다.");
       noteProtectionTargetId=id;
     },
@@ -10903,6 +10965,7 @@ function bindEvents() {
   elements.propertiesSavedFilterSelect?.addEventListener("change", applyPropertyFilter);
   elements.propertyTemplateCreateBtn?.addEventListener("click", createNoteFromPropertyTemplate);
   elements.canvasBtn?.addEventListener("click", openCanvasView);
+  $("#protectionBtn")?.addEventListener("click", () => openNoteProtection({discover:true}).catch(error => showNotice(error.message,"error")));
   elements.canvasCloseBtn?.addEventListener("click", closeCanvasView);
   elements.canvasTitleInput?.addEventListener("input", updateCanvasTitle);
   elements.canvasAddNoteBtn?.addEventListener("click", addSelectedNoteCanvasCard);

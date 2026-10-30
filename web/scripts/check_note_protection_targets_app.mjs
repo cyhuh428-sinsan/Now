@@ -1,0 +1,52 @@
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+let passed=0;
+for(const file of ['../app.js','../../desktop/app/app.js']){
+  const source=await fs.readFile(new URL(file,import.meta.url),'utf8');
+  const box=vm.createContext({structuredClone,URLSearchParams,Set,TextEncoder,TextDecoder});
+  vm.runInContext(await fs.readFile(new URL('../vendor/note-protection-protocol.js',import.meta.url),'utf8'),box);
+  const extract=name=>{
+    const start=source.search(new RegExp('(?:async )?function '+name+'\\('));
+    assert.ok(start>=0,'actual app requires '+name);
+    const tail=source.slice(start),end=/\n(?:async )?function [A-Za-z]/.exec(tail);
+    return tail.slice(0,end.index);
+  };
+  let ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic-session',enabled:true,online:true},active=true;
+  box.noteHistoryContext=()=>structuredClone(ctx);box.protectionActionGuard=()=>()=>{if(!active)throw Error('scope_changed');};
+  box.getSelectedTreeNode=()=>null;box.noteHistory={protectionOperations:()=>({})};box.noteProtectionDiscoveredTargets=null;box.noteProtectionDiscoveryOnly=false;
+  const uuid='00000000-0000-4000-8000-000000000001';
+  const item=local_id=>({local_id,identity_state:'related_only',protection_state:'protected',crypto_epoch:1,current_mode:'absent',current_exists:false});
+  let calls=0;
+  box.noteHistoryRequest=async(c,path,method,body)=>{
+    assert.equal(c.owner,'alice');assert.equal(path,'protection-targets');assert.equal(method,'GET');assert.equal(body.schema_version,3);
+    calls++;return {schema_version:3,server_instance_id:uuid,items:[item(calls===1?'related-without-tree':'한글')],next_cursor:calls===1?'next':null};
+  };
+  vm.runInContext(['protectionDiscoveryBinding','protectionTargetId','protectionTargets','refreshProtectionTargets'].map(extract).join('\n')+'\nglobalThis.refresh=refreshProtectionTargets;',box);
+  const ids=await box.refresh();assert.deepEqual([...ids],['related-without-tree','한글']);assert.equal(calls,2);passed++;
+  const request=box.noteHistoryRequest;
+  box.noteHistoryRequest=async()=>({schema_version:3,server_instance_id:uuid,items:[item(''),item('\u{10000}'.repeat(80))],next_cursor:null});
+  assert.deepEqual([...(await box.refresh())],['','\u{10000}'.repeat(80)]);passed++;
+  box.noteProtectionTargetId='';box.getSelectedTreeNode=()=>({id:'other-selection'});
+  assert.equal(box.protectionTargetId(),'');box.noteProtectionDiscoveryOnly=true;
+  assert.equal(box.protectionTargets().includes('other-selection'),false);passed++;
+  box.getSelectedTreeNode=()=>null;box.noteHistoryRequest=request;
+  ctx={...ctx,owner:'bob',auth:'other-session'};assert.deepEqual([...box.protectionTargets()],[]);passed++;
+  ctx={...ctx,owner:'alice',auth:'synthetic-session'};
+  box.noteHistoryRequest=async()=>({schema_version:3,server_instance_id:uuid,items:[{...item('x'),title:'MUST-NOT-BE-CACHED'}],next_cursor:null});
+  await assert.rejects(box.refresh(),/targets_schema/);assert.equal(box.noteProtectionDiscoveredTargets,null);passed++;
+  let page=0;box.noteHistoryRequest=async()=>({schema_version:3,server_instance_id:page++?uuid.replace(/1$/,'2'):uuid,items:[item(String(page))],next_cursor:page===1?'next':null});
+  await assert.rejects(box.refresh(),/targets_instance/);assert.equal(box.noteProtectionDiscoveredTargets,null);passed++;
+  box.noteHistoryRequest=async()=>({schema_version:3,server_instance_id:uuid,items:[item('duplicate')],next_cursor:'same'});
+  await assert.rejects(box.refresh(),/targets_duplicate|targets_cursor/);assert.equal(box.noteProtectionDiscoveredTargets,null);passed++;
+  box.noteHistoryRequest=async()=>{active=false;return {schema_version:3,server_instance_id:uuid,items:[item('late')],next_cursor:null};};
+  await assert.rejects(box.refresh(),/scope_changed/);assert.equal(box.noteProtectionDiscoveredTargets,null);passed++;
+  active=true;ctx.enabled=false;
+  await assert.rejects(box.refresh(),/targets_auth/);passed++;
+  const html=await fs.readFile(new URL(file.startsWith('../app')?'../index.html':'../../desktop/app/index.html',import.meta.url),'utf8');
+  assert.ok(html.includes('id="protectionBtn"'),'tree-free protection entry must exist');
+  assert.ok(source.includes('"#protectionBtn"')&&source.includes('targets:refreshProtectionTargets'),'entry and list must use actual app functions');
+}
+const ui=await fs.readFile(new URL('../vendor/note-protection-ui.js',import.meta.url),'utf8');
+assert.ok(ui.includes('await api.targets()'),'selection must wait for authenticated discovery');
+console.log('protection target discovery: '+passed+' checks passed (actual app functions; synthetic metadata transport)');

@@ -98,11 +98,16 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   };
   async function load() {
     wipe(); state.info=null; state.copies=[];
+    $('.protection-scope').replaceChildren();
     const token=++state.run;
     status('보호 상태 조회 중');
     const targets=$('[name="target"]');targets.replaceChildren();
-    for(const id of api.targets()) {const o=document.createElement('option');o.value=id;o.textContent=id;targets.append(o);}
-    targets.value=api.target();
+    const ids=await api.targets();if(!valid(token))return;
+    if(!ids.length)throw Error('현재 계정의 보호 대상이 없습니다.');
+    for(const id of ids) {const o=document.createElement('option');o.value=id;o.textContent=api.targetLabel?.(id)||id;targets.append(o);}
+    const chosen=ids.includes(api.target())?api.target():ids[0];
+    if(chosen!==api.target()){api.selectTarget(chosen);state.bound=api.contextKey();}
+    targets.value=chosen;
     const info=await api.inspect(); if (!valid(token)) return;
     state.info=info;
     const dl=$('.protection-scope');dl.replaceChildren();

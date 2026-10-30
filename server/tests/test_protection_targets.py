@@ -107,6 +107,20 @@ def test_unknown_or_inactive_device_never_registered_or_touched(client, subject)
     assert actor.last_seen_at == original
 
 
+def test_opaque_empty_and_astral_ids_preserved(client, subject):
+    from app.models.note_history import NoteHead
+    s = subject
+    context(client, s)
+    ids = ["", "\U00010000" * 80]
+    s["db"].add_all([NoteHead(owner_id=s["owner"], local_id=local, identity_state="related_only") for local in ids])
+    s["db"].commit()
+    first = client.get(PATH, params=params(s, limit=1), headers=s["headers"])
+    assert first.status_code == 200, first.text
+    assert first.json()["items"][0]["local_id"] == "" and first.json()["next_cursor"]
+    second = client.get(PATH, params=params(s, limit=1, cursor=first.json()["next_cursor"]), headers=s["headers"])
+    assert second.status_code == 200 and second.json()["items"][0]["local_id"] == ids[1] and second.json()["next_cursor"] is None
+
+
 def test_strict_queries_and_cursor_scope(client, subject):
     import base64
     import json
