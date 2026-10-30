@@ -332,7 +332,7 @@
       },
     };
   }
-  function createWrite({context,journal,remote,capture,apply,change=()=>{}}) {
+  function createWrite({context,journal,remote,capture,settle,apply,change=()=>{}}) {
     let generation=0,running=false;
     const same=(a,b)=>protocol().canonicalJson(a)===protocol().canonicalJson(b);
     const own=scope=>{
@@ -378,7 +378,7 @@
         if(intent.schema_version!==3 || intent.purpose!=='mixed_note_write') fail('work_purpose');
         if(running) fail('busy');if(pending(scope)) fail('operation_exists');running=true;
         try {
-          const local=await capture(copy(scope),()=>active(ctx,epoch));active(ctx,epoch);
+          const local=await capture(copy(scope),()=>active(ctx,epoch),copy(intent));active(ctx,epoch);
           if(pending(scope)) fail('operation_exists');
           const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'preparing',cipher_bundle:''};
           const bundle={schema_version:1,operation_id:id,scope:copy(scope),intent,local,prepared:null,work:null,receipt:null};
@@ -415,7 +415,10 @@
             if(r.state!=='committed' || !r.receipt || r.receipt.operation_id!==b.prepared.id || r.receipt_matches_current!==true) fail('commit_unconfirmed');
             b.receipt=copy(r.receipt);marker.phase='server_committed';await persist();
           }
-          if(marker.phase==='server_committed'){marker.phase='applying';await persist();}
+          if(marker.phase==='server_committed'){
+            if(settle){b.work.local=copy(await settle(copy(marker.scope),copy(b.local),copy(b.work),copy(b.receipt),password,resolveKey));active(ctx,epoch);}
+            marker.phase='applying';await persist();
+          }
           if(marker.phase==='applying') {
             const r=await remote.status(copy(marker.scope),copy(b.prepared),copy(b.work));active(ctx,epoch);
             if(r.state!=='committed' || r.receipt_matches_current!==true || !same(r.receipt,b.receipt)) fail('committed_not_current');

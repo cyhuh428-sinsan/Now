@@ -94,6 +94,19 @@
   await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
   const rcInfo=await inspectNoteProtection();assert(rcInfo.catalog.context.current_mode==='protected'&&rcInfo.catalog.context.base.crypto_epoch===2,'real_RC_mode_failed');
   let peerPlain=plain;
+  if(config.editorWrite) {
+    assert(getComputedStyle(dialog().querySelector('.protection-editor')).display==='none','editor_not_hidden_before_open');
+    await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    peerPlain='HTTP-QA-EDITED-'+run+'\n';
+    const editor=dialog().querySelector('.protection-draft');
+    editor.value=peerPlain;editor.dispatchEvent(new Event('input',{bubbles:true}));
+    await drive(()=>status().includes('초안 저장됨'),'draft');
+    emit({stage:'editor_ready',owner:a.owner,local_id:target});
+    for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
+    assert(globalThis.__HTTP_CAPTURE_DONE__===true,'editor_capture_failed');
+    await action('save',()=>status().includes('전환 준비 가능'));
+    assert(!dialog().querySelector('.protection-draft').value,'editor_plaintext_survived_save_refresh');
+  }
   if(config.mixedWrite) {
     const c=rcInfo.catalog,selected=String(c.context.selected_physical_note_id);
     const inv=c.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===selected),body=c.entries.find(d=>d.key.kind==='note_body'&&d.key.id===selected);
@@ -130,5 +143,5 @@
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:'local_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
-  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true};
+  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true};
 })();

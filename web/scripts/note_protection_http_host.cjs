@@ -32,7 +32,18 @@ app.whenReady().then(async()=>{
   window.webContents.on('console-message',(...args)=>{
     const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
     if(typeof message!=='string'||!message.startsWith('HTTP_QA_EVENT '))return;
-    try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','code'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});}catch{}
+    try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','code'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});
+      if(event.stage==='editor_ready'&&config.editorWrite)void(async()=>{
+        for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
+          window.setContentSize(width,height);
+          await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          const name='editor-'+config.run+'-'+config.mode+'-'+size+'.png';
+          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage()).toPNG());
+          persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
+        }
+        window.setContentSize(1280,900);await window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=true');
+      })().catch(()=>{void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=false');});
+    }catch{}
   });
   try {
     if(config.mode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));

@@ -2285,7 +2285,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  function createWrite({context,journal,remote,capture,apply,change=()=>{}}) {
+  function createWrite({context,journal,remote,capture,settle,apply,change=()=>{}}) {
     let generation=0,running=false;
     const same=(a,b)=>protocol().canonicalJson(a)===protocol().canonicalJson(b);
     const own=scope=>{
@@ -2331,7 +2331,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(intent.schema_version!==3 || intent.purpose!=='mixed_note_write') fail('work_purpose');
         if(running) fail('busy');if(pending(scope)) fail('operation_exists');running=true;
         try {
-          const local=await capture(copy(scope),()=>active(ctx,epoch));active(ctx,epoch);
+          const local=await capture(copy(scope),()=>active(ctx,epoch),copy(intent));active(ctx,epoch);
           if(pending(scope)) fail('operation_exists');
           const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'preparing',cipher_bundle:''};
           const bundle={schema_version:1,operation_id:id,scope:copy(scope),intent,local,prepared:null,work:null,receipt:null};
@@ -2368,7 +2368,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             if(r.state!=='committed' || !r.receipt || r.receipt.operation_id!==b.prepared.id || r.receipt_matches_current!==true) fail('commit_unconfirmed');
             b.receipt=copy(r.receipt);marker.phase='server_committed';await persist();
           }
-          if(marker.phase==='server_committed'){marker.phase='applying';await persist();}
+          if(marker.phase==='server_committed'){
+            if(settle){b.work.local=copy(await settle(copy(marker.scope),copy(b.local),copy(b.work),copy(b.receipt),password,resolveKey));active(ctx,epoch);}
+            marker.phase='applying';await persist();
+          }
           if(marker.phase==='applying') {
             const r=await remote.status(copy(marker.scope),copy(b.prepared),copy(b.work));active(ctx,epoch);
             if(r.state!=='committed' || r.receipt_matches_current!==true || !same(r.receipt,b.receipt)) fail('committed_not_current');
@@ -3098,18 +3101,20 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
     <dl class="protection-scope"></dl>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
-    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button></section>
+    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
+    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],previous:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],previous:null,editorNote:null,composing:false};
   const keys = new Map();
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    state.editorNote=null;state.composing=false;$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
     askCancel?.(); api.lock();
   }
   function valid(token) {
@@ -3120,12 +3125,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const unlocked = api.canMutate(), info=state.info;
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
     $('[name="target"]').disabled=state.busy;
-    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume']) {
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','save']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
     if (!info) return;
+    $('[data-action="edit"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
+    $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
+    $('.protection-draft').readOnly=state.busy;
     $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
     $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
@@ -3142,7 +3150,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     return new Promise(resolve=>{
       let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
-      const label=document.createElement('label'); label.textContent=(output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const label=document.createElement('label'); label.textContent=(epoch==='write-bundle'?'저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
@@ -3201,7 +3209,16 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if (name==='confirm') {
+        if(name==='edit') {
+          const note=await api.edit(state.info,resolveKey(token));
+          if(valid(token)){state.editorNote=note;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
+        } else if(name==='save') {
+          if(!state.editorNote || state.composing)throw Error('입력을 마친 뒤 저장하세요.');
+          const note=structuredClone(state.editorNote),password=await ask('write-bundle',true,token);
+          if(!password || !valid(token))return;
+          status('보호 메모 저장 중');await api.write(state.info,note,password,resolveKey(token));
+          if(valid(token))await load();
+        } else if (name==='confirm') {
           await api.confirm(state.info.scope,state.copies,[...dialog.querySelectorAll('.protection-copies input:checked')].map(e=>e.value));
           if (valid(token)) await load();
         } else {
@@ -3220,6 +3237,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     finally {state.busy=false;controls();}
   }
   dialog.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)void action(b.dataset.action);});
+  function draftInput(event) {
+    if(!state.editorNote || state.busy || state.composing || event?.isComposing)return;
+    state.editorNote.content=$('.protection-draft').value;
+    const token=state.run;status('초안 저장 중');
+    void api.draft(state.info,structuredClone(state.editorNote)).then(()=>{if(valid(token))status('초안 저장됨');},error=>{if(valid(token))status(error.message||'초안 저장 실패');});
+  }
+  $('.protection-draft').addEventListener('input',draftInput);
+  $('.protection-draft').addEventListener('compositionstart',()=>{state.composing=true;controls();});
+  $('.protection-draft').addEventListener('compositionend',()=>{state.composing=false;draftInput();controls();});
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
   return {
@@ -7417,6 +7443,7 @@ function clearWebSession() {
   noteProtectionClient?.invalidate();
   noteProtectionViewGeneration++;
   noteProtection?.invalidate();
+  noteProtectionWrite?.invalidate();noteProtectionEditSession=null;
   noteProtectionIdentity = null;
   noteProtectionTargetId = null;
   noteHistoryLastError = "";
@@ -7895,6 +7922,8 @@ let noteProtectionTargetId = null;
 let noteProtectionRemote = null;
 let noteProtectionReader = null;
 let noteProtectionClient = null;
+let noteProtectionWrite = null;
+let noteProtectionEditSession = null;
 let noteProtectionUI = null;
 let noteProtectionViewGeneration = 0;
 let noteProtectionInternalEnabled = false;
@@ -8007,6 +8036,30 @@ function initializeNoteProtection() {
       if (noteProtectionBlocked("worklog:" + state.selectedWorklogDate)) elements.worklogContent.readOnly = true;
     },
   });
+  noteProtectionWrite=NowNoteProtectionState.createWrite({context:ctx,journal:noteHistory,remote,
+    capture:async(scope,guard,intent)=>{
+      guard();
+      const record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id];
+      if(!record || NowNoteProtectionProtocol.canonicalJson(record)!==NowNoteProtectionProtocol.canonicalJson(intent.local_record)) throw Error("note_protection:copy_changed");
+      return {record:structuredClone(record)};
+    },
+    settle:async(scope,local,work,receipt,password)=>{
+      const value=structuredClone(work.local_journal),note=structuredClone(work.after.note),base=receipt.result.base;
+      value.raw=structuredClone(note);value.draft=structuredClone(note);
+      value.base={...value.base,...base,snapshot:{schema_version:1,note:structuredClone(note)},replica_count:base.inventory_revision_ids.length};
+      value.dirty=Boolean(value.outbox.length);
+      if(!value.revisions.some(r=>r.revision_id===base.head_revision_id)) value.revisions.push({
+        revision_id:base.head_revision_id,parent_ref:work.commit.base.base.head_revision_id?{kind:"note_revision",id:work.commit.base.base.head_revision_id}:null,
+        snapshot:{schema_version:1,note:structuredClone(note)},reason:"mixed_note_write",created_at:note.updated_at,imported:true,
+        server_ref:{kind:"note_revision",id:base.head_revision_id},
+      });
+      return {record:await noteProtectionClient.sealJournal(scope,value,password,receipt.operation_id)};
+    },
+    apply:async(scope,local,work,receipt,guard)=>{
+      guard();await noteProtectionClient.replaceJournal(scope,local.record,work.local.record,noteHistory);guard();
+    },
+    change:()=>renderSyncStatusIndicator(state.settings.server,noteProtection?.pending()?"bad":state.settings.server.lastStatus),
+  });
 }
 
 function protectionActionGuard() {
@@ -8038,7 +8091,11 @@ async function resumeNoteProtection(id,password,build,resolveKey,guard=protectio
   try {
     await Promise.all([...storagePendingWrites]);
     guard();
-    const receipt = await noteProtection.resume(id,password,build,resolveKey);
+    const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));
+    guard();
+    const receipt = bundle.intent?.purpose==="mixed_note_write"
+      ? await noteProtectionWrite.resume(id,password,(p,i)=>buildProtectedWriteWork(marker.scope,p,i,password,resolveKey),d=>resolveKey({...d,output:false}))
+      : await noteProtection.resume(id,password,build,resolveKey);
     guard();
     noteHistoryRemoteCache.get(NowNoteHistory.key(before))?.delete(marker.scope.local_id);
     unlockedEncryptedNotes.delete(marker.scope.local_id);
@@ -8046,6 +8103,89 @@ async function resumeNoteProtection(id,password,build,resolveKey,guard=protectio
     normalizeData();
     render(); return receipt;
   } finally { protectionApplying = false; }
+}
+
+async function editProtectedCurrent(info,resolveKey) {
+  const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;
+  guard();noteProtectionEditSession=null;
+  if(info.pending || !catalog || catalog.context.base.identity_state!=="coherent" || !catalog.context.base.current_exists) throw Error("note_protection:editor_current_required");
+  const selected=String(catalog.context.selected_physical_note_id);
+  const inventory=catalog.entries.find(d=>d.key.kind==="inventory_snapshot"&&d.key.id===selected);
+  const body=catalog.entries.find(d=>d.key.kind==="note_body"&&d.key.id===selected);
+  if(!inventory || !body) throw Error("note_protection:editor_source_missing");
+  const current=await noteProtectionReader.read(scope,catalog,inventory,resolveKey);guard();
+  const content=await noteProtectionReader.read(scope,catalog,body,resolveKey);guard();
+  const note=structuredClone(NowNoteProtectionProtocol.validateSnapshot(current.value).note);
+  if(note.owner_id!==scope.owner || note.local_id!==scope.local_id || note.content!==content.value) throw Error("note_protection:editor_source_mismatch");
+  const record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id];
+  if(!record?.protection_record) throw Error("note_protection:local_journal_required");
+  const password=await resolveKey({representation_epoch:"local:"+record.protection_record.operation_id,output:false});guard();
+  const value=await noteProtectionClient.openArchive(scope,record,password);guard();
+  for(const part of [value.raw,value.draft]) {
+    NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:part});
+    if(part.owner_id!==scope.owner || part.local_id!==scope.local_id) throw Error("note_protection:editor_scope");
+  }
+  if(!Array.isArray(value.outbox) || value.outbox.length || value.conflict) throw Error("note_protection:offline_import_required");
+  if(value.dirty && !NowNoteHistory.same(value.raw,note)) throw Error("note_protection:editor_conflict");
+  if(!value.dirty){value.raw=structuredClone(note);value.draft=structuredClone(note);}
+  noteProtectionEditSession={scope,record:structuredClone(record),value,archiveKey:password,queue:Promise.resolve(),base:structuredClone(catalog.context),catalogDigest:catalog.catalog_digest};
+  return structuredClone(value.dirty?value.draft:note);
+}
+
+async function buildProtectedWriteWork(scope,prepared,intent,password,resolveKey) {
+  const work=await NowNoteProtectionClient.buildWriteWork(scope,prepared,intent,password,noteProtectionRemote,[],d=>resolveKey({...d,output:false}));
+  work.local_journal=structuredClone(intent.local_journal);return work;
+}
+
+async function saveProtectedDraft(info,input) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  const session=noteProtectionEditSession,guard=protectionActionGuard(),note=structuredClone(input);
+  if(!session || NowNoteProtectionState.scopeKey(session.scope)!==NowNoteProtectionState.scopeKey(info.scope))throw Error("note_protection:editor_scope");
+  NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note});
+  session.queue=session.queue.then(async()=>{
+    guard();if(noteProtectionEditSession!==session)throw Error("note_protection:editor_scope");
+    const value=structuredClone(session.value);value.draft=note;value.dirty=!NowNoteHistory.same(value.raw,note);
+    const record=await noteProtectionClient.saveJournal(session.scope,session.record,value,session.archiveKey,crypto.randomUUID(),noteHistory);
+    guard();session.value=value;session.record=record;
+  });
+  return session.queue;
+}
+
+async function writeProtectedCurrent(info,input,password,resolveKey) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  const guard=protectionActionGuard(),scope=structuredClone(info.scope),session=noteProtectionEditSession;
+  if(!session || NowNoteProtectionState.scopeKey(session.scope)!==NowNoteProtectionState.scopeKey(scope)
+    || NowNoteProtectionProtocol.canonicalJson(session.base)!==NowNoteProtectionProtocol.canonicalJson(info.catalog?.context)
+    || session.catalogDigest!==info.catalog.catalog_digest)throw Error("note_protection:editor_scope");
+  const note=structuredClone(NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:input}).note);
+  if(note.owner_id!==scope.owner || note.local_id!==scope.local_id)throw Error("note_protection:editor_scope");
+  await session.queue;guard();
+  if(noteProtectionEditSession!==session)throw Error("note_protection:editor_scope");
+  await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
+  if(serverSyncRunning || noteHistory.legacyPending() || noteHistory.failure())throw Error("note_protection:legacy_pending");
+  const catalog=info.catalog,selected=String(catalog.context.selected_physical_note_id);
+  const inventory=catalog.entries.find(d=>d.key.kind==="inventory_snapshot"&&d.key.id===selected);
+  const body=catalog.entries.find(d=>d.key.kind==="note_body"&&d.key.id===selected);
+  if(!inventory || !body)throw Error("note_protection:editor_source_missing");
+  const original=await noteProtectionReader.read(scope,catalog,inventory,resolveKey);guard();
+  let parent_context=null;
+  if(note.parent_local_id!==null) {
+    const parent=await noteHistoryRequest(noteHistoryContext(),"mixed-writes/parent-context","GET",{
+      schema_version:3,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      parent_local_id:note.parent_local_id,child_level:note.level,child_deleted:note.deleted_at!==null,
+    });guard();if(parent.schema_version!==3)throw Error("note_protection:parent_context");parent_context=parent.parent_context;
+  }
+  const intent={schema_version:3,purpose:"mixed_note_write",note,local_journal:structuredClone(session.value),local_record:structuredClone(session.record),
+    source_origins:[{key:inventory.key,descriptor:inventory,origin:original.origin}],prepare:{
+      mutation_id:crypto.randomUUID(),base:structuredClone(catalog.context),expected_catalog_digest:catalog.catalog_digest,
+      operation:"put",target_current_mode:catalog.context.current_mode,
+      selection:{physical_note_id:catalog.context.selected_physical_note_id,inventory_revision_ref:inventory.revision_ref,
+        note_representation_etag:body.representation_etag,inventory_representation_etag:inventory.representation_etag},
+      replica_policy:"selected_head_only",structure:Object.fromEntries(["note_type","parent_local_id","level","deleted_at"].map(k=>[k,note[k]])),parent_context,restore_source:null,
+    }};
+  guard();const id=await noteProtectionWrite.start(scope,intent,password);guard();
+  await noteProtectionWrite.resume(id,password,(p,i)=>buildProtectedWriteWork(scope,p,i,password,resolveKey),d=>resolveKey({...d,output:false}));guard();
+  noteProtectionEditSession=null;return id;
 }
 
 function protectionTargetId() { return noteProtectionTargetId || getSelectedTreeNode()?.id || ""; }
@@ -8099,12 +8239,14 @@ async function openNoteProtection() {
     },
     lock:()=>{
       noteProtectionViewGeneration++;noteProtection?.invalidate();noteProtectionClient?.invalidate();
+      noteProtectionWrite?.invalidate();noteProtectionEditSession=null;
       noteHistoryUI?.close();unlockedEncryptedNotes.clear();
       for(const timer of encryptedSaveTimers.values())clearTimeout(timer);
       encryptedSaveTimers.clear();resetTreeEditorHistory(null,"");
     },
     phaseLabel:phase=>({drain_pending:"정착 준비 재개 필요",draining:"연결 실행 정착 대기",preparing:"전환 준비 확인 필요",promoted:"원문 검증·암호화 필요",
       bundled:"암호문 전송 재개 필요",prepared:"게시 준비 완료",committing:"서버 결과 확인 필요",server_committed:"서버 완료 · 이 기기 적용 필요",applying:"서버 완료 · 이 기기 적용 필요",complete:"이 기기 적용 완료"})[phase] || "보호 상태 확인 필요",
+    edit:editProtectedCurrent,draft:saveProtectedDraft,write:writeProtectedCurrent,
     read:async(info,row,resolveKey)=>{
       let value;
       if(row.kind==="archive") value=await noteProtectionClient.openArchive(info.scope,row.record,await resolveKey({representation_epoch:"local:"+row.record.protection_record.operation_id,output:false}));

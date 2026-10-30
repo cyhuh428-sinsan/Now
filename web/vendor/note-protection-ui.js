@@ -8,18 +8,20 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
     <dl class="protection-scope"></dl>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
-    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button></section>
+    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
+    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],previous:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],previous:null,editorNote:null,composing:false};
   const keys = new Map();
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    state.editorNote=null;state.composing=false;$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
     askCancel?.(); api.lock();
   }
   function valid(token) {
@@ -30,12 +32,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const unlocked = api.canMutate(), info=state.info;
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
     $('[name="target"]').disabled=state.busy;
-    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume']) {
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','save']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
     if (!info) return;
+    $('[data-action="edit"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
+    $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
+    $('.protection-draft').readOnly=state.busy;
     $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
     $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
@@ -52,7 +57,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     return new Promise(resolve=>{
       let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
-      const label=document.createElement('label'); label.textContent=(output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const label=document.createElement('label'); label.textContent=(epoch==='write-bundle'?'저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
@@ -111,7 +116,16 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if (name==='confirm') {
+        if(name==='edit') {
+          const note=await api.edit(state.info,resolveKey(token));
+          if(valid(token)){state.editorNote=note;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
+        } else if(name==='save') {
+          if(!state.editorNote || state.composing)throw Error('입력을 마친 뒤 저장하세요.');
+          const note=structuredClone(state.editorNote),password=await ask('write-bundle',true,token);
+          if(!password || !valid(token))return;
+          status('보호 메모 저장 중');await api.write(state.info,note,password,resolveKey(token));
+          if(valid(token))await load();
+        } else if (name==='confirm') {
           await api.confirm(state.info.scope,state.copies,[...dialog.querySelectorAll('.protection-copies input:checked')].map(e=>e.value));
           if (valid(token)) await load();
         } else {
@@ -130,6 +144,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     finally {state.busy=false;controls();}
   }
   dialog.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)void action(b.dataset.action);});
+  function draftInput(event) {
+    if(!state.editorNote || state.busy || state.composing || event?.isComposing)return;
+    state.editorNote.content=$('.protection-draft').value;
+    const token=state.run;status('초안 저장 중');
+    void api.draft(state.info,structuredClone(state.editorNote)).then(()=>{if(valid(token))status('초안 저장됨');},error=>{if(valid(token))status(error.message||'초안 저장 실패');});
+  }
+  $('.protection-draft').addEventListener('input',draftInput);
+  $('.protection-draft').addEventListener('compositionstart',()=>{state.composing=true;controls();});
+  $('.protection-draft').addEventListener('compositionend',()=>{state.composing=false;draftInput();controls();});
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
   return {
