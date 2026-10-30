@@ -342,7 +342,8 @@
       if (b.owner_id !== s.owner || b.local_id !== s.local_id || b.device_id !== s.device || b.server_instance_id !== s.instance) fail('wire_scope');
     };
     async function pages(s,p) {
-      const sections = p.version === 2 ? [null] : ['S','DSET','P','O'], result = {}; let header = null;
+      const sections = p.version === 2 ? [null] : p.response.purpose === 'mixed_note_write' ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
+      const result = {}; let header = null, setDigests = p.response.set_digests || null;
       for (const section of sections) {
         let cursor = null; const seen = new Set(), entries = [];
         do {
@@ -354,8 +355,9 @@
             if (page.schema_version !== 2 || !eq(page.metadata_context,p.response.metadata_context) || !eq(page.set_counts,p.response.set_counts)) fail('manifest_context');
             entries.push(...page.items);
           } else {
+            if (setDigests === null && p.response.purpose === 'mixed_note_write') setDigests = copy(page.set_digests);
             if (page.schema_version !== 3 || page.section !== section || !eq(page.metadata_header,p.response.metadata_header)
-              || !eq(page.set_digests,p.response.set_digests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
+              || !eq(page.set_digests,setDigests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
             header = page.metadata_header; entries.push(...page.entries);
           }
           cursor = page.next_cursor;
@@ -368,21 +370,30 @@
         } else result[section] = entries;
       }
       for (const [name,list] of Object.entries(result)) {
-        const pick = e => name === 'S' ? e.descriptor.key : ['DSET','O','origin_expectations'].includes(name) ? e.destination_key : e.key;
+        const pick = e => ['S','existing','verified_existing'].includes(name) ? e.descriptor.key : ['DSET','O','origin_expectations'].includes(name) ? e.destination_key : e.key;
         const keys = list.map(pick); if (!eq(protocol().keyOrder(keys),keys)) fail('manifest_order');
         if (p.version === 2) { if (list.length !== p.response.set_counts[name]) fail('manifest_count'); }
-        else if (await protocol().hashJson(list) !== p.response.set_digests[name] || list.length !== p.response.counts[name].total) fail('manifest_digest');
+        else if (await protocol().hashJson(list) !== setDigests[name] || list.length !== p.response.counts[name].total) fail('manifest_digest');
       }
       const digest = await protocol().hashJson({ ...(p.version === 2 ? p.response.metadata_context : header), ...result });
       if (digest !== p.digest) fail('manifest_digest');
       return result;
     }
     async function normalized(s,p,response,work) {
+      const writing=p.response.purpose==='mixed_note_write';
       if ((response.operation_id || response.transition_id) !== p.id) fail('operation_identity');
       if (response.state === 'committed') {
         const r = response.receipt;
         if (!r || r.owner_id !== s.owner || r.local_id !== s.local_id || r.server_instance_id !== s.instance || r.metadata_manifest_digest !== p.digest) fail('receipt_binding');
         if (p.version === 3 && r.operation_id !== p.id) fail('receipt_identity');
+        if(writing) {
+          protocol().validateContext(response.latest_context);
+          if(r.schema_version!==3 || r.purpose!=='mixed_note_write' || r.mutation_id!==p.response.mutation_id
+            || !eq(r.result,response.latest_context) || r.ciphertext_manifest_digest!==work?.commit.client_verified_ciphertext_manifest_digest) fail('receipt_binding');
+          for(const name of ['S','DSET','P','O','existing','verified_existing']) {
+            if(r.set_digests?.[name]!==await protocol().hashJson(p.manifest[name])) fail('receipt_manifest');
+          }
+        } else {
         if (response.receipt_matches_current !== true) fail('committed_not_current');
         const now = response.current_context;
         if (!now || now.server_instance_id !== s.instance) fail('current_context');
@@ -394,6 +405,7 @@
             if (!eq(now[f],r[f])) fail('current_context');
           }
           if (now.active_transition_id !== null) fail('current_context');
+        }
         }
         const received = []; let cursor = null, context = null, digest = null;
         do {
@@ -436,9 +448,29 @@
           if (!output.is_null && output.output_epoch > 0 && (!t || d.ciphertext_sha256 !== t.descriptor.ciphertext_sha256)) fail('published_cipher_changed');
         }
       }
-      return response;
+      // MW's wire has latest_context, not the conversion receipt_matches_current field.
+      // This internal flag is emitted only after the original receipt and fresh publication checks.
+      return writing && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
+      async prepareWrite(s,intent) {
+        s=copy(s);
+        const i=copy(intent);
+        if(i.schema_version!==3 || i.purpose!=='mixed_note_write') fail('prepare_schema');
+        const body={...access(s,3),...i.prepare};ensureScope(s,body);
+        const path='/api/v2/notes/mixed-writes',r=await request(s,path+'/quote','POST',body);
+        const h=r.metadata_header;
+        if(r.schema_version!==3 || r.purpose!==i.purpose || !r.operation_id || r.mutation_id!==body.mutation_id
+          || h?.operation_id!==r.operation_id || h.mutation_id!==body.mutation_id || h.owner_id!==s.owner
+          || h.local_id!==s.local_id || h.actor_device_id!==s.device || h.server_instance_id!==s.instance
+          || !eq(h.base,body.base)) fail('operation_identity');
+        const control=Object.fromEntries(['operation','selection','target_current_mode','replica_policy','structure','parent_context','restore_source'].map(k=>[k,body[k]]));
+        if(!eq(h.control,control)) fail('write_control');
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r};
+        p.manifest=await pages(s,p);
+        if(p.manifest.existing.length || p.manifest.verified_existing.length) fail('write_existing');
+        return p;
+      },
       async identity(scope) {
         const r = await request(scope,'/api/v2/notes/crypto-transitions/status','GET',{ owner_id: scope.owner, local_id: scope.local_id, device_id: scope.device });
         if (r.server_instance_id !== scope.instance) fail('server_instance_changed'); return r;
@@ -482,7 +514,8 @@
         if (!eq(fixed,p.manifest)) fail('manifest_changed');
         const meaning = new Map(), resolve = resolveKey || keyResolver || (async () => password);
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
-        const sourceKeys = p.version === 3 ? protocol().keyOrder(fixed.DSET.flatMap(d => d.source_keys).filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
+        const restore=p.response.metadata_header?.purpose==='mixed_note_write' ? p.response.metadata_header.control.restore_source : null;
+        const sourceKeys = p.version === 3 ? protocol().keyOrder([...fixed.DSET.flatMap(d => d.source_keys),...(restore?[restore.descriptor.key]:[])].filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
         for (const k of sourceKeys) {
           const source = p.version === 3 ? fixed.S.find(e => eq(e.descriptor.key,k)) : fixed.entries.find(e => eq(e.key,k));
           if (!source || k.kind === 'reserved_offline_snapshot') {
@@ -563,6 +596,25 @@
         const meaning = new Map((await transport.readSources(s,p,password,localStores,resolveKey,work.source_origins || [])).map(v=>[json(v.key),v.value]));
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const resolve = resolveKey || keyResolver || (async () => password);
+        const writing=p.response.metadata_header?.purpose==='mixed_note_write';
+        let after=null;
+        if(writing) {
+          const h=p.response.metadata_header,c=h.control;
+          after=protocol().validateSnapshot(copy(work.after));
+          if(after.note.owner_id!==s.owner || after.note.local_id!==s.local_id
+            || Object.entries({...h.server_fields,...work.commit.projection}).some(([k,v])=>!semanticEq(after.note[k],v))
+            || Object.entries(c.structure).some(([k,v])=>!semanticEq(after.note[k],v))) fail('write_meaning');
+          const d=fixed.DSET.find(d=>d.destination_key.kind==='revision_before');
+          const before=d.is_null?null:meaning.get(json(d.source_keys[0]));
+          if(!semanticEq(work.commit.plain_after,c.target_current_mode==='plain'?after.note:null)
+            || !semanticEq(work.commit.plain_before,!d.is_null&&d.output_epoch===0?before?.note:null)) fail('write_plain_meaning');
+          const fields=['content','title','tags','source','note_type','parent_local_id','level'];
+          if(c.operation==='delete' && (!before || after.note.deleted_at===null || fields.some(k=>!semanticEq(after.note[k],before.note[k])))) fail('delete_meaning');
+          if(c.operation==='restore') {
+            const original=meaning.get(json(c.restore_source.descriptor.key));
+            if(!original || [...fields,'deleted_at'].some(k=>!semanticEq(after.note[k],original.note[k]))) fail('restore_meaning');
+          }
+        }
         if (p.response.metadata_header?.purpose === 'current_plain_transition') {
           const sources = fixed.S.map(e => e.descriptor), selected = p.response.metadata_header.selection.physical_note_id;
           const body = sources.find(d => d.key.kind === 'note_body' && d.key.id === String(selected));
@@ -580,10 +632,12 @@
           const epoch = p.version === 3 ? d.output_epoch : p.response.target_epoch;
           if (t.descriptor.representation_kind !== d.output_kind || t.descriptor.representation_epoch !== epoch
             || !eq(t.descriptor.key,key) || !eq(t.descriptor.expected_binding,d.expected_binding)) fail('output_binding');
-          const outputKey = d => resolve({...d,output:p.response.metadata_header?.purpose !== 'current_plain_transition'});
+          const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          if (keys.length !== 1 || !meaning.has(json(keys[0])) || !semanticEq(plain,meaning.get(json(keys[0]))) || !semanticEq(plain,t.semantic)) fail('output_semantic');
+          const expected=writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+            : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
+          if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
           const core = { ...(p.version === 2 ? { schema_version: 1, owner_id:s.owner,local_id:s.local_id,device_id:s.device,transition_id:p.id }
             : { ...access(s,3), operation_id: p.id, metadata_manifest_digest: p.digest }),

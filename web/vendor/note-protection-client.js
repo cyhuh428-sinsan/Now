@@ -1,4 +1,4 @@
-/* E4b3a: in-memory inspection and explicit attribution; no plaintext persistence. */
+/* Protected-note inspection, attribution and semantic work; plaintext stays in memory. */
 (() => {
   'use strict';
   const clone = v => structuredClone(v);
@@ -150,6 +150,75 @@
     }
     return {transfers,source_origins:origins,commit};
   }
+  async function buildWriteWork(scope,prepared,intent,password,remote,localStores = [],resolveKey) {
+    scope=clone(scope);
+    const p=clone(prepared),i=clone(intent),h=p.response?.metadata_header,m=p.manifest,a=i.prepare;
+    if(p.version!==3 || i.schema_version!==3 || i.purpose!=='mixed_note_write' || h?.purpose!==i.purpose) fail('work_purpose');
+    if(h.owner_id!==scope.owner || h.local_id!==scope.local_id || h.server_instance_id!==scope.instance
+      || h.actor_device_id!==scope.device || h.operation_id!==p.id || h.mutation_id!==a.mutation_id) fail('write_scope');
+    const control=Object.fromEntries(['operation','selection','target_current_mode','replica_policy','structure','parent_context','restore_source'].map(k=>[k,a[k]]));
+    if(!eq(h.control,control) || !eq(h.base,a.base)) fail('write_control');
+    if(!eq(h.operation_origin,{purpose:i.purpose,operation_id:p.id,mutation_id:a.mutation_id,operation:a.operation,
+      restore_source_ref:a.restore_source?.revision_ref||null,restore_source_descriptor:a.restore_source?.descriptor||null})) fail('write_origin');
+    const input=clone(Q().validateSnapshot({schema_version:1,note:i.note})).note;
+    if(input.owner_id!==scope.owner || input.local_id!==scope.local_id
+      || h.server_fields.owner_id!==scope.owner || h.server_fields.local_id!==scope.local_id) fail('write_scope');
+    const projection=Object.fromEntries(['note_type','parent_local_id','level','deleted_at','title','tags','source'].map(k=>[k,input[k]]));
+    if(Object.keys(a.structure).some(k=>!eq(a.structure[k],projection[k]))) fail('write_structure');
+    const after=Q().validateSnapshot({schema_version:1,note:{...input,...h.server_fields}});
+    const origins=clone(i.source_origins||[]),sources=await remote.readSources(scope,p,password,localStores,resolveKey,origins);
+    const source=key=>{
+      const rows=sources.filter(v=>eq(v.key,key));
+      if(rows.length!==1) fail('source_missing');
+      const value=Q().validateSnapshot(clone(rows[0].value));
+      if(value.note.owner_id!==scope.owner || value.note.local_id!==scope.local_id) fail('write_scope');
+      return value;
+    };
+    const ordered=Q().keyOrder(m.DSET.map(d=>d.destination_key));
+    if(!eq(ordered,m.DSET.map(d=>d.destination_key)) || m.DSET.length!==4
+      || new Set(m.DSET.map(d=>d.destination_key.kind)).size!==4) fail('destination_order');
+    const previous=m.DSET.find(d=>d.destination_key.kind==='revision_before');
+    if(!previous || !m.DSET.some(d=>d.destination_key.kind==='note_body') || !m.DSET.some(d=>d.destination_key.kind==='inventory_snapshot')
+      || !m.DSET.some(d=>d.destination_key.kind==='revision_snapshot')) fail('write_destinations');
+    if(previous.source_keys.length!==(previous.is_null?0:1)) fail('source_arity');
+    const before=previous.is_null?null:source(previous.source_keys[0]);
+    const semanticFields=['content','title','tags','source','note_type','parent_local_id','level'];
+    if(a.operation==='delete' && (!before || input.deleted_at===null || semanticFields.some(k=>!eq(input[k],before.note[k])))) fail('delete_meaning');
+    if(a.operation==='restore') {
+      const restored=source(a.restore_source.descriptor.key);
+      if([...semanticFields,'deleted_at'].some(k=>!eq(input[k],restored.note[k]))) fail('restore_meaning');
+    }
+    const transfers=[],records=[];
+    for(const d of m.DSET) {
+      Q().validateDestination(d,'mixed_note_write');
+      const key=d.destination_key,isBefore=key.kind==='revision_before',body=key.kind==='note_body';
+      if(!isBefore && (d.source_keys.length || d.is_null || d.output_epoch!==(a.target_current_mode==='plain'?0:h.target_epoch))) fail('write_output');
+      if(d.is_null || d.output_epoch===0) continue;
+      const semantic=isBefore?before:body?after.note.content:after;
+      const origin=isBefore?(origins.find(o=>eq(o.key,d.source_keys[0]))?.origin||{value:null,legacy:null}):{value:body?null:h.operation_origin,legacy:null};
+      const outputKey=()=> (resolveKey|| (async()=>password))({key,representation_epoch:d.output_epoch,output:!isBefore});
+      const output={key,output_kind:d.output_kind,output_epoch:d.output_epoch,is_null:false,expected_binding:d.expected_binding,operation_origin:origin.value};
+      const raw=await Q().encryptRepresentation(semantic,output,await outputKey());
+      const hash=await Q().sha256(raw),o=m.O.find(o=>eq(o.destination_key,key));
+      if(!o || o.storage_operation_id!==p.id || o.is_null) fail('write_origin');
+      const descriptor={key,representation_kind:d.output_kind,representation_epoch:d.output_epoch,is_null:false,
+        representation_version:1,representation_etag:d.source_etag,storage_operation_id:p.id,semantic_origin_id:o.semantic_origin_id,
+        origin_validator:o.origin_validator,origin_row_required:o.origin_row_required,expected_binding:d.expected_binding,
+        revision_ref:d.expected_binding?.revision_ref||null,parent_ref:d.expected_binding?.parent_ref||null,
+        physical_note_id:['note_body','inventory_snapshot'].includes(key.kind)?Number(key.id):null,
+        inventory_revision_id:key.kind==='inventory_snapshot'?h.revision_ref.id:null,linked_slot_version:null,ciphertext_sha256:hash};
+      Q().validateDescriptor(descriptor,3);
+      if(!eq(await Q().decryptRepresentation(raw,descriptor,origin,outputKey,3),semantic)) fail('output_verification');
+      transfers.push({key,raw,descriptor,origin,semantic});
+      records.push({entry_key:key,destination_key:key,source_etag:d.source_etag,output_kind:d.output_kind,target_epoch:d.output_epoch,
+        total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
+    }
+    const afterOutput=m.DSET.find(d=>d.destination_key.kind==='revision_snapshot');
+    return {transfers,source_origins:origins,after:clone(after),commit:{...access(scope),operation_id:p.id,mutation_id:a.mutation_id,
+      lease_version:p.response.lease_version,base:clone(a.base),metadata_manifest_digest:p.digest,
+      client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true,projection,
+      plain_after:afterOutput.output_epoch===0?clone(after.note):null,plain_before:!previous.is_null&&previous.output_epoch===0?clone(before.note):null}};
+  }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {
     let binary = '';
@@ -239,5 +308,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,createReader,plan});
 })();

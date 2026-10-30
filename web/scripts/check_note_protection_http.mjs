@@ -57,7 +57,7 @@ try {
     for(const phase of [1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
-      await fs.writeFile(config,JSON.stringify({root,source,profile,mode,phase,result,secrets,envFile,run,manifestFile}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile,mode,phase,result,secrets,envFile,run,manifestFile,mixedWrite:process.argv.includes('--mixed-write')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));

@@ -93,6 +93,28 @@
   assert(NowNoteProtectionProtocol.canonicalJson(publicNote)===NowNoteProtectionProtocol.canonicalJson(JSON.parse(localStorage.getItem('qa-http-'+run+'-public-baseline'))),'real_FULL15_public_fields_changed');
   await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
   const rcInfo=await inspectNoteProtection();assert(rcInfo.catalog.context.current_mode==='protected'&&rcInfo.catalog.context.base.crypto_epoch===2,'real_RC_mode_failed');
+  let peerPlain=plain;
+  if(config.mixedWrite) {
+    const c=rcInfo.catalog,selected=String(c.context.selected_physical_note_id);
+    const inv=c.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===selected),body=c.entries.find(d=>d.key.kind==='note_body'&&d.key.id===selected);
+    assert(inv&&body,'MW_selected_source_absent');
+    const original=await noteProtectionReader.read(scope,c,inv,async()=>password),note=structuredClone(original.value.note),origins=[];
+    peerPlain='HTTP-QA-EDITED-'+run+'\r\n';note.content=peerPlain;
+    for(const d of c.entries){const value=await noteProtectionReader.read(scope,c,d,async()=>password);origins.push({key:d.key,descriptor:d,origin:value.origin});}
+    const intent={schema_version:3,purpose:'mixed_note_write',note,source_origins:origins,prepare:{mutation_id:crypto.randomUUID(),base:c.context,expected_catalog_digest:c.catalog_digest,operation:'put',target_current_mode:'protected',
+      selection:{physical_note_id:c.context.selected_physical_note_id,inventory_revision_ref:inv.revision_ref,note_representation_etag:body.representation_etag,inventory_representation_etag:inv.representation_etag},replica_policy:'selected_head_only',
+      structure:Object.fromEntries(['note_type','parent_local_id','level','deleted_at'].map(k=>[k,note[k]])),parent_context:null,restore_source:null}};
+    emit({stage:'MW_quote_requested',owner:a.owner,local_id:target,operation_id:intent.prepare.mutation_id});
+    const prepared=await noteProtectionRemote.prepareWrite(scope,intent);
+    emit({stage:'MW_prepared',owner:a.owner,local_id:target,operation_id:prepared.id});
+    const work=await NowNoteProtectionClient.buildWriteWork(scope,prepared,intent,password,noteProtectionRemote,[],async()=>password);
+    await noteProtectionRemote.stage(scope,prepared,work,password,[],async()=>password);
+    const result=await noteProtectionRemote.commit(scope,prepared,work);
+    assert(result.state==='committed'&&result.receipt_matches_current===true,'MW_commit_not_verified');
+    const checked=await noteProtectionRemote.status(scope,prepared,work);
+    assert(checked.state==='committed'&&checked.receipt_matches_current===true,'MW_status_not_verified');
+    emit({stage:'MW_committed',owner:a.owner,local_id:target,operation_id:prepared.id,phase:'committed'});
+  }
   const peer='qa-peer-'+run,issued=await request('/api/v1/auth/client-login','POST',{owner_id:a.owner,password:a.password,device_id:peer,device_name:'HTTP peer'},{});
   const peerScope={...scope,device:peer},peerReader=NowNoteProtectionClient.createReader({request:async(s,path,method,body)=>request(path+'?'+new URLSearchParams(body),method,undefined,{'X-Now-User-Token':issued.access_token})});
   const peerCatalog=await peerReader.catalog(peerScope);let peerOrigins=0,nulls=0;
@@ -100,7 +122,7 @@
     const value=await peerReader.read(peerScope,peerCatalog,descriptor,async()=>password);
     if(descriptor.is_null)nulls++;
     if(value.origin.value)peerOrigins++;
-    if(descriptor.key.kind==='inventory_snapshot')assert(value.value.note.content===plain,'real_peer_plain_meaning_changed');
+    if(descriptor.key.kind==='inventory_snapshot')assert(value.value.note.content===peerPlain,'real_peer_plain_meaning_changed');
   }
   assert(peerOrigins>0&&nulls>0,'real_peer_origin_or_null_coverage_absent');
   const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
@@ -108,5 +130,5 @@
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:'local_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
-  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true};
+  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true};
 })();
