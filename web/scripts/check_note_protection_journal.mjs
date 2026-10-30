@@ -53,6 +53,20 @@ assert.equal(writeCount,beforeWrites+1,'exact applied cipher must resume without
 const different=structuredClone(sealed);different.protection_record.ciphertext+='different';
 await assert.rejects(client.replaceJournal(scope,frozen,different,journal),/copy_changed/);
 const previous=journal.export(),removed=structuredClone(previous);
+let releaseWrite,enteredWrite;
+const entered=new Promise(resolve=>enteredWrite=resolve),release=new Promise(resolve=>releaseWrite=resolve);
+const lockedBefore=journal.export();let lockedDisk=structuredClone(lockedBefore);
+const delayedJournal=H.create({initial:lockedBefore,context:()=>ctx,request:async()=>{throw Error('no_network');},write:async(raw,guard)=>{
+  enteredWrite();await release;
+  if(!guard.active())throw Error('locked_before_write');
+  lockedDisk=structuredClone(raw);
+}});
+const lockedRecord=await client.sealJournal(scope,value,'password',uid(10));
+const lateWrite=client.replaceJournal(scope,sealed,lockedRecord,delayedJournal);
+const rejected=assert.rejects(lateWrite,/confirmation_changed|locked_before_write/);
+await entered;ctx={...ctx,generation:1};releaseWrite();await rejected;
+assert.deepEqual(lockedDisk,lockedBefore,'locking while CAS waits must preserve the original persisted cipher');
+assert.deepEqual(delayedJournal.export(),lockedBefore,'cancelled protected CAS must roll back its memory projection');
 delete removed.contexts[H.key(scope)].notes.memo;
 await journal.replaceProtectionStore(previous,removed);
 await assert.rejects(client.replaceJournal(scope,sealed,sealed,journal),/copy_changed/);

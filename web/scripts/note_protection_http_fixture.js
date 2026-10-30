@@ -77,6 +77,23 @@
   }
   state.selectedTreeId=findTreeNode(state.data.tree,target)?target:null;render();await settle();await open();
   assert(status().includes('적용 필요'),'real_cold_restart_lost_pending');
+  if(config.phase===3){
+    const select=dialog().querySelector('[name="representation"]');
+    select.selectedIndex=[...select.options].findIndex(o=>o.textContent.includes('store:'+NOTE_HISTORY_KEY)||o.textContent.includes('history'));
+    assert(select.selectedIndex>=0,'restarted_MW_journal_archive_absent');
+    await action('read',()=>dialog().querySelector('.protection-plain').textContent.includes('HTTP-QA-EDITED-'+run));
+    button('lock').click();
+    const pending=Object.values(noteHistory.protectionOperations()).find(m=>m.scope.local_id===target&&m.phase==='applying');
+    assert(pending,'restarted_MW_pending_absent');
+    const original=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(pending.cipher_bundle,password));
+    await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    const after=await inspectNoteProtection();assert(after.catalog.context.base.head_version===5,'MW_resume_created_another_revision');
+    const descriptor=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
+    const current=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
+    assert(current.value.note.content==='HTTP-QA-EDITED-'+run+'\n','MW_resume_changed_editor_content');
+    emit({stage:'MW_restart_same_operation_complete',owner:a.owner,local_id:target,operation_id:original.prepared.id,local_operation_id:pending.id,phase:'complete',server_instance_id:after.scope.instance});
+    clearWebSession();return {ok:true,mode:config.mode,phase:3,serverEpoch:2,headVersion:5,originalOperationResumed:true,recoveredCipherDraft:true};
+  }
   await action('resume',()=>status().includes('operation')||status().includes('decrypt')||status().includes('실패'),'wrong-key');
   assert(Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'),'wrong_key_changed_pending');
   await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
@@ -100,6 +117,23 @@
   if(config.editorWrite) {
     assert(getComputedStyle(dialog().querySelector('.protection-editor')).display==='none','editor_not_hidden_before_open');
     await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    if(config.editorRestart&&!isDesktopClient()){
+      const before=localStorage.getItem(NOTE_HISTORY_KEY),request=navigator.locks.request.bind(navigator.locks);let release,entered=false;
+      const held=request(NOTE_HISTORY_KEY,()=>new Promise(resolve=>{release=resolve;}));
+      for(let i=0;i<100&&!release;i++)await wait();assert(release,'web_lock_not_acquired');
+      navigator.locks.request=(name,...args)=>{if(name===NOTE_HISTORY_KEY)entered=true;return request(name,...args);};
+      try{
+        const editor=dialog().querySelector('.protection-draft');editor.value='HTTP-QA-CANCELLED-'+run;editor.dispatchEvent(new Event('input',{bubbles:true}));
+        const editing=noteProtectionEditSession;
+        for(let i=0;i<500&&!entered;i++)await wait();assert(entered,'draft_never_waited_for_web_lock');
+        button('lock').click();release();await held;await editing.queue.catch(()=>{});
+        assert(localStorage.getItem(NOTE_HISTORY_KEY)===before,'lock_changed_persisted_cipher');
+        assert(JSON.stringify(noteHistory.export())===before,'lock_retained_cancelled_memory_projection');
+        assert(!dialog().querySelector('.protection-draft').value,'locked_editor_retained_plaintext');
+        emit({stage:'actual_web_lock_cancelled_cipher_CAS',owner:a.owner,local_id:target});
+      }finally{release?.();navigator.locks.request=request;}
+      await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    }
     peerPlain='HTTP-QA-EDITED-'+run+'\n';
     const editor=dialog().querySelector('.protection-draft');
     editor.value=peerPlain;editor.dispatchEvent(new Event('input',{bubbles:true}));
@@ -107,7 +141,18 @@
     emit({stage:'editor_ready',owner:a.owner,local_id:target});
     for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'editor_capture_failed');
-    await action('save',()=>status().includes('전환 준비 가능'));
+    let restore;
+    if(config.editorRestart&&!isDesktopClient()){
+      const set=Storage.prototype.setItem;let fail=true;
+      Storage.prototype.setItem=function(k,v){
+        if(fail&&k===NOTE_HISTORY_KEY){const data=JSON.parse(v),before=JSON.parse(localStorage.getItem(k)),markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
+          const changed=Object.entries(data.contexts||{}).some(([key,c])=>{const a=before.contexts?.[key]?.notes?.[target]?.protection_record,b=c.notes?.[target]?.protection_record;return a&&b&&a.operation_id!==b.operation_id;});
+          if(markers.length===4&&markers.some(m=>m.phase==='applying')&&changed){fail=false;throw Error('qa_MW_journal_CAS_failure');}}
+        return set.call(this,k,v);
+      };restore=()=>Storage.prototype.setItem=set;
+    }
+    try{await action('save',()=>config.editorRestart?Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'):status().includes('전환 준비 가능'));}finally{restore?.();}
+    if(config.editorRestart){assert(Object.values(noteHistory.protectionOperations()).filter(m=>m.phase==='applying').length===1,'MW_not_locally_pending');button('lock').click();}
     assert(!dialog().querySelector('.protection-draft').value,'editor_plaintext_survived_save_refresh');
   }
   if(config.mixedWrite) {
@@ -144,7 +189,7 @@
   const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
   for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-ORIGINAL-'+run),'real_local_plaintext_residue');
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
-  for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:'local_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
+  for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:marker.phase==='complete'?'local_operation_complete':'local_operation_pending',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
   return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true};
 })();

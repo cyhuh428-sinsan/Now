@@ -32,9 +32,9 @@
       if (createBucket) data.contexts[key(ctx)] ||= { notes: {} };
       return data.contexts[key(ctx)] || null;
     };
-    const save = (strict = false) => {
+    const save = (strict = false, guard = null) => {
       const snapshot = copy(data), source = data, ctx = { ...context() }, epoch = generation;
-      const valid = () => data === source && active(ctx,epoch);
+      const valid = () => data === source && active(ctx,epoch) && (!guard?.active || guard.active());
       writes = writes.catch(() => {}).then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
         return write(snapshot,{ active:valid });
@@ -293,11 +293,11 @@
           throw error;
         }
       },
-      async replaceProtectionStore(expected, next) {
+      async replaceProtectionStore(expected, next, guard) {
         requireWritable();
         if (JSON.stringify(data) !== JSON.stringify(expected)) throw new Error('보호 적용 중 이력 저장본이 변경되었습니다.');
         const previous = data, epoch = generation, ctx = { ...context() }; data = copy(next); const assigned = data;
-        try { await save(true); } catch (error) { if (data === assigned && active(ctx,epoch)) data = previous; throw error; }
+        try { await save(true,guard); } catch (error) { if (data === assigned && active(ctx,epoch)) data = previous; throw error; }
       },
       legacyPending,
       async beginLegacy(body) {

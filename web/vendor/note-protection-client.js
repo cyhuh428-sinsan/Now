@@ -47,7 +47,7 @@
       if(eq(current,record))return clone(record);
       if(!eq(current,expected))fail('copy_changed');
       const next=clone(data);next.contexts[key].notes[scope.local_id]=record;
-      active(ctx,scope);await journal.replaceProtectionStore(data,next);active(ctx,scope);
+      active(ctx,scope);await journal.replaceProtectionStore(data,next,{active:()=>active(ctx,scope)});active(ctx,scope);
       if(!eq(journal.export().contexts?.[key]?.notes?.[scope.local_id],record))fail('journal_readback');
       return clone(record);
     }

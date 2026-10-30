@@ -18,7 +18,16 @@ const keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.
 const box={compareAndSetStoreValue,updateStoreFile,desktopStorePath:()=>storeFile,assertRendererStoreKey:k=>{if(!keys.has(k))throw Error('store_key');}};
 vm.runInNewContext(source.slice(from,to)+'\nglobalThis.write=updateRendererStoreValue;',box);
 let failData=config.phase===1;
-function write(key,value,options){if(failData&&key==='nownote.web.v1'&&options&&Object.hasOwn(options,'expectedValue')&&value.tree?.some(n=>n.protection_record)){failData=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_data_CAS_once'});throw Error('qa_local_CAS_failure');}const r=box.write(key,value,options);return {ok:true,updatedAt:r.store.updatedAt};}
+let failEditor=config.editorRestart&&config.phase===2;
+function write(key,value,options){
+  if(failData&&key==='nownote.web.v1'&&options&&Object.hasOwn(options,'expectedValue')&&value.tree?.some(n=>n.protection_record)){failData=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_data_CAS_once'});throw Error('qa_local_CAS_failure');}
+  if(failEditor&&key==='nownote.history.v1'&&options?.expectedValue){
+    const target='qa-http-'+config.run+'-target',markers=Object.values(value.protection_operations||{}).filter(m=>m.scope.local_id===target);
+    const changed=Object.entries(value.contexts||{}).some(([k,c])=>{const before=options.expectedValue.contexts?.[k]?.notes?.[target]?.protection_record,after=c.notes?.[target]?.protection_record;return before&&after&&before.operation_id!==after.operation_id;});
+    if(markers.length===4&&markers.some(m=>m.phase==='applying')&&changed){failEditor=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_MW_journal_CAS_once'});throw Error('qa_MW_journal_CAS_failure');}
+  }
+  const r=box.write(key,value,options);return {ok:true,updatedAt:r.store.updatedAt};
+}
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');return readStoreFile(storeFile).store.values[k]??null;});
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_local_CAS_failure'};}});
