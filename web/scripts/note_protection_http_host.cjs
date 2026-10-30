@@ -20,8 +20,17 @@ vm.runInNewContext(source.slice(from,to)+'\nglobalThis.write=updateRendererStore
 let failData=config.phase===1;
 let failEditor=config.editorRestart&&config.phase===2;
 let failImport=config.importRestart&&config.phase===2;
+function hasProtectedTarget(tree,owner,local){
+  const pending=Array.isArray(tree)?[...tree]:[];
+  while(pending.length){
+    const node=pending.pop(),scope=node?.protection_record?.scope;
+    if(scope?.owner===owner&&scope.local_id===local)return true;
+    if(Array.isArray(node?.children))pending.push(...node.children);
+  }
+  return false;
+}
 function write(key,value,options){
-  if(failData&&key==='nownote.web.v1'&&options&&Object.hasOwn(options,'expectedValue')&&value.tree?.some(n=>n.protection_record)){failData=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_data_CAS_once'});throw Error('qa_local_CAS_failure');}
+  if(failData&&key==='nownote.web.v1'&&options&&Object.hasOwn(options,'expectedValue')&&hasProtectedTarget(value.tree,credentials.a.owner,'qa-http-'+config.run+'-target')){failData=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_data_CAS_once'});throw Error('qa_local_CAS_failure');}
   if(failEditor&&key==='nownote.history.v1'&&options?.expectedValue){
     const target='qa-http-'+config.run+'-target',markers=Object.values(value.protection_operations||{}).filter(m=>m.scope.local_id===target);
     const changed=Object.entries(value.contexts||{}).some(([k,c])=>{const before=options.expectedValue.contexts?.[k]?.notes?.[target]?.protection_record,after=c.notes?.[target]?.protection_record;return before&&after&&before.operation_id!==after.operation_id;});
