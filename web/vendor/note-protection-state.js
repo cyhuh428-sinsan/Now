@@ -43,15 +43,21 @@
   function sameOwner(s, scope) {
     return record(s) && s.url?.replace(/\/+$/, '') === scope.url.replace(/\/+$/, '') && s.owner === scope.owner && s.instance === scope.instance;
   }
-  function inventory(value, kind, scope) {
+  function inventory(value, kind, scope, options = {}) {
     validateScope(scope);
     const found = [], occupied = new Set();
     const add = (path, object, proof, type) => {
+      if (object.owner_id && object.owner_id !== scope.owner) return;
+      if (object.ownerId && object.ownerId !== scope.owner) return;
+      if (object.remoteOwnerId && object.remoteOwnerId !== scope.owner) return;
       if (protectedRecord(object)) {
         if (!sameOwner(object.protection_record.scope, scope)) fail('scope_unverified');
         return;
       }
-      if (!proof) fail('local_scope_unverified');
+      if (!proof) {
+        if (options.unverified) { options.unverified.push({ path, type, before: copy(object) }); return; }
+        fail('local_scope_unverified');
+      }
       validateScope(proof);
       if (!sameOwner(proof,scope)) return;
       if (proof.local_id !== scope.local_id) fail('local_scope_unverified');
@@ -62,6 +68,9 @@
       if (!record(v) && !Array.isArray(v)) return;
       if (Array.isArray(v)) { v.forEach((item,i) => walk(item,[...path,i],role,proof)); return; }
       if (protectedRecord(v)) {
+        if (options.includeArchives && sameOwner(v.protection_record.scope,scope) && v.protection_record.scope.local_id === scope.local_id) {
+          found.push({path:copy(path),type:'archive',before:copy(v)});
+        }
         // A parent's archive never owns its independent child records.
         if (Array.isArray(v.children)) walk(v.children,[...path,'children'],'tree',null);
         for (const k of ['data','history','settings','snapshots','recovery_archives']) {
@@ -76,7 +85,10 @@
           if (!record(c.notes)) fail('journal_unknown');
           const item = c.notes[scope.local_id];
           if (item) {
-            if (protectedRecord(item)) continue;
+            if (protectedRecord(item)) {
+              if (options.includeArchives) walk(item,[...path,'contexts',k,'notes',scope.local_id],'history',null);
+              continue;
+            }
             if (item.raw?.owner_id !== scope.owner || item.raw?.local_id !== scope.local_id
               || item.draft?.owner_id !== scope.owner || item.draft?.local_id !== scope.local_id) fail('journal_scope');
             const positive = item.protectionScope || (item.base?.server_instance_id === scope.instance ? scope : null);
@@ -89,6 +101,9 @@
         return;
       }
       const tagged = v.protectionScope || proof;
+      if (v.localId === scope.local_id && (Object.hasOwn(v,'localContent') || Object.hasOwn(v,'serverContent'))) {
+        add(path,v,tagged,'conflict'); return;
+      }
       if (v.local_id === scope.local_id && v.owner_id === scope.owner) { add(path,v,tagged,'raw'); return; }
       if (v.note_local_id === scope.local_id && v.owner_id === scope.owner) { add(path,v,tagged,'linked'); return; }
       if (role === 'tree' && v.id === scope.local_id) { add(path,v,tagged,'ui'); return; }
@@ -132,10 +147,19 @@
     const omit = v => Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'children'));
     return record(current) && eq(omit(current),omit(old));
   }
-  async function sealCopies(entries, scope, id, password, memo) {
+  async function sealCopies(entries, scope, id, password, memo,resolveKey,intent) {
     const results = [];
     for (const e of entries) {
-      const original = copy(e.before), children = original.children; delete original.children;
+      let original = copy(e.before);
+      const children = original.children; delete original.children;
+      if (e.type === 'archive') {
+        if (typeof resolveKey !== 'function') fail('archive_key_required');
+        const r=original.protection_record;
+        const opened=protocol().parseJson(await protocol().decryptContent(r.ciphertext,await resolveKey({representation_epoch:'local:'+r.operation_id,operation_id:r.operation_id,output:false})));
+        if (opened.schema_version !== 1 || !eq(opened.scope,r.scope) || opened.operation_id !== r.operation_id || !record(opened.value)) fail('archive_binding');
+        if (intent?.purpose === 'current_plain_transition') {results.push({...e,after:copy(e.before)});continue;}
+        original=copy(opened.value);
+      }
       const archive = { schema_version: 1, scope, operation_id: id, value: original };
       const archiveBytes = json(archive);
       let cipher = memo.get(archiveBytes);
@@ -145,7 +169,8 @@
       let after = Object.fromEntries(keep.filter(k => Object.hasOwn(original,k)).map(k => [k,copy(original[k])]));
       if (e.type === 'journal') after = {};
       else { after.title = '보호된 메모'; after.content = cipher; }
-      if (e.type === 'ui') after.tags = [];
+      if (e.type === 'ui' || e.type === 'archive' && Array.isArray(e.before.tags)) after.tags = [];
+      if (e.type === 'archive' && e.before.properties) after.properties = copy(e.before.properties);
       if (children !== undefined) after.children = children;
       after.protection_record = { schema_version: 1, scope: copy(scope), operation_id: id, ciphertext: cipher };
       results.push({ ...e, after });
@@ -180,7 +205,7 @@
       if (bundle.schema_version !== 1 || bundle.operation_id !== m.id || !eq(bundle.scope,m.scope) || !Array.isArray(bundle.stores)) fail('bundle_binding');
       return bundle;
     }
-    async function start(scope,intent,password) {
+    async function start(scope,intent,password,resolveKey) {
       if (!password) fail('key_required'); const ctx = own(scope), generation = epoch;
       if (Object.values(operations()).filter(inAccount).some(m => scopeKey(validateMarker(m).scope) === scopeKey(scope) && m.phase !== 'complete')) fail('operation_exists');
       if (running) fail('busy'); running = true;
@@ -190,7 +215,7 @@
         const id = crypto.randomUUID(), sources = [], memo = new Map();
         for (const store of stores()) {
           const raw = await store.read(); active(ctx,generation);
-          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope),scope,id,password,memo) });
+          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope,{includeArchives:true}),scope,id,password,memo,resolveKey,intent) });
           active(ctx,generation);
         }
         if (!sources.some(s => s.patches.length)) fail('local_copies_missing');
@@ -229,7 +254,7 @@
         }
         if (marker.phase === 'promoted') {
           if (typeof build !== 'function') fail('cipher_plan_required');
-          b.work = await build(copy(b.prepared),copy(b.intent)); active(ctx,generation);
+          b.work = await build(copy(b.prepared),copy(b.intent),copy(b.stores)); active(ctx,generation);
           marker.phase = 'bundled'; await persist();
         }
         if (marker.phase === 'bundled') {
@@ -253,7 +278,8 @@
           if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
           const adapters = stores();
           if (!eq(adapters.map(s => s.name),b.stores.map(s => s.name))) fail('store_inventory_changed');
-          const knownCiphers = b.stores.flatMap(s => s.patches).map(p => p.after.protection_record);
+          const knownCiphers = b.stores.flatMap(s => s.patches).flatMap(p => [p.after.protection_record,
+            ...(protectedRecord(p.before) ? [p.before.protection_record] : [])]);
           const knownArchives = value => {
             if (!record(value) && !Array.isArray(value)) return;
             if (protectedRecord(value)) {
@@ -451,12 +477,9 @@
         const p = { version, path, id, operation_id: id, digest: r.metadata_manifest_digest, response: r, promoted: true };
         p.manifest = await pages(s,p); return p;
       },
-      async stage(s,p,work,password,localStores = [],resolveKey) {
+      async readSources(s,p,password,localStores = [],resolveKey,sourceOrigins = []) {
         const fixed = await pages(s,p);
-        if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
-        const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0)
-          : fixed.entries;
-        if (!eq(protocol().keyOrder(work.transfers.map(t => t.key)),work.transfers.map(t => t.key)) || work.transfers.length !== destinations.length) fail('cipher_set');
+        if (!eq(fixed,p.manifest)) fail('manifest_changed');
         const meaning = new Map(), resolve = resolveKey || keyResolver || (async () => password);
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const sourceKeys = p.version === 3 ? protocol().keyOrder(fixed.DSET.flatMap(d => d.source_keys).filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
@@ -466,7 +489,15 @@
             const revisions = localStores.flatMap(store => store.patches).filter(patch => patch.type === 'journal').flatMap(patch => patch.before.revisions || []);
             const original = revisions.find(r => r.revision_id === k.id);
             if (!original || !original.snapshot || original.snapshot.note.owner_id !== s.owner || original.snapshot.note.local_id !== s.local_id) fail('local_branch_source_missing');
-            protocol().validateSnapshot(original.snapshot); meaning.set(json(k),copy(original.snapshot)); continue;
+            if (revisions.some(r=>r.revision_id===k.id && (!eq(r.snapshot,original.snapshot) || !eq(r.parent_ref,original.parent_ref)))) fail('local_branch_source_conflict');
+            const snapshot=copy(protocol().validateSnapshot(original.snapshot));
+            if (snapshot.note.content.startsWith('NOW_ENCRYPTED_V1:')) {
+              const reservation=p.response.metadata_header?.reserved_branches?.find(r=>r.revision_id===k.id);
+              snapshot.note.content=await protocol().decryptContent(snapshot.note.content,await resolve({key:k,
+                representation_epoch:reservation?.source_representation_epoch ?? 'local-body:'+k.id,output:false}));
+              protocol().validateSnapshot(snapshot);
+            }
+            meaning.set(json(k),snapshot); continue;
           }
           let raw;
           if (p.version === 2) {
@@ -496,7 +527,7 @@
               raw = new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(new Uint8Array(bytes));
             }
           }
-          const supplied = (work.source_origins || []).find(e => eq(e.key,k));
+          const supplied = sourceOrigins.find(e => eq(e.key,k));
           let d, expected;
           if (p.version === 3) { d = source.descriptor; expected = supplied?.origin || { value: null, legacy: null }; }
           else {
@@ -522,6 +553,16 @@
           }
           meaning.set(json(k),await protocol().decryptRepresentation(raw,d,expected,resolve,p.version === 3 ? 3 : 2));
         }
+        return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
+      },
+      async stage(s,p,work,password,localStores = [],resolveKey) {
+        const fixed = await pages(s,p);
+        if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
+        const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
+        if (!eq(protocol().keyOrder(work.transfers.map(t => t.key)),work.transfers.map(t => t.key)) || work.transfers.length !== destinations.length) fail('cipher_set');
+        const meaning = new Map((await transport.readSources(s,p,password,localStores,resolveKey,work.source_origins || [])).map(v=>[json(v.key),v.value]));
+        const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
+        const resolve = resolveKey || keyResolver || (async () => password);
         if (p.response.metadata_header?.purpose === 'current_plain_transition') {
           const sources = fixed.S.map(e => e.descriptor), selected = p.response.metadata_header.selection.physical_note_id;
           const body = sources.find(d => d.key.kind === 'note_body' && d.key.id === String(selected));
@@ -539,7 +580,8 @@
           const epoch = p.version === 3 ? d.output_epoch : p.response.target_epoch;
           if (t.descriptor.representation_kind !== d.output_kind || t.descriptor.representation_epoch !== epoch
             || !eq(t.descriptor.key,key) || !eq(t.descriptor.expected_binding,d.expected_binding)) fail('output_binding');
-          const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,resolve,3);
+          const outputKey = d => resolve({...d,output:p.response.metadata_header?.purpose !== 'current_plain_transition'});
+          const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
           if (keys.length !== 1 || !meaning.has(json(keys[0])) || !semanticEq(plain,meaning.get(json(keys[0]))) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -564,7 +606,7 @@
           }
           const readback = new Uint8Array(downloaded);
           if (await protocol().sha256(readback) !== hash || new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(readback) !== t.raw) fail('staged_bytes');
-          const actual = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,resolve,3);
+          const actual = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           if (!semanticEq(actual,t.semantic)) fail('staged_semantic');
           records.push({ entry_key: entry, destination_key: key, source_etag: d.source_etag, output_kind: d.output_kind, target_epoch: epoch, total_bytes: data.length, ciphertext_sha256: hash });
         }

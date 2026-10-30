@@ -5402,6 +5402,16 @@ kbd {
 
 /* Note history uses the editor's existing panel, field and action tokens. */
 .note-history-dialog { width: min(1100px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
+.note-protection-dialog { width: min(960px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+.protection-scope { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; }
+.protection-scope dd { margin: 0; overflow-wrap: anywhere; }
+.note-protection-dialog > section:has(select) { display: flex; flex-wrap: wrap; gap: 8px; }
+.note-protection-dialog select { flex: 1; min-width: 0; max-width: 100%; }
+.protection-plain { min-height: 120px; max-height: 40dvh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.protection-copies { display: grid; gap: 8px; max-height: 24dvh; overflow: auto; }
+.protection-copies label { display: flex; gap: 8px; align-items: start; overflow-wrap: anywhere; }
+.protection-copies input { flex: 0 0 auto; }
+.note-protection-dialog .library-confirm label { display: grid; gap: 8px; }
 .history-controls { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr) auto auto; gap: 8px; align-items: end; }
 .history-controls label { display: grid; gap: 4px; min-width: 0; }
 .history-controls select { width: 100%; min-width: 0; }

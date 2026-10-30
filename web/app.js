@@ -1996,15 +1996,21 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   function sameOwner(s, scope) {
     return record(s) && s.url?.replace(/\/+$/, '') === scope.url.replace(/\/+$/, '') && s.owner === scope.owner && s.instance === scope.instance;
   }
-  function inventory(value, kind, scope) {
+  function inventory(value, kind, scope, options = {}) {
     validateScope(scope);
     const found = [], occupied = new Set();
     const add = (path, object, proof, type) => {
+      if (object.owner_id && object.owner_id !== scope.owner) return;
+      if (object.ownerId && object.ownerId !== scope.owner) return;
+      if (object.remoteOwnerId && object.remoteOwnerId !== scope.owner) return;
       if (protectedRecord(object)) {
         if (!sameOwner(object.protection_record.scope, scope)) fail('scope_unverified');
         return;
       }
-      if (!proof) fail('local_scope_unverified');
+      if (!proof) {
+        if (options.unverified) { options.unverified.push({ path, type, before: copy(object) }); return; }
+        fail('local_scope_unverified');
+      }
       validateScope(proof);
       if (!sameOwner(proof,scope)) return;
       if (proof.local_id !== scope.local_id) fail('local_scope_unverified');
@@ -2015,6 +2021,9 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (!record(v) && !Array.isArray(v)) return;
       if (Array.isArray(v)) { v.forEach((item,i) => walk(item,[...path,i],role,proof)); return; }
       if (protectedRecord(v)) {
+        if (options.includeArchives && sameOwner(v.protection_record.scope,scope) && v.protection_record.scope.local_id === scope.local_id) {
+          found.push({path:copy(path),type:'archive',before:copy(v)});
+        }
         // A parent's archive never owns its independent child records.
         if (Array.isArray(v.children)) walk(v.children,[...path,'children'],'tree',null);
         for (const k of ['data','history','settings','snapshots','recovery_archives']) {
@@ -2029,7 +2038,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           if (!record(c.notes)) fail('journal_unknown');
           const item = c.notes[scope.local_id];
           if (item) {
-            if (protectedRecord(item)) continue;
+            if (protectedRecord(item)) {
+              if (options.includeArchives) walk(item,[...path,'contexts',k,'notes',scope.local_id],'history',null);
+              continue;
+            }
             if (item.raw?.owner_id !== scope.owner || item.raw?.local_id !== scope.local_id
               || item.draft?.owner_id !== scope.owner || item.draft?.local_id !== scope.local_id) fail('journal_scope');
             const positive = item.protectionScope || (item.base?.server_instance_id === scope.instance ? scope : null);
@@ -2042,6 +2054,9 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         return;
       }
       const tagged = v.protectionScope || proof;
+      if (v.localId === scope.local_id && (Object.hasOwn(v,'localContent') || Object.hasOwn(v,'serverContent'))) {
+        add(path,v,tagged,'conflict'); return;
+      }
       if (v.local_id === scope.local_id && v.owner_id === scope.owner) { add(path,v,tagged,'raw'); return; }
       if (v.note_local_id === scope.local_id && v.owner_id === scope.owner) { add(path,v,tagged,'linked'); return; }
       if (role === 'tree' && v.id === scope.local_id) { add(path,v,tagged,'ui'); return; }
@@ -2085,10 +2100,19 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     const omit = v => Object.fromEntries(Object.entries(v).filter(([k]) => k !== 'children'));
     return record(current) && eq(omit(current),omit(old));
   }
-  async function sealCopies(entries, scope, id, password, memo) {
+  async function sealCopies(entries, scope, id, password, memo,resolveKey,intent) {
     const results = [];
     for (const e of entries) {
-      const original = copy(e.before), children = original.children; delete original.children;
+      let original = copy(e.before);
+      const children = original.children; delete original.children;
+      if (e.type === 'archive') {
+        if (typeof resolveKey !== 'function') fail('archive_key_required');
+        const r=original.protection_record;
+        const opened=protocol().parseJson(await protocol().decryptContent(r.ciphertext,await resolveKey({representation_epoch:'local:'+r.operation_id,operation_id:r.operation_id,output:false})));
+        if (opened.schema_version !== 1 || !eq(opened.scope,r.scope) || opened.operation_id !== r.operation_id || !record(opened.value)) fail('archive_binding');
+        if (intent?.purpose === 'current_plain_transition') {results.push({...e,after:copy(e.before)});continue;}
+        original=copy(opened.value);
+      }
       const archive = { schema_version: 1, scope, operation_id: id, value: original };
       const archiveBytes = json(archive);
       let cipher = memo.get(archiveBytes);
@@ -2098,7 +2122,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       let after = Object.fromEntries(keep.filter(k => Object.hasOwn(original,k)).map(k => [k,copy(original[k])]));
       if (e.type === 'journal') after = {};
       else { after.title = '보호된 메모'; after.content = cipher; }
-      if (e.type === 'ui') after.tags = [];
+      if (e.type === 'ui' || e.type === 'archive' && Array.isArray(e.before.tags)) after.tags = [];
+      if (e.type === 'archive' && e.before.properties) after.properties = copy(e.before.properties);
       if (children !== undefined) after.children = children;
       after.protection_record = { schema_version: 1, scope: copy(scope), operation_id: id, ciphertext: cipher };
       results.push({ ...e, after });
@@ -2133,7 +2158,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (bundle.schema_version !== 1 || bundle.operation_id !== m.id || !eq(bundle.scope,m.scope) || !Array.isArray(bundle.stores)) fail('bundle_binding');
       return bundle;
     }
-    async function start(scope,intent,password) {
+    async function start(scope,intent,password,resolveKey) {
       if (!password) fail('key_required'); const ctx = own(scope), generation = epoch;
       if (Object.values(operations()).filter(inAccount).some(m => scopeKey(validateMarker(m).scope) === scopeKey(scope) && m.phase !== 'complete')) fail('operation_exists');
       if (running) fail('busy'); running = true;
@@ -2143,7 +2168,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         const id = crypto.randomUUID(), sources = [], memo = new Map();
         for (const store of stores()) {
           const raw = await store.read(); active(ctx,generation);
-          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope),scope,id,password,memo) });
+          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope,{includeArchives:true}),scope,id,password,memo,resolveKey,intent) });
           active(ctx,generation);
         }
         if (!sources.some(s => s.patches.length)) fail('local_copies_missing');
@@ -2182,7 +2207,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         }
         if (marker.phase === 'promoted') {
           if (typeof build !== 'function') fail('cipher_plan_required');
-          b.work = await build(copy(b.prepared),copy(b.intent)); active(ctx,generation);
+          b.work = await build(copy(b.prepared),copy(b.intent),copy(b.stores)); active(ctx,generation);
           marker.phase = 'bundled'; await persist();
         }
         if (marker.phase === 'bundled') {
@@ -2206,7 +2231,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
           const adapters = stores();
           if (!eq(adapters.map(s => s.name),b.stores.map(s => s.name))) fail('store_inventory_changed');
-          const knownCiphers = b.stores.flatMap(s => s.patches).map(p => p.after.protection_record);
+          const knownCiphers = b.stores.flatMap(s => s.patches).flatMap(p => [p.after.protection_record,
+            ...(protectedRecord(p.before) ? [p.before.protection_record] : [])]);
           const knownArchives = value => {
             if (!record(value) && !Array.isArray(value)) return;
             if (protectedRecord(value)) {
@@ -2404,12 +2430,9 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         const p = { version, path, id, operation_id: id, digest: r.metadata_manifest_digest, response: r, promoted: true };
         p.manifest = await pages(s,p); return p;
       },
-      async stage(s,p,work,password,localStores = [],resolveKey) {
+      async readSources(s,p,password,localStores = [],resolveKey,sourceOrigins = []) {
         const fixed = await pages(s,p);
-        if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
-        const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0)
-          : fixed.entries;
-        if (!eq(protocol().keyOrder(work.transfers.map(t => t.key)),work.transfers.map(t => t.key)) || work.transfers.length !== destinations.length) fail('cipher_set');
+        if (!eq(fixed,p.manifest)) fail('manifest_changed');
         const meaning = new Map(), resolve = resolveKey || keyResolver || (async () => password);
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const sourceKeys = p.version === 3 ? protocol().keyOrder(fixed.DSET.flatMap(d => d.source_keys).filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
@@ -2419,7 +2442,15 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             const revisions = localStores.flatMap(store => store.patches).filter(patch => patch.type === 'journal').flatMap(patch => patch.before.revisions || []);
             const original = revisions.find(r => r.revision_id === k.id);
             if (!original || !original.snapshot || original.snapshot.note.owner_id !== s.owner || original.snapshot.note.local_id !== s.local_id) fail('local_branch_source_missing');
-            protocol().validateSnapshot(original.snapshot); meaning.set(json(k),copy(original.snapshot)); continue;
+            if (revisions.some(r=>r.revision_id===k.id && (!eq(r.snapshot,original.snapshot) || !eq(r.parent_ref,original.parent_ref)))) fail('local_branch_source_conflict');
+            const snapshot=copy(protocol().validateSnapshot(original.snapshot));
+            if (snapshot.note.content.startsWith('NOW_ENCRYPTED_V1:')) {
+              const reservation=p.response.metadata_header?.reserved_branches?.find(r=>r.revision_id===k.id);
+              snapshot.note.content=await protocol().decryptContent(snapshot.note.content,await resolve({key:k,
+                representation_epoch:reservation?.source_representation_epoch ?? 'local-body:'+k.id,output:false}));
+              protocol().validateSnapshot(snapshot);
+            }
+            meaning.set(json(k),snapshot); continue;
           }
           let raw;
           if (p.version === 2) {
@@ -2449,7 +2480,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
               raw = new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(new Uint8Array(bytes));
             }
           }
-          const supplied = (work.source_origins || []).find(e => eq(e.key,k));
+          const supplied = sourceOrigins.find(e => eq(e.key,k));
           let d, expected;
           if (p.version === 3) { d = source.descriptor; expected = supplied?.origin || { value: null, legacy: null }; }
           else {
@@ -2475,6 +2506,16 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           }
           meaning.set(json(k),await protocol().decryptRepresentation(raw,d,expected,resolve,p.version === 3 ? 3 : 2));
         }
+        return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
+      },
+      async stage(s,p,work,password,localStores = [],resolveKey) {
+        const fixed = await pages(s,p);
+        if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
+        const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
+        if (!eq(protocol().keyOrder(work.transfers.map(t => t.key)),work.transfers.map(t => t.key)) || work.transfers.length !== destinations.length) fail('cipher_set');
+        const meaning = new Map((await transport.readSources(s,p,password,localStores,resolveKey,work.source_origins || [])).map(v=>[json(v.key),v.value]));
+        const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
+        const resolve = resolveKey || keyResolver || (async () => password);
         if (p.response.metadata_header?.purpose === 'current_plain_transition') {
           const sources = fixed.S.map(e => e.descriptor), selected = p.response.metadata_header.selection.physical_note_id;
           const body = sources.find(d => d.key.kind === 'note_body' && d.key.id === String(selected));
@@ -2492,7 +2533,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const epoch = p.version === 3 ? d.output_epoch : p.response.target_epoch;
           if (t.descriptor.representation_kind !== d.output_kind || t.descriptor.representation_epoch !== epoch
             || !eq(t.descriptor.key,key) || !eq(t.descriptor.expected_binding,d.expected_binding)) fail('output_binding');
-          const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,resolve,3);
+          const outputKey = d => resolve({...d,output:p.response.metadata_header?.purpose !== 'current_plain_transition'});
+          const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
           if (keys.length !== 1 || !meaning.has(json(keys[0])) || !semanticEq(plain,meaning.get(json(keys[0]))) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -2517,7 +2559,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           }
           const readback = new Uint8Array(downloaded);
           if (await protocol().sha256(readback) !== hash || new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(readback) !== t.raw) fail('staged_bytes');
-          const actual = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,resolve,3);
+          const actual = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           if (!semanticEq(actual,t.semantic)) fail('staged_semantic');
           records.push({ entry_key: entry, destination_key: key, source_etag: d.source_etag, output_kind: d.output_kind, target_epoch: epoch, total_bytes: data.length, ciphertext_sha256: hash });
         }
@@ -2537,6 +2579,387 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   }
   globalThis.NowNoteProtectionState = Object.freeze({ create,createRemote,inventory,validateMarker,protectedRecord,scopeKey });
 })();
+
+;
+/* E4b3a: in-memory inspection and explicit attribution; no plaintext persistence. */
+(() => {
+  'use strict';
+  const clone = v => structuredClone(v);
+  const P = () => globalThis.NowNoteProtectionState;
+  const Q = () => globalThis.NowNoteProtectionProtocol;
+  const fail = code => { throw new Error('note_protection_client:' + code); };
+  const eq = (a,b) => Q().canonicalJson(a) === Q().canonicalJson(b);
+  const at = (root,path) => path.reduce((v,k)=>v?.[k],root);
+  const same = (a,b) => P().scopeKey(a) === P().scopeKey(b);
+  function create({context,stores}) {
+    let confirmation = null;
+    function active(ctx,scope) {
+      const now = context();
+      if (!eq(ctx,now) || !same(now,scope)) fail('confirmation_changed');
+      return true;
+    }
+    return {
+      async copies(scope) {
+        confirmation = null;
+        const ctx = clone(context()), records = [], snapshots = [];
+        active(ctx,scope);
+        for (const store of stores()) {
+          const raw = await store.read(); active(ctx,scope);
+          const unknown = [];
+          P().inventory(raw,store.kind,scope,{unverified:unknown});
+          snapshots.push({store,raw,unknown});
+          for (const p of unknown) records.push({id:crypto.randomUUID(),store:store.name,path:clone(p.path),type:p.type,
+            title:String(p.before.title || p.before.raw?.title || ''),updated_at:p.before.updatedAt || p.before.updated_at || p.before.raw?.updated_at || null});
+        }
+        confirmation = {ctx,scope:clone(scope),snapshots,records:clone(records)};
+        return records;
+      },
+      async confirm(scope,list,selected) {
+        const c = confirmation;
+        if (!c || !same(c.scope,scope) || !eq(c.records,list)) fail('confirmation_changed');
+        active(c.ctx,scope);
+        if (!Array.isArray(selected) || new Set(selected).size !== list.length || list.some(r=>!selected.includes(r.id))) fail('confirmation_incomplete');
+        // Check every exact copy before the first attribution write.
+        for (const s of c.snapshots) {
+          if (!eq(await s.store.read(),s.raw)) fail('copy_changed');
+          active(c.ctx,scope);
+        }
+        for (const s of c.snapshots) {
+          if (!s.unknown.length) continue;
+          const next = clone(s.raw);
+          for (const p of s.unknown) at(next,p.path).protectionScope = clone(scope);
+          active(c.ctx,scope);
+          await s.store.cas(s.raw,next,{active:()=>active(c.ctx,scope)}); active(c.ctx,scope);
+          if (!eq(await s.store.read(),next)) fail('attribution_readback');
+          active(c.ctx,scope);
+        }
+        confirmation = null;
+      },
+      async openArchive(scope,record,password) {
+        const ctx = clone(context());
+        const saved = clone(record.protection_record);
+        if (!P().protectedRecord(record) || !same(saved.scope,scope)) fail('archive_scope');
+        active(ctx,scope);
+        const archive = Q().parseJson(await Q().decryptContent(saved.ciphertext,password));
+        active(ctx,scope);
+        if (archive.schema_version !== 1 || !eq(archive.scope,saved.scope) || archive.operation_id !== saved.operation_id
+          || !archive.value || !eq(record.protection_record,saved)) fail('archive_binding');
+        return clone(archive.value);
+      },
+      async archives(scope) {
+        const ctx=clone(context()), rows=[]; active(ctx,scope);
+        function walk(v,path,store) {
+          if (!v || typeof v !== 'object') return;
+          if (v.protection_record && P().protectedRecord(v) && same(v.protection_record.scope,scope)) rows.push({store,path:clone(path),record:clone(v)});
+          for (const [k,child] of Object.entries(v)) if (!['protection_record','protection_operations'].includes(k)) walk(child,[...path,k],store);
+        }
+        for (const store of stores()) {walk(await store.read(),[],store.name);active(ctx,scope);}
+        return rows;
+      },
+      invalidate() { confirmation = null; },
+    };
+  }
+  async function buildWork(scope,prepared,intent,password,remote,localStores = [],resolveKey) {
+    const p = clone(prepared), i = clone(intent), m = p.manifest;
+    if (![2,3].includes(p.version) || i.schema_version !== p.version
+      || !['conversion','current_plain_transition','mixed_conversion'].includes(i.purpose)) fail('work_purpose');
+    const origins = clone(i.source_origins || []);
+    const sources = await remote.readSources(scope,p,password,localStores,resolveKey,origins);
+    const source = key => {
+      const row = sources.find(v=>eq(v.key,key));
+      if (!row) fail('source_missing');
+      return clone(row.value);
+    };
+    let destinations = p.version === 2 ? m.entries.map(e=>({destination_key:e.destination_key,source_keys:[e.key],source_etag:e.source_etag,
+      output_kind:e.output_kind,output_epoch:p.response.target_epoch,is_null:false,expected_binding:e.expected_binding})) : m.DSET;
+    const keys = Q().keyOrder(destinations.map(d=>d.destination_key));
+    if (p.version === 2) destinations = keys.map(k=>destinations.find(d=>eq(d.destination_key,k)));
+    if (!eq(keys,destinations.map(d=>d.destination_key))) fail('destination_order');
+    const transfers = [], records = [];
+    for (const d of destinations) {
+      if (d.is_null || d.output_epoch === 0) continue;
+      if (d.source_keys.length !== 1) fail('source_arity');
+      const semantic = source(d.source_keys[0]), key = d.destination_key;
+      const original = p.version === 2 ? m.entries.find(e=>eq(e.destination_key,key)) : null;
+      const sourceDescriptor = p.version === 3 ? m.S.find(e=>eq(e.descriptor.key,d.source_keys[0]))?.descriptor : null;
+      const expected = origins.find(v=>eq(v.key,d.source_keys[0]))?.origin;
+      const origin = original ? {value:original.operation_origin,legacy:null} : expected || {value:null,legacy:null};
+      const output = {key,output_kind:d.output_kind,output_epoch:d.output_epoch,is_null:false,expected_binding:d.expected_binding,operation_origin:origin.value};
+      const outputKey = () => (resolveKey || (async()=>password))({key,representation_epoch:d.output_epoch,output:i.purpose!=='current_plain_transition'});
+      const raw = await Q().encryptRepresentation(semantic,output,await outputKey());
+      const hash = await Q().sha256(raw), linked = d.output_kind === 'linked_text_envelope_v1', body = key.kind === 'note_body';
+      const o = p.version === 3 ? m.O.find(o=>eq(o.destination_key,key)) : null;
+      const descriptor = {key,representation_kind:d.output_kind,representation_epoch:d.output_epoch,is_null:false,
+        representation_version:1,representation_etag:d.source_etag,storage_operation_id:p.id,
+        semantic_origin_id:o?.semantic_origin_id ?? (origin.value?.operation_id || origin.value?.quote_id || origin.value?.import_id || null),
+        origin_validator:o?.origin_validator || (body ? 'body_v1' : linked ? 'linked_v1' : 'native_v1'),
+        origin_row_required:o?.origin_row_required ?? (!body && !linked),expected_binding:d.expected_binding,
+        revision_ref:d.expected_binding?.revision_ref || null,parent_ref:d.expected_binding?.parent_ref || null,
+        physical_note_id:['note_body','inventory_snapshot'].includes(key.kind) ? Number(key.id) : null,
+        inventory_revision_id:key.kind === 'inventory_snapshot' ? d.expected_binding?.revision_ref?.id || null : null,
+        linked_slot_version:linked ? (sourceDescriptor?.linked_slot_version || original?.slot_version || 0) + 1 : null,ciphertext_sha256:hash};
+      // These descriptors verify local output bytes, not a claimed future server etag/version.
+      Q().validateDescriptor(descriptor,3);
+      const verifiedOrigin = {value:origin.value,legacy:null};
+      if (!eq(await Q().decryptRepresentation(raw,descriptor,verifiedOrigin,outputKey,3),semantic)) fail('output_verification');
+      transfers.push({key,raw,descriptor,origin:verifiedOrigin,semantic});
+      records.push({entry_key:p.version === 2 ? original.key : key,destination_key:key,source_etag:d.source_etag,
+        output_kind:d.output_kind,target_epoch:d.output_epoch,total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
+    }
+    if (p.version === 2) {
+      const ordered = Q().keyOrder(records.map(r=>r.entry_key)).map(k=>records.find(r=>eq(r.entry_key,k)));
+      records.splice(0,records.length,...ordered);
+    }
+    const a = i.prepare;
+    const commit = {schema_version:p.version,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      mutation_id:a.mutation_id,metadata_manifest_digest:p.digest,client_verified_ciphertext_manifest_digest:await Q().hashJson(records)};
+    if (p.version === 2) Object.assign(commit,{transition_id:p.id,base_head_version:a.base_head_version,base_revision_id:a.base_revision_id,
+      expected_inventory_revision_ids:a.expected_inventory_revision_ids,expected_history_generation:a.expected_history_generation,
+      from_epoch:a.crypto_epoch,target_epoch:a.target_epoch,drain_id:p.response.drain_id,drain_version:p.response.drain_version,linked_metadata_version:1});
+    else {
+      Object.assign(commit,{operation_id:p.id,lease_version:p.response.lease_version,base:a.base,client_decryption_verified:true});
+      if (i.purpose === 'mixed_conversion') commit.target_epoch = a.target_epoch;
+      else {
+        const h = p.response.metadata_header, selected = String(h.selection.physical_note_id);
+        const body = m.S.find(e=>e.descriptor.key.kind === 'note_body' && e.descriptor.key.id === selected)?.descriptor;
+        const inv = m.S.find(e=>e.descriptor.key.kind === 'inventory_snapshot' && e.descriptor.key.id === selected)?.descriptor;
+        if (!body || !inv) fail('selection_missing');
+        const snapshot = source(inv.key), content = source(body.key);
+        Q().validateSnapshot(snapshot);
+        if (snapshot.note.content !== content) fail('selected_meaning');
+        commit.plain_current = {...snapshot.note,...h.server_fields};
+        Q().validateSnapshot({schema_version:1,note:commit.plain_current});
+      }
+    }
+    return {transfers,source_origins:origins,commit};
+  }
+  const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
+  function encoded(value) {
+    let binary = '';
+    for (const b of new TextEncoder().encode(Q().canonicalJson(value))) binary += String.fromCharCode(b);
+    return btoa(binary).replace(/=/g,'').replace(/\+/g,'-').replace(/\//g,'_');
+  }
+  function createReader({request}) {
+    const path = '/api/v2/notes/mixed-representations';
+    const query = (s,c) => ({...access(s),expected_context:encoded(c.context),catalog_digest:c.catalog_digest});
+    const checked = (r,c) => {
+      if (r.schema_version !== 3 || !eq(r.context,c.context) || r.catalog_digest !== c.catalog_digest) fail('source_changed');
+      return r;
+    };
+    return {
+      async catalog(scope) {
+        scope=clone(scope);
+        const c = await request(scope,path + '/context','GET',access(scope));
+        if (c.server_instance_id !== scope.instance || c.schema_version !== 3) fail('catalog_scope');
+        Q().validateContext(c.context);
+        const pages = []; let cursor = null;
+        do {
+          const r = await request(scope,path + '/catalog','GET',{...query(scope,c),limit:500,...(cursor ? {cursor} : {})});
+          checked(r,c); pages.push(r);
+          cursor = r.next_cursor;
+          if (cursor !== null && pages.slice(0,-1).some(p=>p.next_cursor===cursor)) fail('catalog_cursor');
+        } while (cursor !== null);
+        const entries = await Q().verifyCatalog(pages,{...access(scope),context:c.context,catalog_digest:c.catalog_digest});
+        if (!eq(c.counts,pages[0].counts) || !eq(c.coverage,pages[0].coverage)) fail('catalog_changed');
+        return {...c,entries};
+      },
+      async read(scope,catalog,descriptor,resolveKey) {
+        scope=clone(scope);
+        const c = clone(catalog), d = clone(descriptor);
+        if (!c.entries.some(e=>eq(e,d))) fail('descriptor_missing');
+        Q().validateDescriptor(d,3);
+        const args = {...query(scope,c),kind:d.key.kind,representation_id:d.key.id,slot:d.key.slot,representation_etag:d.representation_etag};
+        const meta = checked(await request(scope,path + '/metadata','GET',args),c);
+        if (!eq(meta.descriptor,d)) fail('source_changed');
+        const fields=['schema_version','context','catalog_digest','descriptor','operation_origin'];
+        if (Object.keys(meta).length!==fields.length || fields.some(k=>!Object.hasOwn(meta,k))) fail('origin_response');
+        if (d.expected_binding && (d.expected_binding.server_instance_id!==scope.instance || d.expected_binding.owner_id!==scope.owner || d.expected_binding.local_id!==scope.local_id)) fail('representation_scope');
+        const expected={value:meta.operation_origin,legacy:d.origin_validator==='a2a_pre_origin_v0'&&meta.operation_origin===null?'a2a_pre_origin_v0':null};
+        const chunks = []; let index = 0, total, size;
+        do {
+          const r = checked(await request(scope,path + '/representation','GET',{...args,chunk_index:index}),c);
+          if (!eq(r.descriptor,d)) fail('source_changed');
+          if (index === 0) {total=r.total_chunks;size=r.total_bytes;}
+          if (!Number.isSafeInteger(total) || !Number.isSafeInteger(size) || total < 0 || size < 0
+            || total !== r.total_chunks || size !== r.total_bytes) fail('source_framing');
+          if (d.is_null) {
+            if (total !== 0 || size !== 0 || r.chunk_index !== null || r.data_base64 !== null) fail('source_null');
+            return {descriptor:d,value:await Q().decryptRepresentation(null,d,expected,resolveKey,3),origin:expected};
+          }
+          if (total !== Math.max(1,Math.ceil(size/262144)) || r.chunk_index !== index || typeof r.data_base64 !== 'string') fail('source_framing');
+          const bytes = Uint8Array.from(atob(r.data_base64),ch=>ch.charCodeAt(0));
+          if (bytes.length !== Math.min(262144,size-index*262144)) fail('source_length');
+          chunks.push(bytes); index++;
+        } while (index < total);
+        const bytes = new Uint8Array(size); let offset=0;
+        for (const chunk of chunks) {bytes.set(chunk,offset);offset+=chunk.length;}
+        const raw = new TextDecoder('utf-8',{fatal:true,ignoreBOM:true}).decode(bytes);
+        const value=await Q().decryptRepresentation(raw,d,expected,resolveKey,3);
+        if (value?.note && (value.note.owner_id!==scope.owner || value.note.local_id!==scope.local_id)) fail('representation_scope');
+        return {descriptor:d,value,origin:expected};
+      },
+    };
+  }
+  function plan(scope,purpose,status,catalog,branches = [],sourceOrigins = []) {
+    const k = status.crypto_epoch;
+    if (!Number.isSafeInteger(k) || k < 0 || status.server_instance_id !== scope.instance) fail('plan_scope');
+    const drain = {mutation_id:crypto.randomUUID(),crypto_epoch:k,expected_history_generation:status.history_generation};
+    if (purpose === 'conversion') {
+      if (k !== 0) fail('initial_epoch');
+      return {schema_version:2,purpose,drain,prepare:{mutation_id:crypto.randomUUID(),crypto_epoch:0,base_head_version:status.head_version,
+        base_revision_id:status.head_revision_id,expected_inventory_revision_ids:clone(status.inventory_revision_ids),
+        expected_history_generation:status.history_generation,target_epoch:1,local_branches:branches.map(b=>({revision_id:b.revision_id,parent_ref:clone(b.parent_ref),origin_device_id:b.origin_device_id}))}};
+    }
+    if (!catalog || k < 1 || !eq(catalog.context.base,Object.fromEntries(Object.keys(catalog.context.base).map(f=>[f,status[f]])))) fail('plan_context');
+    const base = clone(catalog.context), prepare = {mutation_id:crypto.randomUUID(),base,expected_catalog_digest:catalog.catalog_digest};
+    if (purpose === 'mixed_conversion') Object.assign(prepare,{target_epoch:k+1,target_current_mode:base.base.current_exists?'protected':'absent',reserved_branches:clone(branches)});
+    else if (purpose === 'current_plain_transition') {
+      if (base.current_mode !== 'protected' || base.base.identity_state !== 'coherent') fail('current_required');
+      const id = String(base.selected_physical_note_id), body = catalog.entries.find(d=>d.key.kind==='note_body'&&d.key.id===id), inv=catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===id);
+      if (!body || !inv || !inv.revision_ref) fail('selection_missing');
+      Object.assign(prepare,{selection:{physical_note_id:base.selected_physical_note_id,inventory_revision_ref:inv.revision_ref,
+        note_representation_etag:body.representation_etag,inventory_representation_etag:inv.representation_etag},replica_policy:'selected_head_only',target_current_mode:'plain'});
+    } else fail('work_purpose');
+    return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
+  }
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,createReader,plan});
+})();
+
+;
+/* Protected plaintext belongs only to this inspection dialog's live memory/DOM. */
+globalThis.mountNoteProtection = function mountNoteProtection(api) {
+  const dialog = document.createElement('dialog');
+  dialog.id = 'noteProtectionDialog'; dialog.className = 'library-dialog note-protection-dialog';
+  dialog.setAttribute('aria-labelledby','noteProtectionTitle');
+  dialog.innerHTML = `<header class="library-header"><h2 id="noteProtectionTitle">메모 보호</h2><button type="button" class="ghost-btn" data-action="close">닫기</button></header>
+    <p role="status" aria-live="polite" class="protection-status"></p>
+    <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
+    <dl class="protection-scope"></dl>
+    <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
+    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button></section>
+    <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
+    <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
+    <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
+  document.body.append(dialog);
+  const $ = s => dialog.querySelector(s);
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],previous:null};
+  const keys = new Map();
+  let askCancel = null;
+  const status = text => { $('.protection-status').textContent=text; };
+  function wipe() {
+    keys.clear(); $('.protection-plain').textContent='';
+    askCancel?.(); api.lock();
+  }
+  function valid(token) {
+    if (dialog.open && state.bound===api.contextKey() && state.run===token) return true;
+    wipe(); return false;
+  }
+  function controls() {
+    const unlocked = api.canMutate(), info=state.info;
+    for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
+    $('[name="target"]').disabled=state.busy;
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume']) {
+      const b=$(`[data-action="${purpose}"]`);
+      b.disabled=state.busy || !unlocked || !info;
+      b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
+    }
+    if (!info) return;
+    $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
+    $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
+    $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
+    $('[data-action="resume"]').hidden=!info.pending;
+    $('[data-action="confirm"]').hidden=!state.copies.length;
+  }
+  function ask(epoch,output=false) {
+    const slot=(output?'new:':'old:')+epoch;
+    if (keys.has(slot)) return Promise.resolve(keys.get(slot));
+    return new Promise(resolve=>{
+      const section=document.createElement('form'); section.className='library-confirm';
+      const label=document.createElement('label'); label.textContent=(output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
+      const cancel=document.createElement('button'), submit=document.createElement('button');
+      cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
+      const finish=value=>{input.value='';section.remove();askCancel=null;resolve(value);};
+      askCancel=()=>finish(null);cancel.addEventListener('click',()=>finish(null));
+      section.addEventListener('submit',e=>{e.preventDefault();const key=input.value;if(!key)return;keys.set(slot,key);finish(key);});
+      section.append(label,cancel,submit);dialog.append(section);input.focus();
+    });
+  }
+  const resolveKey = async d => {
+    const key=await ask(d.representation_epoch,d.output===true);
+    if (!key || state.bound!==api.contextKey() || !dialog.open) throw Error('키 입력이 취소되었거나 대상이 변경되었습니다.');
+    return key;
+  };
+  async function load() {
+    wipe(); state.info=null; state.copies=[];
+    const token=++state.run;
+    status('보호 상태 조회 중');
+    const targets=$('[name="target"]');targets.replaceChildren();
+    for(const id of api.targets()) {const o=document.createElement('option');o.value=id;o.textContent=id;targets.append(o);}
+    targets.value=api.target();
+    const info=await api.inspect(); if (!valid(token)) return;
+    state.info=info;
+    const dl=$('.protection-scope');dl.replaceChildren();
+    for(const [name,value] of [['서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],['서버 식별',info.scope.instance]]) {
+      const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;dl.append(dt,dd);
+    }
+    const select=$('[name="representation"]');select.replaceChildren();
+    for(const [index,row] of info.rows.entries()) {const o=document.createElement('option');o.value=index;o.textContent=row.label;select.append(o);}
+    if (!info.pending) state.copies=await api.copies(info.scope);
+    if (!valid(token)) return;
+    const list=$('.protection-copies');list.replaceChildren();
+    for(const item of state.copies) {
+      const label=document.createElement('label'),box=document.createElement('input'),text=document.createElement('span');
+      box.type='checkbox';box.value=item.id;
+      text.textContent=[item.store,item.path.join(' / '),item.title,item.updated_at].filter(Boolean).join(' · ');
+      label.append(box,text);list.append(label);
+    }
+    status(info.pending ? api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+  }
+  async function action(name) {
+    if (name==='close') {dialog.close();return;}
+    if (name==='lock') {++state.run;wipe();status('잠김');return;}
+    if (state.busy) return;
+    state.busy=true;controls();const token=state.run;
+    try {
+      if (!valid(token)) throw Error('인증 또는 메모가 변경되었습니다. 다시 여세요.');
+      if (name==='refresh') await load();
+      else if (name==='read') {
+        const row=state.info?.rows[Number($('[name="representation"]').value)];
+        if (!row) throw Error('열람할 표현이 없습니다.');
+        $('.protection-plain').textContent='';
+        const value=await api.read(state.info,row,resolveKey);
+        if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
+      } else {
+        if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
+        if (name==='confirm') {
+          await api.confirm(state.info.scope,state.copies,[...dialog.querySelectorAll('.protection-copies input:checked')].map(e=>e.value));
+          if (valid(token)) await load();
+        } else {
+          if (!state.info) throw Error('보호 상태를 다시 조회하세요.');
+          $('.protection-plain').textContent='';
+          const epoch=name==='resume'?'bundle':name==='current_plain_transition'?state.info.status.crypto_epoch:state.info.status.crypto_epoch+1;
+          const password=await ask(epoch,true);
+          if (!password || !valid(token)) return;
+          status('전환 처리 중');
+          if (name==='resume') await api.resume(state.info,password,resolveKey);
+          else await api.convert(state.info,name,password,resolveKey);
+          if (valid(token)) await load();
+        }
+      }
+    } catch(error) {if (valid(state.run)) {keys.clear();$('.protection-plain').textContent='';status(error.message || '보호 작업 실패 · 원본은 보존됩니다.');}}
+    finally {state.busy=false;controls();}
+  }
+  dialog.addEventListener('click',e=>{const b=e.target.closest('[data-action]');if(b)void action(b.dataset.action);});
+  $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
+  dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
+  return {
+    async open() {if(dialog.open)dialog.close();state.bound=api.contextKey();state.previous=document.activeElement;dialog.showModal();await action('refresh');},
+    lock() {++state.run;wipe();if(dialog.open)status('잠김');},
+    check() {if(dialog.open && state.bound!==api.contextKey())dialog.close();},
+    invalidate() {++state.run;wipe();if(dialog.open)dialog.close();},
+  };
+};
 
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
@@ -4754,6 +5177,7 @@ function syncTreeEditorHistoryCursor() {
 
 // renderTreeEditor 가 편집기에 값을 써 넣은 직후에 부른다.
 function syncTreeEditorHistorySession(node) {
+  if (node && noteProtectionBlocked(node.id)) { resetTreeEditorHistory(null,""); return; }
   const editor = elements.treeContent;
   if (!editor) return;
   // 조합 중에는 setEditorValue 가 쓰기를 미뤄 둔 상태다. 여기서 판단하지 않는다.
@@ -6710,8 +7134,12 @@ function saveWebSession(session) {
 }
 
 function clearWebSession() {
+  noteProtectionUI?.invalidate();
+  noteProtectionClient?.invalidate();
+  noteProtectionViewGeneration++;
   noteProtection?.invalidate();
   noteProtectionIdentity = null;
+  noteProtectionTargetId = null;
   noteHistoryLastError = "";
   noteHistoryAuthenticated = false;
   noteHistory?.invalidate();
@@ -7184,9 +7612,17 @@ let noteHistoryProjectionScope = "";
 const noteHistoryRemoteCache = new Map();
 let noteProtection = null;
 let noteProtectionIdentity = null;
+let noteProtectionTargetId = null;
+let noteProtectionRemote = null;
+let noteProtectionReader = null;
+let noteProtectionClient = null;
+let noteProtectionUI = null;
+let noteProtectionViewGeneration = 0;
+let noteProtectionInternalEnabled = false;
 let protectionApplying = false;
 const storagePendingWrites = new Set();
 let protectionBootstrapPending = false;
+let protectionBootstrapScopes = [];
 
 function noteProtectionBlocked(id) {
   if (!id) return false;
@@ -7243,6 +7679,7 @@ function initializeNoteProtection() {
   const ctx = () => ({ ...noteHistoryContext(), instance: noteProtectionIdentity?.instance || "" });
   const request = async (scope,path,method,body) => {
     const before = ctx();
+    const generation = noteProtectionViewGeneration;
     if (!before.enabled || before.owner !== scope.owner || before.url.replace(/\/+$/,"") !== scope.url.replace(/\/+$/,"")
       || before.instance !== scope.instance) throw new Error("보호 요청의 계정·서버가 변경되었습니다.");
     const query = new URLSearchParams();
@@ -7253,11 +7690,17 @@ function initializeNoteProtection() {
     });
     const value = NowNoteProtectionProtocol.parseJson(await response.text());
     const after = ctx();
-    if (!after.enabled || before.auth !== after.auth || before.owner !== after.owner || before.url !== after.url || before.instance !== after.instance) throw new Error("보호 응답의 인증 상태가 변경되었습니다.");
+    if (generation !== noteProtectionViewGeneration || !after.enabled || before.auth !== after.auth || before.owner !== after.owner || before.url !== after.url || before.instance !== after.instance) throw new Error("보호 응답의 인증 상태가 변경되었습니다.");
     if (!response.ok) throw Object.assign(new Error(value.detail?.code || "보호 요청 실패"),{ code: value.detail?.code, status: response.status });
     return value;
   };
   const remote = NowNoteProtectionState.createRemote({ request });
+  noteProtectionRemote = remote;
+  noteProtectionReader = NowNoteProtectionClient.createReader({ request });
+  noteProtectionClient = NowNoteProtectionClient.create({
+    context: () => ({ url:ctx().url,owner:ctx().owner,instance:ctx().instance,local_id:protectionTargetId(),device:ctx().device,
+      auth:ctx().auth,generation:noteProtectionViewGeneration }), stores:protectionStorageAdapters,
+  });
   noteProtection = NowNoteProtectionState.create({ context: ctx, journal: noteHistory, stores: protectionStorageAdapters, remote,
     preflight: async () => {
       if ([elements.treeContent,elements.treeTitleInput,elements.dailyContent,elements.worklogContent].some(e => e && isEditorComposing(e))) throw new Error("한글 입력을 마친 뒤 다시 시도하세요.");
@@ -7287,33 +7730,136 @@ function initializeNoteProtection() {
   });
 }
 
-// E4b3 will call these only after its existing capability/user-confirmation gate.
-async function beginNoteProtection(scope,intent,password) {
+function protectionActionGuard() {
+  const generation=noteProtectionViewGeneration,key=protectionViewKey();
+  return () => {if(generation!==noteProtectionViewGeneration || key!==protectionViewKey())throw new Error("잠금 또는 보호 대상 변경으로 작업이 취소되었습니다.");};
+}
+
+async function beginNoteProtection(scope,intent,password,resolveKey,guard=protectionActionGuard()) {
+  guard();
   const before = noteHistoryContext();
   const identity = await noteHistoryRequest(before,"crypto-transitions/status","GET",{ local_id: scope.local_id, device_id: scope.device });
+  guard();
   if (before.auth !== noteHistoryContext().auth || before.owner !== scope.owner || before.url !== scope.url || identity.server_instance_id !== scope.instance) throw new Error("보호 대상 서버가 변경되었습니다.");
   noteProtectionIdentity = { instance: identity.server_instance_id };
-  try { return await noteProtection.start(scope,intent,password); }
+  try { return await noteProtection.start(scope,intent,password,resolveKey); }
   finally { render(); }
 }
 
-async function resumeNoteProtection(id,password,build,resolveKey) {
+async function resumeNoteProtection(id,password,build,resolveKey,guard=protectionActionGuard()) {
+  guard();
   const marker = noteHistory.protectionOperations()[id];
   if (!marker) throw new Error("보호 재개 자료가 없습니다.");
   const before = noteHistoryContext();
   const identity = await noteHistoryRequest(before,"crypto-transitions/status","GET",{ local_id: marker.scope.local_id, device_id: marker.scope.device });
+  guard();
   if (before.auth !== noteHistoryContext().auth || before.owner !== marker.scope.owner || before.url !== marker.scope.url || identity.server_instance_id !== marker.scope.instance) throw new Error("보호 재개 계정·서버가 다릅니다.");
   noteProtectionIdentity = { instance: identity.server_instance_id };
   protectionApplying = true;
   try {
     await Promise.all([...storagePendingWrites]);
+    guard();
     const receipt = await noteProtection.resume(id,password,build,resolveKey);
+    guard();
     noteHistoryRemoteCache.get(NowNoteHistory.key(before))?.delete(marker.scope.local_id);
     unlockedEncryptedNotes.delete(marker.scope.local_id);
     resetTreeEditorHistory(null,"");
     normalizeData();
     render(); return receipt;
   } finally { protectionApplying = false; }
+}
+
+function protectionTargetId() { return noteProtectionTargetId || getSelectedTreeNode()?.id || ""; }
+
+function protectionTargets() {
+  const c=noteHistoryContext(),selected=getSelectedTreeNode(),ids=new Set(selected?[selected.id]:[]);
+  for(const marker of Object.values(noteHistory?.protectionOperations() || {})) {
+    if(marker.scope.owner===c.owner && marker.scope.url===c.url)ids.add(marker.scope.local_id);
+  }
+  return [...ids];
+}
+
+function protectionViewKey() {
+  const c=noteHistoryContext();
+  return JSON.stringify([c.url,c.owner,c.auth,c.device,getSelectedTreeNode()?.id,protectionTargetId()]);
+}
+
+async function inspectNoteProtection() {
+  const id=protectionTargetId(), bound=protectionViewKey(), ctx=noteHistoryContext();
+  if (!id || !ctx.enabled || !ctx.online) throw new Error("인증된 서버와 메모를 선택하세요.");
+  const status=await noteHistoryRequest(ctx,"crypto-transitions/status","GET",{local_id:id,device_id:ctx.device});
+  if (bound!==protectionViewKey()) throw new Error("보호 대상이 변경되었습니다.");
+  noteProtectionIdentity={instance:status.server_instance_id};
+  const scope={url:ctx.url,owner:ctx.owner,instance:status.server_instance_id,local_id:id,device:ctx.device};
+  const pending=Object.values(noteHistory.protectionOperations()).find(m=>m.phase!=="complete"
+    && m.scope.owner===scope.owner && m.scope.url===scope.url && m.scope.local_id===scope.local_id);
+  if (pending && pending.scope.instance!==scope.instance) throw new Error("미완료 전환의 서버 식별이 다릅니다. 원본은 보존했습니다.");
+  const catalog=status.crypto_epoch>0 && !pending ? await noteProtectionReader.catalog(scope) : null;
+  const archives=await noteProtectionClient.archives(scope);
+  if (bound!==protectionViewKey()) throw new Error("보호 대상이 변경되었습니다.");
+  return {scope,status,catalog,pending,rows:[
+    ...(catalog?.entries || []).map(descriptor=>({kind:"typed",descriptor,label:descriptor.key.kind+" · "+descriptor.key.id+" · epoch "+descriptor.representation_epoch+(descriptor.is_null?" · null":"")})),
+    ...archives.map(a=>({kind:"archive",...a,label:"이 기기 · "+a.store+" · "+a.path.join(" / ")})),
+  ]};
+}
+
+async function openNoteProtection() {
+  if (!noteProtectionClient) {showNotice("보호 저장소를 먼저 초기화하세요.","error");return;}
+  noteProtectionTargetId=getSelectedTreeNode()?.id || protectionTargets()[0] || null;
+  noteProtectionUI ||= mountNoteProtection({
+    contextKey:protectionViewKey,canMutate:()=>noteProtectionInternalEnabled===true,
+    targets:protectionTargets,target:protectionTargetId,selectTarget:id=>{
+      if(!protectionTargets().includes(id))throw new Error("현재 계정의 보호 대상이 아닙니다.");
+      noteProtectionTargetId=id;
+    },
+    inspect:inspectNoteProtection,copies:scope=>noteProtectionClient.copies(scope),
+    confirm:async(scope,list,ids)=>{
+      protectionApplying=true;
+      try {await Promise.all([...storagePendingWrites]);await noteProtectionClient.confirm(scope,list,ids);}
+      finally {protectionApplying=false;}
+    },
+    lock:()=>{
+      noteProtectionViewGeneration++;noteProtection?.invalidate();noteProtectionClient?.invalidate();
+      noteHistoryUI?.close();unlockedEncryptedNotes.clear();
+      for(const timer of encryptedSaveTimers.values())clearTimeout(timer);
+      encryptedSaveTimers.clear();resetTreeEditorHistory(null,"");
+    },
+    phaseLabel:phase=>({drain_pending:"정착 준비 재개 필요",draining:"연결 실행 정착 대기",preparing:"전환 준비 확인 필요",promoted:"원문 검증·암호화 필요",
+      bundled:"암호문 전송 재개 필요",prepared:"게시 준비 완료",committing:"서버 결과 확인 필요",server_committed:"서버 완료 · 이 기기 적용 필요",applying:"서버 완료 · 이 기기 적용 필요",complete:"이 기기 적용 완료"})[phase] || "보호 상태 확인 필요",
+    read:async(info,row,resolveKey)=>{
+      let value;
+      if(row.kind==="archive") value=await noteProtectionClient.openArchive(info.scope,row.record,await resolveKey({representation_epoch:"local:"+row.record.protection_record.operation_id,output:false}));
+      else value=(await noteProtectionReader.read(info.scope,info.catalog,row.descriptor,resolveKey)).value;
+      if(value===null)return "null";
+      return typeof value==="string"?value:value.note?.content ?? value.content ?? value.draft?.content ?? JSON.stringify(value,null,2);
+    },
+    convert:async(info,purpose,password,resolveKey)=>{
+      const guard=protectionActionGuard();
+      if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+      await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
+      guard();
+      const source_origins=[];
+      for(const descriptor of info.catalog?.entries || []) {
+        const read=await noteProtectionReader.read(info.scope,info.catalog,descriptor,resolveKey);
+        guard();
+        source_origins.push({key:descriptor.key,descriptor,origin:read.origin});
+      }
+      const item=noteHistory.view(info.scope.local_id);
+      const branches=purpose==="conversion"?(item?.revisions || []).filter(r=>!r.imported).map(r=>({
+        revision_id:r.revision_id,parent_ref:r.parent_ref,origin_device_id:r.snapshot.note.device_id || info.scope.device,
+      })):[];
+      const intent=NowNoteProtectionClient.plan(info.scope,purpose,info.status,info.catalog,branches,source_origins);
+      noteHistoryUI?.close();unlockedEncryptedNotes.clear();resetTreeEditorHistory(null,"");
+      const id=await beginNoteProtection(info.scope,intent,password,resolveKey,guard);
+      guard();
+      return resumeNoteProtection(id,password,(p,i,stores)=>NowNoteProtectionClient.buildWork(info.scope,p,i,password,noteProtectionRemote,stores,resolveKey),resolveKey,guard);
+    },
+    resume:async(info,password,resolveKey)=>{
+      if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+      return resumeNoteProtection(info.pending.id,password,(p,i,stores)=>NowNoteProtectionClient.buildWork(info.scope,p,i,password,noteProtectionRemote,stores,resolveKey),resolveKey);
+    },
+  });
+  return noteProtectionUI.open();
 }
 
 function noteHistoryContext() {
@@ -7541,6 +8087,7 @@ async function initializeNoteHistory() {
     if (selector === "#noteActionMenu") anchor.append(button); else anchor.parentElement.insertBefore(button, anchor);
   }
   document.addEventListener("focusout", event => {
+    noteProtectionUI?.check();
     if (event.target.matches("#treeContent,#treeTitleInput,#dailyContent,#worklogContent")) noteHistoryFlush().catch(error => showNotice(error.message, "error"));
   });
   document.addEventListener("visibilitychange", () => {
@@ -7561,6 +8108,7 @@ async function initializeNoteHistory() {
   });
   initializeNoteProtection();
   protectionBootstrapPending = false;
+  protectionBootstrapScopes = [];
   if (!isHostedWebClient()) await noteHistoryController.resume();
 }
 
@@ -8749,6 +9297,7 @@ function bindEvents() {
   });
 
   elements.syncStatusBtn?.addEventListener("click", () => {
+    if (noteProtection?.pending()) { void openNoteProtection(); return; }
     toggleSettings();
   });
 
@@ -18035,6 +18584,7 @@ function renderTreePanelToggle() {
 }
 
 function renderTreeEditor() {
+  noteProtectionUI?.check();
   const selected = getSelectedTreeNode();
   elements.emptyTreeEditor.classList.toggle("hidden", Boolean(selected));
   elements.treeEditor.classList.toggle("hidden", !selected);
@@ -18974,12 +19524,14 @@ async function decryptPlainText(encryptedContent, password) {
 
 function visibleContentForNode(node) {
   if (!node) return "";
+  if (noteProtection?.blocked(node.id) && !node.protection_record) return "보호 전환 재개 필요";
   if (!isEncryptedContent(node.content)) return node.content || "";
   return unlockedEncryptedNotes.get(node.id)?.plain || t("encryption.lockedPlaceholder");
 }
 
 function editableContentForNode(node) {
   if (!node) return "";
+  if (noteProtectionBlocked(node.id)) return "";
   if (!isEncryptedContent(node.content)) return node.content || "";
   return unlockedEncryptedNotes.get(node.id)?.plain || "";
 }
@@ -19006,6 +19558,7 @@ function historyProtectionTransitionBlocked(node) {
 
 async function encryptSelectedNote() {
   const selected = getSelectedTreeNode();
+  if (selected && historyProtectionTransitionBlocked(selected)) return openNoteProtection();
   if (historyProtectionTransitionBlocked(selected)) {
     showNotice("전체 과거 이력 암호화 전환(E4)이 연결되기 전에는 암호화 모드를 바꿀 수 없습니다. 현재 이력은 보존했습니다.", "error");
     return;
@@ -19033,6 +19586,7 @@ async function encryptSelectedNote() {
 
 async function unlockSelectedNote() {
   const selected = getSelectedTreeNode();
+  if (selected && (selected.protection_record || historyProtectionTransitionBlocked(selected))) return openNoteProtection();
   if (!selected || !isEncryptedContent(selected.content)) return;
   const key = await requestEncryptionKey(t("encryption.unlockMessage"));
   if (!key) return;
@@ -19047,6 +19601,7 @@ async function unlockSelectedNote() {
 }
 
 function lockSelectedNote() {
+  noteProtectionUI?.lock();
   const selected = getSelectedTreeNode();
   if (!selected) return;
   unlockedEncryptedNotes.delete(selected.id);
@@ -19058,6 +19613,7 @@ function lockSelectedNote() {
 
 async function decryptSelectedNote() {
   const selected = getSelectedTreeNode();
+  if (selected && historyProtectionTransitionBlocked(selected)) return openNoteProtection();
   if (historyProtectionTransitionBlocked(selected)) {
     showNotice("이력 보호 전환(E4) 전에는 영구 복호화를 할 수 없습니다. 잠금 해제는 사용할 수 있습니다.", "error");
     return;
@@ -19909,6 +20465,7 @@ async function load() {
   try {
     const rawHistory = await readStorage(NOTE_HISTORY_KEY);
     const history = typeof rawHistory === "string" ? JSON.parse(rawHistory) : rawHistory;
+    protectionBootstrapScopes = Object.values(history?.protection_operations || {}).filter(m=>m.phase!=="complete");
     protectionBootstrapPending = Boolean(history?.protection_operations && Object.values(history.protection_operations).some(m => m.phase !== "complete"));
   } catch { protectionBootstrapPending = true; }
   if (isHostedWebClient()) {
@@ -20305,13 +20862,15 @@ function normalizeData() {
   state.data.publishBundles = state.data.publishBundles.filter(isPlainObject).map(normalizePublishBundle).slice(0, 30);
   state.data.tree = state.data.tree.filter(isPlainObject);
 
-  Object.values(state.data.daily).forEach((note) => {
+  Object.entries(state.data.daily).forEach(([date,note]) => {
+    if (preserveProtectionRecord(note,"daily:"+date)) return;
     note.content = normalizeText(note.content);
     note.status = note.status || "active";
     note.syncState = note.syncState || "synced";
     note.updatedAt = note.updatedAt || new Date().toISOString();
   });
   Object.entries(state.data.worklogs).forEach(([date, note]) => {
+    if (preserveProtectionRecord(note,"worklog:"+date)) return;
     note.content = normalizeText(note.content);
     if (!note.content.trim()) {
       delete state.data.worklogs[date];
@@ -20322,6 +20881,7 @@ function normalizeData() {
     note.updatedAt = note.updatedAt || new Date().toISOString();
   });
   state.data.archivedDaily.forEach((note) => {
+    if (preserveProtectionRecord(note,"daily-archive:"+note.id)) return;
     note.id = note.id || crypto.randomUUID();
     note.content = normalizeText(note.content);
     note.status = note.status || "archived";
@@ -20331,6 +20891,7 @@ function normalizeData() {
     note.updatedAt = note.updatedAt || note.archivedAt;
   });
   state.data.deletedTree.forEach((node) => {
+    if (preserveProtectionRecord(node,node.id)) return;
     node.id = node.id || crypto.randomUUID();
     node.title = normalizeText(node.title);
     node.content = normalizeText(node.content);
@@ -20385,6 +20946,7 @@ function normalizePublishBundle(bundle = {}) {
 
 function normalizeDailyNotes(daily) {
   return Object.entries(daily).reduce((normalized, [dateKey, note]) => {
+    if (preserveProtectionRecord(note,"daily:"+dateKey)) { normalized[dateKey]=note; return normalized; }
     const date = isPlainObject(note) && isDateKey(note.date)
       ? note.date
       : dateKey;
@@ -20403,6 +20965,7 @@ function normalizeDailyNotes(daily) {
 
 function normalizeWorklogNotes(worklogs) {
   return Object.entries(worklogs).reduce((normalized, [dateKey, note]) => {
+    if (preserveProtectionRecord(note,"worklog:"+dateKey)) { normalized[dateKey]=note; return normalized; }
     const date = isPlainObject(note) && isDateKey(note.date)
       ? note.date
       : dateKey;
@@ -20434,8 +20997,20 @@ function mergeDailyNote(current, next) {
   };
 }
 
+function preserveProtectionRecord(node,localId) {
+  if (!node || typeof node!=="object") return false;
+  if (node.protection_record) return true;
+  const markers=[...protectionBootstrapScopes,...Object.values(noteHistory?.protectionOperations() || {})];
+  return markers.some(m=>m.phase!=="complete" && m.scope?.local_id===localId
+    && (!node.protectionScope || NowNoteProtectionState.scopeKey(node.protectionScope)===NowNoteProtectionState.scopeKey(m.scope)));
+}
+
 function normalizeTreeNodes(nodes, parentId, level) {
   nodes.forEach((node) => {
+    if (preserveProtectionRecord(node,node.id)) {
+      if (Array.isArray(node.children)) normalizeTreeNodes(node.children,node.id,level+1);
+      return;
+    }
     node.id = node.id || crypto.randomUUID();
     node.title = normalizeText(node.title);
     node.content = normalizeText(node.content);

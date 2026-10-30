@@ -7,7 +7,7 @@ const temp=await fs.mkdtemp('D:/tmp/now-240-stage-b/bundle-');
 const files=['web/app.js','desktop/app/app.js','web/scripts/bundle_markdown.mjs',
   'web/vendor/marked.umd.js','web/vendor/purify.min.js','web/vendor/document-renderer.js',
   'web/vendor/marked.LICENSE','web/vendor/dompurify.LICENSE','web/vendor/library-state.js','web/vendor/library-ui.js',
-  'web/vendor/diff.js','web/vendor/diff.LICENSE','web/vendor/note-history-state.js','web/vendor/note-history-ui.js','web/vendor/note-protection-protocol.js','web/vendor/note-protection-state.js'];
+  'web/vendor/diff.js','web/vendor/diff.LICENSE','web/vendor/note-history-state.js','web/vendor/note-history-ui.js','web/vendor/note-protection-protocol.js','web/vendor/note-protection-state.js','web/vendor/note-protection-client.js','web/vendor/note-protection-ui.js'];
 function run(command,args,cwd){const result=spawnSync(command,args,{cwd,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||result.stdout);return result.stdout;}
 try{
   for(const autocrlf of ['false','true']){

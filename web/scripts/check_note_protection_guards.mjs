@@ -61,6 +61,37 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
     await ready;live=false;release();await assert.rejects(()=>queued,/인증/);
     assert.equal(disk.get('data'),'{"original":true}');
   });
+  await check('pending-coldload-exact-record',async()=>{
+    const scope={url:'https://synthetic.invalid',owner:'alice',instance:'00000000-0000-4000-8000-000000000001',local_id:'new-note',device:'one'};
+    const m={scope,phase:'applying'};
+    const b={crypto:{randomUUID:()=>scope.local_id},Date,isHostedWebClient:()=>false,extractTags:()=>[],defaultNoteProperties:()=>({}),
+      normalizeNoteProperties:v=>v||{},normalizeText:v=>v==null?'':String(v),isPlainObject:v=>v&&typeof v==='object',isEncryptedContent:()=>false,
+      protectionBootstrapScopes:[m],noteHistory:{protectionOperations:()=>({test:m})},NowNoteProtectionState:{scopeKey:s=>JSON.stringify([s.url,s.owner,s.instance,s.local_id])}};
+    vm.createContext(b);
+    vm.runInContext(extract('createNode')+'\n'+extract('normalizeTreeNodes')+'\n'+(source.includes('function preserveProtectionRecord(')?extract('preserveProtectionRecord'):'function preserveProtectionRecord(){return false;}')+'\nglobalThis.api={createNode,normalizeTreeNodes};',b);
+    const node=b.api.createNode('Original','SYNTHETIC\r\n',null,1);node.protectionScope=scope;
+    const before=JSON.parse(JSON.stringify(node));b.api.normalizeTreeNodes([node],null,1);
+    const changed=[...new Set([...Object.keys(before),...Object.keys(node)])].filter(k=>JSON.stringify(before[k])!==JSON.stringify(node[k]));
+    if(changed.length)console.log(file+' actual coldload field diff: '+changed.join(','));
+    assert.deepEqual(changed,[],'pending original must not be normalized before exact CAS');
+  });
+  for(const operation of ['begin-identity','resume-identity','resume-storage'])await check('lock-generation-'+operation,async()=>{
+    let release,reached;const entered=new Promise(r=>reached=r),gate=new Promise(r=>release=r);
+    const scope={url:'https://synthetic.invalid',owner:'alice',instance:'instance',local_id:'memo',device:'one'};
+    let started=0;
+    const b={noteProtectionViewGeneration:0,noteHistoryContext:()=>({auth:'session',url:scope.url,owner:scope.owner,device:scope.device}),
+      protectionViewKey:()=> 'same-target',noteProtectionIdentity:{instance:scope.instance},render:()=>{},protectionApplying:false,
+      noteHistory:{protectionOperations:()=>({op:{scope}})},noteHistoryRequest:async()=>{if(operation.endsWith('identity')){reached();await gate;}return {server_instance_id:scope.instance};},
+      noteProtection:{start:async()=>{started++;return 'op';},resume:async()=>{started++;return {};}}};
+    b.storagePendingWrites=operation.endsWith('storage')?[gate]:[];
+    if(operation.endsWith('storage')){const old=b.noteHistoryRequest;b.noteHistoryRequest=async(...a)=>{const r=await old(...a);reached();return r;};}
+    vm.createContext(b);
+    const guard=source.includes('function protectionActionGuard(')?extract('protectionActionGuard'):'function protectionActionGuard(){return ()=>{};}';
+    vm.runInContext(guard+'\n'+extract('beginNoteProtection')+'\n'+extract('resumeNoteProtection')+'\nglobalThis.api={beginNoteProtection,resumeNoteProtection};',b);
+    const promise=operation.startsWith('begin')?b.api.beginNoteProtection(scope,{},'synthetic'):b.api.resumeNoteProtection('op','synthetic',()=>({}));
+    await entered;b.noteProtectionViewGeneration++;release();
+    await assert.rejects(promise,/잠금|변경|취소/);assert.equal(started,0,'lock must not enter a new state-machine generation');
+  });
   for(const action of ['archive','restore']) await check('accountRace-'+action,async()=>{
     pending=false;confirmLate=false;owner='alice';switchAccount=true;
     box.state.data={daily:{'2026-10-30':{content:'ALICE-ORIGINAL'}},archivedDaily:[{id:'old',date:'2026-10-30',content:'ALICE-ARCHIVE'}]};

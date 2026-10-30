@@ -6,7 +6,8 @@ import { spawn } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
-const qa = path.resolve('D:/tmp/now-240-e4b2');
+const views = process.argv.includes('--e4b3a');
+const qa = path.resolve(views ? 'D:/tmp/now-240-e4b3a' : 'D:/tmp/now-240-e4b2');
 await fs.mkdir(qa,{recursive:true});
 const own = await fs.mkdtemp(path.join(qa,'client-'));
 assert.ok(own.startsWith(qa + path.sep));
@@ -25,11 +26,13 @@ try {
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(8750,'127.0.0.1',resolve);});
   const require = createRequire(new URL('../../desktop/package.json',import.meta.url));
   const electron = require('electron');
-  for(const mode of ['desktop','web']) {
+  for(const mode of ['desktop','web'].filter(mode=>!process.argv.some(a=>a.startsWith('--mode=')) || process.argv.includes('--mode='+mode))) {
     const profile = path.join(own,mode); await fs.mkdir(profile);
+    let serverState = null;
     for(const phase of [1,2]) {
       const result = path.join(own,mode+'-'+phase+'.json'), config = path.join(own,mode+'-'+phase+'-config.json');
-      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result}));
+      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result,suite:views?'e4b3a':'e4b2',serverState,
+        screenshot:views&&phase===2?process.env.NOWNOTE_PROTECTION_SCREENSHOT_DIR:null}));
       const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE;
       child = spawn(electron,[path.join(root,'web/scripts/note_protection_client_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output = '';
@@ -37,7 +40,7 @@ try {
       const status = await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});
       child = null; assert.equal(status,0,output);
       const evidence = JSON.parse(await fs.readFile(result,'utf8'));
-      assert.equal(evidence.ok,true);console.log(JSON.stringify(evidence));
+      assert.equal(evidence.ok,true);serverState=evidence.serverState;delete evidence.serverState;console.log(JSON.stringify(evidence));
     }
   }
 } finally {
