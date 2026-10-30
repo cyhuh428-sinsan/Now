@@ -8509,6 +8509,7 @@ function noteHistoryCaptureDrafts() {
       const draft = { ...item.draft, ...NowNoteHistory.meaning(note), source: item.draft.source, client_updated_at: note.client_updated_at };
       if (note.title === noteTitle(item.draft.title)) draft.title = item.draft.title;
       if (item.raw.tags === item.draft.tags && JSON.stringify(tagsFromServerNote(item.raw)) === JSON.stringify(tagsFromServerNote(note))) draft.tags = item.raw.tags;
+      if (old && NowNoteHistory.same(item.draft, draft) && !sharingChanged) return;
       await noteHistory.edit(draft);
       noteHistoryLastError = "";
       const tree = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;

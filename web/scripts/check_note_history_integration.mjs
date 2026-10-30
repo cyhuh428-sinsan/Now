@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
 const read = p => readFile(new URL('../../' + p, import.meta.url), 'utf8');
 for (const surface of ['web', 'desktop/app']) {
   const app = await read(surface + '/app.js');
@@ -22,6 +23,7 @@ for (const surface of ['web', 'desktop/app']) {
   assert.equal(vm.runInContext('buildServerSyncNotes({}).length', context), 0, `${surface}: unsupported history must never fall back to v1 upload`);
   let historyCalls=0;
   const syncContext=vm.createContext({serverSyncRunning:true,serverSyncQueued:false,
+    requireProtectionSettled:()=>{},
     noteHistoryCaptureChain:Promise.resolve(),noteHistory:{sync:async()=>{historyCalls++;}},noteHistoryController:{resume:async()=>{}},t:x=>x});
   const syncStart=app.indexOf('async function syncWebNotesToServer('),syncEnd=app.indexOf('\nfunction classifySyncFailureAction',syncStart);
   vm.runInContext(app.slice(syncStart,syncEnd),syncContext);
@@ -33,6 +35,7 @@ for (const surface of ['web', 'desktop/app']) {
   let applied=0,completed=0;
   const noop=()=>{};
   const lateContext=vm.createContext({serverSyncRunning:false,serverSyncQueued:false,noteHistoryCaptureEpoch:0,
+    requireProtectionSettled:noop,
     noteHistoryCaptureChain:Promise.resolve(),noteHistoryContext:()=>currentContext,
     NowNoteHistory:{key:c=>JSON.stringify([c.url,c.owner])},NowLibrary:{key:()=>''},libraryContext:()=>({}),
     state:{settings:{server:{mode:'server',url:'https://server.test',ownerId:'alice',deviceId:'one'}}},
@@ -49,6 +52,43 @@ for (const surface of ['web', 'desktop/app']) {
   release({ok:true,json:async()=>({pushed_notes:[],pulled_notes:[]})});await operation;
   assert.equal(applied,0,`${surface}: a late v1 response must not apply to another authenticated context`);
   assert.equal(completed,0,`${surface}: a late v1 response must not acknowledge another context journal`);
+  const captureStart=app.indexOf('function noteHistoryCaptureDrafts()'),captureEnd=app.indexOf('\nasync function noteHistoryFlush()',captureStart);
+  const captureCtx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'token',enabled:true,online:true};
+  const raw={id:null,owner_id:'alice',local_id:'branch',device_id:'original',note_type:'tree',title:'Branch',content:'UNCHANGED\r\n',parent_local_id:null,level:1,tags:null,source:null,deleted_at:null,created_at:'2026-10-30T00:00:00.000001Z',updated_at:'2026-10-30T00:00:00.000001Z',client_updated_at:null};
+  let wire={...raw,tags:'[]',source:'web-tree',client_updated_at:'2026-10-31T00:00:00.000002Z'},scheduled=0;
+  const tree={id:'branch',shared:false,serverShared:false};
+  const captureBox=vm.createContext({crypto:webcrypto,structuredClone,Set,Map,
+    noteHistoryProjection:false,noteHistoryContext:()=>captureCtx,noteHistoryCaptureEpoch:0,noteHistoryProjectionScope:'',
+    noteHistoryCaptureChain:Promise.resolve(),noteHistoryEnrolling:new Set(),noteHistoryTimers:new Map(),noteHistoryRemoteCache:new Map(),noteHistoryLastError:'',
+    noteHistoryWireNotes:()=>[structuredClone(wire)],noteProtectionBlocked:()=>false,findTreeNode:()=>tree,isTreeNodeSharedForServer:n=>n.shared,
+    state:{data:{tree:[tree]},settings:{server:{}}},noteTitle:x=>x,tagsFromServerNote:n=>n.tags?JSON.parse(n.tags):[],
+    setTimeout:()=>++scheduled,noteHistoryFlush:async()=>{},renderSyncStatusIndicator:noop,showNotice:noop});
+  vm.runInContext(await read('web/vendor/note-history-state.js'),captureBox);
+  const history=captureBox.NowNoteHistory.create({context:()=>captureCtx,request:async()=>{throw Error('no_network');},write:async()=>{}});
+  captureBox.noteHistory=history;
+  await history.track(raw,{head_version:0,head_revision_id:null,inventory_revision_ids:[],crypto_epoch:0,history_generation:1,snapshot:{schema_version:1,note:raw}},{localOnly:true});
+  vm.runInContext(app.slice(captureStart,captureEnd),captureBox);
+  vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
+  assert.equal(captureBox.noteHistoryLastError,'');
+  assert.equal(history.view('branch').draft.client_updated_at,null,`${surface}: passive projection must not rewrite the original client timestamp`);
+  assert.equal(history.view('branch').dirty,false,`${surface}: normalized source/tags must not create a phantom unsent edit`);
+  assert.equal(scheduled,0);
+  wire={...wire,content:'ACTUAL-EDIT\r\n'};
+  vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
+  assert.equal(history.view('branch').draft.content,wire.content);
+  assert.equal(history.view('branch').draft.client_updated_at,wire.client_updated_at);
+  assert.equal(history.view('branch').dirty,true);assert.equal(scheduled,1);
+  const fresh=captureBox.NowNoteHistory.create({context:()=>captureCtx,request:async()=>{throw Error('no_network');},write:async()=>{}});
+  captureBox.noteHistory=fresh;captureBox.findLocalNoteForServerNote=()=>({syncState:'pending'});captureBox.noteHistoryTimers.clear();scheduled=0;
+  vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
+  assert.equal(fresh.view('branch').dirty,true,`${surface}: first real local draft must still be enrolled`);
+  assert.equal(scheduled,1,`${surface}: first local draft must retain its seal timer`);
+  const shared=captureBox.NowNoteHistory.create({context:()=>captureCtx,request:async()=>{throw Error('no_network');},write:async()=>{}});
+  await shared.track(raw,{head_version:0,head_revision_id:null,inventory_revision_ids:[],snapshot:{schema_version:1,note:raw}},{localOnly:true});
+  captureBox.noteHistory=shared;captureBox.noteHistoryTimers.clear();scheduled=0;tree.shared=true;wire={...wire,content:raw.content};
+  vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
+  assert.equal(shared.view('branch').localOnly,false,`${surface}: explicit sharing changes must not be skipped`);
+  assert.equal(scheduled,1);
 }
 const main = await read('desktop/main.cjs');
 assert.ok(main.includes('nownote.history.v1'), 'IPC allowlist and CAS journal');
