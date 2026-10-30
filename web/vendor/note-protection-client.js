@@ -342,10 +342,59 @@
       records.push({entry_key:key,destination_key:key,source_etag:d.source_etag,output_kind:d.output_kind,target_epoch:d.output_epoch,
         total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
     }
-    return {transfers,source_origins:origins,branches:clone(local),commit:{...access(scope),operation_id:p.id,mutation_id:i.prepare.mutation_id,
+    return {transfers,source_origins:origins,branches:clone(local),new_branch_ids:m.DSET.map(d=>d.destination_key.id),commit:{...access(scope),operation_id:p.id,mutation_id:i.prepare.mutation_id,
       lease_version:p.response.lease_version,base:clone(i.prepare.base),metadata_manifest_digest:p.digest,client_decryption_verified:true,
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_verified_existing_set_digest:await Q().hashJson(m.verified_existing),
       plain_entries:plain,existing_ciphertexts:existingCiphertexts}};
+  }
+  function planImport(scope,catalog,branches,sourceOrigins=[]) {
+    scope=clone(scope);catalog=clone(catalog);branches=clone(branches);P().validateScope(scope);
+    Q().validateContext(catalog.context);
+    if(catalog.context.base.crypto_epoch<1 || !Array.isArray(branches) || !branches.length) fail('import_plan');
+    const local=branches.sort((a,b)=>a.revision_id<b.revision_id?-1:a.revision_id>b.revision_id?1:0),entries=[];
+    for(const r of local) {
+      const snapshot=Q().validateSnapshot(r.snapshot),key={kind:'offline_snapshot',id:r.revision_id,slot:'snapshot'};
+      if(snapshot.note.owner_id!==scope.owner || snapshot.note.local_id!==scope.local_id) fail('import_scope');
+      if(typeof r.origin_device_id!=='string' || !r.origin_device_id || r.origin_device_id.length>120) fail('import_branch');
+      const old=catalog.entries.find(d=>eq(d.key,key)),rep=r.representation;
+      if(old) Q().validateDescriptor(old,3);
+      if(rep) Q().validateDescriptor(rep.descriptor,3);
+      if(old?.representation_epoch>0 && !rep) fail('import_original_cipher_missing');
+      if(rep && (rep.descriptor.representation_kind!=='history_envelope_v1' || !eq(rep.descriptor.key,key))) fail('import_cipher_source');
+      const sourceKind=rep?'history_envelope_v1':'snapshot_v1',sourceEpoch=rep?rep.descriptor.representation_epoch:0;
+      entries.push({revision_id:r.revision_id,parent_ref:clone(r.parent_ref),origin_device_id:r.origin_device_id,
+        source_kind:sourceKind,source_epoch:sourceEpoch,target_kind:old?.representation_kind||'history_envelope_v1',
+        target_epoch:old?.representation_epoch??catalog.context.base.crypto_epoch,expected_existing:old||null,
+        provenance:{kind:rep?'cipher_branch':'plain_branch',origin_server_instance_id:scope.instance,origin_owner_id:scope.owner,
+          ...(rep?{origin_storage_operation_id:old?rep.descriptor.storage_operation_id:null}:{origin_revision_ref:old?old.revision_ref:null})}});
+    }
+    Q().validateImportEntries(entries);
+    return {schema_version:3,purpose:'mixed_offline_import',source_origins:clone(sourceOrigins),local_branches:local,
+      prepare:{mutation_id:crypto.randomUUID(),base:catalog.context,expected_catalog_digest:catalog.catalog_digest,entries}};
+  }
+  function settleImportJournal(scope,journal,work,receipt) {
+    scope=clone(scope);const value=clone(journal),w=clone(work),r=clone(receipt);
+    if(r.schema_version!==3 || r.purpose!=='mixed_offline_import' || r.owner_id!==scope.owner || r.local_id!==scope.local_id
+      || r.server_instance_id!==scope.instance || r.operation_id!==w.commit.operation_id || r.mutation_id!==w.commit.mutation_id
+      || !Array.isArray(w.branches) || !Array.isArray(w.new_branch_ids)) fail('import_receipt');
+    const ids=w.branches.map(b=>b.revision_id),expected=clone(w.commit.base);
+    if(new Set(ids).size!==ids.length || new Set(w.new_branch_ids).size!==w.new_branch_ids.length
+      || w.new_branch_ids.some(id=>!ids.includes(id))) fail('import_branch_set');
+    if(w.new_branch_ids.length) {
+      expected.base.head_version++;expected.base.history_generation++;
+      if(!expected.base.current_exists) expected.base.identity_state='branch_only';
+    }
+    Q().validateContext(r.result);
+    if(!eq(r.result,expected)) fail('import_receipt_result');
+    for(const b of w.branches) {
+      const rows=value.revisions.filter(v=>v.revision_id===b.revision_id);
+      if(rows.length!==1 || !eq(rows[0].snapshot,b.snapshot) || !eq(rows[0].parent_ref,b.parent_ref)
+        || rows[0].origin_device_id!==undefined && rows[0].origin_device_id!==b.origin_device_id) fail('import_branch_changed');
+      rows[0].imported=true;rows[0].server_ref={kind:'offline_branch',id:b.revision_id};
+      rows[0].origin_device_id=b.origin_device_id;
+    }
+    value.base={...value.base,...r.result.base};
+    return value;
   }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {
@@ -436,5 +485,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,planImport,settleImportJournal,createReader,plan});
 })();
