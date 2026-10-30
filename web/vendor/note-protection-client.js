@@ -422,6 +422,34 @@
     value.base={...value.base,...r.result.base};
     return value;
   }
+  function settlePendingWrite(scope,work,receipt) {
+    const w=clone(work),r=clone(receipt),value=clone(w.local_journal),decision=w.pending_resolution;
+    if(r.schema_version!==3 || r.purpose!=='mixed_note_write' || r.owner_id!==scope.owner || r.local_id!==scope.local_id
+      || r.server_instance_id!==scope.instance || r.operation_id!==w.commit.operation_id || r.mutation_id!==w.commit.mutation_id)fail('resolution_receipt');
+    if(!decision || !['local','server'].includes(decision.choice) || !Array.isArray(decision.revision_ids)
+      || !Array.isArray(value.outbox) || !Array.isArray(value.revisions) || !Array.isArray(value.receipts))fail('resolution_journal');
+    const ids=[...new Set(value.outbox.map(op=>op.revision_id))].sort();
+    if(!eq(ids,[...decision.revision_ids].sort()))fail('resolution_branch_set');
+    for(const op of value.outbox){
+      if(op.sent!==false || op.operation!=='put' || op.body?.owner_id!==scope.owner || op.body?.local_id!==scope.local_id)fail('resolution_request');
+      const rows=value.revisions.filter(row=>row.revision_id===op.revision_id);
+      if(rows.length!==1 || rows[0].imported!==true || rows[0].server_ref?.kind!=='offline_branch'
+        || rows[0].server_ref.id!==op.revision_id || typeof rows[0].origin_device_id!=='string' || !rows[0].origin_device_id
+        || rows[0].origin_device_id!==op.body.device_id)fail('resolution_branch');
+    }
+    const selected=decision.choice==='local'?value.draft:decision.remote;
+    for(const note of [value.raw,value.draft,selected,w.after.note]){
+      Q().validateSnapshot({schema_version:1,note});
+      if(note.owner_id!==scope.owner || note.local_id!==scope.local_id)fail('resolution_scope');
+    }
+    const fields=['note_type','title','content','parent_local_id','level','tags','source','deleted_at'];
+    if(fields.some(key=>!eq(selected[key],w.after.note[key])))fail('resolution_meaning');
+    value.comparison={kind:'protected_pending_resolution',choice:decision.choice,
+      source:{raw:clone(value.raw),draft:clone(value.draft),conflict:clone(value.conflict)},prior:value.comparison??null};
+    value.archived_outbox=[...(value.archived_outbox||[]),...clone(value.outbox)];
+    value.outbox=[];value.conflict=null;value.receipts.push(r);
+    return value;
+  }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {
     let binary = '';
@@ -511,5 +539,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,planImport,settleImportJournal,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
 })();

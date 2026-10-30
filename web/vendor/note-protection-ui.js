@@ -20,13 +20,13 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null};
   const keys = new Map();
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
-    $('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');
+    state.compared=null;$('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');
     state.editorNote=null;state.composing=false;$('.protection-title').value='';$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
     state.importRows=[];$('.protection-import-rows').replaceChildren();$('.protection-imports').classList.add('hidden');
     askCancel?.(); api.lock();
@@ -50,6 +50,10 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       || !state.importRows.length || !$('.protection-import-rows input:checked');
     $('[data-action="edit"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
     $('[data-action="compare"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
+    for(const choice of ['local','server']){
+      const button=$('[data-action="resolve-'+choice+'"]');
+      if(button)button.disabled=state.busy || !unlocked || Boolean(info.pending) || !state.compared;
+    }
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
     $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog
@@ -75,7 +79,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     return new Promise(resolve=>{
       let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
-      const label=document.createElement('label'); label.textContent=(epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const label=document.createElement('label'); label.textContent=(epoch==='resolve-local-bundle'?'내 변경으로 저장 확인 · 저장 비밀번호':epoch==='resolve-server-bundle'?'서버 현재본으로 저장 확인 · 저장 비밀번호':epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
@@ -153,16 +157,27 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           status('선택 이력 가져오는 중');await api.importSelected(state.info,ids,password,resolveKey(token));
           if(valid(token))await load();
         } else if(name==='compare') {
+          state.compared=null;
           $('.protection-comparison').replaceChildren();
           const value=await api.compare(state.info,resolveKey(token));
           if(!valid(token))return;
           const panel=$('.protection-comparison');
-          for(const [label,note]of [['이 기기 미전송 초안',value.local],['서버 현재본',value.remote]]) {
+          for(const [choice,label,note]of [['local','이 기기 미전송 초안',value.local],['server','서버 현재본',value.remote]]) {
             const section=document.createElement('section'),heading=document.createElement('h3'),pre=document.createElement('pre');
             heading.textContent=label;pre.textContent=note.title+'\n\n'+note.content;pre.tabIndex=0;
-            section.append(heading,pre);panel.append(section);
+            const button=document.createElement('button');button.type='button';button.className='secondary-btn';button.dataset.action='resolve-'+choice;
+            button.textContent=choice==='local'?'내 변경으로 저장':'서버 현재본으로 저장';
+            section.append(heading,pre,button);panel.append(section);
           }
+          state.compared=value;
           panel.classList.remove('hidden');status('읽기 전용 비교 · 미전송 '+value.pending+'건'+(value.conflict?' · 충돌 있음':''));
+        } else if(name==='resolve-local'||name==='resolve-server') {
+          if(!state.compared)throw Error('비교 내용을 다시 확인하세요.');
+          const choice=name==='resolve-local'?'local':'server',compared=structuredClone(state.compared);
+          const password=await ask(name+'-bundle',true,token);
+          if(!password || !valid(token))return;
+          status('선택한 내용 저장 중');await api.resolvePending(state.info,choice,compared,password,resolveKey(token));
+          if(valid(token))await load();
         } else if(name==='edit'||name==='create') {
           const note=await api[name](state.info,resolveKey(token));
           if(valid(token)){state.editorNote=note;$('.protection-title').value=note.title;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
@@ -195,7 +210,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         }
       }
     } catch(error) {if (valid(state.run)) {keys.clear();$('.protection-plain').textContent='';
-      if(name==='compare'){$('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');}
+      if(['compare','resolve-local','resolve-server'].includes(name)){state.compared=null;$('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');}
       if(name==='imports'||name==='import-selected'){wipe();state.info=null;}
       status(error.message || '보호 작업 실패 · 원본은 보존됩니다.');}}
     finally {state.busy=false;controls();}

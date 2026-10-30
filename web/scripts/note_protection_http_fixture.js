@@ -412,6 +412,21 @@
     globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'comparison_ready',owner:a.owner,local_id:target});
     for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'comparison_capture_failed');
+    if(config.resolvePending){
+      const choice=config.mode==='desktop'?'local':'server',expected=choice==='local'?snapshot.note.content:peerPlain;
+      await action('resolve-'+choice,()=>status().includes('전환 준비 가능'));
+      const resolved=await inspectNoteProtection(),d=resolved.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(resolved.catalog.context.selected_physical_note_id));
+      const actual=await noteProtectionReader.read(resolved.scope,resolved.catalog,d,async()=>password);
+      assert(actual.value.note.content===expected&&resolved.catalog.context.base.head_version===7,'pending_resolution_wrong_current');
+      const saved=await noteProtectionClient.openArchive(resolved.scope,noteHistory.export().contexts[key].notes[target],password);
+      assert(saved.outbox.length===0&&saved.conflict===null&&!saved.dirty,'pending_resolution_not_settled');
+      assert(NowNoteProtectionProtocol.canonicalJson(saved.archived_outbox)===originalOutbox,'pending_resolution_changed_original_request');
+      assert(NowNoteProtectionProtocol.canonicalJson(saved.comparison.source.draft)===originalDraft&&saved.comparison.choice===choice,'pending_resolution_lost_original_draft');
+      assert(saved.receipts.at(-1).purpose==='mixed_note_write','pending_resolution_receipt_absent');
+      await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+      assert(dialog().querySelector('.protection-draft').value===expected,'pending_resolution_editor_still_blocked');
+      emit({stage:'pending_resolution_'+choice+'_complete',owner:a.owner,local_id:target,operation_id:saved.receipts.at(-1).operation_id,phase:'complete'});
+    }
     button('lock').click();assert(!comparison.textContent&&comparison.classList.contains('hidden'),'locked_comparison_retained_plaintext');
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-IMPORT-'+run),'MI_local_plaintext_residue');
     emit({stage:'MI_original_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:'complete',server_instance_id:scope.instance});
