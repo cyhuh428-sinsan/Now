@@ -62,7 +62,11 @@ try {
         manifest.notes.at(-1).state='created';await save();
         if(local==='target'&&replicas){
           const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_replica_seed.py';
-          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch{throw Error('qa_replica_outcome_unconfirmed');}
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch(error){
+            const diagnostic={process_code:['ETIMEDOUT','ENOENT','EPERM','EACCES'].includes(error.code)?error.code:null,exit_status:Number.isInteger(error.status)?error.status:null,signal:typeof error.signal==='string'?error.signal:null};
+            try{const r=JSON.parse(String(error.stdout||''));if(r.ok===false&&r.code==='qa_replica_seed_failed'&&/^[a-z_]{1,30}$/.test(r.phase)&&/^[A-Za-z0-9_]{1,80}$/.test(r.error_type))diagnostic.helper={phase:r.phase,error_type:r.error_type};}catch{}
+            manifest.notes.at(-1).seed_diagnostic=diagnostic;await save();throw Error('qa_replica_outcome_unconfirmed');
+          }
           if(!seeded.ok||seeded.owner!==owner||seeded.local_id!==local_id||seeded.physical_ids?.length!==2)throw Error('qa_replica_seed_failed');
           replicaIds=seeded.physical_ids;Object.assign(manifest.notes.at(-1),{state:'two_physical_created',physical_ids:replicaIds});await save();
         }
