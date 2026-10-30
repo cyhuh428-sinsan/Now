@@ -79,6 +79,13 @@ def query(request, model):
         error("invalid_request", 422)
 
 
+@operations_router.get("/protection-targets")
+def protection_targets(request: Request, auth=Depends(access)):
+    from app.services.protection_targets import list_targets
+    b = query(request, wire.ProtectionTargetsQuery)
+    return JSONResponse(list_targets(auth(b.owner_id), b), headers={"Cache-Control": "no-store"})
+
+
 @router.get("/context")
 def context(request: Request, auth=Depends(access)):
     b = query(request, wire.Access)

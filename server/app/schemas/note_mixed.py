@@ -14,6 +14,14 @@ HEX = r"^[0-9a-f]{64}$"
 UID = Annotated[str, Field(pattern=r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")]
 
 
+class ProtectionTargetsQuery(Strict):
+    schema_version: Literal[3]
+    owner_id: str = Field(min_length=1, max_length=80)
+    device_id: str = Field(min_length=1, max_length=120)
+    limit: int = Field(default=100, ge=1, le=100)
+    cursor: str | None = Field(default=None, max_length=4096)
+
+
 class Access(Strict):
     schema_version: Literal[3]
     owner_id: str = Field(min_length=1, max_length=80)
