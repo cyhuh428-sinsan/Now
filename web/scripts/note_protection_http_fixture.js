@@ -50,6 +50,31 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===7){
+    state.selectedTreeId=target;render();await settle();await open();
+    const marker=Object.values(noteHistory.protectionOperations()).find(m=>m.scope.local_id===target&&m.phase==='applying');
+    assert(marker,'MI_restart_pending_absent');
+    const original=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));
+    assert(original.intent.purpose==='mixed_offline_import'&&original.receipt.operation_id===original.prepared.id,'MI_restart_original_bundle_changed');
+    const originalCipher=original.work.local.record.protection_record.ciphertext;
+    await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    const after=await inspectNoteProtection(),key=NowNoteHistory.key(after.scope),record=noteHistory.export().contexts[key].notes[target];
+    assert(after.catalog.context.base.head_version===6,'MI_restart_created_another_operation');
+    assert(record.protection_record.ciphertext===originalCipher,'MI_restart_resealed_local_cipher');
+    const value=await noteProtectionClient.openArchive(after.scope,record,password),branch=original.work.branches[0];
+    assert(NowNoteProtectionProtocol.canonicalJson(value.outbox)===NowNoteProtectionProtocol.canonicalJson(original.intent.local_journal.outbox)
+      &&NowNoteProtectionProtocol.canonicalJson(value.draft)===NowNoteProtectionProtocol.canonicalJson(original.intent.local_journal.draft)&&value.dirty,'MI_restart_acknowledged_current');
+    const descriptor=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===branch.revision_id);
+    const actual=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
+    assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(branch.snapshot),'MI_restart_changed_original_FULL15');
+    assert(descriptor.ciphertext_sha256===original.work.transfers[0].descriptor.ciphertext_sha256,'MI_restart_reencrypted_branch');
+    const checked=await noteProtectionRemote.status(after.scope,original.prepared,original.work);
+    assert(checked.state==='committed'&&checked.receipt.operation_id===original.prepared.id,'MI_restart_not_original_receipt');
+    const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'MI_restart_changed_other');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-IMPORT-'+run),'MI_restart_plaintext_residue');
+    emit({stage:'MI_restart_original_operation_complete',owner:a.owner,local_id:target,operation_id:original.prepared.id,local_operation_id:marker.id,phase:'complete',server_instance_id:after.scope.instance});
+    clearWebSession();return {ok:true,mode:config.mode,phase:7,serverEpoch:2,headVersion:6,originalImportOperationResumed:true,exactServerAndLocalCipherReused:true,unsentCurrentPreserved:true,otherPreserved:true};
+  }
   if(config.phase===6){
     const source=await request('/api/v2/notes/revision?'+query(target,{revision_kind:'offline_branch',revision_id:config.branchId}));
     const baseline=await identity();assert(baseline.identity_state==='branch_only'&&!baseline.current_exists,'create_fixture_has_current');
@@ -302,12 +327,32 @@
     globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'import_ready',owner:a.owner,local_id:target});
     for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'import_capture_failed');
-    await action('import-selected',()=>Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target).length===5
-      &&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    let restoreImport;
+    if(config.importRestart&&!isDesktopClient()){
+      const set=Storage.prototype.setItem;let fail=true;
+      Storage.prototype.setItem=function(k,v){
+        if(fail&&k===NOTE_HISTORY_KEY){
+          const data=JSON.parse(v),before=JSON.parse(localStorage.getItem(k)),markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
+          const changed=Object.entries(data.contexts||{}).some(([key,c])=>{const a=before.contexts?.[key]?.notes?.[target]?.protection_record,b=c.notes?.[target]?.protection_record;return a&&b&&a.operation_id!==b.operation_id;});
+          if(markers.length===5&&markers.some(m=>m.phase==='applying')&&changed){fail=false;throw Error('qa_MI_journal_CAS_failure');}
+        }
+        return set.call(this,k,v);
+      };restoreImport=()=>Storage.prototype.setItem=set;
+    }
+    try{await action('import-selected',()=>Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target).length===5
+      &&(config.importRestart?Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'):Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete')));}
+    finally{restoreImport?.();}
     const marker=Object.values(noteHistory.protectionOperations()).find(m=>!previous.has(m.id));
     assert(marker,'MI_durable_marker_absent');
     const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));
     assert(bundle.intent.purpose==='mixed_offline_import','MI_used_wrong_purpose');
+    if(config.importRestart){
+      assert(marker.phase==='applying'&&bundle.receipt.operation_id===bundle.prepared.id&&bundle.work.local.record.protection_record.ciphertext,'MI_not_pending_after_original_local_failure');
+      const after=await noteProtectionReader.catalog(before.scope);assert(after.context.base.head_version===6,'MI_server_not_committed_before_restart');
+      emit({stage:'MI_server_committed_local_pending_before_restart',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:'applying',server_instance_id:scope.instance});
+      button('lock').click();clearWebSession();
+      return {ok:true,mode:config.mode,phase:2,serverEpoch:2,headVersion:6,offlineImportServerCommitted:true,offlineImportVerified:false,localPhase:'applying'};
+    }
     const after=await inspectNoteProtection(),published=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===revisionId);
     assert(published&&published.representation_epoch===2&&published.parent_ref.id===parent_ref.id,'MI_original_branch_metadata_changed');
     const actual=await noteProtectionReader.read(after.scope,after.catalog,published,async()=>password);
