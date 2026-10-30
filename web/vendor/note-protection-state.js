@@ -778,5 +778,5 @@
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createRemote,inventory,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
 })();

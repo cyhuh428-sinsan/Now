@@ -15,7 +15,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   const Q=box.NowNoteProtectionProtocol,H=box.NowNoteHistory;
   let current=true;
   box.protectionActionGuard=()=>()=>{if(!current)throw Error('scope_changed');};
-  const value={raw:structuredClone(note),draft:structuredClone(note),base:{inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[]};
+  const value={raw:structuredClone(note),draft:structuredClone(note),base:{inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],protectionScope:structuredClone(scope)};
   const record={protection_record:{schema_version:1,scope,operation_id:uid(2),ciphertext:await Q.encryptContent(JSON.stringify({schema_version:1,scope,operation_id:uid(2),value}),'password')}};
   box.noteHistory={export:()=>({contexts:{[H.key(scope)]:{notes:{memo:record}}}})};
   box.noteProtectionClient=box.NowNoteProtectionClient.create({context:()=>({...scope,auth:'token'}),stores:()=>[]});

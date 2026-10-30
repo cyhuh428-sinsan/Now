@@ -18,9 +18,10 @@
     async function sealJournal(scope,value,password,operationId) {
       scope=clone(scope);value=clone(value);const ctx=clone(context());active(ctx,scope);
       if(!password || typeof operationId!=='string' || !operationId) fail('journal_key');
-      const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison'];
+      const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison','protectionScope'];
       if(!value || Object.keys(value).some(k=>!allowed.includes(k)) || !Array.isArray(value.base?.inventory_revision_ids)
         || !['revisions','outbox','receipts'].every(k=>Array.isArray(value[k]))) fail('journal_shape');
+      if(value.protectionScope){P().validateScope(value.protectionScope);if(!same(value.protectionScope,scope))fail('journal_scope');}
       const check=note=>{
         Q().validateSnapshot({schema_version:1,note});
         if(note.owner_id!==scope.owner || note.local_id!==scope.local_id) fail('journal_scope');
@@ -103,6 +104,7 @@
         active(ctx,scope);
         if (archive.schema_version !== 1 || !eq(archive.scope,saved.scope) || archive.operation_id !== saved.operation_id
           || !archive.value || !eq(record.protection_record,saved)) fail('archive_binding');
+        if(archive.value.protectionScope){P().validateScope(archive.value.protectionScope);if(!same(archive.value.protectionScope,scope))fail('archive_scope');}
         return clone(archive.value);
       },
       async archives(scope) {
