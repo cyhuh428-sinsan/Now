@@ -233,6 +233,17 @@
   assert(NowNoteProtectionProtocol.canonicalJson(publicNote)===NowNoteProtectionProtocol.canonicalJson(JSON.parse(localStorage.getItem('qa-http-'+run+'-public-baseline'))),'real_FULL15_public_fields_changed');
   await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
   const rcInfo=await inspectNoteProtection();assert(rcInfo.catalog.context.current_mode==='protected'&&rcInfo.catalog.context.base.crypto_epoch===2,'real_RC_mode_failed');
+  let replicaBaseline=null;
+  if(config.replicaIds){
+    const ids=rcInfo.catalog.entries.filter(d=>d.key.kind==='inventory_snapshot').map(d=>Number(d.key.id)).sort((a,b)=>a-b);
+    assert(JSON.stringify(ids)===JSON.stringify(config.replicaIds),'replica_inventory_not_exact_pair');
+    const selected=rcInfo.catalog.context.selected_physical_note_id,otherId=ids.find(id=>id!==selected);
+    assert(selected===Math.max(...ids),'replica_selected_wrong_current');
+    const descriptors=rcInfo.catalog.entries.filter(d=>['note_body','inventory_snapshot'].includes(d.key.kind)&&d.key.id===String(otherId));
+    assert(descriptors.length===2,'nonselected_replica_missing');
+    const value=await noteProtectionReader.read(scope,rcInfo.catalog,descriptors.find(d=>d.key.kind==='inventory_snapshot'),async()=>password);
+    replicaBaseline={selected,descriptors,value:value.value};
+  }
   let parentBaseline=null;
   if(config.parentMode){
     const inv=rcInfo.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
@@ -331,7 +342,7 @@
     const value=await peerReader.read(peerScope,peerCatalog,descriptor,async()=>password);
     if(descriptor.is_null)nulls++;
     if(value.origin.value)peerOrigins++;
-    if(descriptor.key.kind==='inventory_snapshot')assert(value.value.note.content===peerPlain,'real_peer_plain_meaning_changed');
+    if(descriptor.key.kind==='inventory_snapshot')assert(value.value.note.content===(config.replicaIds&&Number(descriptor.key.id)!==peerCatalog.context.selected_physical_note_id?plain:peerPlain),'real_peer_plain_meaning_changed');
   }
   assert(peerOrigins>0&&nulls>0,'real_peer_origin_or_null_coverage_absent');
   if(config.importWrite){
@@ -424,6 +435,13 @@
     }
     emit({stage:'protected_delete_restore_and_plain_restore_complete',owner:a.owner,local_id:target,phase:'complete'});
   }
+  if(replicaBaseline){
+    const after=await noteProtectionReader.catalog(scope);
+    assert(after.context.selected_physical_note_id===replicaBaseline.selected,'replica_selection_changed');
+    for(const d of replicaBaseline.descriptors)assert(after.entries.some(v=>NowNoteProtectionProtocol.canonicalJson(v)===NowNoteProtectionProtocol.canonicalJson(d)),'MW_changed_nonselected_replica_descriptor');
+    const d=replicaBaseline.descriptors.find(v=>v.key.kind==='inventory_snapshot'),actual=await noteProtectionReader.read(scope,after,d,async()=>password);
+    assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(replicaBaseline.value),'MW_changed_nonselected_replica_FULL15');
+  }
   if(config.parentMode==='mixed'){
     const parentScope={...scope,local_id:other},parent=await noteProtectionReader.catalog(parentScope);
     assert(NowNoteProtectionProtocol.canonicalJson(parent)===NowNoteProtectionProtocol.canonicalJson(parentBaseline),'child_write_changed_protected_parent');
@@ -447,5 +465,5 @@
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:marker.phase==='complete'?'local_operation_complete':'local_operation_pending',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
-  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true,deleteRestoreVerified:config.mutationWrite===true,offlineImportVerified:config.importWrite===true,parentBoundary:config.parentMode||null};
+  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true,deleteRestoreVerified:config.mutationWrite===true,offlineImportVerified:config.importWrite===true,parentBoundary:config.parentMode||null,physicalReplicasPreserved:Boolean(config.replicaIds)};
 })();

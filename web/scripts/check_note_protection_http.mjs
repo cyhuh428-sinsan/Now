@@ -38,8 +38,9 @@ try {
   const require=createRequire(new URL('../../desktop/package.json',import.meta.url)),electron=require('electron');
   const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
   const parentMode=process.argv.includes('--parent-mixed')?'mixed':process.argv.includes('--parent-plain')?'plain':null;
+  const replicas=process.argv.includes('--physical-replicas');
   for(const mode of modes) {
-    const credentials={};let branchId=null;
+    const credentials={};let branchId=null,replicaIds=null;
     const probe=process.argv.includes('--probe');
     for(const suffix of probe?[]:['a','b']) {
       const owner='qa_http_'+run+'_'+mode+'_'+suffix,device=mode==='web'?'web-client':'qa-http-'+run,password='Qa-'+crypto.randomBytes(18).toString('hex');
@@ -59,6 +60,12 @@ try {
         await request('PUT','/api/v2/notes/current',{schema_version:1,owner_id:owner,local_id,device_id:device,mutation_id,crypto_epoch:0,base_head_version:0,base_revision_id:null,expected_inventory_revision_ids:[],
           note:{note_type:'tree',title:'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run,parent_local_id:parentMode&&local==='target'?'qa-http-'+run+'-other':null,level:parentMode&&local==='target'?2:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
         manifest.notes.at(-1).state='created';await save();
+        if(local==='target'&&replicas){
+          const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_replica_seed.py';
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch{throw Error('qa_replica_outcome_unconfirmed');}
+          if(!seeded.ok||seeded.owner!==owner||seeded.local_id!==local_id||seeded.physical_ids?.length!==2)throw Error('qa_replica_seed_failed');
+          replicaIds=seeded.physical_ids;Object.assign(manifest.notes.at(-1),{state:'two_physical_created',physical_ids:replicaIds});await save();
+        }
       }
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
@@ -68,7 +75,7 @@ try {
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=phase===5?path.join(own,mode+'-fresh'):profile;
       if(phase===5)await fs.mkdir(activeProfile);
-      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart')}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,replicaIds,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||replicas||['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));
