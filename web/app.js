@@ -3149,7 +3149,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="edit"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
-    $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists
+    $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog
       || row?.kind!=='typed' || !['revision_snapshot','offline_snapshot'].includes(d?.key.kind) || d.is_null || !d.revision_ref;
     $('[data-action="delete"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
     $('[data-action="create"]').hidden=!info.catalog || info.catalog.context.base.current_exists;
@@ -8070,7 +8070,7 @@ function initializeNoteProtection() {
       const value=structuredClone(work.local_journal),note=structuredClone(work.after.note),base=receipt.result.base;
       value.raw=structuredClone(note);value.draft=structuredClone(note);
       value.base={...value.base,...base,snapshot:{schema_version:1,note:structuredClone(note)},replica_count:base.inventory_revision_ids.length};
-      value.dirty=Boolean(value.outbox.length);
+      value.dirty=Boolean(value.outbox.length);value.localOnly=false;
       if(!value.revisions.some(r=>r.revision_id===base.head_revision_id)) value.revisions.push({
         revision_id:base.head_revision_id,parent_ref:work.commit.base.base.head_revision_id?{kind:"note_revision",id:work.commit.base.base.head_revision_id}:null,
         snapshot:{schema_version:1,note:structuredClone(note)},reason:"mixed_note_write",created_at:note.updated_at,imported:true,
@@ -8163,15 +8163,17 @@ async function editProtectedCurrent(info,resolveKey) {
   return structuredClone(value.dirty?value.draft:note);
 }
 
-async function createProtectedCurrent(info,resolveKey) {
+async function createProtectedCurrent(info,resolveKey,initialNote=null) {
   if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;guard();
   if(info.pending || !catalog || catalog.context.base.current_exists || catalog.context.base.crypto_epoch<1
     || catalog.context.base.identity_state==="ambiguous")throw Error("note_protection:create_absent_required");
+  const seed=initialNote===null?null:structuredClone(NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:initialNote}).note);
+  if(seed && (seed.owner_id!==scope.owner || seed.local_id!==scope.local_id))throw Error("note_protection:editor_scope");
   if(noteProtectionEditSession){await noteProtectionEditSession.queue;guard();}
   let record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id],value,password;
   const stamp=new Date().toISOString().replace("Z","000Z");
-  let note={id:null,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,note_type:"tree",title:"새 메모",content:"",
+  let note=seed || {id:null,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,note_type:"tree",title:"새 메모",content:"",
     parent_local_id:null,level:1,tags:null,source:"web-tree",deleted_at:null,created_at:stamp,updated_at:stamp,client_updated_at:null};
   if(record!==undefined){
     if(!record?.protection_record)throw Error("note_protection:local_journal_required");
@@ -8182,7 +8184,7 @@ async function createProtectedCurrent(info,resolveKey) {
       if(part.owner_id!==scope.owner || part.local_id!==scope.local_id)throw Error("note_protection:editor_scope");
     }
     if(!Array.isArray(value.outbox) || value.outbox.length || value.conflict)throw Error("note_protection:offline_import_required");
-    if(value.dirty){if(!value.localOnly || value.draft.id!==null)throw Error("note_protection:unsent_draft");note=structuredClone(value.draft);}
+    if(value.dirty){if(seed || !value.localOnly || value.draft.id!==null)throw Error("note_protection:unsent_draft");note=structuredClone(value.draft);}
     value.draft=structuredClone(note);value.dirty=true;value.localOnly=true;
     value.base={...structuredClone(catalog.context.base),replica_count:0};
     record=await noteProtectionClient.saveJournal(scope,record,value,password,crypto.randomUUID(),noteHistory);guard();
@@ -8223,7 +8225,7 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
     || session.catalogDigest!==info.catalog.catalog_digest)throw Error("note_protection:editor_scope");
   const note=structuredClone(NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:input}).note);
   if(note.owner_id!==scope.owner || note.local_id!==scope.local_id)throw Error("note_protection:editor_scope");
-  if(session.create){if(operation!=="put")throw Error("note_protection:write_operation");operation="create";}
+  if(session.create&&operation==="put")operation="create";
   if(!["put","delete","restore","create"].includes(operation) || (operation==="restore")!==Boolean(restore_source))throw Error("note_protection:write_operation");
   await session.queue;guard();
   if(noteProtectionEditSession!==session)throw Error("note_protection:editor_scope");
@@ -8233,7 +8235,7 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
   const inventory=catalog.entries.find(d=>d.key.kind==="inventory_snapshot"&&d.key.id===selected);
   const body=catalog.entries.find(d=>d.key.kind==="note_body"&&d.key.id===selected);
   const absent=!catalog.context.base.current_exists;
-  if(absent!==(operation==="create"))throw Error("note_protection:write_operation");
+  if((absent&&!["create","restore"].includes(operation))||(!absent&&operation==="create"))throw Error("note_protection:write_operation");
   if(!absent && (!inventory || !body))throw Error("note_protection:editor_source_missing");
   const source_origins=[];
   if(!absent){const original=await noteProtectionReader.read(scope,catalog,inventory,resolveKey);guard();source_origins.push({key:inventory.key,descriptor:inventory,origin:original.origin});}
@@ -8269,12 +8271,11 @@ async function mutateProtectedCurrent(info,operation,row,password,resolveKey) {
   if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
   if(!["delete","restore"].includes(operation))throw Error("note_protection:write_operation");
+  const absent=!info.catalog?.context.base.current_exists;
+  if(absent&&operation==="delete")throw Error("note_protection:editor_current_required");
   if(noteProtectionEditSession){await noteProtectionEditSession.queue;guard();if(noteProtectionEditSession?.value.dirty)throw Error("note_protection:unsent_draft");}
-  const note=await editProtectedCurrent(info,resolveKey);guard();
-  if(noteProtectionEditSession.value.dirty)throw Error("note_protection:unsent_draft");
-  let input=note,restore_source=null;
-  if(operation==="delete")input={...note,deleted_at:new Date().toISOString().replace("Z","000Z")};
-  else{
+  let input,restore_source=null;
+  if(operation==="restore"){
     const d=row?.descriptor;
     if(row?.kind!=="typed" || !d || !["revision_snapshot","offline_snapshot"].includes(d.key.kind) || d.is_null || !d.revision_ref
       || !info.catalog.entries.some(e=>NowNoteProtectionProtocol.canonicalJson(e)===NowNoteProtectionProtocol.canonicalJson(d)))throw Error("note_protection:restore_source");
@@ -8283,6 +8284,9 @@ async function mutateProtectedCurrent(info,operation,row,password,resolveKey) {
     if(input.owner_id!==info.scope.owner || input.local_id!==info.scope.local_id)throw Error("note_protection:editor_scope");
     restore_source={revision_ref:structuredClone(d.revision_ref),descriptor:structuredClone(d)};
   }
+  const note=absent?await createProtectedCurrent(info,resolveKey,input):await editProtectedCurrent(info,resolveKey);guard();
+  if(!absent&&noteProtectionEditSession.value.dirty)throw Error("note_protection:unsent_draft");
+  if(operation==="delete")input={...note,deleted_at:new Date().toISOString().replace("Z","000Z")};
   guard();return writeProtectedCurrent(info,input,password,resolveKey,{operation,restore_source});
 }
 

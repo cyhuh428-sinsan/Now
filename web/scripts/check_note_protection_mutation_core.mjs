@@ -12,7 +12,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'memo',device:'one',instance:'00000000-0000-4000-8000-000000000001'};
   const note={id:7,owner_id:'alice',local_id:'memo',device_id:'original',note_type:'tree',title:'Title',content:'CURRENT\r\n',parent_local_id:null,level:1,tags:null,source:null,deleted_at:null,created_at:'2026-10-30T00:00:00.000001Z',updated_at:'2026-10-30T00:00:00.000002Z',client_updated_at:null};
   const descriptor={key:{kind:'revision_snapshot',id:'old',slot:'after'},revision_ref:{kind:'note_revision',id:'old'},is_null:false};
-  const row={kind:'typed',descriptor},info={scope,catalog:{entries:[descriptor]}};
+  const row={kind:'typed',descriptor},info={scope,catalog:{entries:[descriptor],context:{base:{current_exists:true}}}};
   let dirty=false,current=true,written,restored={...note,content:'PAST\r\n',title:'Past title'};
   box.noteProtectionInternalEnabled=true;
   box.noteProtectionEditSession=null;
@@ -32,6 +32,11 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   await assert.rejects(box.mutate(info,'restore',{...row,descriptor:{...descriptor,key:{...descriptor.key,kind:'revision_before'}}},'key',async()=> 'key'),/restore_source/);passed++;
   restored={...restored,owner_id:'bob'};await assert.rejects(box.mutate(info,'restore',row,'key',async()=> 'key'),/scope/);passed++;
   box.noteProtectionInternalEnabled=false;await assert.rejects(box.mutate(info,'delete',null,'key',async()=> 'key'),/not_enabled/);passed++;
+  box.noteProtectionInternalEnabled=true;box.noteProtectionEditSession=null;restored={...note,content:'ABSENT-RESTORE'};
+  info.catalog.context.base.current_exists=false;let bootstraps=0;
+  box.createProtectedCurrent=async(_info,_resolve,input)=>{bootstraps++;box.noteProtectionEditSession={value:{dirty:true},create:true};return structuredClone(input);};
+  await box.mutate(info,'restore',row,'key',async()=> 'key');
+  assert.equal(bootstraps,1,'absent restore must bootstrap its cipher journal from the verified source');assert.equal(written[1].content,'ABSENT-RESTORE');assert.equal(written[4].operation,'restore');passed++;
 }
 const ui=await fs.readFile(new URL('../vendor/note-protection-ui.js',import.meta.url),'utf8');
 assert.ok(ui.includes('data-action="restore"'),'typed history restore needs an actual dialog control');

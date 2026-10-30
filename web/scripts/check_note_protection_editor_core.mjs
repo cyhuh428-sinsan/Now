@@ -88,6 +88,16 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal((await box.createCurrent(absent,async()=> 'new-local-key')).content,'CREATED-DRAFT','reopening must preserve the durable draft');passed++;
   await box.write(absent,{...created,content:'CREATED-DRAFT'},'bundle-key',async()=> 'new-local-key');
   assert.equal(intent.prepare.operation,'create');assert.equal(intent.prepare.selection,null);assert.equal(intent.prepare.target_current_mode,'protected');passed++;
+  box.noteHistory=H.create({context:()=>({...scope,enabled:true,auth:'token'}),request:async()=>{throw Error('no_network');},write:async()=>{}});box.noteProtectionEditSession=null;
+  const restoredDraft=await box.createCurrent(absent,async()=> 'new-local-key',note);
+  assert.equal(restoredDraft.id,note.id,'verified restore source must retain its full original metadata before quote');passed++;
+  const old={key:{kind:'offline_snapshot',id:uid(9),slot:'snapshot'},revision_ref:{kind:'offline_branch',id:uid(9)},is_null:false};absent.catalog.entries=[old];
+  box.noteProtectionEditSession.catalogDigest=absent.catalog.catalog_digest;
+  await box.write(absent,restoredDraft,'bundle-key',async()=> 'new-local-key',{operation:'restore',restore_source:{revision_ref:old.revision_ref,descriptor:old}});
+  assert.equal(intent.prepare.operation,'restore');assert.equal(intent.prepare.selection,null);passed++;
+  const preservedJournal=JSON.stringify(box.noteHistory.export());
+  await assert.rejects(box.createCurrent(absent,async()=> 'key',{...note,owner_id:'bob'}),/editor_scope/);
+  assert.equal(JSON.stringify(box.noteHistory.export()),preservedJournal);passed++;
 }
 const ui=await fs.readFile(new URL('../vendor/note-protection-ui.js',import.meta.url),'utf8');
 assert.ok(ui.includes('data-action="create"'),'absent current creation needs a visible control');
