@@ -1775,25 +1775,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if ((o.operation === 'restore') !== (o.restore_source_ref !== null) || (o.operation === 'restore') !== (o.restore_source_descriptor !== null)) fail('restore_origin');
     } else if (p === 'mixed_offline_import') {
       exact(o, ['purpose', 'operation_id', 'mutation_id', 'entries']); uuid(o.operation_id); uuid(o.mutation_id);
-      if (!Array.isArray(o.entries) || o.entries.length === 0) fail('import_entries');
-      const ids = new Set();
-      for (const e of o.entries) {
-        exact(e, ['revision_id', 'parent_ref', 'origin_device_id', 'source_kind', 'source_epoch', 'target_kind', 'target_epoch', 'expected_existing', 'provenance']);
-        uuid(e.revision_id); if (ids.has(e.revision_id)) fail('import_duplicate'); ids.add(e.revision_id);
-        ref(e.parent_ref); text(e.origin_device_id); integer(e.source_epoch); integer(e.target_epoch);
-        for (const [kind, epoch] of [[e.source_kind, e.source_epoch], [e.target_kind, e.target_epoch]]) {
-          if (!['snapshot_v1', 'history_envelope_v1'].includes(kind) || (epoch === 0) !== (kind === 'snapshot_v1')) fail('import_kind_epoch');
-        }
-        if (e.source_kind === 'history_envelope_v1' && e.target_kind !== 'history_envelope_v1') fail('import_plain_downgrade');
-        nullable(e.expected_existing, d => validateDescriptor(d, 3));
-        const ip = e.provenance, common = ['kind', 'origin_server_instance_id', 'origin_owner_id'];
-        if (!record(ip)) fail('import_provenance');
-        if (ip.kind === 'post_plain_draft') { exact(ip, [...common, 'mode_operation_id', 'mode_receipt_digest']); uuid(ip.mode_operation_id); hex(ip.mode_receipt_digest); }
-        else if (ip.kind === 'cipher_branch') { exact(ip, [...common, 'origin_storage_operation_id']); nullable(ip.origin_storage_operation_id, uuid); }
-        else if (ip.kind === 'plain_branch') { exact(ip, [...common, 'origin_revision_ref']); ref(ip.origin_revision_ref); }
-        else fail('import_provenance');
-        uuid(ip.origin_server_instance_id); text(ip.origin_owner_id);
-      }
+      validateImportEntries(o.entries);
     } else if (p === 'mixed_analysis_write') {
       if (o.request_type === 'initial') {
         exact(o, ['purpose', 'operation_id', 'execution_id', 'request_type', 'source_context', 'source_digest', 'terminal_receipt_digest', 'original_bundle_digest', 'previous_write_id']);
@@ -1814,6 +1796,28 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (o.previous_descriptor.key.kind !== 'recording_transcript' || o.previous_descriptor.key.id !== String(o.recording_id)) fail('transcript_origin');
     } else fail('semantic_origin');
     return o;
+  }
+  function validateImportEntries(entries) {
+      if (!Array.isArray(entries) || entries.length === 0) fail('import_entries');
+      const ids = new Set();
+      for (const e of entries) {
+        exact(e, ['revision_id', 'parent_ref', 'origin_device_id', 'source_kind', 'source_epoch', 'target_kind', 'target_epoch', 'expected_existing', 'provenance']);
+        uuid(e.revision_id); if (ids.has(e.revision_id)) fail('import_duplicate'); ids.add(e.revision_id);
+        ref(e.parent_ref); text(e.origin_device_id); integer(e.source_epoch); integer(e.target_epoch);
+        for (const [kind, epoch] of [[e.source_kind, e.source_epoch], [e.target_kind, e.target_epoch]]) {
+          if (!['snapshot_v1', 'history_envelope_v1'].includes(kind) || (epoch === 0) !== (kind === 'snapshot_v1')) fail('import_kind_epoch');
+        }
+        if (e.source_kind === 'history_envelope_v1' && e.target_kind !== 'history_envelope_v1') fail('import_plain_downgrade');
+        nullable(e.expected_existing, d => validateDescriptor(d, 3));
+        const ip = e.provenance, common = ['kind', 'origin_server_instance_id', 'origin_owner_id'];
+        if (!record(ip)) fail('import_provenance');
+        if (ip.kind === 'post_plain_draft') { exact(ip, [...common, 'mode_operation_id', 'mode_receipt_digest']); uuid(ip.mode_operation_id); hex(ip.mode_receipt_digest); }
+        else if (ip.kind === 'cipher_branch') { exact(ip, [...common, 'origin_storage_operation_id']); nullable(ip.origin_storage_operation_id, uuid); }
+        else if (ip.kind === 'plain_branch') { exact(ip, [...common, 'origin_revision_ref']); ref(ip.origin_revision_ref); }
+        else fail('import_provenance');
+        uuid(ip.origin_server_instance_id); text(ip.origin_owner_id);
+      }
+      return entries;
   }
   function originExpectation(e, d, schema) {
     exact(e, ['value', 'legacy']);
@@ -1946,7 +1950,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     return items;
   }
   globalThis.NowNoteProtectionProtocol = Object.freeze({ canonicalJson, parseJson, sha256, hashJson, keyOrder, validateKey,
-    validateBinding, validateBase, validateContext, validateDescriptor, validateDestination, validateSnapshot, verifyCatalog,
+    validateBinding, validateBase, validateContext, validateDescriptor, validateDestination, validateSnapshot, validateImportEntries, verifyCatalog,
     encryptContent, decryptContent, encryptRepresentation, decryptRepresentation });
 })();
 
@@ -2395,7 +2399,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (b.owner_id !== s.owner || b.local_id !== s.local_id || b.device_id !== s.device || b.server_instance_id !== s.instance) fail('wire_scope');
     };
     async function pages(s,p) {
-      const sections = p.version === 2 ? [null] : p.response.purpose === 'mixed_note_write' ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
+      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
       const result = {}; let header = null, setDigests = p.response.set_digests || null;
       for (const section of sections) {
         let cursor = null; const seen = new Set(), entries = [];
@@ -2408,7 +2412,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             if (page.schema_version !== 2 || !eq(page.metadata_context,p.response.metadata_context) || !eq(page.set_counts,p.response.set_counts)) fail('manifest_context');
             entries.push(...page.items);
           } else {
-            if (setDigests === null && p.response.purpose === 'mixed_note_write') setDigests = copy(page.set_digests);
+            if (setDigests === null && ['mixed_note_write','mixed_offline_import'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
             if (page.schema_version !== 3 || page.section !== section || !eq(page.metadata_header,p.response.metadata_header)
               || !eq(page.set_digests,setDigests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
             header = page.metadata_header; entries.push(...page.entries);
@@ -2506,6 +2510,100 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       return writing && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
+      async prepareImport(s,intent) {
+        s=copy(s);validateScope(s);
+        const i=copy(intent), Q=protocol();
+        if(i.schema_version!==3 || i.purpose!=='mixed_offline_import') fail('import_prepare_schema');
+        fields(i.prepare,['mutation_id','base','expected_catalog_digest','entries']);
+        Q.validateContext(i.prepare.base);Q.validateImportEntries(i.prepare.entries);
+        if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(i.prepare.mutation_id)
+          || !/^[0-9a-f]{64}$/.test(i.prepare.expected_catalog_digest)) fail('import_prepare');
+        const entries=i.prepare.entries, epoch=i.prepare.base.base.crypto_epoch;
+        if(!eq(entries.map(e=>e.revision_id),entries.map(e=>e.revision_id).sort())) fail('import_order');
+        for(const e of entries) {
+          const ip=e.provenance;
+          if(ip.origin_owner_id!==s.owner || ip.origin_server_instance_id!==s.instance) fail('import_provenance_scope');
+          if(!e.origin_device_id || e.origin_device_id.length>120
+            || (ip.kind==='cipher_branch')!==(e.source_kind==='history_envelope_v1')
+            || e.target_epoch!==(e.target_kind==='snapshot_v1'?0:epoch)) fail('import_provenance');
+          if(!e.expected_existing && (ip.kind==='cipher_branch' && ip.origin_storage_operation_id!==null
+            || ip.kind==='plain_branch' && ip.origin_revision_ref!==null
+            || e.target_epoch===0 && (ip.kind!=='post_plain_draft' || i.prepare.base.current_mode!=='plain'))) fail('import_provenance');
+        }
+        const body={...access(s,3),...i.prepare}, path='/api/v2/notes/mixed-imports';
+        const r=await request(s,path+'/prepare','POST',body), h=r.metadata_header;
+        if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(r.operation_id)) fail('import_identity');
+        fields(h,['schema_version','purpose','operation_id','server_instance_id','owner_id','local_id','actor_device_id','mutation_id','base',
+          'source_catalog_digest','target_epoch','revision_ref','parent_ref','server_fields','control','operation_origin']);
+        if(r.schema_version!==3 || r.purpose!==i.purpose || !h
+          || h.schema_version!==3 || h.purpose!==i.purpose || h.operation_id!==r.operation_id
+          || h.mutation_id!==body.mutation_id || r.mutation_id!==body.mutation_id
+          || h.server_instance_id!==s.instance || h.owner_id!==s.owner || h.local_id!==s.local_id
+          || h.actor_device_id!==s.device || !eq(h.base,body.base) || h.source_catalog_digest!==body.expected_catalog_digest
+          || h.target_epoch!==epoch || h.revision_ref!==null || h.parent_ref!==null || h.server_fields!==null
+          || !eq(h.control,{entries}) || !eq(h.operation_origin,{purpose:i.purpose,operation_id:r.operation_id,mutation_id:body.mutation_id,entries}))
+          fail('import_identity_control');
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r};
+        const m=p.manifest=await pages(s,p), source=m.S.map(e=>e.descriptor);
+        const kinds=['analysis_error','analysis_input','analysis_result','inventory_snapshot','note_body','offline_snapshot',
+          'recording_transcript','reserved_offline_snapshot','revision_before','revision_snapshot'];
+        const count=rows=>({total:rows.length,nonnull:rows.filter(e=>!e.is_null).length,nulls:rows.filter(e=>e.is_null).length,
+          by_kind:kinds.map(kind=>{const part=rows.filter(e=>e.key.kind===kind);return {kind,total:part.length,nonnull:part.filter(e=>!e.is_null).length,nulls:part.filter(e=>e.is_null).length};})});
+        const counts=Object.fromEntries(Object.entries(m).map(([name,list])=>[name,count(list.map(e=>['S','existing','verified_existing'].includes(name)
+          ?e.descriptor:['DSET','O'].includes(name)?{...e,key:e.destination_key}:e))]));
+        if(!eq(r.counts,counts)) fail('import_manifest_counts');
+        if(!eq(m.P,source) || await Q.hashJson({server_instance_id:s.instance,owner_id:s.owner,local_id:s.local_id,context:body.base,entries:source})!==body.expected_catalog_digest)
+          fail('import_catalog');
+        const byKey=new Map(), refs=new Set(), batch=new Map(entries.map(e=>[e.revision_id,e]));
+        const expectation=d=>({destination_key:d.key,...Object.fromEntries(['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'].map(k=>[k,d[k]]))});
+        const expectedO=[], expectedExisting=[], expectedProof=[], expectedOutputs=[];
+        for(const d of source) {
+          Q.validateDescriptor(d,3);byKey.set(Q.canonicalJson(d.key),d);expectedO.push(expectation(d));
+          if(['revision_snapshot','offline_snapshot'].includes(d.key.kind)) refs.add(Q.canonicalJson(d.revision_ref));
+        }
+        const done=new Set();
+        for(const e of entries) {
+          let node=e;const chain=new Set();
+          while(node && !done.has(node.revision_id)) {
+            if(chain.has(node.revision_id)) fail('import_parent_cycle');
+            chain.add(node.revision_id);const parent=node.parent_ref;
+            if(parent===null) break;
+            if(parent.kind==='offline_branch' && batch.has(parent.id)) node=batch.get(parent.id);
+            else {if(!refs.has(Q.canonicalJson(parent))) fail('import_parent');break;}
+          }
+          for(const id of chain) done.add(id);
+          const key={kind:'offline_snapshot',id:e.revision_id,slot:'snapshot'}, old=byKey.get(Q.canonicalJson(key));
+          if(old) {
+            const ip=e.provenance;
+            if(!eq(old,e.expected_existing) || old.is_null || !eq(old.parent_ref,e.parent_ref)
+              || old.representation_kind!==e.source_kind || old.representation_epoch!==e.source_epoch
+              || old.representation_kind!==e.target_kind || old.representation_epoch!==e.target_epoch
+              || ip.kind==='cipher_branch' && ip.origin_storage_operation_id!==null && ip.origin_storage_operation_id!==old.storage_operation_id
+              || ip.kind==='plain_branch' && ip.origin_revision_ref!==null && !eq(ip.origin_revision_ref,old.revision_ref)) fail('import_existing');
+            expectedExisting.push({revision_id:e.revision_id,descriptor:old,comparison:old.representation_epoch===0?'plain_exact':'cipher_exact'});
+            const v=m.verified_existing.find(v=>eq(v.key,key));
+            if(!v || (old.representation_epoch>0
+              ? !Number.isSafeInteger(v.total_bytes) || v.total_bytes<1 || v.total_chunks!==Math.ceil(v.total_bytes/262144)
+              : v.total_bytes!==null || v.total_chunks!==null)) fail('import_existing_proof');
+            expectedProof.push({key,revision_ref:{kind:'offline_branch',id:e.revision_id},parent_ref:e.parent_ref,
+              origin_device_id:e.origin_device_id,descriptor:old,origin_expectation:expectation(old),total_bytes:v.total_bytes,
+              total_chunks:v.total_chunks,expected_binding:old.expected_binding,ciphertext_sha256:old.ciphertext_sha256});
+          } else {
+            if(e.expected_existing!==null) fail('import_existing');
+            const d=m.DSET.find(d=>eq(d.destination_key,key));
+            if(!d) fail('import_destination');
+            Q.validateDestination(d,i.purpose);
+            const binding=e.target_epoch===0?null:{server_instance_id:s.instance,owner_id:s.owner,local_id:s.local_id,
+              transition_id:p.id,crypto_epoch:e.target_epoch,destination_key:key,revision_ref:{kind:'offline_branch',id:e.revision_id},parent_ref:e.parent_ref};
+            expectedOutputs.push({destination_key:key,source_keys:[],source_etag:d.source_etag,output_kind:e.target_kind,
+              output_epoch:e.target_epoch,is_null:false,expected_binding:binding});
+            expectedO.push({destination_key:key,is_null:false,origin_validator:'native_mixed_v1',origin_row_required:true,storage_operation_id:p.id,semantic_origin_id:p.id});
+          }
+        }
+        const orderedO=Q.keyOrder(expectedO.map(e=>e.destination_key)).map(key=>expectedO.find(e=>eq(e.destination_key,key)));
+        if(!eq(m.DSET,expectedOutputs) || !eq(m.O,orderedO) || !eq(m.existing,expectedExisting) || !eq(m.verified_existing,expectedProof)) fail('import_manifest_sets');
+        return p;
+      },
       async prepareWrite(s,intent) {
         s=copy(s);
         const i=copy(intent);
