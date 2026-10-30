@@ -152,7 +152,7 @@
     const baseline=structuredClone(original.snapshot.note);delete baseline.content;
     localStorage.setItem('qa-http-'+run+'-public-baseline',JSON.stringify(baseline));
     noteHistoryProjection=true;
-    try{for(const current of [original,otherCurrent]){await noteHistory.track(current.snapshot.note,current);noteHistoryProject(current.snapshot.note);}}finally{noteHistoryProjection=false;}
+    try{for(const current of config.parentMode?[otherCurrent,original]:[original,otherCurrent]){await noteHistory.track(current.snapshot.note,current);noteHistoryProject(current.snapshot.note);}}finally{noteHistoryProjection=false;}
     state.selectedTreeId=target;render();persist();await settle();await open();
     const boxes=[...dialog().querySelectorAll('.protection-copies input')];assert(boxes.length>0,'real_copy_list_empty');
     boxes[0].checked=true;
@@ -233,6 +233,21 @@
   assert(NowNoteProtectionProtocol.canonicalJson(publicNote)===NowNoteProtectionProtocol.canonicalJson(JSON.parse(localStorage.getItem('qa-http-'+run+'-public-baseline'))),'real_FULL15_public_fields_changed');
   await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
   const rcInfo=await inspectNoteProtection();assert(rcInfo.catalog.context.current_mode==='protected'&&rcInfo.catalog.context.base.crypto_epoch===2,'real_RC_mode_failed');
+  let parentBaseline=null;
+  if(config.parentMode){
+    const inv=rcInfo.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
+    const child=await noteProtectionReader.read(scope,rcInfo.catalog,inv,async()=>password);
+    assert(child.value.note.parent_local_id===other&&child.value.note.level===2,'parent_fixture_not_child');
+    if(config.parentMode==='mixed'){
+      dialog().close();state.selectedTreeId=other;render();await settle();await open();
+      const boxes=[...dialog().querySelectorAll('.protection-copies input')];boxes.forEach(e=>e.checked=true);
+      await action('confirm',()=>!dialog().querySelector('.protection-copies input'));
+      await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===other&&m.phase==='complete'));
+      const parent=await inspectNoteProtection();parentBaseline=parent.catalog;
+      assert(parent.catalog.context.base.crypto_epoch===1&&parent.catalog.context.current_mode==='protected','parent_not_protected');
+      dialog().close();state.selectedTreeId=target;render();await settle();await open();
+    }
+  }
   let peerPlain=plain;
   if(config.editorWrite) {
     assert(getComputedStyle(dialog().querySelector('.protection-editor')).display==='none','editor_not_hidden_before_open');
@@ -396,7 +411,14 @@
     }
     emit({stage:'protected_delete_restore_and_plain_restore_complete',owner:a.owner,local_id:target,phase:'complete'});
   }
-  const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
+  if(config.parentMode==='mixed'){
+    const parentScope={...scope,local_id:other},parent=await noteProtectionReader.catalog(parentScope);
+    assert(NowNoteProtectionProtocol.canonicalJson(parent)===NowNoteProtectionProtocol.canonicalJson(parentBaseline),'child_write_changed_protected_parent');
+    const inv=parent.entries.find(d=>d.key.kind==='inventory_snapshot'),note=await noteProtectionReader.read(parentScope,parent,inv,async()=>password);
+    assert(note.value.note.content==='HTTP-QA-PRESERVE-'+run,'child_write_changed_parent_meaning');
+  }else{
+    const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
+  }
   for(const store of protectionStorageAdapters()){
     const raw=await store.read();
     if(config.mutationWrite&&isHostedWebClient()&&store.name==='memory:data'&&store.ephemeral){
@@ -412,5 +434,5 @@
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:marker.phase==='complete'?'local_operation_complete':'local_operation_pending',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
-  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true,deleteRestoreVerified:config.mutationWrite===true,offlineImportVerified:config.importWrite===true};
+  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true,deleteRestoreVerified:config.mutationWrite===true,offlineImportVerified:config.importWrite===true,parentBoundary:config.parentMode||null};
 })();

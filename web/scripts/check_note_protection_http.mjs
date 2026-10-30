@@ -37,6 +37,7 @@ try {
   manifest.servedSourceMatches=true;await save();
   const require=createRequire(new URL('../../desktop/package.json',import.meta.url)),electron=require('electron');
   const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
+  const parentMode=process.argv.includes('--parent-mixed')?'mixed':process.argv.includes('--parent-plain')?'plain':null;
   for(const mode of modes) {
     const credentials={};let branchId=null;
     const probe=process.argv.includes('--probe');
@@ -45,7 +46,7 @@ try {
       stage=mode+'_register_'+suffix;manifest.accounts.push({owner,device,state:'request_pending',retention:'QA verification retained'});await save();
       const issued=await request('POST','/api/v1/auth/register',{owner_id:owner,password,email:owner+'@example.invalid',display_name:'HTTP QA',device_id:device,device_name:'Isolated HTTP QA'});
       credentials[suffix]={owner,device,password};manifest.accounts.at(-1).state='created';await save();
-      if(suffix==='a')for(const local of ['target','other']) {
+      if(suffix==='a')for(const local of parentMode?['other','target']:['target','other']) {
         const local_id='qa-http-'+run+'-'+local,mutation_id=crypto.randomUUID();
         stage=mode+'_seed_'+local;manifest.notes.push({owner,local_id,mutation_id,state:'request_pending'});await save();
         if(local==='target'&&['--create-current','--restore-absent'].some(f=>process.argv.includes(f))){
@@ -56,7 +57,7 @@ try {
           Object.assign(manifest.notes.at(-1),{state:'branch_only_created',branch_id:branchId});await save();continue;
         }
         await request('PUT','/api/v2/notes/current',{schema_version:1,owner_id:owner,local_id,device_id:device,mutation_id,crypto_epoch:0,base_head_version:0,base_revision_id:null,expected_inventory_revision_ids:[],
-          note:{note_type:'tree',title:'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run,parent_local_id:null,level:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
+          note:{note_type:'tree',title:'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run,parent_local_id:parentMode&&local==='target'?'qa-http-'+run+'-other':null,level:parentMode&&local==='target'?2:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
         manifest.notes.at(-1).state='created';await save();
       }
     }
@@ -67,7 +68,7 @@ try {
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=phase===5?path.join(own,mode+'-fresh'):profile;
       if(phase===5)await fs.mkdir(activeProfile);
-      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart')}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));
