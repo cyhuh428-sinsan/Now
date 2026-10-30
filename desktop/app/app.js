@@ -8175,7 +8175,7 @@ async function editProtectedCurrent(info,resolveKey) {
 
 async function createProtectedCurrent(info,resolveKey,initialNote=null) {
   if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
-  const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;guard();
+  const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=structuredClone(info.catalog);guard();
   if(info.pending || !catalog || catalog.context.base.current_exists || catalog.context.base.crypto_epoch<1
     || catalog.context.base.identity_state==="ambiguous")throw Error("note_protection:create_absent_required");
   const seed=initialNote===null?null:structuredClone(NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:initialNote}).note);
@@ -8195,13 +8195,15 @@ async function createProtectedCurrent(info,resolveKey,initialNote=null) {
     }
     if(!Array.isArray(value.outbox) || value.outbox.length || value.conflict)throw Error("note_protection:offline_import_required");
     if(value.dirty){if(seed || !value.localOnly || value.draft.id!==null)throw Error("note_protection:unsent_draft");note=structuredClone(value.draft);}
-    value.draft=structuredClone(note);value.dirty=true;value.localOnly=true;
-    value.base={...structuredClone(catalog.context.base),replica_count:0};
-    record=await noteProtectionClient.saveJournal(scope,record,value,password,crypto.randomUUID(),noteHistory);guard();
+    if(!seed){
+      value.draft=structuredClone(note);value.dirty=true;value.localOnly=true;
+      value.base={...structuredClone(catalog.context.base),replica_count:0};
+      record=await noteProtectionClient.saveJournal(scope,record,value,password,crypto.randomUUID(),noteHistory);guard();
+    }
   }else{
     password=await resolveKey({representation_epoch:"local:new",output:true});guard();
     value={raw:structuredClone(note),draft:structuredClone(note),base:{...structuredClone(catalog.context.base),replica_count:0},
-      revisions:[],outbox:[],receipts:[],conflict:null,dirty:true,localOnly:true,replicaSelected:true,protectionScope:scope};
+      revisions:[],outbox:[],receipts:[],conflict:null,dirty:!seed,localOnly:!seed,replicaSelected:true,protectionScope:scope};
     record=await noteProtectionClient.initializeJournal(scope,value,password,crypto.randomUUID(),noteHistory);guard();
   }
   noteProtectionEditSession={scope,record:structuredClone(record),value,archiveKey:password,queue:Promise.resolve(),base:structuredClone(catalog.context),catalogDigest:catalog.catalog_digest,create:true};

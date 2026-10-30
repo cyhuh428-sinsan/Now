@@ -66,6 +66,12 @@
     async function capture(){emit({stage:'editor_ready',owner:a.owner,local_id:target});for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));assert(globalThis.__HTTP_CAPTURE_DONE__===true,'create_editor_capture_failed');}
     const complete=()=>Object.values(noteHistory.protectionOperations()).length===2&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete');
     if(config.restoreAbsent){
+      const record=noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.[target];
+      if(record?.protection_record){
+        const value=await noteProtectionClient.openArchive(before.scope,record,password),fields=['id','owner_id','local_id','device_id','note_type','title','content','parent_local_id','level','tags','source','deleted_at','created_at','updated_at','client_updated_at'];
+        const rawFields=fields.filter(f=>JSON.stringify(value.raw?.[f])!==JSON.stringify(value.draft?.[f])),sourceFields=fields.filter(f=>JSON.stringify(original.value.note[f])!==JSON.stringify(value.draft?.[f]));
+        emit({stage:'restore_local_copy_field_differences',owner:a.owner,local_id:target,code:'dirty_'+Boolean(value.dirty)+'_raw_'+rawFields.join('+')+'_source_'+sourceFields.join('+')});
+      }
       const select=dialog().querySelector('[name="representation"]');select.selectedIndex=before.rows.findIndex(r=>r.kind==='typed'&&r.descriptor.key.kind==='offline_snapshot'&&r.descriptor.key.id===config.branchId);select.dispatchEvent(new Event('change',{bubbles:true}));
       assert(!button('restore').disabled,'absent_restore_control_disabled');await action('restore',complete);
     }else{

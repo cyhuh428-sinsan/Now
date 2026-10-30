@@ -91,8 +91,17 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   box.noteHistory=H.create({context:()=>({...scope,enabled:true,auth:'token'}),request:async()=>{throw Error('no_network');},write:async()=>{}});box.noteProtectionEditSession=null;
   const restoredDraft=await box.createCurrent(absent,async()=> 'new-local-key',note);
   assert.equal(restoredDraft.id,note.id,'verified restore source must retain its full original metadata before quote');passed++;
+  assert.equal(box.noteProtectionEditSession.value.dirty,false,'a verified read-only restore source is not an unsent user edit');
+  box.noteProtectionEditSession=null;
+  assert.equal((await box.createCurrent(absent,async()=> 'new-local-key',note)).id,note.id,'pre-marker restore bootstrap must remain reusable after reopen');passed++;
   const old={key:{kind:'offline_snapshot',id:uid(9),slot:'snapshot'},revision_ref:{kind:'offline_branch',id:uid(9)},is_null:false};absent.catalog.entries=[old];
   box.noteProtectionEditSession.catalogDigest=absent.catalog.catalog_digest;
+  const reader=box.noteProtectionReader.read,priorIntent=intent;
+  box.noteProtectionReader.read=async()=>{throw Error('before_marker_read_failed');};
+  await assert.rejects(box.write(absent,restoredDraft,'bundle-key',async()=> 'new-local-key',{operation:'restore',restore_source:{revision_ref:old.revision_ref,descriptor:old}}),/before_marker_read_failed/);
+  assert.equal(intent,priorIntent,'read failure must not create a new MW intent');
+  box.noteProtectionEditSession=null;
+  await box.createCurrent(absent,async()=> 'new-local-key',note);box.noteProtectionReader.read=reader;passed++;
   await box.write(absent,restoredDraft,'bundle-key',async()=> 'new-local-key',{operation:'restore',restore_source:{revision_ref:old.revision_ref,descriptor:old}});
   assert.equal(intent.prepare.operation,'restore');assert.equal(intent.prepare.selection,null);passed++;
   const preservedJournal=JSON.stringify(box.noteHistory.export());
