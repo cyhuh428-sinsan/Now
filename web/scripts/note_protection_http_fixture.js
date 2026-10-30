@@ -373,6 +373,15 @@
   }
   assert(peerOrigins>0&&nulls>0,'real_peer_origin_or_null_coverage_absent');
   if(config.importWrite){
+    let plainModeReceipt=null;
+    if(config.importPlain){
+      const prior=new Set(Object.keys(noteHistory.protectionOperations()));
+      await action('current_plain_transition',()=>status().includes('전환 준비 가능'));
+      const marker=Object.values(noteHistory.protectionOperations()).find(m=>!prior.has(m.id));
+      const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));
+      assert(bundle.receipt.result.current_mode==='plain'&&bundle.intent.purpose==='current_plain_transition','plain_setup_CP_receipt_absent');
+      plainModeReceipt={operation_id:bundle.prepared.id,digest:await NowNoteProtectionProtocol.hashJson(bundle.receipt)};
+    }
     const before=await inspectNoteProtection(),key=NowNoteHistory.key(before.scope);
     const record=noteHistory.export().contexts[key].notes[target],value=await noteProtectionClient.openArchive(before.scope,record,password);
     const revisionId=crypto.randomUUID(),originDevice='qa-original-'+run,parent_ref={kind:'note_revision',id:before.catalog.context.base.head_revision_id};
@@ -400,6 +409,8 @@
     if(config.importPlain){
       const intent=NowNoteProtectionClient.planImport(before.scope,before.catalog,[{revision_id:revisionId,parent_ref,origin_device_id:originDevice,snapshot,representation:null}],[]);
       intent.prepare.entries[0].target_kind='snapshot_v1';intent.prepare.entries[0].target_epoch=0;
+      intent.prepare.entries[0].provenance={kind:'post_plain_draft',origin_server_instance_id:before.scope.instance,origin_owner_id:before.scope.owner,
+        mode_operation_id:plainModeReceipt.operation_id,mode_receipt_digest:plainModeReceipt.digest};
       const prepared=await noteProtectionRemote.prepareImport(before.scope,intent);
       const work=await NowNoteProtectionClient.buildImportWork(before.scope,prepared,intent,password,noteProtectionRemote,[],async()=>password);
       await noteProtectionRemote.stage(before.scope,prepared,work,password,[],async()=>password);
@@ -426,7 +437,7 @@
         return set.call(this,k,v);
       };restoreImport=()=>Storage.prototype.setItem=set;
     }
-    try{await action('import-selected',()=>Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target).length===5
+    try{await action('import-selected',()=>Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target).length===previous.size+1
       &&(config.importRestart?Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'):Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete')));}
     finally{restoreImport?.();}
     const marker=Object.values(noteHistory.protectionOperations()).find(m=>!previous.has(m.id));
@@ -448,9 +459,9 @@
       assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(branch.snapshot),'MI_original_FULL15_changed');
       assert(actual.origin.value.entries.find(e=>e.revision_id===branch.revisionId)?.origin_device_id===branch.originDevice,'MI_original_actor_changed');
     }
-    assert(after.catalog.context.base.head_version===6&&after.catalog.context.base.history_generation===before.catalog.context.base.history_generation+1
+    assert(after.catalog.context.base.head_version===before.catalog.context.base.head_version+1&&after.catalog.context.base.history_generation===before.catalog.context.base.history_generation+1
       &&after.catalog.context.base.head_revision_id===before.catalog.context.base.head_revision_id
-      &&after.catalog.context.selected_physical_note_id===before.catalog.context.selected_physical_note_id&&after.catalog.context.current_mode==='protected','MI_changed_current_or_result');
+      &&after.catalog.context.selected_physical_note_id===before.catalog.context.selected_physical_note_id&&after.catalog.context.current_mode===before.catalog.context.current_mode,'MI_changed_current_or_result');
     assert(NowNoteProtectionProtocol.canonicalJson(after.catalog.entries.filter(d=>!pendingBranches.some(b=>b.revisionId===d.key.id)))===NowNoteProtectionProtocol.canonicalJson(before.catalog.entries),'MI_changed_old_catalog');
     const local=await noteProtectionClient.openArchive(after.scope,noteHistory.export().contexts[key].notes[target],password);
     if(config.importPlain)assert(bundle.work.new_branch_ids.length===0&&bundle.work.transfers.length===0&&bundle.work.commit.plain_entries.length===1,'existing_plain_import_created_new_branch');
