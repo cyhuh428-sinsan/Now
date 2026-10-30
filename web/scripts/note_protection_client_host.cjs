@@ -44,7 +44,7 @@ app.whenReady().then(async()=>{
     }
     await window.webContents.executeJavaScript('globalThis.__PROTECTION_QA__='+JSON.stringify(config));
     if(config.suite==='e4b3a')await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_views_backend.js'),'utf8')+'\nvoid 0;');
-    const fixture = fs.readFileSync(path.join(config.root,config.suite==='e4b3a'?'web/scripts/note_protection_views_fixture.js':'web/scripts/note_protection_client_fixture.js'),'utf8');
+    const fixture = fs.readFileSync(path.join(config.root,config.keyGuard?'web/scripts/note_protection_keyguard_fixture.js':config.suite==='e4b3a'?'web/scripts/note_protection_views_fixture.js':'web/scripts/note_protection_client_fixture.js'),'utf8');
     const result = await window.webContents.executeJavaScript(fixture);
     if(config.suite==='e4b3a'&&config.screenshot) {
       const out=path.resolve(config.screenshot);fs.mkdirSync(out,{recursive:true});

@@ -42,24 +42,31 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="resume"]').hidden=!info.pending;
     $('[data-action="confirm"]').hidden=!state.copies.length;
   }
-  function ask(epoch,output=false) {
+  function requireAction(token) {
+    if (!dialog.open || state.bound!==api.contextKey() || state.run!==token) throw Error('잠금 또는 대상 변경으로 이전 키 요청이 취소되었습니다.');
+  }
+  function ask(epoch,output=false,token=state.run) {
+    requireAction(token);
     const slot=(output?'new:':'old:')+epoch;
     if (keys.has(slot)) return Promise.resolve(keys.get(slot));
     return new Promise(resolve=>{
+      let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
       const label=document.createElement('label'); label.textContent=(output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
-      const finish=value=>{input.value='';section.remove();askCancel=null;resolve(value);};
+      const finish=value=>{if(finished)return;finished=true;input.value='';section.remove();askCancel=null;resolve(value);};
       askCancel=()=>finish(null);cancel.addEventListener('click',()=>finish(null));
-      section.addEventListener('submit',e=>{e.preventDefault();const key=input.value;if(!key)return;keys.set(slot,key);finish(key);});
+      section.addEventListener('submit',e=>{e.preventDefault();if(finished)return;try{requireAction(token);}catch{finish(null);return;}const key=input.value;if(!key)return;keys.set(slot,key);finish(key);});
       section.append(label,cancel,submit);dialog.append(section);input.focus();
     });
   }
-  const resolveKey = async d => {
-    const key=await ask(d.representation_epoch,d.output===true);
-    if (!key || state.bound!==api.contextKey() || !dialog.open) throw Error('키 입력이 취소되었거나 대상이 변경되었습니다.');
+  const resolveKey = token => async d => {
+    requireAction(token);
+    const key=await ask(d.representation_epoch,d.output===true,token);
+    requireAction(token);
+    if (!key) throw Error('키 입력이 취소되었습니다.');
     return key;
   };
   async function load() {
@@ -100,7 +107,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         const row=state.info?.rows[Number($('[name="representation"]').value)];
         if (!row) throw Error('열람할 표현이 없습니다.');
         $('.protection-plain').textContent='';
-        const value=await api.read(state.info,row,resolveKey);
+        const value=await api.read(state.info,row,resolveKey(token));
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
@@ -111,11 +118,11 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           if (!state.info) throw Error('보호 상태를 다시 조회하세요.');
           $('.protection-plain').textContent='';
           const epoch=name==='resume'?'bundle':name==='current_plain_transition'?state.info.status.crypto_epoch:state.info.status.crypto_epoch+1;
-          const password=await ask(epoch,true);
+          const password=await ask(epoch,true,token);
           if (!password || !valid(token)) return;
           status('전환 처리 중');
-          if (name==='resume') await api.resume(state.info,password,resolveKey);
-          else await api.convert(state.info,name,password,resolveKey);
+          if (name==='resume') await api.resume(state.info,password,resolveKey(token));
+          else await api.convert(state.info,name,password,resolveKey(token));
           if (valid(token)) await load();
         }
       }
