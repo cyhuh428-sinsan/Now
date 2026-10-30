@@ -24,6 +24,8 @@ const foreign=structuredClone(first);foreign.snapshot.note.owner_id='bob';
 assert.throws(()=>C.planImport(scope,catalog,[foreign],[]),/scope/);
 assert.throws(()=>C.planImport(scope,catalog,[first,first],[]),/duplicate/);
 assert.throws(()=>C.planImport(scope,catalog,[{...first,origin_device_id:''}],[]),/branch/);
+assert.throws(()=>C.planImport(scope,catalog,[second],[]),/parent/);
+assert.throws(()=>C.planImport(scope,catalog,[{...first,parent_ref:{kind:'offline_branch',id:first.revision_id}}],[]),/cycle/);
 const journal={raw:structuredClone(note),draft:{...note,content:'still unsent'},base:{...base.base,snapshot:{schema_version:1,note}},
   revisions:[{revision_id:uid(10),parent_ref:null,snapshot:{schema_version:1,note},imported:false},{revision_id:uid(11),parent_ref:second.parent_ref,snapshot:second.snapshot,imported:false}],
   outbox:[{id:uid(20),revision_id:uid(10),sent:false,body:{owner_id:'alice',local_id:'memo',device_id:'capture-original'}}],
@@ -39,4 +41,4 @@ assert.equal(journal.revisions[0].imported,false,'source journal must remain unc
 const changed=structuredClone(journal);changed.revisions[0].snapshot.note.content='changed after capture';
 assert.throws(()=>C.settleImportJournal(scope,changed,work,receipt),/import_branch/);
 assert.throws(()=>C.settleImportJournal(scope,journal,work,{...receipt,operation_id:uid(99)}),/receipt/);
-console.log('MI plan/settle: 8 PASS (original metadata and FULL15, no current-write acknowledgement; pure synthetic journal)');
+console.log('MI plan/settle: 10 PASS (original metadata and FULL15, pre-marker parent graph, no current-write acknowledgement; pure synthetic journal)');

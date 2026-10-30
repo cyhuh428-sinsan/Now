@@ -3275,6 +3275,20 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           ...(rep?{origin_storage_operation_id:old?rep.descriptor.storage_operation_id:null}:{origin_revision_ref:old?old.revision_ref:null})}});
     }
     Q().validateImportEntries(entries);
+    const batch=new Map(entries.map(e=>[e.revision_id,e])),known=new Set(catalog.entries
+      .filter(d=>['revision_snapshot','offline_snapshot'].includes(d.key.kind) && d.revision_ref!==null).map(d=>Q().canonicalJson(d.revision_ref)));
+    const done=new Set();
+    for(const entry of entries) {
+      let node=entry;const chain=new Set();
+      while(node && !done.has(node.revision_id)) {
+        if(chain.has(node.revision_id)) fail('import_parent_cycle');
+        chain.add(node.revision_id);const parent=node.parent_ref;
+        if(parent===null) break;
+        if(parent.kind==='offline_branch' && batch.has(parent.id)) node=batch.get(parent.id);
+        else {if(!known.has(Q().canonicalJson(parent))) fail('import_parent_missing');break;}
+      }
+      for(const id of chain) done.add(id);
+    }
     return {schema_version:3,purpose:'mixed_offline_import',source_origins:clone(sourceOrigins),local_branches:local,
       prepare:{mutation_id:crypto.randomUUID(),base:catalog.context,expected_catalog_digest:catalog.catalog_digest,entries}};
   }
