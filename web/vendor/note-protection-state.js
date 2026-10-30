@@ -846,7 +846,6 @@
               const original=await protocol().decryptRepresentation(rep.raw,d,rep.origin,resolve,3);
               if(!semanticEq(original,value)) fail('import_cipher_meaning');
             } else if(r.representation!==null) fail('import_plain_source');
-            if(fixed.DSET.some(d=>d.destination_key.id===e.revision_id) && value.note.id!==null) fail('import_destination');
             imported.set(e.revision_id,value);
           }
           for(const old of fixed.existing) {

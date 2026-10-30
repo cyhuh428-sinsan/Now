@@ -2803,7 +2803,6 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
               const original=await protocol().decryptRepresentation(rep.raw,d,rep.origin,resolve,3);
               if(!semanticEq(original,value)) fail('import_cipher_meaning');
             } else if(r.representation!==null) fail('import_plain_source');
-            if(fixed.DSET.some(d=>d.destination_key.id===e.revision_id) && value.note.id!==null) fail('import_destination');
             imported.set(e.revision_id,value);
           }
           for(const old of fixed.existing) {
@@ -3230,7 +3229,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if(e.target_epoch===0) plain.push({revision_id:e.revision_id,snapshot:clone(snapshot.note)});
       if(!d) continue;
       Q().validateDestination(d,i.purpose);
-      if(snapshot.note.id!==null || d.destination_key.kind!=='offline_snapshot' || d.output_kind!==e.target_kind
+      if(d.destination_key.kind!=='offline_snapshot' || d.output_kind!==e.target_kind
         || d.output_epoch!==e.target_epoch || d.is_null || d.source_keys.length) fail('import_destination');
       if(d.output_epoch===0) continue;
       const key=d.destination_key,origin={value:h.operation_origin,legacy:null};
