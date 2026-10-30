@@ -39,7 +39,8 @@ try {
   const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
   for(const mode of modes) {
     const credentials={};
-    for(const suffix of ['a','b']) {
+    const probe=process.argv.includes('--probe');
+    for(const suffix of probe?[]:['a','b']) {
       const owner='qa_http_'+run+'_'+mode+'_'+suffix,device=mode==='web'?'web-client':'qa-http-'+run,password='Qa-'+crypto.randomBytes(18).toString('hex');
       stage=mode+'_register_'+suffix;manifest.accounts.push({owner,device,state:'request_pending',retention:'QA verification retained'});await save();
       const issued=await request('POST','/api/v1/auth/register',{owner_id:owner,password,email:owner+'@example.invalid',display_name:'HTTP QA',device_id:device,device_name:'Isolated HTTP QA'});
@@ -54,10 +55,10 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of [1,2]) {
+    for(const phase of probe?[0]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
-      await fs.writeFile(config,JSON.stringify({root,source,profile,mode,phase,result,secrets,envFile,run,manifestFile,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:process.argv.includes('--editor-write')}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile,mode,phase,result,secrets,envFile,run,manifestFile,probe,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:process.argv.includes('--editor-write')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));

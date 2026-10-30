@@ -7,7 +7,7 @@
   async function request(path,method='GET',body,headers) {
     let response;
     try{response=await fetch(url+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...(headers||noteHistoryContext().headers),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});}
-    catch{emit({stage:'transport_uncertain',owner:a.owner,local_id:target});throw Error('transport_uncertain');}
+    catch(error){emit({stage:'transport_uncertain_'+path.split('?')[0].split('/').at(-1),owner:a?.owner,local_id:target,code:/^[A-Za-z]+$/.test(error.name)?error.name:'network_error'});throw Error('transport_uncertain');}
     if(!response.ok)throw Error('http_'+response.status+'_'+path.split('/').at(-1));
     return response.json();
   }
@@ -26,6 +26,9 @@
     state.settings.server.autoSync=false;
     assert(noteHistoryContext().enabled&&noteHistoryContext().owner===account.owner,'auth_context_failed');
   }
+  const ready=await request('/health/ready','GET',undefined,{'Content-Type':'application/json'});
+  assert(ready.status==='ready','renderer_route_not_ready');
+  if(config.probe)return {ok:true,mode:config.mode,phase:config.phase,readOnlyProbe:true};
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;

@@ -26,8 +26,11 @@ ipcMain.handle('nownote:desktop-store-info',()=>({path:storeFile,version:1,keys:
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 const persistEvidence=evidence=>{const m=JSON.parse(fs.readFileSync(config.manifestFile,'utf8'));m.clientEvidence ||= [];m.clientEvidence.push(evidence);fs.writeFileSync(config.manifestFile,JSON.stringify(m,null,2));};
 app.whenReady().then(async()=>{
+  const proxy=await session.defaultSession.resolveProxy('http://127.0.0.1:8750');
+  persistEvidence({mode:config.mode,phase:config.phase,proxyDirect:proxy==='DIRECT'});
   session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(d,done)=>{const u=new URL(d.url);done({cancel:!(['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750')});});
   session.defaultSession.webRequest.onCompleted({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(u.pathname.startsWith('/api/'))persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,status:d.statusCode});});
+  session.defaultSession.webRequest.onErrorOccurred({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750')persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,error:/^net::ERR_[A-Z_]+$/.test(d.error)?d.error:'network_error'});});
   const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,...(config.mode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
   window.webContents.on('console-message',(...args)=>{
     const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
