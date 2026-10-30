@@ -2175,7 +2175,11 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope,{includeArchives:true}),scope,id,password,memo,resolveKey,intent) });
           active(ctx,generation);
         }
-        if (!sources.some(s => s.patches.length)) fail('local_copies_missing');
+        if (!sources.some(s => s.patches.length)) {
+          if (intent.schema_version !== 2 || intent.purpose !== 'conversion' || typeof remote.verifyEmptyLocal !== 'function'
+            || await remote.verifyEmptyLocal(copy(scope),copy(intent)) !== true) fail('local_copies_missing');
+          active(ctx,generation);
+        }
         const bundle = { schema_version: 1, scope: copy(scope), operation_id: id, intent: copy(intent), stores: sources, drain: null, prepared: null, work: null, receipt: null };
         const marker = { schema_version: 1, id, scope: copy(scope), phase: 'drain_pending', cipher_bundle: '' };
         await save(marker,bundle,password,ctx,generation);
@@ -2647,6 +2651,20 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       async identity(scope) {
         const r = await request(scope,'/api/v2/notes/crypto-transitions/status','GET',{ owner_id: scope.owner, local_id: scope.local_id, device_id: scope.device });
         if (r.server_instance_id !== scope.instance) fail('server_instance_changed'); return r;
+      },
+      async verifyEmptyLocal(s,intent) {
+        const p = intent.prepare, d = intent.drain;
+        if (intent.schema_version !== 2 || intent.purpose !== 'conversion' || !p || !d
+          || p.crypto_epoch !== 0 || p.target_epoch !== 1 || !Array.isArray(p.local_branches) || p.local_branches.length
+          || d.crypto_epoch !== 0 || d.expected_history_generation !== p.expected_history_generation) fail('server_only_conversion');
+        const r = await transport.identity(s);
+        if (r.crypto_epoch !== 0 || r.protection_state !== 'legacy' || r.identity_state !== 'related_only'
+          || r.current_exists !== false || r.head_revision_id !== null || !Array.isArray(r.inventory_revision_ids) || r.inventory_revision_ids.length
+          || !Number.isSafeInteger(r.head_version) || r.head_version < 0
+          || !Number.isSafeInteger(r.history_generation) || r.history_generation < 0) fail('server_only_conversion');
+        const mapping = {base_head_version:'head_version',base_revision_id:'head_revision_id',expected_history_generation:'history_generation',expected_inventory_revision_ids:'inventory_revision_ids'};
+        if (Object.entries(mapping).some(([a,b]) => !eq(p[a],r[b]))) fail('context_changed');
+        return true;
       },
       async drainPrepare(s,intent) {
         const body = { ...access(s,2), ...intent.drain }; ensureScope(s,body);
