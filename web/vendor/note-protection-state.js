@@ -332,6 +332,103 @@
       },
     };
   }
+  function createWrite({context,journal,remote,capture,apply,change=()=>{}}) {
+    let generation=0,running=false;
+    const same=(a,b)=>protocol().canonicalJson(a)===protocol().canonicalJson(b);
+    const own=scope=>{
+      validateScope(scope);const ctx=copy(context());
+      if(!ctx.enabled || ctx.owner!==scope.owner || ctx.instance!==scope.instance || ctx.device!==scope.device
+        || String(ctx.url).replace(/\/+$/,'')!==scope.url.replace(/\/+$/,'')) fail('scope_changed');
+      return {...ctx,local_id:scope.local_id};
+    };
+    const active=(ctx,epoch)=>{
+      const current=own(Object.fromEntries(['url','owner','instance','local_id','device'].map(k=>[k,ctx[k]])));
+      if(epoch!==generation || current.auth!==ctx.auth) fail('scope_changed');
+      return true;
+    };
+    const status=id=>{
+      const marker=journal.protectionOperations()[id];
+      if(!marker) fail('operation_missing');
+      validateMarker(marker);own(marker.scope);return copy(marker);
+    };
+    const pending=scope=>Object.values(journal.protectionOperations()).some(marker=>{
+      if(marker?.scope?.owner!==scope.owner || String(marker?.scope?.url||'').replace(/\/+$/,'')!==scope.url.replace(/\/+$/,'')) return false;
+      validateMarker(marker);
+      return marker.phase!=='complete' && marker.scope.owner===scope.owner && marker.scope.local_id===scope.local_id
+        && marker.scope.url.replace(/\/+$/,'')===scope.url.replace(/\/+$/,'');
+    });
+    async function save(marker,bundle,password,ctx,epoch) {
+      active(ctx,epoch);
+      marker.cipher_bundle=await protocol().encryptContent(json(bundle),password);active(ctx,epoch);
+      validateMarker(marker);await journal.saveProtection(copy(marker));active(ctx,epoch);
+      if(!same(status(marker.id),marker)) fail('marker_readback');change();
+    }
+    async function open(marker,password) {
+      if(!password) fail('key_required');
+      const b=protocol().parseJson(await protocol().decryptContent(marker.cipher_bundle,password));
+      fields(b,['schema_version','operation_id','scope','intent','local','prepared','work','receipt']);
+      if(b.schema_version!==1 || b.operation_id!==marker.id || !same(b.scope,marker.scope)
+        || b.intent?.schema_version!==3 || b.intent.purpose!=='mixed_note_write') fail('bundle_binding');
+      return b;
+    }
+    return {
+      async start(scope,intent,password) {
+        if(!password) fail('key_required');scope=copy(scope);intent=copy(intent);
+        const ctx=own(scope),epoch=generation;
+        if(intent.schema_version!==3 || intent.purpose!=='mixed_note_write') fail('work_purpose');
+        if(running) fail('busy');if(pending(scope)) fail('operation_exists');running=true;
+        try {
+          const local=await capture(copy(scope),()=>active(ctx,epoch));active(ctx,epoch);
+          if(pending(scope)) fail('operation_exists');
+          const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'preparing',cipher_bundle:''};
+          const bundle={schema_version:1,operation_id:id,scope:copy(scope),intent,local,prepared:null,work:null,receipt:null};
+          await save(marker,bundle,password,ctx,epoch);return id;
+        } finally {running=false;}
+      },
+      async resume(id,password,build,resolveKey) {
+        const marker=status(id),ctx=own(marker.scope),epoch=generation;
+        if(running) fail('busy');running=true;
+        try {
+          const b=await open(marker,password);active(ctx,epoch);
+          const persist=()=>save(marker,b,password,ctx,epoch);
+          if(marker.phase==='complete') return copy(b.receipt);
+          if(marker.phase==='preparing') {
+            b.prepared=await remote.prepareWrite(copy(marker.scope),copy(b.intent));active(ctx,epoch);
+            marker.phase='promoted';await persist();
+          }
+          if(marker.phase==='promoted') {
+            if(typeof build!=='function') fail('cipher_plan_required');
+            b.work=await build(copy(b.prepared),copy(b.intent),copy(b.local));active(ctx,epoch);
+            marker.phase='bundled';await persist();
+          }
+          if(marker.phase==='bundled') {
+            await remote.stage(copy(marker.scope),copy(b.prepared),copy(b.work),password,[],resolveKey);active(ctx,epoch);
+            marker.phase='prepared';await persist();
+          }
+          if(marker.phase==='prepared'){marker.phase='committing';await persist();}
+          if(marker.phase==='committing') {
+            let r=await remote.status(copy(marker.scope),copy(b.prepared),copy(b.work));active(ctx,epoch);
+            if(r.state!=='committed') {
+              if(!['prepared','uploading','ready'].includes(r.state)) fail('remote_not_committable');
+              r=await remote.commit(copy(marker.scope),copy(b.prepared),copy(b.work));active(ctx,epoch);
+            }
+            if(r.state!=='committed' || !r.receipt || r.receipt.operation_id!==b.prepared.id || r.receipt_matches_current!==true) fail('commit_unconfirmed');
+            b.receipt=copy(r.receipt);marker.phase='server_committed';await persist();
+          }
+          if(marker.phase==='server_committed'){marker.phase='applying';await persist();}
+          if(marker.phase==='applying') {
+            const r=await remote.status(copy(marker.scope),copy(b.prepared),copy(b.work));active(ctx,epoch);
+            if(r.state!=='committed' || r.receipt_matches_current!==true || !same(r.receipt,b.receipt)) fail('committed_not_current');
+            await apply(copy(marker.scope),copy(b.local),copy(b.work),copy(b.receipt),()=>active(ctx,epoch));active(ctx,epoch);
+            marker.phase='complete';await persist();
+          }
+          if(marker.phase!=='complete') fail('write_phase');
+          return copy(b.receipt);
+        } finally {running=false;}
+      },
+      status,invalidate(){generation++;},
+    };
+  }
   function createRemote({ request, keyResolver }) {
     const eq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
     const access = (s,version) => ({ schema_version: version, owner_id: s.owner, local_id: s.local_id, device_id: s.device, server_instance_id: s.instance });
@@ -678,5 +775,5 @@
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createRemote,inventory,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createRemote,inventory,validateMarker,protectedRecord,scopeKey });
 })();
