@@ -445,6 +445,30 @@
     const local=await noteProtectionClient.openArchive(after.scope,noteHistory.export().contexts[key].notes[target],password);
     assert(NowNoteProtectionProtocol.canonicalJson(local.outbox)===originalOutbox&&NowNoteProtectionProtocol.canonicalJson(local.draft)===originalDraft&&local.dirty,'MI_acknowledged_unsent_current');
     assert(pendingBranches.every(b=>local.revisions.find(r=>r.revision_id===b.revisionId).imported),'MI_local_receipt_not_settled');
+    if(config.importExisting){
+      const replayRecord=noteHistory.export().contexts[key].notes[target],replayValue=structuredClone(local);
+      const revision=replayValue.revisions.find(r=>r.revision_id===revisionId),descriptor=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===revisionId);
+      const proof=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
+      const original=bundle.work.transfers.find(t=>t.key.kind==='offline_snapshot'&&t.key.id===revisionId);
+      assert(original&&await NowNoteProtectionProtocol.sha256(original.raw)===descriptor.ciphertext_sha256,'existing_import_original_cipher_absent');
+      revision.imported=false;delete revision.server_ref;
+      revision.representation={descriptor,raw:original.raw,origin:proof.origin};
+      const pending=await noteProtectionClient.sealJournal(after.scope,replayValue,password,crypto.randomUUID());
+      await noteProtectionClient.replaceJournal(after.scope,replayRecord,pending,noteHistory);
+      const prior=new Set(Object.keys(noteHistory.protectionOperations()));
+      await action('refresh',()=>status().includes('전환 준비 가능'));
+      await action('imports',()=>dialog().querySelectorAll('.protection-import-rows input:checked').length===1);
+      await action('import-selected',()=>Object.keys(noteHistory.protectionOperations()).length===6&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+      const repeated=Object.values(noteHistory.protectionOperations()).find(m=>!prior.has(m.id));
+      const work=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(repeated.cipher_bundle,password));
+      const unchanged=await inspectNoteProtection();
+      assert(NowNoteProtectionProtocol.canonicalJson(unchanged.catalog)===NowNoteProtectionProtocol.canonicalJson(after.catalog),'existing_only_import_changed_catalog');
+      assert(work.work.transfers.length===0&&work.work.new_branch_ids.length===0&&work.work.commit.existing_ciphertexts.length===1,'existing_only_import_created_new_branch');
+      const saved=await noteProtectionClient.openArchive(after.scope,noteHistory.export().contexts[key].notes[target],password);
+      assert(NowNoteProtectionProtocol.canonicalJson(saved.outbox)===originalOutbox&&NowNoteProtectionProtocol.canonicalJson(saved.draft)===originalDraft&&saved.dirty,'existing_import_acknowledged_current');
+      assert(saved.revisions.find(r=>r.revision_id===revisionId).imported,'existing_import_not_settled');
+      emit({stage:'MI_existing_original_cipher_complete',owner:a.owner,local_id:target,operation_id:work.prepared.id,local_operation_id:repeated.id,phase:'complete'});
+    }
     const comparedRecord=NowNoteProtectionProtocol.canonicalJson(noteHistory.export().contexts[key].notes[target]);
     await action('compare',()=>status().includes('읽기 전용 비교'));
     const comparison=dialog().querySelector('.protection-comparison'),panes=[...comparison.querySelectorAll('pre')];
