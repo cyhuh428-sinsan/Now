@@ -54,6 +54,54 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===10){
+    assert(!findTreeNode(state.data.tree,target),'related_scope_inherited_tree');
+    assert(!Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target),'related_scope_inherited_marker');
+    document.querySelector('#protectionBtn').click();
+    await drive(()=>dialog()?.open&&!button('refresh').disabled&&dialog().querySelector('[name="target"] option'),'related_list_entry');
+    const targets=dialog().querySelector('[name="target"]');
+    assert([...targets.options].some(o=>o.value===target&&o.textContent.includes('연결 자료만')),'related_scope_not_discovered');
+    targets.value=target;targets.dispatchEvent(new Event('change',{bubbles:true}));
+    await drive(()=>dialog().querySelector('.protection-scope').textContent.includes(target)&&status().includes('전환 준비 가능'),'related_target_selected');
+    const initial=await inspectNoteProtection();
+    assert(initial.scope.local_id===target&&initial.status.crypto_epoch===0&&!initial.catalog,'related_scope_not_pristine');
+    assert(!findTreeNode(state.data.tree,target),'discovery_created_placeholder_tree');
+    await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='complete'));
+    const before=await inspectNoteProtection();
+    assert(before.catalog.context.base.identity_state==='related_only'&&before.catalog.context.current_mode==='absent','related_protection_created_current');
+    const linked=before.catalog.entries.filter(d=>['analysis_input','analysis_result','analysis_error','recording_transcript'].includes(d.key.kind));
+    assert(linked.length===4&&linked.filter(d=>d.is_null).length===1,'related_four_slot_coverage_changed');
+    const values=[];
+    for(const d of linked)values.push((await noteProtectionReader.read(before.scope,before.catalog,d,async()=>password)).value);
+    assert(values.some(v=>v==='HTTP-QA-LINKED-'+run+'\r\n')&&values.some(v=>v==='HTTP-QA-TRANSCRIPT-'+run+'\r\n')&&values.includes(null),'related_original_meaning_changed');
+    await action('create',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    const editor=dialog().querySelector('.protection-draft');editor.value='HTTP-QA-RELATED-CURRENT-'+run+'\n';editor.dispatchEvent(new Event('input',{bubbles:true}));
+    await drive(()=>status().includes('초안 저장됨'),'related_create_draft');
+    globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'related_create_ready',owner:a.owner,local_id:target});
+    for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
+    assert(globalThis.__HTTP_CAPTURE_DONE__===true,'related_create_capture_failed');
+    await action('save',()=>status().includes('전환 준비 가능'));
+    const after=await inspectNoteProtection();
+    assert(after.catalog.context.base.current_exists&&after.catalog.context.base.identity_state==='coherent'
+      &&after.catalog.context.base.head_version===before.catalog.context.base.head_version+1
+      &&after.catalog.context.base.history_generation===before.catalog.context.base.history_generation+1,'related_create_wrong_result');
+    assert(after.catalog.entries.some(d=>d.key.kind==='revision_before'&&d.is_null),'related_create_before_not_null');
+    for(let i=0;i<linked.length;i++){
+      assert(after.catalog.entries.some(d=>NowNoteProtectionProtocol.canonicalJson(d)===NowNoteProtectionProtocol.canonicalJson(linked[i])),'related_create_changed_linked_descriptor');
+      const actual=await noteProtectionReader.read(after.scope,after.catalog,linked[i],async()=>password);
+      assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(values[i]),'related_create_changed_linked_value');
+    }
+    const inventory=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(after.catalog.context.selected_physical_note_id));
+    const current=await noteProtectionReader.read(after.scope,after.catalog,inventory,async()=>password);
+    assert(current.value.note.content==='HTTP-QA-RELATED-CURRENT-'+run+'\n','related_created_current_wrong_content');
+    for(const store of protectionStorageAdapters()){
+      const raw=JSON.stringify(await store.read());
+      for(const prefix of ['HTTP-QA-LINKED-','HTTP-QA-RESULT-','HTTP-QA-TRANSCRIPT-','HTTP-QA-RELATED-CURRENT-'])assert(!raw.includes(prefix+run),'related_scope_local_plaintext_residue');
+    }
+    button('lock').click();clearWebSession();await login(b);
+    assert(!(await refreshProtectionTargets()).includes(target)&&!protectionTargets().includes(target),'other_account_inherited_related_target');
+    clearWebSession();return {ok:true,mode:config.mode,phase:10,relatedOnlyDiscovered:true,createdCurrent:true,linkedPreserved:true,nullBefore:true,accountIsolation:true};
+  }
   if(config.phase===7){
     state.selectedTreeId=target;render();await settle();await open();
     const marker=Object.values(noteHistory.protectionOperations()).find(m=>m.scope.local_id===target&&m.phase==='applying');

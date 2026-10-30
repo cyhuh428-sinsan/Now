@@ -39,6 +39,7 @@ try {
   const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
   const parentMode=process.argv.includes('--parent-mixed')?'mixed':process.argv.includes('--parent-plain')?'plain':null;
   const replicas=process.argv.includes('--physical-replicas');
+  const relatedOnly=process.argv.includes('--related-only');
   for(const mode of modes) {
     const credentials={};let branchId=null,replicaIds=null;
     const probe=process.argv.includes('--probe');
@@ -50,6 +51,16 @@ try {
       if(suffix==='a')for(const local of parentMode?['other','target']:['target','other']) {
         const local_id='qa-http-'+run+'-'+local,mutation_id=crypto.randomUUID();
         stage=mode+'_seed_'+local;manifest.notes.push({owner,local_id,mutation_id,state:'request_pending'});await save();
+        if(local==='target'&&relatedOnly){
+          const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_related_seed.py';
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch(error){
+            const diagnostic={exit_status:Number.isInteger(error.status)?error.status:null};
+            try{const r=JSON.parse(String(error.stdout||''));if(r.ok===false&&r.code==='qa_related_seed_failed'&&/^[a-z_]{1,30}$/.test(r.phase)&&/^[A-Za-z0-9_]{1,80}$/.test(r.error_type))diagnostic.helper={phase:r.phase,error_type:r.error_type};}catch{}
+            manifest.notes.at(-1).seed_diagnostic=diagnostic;await save();throw Error('qa_related_outcome_unconfirmed');
+          }
+          if(!seeded.ok||seeded.owner!==owner||seeded.local_id!==local_id||seeded.identity_state!=='related_only'||!Number.isSafeInteger(seeded.job_id)||!Number.isSafeInteger(seeded.recording_id))throw Error('qa_related_seed_failed');
+          Object.assign(manifest.notes.at(-1),{state:'related_only_created',job_id:seeded.job_id,recording_id:seeded.recording_id});await save();continue;
+        }
         if(local==='target'&&['--create-current','--restore-absent'].some(f=>process.argv.includes(f))){
           branchId=crypto.randomUUID();
           const command='docker exec -i now-api python - '+[run,mode,owner,local_id,branchId].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_seed.py';
@@ -74,12 +85,12 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of probe?[0]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
+    for(const phase of probe?[0]:relatedOnly?[10]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=phase===5?path.join(own,mode+'-fresh'):profile;
       if(phase===5)await fs.mkdir(activeProfile);
-      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,replicaIds,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||replicas||['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart','--resolve-pending','--offline-draft','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart','--resolve-pending','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart'),resolvePending:process.argv.includes('--resolve-pending'),offlineDraft:process.argv.includes('--offline-draft'),importMultiple:process.argv.includes('--import-multiple'),importExisting:process.argv.includes('--import-existing'),importPlain:process.argv.includes('--import-plain')}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,replicaIds,relatedOnly,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||replicas||['--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart','--resolve-pending','--offline-draft','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart','--resolve-pending','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart'),resolvePending:process.argv.includes('--resolve-pending'),offlineDraft:process.argv.includes('--offline-draft'),importMultiple:process.argv.includes('--import-multiple'),importExisting:process.argv.includes('--import-existing'),importPlain:process.argv.includes('--import-plain')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));
