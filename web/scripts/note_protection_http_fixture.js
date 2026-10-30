@@ -404,6 +404,15 @@
     const local=await noteProtectionClient.openArchive(after.scope,noteHistory.export().contexts[key].notes[target],password);
     assert(NowNoteProtectionProtocol.canonicalJson(local.outbox)===originalOutbox&&NowNoteProtectionProtocol.canonicalJson(local.draft)===originalDraft&&local.dirty,'MI_acknowledged_unsent_current');
     assert(local.revisions.find(r=>r.revision_id===revisionId).imported,'MI_local_receipt_not_settled');
+    const comparedRecord=NowNoteProtectionProtocol.canonicalJson(noteHistory.export().contexts[key].notes[target]);
+    await action('compare',()=>status().includes('읽기 전용 비교'));
+    const comparison=dialog().querySelector('.protection-comparison'),panes=[...comparison.querySelectorAll('pre')];
+    assert(panes.length===2&&panes[0].textContent.endsWith(snapshot.note.content)&&panes[1].textContent.endsWith(peerPlain),'pending_comparison_changed_original_meaning');
+    assert(NowNoteProtectionProtocol.canonicalJson(noteHistory.export().contexts[key].notes[target])===comparedRecord,'comparison_changed_original_journal');
+    globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'comparison_ready',owner:a.owner,local_id:target});
+    for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
+    assert(globalThis.__HTTP_CAPTURE_DONE__===true,'comparison_capture_failed');
+    button('lock').click();assert(!comparison.textContent&&comparison.classList.contains('hidden'),'locked_comparison_retained_plaintext');
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-IMPORT-'+run),'MI_local_plaintext_residue');
     emit({stage:'MI_original_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:'complete',server_instance_id:scope.instance});
   }

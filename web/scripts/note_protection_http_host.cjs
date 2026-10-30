@@ -60,11 +60,11 @@ app.whenReady().then(async()=>{
     const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
     if(typeof message!=='string'||!message.startsWith('HTTP_QA_EVENT '))return;
     try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','code'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});
-      if(event.stage==='editor_ready'&&config.editorWrite || event.stage==='import_ready'&&config.importWrite)void(async()=>{
+      if(event.stage==='editor_ready'&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          const name=(event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          const name=(event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
           fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage()).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
