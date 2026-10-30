@@ -11390,6 +11390,13 @@ async function verifyWebSession() {
 
 async function loadServerSharedNotes({ replace = false, message = t("settings.server.syncing") } = {}) {
   const server = state.settings.server;
+  const requestedContext = libraryContext();
+  const assertRequestContext = () => {
+    const current = libraryContext();
+    if (current.owner !== requestedContext.owner || current.url !== requestedContext.url
+      || current.auth !== requestedContext.auth || current.headers?.Authorization !== requestedContext.headers?.Authorization
+      || (isHostedWebClient() && !current.enabled)) throw new Error("서버 조회 중 인증 또는 계정이 변경되었습니다.");
+  };
   const libraryLoadContext = NowLibrary.key(libraryContext());
   if (!prepareServerRequest(server)) return;
   renderServerStatus("testing", message);
@@ -11403,6 +11410,7 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
       notes: [],
     }),
   });
+  assertRequestContext();
   hostedWebSyncSuspended = true;
   try {
     if (replace) {
@@ -11415,8 +11423,14 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
       state.expandedTreeIds.clear();
       state.selectedDeletedTreeIds.clear();
     }
+    if (isHostedWebClient()) {
+      noteHistoryAuthenticated = true;
+      await noteHistoryController?.resume();
+      assertRequestContext();
+    }
     const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);
     await noteHistoryController?.resume();
+    assertRequestContext();
     libraryNotesContext = libraryLoadContext === NowLibrary.key(libraryContext()) ? libraryLoadContext : "";
     libraryStore?.sync().catch(error => showNotice(error.message, "error"));
     markServerSyncedNotes();
