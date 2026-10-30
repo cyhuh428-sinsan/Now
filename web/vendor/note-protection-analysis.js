@@ -32,6 +32,7 @@
     return r;
   }
   async function validateBundle(e,bm) {
+    e=structuredClone(e);bm=structuredClone(bm);
     exact(bm,['schema_version','source_digest','original_job_id','original_epoch','outcome','error_code','slot_nulls','ciphertext_manifest','bundle_digest']);
     if(bm.schema_version!==3||bm.source_digest!==e.source_digest||bm.original_job_id!==e.job_id||bm.original_epoch!==e.source_context.base.base.crypto_epoch
       ||!['done','failed'].includes(bm.outcome)||(bm.outcome==='done'?bm.error_code!==null:!['provider_error','invalid_result'].includes(bm.error_code)))fail('bundle_binding');
@@ -54,6 +55,7 @@
     return bm;
   }
   async function validateExecution(scope,request,e) {
+    scope=structuredClone(scope);request=structuredClone(request);e=structuredClone(e);
     validateRequest(scope,request);
     exact(e,['schema_version','execution_id','job_id','job_id_mode','state','run_version','lease_version','expires_at','source_context','source_keys','source_digest','claim_metadata_digest','output_slots','dispatch_receipt','terminal_receipt','bundle_metadata','source_matches_current','latest_context']);
     uuid(e.execution_id);integer(e.job_id,1);integer(e.run_version,1);integer(e.lease_version,1);

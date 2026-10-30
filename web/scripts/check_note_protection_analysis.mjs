@@ -17,6 +17,9 @@ const control=r=>({schema_version:3,...Object.fromEntries([...sourceFields,'exec
 const pending={schema_version:3,execution_id:uid(4),job_id:12,job_id_mode:'allocated',state:'client_pending',run_version:1,lease_version:1,expires_at:'2026-10-31T01:00:00.000000Z',source_context:request.source_context,source_keys:request.source_keys,source_digest,claim_metadata_digest:'',output_slots,dispatch_receipt:null,terminal_receipt:null,bundle_metadata:null,source_matches_current:true,latest_context:base};
 pending.claim_metadata_digest=await Q.hashJson(control(pending));
 await A.validateExecution(scope,request,pending);
+const changing=copy(pending),checking=A.validateExecution(scope,request,changing);
+changing.output_slots[0].expected_binding.owner_id='changed-after-await';
+assert.equal((await checking).output_slots[0].expected_binding.owner_id,'alice','metadata validation must freeze before its first await');
 await assert.rejects(()=>A.validateExecution(scope,request,{...copy(pending),created:true}));
 let checks=1;
 for(const changed of [{schema_version:1},{job_id:true},{job_id_mode:'other'},{source_digest:'b'.repeat(64)},{claim_metadata_digest:'b'.repeat(64)},{source_context:{...request.source_context,server_instance_id:uid(9)}},{source_keys:[]},{run_version:2},{state:'client_running'},{source_matches_current:1},{extra:'not allowed'}]) {
