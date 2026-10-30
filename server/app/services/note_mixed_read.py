@@ -123,6 +123,24 @@ def item(db, body, *, raw=False):
     if raw:
         value = next(v for k, _, v, _, _ in meta.slots(db, body.owner_id, body.local_id) if k == key)
         result.update(framed(value, body.chunk_index))
+    else:
+        from app.services.note_operation_origin import read as read_origin
+        value = next(v for k, _, v, _, _ in meta.slots(db, body.owner_id, body.local_id) if k == key)
+        if d["origin_validator"] == "linked_v1":
+            from app.models.note_related import LinkedText
+            from app.models.note_crypto import NoteCryptoTransition
+            linked = db.get(LinkedText, (body.owner_id, body.local_id, meta.canonical(key)))
+            operation = db.get(NoteCryptoTransition, d["storage_operation_id"])
+            if (d["semantic_origin_id"] is not None or linked is None
+                or linked.storage_operation_id != d["storage_operation_id"] or linked.slot_version != d["linked_slot_version"]
+                or operation is None or (operation.owner_id, operation.local_id, operation.state) != (body.owner_id, body.local_id, "committed")):
+                error("inconsistent_related_text")
+            receipt = meta.stored_json(operation.receipt_json)
+            if not isinstance(receipt, dict) or receipt.get("metadata_manifest_digest") != operation.manifest_digest:
+                error("inconsistent_related_text")
+            result["operation_origin"] = None
+        else:
+            result["operation_origin"] = read_origin(db, body.owner_id, body.local_id, key, value)
     return result
 
 
