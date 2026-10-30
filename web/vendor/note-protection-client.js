@@ -6,6 +6,18 @@
   const Q = () => globalThis.NowNoteProtectionProtocol;
   const fail = code => { throw new Error('note_protection_client:' + code); };
   const eq = (a,b) => Q().canonicalJson(a) === Q().canonicalJson(b);
+  function sameLocal(a,b,left=new Set(),right=new Set()) {
+    if(Object.is(a,b))return true;
+    if(!a || !b || typeof a!=='object' || typeof b!=='object' || Array.isArray(a)!==Array.isArray(b))return false;
+    if(Array.isArray(a)){if(a.length!==b.length)return false;}
+    else if(Object.prototype.toString.call(a)!=='[object Object]' || Object.prototype.toString.call(b)!=='[object Object]')return false;
+    if(left.has(a)||right.has(b))return false;
+    const keys=Object.keys(a),other=Object.keys(b);
+    if(keys.length!==other.length || keys.some((k,n)=>k!==other[n]))return false;
+    left.add(a);right.add(b);
+    const same=keys.every(k=>sameLocal(a[k],b[k],left,right));
+    left.delete(a);right.delete(b);return same;
+  }
   const at = (root,path) => path.reduce((v,k)=>v?.[k],root);
   const same = (a,b) => P().scopeKey(a) === P().scopeKey(b);
   function create({context,stores}) {
@@ -86,7 +98,7 @@
         if (!Array.isArray(selected) || new Set(selected).size !== list.length || list.some(r=>!selected.includes(r.id))) fail('confirmation_incomplete');
         // Check every exact copy before the first attribution write.
         for (const s of c.snapshots) {
-          if (!eq(await s.store.read(),s.raw)) fail('copy_changed');
+          if (!sameLocal(await s.store.read(),s.raw)) fail('copy_changed');
           active(c.ctx,scope);
         }
         for (const s of c.snapshots) {
@@ -95,7 +107,7 @@
           for (const p of s.unknown) at(next,p.path).protectionScope = clone(scope);
           active(c.ctx,scope);
           await s.store.cas(s.raw,next,{active:()=>active(c.ctx,scope)}); active(c.ctx,scope);
-          if (!eq(await s.store.read(),next)) fail('attribution_readback');
+          if (!sameLocal(await s.store.read(),next)) fail('attribution_readback');
           active(c.ctx,scope);
         }
         confirmation = null;
