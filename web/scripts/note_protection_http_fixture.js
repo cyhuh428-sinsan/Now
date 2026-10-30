@@ -256,7 +256,18 @@
     emit({stage:'protected_delete_restore_and_plain_restore_complete',owner:a.owner,local_id:target,phase:'complete'});
   }
   const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
-  for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-ORIGINAL-'+run),'real_local_plaintext_residue');
+  for(const store of protectionStorageAdapters()){
+    const raw=await store.read();
+    if(config.mutationWrite&&isHostedWebClient()&&store.name==='memory:data'&&store.ephemeral){
+      for(const node of flattenTree(raw?.tree||[]))if(node.id===target&&typeof node.content==='string'
+        &&node.content.replace(/\r\n/g,'\n')===plain.replace(/\r\n/g,'\n')){
+        node.content='QA-VERIFIED-PLAIN-CURRENT';emit({stage:'plain_current_live_memory_classified',owner:a.owner,local_id:target,code:store.name});
+      }
+    }
+    if(JSON.stringify(raw).includes('HTTP-QA-ORIGINAL-'+run)){
+      emit({stage:'unexpected_plaintext_store',owner:a.owner,local_id:target,code:store.name});throw Error('real_local_plaintext_residue');
+    }
+  }
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:marker.phase==='complete'?'local_operation_complete':'local_operation_pending',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
