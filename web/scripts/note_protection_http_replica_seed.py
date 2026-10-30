@@ -10,6 +10,8 @@ from app.models.note import Note, UserAccount
 from app.models.note_crypto import NoteCryptoFence
 from app.models.note_history import NoteHead, NoteInventory
 from app.services import note_v2
+from app.services import related_text  # noqa: F401 - register guards before the first Note flush
+from app.services.note_history import capture_change, prepare_history
 
 phase = "args"
 
@@ -39,7 +41,9 @@ def main():
         values = {column.key: getattr(source, column.key) for column in inspect(Note).columns if column.key != "id"}
         values["device_id"] = "qa-physical-" + run
         replica = Note(**values)
+        prepare_history(db, owner, local)
         db.add(replica)
+        capture_change(db, replica, None, "qa_replica")
         phase = "flush"
         db.flush()
         phase = "baseline"
