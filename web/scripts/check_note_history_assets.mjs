@@ -26,7 +26,7 @@ for (const path of ['main.cjs', 'preload.cjs']) {
   assert.equal(sha(asar.extractFile(archive, path)), sha(source)); hashes['desktop/' + path] = sha(source);
 }
 const app = await fs.readFile(new URL('web/app.js', root), 'utf8');
-for (const path of ['diff.js', 'note-history-state.js', 'note-history-ui.js', 'note-protection-protocol.js']) {
+for (const path of ['diff.js', 'note-history-state.js', 'note-history-ui.js', 'note-protection-protocol.js', 'note-protection-state.js']) {
   const source = await fs.readFile(new URL('web/vendor/' + path, root), 'utf8');
   assert.ok(app.includes(source.replace(/\r\n/g, '\n')), path + ' runtime must be bundled exactly');
   hashes['web/vendor/' + path] = sha(Buffer.from(source));

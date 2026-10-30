@@ -9,6 +9,7 @@
   const uuid = () => crypto.randomUUID();
   const emptyBase = () => ({ head_version: 0, head_revision_id: null, inventory_revision_ids: [], crypto_epoch: 0, replica_count: 0 });
   const record = value => value && typeof value === 'object' && !Array.isArray(value);
+  const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
@@ -16,10 +17,10 @@
       && Object.values(data.contexts).every(c => record(c) && record(c.notes)
         && (!c.legacy_pending || (typeof c.legacy_pending.id === 'string' && record(c.legacy_pending.body) && Array.isArray(c.legacy_pending.body.notes)))
         && Object.values(c.notes).every(item =>
-        record(item) && record(item.raw) && record(item.draft) && record(item.base)
+        protectedItem(item) || (record(item) && record(item.raw) && record(item.draft) && record(item.base)
         && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
         && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
-        && Array.isArray(item.outbox) && item.outbox.every(op => record(op) && record(op.body)) && Array.isArray(item.receipts)));
+        && Array.isArray(item.outbox) && item.outbox.every(op => record(op) && record(op.body)) && Array.isArray(item.receipts))));
     const requireWritable = () => {
       if (!readable()) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
       const ctx = context();
@@ -31,12 +32,25 @@
       if (createBucket) data.contexts[key(ctx)] ||= { notes: {} };
       return data.contexts[key(ctx)] || null;
     };
-    const save = () => {
-      const snapshot = copy(data);
-      writes = writes.catch(() => {}).then(() => write(snapshot));
-      return writes.then(() => { failed = null; change(); }, error => { failed = error; change(); throw error; });
+    const save = (strict = false) => {
+      const snapshot = copy(data), source = data, ctx = { ...context() }, epoch = generation;
+      const valid = () => data === source && active(ctx,epoch);
+      writes = writes.catch(() => {}).then(() => {
+        if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
+        return write(snapshot,{ active:valid });
+      });
+      return writes.then(() => {
+        if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
+        failed = null; change();
+      },error => { if (valid()) { failed = error; change(); throw error; } if (strict) throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
+    const blocked = id => protectedItem(entry(id)) || Object.values(data?.protection_operations || {}).some(m => {
+      if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
+      globalThis.NowNoteProtectionState.validateMarker(m);
+      return m.scope.local_id === id && m.scope.owner === context().owner && m.scope.url.replace(/\/+$/,'') === String(context().url || '').replace(/\/+$/,'') && m.phase !== 'complete';
+    });
+    const writableNote = id => { if (blocked(id)) throw new Error('보호 전환 적용이 필요합니다. 원본을 보존했습니다.'); };
     const legacyPending = () => context().enabled ? copy(bucket(context())?.legacy_pending || null) : null;
     const requireSettledLegacy = () => {
       if (legacyPending()) throw new Error('기존 동기화 응답을 확인하지 못했습니다. 같은 계정에서 다시 동기화하세요. 편집본은 보존했습니다.');
@@ -62,6 +76,7 @@
       await save();
     }
     async function bindBaseline(id, current) {
+      writableNote(id);
       requireWritable(); const item = entry(id);
       if (!item || !item.needsBaseline) return;
       if (item.outbox.some(op => op.sent)) throw new Error('전송한 요청의 기준은 바꿀 수 없습니다.');
@@ -77,6 +92,7 @@
       await save();
     }
     async function edit(note) {
+      writableNote(note.local_id);
       const ctx = requireWritable(), item = entry(note.local_id);
       if (!item || note.owner_id !== ctx.owner) throw new Error('메모 이력 기준을 먼저 확인하세요.');
       if (!same(item.draft, note)) item.edit_generation = (item.edit_generation || 0) + 1;
@@ -85,6 +101,7 @@
       await save();
     }
     async function seal(id, reason = 'edit') {
+      writableNote(id);
       const ctx = requireWritable(), item = entry(id);
       if (!item || !item.dirty) return;
       const last = item.revisions.at(-1);
@@ -107,6 +124,7 @@
       if (legacyPending()) return;
       running = (async () => {
         for (const [id, item] of Object.entries(bucket(ctx)?.notes || {})) {
+          if (blocked(id)) continue;
           if (!active(ctx, epoch) || failed) return;
           if (item.needsBaseline) {
             try {
@@ -190,6 +208,7 @@
       return running;
     }
     async function compare(id) {
+      writableNote(id);
       requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
@@ -205,6 +224,7 @@
     const equalBase = (a, b) => a?.head_version === b?.head_version && a?.head_revision_id === b?.head_revision_id
       && a?.crypto_epoch === b?.crypto_epoch && JSON.stringify(a?.inventory_revision_ids) === JSON.stringify(b?.inventory_revision_ids);
     async function importPending(id) {
+      writableNote(id);
       requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item || failed) throw new Error(failed?.message || '메모 이력 기준이 없습니다.');
@@ -223,6 +243,7 @@
       }
     }
     async function restore(id, targetRef, compared) {
+      writableNote(id);
       requireSettledLegacy();
       const ctx = { ...requireWritable() }, epoch = generation, item = entry(id);
       if (!item) throw new Error('메모 이력 기준이 없습니다.');
@@ -250,6 +271,7 @@
       return copy(item.receipts.find(receipt => receipt.mutation_id === mutationId) || null);
     }
     async function restoreLocal(id, snapshot) {
+      writableNote(id);
       requireWritable();
       await seal(id, 'before_restore');
       if (!snapshot?.note || snapshot.note.owner_id !== context().owner || snapshot.note.local_id !== id) throw new Error('복원 대상이 이 메모와 다릅니다.');
@@ -258,10 +280,30 @@
     }
     return {
       track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      blocked,
+      protectionOperations: () => copy(data?.protection_operations || {}),
+      async saveProtection(marker) {
+        requireWritable(); globalThis.NowNoteProtectionState.validateMarker(marker);
+        if (marker.scope.owner !== context().owner || marker.scope.url.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) throw new Error('보호 원장의 소유자가 다릅니다.');
+        const source = data, epoch = generation, ctx = { ...context() }, previous = copy(data.protection_operations || {});
+        data.protection_operations ||= {}; data.protection_operations[marker.id] = copy(marker);
+        const assigned = data.protection_operations[marker.id];
+        try { await save(true); } catch (error) {
+          if (data === source && active(ctx,epoch) && data.protection_operations[marker.id] === assigned) data.protection_operations = previous;
+          throw error;
+        }
+      },
+      async replaceProtectionStore(expected, next) {
+        requireWritable();
+        if (JSON.stringify(data) !== JSON.stringify(expected)) throw new Error('보호 적용 중 이력 저장본이 변경되었습니다.');
+        const previous = data, epoch = generation, ctx = { ...context() }; data = copy(next); const assigned = data;
+        try { await save(true); } catch (error) { if (data === assigned && active(ctx,epoch)) data = previous; throw error; }
+      },
       legacyPending,
       async beginLegacy(body) {
         const ctx = requireWritable();
         if (body.owner_id !== ctx.owner || !Array.isArray(body.notes)) throw new Error('기존 동기화 요청의 소유자가 다릅니다.');
+        if (body.notes.some(n => blocked(n.local_id))) throw new Error('보호 전환 중인 원본은 일반 동기화할 수 없습니다.');
         const c = bucket(ctx, true);
         if (!c.legacy_pending) {
           c.legacy_pending = {id: uuid(), body: copy(body)};
@@ -276,12 +318,12 @@
         await save();
       },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
-      view: id => context().enabled && readable() && entry(id) ? copy(entry(id)) : null,
-      entries: () => context().enabled && readable() ? copy(bucket(context())?.notes || {}) : {},
+      view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
+      entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),
       failure: () => failed?.message || '',
       status() {
-        const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}) : [];
+        const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}).filter(v => !protectedItem(v)) : [];
         return { pending: notes.filter(item => !item.localOnly && (item.dirty || item.outbox.length)).length,
           conflicts: notes.filter(item => item.conflict).length, revisions: notes.reduce((sum, item) => sum + item.revisions.length, 0),
           failed: Boolean(failed), unsupported: data !== null && !readable() };
@@ -290,8 +332,9 @@
       suspend() { generation++; data = null; failed = null; },
       suspended: () => data === null,
       hydrate(value) { if (!context().enabled) throw new Error('본인 계정으로 다시 인증하세요.'); generation++; data = value == null ? { schema_version: 1, contexts: {} } : copy(value); },
-      async localOnly(id, value) { requireWritable(); const item = entry(id); if (item && item.localOnly !== value) { item.localOnly = value; await save(); } },
+      async localOnly(id, value) { writableNote(id); requireWritable(); const item = entry(id); if (item && item.localOnly !== value) { item.localOnly = value; await save(); } },
       async import(value) {
+        if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
         requireWritable(); generation++;
         if (!value || value.schema_version !== 1 || !value.contexts) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
         const previous = copy(data), next = copy(value);
@@ -303,6 +346,7 @@
         data = next; await save();
       },
       async selectReplica(id, current) {
+        writableNote(id);
         requireWritable(); const item = entry(id);
         if (!item || JSON.stringify(item.base.inventory_revision_ids) !== JSON.stringify(current.inventory_revision_ids)
           || item.base.head_version !== current.head_version || item.base.head_revision_id !== current.head_revision_id) throw new Error('비교본이 변경되었습니다. 다시 선택하세요.');

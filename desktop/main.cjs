@@ -89,6 +89,9 @@ function registerDesktopStorageHandlers() {
 
 function updateRendererStoreValue(key, value, options) {
   assertRendererStoreKey(key);
+  if (options && Object.hasOwn(options, "expectedValue")) {
+    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
+  }
   if (key === "nownote.library.v1" || key === "nownote.history.v1") {
     if (!options || !Object.hasOwn(options, "expectedValue")) throw new Error("Library writes require an expected value");
     return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
