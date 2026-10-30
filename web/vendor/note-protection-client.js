@@ -52,6 +52,18 @@
       return clone(record);
     }
     return {sealJournal,replaceJournal,
+      async initializeJournal(scope,value,password,operationId,journal) {
+        scope=clone(scope);const ctx=clone(context());active(ctx,scope);
+        const data=journal.export(),key=globalThis.NowNoteHistory.key(scope);
+        if(data?.schema_version!==1 || !data.contexts)fail('journal_shape');
+        if(data.contexts[key]?.notes?.[scope.local_id]!==undefined)fail('copy_changed');
+        const record=await sealJournal(scope,value,password,operationId);active(ctx,scope);
+        const next=clone(data);next.contexts[key] ||= {notes:{}};
+        next.contexts[key].notes[scope.local_id]=record;
+        await journal.replaceProtectionStore(data,next,{active:()=>active(ctx,scope)});active(ctx,scope);
+        if(!eq(journal.export().contexts?.[key]?.notes?.[scope.local_id],record))fail('journal_readback');
+        return clone(record);
+      },
       async copies(scope) {
         confirmation = null;
         const ctx = clone(context()), records = [], snapshots = [];

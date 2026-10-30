@@ -50,6 +50,24 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===5){
+    assert(!noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.[target],'fresh_profile_inherited_journal');
+    await loadServerSharedNotes();await settle();state.selectedTreeId=target;render();await open();
+    await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    const initial=noteHistory.export().contexts[NowNoteHistory.key(noteHistoryContext())].notes[target];
+    assert(initial.protection_record&&!JSON.stringify(initial).includes('HTTP-QA-EDITED-'),'fresh_editor_journal_not_ciphertext');
+    const editor=dialog().querySelector('.protection-draft');assert(editor.value==='HTTP-QA-EDITED-'+run+'\n','fresh_editor_wrong_current');
+    editor.value='HTTP-QA-FRESH-EDITOR-'+run+'\n';editor.dispatchEvent(new Event('input',{bubbles:true}));await drive(()=>status().includes('초안 저장됨'),'fresh_draft');
+    await action('save',()=>status().includes('전환 준비 가능'));
+    const after=await inspectNoteProtection();assert(after.catalog.context.base.head_version===6,'fresh_editor_save_not_single_write');
+    const descriptor=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
+    const current=await noteProtectionReader.read(after.scope,after.catalog,descriptor,async()=>password);
+    assert(current.value.note.content==='HTTP-QA-FRESH-EDITOR-'+run+'\n','fresh_editor_server_meaning_changed');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-FRESH-EDITOR-'+run),'fresh_editor_plaintext_persisted');
+    const otherNote=await request('/api/v2/notes/current?'+query(other));assert(otherNote.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'fresh_editor_changed_other');
+    emit({stage:'fresh_profile_cipher_journal_editor_saved',owner:a.owner,local_id:target,phase:'complete',server_instance_id:after.scope.instance});
+    clearWebSession();return {ok:true,mode:config.mode,phase:5,serverEpoch:2,headVersion:6,freshProfileJournalInitialized:true,otherPreserved:true};
+  }
   if(config.phase===1) {
     const original=await request('/api/v2/notes/current?'+query(target)),otherCurrent=await request('/api/v2/notes/current?'+query(other));
     const baseline=structuredClone(original.snapshot.note);delete baseline.content;

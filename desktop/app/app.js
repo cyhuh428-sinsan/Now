@@ -2789,6 +2789,18 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       return clone(record);
     }
     return {sealJournal,replaceJournal,
+      async initializeJournal(scope,value,password,operationId,journal) {
+        scope=clone(scope);const ctx=clone(context());active(ctx,scope);
+        const data=journal.export(),key=globalThis.NowNoteHistory.key(scope);
+        if(data?.schema_version!==1 || !data.contexts)fail('journal_shape');
+        if(data.contexts[key]?.notes?.[scope.local_id]!==undefined)fail('copy_changed');
+        const record=await sealJournal(scope,value,password,operationId);active(ctx,scope);
+        const next=clone(data);next.contexts[key] ||= {notes:{}};
+        next.contexts[key].notes[scope.local_id]=record;
+        await journal.replaceProtectionStore(data,next,{active:()=>active(ctx,scope)});active(ctx,scope);
+        if(!eq(journal.export().contexts?.[key]?.notes?.[scope.local_id],record))fail('journal_readback');
+        return clone(record);
+      },
       async copies(scope) {
         confirmation = null;
         const ctx = clone(context()), records = [], snapshots = [];
@@ -3152,7 +3164,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     return new Promise(resolve=>{
       let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
-      const label=document.createElement('label'); label.textContent=(epoch==='write-bundle'?'저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const label=document.createElement('label'); label.textContent=(epoch==='write-bundle'?'저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
@@ -8108,6 +8120,7 @@ async function resumeNoteProtection(id,password,build,resolveKey,guard=protectio
 }
 
 async function editProtectedCurrent(info,resolveKey) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;
   guard();noteProtectionEditSession=null;
   if(info.pending || !catalog || catalog.context.base.identity_state!=="coherent" || !catalog.context.base.current_exists) throw Error("note_protection:editor_current_required");
@@ -8119,10 +8132,17 @@ async function editProtectedCurrent(info,resolveKey) {
   const content=await noteProtectionReader.read(scope,catalog,body,resolveKey);guard();
   const note=structuredClone(NowNoteProtectionProtocol.validateSnapshot(current.value).note);
   if(note.owner_id!==scope.owner || note.local_id!==scope.local_id || note.content!==content.value) throw Error("note_protection:editor_source_mismatch");
-  const record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id];
-  if(!record?.protection_record) throw Error("note_protection:local_journal_required");
-  const password=await resolveKey({representation_epoch:"local:"+record.protection_record.operation_id,output:false});guard();
-  const value=await noteProtectionClient.openArchive(scope,record,password);guard();
+  let record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id],password,value;
+  if(record===undefined){
+    password=await resolveKey({representation_epoch:"local:new",output:true});guard();
+    value={raw:structuredClone(note),draft:structuredClone(note),base:{...structuredClone(catalog.context.base),replica_count:catalog.context.base.inventory_revision_ids.length},
+      revisions:[],outbox:[],receipts:[],conflict:null,dirty:false,replicaSelected:catalog.context.base.inventory_revision_ids.length<2,protectionScope:scope};
+    record=await noteProtectionClient.initializeJournal(scope,value,password,crypto.randomUUID(),noteHistory);guard();
+  }else{
+    if(!record?.protection_record)throw Error("note_protection:local_journal_required");
+    password=await resolveKey({representation_epoch:"local:"+record.protection_record.operation_id,output:false});guard();
+    value=await noteProtectionClient.openArchive(scope,record,password);guard();
+  }
   for(const part of [value.raw,value.draft]) {
     NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:part});
     if(part.owner_id!==scope.owner || part.local_id!==scope.local_id) throw Error("note_protection:editor_scope");

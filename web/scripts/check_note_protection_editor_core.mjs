@@ -21,7 +21,8 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   box.noteProtectionClient=box.NowNoteProtectionClient.create({context:()=>({...scope,auth:'token'}),stores:()=>[]});
   box.noteProtectionReader={read:async(s,c,d)=>({value:d.key.kind==='note_body'?note.content:{schema_version:1,note:structuredClone(note)}})};
   box.noteProtectionEditSession=null;
-  const info={scope,pending:null,catalog:{catalog_digest:'a'.repeat(64),context:{base:{identity_state:'coherent',current_exists:true},current_mode:'protected',selected_physical_note_id:7},entries:[{key:{kind:'inventory_snapshot',id:'7',slot:'current'}},{key:{kind:'note_body',id:'7',slot:'content'}}]}};
+  box.noteProtectionInternalEnabled=true;
+  const info={scope,pending:null,catalog:{catalog_digest:'a'.repeat(64),context:{base:{identity_state:'coherent',current_exists:true,head_version:2,head_revision_id:uid(2),crypto_epoch:2,history_generation:2,inventory_revision_ids:[uid(2)]},current_mode:'protected',selected_physical_note_id:7},entries:[{key:{kind:'inventory_snapshot',id:'7',slot:'current'}},{key:{kind:'note_body',id:'7',slot:'content'}}]}};
   vm.runInContext(tail.slice(0,end.index)+'\nglobalThis.edit=editProtectedCurrent;',box);
   assert.equal((await box.edit(info,async()=> 'password')).content,note.content);passed++;
   assert.equal(JSON.stringify(record).includes(note.content),false);
@@ -62,5 +63,12 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal(intent.local_journal.draft.content,draft.content);
   assert.equal(Object.hasOwn(intent,'archiveKey'),false);
   assert.equal(Q.canonicalJson(intent.local_record),Q.canonicalJson(persisted));passed++;
+  box.noteHistory=H.create({context:()=>({...scope,enabled:true,auth:'token'}),request:async()=>{throw Error('no_network');},write:async data=>{assert.equal(JSON.stringify(data).includes(note.content),false);}});
+  const initialized=await box.edit(info,async()=> 'new-local-key');
+  assert.equal(initialized.content,note.content);
+  const fresh=box.noteHistory.export().contexts[H.key(scope)].notes.memo;
+  assert.equal((await box.noteProtectionClient.openArchive(scope,fresh,'new-local-key')).raw.content,note.content);passed++;
+  box.noteProtectionInternalEnabled=false;
+  await assert.rejects(box.edit(info,async()=> 'new-local-key'),/not_enabled/);passed++;
 }
 console.log(`Protected editor open: ${passed} PASS (actual function; synthetic typed source/storage)`);

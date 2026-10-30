@@ -70,4 +70,15 @@ assert.deepEqual(delayedJournal.export(),lockedBefore,'cancelled protected CAS m
 delete removed.contexts[H.key(scope)].notes.memo;
 await journal.replaceProtectionStore(previous,removed);
 await assert.rejects(client.replaceJournal(scope,sealed,sealed,journal),/copy_changed/);
+assert.equal(typeof client.initializeJournal,'function','a new device must initialize only a ciphertext journal via existing CAS');
+const initialized=await client.initializeJournal(scope,value,'password',uid(11),journal);
+assert.equal((await client.openArchive(scope,initialized,'password')).draft.content,note.content);
+assert.equal(bucket().other.raw.content,'PRESERVE');
+assert.equal(JSON.stringify(journal.export()).includes(note.content),false);
+await assert.rejects(client.initializeJournal(scope,value,'password',uid(12),journal),/copy_changed/);
+const emptyJournal=H.create({context:()=>ctx,request:async()=>{throw Error('no_network');},write:async raw=>{assert.equal(JSON.stringify(raw).includes(note.content),false);}});
+await client.initializeJournal(scope,value,'password',uid(12),emptyJournal);
+assert.ok(emptyJournal.export().contexts[H.key(scope)].notes.memo.protection_record);
+const plainJournal=H.create({initial:{schema_version:1,contexts:{[H.key(scope)]:{notes:{memo:value}}}},context:()=>ctx,request:async()=>{},write:async()=>{throw Error('must_not_overwrite_existing');}});
+await assert.rejects(client.initializeJournal(scope,value,'password',uid(13),plainJournal),/copy_changed/);
 console.log('Protected journal CAS: ciphertext-only, original entry CAS, rollback, account/target scope and other-note preservation PASS (synthetic storage)');
