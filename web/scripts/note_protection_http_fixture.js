@@ -28,7 +28,11 @@
   }
   const ready=await request('/health/ready','GET',undefined,{'Content-Type':'application/json'});
   assert(ready.status==='ready','renderer_route_not_ready');
-  if(config.probe)return {ok:true,mode:config.mode,phase:config.phase,readOnlyProbe:true};
+  if(config.probe){
+    const textarea=document.createElement('textarea');textarea.value='QA\r\n';
+    assert(textarea.value==='QA\n','textarea_newline_contract_changed');
+    return {ok:true,mode:config.mode,phase:config.phase,readOnlyProbe:true,textareaCRLFNormalizesToLF:true};
+  }
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;
@@ -424,7 +428,7 @@
       assert(NowNoteProtectionProtocol.canonicalJson(saved.comparison.source.draft)===originalDraft&&saved.comparison.choice===choice,'pending_resolution_lost_original_draft');
       assert(saved.receipts.at(-1).purpose==='mixed_note_write','pending_resolution_receipt_absent');
       await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
-      assert(dialog().querySelector('.protection-draft').value===expected,'pending_resolution_editor_still_blocked');
+      assert(dialog().querySelector('.protection-draft').value===expected.replace(/\r\n/g,'\n'),'pending_resolution_editor_still_blocked');
       emit({stage:'pending_resolution_'+choice+'_complete',owner:a.owner,local_id:target,operation_id:saved.receipts.at(-1).operation_id,phase:'complete'});
     }
     button('lock').click();assert(!comparison.textContent&&comparison.classList.contains('hidden'),'locked_comparison_retained_plaintext');
