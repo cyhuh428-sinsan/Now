@@ -2749,7 +2749,42 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (!eq(ctx,now) || !same(now,scope)) fail('confirmation_changed');
       return true;
     }
-    return {
+    async function sealJournal(scope,value,password,operationId) {
+      scope=clone(scope);value=clone(value);const ctx=clone(context());active(ctx,scope);
+      if(!password || typeof operationId!=='string' || !operationId) fail('journal_key');
+      const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison'];
+      if(!value || Object.keys(value).some(k=>!allowed.includes(k)) || !Array.isArray(value.base?.inventory_revision_ids)
+        || !['revisions','outbox','receipts'].every(k=>Array.isArray(value[k]))) fail('journal_shape');
+      const check=note=>{
+        Q().validateSnapshot({schema_version:1,note});
+        if(note.owner_id!==scope.owner || note.local_id!==scope.local_id) fail('journal_scope');
+      };
+      check(value.raw);check(value.draft);
+      for(const revision of value.revisions)check(revision.snapshot?.note);
+      for(const op of [...value.outbox,...(value.completed_outbox||[]),...(value.archived_outbox||[])]) {
+        if(op.body && (op.body.owner_id!==scope.owner || op.body.local_id!==scope.local_id)) fail('journal_scope');
+        if(op.restored_snapshot)check(op.restored_snapshot.note);
+      }
+      const archive={schema_version:1,scope,operation_id:operationId,value};
+      const ciphertext=await Q().encryptContent(JSON.stringify(archive),password);active(ctx,scope);
+      const record={protection_record:{schema_version:1,scope,operation_id:operationId,ciphertext}};
+      P().protectedRecord(record);return record;
+    }
+    async function replaceJournal(scope,expected,record,journal) {
+      scope=clone(scope);expected=clone(expected);record=clone(record);
+      const ctx=clone(context());active(ctx,scope);
+      if(!P().protectedRecord(expected) || !same(expected.protection_record.scope,scope)
+        || !P().protectedRecord(record) || !same(record.protection_record.scope,scope)) fail('journal_scope');
+      const data=journal.export(),key=globalThis.NowNoteHistory.key(scope),current=data.contexts?.[key]?.notes?.[scope.local_id];
+      if(current===undefined)fail('copy_changed');
+      if(eq(current,record))return clone(record);
+      if(!eq(current,expected))fail('copy_changed');
+      const next=clone(data);next.contexts[key].notes[scope.local_id]=record;
+      active(ctx,scope);await journal.replaceProtectionStore(data,next);active(ctx,scope);
+      if(!eq(journal.export().contexts?.[key]?.notes?.[scope.local_id],record))fail('journal_readback');
+      return clone(record);
+    }
+    return {sealJournal,replaceJournal,
       async copies(scope) {
         confirmation = null;
         const ctx = clone(context()), records = [], snapshots = [];
@@ -2787,33 +2822,11 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         confirmation = null;
       },
       async saveJournal(scope,expected,value,password,operationId,journal) {
-        scope=clone(scope);expected=clone(expected);value=clone(value);
+        scope=clone(scope);expected=clone(expected);
         const ctx=clone(context());active(ctx,scope);
-        if(!password || typeof operationId!=='string' || !operationId) fail('journal_key');
         if(!P().protectedRecord(expected) || !same(expected.protection_record.scope,scope)) fail('journal_scope');
-        const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison'];
-        if(!value || Object.keys(value).some(k=>!allowed.includes(k)) || !Array.isArray(value.base?.inventory_revision_ids)
-          || !['revisions','outbox','receipts'].every(k=>Array.isArray(value[k]))) fail('journal_shape');
-        const check=note=>{
-          Q().validateSnapshot({schema_version:1,note});
-          if(note.owner_id!==scope.owner || note.local_id!==scope.local_id) fail('journal_scope');
-        };
-        check(value.raw);check(value.draft);
-        for(const revision of value.revisions)check(revision.snapshot?.note);
-        for(const op of [...value.outbox,...(value.completed_outbox||[]),...(value.archived_outbox||[])]) {
-          if(op.body && (op.body.owner_id!==scope.owner || op.body.local_id!==scope.local_id)) fail('journal_scope');
-          if(op.restored_snapshot)check(op.restored_snapshot.note);
-        }
-        const archive={schema_version:1,scope,operation_id:operationId,value};
-        const ciphertext=await Q().encryptContent(JSON.stringify(archive),password);active(ctx,scope);
-        const record={protection_record:{schema_version:1,scope,operation_id:operationId,ciphertext}};
-        P().protectedRecord(record);
-        const data=journal.export(),key=globalThis.NowNoteHistory.key(scope),current=data.contexts?.[key]?.notes?.[scope.local_id];
-        if(!eq(current,expected)) fail('copy_changed');
-        const next=clone(data);next.contexts[key].notes[scope.local_id]=record;
-        active(ctx,scope);await journal.replaceProtectionStore(data,next);active(ctx,scope);
-        if(!eq(journal.export().contexts?.[key]?.notes?.[scope.local_id],record)) fail('journal_readback');
-        return clone(record);
+        const record=await sealJournal(scope,value,password,operationId);active(ctx,scope);
+        return replaceJournal(scope,expected,record,journal);
       },
       async openArchive(scope,record,password) {
         const ctx = clone(context());
