@@ -54,6 +54,39 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===11){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,catalog=info.catalog,Q=NowNoteProtectionProtocol,A=NowNoteProtectionAnalysis;
+    const descriptor=catalog.entries.find(d=>d.key.kind==='note_body'&&d.key.id===String(catalog.context.selected_physical_note_id));
+    assert(descriptor&&!descriptor.is_null,'analysis_source_missing');
+    const access={schema_version:3,owner_id:a.owner,local_id:target,device_id:a.device,server_instance_id:scope.instance};
+    const claim={...access,mutation_id:crypto.randomUUID(),source_context:{server_instance_id:scope.instance,base:catalog.context,catalog_digest:catalog.catalog_digest},source_keys:[{descriptor}],job_type:'memo_summary',prompt_version:'single_source_v1',source_job_id:null,execution_route:'client_provider',client_execution_confirmed:true};
+    const prefix='/api/v2/notes/mixed-analysis-claims';
+    const created=await request(prefix,'POST',claim);await A.validateExecution(scope,claim,created);
+    assert(created.state==='client_pending'&&created.dispatch_receipt===null,'analysis_claim_dispatched');
+    const query=new URLSearchParams({...access,execution_id:created.execution_id});
+    const observed=await request(prefix+'/status?'+query);await A.validateExecution(scope,claim,observed);
+    assert(Q.canonicalJson(created)===Q.canonicalJson(observed),'analysis_status_changed_claim');
+    const chunks=[];let totalBytes=null,totalChunks=null;
+    for(let index=0;;index++){
+      const args=new URLSearchParams({...access,execution_id:created.execution_id,source_digest:created.source_digest,kind:descriptor.key.kind,representation_id:descriptor.key.id,slot:descriptor.key.slot,source_etag:descriptor.representation_etag,chunk_index:index});
+      const value=await request(prefix+'/source?'+args);
+      assert(Object.keys(value).sort().join(',')==='chunk_index,data_base64,descriptor,execution_id,schema_version,source_digest,total_bytes,total_chunks','analysis_source_fields');
+      assert(value.schema_version===3&&value.execution_id===created.execution_id&&value.source_digest===created.source_digest&&Q.canonicalJson(value.descriptor)===Q.canonicalJson(descriptor),'analysis_source_binding');
+      if(index===0){totalBytes=value.total_bytes;totalChunks=value.total_chunks;assert(Number.isSafeInteger(totalBytes)&&totalBytes>=1&&totalChunks===Math.ceil(totalBytes/262144),'analysis_source_frame');}
+      assert(value.total_bytes===totalBytes&&value.total_chunks===totalChunks&&value.chunk_index===index,'analysis_source_frame_changed');
+      const bytes=Uint8Array.from(atob(value.data_base64),c=>c.charCodeAt(0));assert(bytes.length===Math.min(262144,totalBytes-index*262144),'analysis_source_chunk_length');chunks.push(bytes);
+      if(index+1===totalChunks)break;
+    }
+    const bytes=new Uint8Array(totalBytes);let offset=0;for(const c of chunks){bytes.set(c,offset);offset+=c.length;}
+    assert(await Q.sha256(bytes)===descriptor.ciphertext_sha256,'analysis_source_cipher_changed');
+    const cancelled=await request(prefix+'/cancel','POST',{...access,execution_id:created.execution_id,run_version:observed.run_version,lease_version:observed.lease_version});
+    await A.validateExecution(scope,claim,cancelled);assert(cancelled.state==='cancelled'&&cancelled.dispatch_receipt===null,'analysis_cancel_not_terminal');
+    const after=await inspectNoteProtection();assert(Q.canonicalJson(after.catalog)===Q.canonicalJson(catalog),'analysis_metadata_changed_note');
+    emit({stage:'analysis_claim_source_cancel_verified',owner:a.owner,local_id:target,operation_id:created.execution_id});
+    button('lock').click();clearWebSession();
+    return {ok:true,mode:config.mode,phase:11,actualMXClaimSourceCancel:true,currentCatalogUnchanged:true,providerCalls:0,journalExecution:'not implemented'};
+  }
   if(config.phase===10){
     assert(!findTreeNode(state.data.tree,target),'related_scope_inherited_tree');
     assert(!Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target),'related_scope_inherited_marker');
