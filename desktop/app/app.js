@@ -8428,6 +8428,38 @@ async function resumeNoteProtection(id,password,build,resolveKey,guard=protectio
   } finally { protectionApplying = false; }
 }
 
+async function prepareProtectedImport(info,resolveKey) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=structuredClone(info.catalog);
+  guard();
+  if(info.pending || !catalog || catalog.context.base.crypto_epoch<1)throw Error("note_protection:import_catalog_required");
+  if(noteProtectionEditSession) {await noteProtectionEditSession.queue;guard();}
+  await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
+  if(serverSyncRunning || noteHistory.legacyPending())throw Error("note_protection:original_request_unconfirmed");
+  if(noteHistory.failure())throw Error(noteHistory.failure());
+  const record=structuredClone(noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id]);
+  if(!record?.protection_record)throw Error("note_protection:local_journal_required");
+  const archiveKey=await resolveKey({representation_epoch:"local:"+record.protection_record.operation_id,output:false});guard();
+  const value=await noteProtectionClient.openArchive(scope,record,archiveKey);guard();
+  const branches=[];
+  for(const revision of value.revisions.filter(r=>!r.imported && !r.server_ref)) {
+    const ops=value.outbox.filter(op=>op.revision_id===revision.revision_id);
+    if(ops.some(op=>op.sent!==false))throw Error("note_protection:original_request_unconfirmed");
+    const actors=new Set(revision.origin_device_id?[revision.origin_device_id]:[]);
+    for(const op of ops) {
+      if(op.body?.owner_id!==scope.owner || op.body?.local_id!==scope.local_id || !op.body.device_id)
+        throw Error("note_protection:import_origin_device_unavailable");
+      actors.add(op.body.device_id);
+    }
+    if(actors.size!==1)throw Error("note_protection:import_origin_device_unavailable");
+    const snapshot=structuredClone(NowNoteProtectionProtocol.validateSnapshot(revision.snapshot));
+    if(snapshot.note.owner_id!==scope.owner || snapshot.note.local_id!==scope.local_id)throw Error("note_protection:import_scope");
+    branches.push({revision_id:revision.revision_id,parent_ref:structuredClone(revision.parent_ref),
+      origin_device_id:[...actors][0],snapshot,representation:structuredClone(revision.representation||null)});
+  }
+  guard();return {scope,catalog,record,value,branches};
+}
+
 async function editProtectedCurrent(info,resolveKey) {
   if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;
