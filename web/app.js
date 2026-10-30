@@ -3116,9 +3116,9 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <dl class="protection-scope"></dl>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
     <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button></section>
-    <div class="history-actions"><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
+    <div class="history-actions"><button type="button" class="secondary-btn" data-action="create">현재 메모 생성</button><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
-    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
+    <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><label>본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
@@ -3129,7 +3129,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
-    state.editorNote=null;state.composing=false;$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
+    state.editorNote=null;state.composing=false;$('.protection-title').value='';$('.protection-draft').value='';$('.protection-editor').classList.add('hidden');$('.protection-plain').classList.remove('hidden');
     askCancel?.(); api.lock();
   }
   function valid(token) {
@@ -3140,7 +3140,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const unlocked = api.canMutate(), info=state.info;
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
     $('[name="target"]').disabled=state.busy;
-    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','save','restore','delete']) {
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','save','restore','delete','create']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
@@ -3152,7 +3152,10 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists
       || row?.kind!=='typed' || !['revision_snapshot','offline_snapshot'].includes(d?.key.kind) || d.is_null || !d.revision_ref;
     $('[data-action="delete"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
+    $('[data-action="create"]').hidden=!info.catalog || info.catalog.context.base.current_exists;
+    $('[data-action="create"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog || info.catalog.context.base.current_exists;
     $('.protection-draft').readOnly=state.busy;
+    $('.protection-title').readOnly=state.busy;
     $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
     $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
@@ -3228,9 +3231,9 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if(name==='edit') {
-          const note=await api.edit(state.info,resolveKey(token));
-          if(valid(token)){state.editorNote=note;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
+        if(name==='edit'||name==='create') {
+          const note=await api[name](state.info,resolveKey(token));
+          if(valid(token)){state.editorNote=note;$('.protection-title').value=note.title;$('.protection-draft').value=note.content;$('.protection-editor').classList.remove('hidden');$('.protection-plain').classList.add('hidden');status('편집 중');}
         } else if(name==='save') {
           if(!state.editorNote || state.composing)throw Error('입력을 마친 뒤 저장하세요.');
           const note=structuredClone(state.editorNote),password=await ask('write-bundle',true,token);
@@ -3266,12 +3269,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   function draftInput(event) {
     if(!state.editorNote || state.busy || state.composing || event?.isComposing)return;
     state.editorNote.content=$('.protection-draft').value;
+    state.editorNote.title=$('.protection-title').value;
     const token=state.run;status('초안 저장 중');
     void api.draft(state.info,structuredClone(state.editorNote)).then(()=>{if(valid(token))status('초안 저장됨');},error=>{if(valid(token))status(error.message||'초안 저장 실패');});
   }
-  $('.protection-draft').addEventListener('input',draftInput);
-  $('.protection-draft').addEventListener('compositionstart',()=>{state.composing=true;controls();});
-  $('.protection-draft').addEventListener('compositionend',()=>{state.composing=false;draftInput();controls();});
+  for(const editor of [$('.protection-draft'),$('.protection-title')]){
+    editor.addEventListener('input',draftInput);
+    editor.addEventListener('compositionstart',()=>{state.composing=true;controls();});
+    editor.addEventListener('compositionend',()=>{state.composing=false;draftInput();controls();});
+  }
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   $('[name="representation"]').addEventListener('change',controls);
   dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
@@ -8157,6 +8163,39 @@ async function editProtectedCurrent(info,resolveKey) {
   return structuredClone(value.dirty?value.draft:note);
 }
 
+async function createProtectedCurrent(info,resolveKey) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;guard();
+  if(info.pending || !catalog || catalog.context.base.current_exists || catalog.context.base.crypto_epoch<1
+    || catalog.context.base.identity_state==="ambiguous")throw Error("note_protection:create_absent_required");
+  if(noteProtectionEditSession){await noteProtectionEditSession.queue;guard();}
+  let record=noteHistory.export().contexts?.[NowNoteHistory.key(scope)]?.notes?.[scope.local_id],value,password;
+  const stamp=new Date().toISOString().replace("Z","000Z");
+  let note={id:null,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,note_type:"tree",title:"새 메모",content:"",
+    parent_local_id:null,level:1,tags:null,source:"web-tree",deleted_at:null,created_at:stamp,updated_at:stamp,client_updated_at:null};
+  if(record!==undefined){
+    if(!record?.protection_record)throw Error("note_protection:local_journal_required");
+    password=await resolveKey({representation_epoch:"local:"+record.protection_record.operation_id,output:false});guard();
+    value=await noteProtectionClient.openArchive(scope,record,password);guard();
+    for(const part of [value.raw,value.draft]){
+      NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:part});
+      if(part.owner_id!==scope.owner || part.local_id!==scope.local_id)throw Error("note_protection:editor_scope");
+    }
+    if(!Array.isArray(value.outbox) || value.outbox.length || value.conflict)throw Error("note_protection:offline_import_required");
+    if(value.dirty){if(!value.localOnly || value.draft.id!==null)throw Error("note_protection:unsent_draft");note=structuredClone(value.draft);}
+    value.draft=structuredClone(note);value.dirty=true;value.localOnly=true;
+    value.base={...structuredClone(catalog.context.base),replica_count:0};
+    record=await noteProtectionClient.saveJournal(scope,record,value,password,crypto.randomUUID(),noteHistory);guard();
+  }else{
+    password=await resolveKey({representation_epoch:"local:new",output:true});guard();
+    value={raw:structuredClone(note),draft:structuredClone(note),base:{...structuredClone(catalog.context.base),replica_count:0},
+      revisions:[],outbox:[],receipts:[],conflict:null,dirty:true,localOnly:true,replicaSelected:true,protectionScope:scope};
+    record=await noteProtectionClient.initializeJournal(scope,value,password,crypto.randomUUID(),noteHistory);guard();
+  }
+  noteProtectionEditSession={scope,record:structuredClone(record),value,archiveKey:password,queue:Promise.resolve(),base:structuredClone(catalog.context),catalogDigest:catalog.catalog_digest,create:true};
+  return structuredClone(note);
+}
+
 async function buildProtectedWriteWork(scope,prepared,intent,password,resolveKey) {
   const work=await NowNoteProtectionClient.buildWriteWork(scope,prepared,intent,password,noteProtectionRemote,[],d=>resolveKey({...d,output:false}));
   work.local_journal=structuredClone(intent.local_journal);return work;
@@ -8184,7 +8223,8 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
     || session.catalogDigest!==info.catalog.catalog_digest)throw Error("note_protection:editor_scope");
   const note=structuredClone(NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note:input}).note);
   if(note.owner_id!==scope.owner || note.local_id!==scope.local_id)throw Error("note_protection:editor_scope");
-  if(!["put","delete","restore"].includes(operation) || (operation==="restore")!==Boolean(restore_source))throw Error("note_protection:write_operation");
+  if(session.create){if(operation!=="put")throw Error("note_protection:write_operation");operation="create";}
+  if(!["put","delete","restore","create"].includes(operation) || (operation==="restore")!==Boolean(restore_source))throw Error("note_protection:write_operation");
   await session.queue;guard();
   if(noteProtectionEditSession!==session)throw Error("note_protection:editor_scope");
   await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
@@ -8192,9 +8232,11 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
   const catalog=info.catalog,selected=String(catalog.context.selected_physical_note_id);
   const inventory=catalog.entries.find(d=>d.key.kind==="inventory_snapshot"&&d.key.id===selected);
   const body=catalog.entries.find(d=>d.key.kind==="note_body"&&d.key.id===selected);
-  if(!inventory || !body)throw Error("note_protection:editor_source_missing");
-  const original=await noteProtectionReader.read(scope,catalog,inventory,resolveKey);guard();
-  const source_origins=[{key:inventory.key,descriptor:inventory,origin:original.origin}];
+  const absent=!catalog.context.base.current_exists;
+  if(absent!==(operation==="create"))throw Error("note_protection:write_operation");
+  if(!absent && (!inventory || !body))throw Error("note_protection:editor_source_missing");
+  const source_origins=[];
+  if(!absent){const original=await noteProtectionReader.read(scope,catalog,inventory,resolveKey);guard();source_origins.push({key:inventory.key,descriptor:inventory,origin:original.origin});}
   if(restore_source){
     const d=restore_source.descriptor;
     if(!d || !["revision_snapshot","offline_snapshot"].includes(d.key.kind) || d.is_null || !d.revision_ref
@@ -8213,8 +8255,8 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
   const intent={schema_version:3,purpose:"mixed_note_write",note,local_journal:structuredClone(session.value),local_record:structuredClone(session.record),
     source_origins,prepare:{
       mutation_id:crypto.randomUUID(),base:structuredClone(catalog.context),expected_catalog_digest:catalog.catalog_digest,
-      operation,target_current_mode:catalog.context.current_mode,
-      selection:{physical_note_id:catalog.context.selected_physical_note_id,inventory_revision_ref:inventory.revision_ref,
+      operation,target_current_mode:absent?"protected":catalog.context.current_mode,
+      selection:absent?null:{physical_note_id:catalog.context.selected_physical_note_id,inventory_revision_ref:inventory.revision_ref,
         note_representation_etag:body.representation_etag,inventory_representation_etag:inventory.representation_etag},
       replica_policy:"selected_head_only",structure:Object.fromEntries(["note_type","parent_local_id","level","deleted_at"].map(k=>[k,note[k]])),parent_context,restore_source:structuredClone(restore_source),
     }};
@@ -8302,7 +8344,7 @@ async function openNoteProtection() {
     },
     phaseLabel:phase=>({drain_pending:"정착 준비 재개 필요",draining:"연결 실행 정착 대기",preparing:"전환 준비 확인 필요",promoted:"원문 검증·암호화 필요",
       bundled:"암호문 전송 재개 필요",prepared:"게시 준비 완료",committing:"서버 결과 확인 필요",server_committed:"서버 완료 · 이 기기 적용 필요",applying:"서버 완료 · 이 기기 적용 필요",complete:"이 기기 적용 완료"})[phase] || "보호 상태 확인 필요",
-    edit:editProtectedCurrent,draft:saveProtectedDraft,write:writeProtectedCurrent,mutate:mutateProtectedCurrent,
+    edit:editProtectedCurrent,create:createProtectedCurrent,draft:saveProtectedDraft,write:writeProtectedCurrent,mutate:mutateProtectedCurrent,
     read:async(info,row,resolveKey)=>{
       let value;
       if(row.kind==="archive") value=await noteProtectionClient.openArchive(info.scope,row.record,await resolveKey({representation_epoch:"local:"+row.record.protection_record.operation_id,output:false}));

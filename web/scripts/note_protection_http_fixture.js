@@ -50,6 +50,41 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===6){
+    const source=await request('/api/v2/notes/revision?'+query(target,{revision_kind:'offline_branch',revision_id:config.branchId}));
+    const baseline=await identity();assert(baseline.identity_state==='branch_only'&&!baseline.current_exists,'create_fixture_has_current');
+    noteHistoryProjection=true;
+    try{await noteHistory.track(source.snapshot.note,{...baseline,snapshot:source.snapshot,replica_count:0},{localOnly:true});noteHistoryProject(source.snapshot.note);}finally{noteHistoryProjection=false;}
+    state.selectedTreeId=target;render();persist();await settle();await open();
+    const boxes=[...dialog().querySelectorAll('.protection-copies input')];boxes.forEach(e=>e.checked=true);
+    if(boxes.length)await action('confirm',()=>!dialog().querySelector('.protection-copies input'));
+    await action('conversion',()=>Object.values(noteHistory.protectionOperations()).length===1&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    const before=await inspectNoteProtection();assert(before.catalog.context.current_mode==='absent','converted_branch_created_current');
+    const branch=before.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===config.branchId);
+    assert(branch,'converted_original_branch_absent');
+    const original=await noteProtectionReader.read(before.scope,before.catalog,branch,async()=>password);
+    await action('create',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
+    const title=dialog().querySelector('.protection-title'),editor=dialog().querySelector('.protection-draft');
+    title.value='HTTP QA created current';editor.value='HTTP-QA-CREATED-'+run+'\n';editor.dispatchEvent(new Event('input',{bubbles:true}));
+    await drive(()=>status().includes('초안 저장됨'),'create_draft');
+    emit({stage:'editor_ready',owner:a.owner,local_id:target});
+    for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));assert(globalThis.__HTTP_CAPTURE_DONE__===true,'create_editor_capture_failed');
+    await action('save',()=>Object.values(noteHistory.protectionOperations()).length===2&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    const after=await inspectNoteProtection();assert(after.catalog.context.base.head_version===2&&after.catalog.context.current_mode==='protected','create_current_not_published_once');
+    const currentDescriptor=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot');
+    const current=await noteProtectionReader.read(after.scope,after.catalog,currentDescriptor,async()=>password);
+    assert(current.value.note.content==='HTTP-QA-CREATED-'+run+'\n'&&current.value.note.title==='HTTP QA created current','created_current_meaning_changed');
+    assert(current.value.note.id!==null&&current.value.note.device_id===a.device,'created_current_server_fields_missing');
+    const kept=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===config.branchId);
+    assert(NowNoteProtectionProtocol.canonicalJson(kept)===NowNoteProtectionProtocol.canonicalJson(branch),'create_rewrote_original_branch_descriptor');
+    const preserved=await noteProtectionReader.read(after.scope,after.catalog,kept,async()=>password);
+    assert(NowNoteProtectionProtocol.canonicalJson(preserved.value)===NowNoteProtectionProtocol.canonicalJson(original.value),'create_changed_original_branch_full15');
+    const beforeSlot=after.catalog.entries.find(d=>d.key.kind==='revision_before'&&d.key.id===after.catalog.context.base.head_revision_id);assert(beforeSlot?.is_null,'create_before_not_null');
+    const otherNote=await request('/api/v2/notes/current?'+query(other));assert(otherNote.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'create_changed_other');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-CREATED-'+run),'create_plaintext_persisted');
+    for(const marker of Object.values(noteHistory.protectionOperations())){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:'branch_create_original_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:after.scope.instance});}
+    clearWebSession();return {ok:true,mode:config.mode,phase:6,serverEpoch:1,headVersion:2,createFromBranchOnly:true,originalBranchFull15AndCipherPreserved:true,beforeNull:true,otherPreserved:true};
+  }
   if(config.phase===5){
     assert(!noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.[target],'fresh_profile_inherited_journal');
     await loadServerSharedNotes();await settle();state.selectedTreeId=target;render();await open();

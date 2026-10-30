@@ -75,5 +75,20 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal((await box.noteProtectionClient.openArchive(scope,fresh,'new-local-key')).raw.content,note.content);passed++;
   box.noteProtectionInternalEnabled=false;
   await assert.rejects(box.edit(info,async()=> 'new-local-key'),/not_enabled/);passed++;
+  const createStart=source.indexOf('async function createProtectedCurrent(');
+  assert.ok(createStart>=0,'an absent protected current needs a durable create editor');
+  const createTail=source.slice(createStart),createEnd=/\n(?:async )?function [A-Za-z]/.exec(createTail);
+  vm.runInContext(createTail.slice(0,createEnd.index)+'\nglobalThis.createCurrent=createProtectedCurrent;',box);
+  box.noteProtectionInternalEnabled=true;
+  box.noteHistory=H.create({context:()=>({...scope,enabled:true,auth:'token'}),request:async()=>{throw Error('no_network');},write:async data=>{assert.equal(JSON.stringify(data).includes('CREATED-DRAFT'),false);}});
+  const absent=structuredClone(info);absent.catalog.context.base.current_exists=false;absent.catalog.context.base.identity_state='related_only';absent.catalog.context.base.inventory_revision_ids=[];absent.catalog.context.selected_physical_note_id=null;absent.catalog.context.current_mode='absent';absent.catalog.entries=[];
+  const created=await box.createCurrent(absent,async()=> 'new-local-key');
+  assert.equal(created.id,null);assert.equal(created.owner_id,scope.owner);passed++;
+  await box.draft(absent,{...created,content:'CREATED-DRAFT'});
+  assert.equal((await box.createCurrent(absent,async()=> 'new-local-key')).content,'CREATED-DRAFT','reopening must preserve the durable draft');passed++;
+  await box.write(absent,{...created,content:'CREATED-DRAFT'},'bundle-key',async()=> 'new-local-key');
+  assert.equal(intent.prepare.operation,'create');assert.equal(intent.prepare.selection,null);assert.equal(intent.prepare.target_current_mode,'protected');passed++;
 }
+const ui=await fs.readFile(new URL('../vendor/note-protection-ui.js',import.meta.url),'utf8');
+assert.ok(ui.includes('data-action="create"'),'absent current creation needs a visible control');
 console.log(`Protected editor open: ${passed} PASS (actual function; synthetic typed source/storage)`);
