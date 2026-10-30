@@ -382,14 +382,25 @@
       base_head_version:before.catalog.context.base.head_version,base_revision_id:parent_ref.id,expected_inventory_revision_ids:before.catalog.context.base.inventory_revision_ids,
       note:Object.fromEntries(['note_type','title','content','parent_local_id','level','tags','source','deleted_at'].map(k=>[k,snapshot.note[k]]))}};
     value.revisions.push({revision_id:revisionId,parent_ref,snapshot,reason:'qa_original_pending',created_at:new Date().toISOString(),imported:false});
-    value.outbox.push(originalRequest);value.draft=structuredClone(snapshot.note);value.dirty=true;
+    value.outbox.push(originalRequest);
+    const pendingBranches=[{revisionId,parent_ref,snapshot,originDevice}];
+    if(config.importMultiple){
+      const childId=crypto.randomUUID(),actor='qa-second-'+run,child={schema_version:1,note:{...snapshot.note,content:'HTTP-QA-IMPORT-CHILD-'+run+'\r\n'}};
+      const parent={kind:'offline_branch',id:revisionId};
+      value.revisions.push({revision_id:childId,parent_ref:parent,snapshot:child,reason:'qa_original_child_pending',created_at:new Date().toISOString(),imported:false});
+      value.outbox.push({...structuredClone(originalRequest),id:crypto.randomUUID(),revision_id:childId,waiting_for:originalRequest.id,
+        body:{...structuredClone(originalRequest.body),device_id:actor,mutation_id:crypto.randomUUID(),base_head_version:null,base_revision_id:null,
+          note:{...structuredClone(originalRequest.body.note),content:child.note.content}}});
+      pendingBranches.push({revisionId:childId,parent_ref:parent,snapshot:child,originDevice:actor});
+    }
+    value.draft=structuredClone(pendingBranches.at(-1).snapshot.note);value.dirty=true;
     const originalOutbox=NowNoteProtectionProtocol.canonicalJson(value.outbox),originalDraft=NowNoteProtectionProtocol.canonicalJson(value.draft);
     const sealed=await noteProtectionClient.sealJournal(before.scope,value,password,crypto.randomUUID());
     await noteProtectionClient.replaceJournal(before.scope,record,sealed,noteHistory);
     const previous=new Set(Object.keys(noteHistory.protectionOperations()));
     await action('refresh',()=>status().includes('전환 준비 가능'));
-    await action('imports',()=>dialog().querySelectorAll('.protection-import-rows input:checked').length===1);
-    assert(dialog().querySelector('.protection-import-rows input').value===revisionId,'MI_original_UUID_not_selected');
+    await action('imports',()=>dialog().querySelectorAll('.protection-import-rows input:checked').length===pendingBranches.length);
+    assert(pendingBranches.every(b=>[...dialog().querySelectorAll('.protection-import-rows input:checked')].some(input=>input.value===b.revisionId)),'MI_original_UUID_not_selected');
     globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'import_ready',owner:a.owner,local_id:target});
     for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'import_capture_failed');
@@ -419,22 +430,25 @@
       button('lock').click();clearWebSession();
       return {ok:true,mode:config.mode,phase:2,serverEpoch:2,headVersion:6,offlineImportServerCommitted:true,offlineImportVerified:false,localPhase:'applying'};
     }
-    const after=await inspectNoteProtection(),published=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===revisionId);
-    assert(published&&published.representation_epoch===2&&published.parent_ref.id===parent_ref.id,'MI_original_branch_metadata_changed');
-    const actual=await noteProtectionReader.read(after.scope,after.catalog,published,async()=>password);
-    assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(snapshot),'MI_original_FULL15_changed');
-    assert(actual.origin.value.entries[0].origin_device_id===originDevice,'MI_original_actor_changed');
+    const after=await inspectNoteProtection();
+    for(const branch of pendingBranches){
+      const published=after.catalog.entries.find(d=>d.key.kind==='offline_snapshot'&&d.key.id===branch.revisionId);
+      assert(published&&published.representation_epoch===2&&NowNoteProtectionProtocol.canonicalJson(published.parent_ref)===NowNoteProtectionProtocol.canonicalJson(branch.parent_ref),'MI_original_branch_metadata_changed');
+      const actual=await noteProtectionReader.read(after.scope,after.catalog,published,async()=>password);
+      assert(NowNoteProtectionProtocol.canonicalJson(actual.value)===NowNoteProtectionProtocol.canonicalJson(branch.snapshot),'MI_original_FULL15_changed');
+      assert(actual.origin.value.entries.find(e=>e.revision_id===branch.revisionId)?.origin_device_id===branch.originDevice,'MI_original_actor_changed');
+    }
     assert(after.catalog.context.base.head_version===6&&after.catalog.context.base.history_generation===before.catalog.context.base.history_generation+1
       &&after.catalog.context.base.head_revision_id===before.catalog.context.base.head_revision_id
       &&after.catalog.context.selected_physical_note_id===before.catalog.context.selected_physical_note_id&&after.catalog.context.current_mode==='protected','MI_changed_current_or_result');
-    assert(NowNoteProtectionProtocol.canonicalJson(after.catalog.entries.filter(d=>d.key.id!==revisionId))===NowNoteProtectionProtocol.canonicalJson(before.catalog.entries),'MI_changed_old_catalog');
+    assert(NowNoteProtectionProtocol.canonicalJson(after.catalog.entries.filter(d=>!pendingBranches.some(b=>b.revisionId===d.key.id)))===NowNoteProtectionProtocol.canonicalJson(before.catalog.entries),'MI_changed_old_catalog');
     const local=await noteProtectionClient.openArchive(after.scope,noteHistory.export().contexts[key].notes[target],password);
     assert(NowNoteProtectionProtocol.canonicalJson(local.outbox)===originalOutbox&&NowNoteProtectionProtocol.canonicalJson(local.draft)===originalDraft&&local.dirty,'MI_acknowledged_unsent_current');
-    assert(local.revisions.find(r=>r.revision_id===revisionId).imported,'MI_local_receipt_not_settled');
+    assert(pendingBranches.every(b=>local.revisions.find(r=>r.revision_id===b.revisionId).imported),'MI_local_receipt_not_settled');
     const comparedRecord=NowNoteProtectionProtocol.canonicalJson(noteHistory.export().contexts[key].notes[target]);
     await action('compare',()=>status().includes('읽기 전용 비교'));
     const comparison=dialog().querySelector('.protection-comparison'),panes=[...comparison.querySelectorAll('pre')];
-    assert(panes.length===2&&panes[0].textContent.endsWith(snapshot.note.content)&&panes[1].textContent.endsWith(peerPlain),'pending_comparison_changed_original_meaning');
+    assert(panes.length===2&&panes[0].textContent.endsWith(pendingBranches.at(-1).snapshot.note.content)&&panes[1].textContent.endsWith(peerPlain),'pending_comparison_changed_original_meaning');
     assert(NowNoteProtectionProtocol.canonicalJson(noteHistory.export().contexts[key].notes[target])===comparedRecord,'comparison_changed_original_journal');
     globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'comparison_ready',owner:a.owner,local_id:target});
     for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
@@ -455,7 +469,10 @@
       emit({stage:'pending_resolution_'+choice+'_complete',owner:a.owner,local_id:target,operation_id:saved.receipts.at(-1).operation_id,phase:'complete'});
     }
     button('lock').click();assert(!comparison.textContent&&comparison.classList.contains('hidden'),'locked_comparison_retained_plaintext');
-    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-IMPORT-'+run),'MI_local_plaintext_residue');
+    for(const store of protectionStorageAdapters()){
+      const raw=JSON.stringify(await store.read());
+      for(const branch of pendingBranches)assert(!raw.includes(branch.snapshot.note.content.trim()),'MI_local_plaintext_residue');
+    }
     emit({stage:'MI_original_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:'complete',server_instance_id:scope.instance});
   }
   if(config.mutationWrite){
