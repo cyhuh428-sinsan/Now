@@ -60,7 +60,7 @@ try {
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=phase===5?path.join(own,mode+'-fresh'):profile;
       if(phase===5)await fs.mkdir(activeProfile);
-      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:['--editor-write','--editor-restart','--fresh-editor'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart')}));
+      await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,mixedWrite:process.argv.includes('--mixed-write'),editorWrite:['--editor-write','--editor-restart','--fresh-editor','--mutation-write'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write')}));
       const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
       child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));

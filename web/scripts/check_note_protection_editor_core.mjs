@@ -63,6 +63,11 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal(intent.local_journal.draft.content,draft.content);
   assert.equal(Object.hasOwn(intent,'archiveKey'),false);
   assert.equal(Q.canonicalJson(intent.local_record),Q.canonicalJson(persisted));passed++;
+  await box.edit(info,async()=> 'password');
+  await box.write(info,{...note,deleted_at:'2026-10-30T00:00:01.000000Z'},'bundle-key',async()=> 'password',{operation:'delete'});
+  assert.equal(intent.prepare.operation,'delete');assert.equal(intent.prepare.restore_source,null);passed++;
+  await box.edit(info,async()=> 'password');
+  await assert.rejects(box.write(info,note,'bundle-key',async()=> 'password',{operation:'restore'}),/write_operation/);passed++;
   box.noteHistory=H.create({context:()=>({...scope,enabled:true,auth:'token'}),request:async()=>{throw Error('no_network');},write:async data=>{assert.equal(JSON.stringify(data).includes(note.content),false);}});
   const initialized=await box.edit(info,async()=> 'new-local-key');
   assert.equal(initialized.content,note.content);

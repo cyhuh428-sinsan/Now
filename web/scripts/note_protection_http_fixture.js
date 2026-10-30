@@ -227,10 +227,38 @@
     if(descriptor.key.kind==='inventory_snapshot')assert(value.value.note.content===peerPlain,'real_peer_plain_meaning_changed');
   }
   assert(peerOrigins>0&&nulls>0,'real_peer_origin_or_null_coverage_absent');
+  if(config.mutationWrite){
+    async function current(){const info=await inspectNoteProtection(),d=info.catalog.entries.find(v=>v.key.kind==='inventory_snapshot');return {info,note:(await noteProtectionReader.read(info.scope,info.catalog,d,async()=>password)).value.note};}
+    async function selectOriginal(){
+      const info=await inspectNoteProtection();let selected;
+      for(const d of info.catalog.entries.filter(v=>v.key.kind==='revision_snapshot'&&!v.is_null)){
+        const read=await noteProtectionReader.read(info.scope,info.catalog,d,async()=>password);
+        if(read.value.note.content===plain&&read.value.note.deleted_at===null){selected=d;break;}
+      }
+      assert(selected,'original_restore_snapshot_absent');
+      const select=dialog().querySelector('[name="representation"]');
+      select.selectedIndex=info.rows.findIndex(r=>r.kind==='typed'&&NowNoteProtectionProtocol.canonicalJson(r.descriptor)===NowNoteProtectionProtocol.canonicalJson(selected));
+      select.dispatchEvent(new Event('change',{bubbles:true}));assert(!button('restore').disabled,'restore_control_disabled');
+    }
+    const complete=count=>{const ops=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);return ops.length===count&&ops.every(m=>m.phase==='complete');};
+    await action('delete',()=>complete(5));
+    const deleted=await current();assert(deleted.info.catalog.context.base.head_version===6&&deleted.note.deleted_at!==null&&deleted.note.content===peerPlain,'protected_delete_changed_meaning');
+    await selectOriginal();await action('restore',()=>complete(6));
+    const restored=await current();assert(restored.info.catalog.context.base.head_version===7&&restored.note.deleted_at===null&&restored.note.content===plain,'protected_history_restore_changed_meaning');
+    await action('current_plain_transition',()=>complete(7));
+    await selectOriginal();await action('restore',()=>complete(8));
+    const mixed=await current();assert(mixed.info.catalog.context.base.head_version===9&&mixed.info.catalog.context.current_mode==='plain'&&mixed.note.content===plain,'plain_current_cipher_history_restore_failed');
+    assert(mixed.info.catalog.entries.some(d=>d.representation_epoch>0&&d.key.kind==='revision_snapshot'),'plain_restore_lost_cipher_history');
+    for(const marker of Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target)){
+      const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));
+      emit({stage:'mutation_original_operation_complete',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});
+    }
+    emit({stage:'protected_delete_restore_and_plain_restore_complete',owner:a.owner,local_id:target,phase:'complete'});
+  }
   const otherCurrent=await request('/api/v2/notes/current?'+query(other));assert(otherCurrent.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'real_other_note_changed');
   for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-ORIGINAL-'+run),'real_local_plaintext_residue');
   const operations=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target);
   for(const marker of operations){const bundle=NowNoteProtectionProtocol.parseJson(await NowNoteProtectionProtocol.decryptContent(marker.cipher_bundle,password));emit({stage:marker.phase==='complete'?'local_operation_complete':'local_operation_pending',owner:a.owner,local_id:target,operation_id:bundle.prepared.id,local_operation_id:marker.id,phase:marker.phase,server_instance_id:scope.instance});}
   delete globalThis.__HTTP_QA__;clearWebSession();
-  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true};
+  return {ok:true,mode:config.mode,phase:2,owner:a.owner,local_id:target,serverEpoch:2,CPplainHistoricalCipher:true,FULL15preserved:true,peerOrigins,nulls,otherPreserved:true,localPlaintextAbsent:true,mixedWriteVerified:config.mixedWrite===true||config.editorWrite===true,editorWriteVerified:config.editorWrite===true,deleteRestoreVerified:config.mutationWrite===true};
 })();
