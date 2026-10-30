@@ -240,6 +240,19 @@
     assert(child.value.note.parent_local_id===other&&child.value.note.level===2,'parent_fixture_not_child');
     if(config.parentMode==='mixed'){
       dialog().close();state.selectedTreeId=other;render();await settle();await open();
+      for(const store of protectionStorageAdapters()){
+        const raw=await store.read();
+        try{NowNoteProtectionProtocol.canonicalJson(raw);}catch{
+          const paths=[],seen=new Set();
+          const scan=(v,path)=>{
+            if(['undefined','bigint','symbol','function'].includes(typeof v)){paths.push(typeof v+':'+path.join('/'));return;}
+            if(!v||typeof v!=='object'||seen.has(v))return;seen.add(v);
+            for(const [k,child]of Object.entries(v))scan(child,[...path,k]);
+          };
+          scan(raw,[]);
+          for(const field of paths.slice(0,6))emit({stage:'parent_confirmation_non_json_store',owner:a.owner,local_id:other,code:store.name+':'+field});
+        }
+      }
       const boxes=[...dialog().querySelectorAll('.protection-copies input')];boxes.forEach(e=>e.checked=true);
       await action('confirm',()=>!dialog().querySelector('.protection-copies input'));
       await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===other&&m.phase==='complete'));
