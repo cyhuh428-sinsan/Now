@@ -275,6 +275,69 @@
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true,projection,
       plain_after:afterOutput.output_epoch===0?clone(after.note):null,plain_before:!previous.is_null&&previous.output_epoch===0?clone(before.note):null}};
   }
+  async function buildImportWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
+    scope=clone(scope);const p=clone(prepared),i=clone(intent),m=p.manifest,h=p.response.metadata_header;
+    if(i.schema_version!==3 || i.purpose!=='mixed_offline_import' || h.purpose!==i.purpose || h.operation_id!==p.id
+      || h.owner_id!==scope.owner || h.local_id!==scope.local_id || h.server_instance_id!==scope.instance || h.actor_device_id!==scope.device
+      || h.mutation_id!==i.prepare.mutation_id || !eq(h.base,i.prepare.base) || h.source_catalog_digest!==i.prepare.expected_catalog_digest
+      || !eq(h.control,{entries:i.prepare.entries})) fail('import_binding');
+    Q().validateImportEntries(i.prepare.entries);
+    const local=i.local_branches,entries=i.prepare.entries;
+    if(!Array.isArray(local) || !eq(local.map(r=>r.revision_id),entries.map(e=>e.revision_id))) fail('import_branch_set');
+    const snapshots=new Map(),resolve=resolveKey||(async()=>password);
+    for(let n=0;n<entries.length;n++) {
+      const e=entries[n],r=local[n],key={kind:'offline_snapshot',id:e.revision_id,slot:'snapshot'};
+      if(!eq(Object.keys(r).sort(),['revision_id','parent_ref','origin_device_id','snapshot','representation'].sort())
+        || !eq(r.parent_ref,e.parent_ref) || r.origin_device_id!==e.origin_device_id) fail('import_branch');
+      let snapshot=Q().validateSnapshot(clone(r.snapshot));
+      if(snapshot.note.owner_id!==scope.owner || snapshot.note.local_id!==scope.local_id) fail('import_scope');
+      if(e.source_epoch>0) {
+        const rep=r.representation;
+        if(!rep || !eq(Object.keys(rep).sort(),['descriptor','raw','origin'].sort())) fail('import_cipher_source');
+        const d=Q().validateDescriptor(rep.descriptor,3);
+        if(!eq(d.key,key) || d.is_null || d.representation_kind!==e.source_kind || d.representation_epoch!==e.source_epoch
+          || !eq(d.parent_ref,e.parent_ref) || !eq(d.revision_ref,{kind:'offline_branch',id:e.revision_id})
+          || d.expected_binding?.server_instance_id!==scope.instance) fail('import_cipher_source');
+        const actual=await Q().decryptRepresentation(rep.raw,d,rep.origin,resolve,3);
+        if(!eq(actual,snapshot)) fail('import_cipher_meaning');
+      } else if(r.representation!==null) fail('import_plain_source');
+      snapshots.set(e.revision_id,snapshot);
+    }
+    const origins=clone(i.source_origins||[]),existing=await remote.readSources(scope,p,password,localStores,resolveKey,origins);
+    for(const old of m.existing) {
+      const rows=existing.filter(r=>r.key.kind==='offline_snapshot' && r.key.id===old.revision_id);
+      if(rows.length!==1 || !eq(rows[0].value,snapshots.get(old.revision_id))) fail('import_existing_meaning');
+    }
+    const transfers=[],records=[],plain=[];
+    for(const e of entries) {
+      const snapshot=snapshots.get(e.revision_id),d=m.DSET.find(d=>d.destination_key.id===e.revision_id);
+      if(e.target_epoch===0) plain.push({revision_id:e.revision_id,snapshot:clone(snapshot.note)});
+      if(!d) continue;
+      Q().validateDestination(d,i.purpose);
+      if(snapshot.note.id!==null || d.destination_key.kind!=='offline_snapshot' || d.output_kind!==e.target_kind
+        || d.output_epoch!==e.target_epoch || d.is_null || d.source_keys.length) fail('import_destination');
+      if(d.output_epoch===0) continue;
+      const key=d.destination_key,origin={value:h.operation_origin,legacy:null};
+      const outputKey=()=>resolve({key,representation_epoch:d.output_epoch,output:true});
+      const raw=await Q().encryptRepresentation(snapshot,{key,output_kind:d.output_kind,output_epoch:d.output_epoch,is_null:false,
+        expected_binding:d.expected_binding,operation_origin:origin.value},await outputKey());
+      const hash=await Q().sha256(raw),o=m.O.find(o=>eq(o.destination_key,key));
+      if(!o || o.storage_operation_id!==p.id || o.semantic_origin_id!==p.id || o.is_null) fail('import_origin');
+      const descriptor={key,representation_kind:d.output_kind,representation_epoch:d.output_epoch,is_null:false,representation_version:1,
+        representation_etag:d.source_etag,storage_operation_id:p.id,semantic_origin_id:p.id,origin_validator:o.origin_validator,
+        origin_row_required:o.origin_row_required,expected_binding:d.expected_binding,revision_ref:d.expected_binding.revision_ref,
+        parent_ref:e.parent_ref,physical_note_id:null,inventory_revision_id:null,linked_slot_version:null,ciphertext_sha256:hash};
+      Q().validateDescriptor(descriptor,3);
+      if(!eq(await Q().decryptRepresentation(raw,descriptor,origin,outputKey,3),snapshot)) fail('import_output');
+      transfers.push({key,raw,descriptor,origin,semantic:clone(snapshot)});
+      records.push({entry_key:key,destination_key:key,source_etag:d.source_etag,output_kind:d.output_kind,target_epoch:d.output_epoch,
+        total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
+    }
+    return {transfers,source_origins:origins,branches:clone(local),commit:{...access(scope),operation_id:p.id,mutation_id:i.prepare.mutation_id,
+      lease_version:p.response.lease_version,base:clone(i.prepare.base),metadata_manifest_digest:p.digest,client_decryption_verified:true,
+      client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_verified_existing_set_digest:await Q().hashJson(m.verified_existing),
+      plain_entries:plain,existing_ciphertexts:m.verified_existing.filter(v=>v.descriptor.representation_epoch>0).map(v=>({revision_id:v.key.id,ciphertext_sha256:v.ciphertext_sha256}))}};
+  }
   const access = s => ({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
   function encoded(value) {
     let binary = '';
@@ -364,5 +427,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,createReader,plan});
 })();

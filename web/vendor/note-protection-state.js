@@ -704,12 +704,14 @@
         p.manifest = await pages(s,p); return p;
       },
       async readSources(s,p,password,localStores = [],resolveKey,sourceOrigins = []) {
+        const importing=p.response.purpose==='mixed_offline_import';
+        if(importing) {s=copy(s);p=copy(p);sourceOrigins=copy(sourceOrigins);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest)) fail('manifest_changed');
         const meaning = new Map(), resolve = resolveKey || keyResolver || (async () => password);
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const restore=p.response.metadata_header?.purpose==='mixed_note_write' ? p.response.metadata_header.control.restore_source : null;
-        const sourceKeys = p.version === 3 ? protocol().keyOrder([...fixed.DSET.flatMap(d => d.source_keys),...(restore?[restore.descriptor.key]:[])].filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
+        const sourceKeys = importing ? fixed.verified_existing.map(v=>v.key) : p.version === 3 ? protocol().keyOrder([...fixed.DSET.flatMap(d => d.source_keys),...(restore?[restore.descriptor.key]:[])].filter((k,i,a) => a.findIndex(x => eq(x,k)) === i)) : fixed.entries.map(d => d.key);
         for (const k of sourceKeys) {
           const source = p.version === 3 ? fixed.S.find(e => eq(e.descriptor.key,k)) : fixed.entries.find(e => eq(e.key,k));
           if (!source || k.kind === 'reserved_offline_snapshot') {
@@ -734,6 +736,7 @@
             raw = r.value;
           } else {
             const bytes = []; let index = 0, total = null, size = null;
+            const proof=importing?fixed.verified_existing.find(v=>eq(v.key,k)):null;
             do {
               const r = await request(s,p.path + '/source','GET',{ ...query(s,p), metadata_manifest_digest: p.digest, kind: k.kind,
                 representation_id: k.id, slot: k.slot, source_etag: source.source_etag, chunk_index: index });
@@ -741,12 +744,16 @@
                 || r.source_etag !== source.source_etag || r.metadata_manifest_digest !== p.digest) fail('source_changed');
               if (index === 0) { total = r.total_chunks; size = r.total_bytes; }
               if (r.total_chunks !== total || r.total_bytes !== size || !Number.isSafeInteger(total) || total < 0) fail('source_chunks');
+              if(importing && (r.schema_version!==3 || !Number.isSafeInteger(size) || size<1 || total!==Math.ceil(size/262144)
+                || source.descriptor.representation_epoch>0 && (size!==proof.total_bytes || total!==proof.total_chunks))) fail('import_source_framing');
               if (source.descriptor.is_null) {
                 if (total !== 0 || size !== 0 || r.chunk_index !== null || r.data_base64 !== null) fail('source_null');
                 raw = null; break;
               }
               if (r.chunk_index !== index || total < 1 || typeof r.data_base64 !== 'string') fail('source_chunks');
-              for (const c of atob(r.data_base64)) bytes.push(c.charCodeAt(0));
+              const chunk=atob(r.data_base64);
+              if(importing && (btoa(chunk)!==r.data_base64 || chunk.length!==Math.min(262144,size-index*262144))) fail('import_source_chunk');
+              for (const c of chunk) bytes.push(c.charCodeAt(0));
               index++;
             } while (index < total);
             if (raw !== null) {
@@ -778,7 +785,12 @@
               operation_origin: source.operation_origin, ...(source.slot_version !== null ? { slot_version: source.slot_version } : {}) };
             expected = supplied?.origin || { value: source.operation_origin, legacy: null };
           }
-          meaning.set(json(k),await protocol().decryptRepresentation(raw,d,expected,resolve,p.version === 3 ? 3 : 2));
+          const value=await protocol().decryptRepresentation(raw,d,expected,resolve,p.version === 3 ? 3 : 2);
+          if(importing) {
+            protocol().validateSnapshot(value);
+            if(value.note.owner_id!==s.owner || value.note.local_id!==s.local_id) fail('import_source_scope');
+          }
+          meaning.set(json(k),value);
         }
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },

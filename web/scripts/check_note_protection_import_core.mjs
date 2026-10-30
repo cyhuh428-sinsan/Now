@@ -3,7 +3,7 @@ import vm from 'node:vm';
 import assert from 'node:assert/strict';
 import {webcrypto} from 'node:crypto';
 const box=vm.createContext({crypto:webcrypto,TextEncoder,TextDecoder,structuredClone,Uint8Array,atob,btoa});
-for(const name of ['protocol','state'])vm.runInContext(await fs.readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
+for(const name of ['protocol','state','client'])vm.runInContext(await fs.readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
 const P=box.NowNoteProtectionState,Q=box.NowNoteProtectionProtocol,uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'memo',device:'actor',instance:uid(1)},key={kind:'offline_snapshot',id:uid(10),slot:'snapshot'};
 const base={base:{head_version:2,head_revision_id:null,crypto_epoch:2,history_generation:3,protection_state:'protected',inventory_revision_ids:[],identity_state:'branch_only',current_exists:false},current_mode:'absent',selected_physical_note_id:null,mixed_metadata_version:1};
@@ -19,6 +19,9 @@ const kinds=['analysis_error','analysis_input','analysis_result','inventory_snap
 const count=rows=>({total:rows.length,nonnull:rows.filter(e=>!e.is_null).length,nulls:rows.filter(e=>e.is_null).length,
   by_kind:kinds.map(kind=>({kind,total:rows.filter(e=>e.key.kind===kind).length,nonnull:rows.filter(e=>e.key.kind===kind&&!e.is_null).length,nulls:rows.filter(e=>e.key.kind===kind&&e.is_null).length}))});
 let sampleManifest=manifest,sampleHeader=header;
+const full={id:null,owner_id:scope.owner,local_id:scope.local_id,device_id:'original-device',note_type:'tree',title:'Original',content:'Exact\r\n',
+  parent_local_id:null,level:1,tags:'[]',source:'web-tree',deleted_at:null,client_updated_at:null,created_at:'2026-10-30T00:00:00.000001Z',updated_at:'2026-10-30T00:00:00.000002Z'};
+let sourceRaw=Q.canonicalJson({schema_version:1,note:full}), sourceDamage=null,sourceCalls=0;
 const remote=P.createRemote({request:async(s,path,method,body)=>{
   calls.push({path,method,body:structuredClone(body)});
   assert.ok(path.startsWith('/api/v2/notes/mixed-imports/'));
@@ -33,6 +36,12 @@ const remote=P.createRemote({request:async(s,path,method,body)=>{
     return {schema_version:3,purpose:'mixed_offline_import',operation_id:uid(3),mutation_id:uid(4),state:'prepared',lease_version:1,metadata_manifest_digest:digest,metadata_header:activeHeader,counts,receipt:null,latest_context:base};
   }
   if(path.endsWith('/manifest'))return {schema_version:3,section:body.section,metadata_manifest_digest:digest,metadata_header:activeHeader,counts,set_digests:damage==='digest'&&body.section==='O'?{...setDigests,O:'0'.repeat(64)}:setDigests,entries:activeManifest[body.section],next_cursor:null};
+  if(path.endsWith('/source')){
+    sourceCalls++;const bytes=new TextEncoder().encode(sourceRaw),chunk=bytes.slice(body.chunk_index*262144,(body.chunk_index+1)*262144);
+    return {schema_version:3,operation_id:uid(3),metadata_manifest_digest:digest,entry_key:key,source_etag:uid(12),descriptor:activeManifest.S[0].descriptor,
+      total_bytes:bytes.length,total_chunks:Math.ceil(bytes.length/262144),chunk_index:body.chunk_index,
+      data_base64:sourceDamage==='bytes'?btoa('wrong'):btoa(Array.from(chunk,b=>String.fromCharCode(b)).join(''))};
+  }
   throw Error('unexpected_request');
 }});
 assert.equal(typeof remote.prepareImport,'function','typed MI requires its own metadata-only prepare endpoint');
@@ -48,6 +57,11 @@ const foreign=structuredClone(intent);foreign.prepare.entries[0].provenance.orig
 let before=calls.length;await assert.rejects(remote.prepareImport(scope,foreign),/scope|provenance/);assert.equal(calls.length,before);
 const extra=structuredClone(intent);extra.prepare.snapshot='PRIVATE';
 before=calls.length;await assert.rejects(remote.prepareImport(scope,extra),/fields|prepare/);assert.equal(calls.length,before);
+const sourcePrepared=await remote.prepareImport(scope,intent);
+let read=await remote.readSources(scope,sourcePrepared,'local-key');
+assert.equal(read.length,1,'MI must actually fetch every verified existing representation');
+assert.equal(Q.canonicalJson(read[0].value),Q.canonicalJson({schema_version:1,note:full}));
+sourceDamage='bytes';await assert.rejects(remote.readSources(scope,sourcePrepared,'local-key'),/source|json/);sourceDamage=null;
 const mixed=structuredClone(intent), newKey={...key,id:uid(20)};
 const added={...entry,revision_id:uid(20),parent_ref:descriptor.revision_ref,source_kind:'history_envelope_v1',source_epoch:1,
   target_kind:'history_envelope_v1',target_epoch:2,expected_existing:null,provenance:{kind:'cipher_branch',origin_server_instance_id:scope.instance,origin_owner_id:scope.owner,origin_storage_operation_id:null}};
@@ -64,4 +78,75 @@ sampleManifest.DSET[0].expected_binding.parent_ref=descriptor.revision_ref;
 sampleHeader.control.entries[1].parent_ref={kind:'offline_branch',id:uid(20)};
 const cycle=structuredClone(mixed);cycle.prepare.entries[1].parent_ref={kind:'offline_branch',id:uid(20)};
 await assert.rejects(remote.prepareImport(scope,cycle),/import_parent_cycle/);
-console.log('MI prepare: 10 PASS (synthetic six-section metadata contract; no HTTP/bytes/UI)');
+sampleManifest=structuredClone(manifest);sampleHeader=structuredClone(header);
+const cipherBinding={...binding,destination_key:key,revision_ref:descriptor.revision_ref,parent_ref:null,transition_id:uid(30)};
+const cipherValue={schema_version:1,note:{...full,content:'Exact\r\n'+'x'.repeat(160000)}};
+sourceRaw=await Q.encryptRepresentation(cipherValue,{key,output_kind:'history_envelope_v1',output_epoch:2,is_null:false,expected_binding:cipherBinding,operation_origin:null},'cipher-key');
+const cipherDescriptor={...descriptor,representation_kind:'history_envelope_v1',representation_epoch:2,storage_operation_id:uid(30),expected_binding:cipherBinding,ciphertext_sha256:await Q.sha256(sourceRaw)};
+const cipherEntry={...entry,source_kind:'history_envelope_v1',source_epoch:2,target_kind:'history_envelope_v1',target_epoch:2,expected_existing:cipherDescriptor,
+  provenance:{kind:'cipher_branch',origin_server_instance_id:scope.instance,origin_owner_id:scope.owner,origin_storage_operation_id:uid(30)}};
+const cipherOrigin={...origin,storage_operation_id:uid(30)};
+const size=new TextEncoder().encode(sourceRaw).length;
+sampleManifest.S[0].descriptor=cipherDescriptor;sampleManifest.P=[cipherDescriptor];sampleManifest.O=[cipherOrigin];
+sampleManifest.existing=[{revision_id:key.id,descriptor:cipherDescriptor,comparison:'cipher_exact'}];
+sampleManifest.verified_existing=[{...manifest.verified_existing[0],descriptor:cipherDescriptor,origin_expectation:cipherOrigin,total_bytes:size,total_chunks:Math.ceil(size/262144),expected_binding:cipherBinding,ciphertext_sha256:cipherDescriptor.ciphertext_sha256}];
+sampleHeader.control={entries:[cipherEntry]};sampleHeader.operation_origin={...header.operation_origin,entries:[cipherEntry]};
+sampleHeader.source_catalog_digest=await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:base,entries:[cipherDescriptor]});
+const cipherIntent={...intent,prepare:{...intent.prepare,expected_catalog_digest:sampleHeader.source_catalog_digest,entries:[cipherEntry]}};
+const cipherPrepared=await remote.prepareImport(scope,cipherIntent);
+sourceCalls=0;read=await remote.readSources(scope,cipherPrepared,'cipher-key');
+assert.equal(Q.canonicalJson(read[0].value),Q.canonicalJson(cipherValue));assert.ok(sourceCalls>=2,'real crypto source spans multiple wire chunks');
+await assert.rejects(remote.readSources(scope,cipherPrepared,'wrong-key'));
+sampleManifest.verified_existing[0].total_bytes++;sampleManifest.verified_existing[0].total_chunks=Math.ceil((size+1)/262144);
+const wrongSize=await remote.prepareImport(scope,cipherIntent);
+await assert.rejects(remote.readSources(scope,wrongSize,'cipher-key'),/import_source_framing/);
+sampleManifest=structuredClone(manifest);sampleHeader=structuredClone(header);
+const foreignPrepared=await remote.prepareImport(scope,intent);
+sourceRaw=Q.canonicalJson({schema_version:1,note:{...full,owner_id:'bob'}});
+await assert.rejects(remote.readSources(scope,foreignPrepared,'local-key'),/import_source_scope/);
+sourceRaw=Q.canonicalJson({schema_version:1,note:full});
+assert.equal(typeof box.NowNoteProtectionClient.buildImportWork,'function','MI needs its own original-branch semantic work builder');
+const local={revision_id:key.id,parent_ref:null,origin_device_id:'original-device',snapshot:{schema_version:1,note:full},representation:null};
+const importIntent={...intent,local_branches:[local]};
+const work=await box.NowNoteProtectionClient.buildImportWork(scope,foreignPrepared,importIntent,'local-key',remote);
+assert.equal(work.transfers.length,0);
+assert.equal(work.commit.client_verified_existing_set_digest,await Q.hashJson(manifest.verified_existing));
+assert.notEqual(work.commit.client_verified_existing_set_digest,await Q.hashJson(manifest.existing));
+assert.equal(Q.canonicalJson(work.commit.plain_entries),Q.canonicalJson([{revision_id:key.id,snapshot:full}]));
+const changed=structuredClone(importIntent);changed.local_branches[0].snapshot.note.content='changed';
+await assert.rejects(box.NowNoteProtectionClient.buildImportWork(scope,foreignPrepared,changed,'local-key',remote),/import_existing_meaning/);
+const wrongDevice=structuredClone(importIntent);wrongDevice.local_branches[0].origin_device_id='actor';
+await assert.rejects(box.NowNoteProtectionClient.buildImportWork(scope,foreignPrepared,wrongDevice,'local-key',remote),/import_branch/);
+const newEntry={...added,parent_ref:descriptor.revision_ref,source_kind:'snapshot_v1',source_epoch:0,provenance:{kind:'plain_branch',origin_server_instance_id:scope.instance,origin_owner_id:scope.owner,origin_revision_ref:null}};
+const newIntent={...importIntent,prepare:{...intent.prepare,entries:[entry,newEntry]},local_branches:[local,{...local,revision_id:uid(20),parent_ref:descriptor.revision_ref,snapshot:{schema_version:1,note:{...full,title:'Child',device_id:'original-device'}}}]};
+sampleManifest=structuredClone(manifest);sampleHeader=structuredClone(header);
+sampleHeader.control={entries:newIntent.prepare.entries};sampleHeader.operation_origin={...header.operation_origin,entries:newIntent.prepare.entries};
+sampleManifest.DSET=[{destination_key:newKey,source_keys:[],source_etag:uid(21),output_kind:'history_envelope_v1',output_epoch:2,is_null:false,expected_binding:binding}];
+sampleManifest.O.push({destination_key:newKey,is_null:false,origin_validator:'native_mixed_v1',origin_row_required:true,storage_operation_id:uid(3),semantic_origin_id:uid(3)});
+const newPrepared=await remote.prepareImport(scope,newIntent);
+const newWork=await box.NowNoteProtectionClient.buildImportWork(scope,newPrepared,newIntent,'new-key',remote);
+assert.equal(newWork.transfers.length,1);assert.equal(newWork.commit.plain_entries.length,1);
+const transfer=newWork.transfers[0];
+assert.equal(Q.canonicalJson(await Q.decryptRepresentation(transfer.raw,transfer.descriptor,transfer.origin,async()=>'new-key',3)),Q.canonicalJson(newIntent.local_branches[1].snapshot));
+assert.equal(transfer.descriptor.parent_ref.id,key.id);assert.equal(transfer.descriptor.revision_ref.id,uid(20));
+assert.equal(newWork.branches[1].origin_device_id,'original-device');assert.equal(newWork.branches[1].snapshot.note.client_updated_at,null);
+const forged=structuredClone(newIntent);forged.local_branches[1].snapshot.note.id=99;
+await assert.rejects(box.NowNoteProtectionClient.buildImportWork(scope,newPrepared,forged,'new-key',remote),/import_destination/);
+const originalBinding={...binding,transition_id:uid(30),crypto_epoch:1};
+const originalValue=newIntent.local_branches[1].snapshot;
+const originalRaw=await Q.encryptRepresentation(originalValue,{key:newKey,output_kind:'history_envelope_v1',output_epoch:1,is_null:false,expected_binding:originalBinding,operation_origin:null},'original-key');
+const originalDescriptor={...descriptor,key:newKey,representation_kind:'history_envelope_v1',representation_epoch:1,storage_operation_id:uid(30),
+  expected_binding:originalBinding,revision_ref:originalBinding.revision_ref,parent_ref:originalBinding.parent_ref,ciphertext_sha256:await Q.sha256(originalRaw)};
+const originalIntent=structuredClone(newIntent);
+Object.assign(originalIntent.prepare.entries[1],{source_kind:'history_envelope_v1',source_epoch:1,provenance:{kind:'cipher_branch',origin_server_instance_id:scope.instance,origin_owner_id:scope.owner,origin_storage_operation_id:null}});
+originalIntent.local_branches[1].representation={raw:originalRaw,descriptor:originalDescriptor,origin:{value:null,legacy:null}};
+sampleHeader.control={entries:originalIntent.prepare.entries};sampleHeader.operation_origin={...header.operation_origin,entries:originalIntent.prepare.entries};
+const originalPrepared=await remote.prepareImport(scope,originalIntent);
+const keys=async d=>d.output?'new-key':'original-key';
+const originalWork=await box.NowNoteProtectionClient.buildImportWork(scope,originalPrepared,originalIntent,'new-key',remote,[],keys);
+assert.equal(Q.canonicalJson(originalWork.transfers[0].semantic),Q.canonicalJson(originalValue));
+const badOriginal=structuredClone(originalIntent);badOriginal.local_branches[1].snapshot.note.content='rewritten';
+await assert.rejects(box.NowNoteProtectionClient.buildImportWork(scope,originalPrepared,badOriginal,'new-key',remote,[],keys),/import_cipher_meaning/);
+console.log('MI prepare: 10 PASS (synthetic six-section metadata contract; no HTTP/UI)');
+console.log('MI existing source: 6 PASS (actual WebCrypto and multi-chunk synthetic transport; no server/UI)');
+console.log('MI semantic work: 8 PASS (actual old/new epoch crypto, original FULL15/parent/device and V3 digest; synthetic transport, no commit/UI)');
