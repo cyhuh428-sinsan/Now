@@ -54,11 +54,11 @@ async function closeSyntheticProvider(){
   if(syntheticProvider){
     const provider=syntheticProvider;await provider.close();
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{port:provider.port,...provider.stats(),attempts:providerAttempts,closed:!provider.isListening()}});syntheticProvider=null;
-  }else if([15,17].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
+  }else if([15,17,19].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
 }
 app.whenReady().then(async()=>{
-  if([14,16].includes(config.phase)){
-    syntheticProvider=await require('./note_protection_http_provider.cjs').startSyntheticProvider({run:config.run,mode:config.mode});
+  if([14,16,18].includes(config.phase)){
+    syntheticProvider=await require('./note_protection_http_provider.cjs').startSyntheticProvider({run:config.run,mode:config.mode,purpose:config.phase===18?'ui':'core'});
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProviderStarted:{port:syntheticProvider.port,loopbackOnly:true,externalCalls:0}});
   }
   const proxy=await session.defaultSession.resolveProxy('http://127.0.0.1:8750');
@@ -79,11 +79,11 @@ app.whenReady().then(async()=>{
       if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
         blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
       }
-      if(event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
+      if(event.stage==='analysis_ui_result_ready'||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          const name=(event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          const name=(event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
           fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage()).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
@@ -98,7 +98,7 @@ app.whenReady().then(async()=>{
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
     if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
-    if([15,17].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
+    if([15,17,19].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
     window.destroy();app.exit(0);

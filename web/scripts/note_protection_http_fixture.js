@@ -39,13 +39,14 @@
   const query=(local,extra={})=>new URLSearchParams({owner_id:a.owner,local_id:local,device_id:a.device,...extra});
   async function identity(){return request('/api/v2/notes/crypto-transitions/status?'+query(target));}
   const dialog=()=>document.querySelector('#noteProtectionDialog'),button=name=>dialog().querySelector('[data-action="'+name+'"]'),status=()=>dialog().querySelector('.protection-status').textContent;
+  let keyPrompts=0;
   async function drive(done,label,key=password) {
     for(let i=0;i<2500;i++) {
       const form=dialog()?.querySelector('form.library-confirm');
-      if(form){form.querySelector('input').value=key;form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}
+      if(form){keyPrompts++;form.querySelector('input').value=key;form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}
       if(done()&&!button('refresh').disabled)return;
-      if(!button('refresh').disabled&&!form&&/note_protection:|note_protection_client:|HTTP |http_/.test(status())) {
-        const raw=status(),code=/^note_protection(?:_client)?:[a-z_]+(?::[a-z0-9_/:.-]+)?$/.test(raw)?raw:'ui_http_failure';
+      if(!button('refresh').disabled&&!form&&/note_protection:|note_protection_client:|note_protection_analysis:|HTTP |http_/.test(status())) {
+        const raw=status(),code=/^note_protection(?:_client|_analysis)?:[a-z_]+(?::[a-z0-9_/:.-]+)?$/.test(raw)?raw:'ui_http_failure';
         emit({stage:label,owner:a.owner,local_id:target,code});throw Error('ui_action_failed_'+label);
       }
       await wait();
@@ -54,6 +55,33 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([18,19].includes(config.phase)){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,before=await noteProtectionReader.catalog(scope);
+    const field=name=>dialog().querySelector('[name="analysis-'+name+'"]');
+    if(config.phase===18){
+      state.settings.llm={...state.settings.llm,provider:'omniroute',omniUrl:config.syntheticProviderUrl,omniModel:'auto',omniApiKey:'synthetic-only',omniReasoning:''};
+      await action('analysis-prepare',()=>!dialog().querySelector('.protection-analysis').classList.contains('hidden'));
+      assert(field('input').value.endsWith(plain.replace(/\r\n/g,'\n'))&&field('input').readOnly&&field('endpoint').value===config.syntheticProviderUrl&&field('model').value==='auto','analysis_ui_input_or_route');
+      assert(button('analysis-run').disabled&&!field('confirm').checked,'analysis_ui_missing_confirmation');
+      field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));const prompts=keyPrompts;
+      await action('analysis-run',()=>dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+      assert(keyPrompts-prompts===2,'analysis_ui_output_key_not_fresh');
+      emit({stage:'analysis_ui_result_ready',owner:a.owner,local_id:target});
+      for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await wait();assert(globalThis.__HTTP_CAPTURE_DONE__===true,'analysis_ui_capture_unconfirmed');
+    }else{
+      assert(field('operation').value&&button('analysis-run').disabled,'analysis_ui_cold_execution_missing');
+      await action('analysis-resume',()=>dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+    }
+    const markers=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target&&m.scope.owner===a.owner&&m.phase==='analysis_settled');assert(markers.length===1,'analysis_ui_cipher_terminal_missing');
+    const original=Q.parseJson(await Q.decryptContent(markers[0].cipher_bundle,password));
+    assert(original.execution.state==='client_settled'&&original.execution.terminal_receipt.outcome==='done','analysis_ui_receipt_missing');
+    assert(Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'analysis_ui_changed_current');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'analysis_ui_raw_result_persisted');
+    emit({stage:'analysis_ui_verified',owner:a.owner,local_id:target,operation_id:original.execution.execution_id,local_operation_id:markers[0].id});
+    button('lock').click();assert(!dialog().querySelector('.protection-analysis-result').textContent&&!field('input').value,'analysis_ui_lock_raw');clearWebSession();
+    return {ok:true,mode:config.mode,phase:config.phase,analysisUiConfirmed:config.phase===18,coldResultRead:config.phase===19,freshOutputKey:config.phase===18,cipherOnlyResult:true,currentCatalogUnchanged:true,providerCalls:config.phase===18?1:0};
+  }
   if([14,15,16,17].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,A=NowNoteProtectionAnalysis,Q=NowNoteProtectionProtocol;
