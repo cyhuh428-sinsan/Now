@@ -2451,8 +2451,19 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       return result;
     }
     async function normalized(s,p,response,work) {
+      const analyzing=p.response.purpose==='mixed_analysis_write';
+      if(analyzing){
+        s=copy(s);p=copy(p);response=copy(response);work=copy(work);
+        if(Object.hasOwn(response,'status')){
+          fields(response,['schema_version','status','operation','original_execution']);
+          if(response.schema_version!==3||response.status!=='operation'||!eq(response.original_execution,p.original_execution))fail('analysis_original_execution');
+          response=response.operation;
+        }
+        fields(response,['schema_version','purpose','operation_id','mutation_id','state','lease_version','expires_at','metadata_manifest_digest','metadata_header','counts','receipt','latest_context']);
+        if(response.metadata_manifest_digest!==p.digest||!eq(response.metadata_header,p.response.metadata_header)||!eq(response.counts,p.response.counts))fail('analysis_operation_changed');
+      }
       const writing=p.response.purpose==='mixed_note_write';
-      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing;
+      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing||analyzing;
       if ((response.operation_id || response.transition_id) !== p.id) fail('operation_identity');
       if(mutation && (response.schema_version!==3 || response.purpose!==p.response.purpose || response.mutation_id!==p.response.mutation_id)) fail('receipt_identity');
       if (response.state === 'committed') {
@@ -2465,6 +2476,13 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             || !eq(r.result,response.latest_context) || r.ciphertext_manifest_digest!==work?.commit.client_verified_ciphertext_manifest_digest) fail('receipt_binding');
           for(const name of ['S','DSET','P','O','existing','verified_existing']) {
             if(r.set_digests?.[name]!==await protocol().hashJson(p.manifest[name])) fail('receipt_manifest');
+          }
+          if(analyzing){
+            fields(r,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);
+            fields(r.set_digests,['S','DSET','P','O','existing','verified_existing']);
+            const expected=copy(p.response.metadata_header.base);expected.base.history_generation++;
+            if(!eq(r.result,expected)||r.origin_expectations_digest!==await protocol().hashJson(p.manifest.O)
+              ||typeof r.committed_at!=='string'||!Number.isFinite(Date.parse(r.committed_at)))fail('analysis_receipt');
           }
           if(importing) {
             const expected=copy(p.response.metadata_header.base);
@@ -2519,7 +2537,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         } while (cursor !== null);
         const actual = await protocol().verifyCatalog(received,{ schema_version:p.version === 3 ? 3 : 2,
           server_instance_id:s.instance, owner_id:s.owner,local_id:s.local_id,device_id:s.device,context,catalog_digest:digest });
-        if(importing) {
+        if(importing||analyzing) {
           if(actual.length!==p.manifest.P.length+p.manifest.DSET.length
             || p.manifest.P.some(old=>!actual.some(d=>eq(d,old)))) fail('import_published_preserved');
           for(const output of p.manifest.DSET) {

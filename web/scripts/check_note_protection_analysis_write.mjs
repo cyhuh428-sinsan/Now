@@ -44,7 +44,7 @@ console.log('MA initial plan/manifest: original settled TR/BM/C bytes/nulls, exa
 const names=['S','DSET','P','O','existing','verified_existing'],header=Object.fromEntries(Object.entries(manifest).filter(([k])=>!names.includes(k)));
 const operation={schema_version:3,purpose:plan.purpose,operation_id:settled.execution_id,mutation_id:uid(99),state:'prepared',lease_version:1,expires_at:running.expires_at,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:header,counts:verified.counts,receipt:null,latest_context:context};
 const originalExecution={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:settled.source_context,terminal_receipt:settled.terminal_receipt,bundle_metadata:settled.bundle_metadata};
-let prepareCalls=0,exists=false,losePrepare=true;const transportCalls=[],uploads=new Map();
+let prepareCalls=0,exists=false,losePrepare=true,commitCalls=0,loseCommit=true,publishedRows=[],resultContext=null,publishedCounts=null;const transportCalls=[],uploads=new Map();
 const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
  if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
@@ -62,6 +62,13 @@ const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,metho
   const entry=uploads.get(Q.canonicalJson({kind:body.kind,id:body.representation_id,slot:body.slot}));assert.ok(entry?.raw);
   return {chunk_index:body.chunk_index,total_chunks:entry.core.total_chunks,total_bytes:entry.raw.length,ciphertext_sha256:entry.hash,source_etag:entry.core.source_etag,data_base64:entry.chunks[body.chunk_index].toString('base64')};
  }
+ if(path.endsWith('/commit')){
+  commitCalls++;assert.ok(Q.canonicalJson(body)===Q.canonicalJson(publicationWork.commit),'original commit core changed');operation.state='committed';operation.latest_context=copy(resultContext);
+  operation.receipt={schema_version:3,purpose:plan.purpose,operation_id:prepared.id,mutation_id:uid(99),server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,result:copy(resultContext),metadata_manifest_digest:prepared.digest,set_digests:copy(verified.set_digests),ciphertext_manifest_digest:publicationWork.commit.client_verified_ciphertext_manifest_digest,origin_expectations_digest:await Q.hashJson(manifest.O),committed_at:'2026-10-31T01:00:00.000000Z'};
+  if(loseCommit){loseCommit=false;throw Error('fixture_commit_response_lost');}return copy(operation);
+ }
+ if(path.endsWith('/mixed-representations/context'))return {server_instance_id:scope.instance,context:copy(resultContext),catalog_digest:await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:resultContext,entries:publishedRows})};
+ if(path.endsWith('/mixed-representations/catalog'))return {schema_version:3,context:copy(resultContext),catalog_digest:body.catalog_digest,entries:copy(publishedRows),counts:copy(publishedCounts),coverage:{supported_kinds:verified.counts.P.by_kind.map(r=>r.kind),scope_complete:true,full_protection_complete:false},next_cursor:null};
  throw Error('unexpected_transport');
 }});
 await assert.rejects(()=>remote.prepareAnalysis(scope,plan,settled,catalog),/fixture_prepare_response_lost/);
@@ -82,3 +89,17 @@ const semanticTamper=copy(publicationWork);semanticTamper.transfers[0].semantic=
 await assert.rejects(()=>remote.stage(scope,prepared,semanticTamper,'fixture-key'),/output_semantic/);
 assert.equal(transportCalls.filter(c=>c.path.endsWith('/chunks')).length,puts);
 console.log('MA initial stage: original ciphertext uploads/readback and real decrypt/meaning before commit, null excluded, semantic tamper/no upload PASS (synthetic transport only)');
+resultContext=copy(context);resultContext.base.history_generation++;
+publishedRows=[copy(d),...outputs.map((output,i)=>({...copy(d),key:copy(output.destination_key),representation_kind:output.output_kind,representation_epoch:output.output_epoch,is_null:output.is_null,representation_etag:uid(100+i),storage_operation_id:prepared.id,semantic_origin_id:prepared.id,origin_validator:'linked_mixed_v1',expected_binding:copy(output.expected_binding),ciphertext_sha256:output.is_null?null:uploads.get(Q.canonicalJson(output.destination_key)).hash}))];
+publishedRows=Q.keyOrder(publishedRows.map(d=>d.key)).map(key=>publishedRows.find(d=>Q.canonicalJson(d.key)===Q.canonicalJson(key)));
+const stats=rows=>({total:rows.length,nonnull:rows.filter(d=>!d.is_null).length,nulls:rows.filter(d=>d.is_null).length});
+publishedCounts={...stats(publishedRows),by_kind:verified.counts.P.by_kind.map(r=>({kind:r.kind,...stats(publishedRows.filter(d=>d.key.kind===r.kind))}))};
+await assert.rejects(()=>remote.commit(scope,prepared,publicationWork),/fixture_commit_response_lost/);
+const published=await remote.status(scope,prepared,publicationWork);assert.equal(published.state,'committed');assert.equal(published.receipt_matches_current,true);assert.equal(commitCalls,1);
+const originalOrigin=publishedRows[0].semantic_origin_id;publishedRows[0].semantic_origin_id=uid(444);
+await assert.rejects(()=>remote.status(scope,prepared,publicationWork));assert.equal(commitCalls,1);publishedRows[0].semantic_origin_id=originalOrigin;
+const storedReceipt=copy(operation.receipt),storedLatest=copy(operation.latest_context);
+operation.receipt.result.base.head_version++;operation.latest_context.base.head_version++;
+await assert.rejects(()=>remote.status(scope,prepared,publicationWork),/analysis_receipt/);operation.receipt=storedReceipt;operation.latest_context=storedLatest;
+loseCommit=false;const directCommit=await remote.commit(scope,prepared,publicationWork);assert.equal(directCommit.receipt_matches_current,true);assert.equal(commitCalls,2);
+console.log('MA commit/status metadata: original lost-response receipt, G+1 only, current/P/O/cipher publication metadata and wrong-origin denial PASS (synthetic; no typed raw read/API/journal)');
