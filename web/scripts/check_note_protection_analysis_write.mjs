@@ -253,9 +253,14 @@ console.log('MA E3 replan typed proof: G+1 only, full preserved catalog, new cip
 const storedResponse={...copy(replanStored),latest_context:copy(resultContext)};
 let storedWrongSource=false;
 const storedReader=box.NowNoteProtectionClient.createReader({request:async(...args)=>{const r=await transport(...args);if(args[1].endsWith('/metadata')){r.operation_origin=copy(args[3].representation_id==='12'?header.operation_origin:replanHeader.operation_origin);if(storedWrongSource&&args[3].representation_id==='12')r.operation_origin.source_digest='f'.repeat(64);}return r;}});
-const storedProof=await A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',descriptor=>descriptor.representation_epoch===1?'fixture-key':'new-epoch-key');
+const storedStatus=async(s,path,method,body)=>{assert.equal(path,'/api/v2/notes/mixed-analysis-writes/status');assert.equal(method,'GET');assert.equal(body.operation_id,settled.execution_id);return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};};
+const storedProof=await A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',descriptor=>descriptor.representation_epoch===1?'fixture-key':'new-epoch-key',storedStatus);
 assert.equal(storedProof.operation_id,settled.execution_id);assert.equal(storedProof.output_keys.length,3);
-storedWrongSource=true;await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key'),/stored_origin/);storedWrongSource=false;
+for(const change of [r=>{r.stored_result.receipt.metadata_manifest_digest='d'.repeat(64);},r=>{r.stored_result.receipt.set_digests.S='d'.repeat(64);},r=>{r.stored_result.receipt.ciphertext_manifest_digest='d'.repeat(64);}]){
+ const bad=copy(storedResponse);change(bad);await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,bad,storedReader,'fixture-key',()=>'fixture-key',storedStatus),/stored_receipt_unconfirmed/);
+}
+await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key',async()=>{throw Object.assign(Error('actor_denied'),{status:403});}),/actor_denied/);
+storedWrongSource=true;await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key',storedStatus),/stored_origin/);storedWrongSource=false;
 const savedPublished=copy(publishedRows);publishedRows=publishedRows.filter(d=>d.key.id!=='12'||d.key.kind!=='analysis_error');publishedCounts={...stats(publishedRows),by_kind:verified.counts.P.by_kind.map(r=>({kind:r.kind,...stats(publishedRows.filter(d=>d.key.kind===r.kind))}))};
-await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key'),/stored_outputs/);publishedRows=savedPublished;
+await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key',storedStatus),/stored_outputs/);publishedRows=savedPublished;
 console.log('MA E3 AlreadyStored typed proof: existing initial result under newer current catalog, original execution/source/nulls and decrypted exact meaning, missing/forged source denied PASS (synthetic only; no durable replan/UI)');

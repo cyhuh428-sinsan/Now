@@ -3986,15 +3986,25 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     }
     return {operation_id:prepared.id,metadata_manifest_digest:proof.metadata_manifest_digest,published_catalog_digest:catalog.catalog_digest,output_keys:prepared.manifest.DSET.map(d=>d.destination_key)};
   }
-  async function verifyStoredAnalysisPublication(scope,plan,originalCatalog,response,reader,originalPassword,resolveKey,active=()=>true) {
+  async function verifyStoredAnalysisPublication(scope,plan,originalCatalog,response,reader,originalPassword,resolveKey,readStatus,active=()=>true) {
     scope=structuredClone(scope);plan=structuredClone(plan);originalCatalog=structuredClone(originalCatalog);response=structuredClone(response);
     const check=()=>{if(active()!==true)fail('scope_changed');};check();
     await validateStoredAnalysisResult(scope,plan,originalCatalog,response,active);check();
     const original=plan.original,e=original.execution;
     const values=await openTerminalBundle(original.scope,original.request,e,original.work,originalPassword,active);check();
+    if(typeof readStatus!=='function')fail('stored_receipt_unconfirmed');
+    const id=response.stored_result.operation_id;
+    const status=await readStatus(structuredClone(scope),'/api/v2/notes/mixed-analysis-writes/status','GET',
+      {schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,operation_id:id});check();
+    exact(status,['schema_version','status','operation','original_execution']);
+    const op=status.operation;exact(op,['schema_version','purpose','operation_id','mutation_id','state','lease_version','expires_at','metadata_manifest_digest','metadata_header','counts','receipt','latest_context']);
+    if(status.schema_version!==3||status.status!=='operation'||!same(status.original_execution,response.original_execution)
+      ||op.schema_version!==3||op.purpose!=='mixed_analysis_write'||op.operation_id!==id||op.state!=='committed'
+      ||!same(op.receipt,response.stored_result.receipt)||op.mutation_id!==op.receipt.mutation_id||op.metadata_manifest_digest!==op.receipt.metadata_manifest_digest
+      ||op.metadata_header?.operation_id!==id||op.metadata_header.owner_id!==scope.owner||op.metadata_header.local_id!==scope.local_id||op.metadata_header.server_instance_id!==scope.instance)fail('stored_receipt_unconfirmed');
     const catalog=await reader.catalog(scope);check();
     if(!same(catalog.context,response.latest_context))fail('stored_context_changed');
-    const id=response.stored_result.operation_id,rows=catalog.entries.filter(d=>d.semantic_origin_id===id&&slots.some(([kind])=>d.key.kind===kind));
+    const rows=catalog.entries.filter(d=>d.semantic_origin_id===id&&slots.some(([kind])=>d.key.kind===kind));
     if(rows.length!==3||new Set(rows.map(d=>d.key.id)).size!==1)fail('stored_outputs');
     for(let n=0;n<slots.length;n++){
       const [kind,slot]=slots[n],d=rows.find(d=>d.key.kind===kind&&d.key.slot===slot),wasNull=e.bundle_metadata.slot_nulls[n].is_null;
