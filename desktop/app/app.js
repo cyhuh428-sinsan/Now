@@ -373,6 +373,109 @@ function a(e,t){return n(e)||r(e,t)||o(e,t)||i()}function o(e,n){if(e){if(typeof
 `+f),V&&(f=Nn(f)),P&&It?at(f):f},t.setConfig=function(){let e=arguments.length>0&&arguments[0]!==void 0?arguments[0]:{};un(e),jt=!0,Mt=L,Nt=R},t.clearConfig=function(){sn=null,jt=!1,Mt=null,Nt=null,P=tt,F=``},t.isValidAttribute=function(e,t,n){sn||un({});let r=Y(e),i=Y(t);return typeof n==`string`&&(Jn(t,n)||!At&&w(Ge,n))?!1:Un(r,i,n)},t.addHook=function(e,t){typeof t==`function`&&S(I,e)&&ie(I[e],t)},t.removeHook=function(e,t){if(S(I,e)){if(t!==void 0){let n=ne(I[e],t);return n===-1?void 0:oe(I[e],n,1)[0]}return re(I[e])}},t.removeHooks=function(e){S(I,e)&&(I[e]=[])},t.removeAllHooks=function(){I=Ye()},t}return Ze()});
 //# sourceMappingURL=purify.min.js.map
 ;
+/* Stable Markdown anchors are source text; resolved bodies are never cached. */
+(() => {
+  'use strict';
+  const uuid='[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}';
+  const validId=new RegExp('^'+uuid+'$','i');
+  const marker=new RegExp('(?:^|[ \\t])\\^('+uuid+')[ \\t]*$','i');
+  const referencePattern=new RegExp('!\\[\\[nownote:([^/\\n\\]]+)/([^#\\n\\]]+)#\\^('+uuid+')\\]\\]','g');
+  function normalize(source){
+    let text='',positions=[];
+    for(let i=0;i<source.length;i++){
+      positions.push(i);
+      if(source[i]==='\r'){text+='\n';if(source[i+1]==='\n')i++;}
+      else text+=source[i];
+    }
+    positions.push(source.length);
+    return {text,positions};
+  }
+  function index(input){
+    const source=String(input||''),{text,positions}=normalize(source),blocks=[];
+    let cursor=0,previous=null;
+    for(const token of marked.lexer(text,{gfm:true})){
+      if(!token.raw)continue;
+      const start=text.indexOf(token.raw,cursor);
+      if(start<0){previous=null;continue;}
+      cursor=start+token.raw.length;
+      if(token.type==='space')continue;
+      if(!['paragraph','heading','list','blockquote','table','code'].includes(token.type)){previous=null;continue;}
+      const raw=token.raw.replace(/\s+$/,''),match=token.type==='code'?null:marker.exec(raw);
+      if(match&&raw.trim()==='^'+match[1]){
+        if(previous&&!previous.id){
+          previous.id=match[1].toLowerCase();previous.anchorStart=positions[start+raw.indexOf('^')];
+          previous.anchorEnd=positions[start+raw.length];
+        }
+        continue;
+      }
+      const end=start+raw.length,bodyEnd=match?start+match.index:end;
+      const block={id:match?match[1].toLowerCase():null,type:token.type,start:positions[start],end:positions[end],
+        content:source.slice(positions[start],positions[bodyEnd])};
+      if(match){block.anchorStart=positions[start+raw.lastIndexOf('^')];block.anchorEnd=positions[end];}
+      blocks.push(block);previous=block;
+    }
+    return blocks;
+  }
+  function anchor(input,start,end=start){
+    const source=String(input||''),blocks=index(source);
+    const valid=Number.isInteger(start)&&Number.isInteger(end)&&start>=0&&end>=start&&end<=source.length;
+    const block=valid&&blocks.find(row=>start>=row.start&&start<=row.end&&end<=row.end);
+    if(!block)throw Error('참조할 한 블록 안에 커서나 선택 영역을 두세요.');
+    if(block.id){
+      if(blocks.filter(row=>row.id===block.id).length!==1)throw Error('중복된 블록 ID를 먼저 확인하세요.');
+      return {source,blockId:block.id};
+    }
+    const id=crypto.randomUUID(),newline=source.includes('\r\n')?'\r\n':'\n';
+    return {source:source.slice(0,block.end)+newline+newline+'^'+id+source.slice(block.end),blockId:id};
+  }
+  function reference(owner,localId,blockId){
+    if(!owner||!localId||!validId.test(blockId))throw Error('잘못된 메모 참조입니다.');
+    return '![[nownote:'+encodeURIComponent(owner)+'/'+encodeURIComponent(localId)+'#^'+blockId.toLowerCase()+']]';
+  }
+  function parse(value){
+    const match=new RegExp('^'+referencePattern.source+'$').exec(String(value));
+    if(!match)return null;
+    try{
+      const owner=decodeURIComponent(match[1]),localId=decodeURIComponent(match[2]);
+      if(!owner||!localId||owner.length>80||localId.length>120||/[\x00-\x1f\x7f]/.test(owner+localId))return null;
+      return {owner,localId,blockId:match[3].toLowerCase()};
+    }catch{return null;}
+  }
+  function stripAnchors(source){
+    let result=String(source||'');
+    for(const block of index(result).filter(row=>row.id).sort((a,b)=>b.anchorStart-a.anchorStart))
+      result=result.slice(0,block.anchorStart)+result.slice(block.anchorEnd);
+    return result;
+  }
+  function traversal(){
+    return {trail:[],budget:{count:0,bytes:0,maxDepth:5,maxBlocks:200,maxBytes:1048576}};
+  }
+  function resolve(value,ctx,state=traversal()){
+    const ref=parse(value);
+    if(!ref)return {status:'invalid'};
+    if(!ctx.owner||ref.owner!==ctx.owner)return {status:'unavailable'};
+    const key=JSON.stringify([ref.owner,ref.localId,ref.blockId]),{trail,budget}=state;
+    if(trail.includes(key))return {status:'cycle'};
+    if(trail.length>=budget.maxDepth)return {status:'depth_limit'};
+    if(budget.count>=budget.maxBlocks)return {status:'budget_limit'};
+    let note;
+    try{note=ctx.lookup(ref.localId);}catch{return {status:'unavailable'};}
+    if(!note)return {status:'missing'};
+    if(note.owner!==ref.owner)return {status:'unavailable'};
+    if(note.status!=='ok')return {status:['locked','deleted'].includes(note.status)?note.status:'unavailable'};
+    const found=index(note.content).filter(row=>row.id===ref.blockId);
+    if(found.length!==1)return {status:found.length?'ambiguous_block':'missing_block'};
+    const block=found[0],bytes=new TextEncoder().encode(block.content).length;
+    if(budget.bytes+bytes>budget.maxBytes)return {status:'budget_limit'};
+    budget.count++;budget.bytes+=bytes;
+    return {status:'ok',content:block.content,title:note.title||'',ref,start:block.start,end:block.end,
+      next:{trail:[...trail,key],budget}};
+  }
+  globalThis.NowNoteBlocks={index,anchor,reference,parse,stripAnchors,traversal,resolve,
+    pattern:()=>new RegExp(referencePattern.source,'g')};
+})();
+
+;
 /* 원문을 변경하지 않는 문서 변환. 외부 HTML은 정제 후 DOM으로 구성한다. */
 window.NowMarkdown = (() => {
   const tags = ['p','br','hr','strong','em','del','blockquote','ul','ol','li','pre','code','h1','h2','h3','h4','h5','h6','a','img','table','thead','tbody','tr','th','td','details','summary','input','span'];
@@ -398,6 +501,7 @@ window.NowMarkdown = (() => {
   }
   function render(source, options = {}) {
     const sanitize = html => clean(html, options.images !== false);
+    const referenceState=options.referenceState || globalThis.NowNoteBlocks?.traversal();
     const localPaths = [];
     const renderer = new marked.Renderer();
     renderer.link = function(token) {
@@ -410,7 +514,8 @@ window.NowMarkdown = (() => {
     };
     renderer.image = token => options.image ? options.image(escape(token.text), escape(token.href)) : '';
     const root = document.createElement('div');
-    root.innerHTML = sanitize(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
+    const displaySource=globalThis.NowNoteBlocks?NowNoteBlocks.stripAnchors(String(source||'')):String(source||'');
+    root.innerHTML = sanitize(marked.parse(displaySource, { renderer, gfm: true, breaks: true }));
     // details raw block 안에 남은 텍스트도 같은 Markdown parser로 처리한다.
     for (const node of [...root.querySelectorAll('details, blockquote')]) {
       for (const text of [...node.childNodes]) {
@@ -446,6 +551,33 @@ window.NowMarkdown = (() => {
     while (walker.nextNode()) texts.push(walker.currentNode);
     for (const text of texts) {
       if (text.parentElement.closest('pre,code,a,button')) continue;
+      const references=globalThis.NowNoteBlocks?[...text.textContent.matchAll(NowNoteBlocks.pattern())]:[];
+      if(references.length){
+        const nodes=[];let offset=0;
+        for(const match of references){
+          nodes.push(document.createTextNode(text.textContent.slice(offset,match.index)));
+          const result=options.reference?options.reference(match[0],referenceState):{status:'unavailable'};
+          const wrapper=document.createElement('blockquote');wrapper.className='note-reference';
+          if(result.status==='ok'){
+            const link=document.createElement('button');link.type='button';link.className='note-reference-source';
+            link.dataset.noteReference=match[0];link.textContent=result.title || '원문';
+            const body=document.createElement('div');body.className='note-reference-body';
+            body.innerHTML=render(result.content,{...options,referenceState:result.next,sections:false,tasks:false,code:null});
+            body.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));
+            wrapper.append(link,body);
+          }else{
+            const labels={cycle:'순환 참조',depth_limit:'참조 깊이 제한',budget_limit:'참조 크기 제한',
+              missing:'원본 없음',missing_block:'원본 블록 없음',ambiguous_block:'중복 블록 ID',locked:'잠긴 원본'};
+            wrapper.textContent=labels[result.status] || '사용할 수 없는 메모 참조';
+            wrapper.classList.add('unavailable');
+          }
+          nodes.push(wrapper);offset=match.index+match[0].length;
+        }
+        nodes.push(document.createTextNode(text.textContent.slice(offset)));
+        if(text.parentElement.tagName==='P')text.parentElement.replaceWith(...text.parentElement.childNodes);
+        text.replaceWith(...nodes);
+        continue;
+      }
       const parts = text.textContent.split(/(\[\[[^\]\n]+\]\])/g);
       if (parts.length === 1) continue;
       text.replaceWith(...parts.map(part => {
@@ -456,7 +588,7 @@ window.NowMarkdown = (() => {
     }
     const sourceHeadings = scanHeadings(source);
     let sourceOffset = 0;
-    root.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((heading, index) => {
+    [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(heading=>!heading.closest('.note-reference')).forEach((heading, index) => {
       heading.id = `note-heading-${index}`;
       const candidate = sourceHeadings.find(item => {
         const title = document.createElement('div'); title.innerHTML = clean(marked.parseInline(item.title));
@@ -11302,6 +11434,7 @@ async function initializeApp() {
   await loadSettings();
   await initializeLibrary();
   await initializeNoteHistory();
+  initializeBlockReferences();
   applyLanguageQueryOverride();
   initializeLiveMemoEditor();
   bindEvents();
@@ -18466,10 +18599,12 @@ function togglePreview() {
 }
 
 let documentSourceSelection = null;
+let documentFormattedNoteId = null;
 
 function setDocumentMode(isOpening) {
   const selected = getSelectedTreeNode();
   if (!selected || isEditorComposing(elements.treeContent)) return;
+  documentFormattedNoteId=isOpening?selected.id:null;
   if (isOpening) documentSourceSelection = {
     id: selected.id, start: elements.treeContent.selectionStart,
     end: elements.treeContent.selectionEnd, top: elements.treeContent.scrollTop,
@@ -22061,13 +22196,15 @@ function renderTreeEditor() {
   renderTags();
   renderNoteProperties(selected);
   renderNoteStats(selected);
-  elements.markdownPreview.classList.add("hidden");
-  elements.treeContent.classList.remove("hidden");
-  elements.previewToggleBtn.textContent = t("editor.preview");
+  const formatted=documentFormattedNoteId===selected.id;
+  if(!formatted)documentFormattedNoteId=null;
+  elements.markdownPreview.classList.toggle("hidden",!formatted);
+  elements.treeContent.classList.toggle("hidden",formatted);
+  elements.previewToggleBtn.textContent = t(formatted?"editor.edit":"editor.preview");
   renderTreePath(selected);
-  elements.treeContentSurface.classList.remove("hidden");
-  document.querySelector("#documentSourceBtn").setAttribute("aria-pressed", "true");
-  document.querySelector("#documentFormattedBtn").setAttribute("aria-pressed", "false");
+  elements.treeContentSurface.classList.toggle("hidden",formatted);
+  document.querySelector("#documentSourceBtn").setAttribute("aria-pressed", String(!formatted));
+  document.querySelector("#documentFormattedBtn").setAttribute("aria-pressed", String(formatted));
   renderMarkdownPreview(displayContent);
   renderOutlinePanel({ ...selected, content: displayContent });
   renderLinkPanel();
@@ -22713,7 +22850,7 @@ function treePathNodes(id, nodes = state.data.tree, parents = []) {
 }
 
 function renderMarkdownPreview(content) {
-  const html = markdownToHtml(content || "", { withCodeBlockActions: true });
+  const html = markdownToHtml(content || "", { withCodeBlockActions: true, withReferences:true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
   hydrateNoteAttachmentImages(elements.markdownPreview);
 }
@@ -22825,12 +22962,104 @@ function renderLinkPanel() {
   elements.backlinksPanel.replaceChildren(...blocks);
 }
 
+function initializeBlockReferences() {
+  let savedSelection=null,insertion=null;
+  const remember=()=>{
+    const node=getSelectedTreeNode();
+    if(node)savedSelection={id:node.id,text:elements.treeContent.value,start:elements.treeContent.selectionStart,end:elements.treeContent.selectionEnd};
+  };
+  elements.noteActionMenuBtn?.addEventListener("pointerdown",remember);
+  const dialog=document.createElement("dialog");
+  dialog.id="noteBlockReferenceDialog";dialog.className="note-block-dialog";
+  dialog.setAttribute("aria-labelledby","noteBlockReferenceTitle");
+  dialog.innerHTML='<form><header><h2 id="noteBlockReferenceTitle">블록 참조 삽입</h2><button type="button" class="ghost-btn" data-close>닫기</button></header><label for="noteBlockReferenceInput">참조</label><input id="noteBlockReferenceInput" class="settings-input" maxlength="1024" required><p role="status"></p><button id="noteBlockReferenceApply" type="submit" class="secondary-btn">삽입</button></form>';
+  document.body.append(dialog);
+  const input=dialog.querySelector("input"),status=dialog.querySelector('[role="status"]');
+  const commandGuard=()=>{
+    requireProtectionSettled();
+    const node=getSelectedTreeNode(),ctx=noteHistoryContext();
+    if(vaultHistoryApplying || !node || !blockReferenceContext().owner || isEditorComposing(elements.treeContent)
+      || isReadOnlyTreeNode(node) || node.groupSharedReadOnly || isEncryptedContent(node.content))
+      throw Error("편집 가능한 본인 메모의 원문에서 다시 시도하세요.");
+    return {node,ctx};
+  };
+  const selection=()=>{
+    const node=getSelectedTreeNode();
+    if(savedSelection?.id===node?.id && savedSelection.text===elements.treeContent.value)return savedSelection;
+    return {id:node?.id,text:elements.treeContent.value,start:elements.treeContent.selectionStart,end:elements.treeContent.selectionEnd};
+  };
+  const sourceMode=()=>{if(!elements.markdownPreview.classList.contains("hidden"))setDocumentMode(false);};
+  for(const [id,label,action] of [
+    ["noteBlockCopyBtn","블록 참조 복사",async()=>{
+      const {node,ctx}=commandGuard();sourceMode();
+      const range=selection(),result=NowNoteBlocks.anchor(range.text,range.start,range.end);
+      if(result.source!==range.text && !applyTreeEditorText("block-anchor",result.source,range))throw Error("원문 변경을 저장하지 못했습니다.");
+      await noteHistoryCaptureChain;await noteHistory.idle();
+      if(noteHistory.failure() || noteHistoryLastError || NowNoteHistory.key(ctx)!==NowNoteHistory.key(noteHistoryContext()) || ctx.auth!==noteHistoryContext().auth)
+        throw Error("저장·계정을 먼저 확인하세요. 원문은 보존했습니다.");
+      if(!await copyText(NowNoteBlocks.reference(ctx.owner,node.id,result.blockId)))
+        throw Error("참조를 복사하지 못했습니다. 원문 블록 ID는 보존했습니다.");
+      showNotice("블록 참조를 복사했습니다.","success");
+    }],
+    ["noteBlockInsertBtn","블록 참조 삽입",async()=>{
+      const {ctx}=commandGuard();sourceMode();insertion={...selection(),key:NowNoteHistory.key(ctx),auth:ctx.auth};
+      input.value="";status.textContent="";dialog.showModal();input.focus();
+    }]
+  ]){
+    const button=document.createElement("button");button.type="button";button.id=id;button.textContent=label;
+    button.addEventListener("mousedown",event=>event.preventDefault());
+    button.addEventListener("click",()=>action().catch(error=>showNotice(error.message,"error")));
+    elements.noteActionMenu?.append(button);
+  }
+  dialog.querySelector("[data-close]").addEventListener("click",()=>dialog.close());
+  dialog.querySelector("form").addEventListener("submit",event=>{
+    event.preventDefault();
+    try{
+      const {node,ctx}=commandGuard(),ref=NowNoteBlocks.parse(input.value.trim());
+      if(!ref || ref.owner!==ctx.owner)throw Error("본인 메모의 올바른 블록 참조를 입력하세요.");
+      if(!insertion || node.id!==insertion.id || elements.treeContent.value!==insertion.text
+        || insertion.key!==NowNoteHistory.key(ctx) || insertion.auth!==ctx.auth)throw Error("메모 또는 계정이 변경되었습니다. 다시 선택하세요.");
+      const before=insertion.text.slice(0,insertion.start),after=insertion.text.slice(insertion.end);
+      const value=before+(before&&!before.endsWith("\n\n")?"\n\n":"")+input.value.trim()+(after&&!after.startsWith("\n\n")?"\n\n":"")+after;
+      if(!applyTreeEditorText("block-reference",value))throw Error("참조를 삽입하지 못했습니다.");
+      dialog.close();elements.treeContent.focus();
+    }catch(error){status.textContent=error.message;}
+  });
+  elements.markdownPreview.addEventListener("click",event=>{
+    const link=event.target.closest("[data-note-reference]");
+    if(!link)return;
+    const result=NowNoteBlocks.resolve(link.dataset.noteReference,blockReferenceContext());
+    if(result.status!=="ok"){renderMarkdownPreview(visibleContentForNode(getSelectedTreeNode()));return;}
+    selectTreeNode(result.ref.localId);setDocumentMode(false);
+    elements.treeContent.focus();elements.treeContent.setSelectionRange(result.start,result.end);
+    elements.treeContent.scrollTop=Math.max(0,elements.treeContent.scrollHeight*result.start/Math.max(1,elements.treeContent.value.length)-80);
+  });
+}
+
+function blockReferenceContext() {
+  const ctx=noteHistoryContext();
+  const available=ctx.enabled && !hostedWebSyncSuspended
+    && noteHistoryProjectionScope===NowNoteHistory.key(ctx);
+  return {owner:available?ctx.owner:"",lookup:id=>{
+    const node=findTreeNode(state.data.tree,id);
+    if(!node)return null;
+    if(node.groupSharedReadOnly || (node.remoteOwnerId && node.remoteOwnerId!==ctx.owner))
+      return {owner:ctx.owner,status:"unavailable"};
+    if(node.status==="deleted")return {owner:ctx.owner,status:"deleted"};
+    if(node.protection_record || noteProtectionBlocked(id) || isEncryptedContent(node.content))
+      return {owner:ctx.owner,status:"locked"};
+    return {owner:ctx.owner,status:"ok",title:noteTitle(node.title),content:node.content};
+  }};
+}
+
 function markdownToHtml(markdown, options = {}) {
+  const referenceContext=options.withReferences?blockReferenceContext():null;
   return NowMarkdown.render(markdown || "", {
     sections: Boolean(options.withCodeBlockActions),
     tasks: Boolean(options.withCodeBlockActions) && !isReadOnlyTreeNode(getSelectedTreeNode()) && !isEncryptedTreeNodeLocked(getSelectedTreeNode()),
     image: renderInlineImage,
     code: options.withCodeBlockActions ? renderMarkdownCodeBlock : null,
+    reference:referenceContext?(value,traversal)=>NowNoteBlocks.resolve(value,referenceContext,traversal):null,
   });
 }
 
@@ -23458,7 +23687,8 @@ function findTreeNodeByTitle(title) {
 }
 
 function extractWikiLinks(content) {
-  return Array.from(stripMarkdownCode(content).matchAll(/\[\[([^\]]+)\]\]/g), (match) => match[1].trim())
+  const titleLinks=stripMarkdownCode(content).replace(NowNoteBlocks.pattern(),"");
+  return Array.from(titleLinks.matchAll(/\[\[([^\]]+)\]\]/g), (match) => match[1].trim())
     .filter(Boolean);
 }
 

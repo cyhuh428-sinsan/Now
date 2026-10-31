@@ -439,6 +439,74 @@ function stopBrowserProcess(browser) {
   browser.kill("SIGKILL");
 }
 
+async function checkBlockReferences(page) {
+  await evaluate(page, String.raw`(() => {
+    const id="11111111-1111-4111-8111-111111111111",owner=noteHistoryContext().owner;
+    const source=createNode("Block source","**Live source** ^"+id,null,1);
+    source.id="block-source";source.shared=false;
+    const target=createNode("Block destination",NowNoteBlocks.reference(owner,source.id,id),null,1);
+    target.id="block-destination";target.shared=false;
+    state.data=defaultData();state.data.tree=[source,target];state.selectedTreeId=target.id;
+    globalThis.blockQa={id,owner,ref:target.content};
+    setView("tree");render();setDocumentMode(true);
+  })()`);
+  const inspect=()=>evaluate(page,'({body:elements.markdownPreview.textContent,links:elements.markdownPreview.querySelectorAll("[data-note-reference]").length,raw:getSelectedTreeNode().content})');
+  let value=await inspect();
+  assert(value.body.includes("Live source")&&value.links===1,"Block reference must resolve with source navigation");
+  assert(value.raw.startsWith("![[nownote:"),"Live reference must not replace raw source with a copy");
+  await evaluate(page,'render()');
+  assert(await evaluate(page,'!elements.markdownPreview.classList.contains("hidden")'),"A same-note refresh must preserve formatted mode");
+  assert(await evaluate(page,'uniqueWikiLinks(getSelectedTreeNode().content).length===0'),"Stable block references are not missing title links");
+  assert(await evaluate(page,'!elements.markdownPreview.textContent.includes("^"+blockQa.id)'),"Formatted view must hide the anchor");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").content="**Updated source** ^"+blockQa.id;renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).body.includes("Updated source"),"Source updates must be visible without a saved copy");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").groupSharedReadOnly=true;renderMarkdownPreview(getSelectedTreeNode().content)');
+  value=await inspect();assert(!value.body.includes("Updated source")&&value.links===0,"Group or foreign source must not leak");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").groupSharedReadOnly=false;findTreeNode(state.data.tree,"block-source").content="NOW_ENCRYPTED_V1:fixture";renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert(!(await inspect()).body.includes("Updated source"),"Locked source must not use cached plaintext");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").content=blockQa.ref+" ^"+blockQa.id;renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).body.includes("순환"),"Recursive references must stop");
+  const outside=await evaluate(page,'markdownToHtml(blockQa.ref)');
+  assert(!outside.includes("data-note-reference"),"Export/publish must not silently expand live sources");
+  await evaluate(page,'state.data.tree=state.data.tree.filter(node=>node.id!=="block-source");renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).links===0,"Deleted source cannot stay available");
+  await evaluate(page,String.raw`(() => {
+    const source=createNode("Copy source","Copyable **block**",null,1);source.id="block-copy-source";source.shared=false;
+    state.data.tree.push(source);state.selectedTreeId=source.id;render();setDocumentMode(false);
+    copyText=async()=>{globalThis.blockQaCopyAttempt=true;return false;};
+    elements.treeContent.focus();elements.treeContent.setSelectionRange(2,6);
+    document.querySelector("#noteBlockCopyBtn").click();
+  })()`);
+  await waitForCondition(page,'Boolean(globalThis.blockQaCopyAttempt)',"Block copy failure boundary");
+  assert(await evaluate(page,'elements.toastRegion.textContent.includes("참조를 복사하지 못했습니다")'),"Clipboard failure must not be shown as success");
+  await evaluate(page,'copyText=async text=>{globalThis.blockQaClipboard=text;return true;};elements.treeContent.focus();elements.treeContent.setSelectionRange(2,6);document.querySelector("#noteBlockCopyBtn").click()');
+  await waitForCondition(page,'Boolean(globalThis.blockQaClipboard)',"Block copy command");
+  assert(await evaluate(page,'NowNoteBlocks.parse(blockQaClipboard)?.localId==="block-copy-source" && NowNoteBlocks.index(getSelectedTreeNode().content).some(row=>row.id)'),"Copy must preserve a stable source anchor");
+  await evaluate(page,'undoTreeEditor()');
+  assert(await evaluate(page,'getSelectedTreeNode().content==="Copyable **block**"'),"Anchor command must support Undo");
+  await evaluate(page,'redoTreeEditor();selectTreeNode("block-destination");setDocumentMode(false);elements.treeContent.focus();elements.treeContent.setSelectionRange(0,elements.treeContent.value.length);document.querySelector("#noteBlockInsertBtn").click()');
+  await evaluate(page,'document.querySelector("#noteBlockReferenceInput").value=blockQaClipboard;document.querySelector("#noteBlockReferenceApply").click()');
+  assert(await evaluate(page,'getSelectedTreeNode().content.trim()===blockQaClipboard'),"Insert must store the reference, not a copied body");
+  await evaluate(page,'setDocumentMode(true)');
+  assert((await inspect()).body.includes("Copyable"),"Inserted reference must render");
+  await evaluate(page,'elements.markdownPreview.querySelector("[data-note-reference]").click()');
+  assert(await evaluate(page,'state.selectedTreeId==="block-copy-source" && elements.treeContent.selectionStart===0'),"Reference must navigate to the original block");
+  for(const width of [1280,390]){
+    await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+    await evaluate(page,'selectTreeNode("block-destination");setDocumentMode(true)');
+    if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+      const shot=await page.send("Page.captureScreenshot");
+      await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"blocks-"+(process.argv.includes("--desktop")?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+    }
+    await evaluate(page,'document.querySelector("#noteBlockInsertBtn").click()');
+    assert(await evaluate(page,'(()=>{const d=document.querySelector("#noteBlockReferenceDialog").getBoundingClientRect(),i=document.querySelector("#noteBlockReferenceInput").getBoundingClientRect();return d.left>=0&&d.right<=innerWidth&&i.left>=d.left&&i.right<=d.right;})()'),"Reference dialog must fit the viewport");
+    await evaluate(page,'document.querySelector("#noteBlockReferenceDialog").close()');
+  }
+  await evaluate(page,'persist();persistSettings();(async()=>{await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()');
+  assert(await evaluate(page,'Boolean(noteHistory.view("block-destination")) && (isDesktopClient() || Boolean(JSON.parse(localStorage.getItem(NOTE_HISTORY_KEY))?.contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.["block-destination"]))'),"Block journal must be present before closing");
+  console.log("Source blocks actual UI: live update, source link, raw preservation, group/lock/delete/cycle and export isolation PASS");
+}
+
 async function runOnce() {
   assert(typeof WebSocket === "function", "현재 Node.js 런타임이 WebSocket을 지원하지 않습니다.");
 
@@ -469,6 +537,21 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
+    if(process.argv.includes("--document")){
+      const {verifyDocumentFlow}=await import("./document_fixture.mjs");
+      const click=async selector=>{
+        const point=await evaluate(page,'(()=>{const e=document.querySelector('+JSON.stringify(selector)+');e.scrollIntoView({block:"nearest"});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');
+        await page.send("Input.dispatchMouseEvent",{type:"mousePressed",...point,button:"left",clickCount:1});
+        await page.send("Input.dispatchMouseEvent",{type:"mouseReleased",...point,button:"left",clickCount:1});
+      };
+      const fill=async(selector,text)=>{
+        await evaluate(page,'(()=>{const e=document.querySelector('+JSON.stringify(selector)+');e.focus();e.setSelectionRange(0,e.value.length);})()');
+        await page.send("Input.insertText",{text});
+      };
+      const result=await verifyDocumentFlow({evaluate:expression=>evaluate(page,expression),click,fill});
+      console.log("Existing document fixture: sanitizer, details, headings, raw roundtrip, IME, Undo and print PASS; headings="+result.headings.length);
+      return;
+    }
 
     if(process.argv.includes("--vault-history")){
       await checkVaultHistoryUI(page,tempDir);
@@ -484,6 +567,24 @@ async function runOnce() {
     }
     if (process.argv.includes("--canvas-account")) {
       await checkCanvasAccountUI(page);
+      return;
+    }
+    if(process.argv.includes("--blocks")){
+      await checkBlockReferences(page);
+      if(!desktop){
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA browser normal close timeout");})]);
+      }else stopBrowserProcess(browser);
+      browserClient.close();await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",...(desktop?{NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir}:{})},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      await waitForCondition(page,'typeof noteHistory!=="undefined" && Boolean(noteHistory?.view("block-destination"))',"Block reference cold journal");
+      await evaluate(page,'selectTreeNode("block-destination");setDocumentMode(true)');
+      assert(await evaluate(page,'getSelectedTreeNode().content.trim().startsWith("![[nownote:") && elements.markdownPreview.textContent.includes("Copyable")'),"Cold process must restore the live reference, not a copied body");
+      console.log("Source blocks cold process: source anchor, raw reference and live formatted body PASS");
       return;
     }
     if (process.argv.includes("--canvas-only")) {

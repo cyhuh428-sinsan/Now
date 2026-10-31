@@ -5477,3 +5477,18 @@ kbd {
 .note-protection-dialog > section[aria-label="보호 메모 분석"] { display: block; }
 .note-protection-dialog [name="analysis-operation"] { width: 100%; }
 .protection-plain:empty { display: none; }
+
+.note-reference { border-left: 3px solid var(--blue); margin: 12px 0; padding: 8px 12px; overflow-wrap: anywhere; }
+.note-reference.unavailable { border-color: var(--line); color: var(--muted); font-size: 13px; }
+.note-reference-source { border: 0; background: transparent; color: var(--blue); padding: 4px 0; font-size: 12px; text-align: left; max-width: 100%; overflow-wrap: anywhere; cursor: pointer; }
+.note-reference-body > :first-child { margin-top: 4px; }
+.note-reference-body > :last-child { margin-bottom: 0; }
+.note-reference-body pre { max-width: 100%; overflow: auto; }
+.note-block-dialog { width: min(560px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); box-sizing: border-box; margin: auto; padding: 16px; background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 8px; overflow: auto; }
+.note-block-dialog::backdrop { background: rgba(0,0,0,.45); }
+.note-block-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.note-block-dialog h2 { margin: 0; font-size: 18px; }
+.note-block-dialog label { display: block; margin-bottom: 6px; font-size: 13px; }
+.note-block-dialog input { box-sizing: border-box; width: 100%; min-width: 0; }
+.note-block-dialog [role="status"] { min-height: 20px; margin: 8px 0; font-size: 13px; color: var(--red); overflow-wrap: anywhere; }
+.note-block-dialog :is(button,input):focus-visible, .note-reference-source:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

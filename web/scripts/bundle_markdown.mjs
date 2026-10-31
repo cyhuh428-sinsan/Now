@@ -6,7 +6,7 @@ const vendor = path.join(root, 'web/vendor');
 const prefix = '// BEGIN NOWNOTE MARKDOWN RUNTIME', suffix = '// END NOWNOTE MARKDOWN RUNTIME';
 // Git의 CRLF checkout 여부와 관계없이 빌드 소스만 LF로 비교·생성한다.
 const normalize = source => source.replace(/\r\n/g, '\n');
-const libraries = await Promise.all(['marked.umd.js','purify.min.js','document-renderer.js','library-state.js','library-ui.js','diff.js','note-history-state.js','note-history-ui.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-protection-analysis.js','note-protection-ui.js'].map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
+const libraries = await Promise.all(['marked.umd.js','purify.min.js','note-blocks.js','document-renderer.js','library-state.js','library-ui.js','diff.js','note-history-state.js','note-history-ui.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-protection-analysis.js','note-protection-ui.js'].map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
 const licenses = await Promise.all(['marked.LICENSE','dompurify.LICENSE','diff.LICENSE'].map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
 for (const relative of ['web/app.js','desktop/app/app.js']) {
   const file = path.join(root,relative); let source = await fs.readFile(file,'utf8');

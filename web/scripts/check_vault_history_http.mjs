@@ -10,6 +10,8 @@ const {renderManagedMarkdown}=require('../../desktop/vault-markdown.cjs');
 const {readStoreFile,updateStoreFile}=require('../../desktop/store-file.cjs');
 const base='http://127.0.0.1:8750',run=randomUUID().replaceAll('-','').slice(0,12);
 const owner='qa_vault_'+run,device='qa-vault-'+run,local='qa-vault-'+run;
+const blocks=process.argv.includes('--blocks'),blockId=randomUUID();
+const originalBody=blocks?'Original block ^'+blockId:'before';
 const manifestDir=process.env.NOWNOTE_QA_MANIFEST_DIR;
 assert.ok(manifestDir&&process.env.NOWNOTE_QA_ENV_FILE,'Private QA paths required');
 const env=await fs.readFile(process.env.NOWNOTE_QA_ENV_FILE,'utf8');
@@ -22,6 +24,7 @@ await fs.mkdir(root,{recursive:true});
 const own=await fs.mkdtemp(path.join(root,'http-'));
 const storePath=path.join(own,'store.json'),vault=path.join(own,'vault');
 const manifest={run,owner,local,device,requests:[],outcome:'running',providerCalls:0,serverResources:'retained synthetic QA'};
+manifest.blockReferences=blocks;
 manifest.sourceHashes={};
 for(const file of ['../vendor/note-history-state.js','../../desktop/vault-history.cjs','../../desktop/vault-service.cjs'])
   manifest.sourceHashes[file]=createHash('sha256').update(await fs.readFile(new URL(file,import.meta.url))).digest('hex');
@@ -54,18 +57,19 @@ try{
   const write=async value=>{updateStoreFile(storePath,store=>{store.values['nownote.history.v1']=value;return store;});};
   const make=initial=>box.NowNoteHistory.create({initial,context:()=>ctx,request,write});
   const now=new Date().toISOString();
-  const note={id:null,owner_id:owner,device_id:device,local_id:local,note_type:'tree',title:'Vault HTTP QA',content:'before',
+  const note={id:null,owner_id:owner,device_id:device,local_id:local,note_type:'tree',title:'Vault HTTP QA',content:originalBody,
     parent_local_id:null,level:1,tags:'',source:'web-tree',created_at:now,updated_at:now,client_updated_at:now,deleted_at:null};
   let history=make();
   await history.track(note,null,{needsBaseline:true});await history.seal(local);await history.sync();
   assert.equal(history.view(local).outbox.length,0);assert.ok(history.view(local).base.head_revision_id);
   const original=history.view(local).base.head_revision_id;
   await fs.mkdir(path.join(vault,'Topic'),{recursive:true});
-  const file=path.join(vault,'Topic','_index.md'),imported='Imported Vault HTTP body '+run;
+  const file=path.join(vault,'Topic','_index.md');
+  const imported=blocks?'Updated block ^'+blockId+'\n\n![[nownote:'+encodeURIComponent(owner)+'/'+encodeURIComponent(local)+'#^'+blockId+']]':'Imported Vault HTTP body '+run;
   const markdown=renderManagedMarkdown({id:local,kind:'topic',title:note.title,body:imported,tags:[]});
   await fs.writeFile(file,markdown);
   updateStoreFile(storePath,store=>{
-    store.values['nownote.web.v1']={tree:[{id:local,title:note.title,content:'before',level:1,parentId:null,tags:[],children:[],status:'active'}]};
+    store.values['nownote.web.v1']={tree:[{id:local,title:note.title,content:originalBody,level:1,parentId:null,tags:[],children:[],status:'active'}]};
     store.values['nownote.web.settings.v1']={server:{mode:'server',url:base,ownerId:owner,deviceId:device}};
     store.values['nownote.vault.v1']={path:vault,baselines:{}};return store;
   });
@@ -80,7 +84,7 @@ try{
   const current=await request(ctx,'current','GET',{local_id:local});
   assert.equal(current.snapshot.note.content,imported);
   const previous=await request(ctx,'revision','GET',{local_id:local,revision_kind:'note_revision',revision_id:original});
-  assert.equal(previous.snapshot.note.content,'before');
+  assert.equal(previous.snapshot.note.content,originalBody);
   history=make(readStoreFile(storePath).store.values['nownote.history.v1']);
   assert.equal(history.view(local).draft.content,imported);assert.equal(history.view(local).outbox.length,0);
   assert.equal(await fs.readFile(file,'utf8'),markdown);

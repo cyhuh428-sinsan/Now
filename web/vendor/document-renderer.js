@@ -23,6 +23,7 @@ window.NowMarkdown = (() => {
   }
   function render(source, options = {}) {
     const sanitize = html => clean(html, options.images !== false);
+    const referenceState=options.referenceState || globalThis.NowNoteBlocks?.traversal();
     const localPaths = [];
     const renderer = new marked.Renderer();
     renderer.link = function(token) {
@@ -35,7 +36,8 @@ window.NowMarkdown = (() => {
     };
     renderer.image = token => options.image ? options.image(escape(token.text), escape(token.href)) : '';
     const root = document.createElement('div');
-    root.innerHTML = sanitize(marked.parse(String(source || ''), { renderer, gfm: true, breaks: true }));
+    const displaySource=globalThis.NowNoteBlocks?NowNoteBlocks.stripAnchors(String(source||'')):String(source||'');
+    root.innerHTML = sanitize(marked.parse(displaySource, { renderer, gfm: true, breaks: true }));
     // details raw block 안에 남은 텍스트도 같은 Markdown parser로 처리한다.
     for (const node of [...root.querySelectorAll('details, blockquote')]) {
       for (const text of [...node.childNodes]) {
@@ -71,6 +73,33 @@ window.NowMarkdown = (() => {
     while (walker.nextNode()) texts.push(walker.currentNode);
     for (const text of texts) {
       if (text.parentElement.closest('pre,code,a,button')) continue;
+      const references=globalThis.NowNoteBlocks?[...text.textContent.matchAll(NowNoteBlocks.pattern())]:[];
+      if(references.length){
+        const nodes=[];let offset=0;
+        for(const match of references){
+          nodes.push(document.createTextNode(text.textContent.slice(offset,match.index)));
+          const result=options.reference?options.reference(match[0],referenceState):{status:'unavailable'};
+          const wrapper=document.createElement('blockquote');wrapper.className='note-reference';
+          if(result.status==='ok'){
+            const link=document.createElement('button');link.type='button';link.className='note-reference-source';
+            link.dataset.noteReference=match[0];link.textContent=result.title || '원문';
+            const body=document.createElement('div');body.className='note-reference-body';
+            body.innerHTML=render(result.content,{...options,referenceState:result.next,sections:false,tasks:false,code:null});
+            body.querySelectorAll('[id]').forEach(node=>node.removeAttribute('id'));
+            wrapper.append(link,body);
+          }else{
+            const labels={cycle:'순환 참조',depth_limit:'참조 깊이 제한',budget_limit:'참조 크기 제한',
+              missing:'원본 없음',missing_block:'원본 블록 없음',ambiguous_block:'중복 블록 ID',locked:'잠긴 원본'};
+            wrapper.textContent=labels[result.status] || '사용할 수 없는 메모 참조';
+            wrapper.classList.add('unavailable');
+          }
+          nodes.push(wrapper);offset=match.index+match[0].length;
+        }
+        nodes.push(document.createTextNode(text.textContent.slice(offset)));
+        if(text.parentElement.tagName==='P')text.parentElement.replaceWith(...text.parentElement.childNodes);
+        text.replaceWith(...nodes);
+        continue;
+      }
       const parts = text.textContent.split(/(\[\[[^\]\n]+\]\])/g);
       if (parts.length === 1) continue;
       text.replaceWith(...parts.map(part => {
@@ -81,7 +110,7 @@ window.NowMarkdown = (() => {
     }
     const sourceHeadings = scanHeadings(source);
     let sourceOffset = 0;
-    root.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach((heading, index) => {
+    [...root.querySelectorAll('h1,h2,h3,h4,h5,h6')].filter(heading=>!heading.closest('.note-reference')).forEach((heading, index) => {
       heading.id = `note-heading-${index}`;
       const candidate = sourceHeadings.find(item => {
         const title = document.createElement('div'); title.innerHTML = clean(marked.parseInline(item.title));
