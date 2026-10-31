@@ -3,6 +3,15 @@
   const target='qa-http-'+run+'-target',other='qa-http-'+run+'-other',plain='HTTP-QA-ORIGINAL-'+run+'\r\n',password='qa-protection-'+run;
   const assert=(v,code)=>{if(!v)throw Error(code);},wait=()=>new Promise(r=>setTimeout(r,15));
   const emit=event=>console.log('HTTP_QA_EVENT '+JSON.stringify(event));
+  const originalProtectionGuard=protectionActionGuard;
+  protectionActionGuard=()=>{
+    const check=originalProtectionGuard(),before=JSON.parse(protectionViewKey()),generation=noteProtectionViewGeneration;
+    return ()=>{try{check();}catch(error){
+      const after=JSON.parse(protectionViewKey()),names=['url','owner','auth','device','selected','target'];
+      emit({stage:'protection_guard_changed',code:[...(generation!==noteProtectionViewGeneration?['generation']:[]),...names.filter((name,i)=>before[i]!==after[i])].join('.')||'unknown'});
+      throw error;
+    }};
+  };
   const url=config.mode==='web'&&config.phase!==24?'http://localhost.:8750':'http://127.0.0.1:8750';
   async function request(path,method='GET',body,headers) {
     let response;

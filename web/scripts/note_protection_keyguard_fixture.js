@@ -64,5 +64,29 @@
     assert(writes===1&&dialog.querySelector('.protection-plain').textContent==='FRESH-ONLY','fresh key request failed');
     view.invalidate();await delay();dialog.remove();cases++;normal++;
   }
-  return {ok:true,mode:globalThis.__PROTECTION_QA__.mode,phase:1,stage:'action-bound-key-requests',staleCases:cases,freshReads:normal};
+  let staleDraftCases=0;
+  for(const outcome of ['resolve','reject']){
+    let context='old-view',release,reject,locks=0,pending=false;
+    const gate=new Promise((yes,no)=>{release=yes;reject=no;});
+    const view=mountNoteProtection({contextKey:()=>context,canMutate:()=>true,targets:()=>['one'],target:()=> 'one',selectTarget:()=>{},lock:()=>{locks++;},
+      inspect:async()=>({scope:{url:'https://synthetic.invalid',owner:'one',local_id:'one',instance:'synthetic'},status:{crypto_epoch:1},
+        catalog:{context:{base:{current_exists:true},current_mode:'protected'}},rows:[{label:'Synthetic'}]}),copies:async()=>[],
+      edit:async()=>({title:'Synthetic',content:'OLD-DRAFT'}),draft:async()=>{pending=true;await gate;},read:async()=> 'FRESH-VIEW'});
+    await view.open();const dialog=document.querySelector('#noteProtectionDialog'),button=name=>dialog.querySelector('[data-action="'+name+'"]');
+    button('edit').click();
+    for(let i=0;i<500&&(button('refresh').disabled||dialog.querySelector('.protection-editor').classList.contains('hidden'));i++)await delay();
+    assert(!dialog.querySelector('.protection-editor').classList.contains('hidden'),'Draft editor not ready');
+    const input=dialog.querySelector('.protection-draft');input.value='PENDING-OLD-DRAFT';input.dispatchEvent(new Event('input',{bubbles:true}));
+    assert(pending,'Old draft save was not pending');
+    view.lock();context='new-view';await view.open();button('read').click();
+    for(let i=0;i<500&&button('refresh').disabled;i++)await delay();
+    assert(dialog.querySelector('.protection-plain').textContent==='FRESH-VIEW','Fresh read did not finish');
+    const before=locks;
+    if(outcome==='resolve')release();else reject(Error('synthetic_old_draft_failed'));
+    await delay();await delay();
+    assert(locks===before,'Old draft callback relocked the newer protection view');
+    assert(dialog.querySelector('.protection-plain').textContent==='FRESH-VIEW','Old draft callback wiped newer plaintext');
+    view.invalidate();await delay();dialog.remove();staleDraftCases++;
+  }
+  return {ok:true,mode:globalThis.__PROTECTION_QA__.mode,phase:1,stage:'action-bound-key-requests',staleCases:cases,freshReads:normal,staleDraftCases};
 })();

@@ -24,7 +24,8 @@ const server = createServer(async(req,res)=>{
 });
 let child = null;
 try {
-  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(8750,'127.0.0.1',resolve);});
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(keyGuard?0:8750,'127.0.0.1',resolve);});
+  const port=server.address().port;
   const require = createRequire(new URL('../../desktop/package.json',import.meta.url));
   const electron = require('electron');
   for(const mode of ['desktop','web'].filter(mode=>!process.argv.some(a=>a.startsWith('--mode=')) || process.argv.includes('--mode='+mode))) {
@@ -32,7 +33,7 @@ try {
     let serverState = null;
     for(const phase of keyGuard ? [1] : [1,2]) {
       const result = path.join(own,mode+'-'+phase+'.json'), config = path.join(own,mode+'-'+phase+'-config.json');
-      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result,suite:views?'e4b3a':'e4b2',serverState,keyGuard,
+      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result,port,suite:views?'e4b3a':'e4b2',serverState,keyGuard,
         screenshot:views&&phase===2?process.env.NOWNOTE_PROTECTION_SCREENSHOT_DIR:null}));
       const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE;
       child = spawn(electron,[path.join(root,'web/scripts/note_protection_client_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});

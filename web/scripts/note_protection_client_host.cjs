@@ -31,12 +31,12 @@ ipcMain.handle('nownote:vault-status',()=>({connected:false}));
 ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 app.whenReady().then(async()=>{
   session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(details,done)=>{
-    const url = new URL(details.url); done({cancel:!(['localhost.','127.0.0.1'].includes(url.hostname) && url.port === '8750')});
+    const url = new URL(details.url); done({cancel:!(['localhost.','127.0.0.1'].includes(url.hostname) && url.port === String(config.port||8750))});
   });
   const window = new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,
     ...(config.mode === 'desktop' ? {preload:path.join(config.root,'desktop/preload.cjs')} : {})}});
   try {
-    if(config.mode === 'web') await window.loadURL('http://localhost.:8750/index.html');
+    if(config.mode === 'web') await window.loadURL('http://localhost.:'+(config.port||8750)+'/index.html');
     else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
     for(let i=0;i<240;i++) {
       if(await window.webContents.executeJavaScript('typeof noteHistory !== "undefined" && Boolean(noteHistory && noteProtection)' + (config.mode === 'web' ? ' && noteHistory.suspended()' : '')))break;

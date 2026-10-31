@@ -57,7 +57,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     askCancel?.(); api.lock();
   }
   function valid(token) {
-    if (dialog.open && state.bound===api.contextKey() && state.run===token) return true;
+    if (!dialog.open || state.run!==token) return false;
+    if (state.bound===api.contextKey()) return true;
     wipe(); return false;
   }
   function editorView(preview) {

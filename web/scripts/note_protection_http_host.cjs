@@ -119,6 +119,12 @@ app.whenReady().then(async()=>{
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
     window.destroy();app.exit(0);
-  }catch(error){const code=/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error';persistEvidence({mode:config.mode,phase:config.phase,failure:code});await closeSyntheticProvider();window.destroy();app.exit(1);}
+  }catch(error){
+    const messages=[['잠금 또는 보호 대상 변경으로 작업이 취소되었습니다.','protection_view_changed'],['위키 보호 계정·서버가 변경되었습니다.','wiki_scope_changed'],['보호 응답의 인증 상태가 변경되었습니다.','protection_auth_changed']];
+    const code=messages.find(([message])=>error.message?.includes(message))?.[1]
+      || (/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error');
+    const errorType=/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error';
+    persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();app.exit(1);
+  }
 });
 setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>app.exit(1));},120000).unref();
