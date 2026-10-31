@@ -129,5 +129,14 @@
     }
     return [...ids].sort();
   }
-  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies};
+  async function localProtectionScope(context,localId){
+    const ctx=scope(context);
+    if(!ctx.owner||!context.device||!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(localId))
+      throw Error('wiki_local_protection_scope');
+    // This deterministic local namespace is not a server-instance assertion.
+    const digest=await P.sha256('NowNote local wiki protection v1\n'+P.canonicalJson({...ctx,local_id:localId}));
+    const instance=digest.slice(0,8)+'-'+digest.slice(8,12)+'-5'+digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
+    return {...ctx,instance,local_id:localId,device:context.device};
+  }
+  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies,localProtectionScope};
 })();

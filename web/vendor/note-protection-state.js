@@ -247,10 +247,12 @@
     function localWikiRecord(scope,value) {
       if (!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.local_id)
         || !value || value.localOnly !== true || value.base?.head_revision_id || value.base?.head_version
+        || value.base?.crypto_epoch || value.base?.history_generation || value.base?.server_instance_id || value.base?.snapshot
+        || value.base?.inventory_revision_ids?.length || value.base?.replica_count || value.receipts?.length
         || value.raw?.source !== 'wiki-artifact' || value.draft?.source !== 'wiki-artifact'
         || value.raw?.id != null || value.draft?.id != null || value.raw?.owner_id !== scope.owner
         || value.draft?.owner_id !== scope.owner || value.raw?.local_id !== scope.local_id || value.draft?.local_id !== scope.local_id
-        || !Array.isArray(value.revisions) || value.revisions.some(r => r.imported || r.server_ref)
+        || !Array.isArray(value.revisions) || value.revisions.some(r => r.imported || r.server_ref || r.import_request)
         || !Array.isArray(value.outbox) || value.outbox.some(op => op.sent) || value.completed_outbox?.length
         || value.archived_outbox?.length || value.conflict) fail('local_wiki_required');
     }

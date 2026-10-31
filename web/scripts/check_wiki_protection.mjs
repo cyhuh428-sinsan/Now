@@ -49,6 +49,10 @@ assert.equal(archive.value.draft.content,text);assert.equal(archive.value.revisi
 assert.deepEqual(other,{content:'preserve-other'});assert.equal(network,0);
 await controller.resume(id,password);assert.equal(network,0);
 const W=box.NowNoteWiki;
+assert.equal(typeof W.localProtectionScope,'function');
+const localScope=await W.localProtectionScope(ctx,local);
+assert.equal(localScope.instance,(await W.localProtectionScope({...ctx,device:'two'},local)).instance,'Local archive identity survives a different device without claiming a real server identity');
+assert.notEqual(localScope.instance,(await W.localProtectionScope({...ctx,owner:'bob'},local)).instance);
 assert.equal(typeof W.sourceProtectionDependencies,'function','Original protection must inspect all local wiki draft/history dependencies before freezing sources');
 const wikiDoc={schema_version:1,wiki_id:local.slice(5),scope:{url:scope.url,owner:scope.owner},
   drafts:[{source_manifest:[{note_ref:{owner_id:scope.owner,local_id:'original'}}]},
@@ -66,4 +70,12 @@ const second='wiki:'+webcrypto.randomUUID(),serverScope={...scope,local_id:secon
 await journal.track({...note,local_id:second},null,{localOnly:false});
 await assert.rejects(()=>controller.startLocalWiki(serverScope,password),/local_wiki/);
 assert.equal(network,0);
-console.log('Local wiki protection: zero network, cipher journal, interrupted per-store CAS, wrong key/owner, cold resume, exact history, source dependency union and server-note refusal PASS');
+const uncertain='wiki:'+webcrypto.randomUUID(),uncertainScope={...scope,local_id:uncertain};
+await journal.track({...note,local_id:uncertain},null,{localOnly:true});await journal.seal(uncertain,'wiki_edit');
+data=journal.export();const uncertainRecord=data.contexts[key].notes[uncertain];
+uncertainRecord.protectionScope=copy(uncertainScope);
+uncertainRecord.revisions[0].import_request={schema_version:1,mutation_id:webcrypto.randomUUID()};
+await journal.replaceProtectionStore(journal.export(),data);
+await assert.rejects(()=>controller.startLocalWiki(uncertainScope,password),/local_wiki_required/,'A persisted import request with an unknown server outcome is not local-only evidence');
+assert.equal(network,0);
+console.log('Local wiki protection: zero network, cipher journal, interrupted per-store CAS, wrong key/owner, cold resume, exact history, dependency union and uncertain-server refusal PASS');
