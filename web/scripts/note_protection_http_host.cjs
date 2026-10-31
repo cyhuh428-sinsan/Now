@@ -7,6 +7,7 @@ if(!path.resolve(config.profile).startsWith(qaRoot+path.sep))throw Error('profil
 app.setPath('userData',config.profile);app.disableHardwareAcceleration();
 const credentials=JSON.parse(fs.readFileSync(config.secrets,'utf8'));
 if(config.phase===24)credentials.a.device+='-peer';
+const clientMode=config.phase===24?'desktop':config.mode;
 const tokenLine=fs.readFileSync(config.envFile,'utf8').split(/\r?\n/).find(v=>v.startsWith('NOW_QA_API_TOKEN='));
 let apiToken=tokenLine?.slice('NOW_QA_API_TOKEN='.length).trim();
 if(apiToken?.startsWith('"')&&apiToken.endsWith('"'))apiToken=apiToken.slice(1,-1);
@@ -55,7 +56,7 @@ async function closeSyntheticProvider(){
   if(syntheticProvider){
     const provider=syntheticProvider;await provider.close();
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{port:provider.port,...provider.stats(),attempts:providerAttempts,closed:!provider.isListening()}});syntheticProvider=null;
-  }else if([15,17,19,20,21].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
+  }else if([15,17,19,20,21,22,23,24].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
 }
 app.whenReady().then(async()=>{
   if([14,16,18].includes(config.phase)){
@@ -72,7 +73,7 @@ app.whenReady().then(async()=>{
   });
   session.defaultSession.webRequest.onCompleted({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(u.pathname.startsWith('/api/'))persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,status:d.statusCode});});
   session.defaultSession.webRequest.onErrorOccurred({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750')persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,error:/^net::ERR_[A-Z_]+$/.test(d.error)?d.error:'network_error'});});
-  const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,...(config.mode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
+  const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,...(clientMode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
   window.webContents.on('console-message',(...args)=>{
     const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
     if(typeof message!=='string'||!message.startsWith('HTTP_QA_EVENT '))return;
@@ -82,19 +83,20 @@ app.whenReady().then(async()=>{
       }
       if(['analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
+          persistEvidence({mode:config.mode,phase:config.phase,captureStage:size+'_start'});
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
           const name=(event.stage==='analysis_replan_ready'?'analysis-replanned':event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
-          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage()).toPNG());
+          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
         window.setContentSize(1280,900);await window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=true');
-      })().catch(()=>{void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=false');});
+      })().catch(()=>{persistEvidence({mode:config.mode,phase:config.phase,captureFailure:'capture_failed'});void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_ERROR__="capture_failed"');});
     }catch{}
   });
   try {
     if(syntheticProvider&&await session.defaultSession.resolveProxy(syntheticProvider.origin)!=='DIRECT')throw Error('synthetic_provider_proxy_not_direct');
-    if(config.mode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
+    if(clientMode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));

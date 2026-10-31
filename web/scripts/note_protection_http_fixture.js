@@ -3,7 +3,7 @@
   const target='qa-http-'+run+'-target',other='qa-http-'+run+'-other',plain='HTTP-QA-ORIGINAL-'+run+'\r\n',password='qa-protection-'+run;
   const assert=(v,code)=>{if(!v)throw Error(code);},wait=()=>new Promise(r=>setTimeout(r,15));
   const emit=event=>console.log('HTTP_QA_EVENT '+JSON.stringify(event));
-  const url=config.mode==='web'?'http://localhost.:8750':'http://127.0.0.1:8750';
+  const url=config.mode==='web'&&config.phase!==24?'http://localhost.:8750':'http://127.0.0.1:8750';
   async function request(path,method='GET',body,headers) {
     let response;
     try{response=await fetch(url+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...(headers||noteHistoryContext().headers),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});}
@@ -56,7 +56,10 @@
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
   if(config.phase===24){
+    const originalDevice=config.mode==='web'?'web-client':a.device.replace(/-peer$/,'');
+    assert(!isHostedWebClient(),'peer_client_must_support_distinct_device');
     a.device=noteHistoryContext().device;
+    assert(a.device!==originalDevice&&a.device.endsWith('-peer'),'peer_device_not_distinct');
     assert(!noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.[target],'peer_inherited_original_journal');
     await loadServerSharedNotes();await settle();state.selectedTreeId=target;render();await open();
     const before=await inspectNoteProtection();
@@ -70,7 +73,7 @@
     assert(value.value==='HTTP-QA-PEER-'+run+'\n','peer_current_readback');
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-PEER-'),'peer_plaintext_persisted');
     emit({stage:'analysis_peer_source_changed',owner:a.owner,local_id:target,device_id:a.device});button('lock').click();clearWebSession();
-    return {ok:true,mode:config.mode,phase:24,peerDeviceId:a.device,isolatedPeer:true,sourceChanged:true,headVersion:c.base.head_version,historyGeneration:c.base.history_generation,providerCalls:0};
+    return {ok:true,mode:config.mode,phase:24,peerClient:'desktop',peerDeviceId:a.device,distinctDevice:true,isolatedPeer:true,sourceChanged:true,headVersion:c.base.head_version,historyGeneration:c.base.history_generation,providerCalls:0};
   }
   if([22,23].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
@@ -111,7 +114,7 @@
       assert(current.value==='HTTP-QA-PEER-'+run+'\n'&&Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'replan_overwrote_peer_current_or_cold_catalog');
       const otherNote=await request('/api/v2/notes/current?'+query(other));assert(otherNote.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'replan_changed_other');
       emit({stage:'analysis_replan_ready',owner:a.owner,local_id:target,operation_id:r.prepared.id,local_operation_id:id});
-      for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await wait();assert(globalThis.__HTTP_CAPTURE_DONE__===true,'replan_capture_unconfirmed');
+      for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__&&!globalThis.__HTTP_CAPTURE_ERROR__;i++)await wait();assert(!globalThis.__HTTP_CAPTURE_ERROR__,'replan_capture_failed');assert(globalThis.__HTTP_CAPTURE_DONE__===true,'replan_capture_unconfirmed');
     }
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'replan_plain_result_persisted');
     button('lock').click();clearWebSession();
