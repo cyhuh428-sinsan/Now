@@ -211,6 +211,49 @@ async function waitForCondition(page, expression, label, timeoutMs = DEFAULT_TIM
   throw new Error(`${label} 확인 시간이 초과되었습니다.`);
 }
 
+async function checkCanvasInteractions(page) {
+  await page.send("Emulation.setDeviceMetricsOverride", {width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(page, `(() => {
+    state.data = defaultData(); state.settings.server = defaultServerSettings();
+    state.data.tree = [{id:"canvas-source",title:"Canvas source",content:"Original stays",children:[],level:1}];
+    state.data.canvases = [];
+    state.selectedTreeId = "canvas-source";
+    openCanvasView(); elements.canvasAddNoteBtn.click(); elements.canvasAddTextBtn.click();
+    state.selectedCanvasCardIds = activeCanvas().cards.map(card=>card.id);
+    elements.canvasConnectBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().cards.length===2 && activeCanvas().edges.length===1'), "Canvas add/connect failed");
+  for (const zoom of [0.6,1,1.8]) {
+    const start = await evaluate(page, `(() => {
+      const c=activeCanvas(); c.zoom=${zoom}; c.cards[0].x=80;c.cards[0].y=80;
+      renderCanvas(); elements.canvasBoard.scrollLeft=0;elements.canvasBoard.scrollTop=0;
+      const r=elements.canvasBoard.querySelector("[data-canvas-drag]").getBoundingClientRect();
+      return {x:r.left+8,y:r.top+8,id:c.cards[0].id};
+    })()`);
+    await page.send("Input.dispatchMouseEvent", {type:"mousePressed",x:start.x,y:start.y,button:"left",clickCount:1});
+    await page.send("Input.dispatchMouseEvent", {type:"mouseMoved",x:start.x+60*zoom,y:start.y+30*zoom,button:"left",buttons:1});
+    await page.send("Input.dispatchMouseEvent", {type:"mouseReleased",x:start.x+60*zoom,y:start.y+30*zoom,button:"left",clickCount:1});
+    const card = await evaluate(page, 'activeCanvas().cards[0]');
+    assert(Math.abs(card.x-140)<2 && Math.abs(card.y-110)<2, "Canvas pointer zoom coordinates wrong: "+zoom);
+  }
+  await evaluate(page, `(() => {
+    const c=activeCanvas();state.selectedCanvasCardIds=c.cards.map(card=>card.id);
+    elements.canvasDisconnectBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().edges.length===0 && activeCanvas().cards.length===2'), "Canvas disconnect deletes cards");
+  await evaluate(page, `(() => {
+    state.selectedCanvasCardIds=[activeCanvas().cards[0].id];elements.canvasRemoveBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().cards.length===1 && state.data.tree[0].content==="Original stays"'), "Canvas card removal changed original");
+  await page.send("Emulation.setDeviceMetricsOverride", {width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await evaluate(page, 'renderCanvas()');
+  assert(await evaluate(page, `(() => {
+    const view=elements.canvasView.querySelector(".canvas-card").getBoundingClientRect();
+    return view.left>=0 && view.right<=innerWidth+1;
+  })()`), "Canvas narrow dialog overflow");
+  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, disconnect, source-preserving remove and narrow layout PASS");
+}
+
 function browserArgs(debugPort, userDataDir, appUrl) {
   return [
     "--headless=new",
@@ -260,6 +303,11 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
+
+    if (process.argv.includes("--canvas-only")) {
+      await checkCanvasInteractions(page);
+      return;
+    }
 
     const result = await evaluate(page, `
       (() => {

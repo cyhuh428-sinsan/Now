@@ -8922,6 +8922,8 @@ const elements = {
   canvasAddNoteBtn: $("#canvasAddNoteBtn"),
   canvasAddTextBtn: $("#canvasAddTextBtn"),
   canvasConnectBtn: $("#canvasConnectBtn"),
+  canvasDisconnectBtn: $("#canvasDisconnectBtn"),
+  canvasRemoveBtn: $("#canvasRemoveBtn"),
   canvasDraftFromGraphBtn: $("#canvasDraftFromGraphBtn"),
   canvasZoomOutBtn: $("#canvasZoomOutBtn"),
   canvasZoomInBtn: $("#canvasZoomInBtn"),
@@ -12843,6 +12845,8 @@ function bindEvents() {
   elements.canvasAddNoteBtn?.addEventListener("click", addSelectedNoteCanvasCard);
   elements.canvasAddTextBtn?.addEventListener("click", addTextCanvasCard);
   elements.canvasConnectBtn?.addEventListener("click", connectSelectedCanvasCards);
+  elements.canvasDisconnectBtn?.addEventListener("click", disconnectSelectedCanvasCards);
+  elements.canvasRemoveBtn?.addEventListener("click", removeSelectedCanvasCards);
   elements.canvasDraftFromGraphBtn?.addEventListener("click", createCanvasDraftFromGraph);
   elements.canvasZoomOutBtn?.addEventListener("click", () => adjustCanvasZoom(-0.1));
   elements.canvasZoomInBtn?.addEventListener("click", () => adjustCanvasZoom(0.1));
@@ -19726,12 +19730,13 @@ function defaultCanvas() {
 function normalizeCanvas(canvas = {}) {
   const now = new Date().toISOString();
   const source = canvas && typeof canvas === "object" ? canvas : {};
-  const cards = Array.isArray(source.cards) ? source.cards.filter(isPlainObject) : [];
+  const cards = (Array.isArray(source.cards) ? source.cards.filter(isPlainObject) : []).map(normalizeCanvasCard);
   const cardIds = new Set(cards.map((card) => card.id).filter(Boolean));
+  const seenEdges = new Set();
   return {
     id: typeof source.id === "string" && source.id ? source.id : crypto.randomUUID(),
     title: normalizeText(source.title || "생각 Canvas").slice(0, 80),
-    cards: cards.map((card) => normalizeCanvasCard(card)),
+    cards,
     edges: (Array.isArray(source.edges) ? source.edges : [])
       .filter(isPlainObject)
       .map((edge) => ({
@@ -19741,8 +19746,12 @@ function normalizeCanvas(canvas = {}) {
         label: normalizeText(edge.label).slice(0, 60),
       }))
       .filter((edge) => edge.from && edge.to && edge.from !== edge.to && cardIds.has(edge.from) && cardIds.has(edge.to))
-      .slice(0, 80),
-    zoom: Math.min(1.8, Math.max(0.6, Number(source.zoom) || 1)),
+      .filter((edge) => {
+        const key = JSON.stringify([edge.from, edge.to]);
+        if (seenEdges.has(key)) return false;
+        seenEdges.add(key); return true;
+      }),
+    zoom: Math.min(1.8, Math.max(0.1, Number(source.zoom) || 1)),
     createdAt: source.createdAt || now,
     updatedAt: source.updatedAt || source.createdAt || now,
   };
@@ -19755,8 +19764,8 @@ function normalizeCanvasCard(card = {}) {
     type,
     noteId: type === "note" && typeof card.noteId === "string" ? card.noteId : "",
     text: normalizeText(card.text).slice(0, 600),
-    x: Math.min(1800, Math.max(0, Number(card.x) || 80)),
-    y: Math.min(1200, Math.max(0, Number(card.y) || 80)),
+    x: Number.isFinite(Number(card.x)) ? Math.max(0, Number(card.x)) : 80,
+    y: Number.isFinite(Number(card.y)) ? Math.max(0, Number(card.y)) : 80,
     width: Math.min(360, Math.max(180, Number(card.width) || 240)),
     color: normalizeText(card.color || "blue").slice(0, 24),
   };
@@ -19779,8 +19788,8 @@ function markCanvasChanged(canvas = activeCanvas()) {
 
 function openCanvasView() {
   closePopupLayers();
-  renderCanvas();
   elements.canvasView.classList.remove("hidden");
+  renderCanvas();
 }
 
 function closeCanvasView() {
@@ -19825,24 +19834,34 @@ function renderCanvasBoard(canvas) {
     const from = cardById.get(edge.from);
     const to = cardById.get(edge.to);
     if (!from || !to) return "";
-    const x1 = (from.x + from.width / 2) * canvas.zoom;
-    const y1 = (from.y + 50) * canvas.zoom;
-    const x2 = (to.x + to.width / 2) * canvas.zoom;
-    const y2 = (to.y + 50) * canvas.zoom;
+    const x1 = from.x + from.width / 2;
+    const y1 = from.y + 50;
+    const x2 = to.x + to.width / 2;
+    const y2 = to.y + 50;
     const lx = (x1 + x2) / 2;
     const ly = (y1 + y2) / 2;
     return `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"></line><text x="${lx}" y="${ly}">${escapeHtml(edge.label || "연결")}</text>`;
   }).join("");
+  const width = Math.max(800, ...canvas.cards.map(card => card.x + card.width + 80));
+  const height = Math.max(560, ...canvas.cards.map(card => card.y + 280));
   elements.canvasBoard.innerHTML = `
-    <svg class="canvas-edges" viewBox="0 0 2200 1500" aria-hidden="true">${edgeSvg}</svg>
-    ${canvas.cards.map((card) => canvasCardHtml(card, canvas.zoom)).join("")}
+    <div class="canvas-stage" style="width:${width * canvas.zoom}px;height:${height * canvas.zoom}px">
+      <div class="canvas-world" style="width:${width}px;height:${height}px;transform:scale(${canvas.zoom})">
+        <svg class="canvas-edges" viewBox="0 0 ${width} ${height}" aria-hidden="true">${edgeSvg}</svg>
+        ${canvas.cards.map((card) => canvasCardHtml(card, 1)).join("")}
+      </div>
+    </div>
   `;
   elements.canvasBoard.querySelectorAll("[data-canvas-card-id]").forEach((cardEl) => {
+    bindCanvasCardDrag(cardEl, canvas);
     cardEl.addEventListener("click", () => toggleCanvasCardSelection(cardEl.dataset.canvasCardId));
     cardEl.querySelector("[data-action='open-note']")?.addEventListener("click", (event) => {
       event.stopPropagation();
       const card = canvas.cards.find((item) => item.id === cardEl.dataset.canvasCardId);
-      if (card?.noteId && findTreeNode(state.data.tree, card.noteId)) selectTreeNode(card.noteId);
+      if (card?.noteId && findTreeNode(state.data.tree, card.noteId)) {
+        closeCanvasView();
+        selectTreeNode(card.noteId);
+      }
     });
     cardEl.querySelector("[data-action='text']")?.addEventListener("input", (event) => {
       const card = canvas.cards.find((item) => item.id === cardEl.dataset.canvasCardId);
@@ -19864,11 +19883,58 @@ function canvasCardHtml(card, zoom) {
     ? `<button class="small-btn" type="button" data-action="open-note">열기</button>`
     : "";
   return `
-    <article class="canvas-board-card ${selected ? "selected" : ""}" data-canvas-card-id="${escapeHtml(card.id)}" style="left:${card.x * zoom}px; top:${card.y * zoom}px; width:${card.width * zoom}px;">
-      <header><strong>${escapeHtml(title)}</strong>${openButton}</header>
+    <article class="canvas-board-card ${selected ? "selected" : ""}" tabindex="0" aria-label="${escapeHtml(title)}" data-canvas-card-id="${escapeHtml(card.id)}" style="left:${card.x * zoom}px; top:${card.y * zoom}px; width:${card.width * zoom}px;">
+      <header data-canvas-drag><strong>${escapeHtml(title)}</strong>${openButton}</header>
       ${body}
     </article>
   `;
+}
+
+function bindCanvasCardDrag(cardEl, canvas) {
+  const header = cardEl.querySelector("[data-canvas-drag]"), data = state.data;
+  let drag = null;
+  cardEl.addEventListener("keydown", event => {
+    if (event.target !== cardEl) return;
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault(); toggleCanvasCardSelection(cardEl.dataset.canvasCardId); return;
+    }
+    const delta = {ArrowLeft:[-40,0],ArrowRight:[40,0],ArrowUp:[0,-40],ArrowDown:[0,40]}[event.key];
+    if (!delta) return;
+    event.preventDefault();
+    state.selectedCanvasCardIds = [cardEl.dataset.canvasCardId];
+    moveSelectedCanvasCard(...delta);
+    elements.canvasBoard.querySelector(`[data-canvas-card-id="${CSS.escape(cardEl.dataset.canvasCardId)}"]`)?.focus();
+  });
+  header?.addEventListener("pointerdown", event => {
+    if (event.button !== 0 || event.target.closest("button")) return;
+    const card = canvas.cards.find(item => item.id === cardEl.dataset.canvasCardId);
+    if (!card) return;
+    drag = {id:event.pointerId,x:event.clientX,y:event.clientY,left:card.x,top:card.y,card,moved:false};
+    header.setPointerCapture(event.pointerId);
+    event.preventDefault();
+  });
+  header?.addEventListener("pointermove", event => {
+    if (!drag || event.pointerId !== drag.id || data !== state.data) return;
+    const dx = (event.clientX - drag.x) / canvas.zoom, dy = (event.clientY - drag.y) / canvas.zoom;
+    drag.moved ||= Math.abs(dx) + Math.abs(dy) > 3;
+    if (!drag.moved) return;
+    drag.card.x = Math.max(0, drag.left + dx); drag.card.y = Math.max(0, drag.top + dy);
+    cardEl.style.left = drag.card.x + "px"; cardEl.style.top = drag.card.y + "px";
+  });
+  const finish = event => {
+    if (!drag || event.pointerId !== drag.id) return;
+    const last = drag; drag = null;
+    if (event.type !== "pointerup" || data !== state.data) {
+      last.card.x = last.left; last.card.y = last.top;
+    } else if (last.moved) {
+      state.selectedCanvasCardIds = [last.card.id];
+      markCanvasChanged(canvas);
+    }
+    if (data === state.data) renderCanvas();
+  };
+  header?.addEventListener("pointerup", finish);
+  header?.addEventListener("pointercancel", finish);
+  header?.addEventListener("lostpointercapture", finish);
 }
 
 function canvasCardTitle(card) {
@@ -19924,8 +19990,8 @@ function moveSelectedCanvasCard(dx, dy) {
   const id = state.selectedCanvasCardIds[state.selectedCanvasCardIds.length - 1];
   const card = canvas.cards.find((item) => item.id === id);
   if (!card) return;
-  card.x = Math.min(1800, Math.max(0, card.x + dx));
-  card.y = Math.min(1200, Math.max(0, card.y + dy));
+  card.x = Math.max(0, card.x + dx);
+  card.y = Math.max(0, card.y + dy);
   markCanvasChanged(canvas);
   renderCanvas();
 }
@@ -19947,14 +20013,38 @@ function connectSelectedCanvasCards() {
 
 function adjustCanvasZoom(delta) {
   const canvas = activeCanvas();
-  canvas.zoom = Math.min(1.8, Math.max(0.6, Math.round((canvas.zoom + delta) * 10) / 10));
+  canvas.zoom = Math.min(1.8, Math.max(0.1, Math.round((canvas.zoom + delta) * 10) / 10));
   markCanvasChanged(canvas);
   renderCanvas();
 }
 
 function fitCanvasView() {
   const canvas = activeCanvas();
-  canvas.zoom = 1;
+  const cards = canvas.cards, board = elements.canvasBoard;
+  const left = cards.length ? Math.min(...cards.map(card => card.x)) : 0;
+  const top = cards.length ? Math.min(...cards.map(card => card.y)) : 0;
+  const right = cards.length ? Math.max(...cards.map(card => card.x + card.width)) : 1;
+  const bottom = cards.length ? Math.max(...cards.map(card => card.y + 200)) : 1;
+  canvas.zoom = Math.max(0.1, Math.min(1, (board.clientWidth - 48) / (right - left), (board.clientHeight - 48) / (bottom - top)));
+  markCanvasChanged(canvas);
+  renderCanvas();
+  board.scrollLeft = Math.max(0, left * canvas.zoom - 24);
+  board.scrollTop = Math.max(0, top * canvas.zoom - 24);
+}
+
+function removeSelectedCanvasCards() {
+  const canvas = activeCanvas(), selected = new Set(state.selectedCanvasCardIds);
+  canvas.cards = canvas.cards.filter(card => !selected.has(card.id));
+  canvas.edges = canvas.edges.filter(edge => !selected.has(edge.from) && !selected.has(edge.to));
+  state.selectedCanvasCardIds = [];
+  markCanvasChanged(canvas);
+  renderCanvas();
+}
+
+function disconnectSelectedCanvasCards() {
+  const canvas = activeCanvas(), [from, to] = state.selectedCanvasCardIds;
+  if (!from || !to) return;
+  canvas.edges = canvas.edges.filter(edge => !((edge.from === from && edge.to === to) || (edge.from === to && edge.to === from)));
   markCanvasChanged(canvas);
   renderCanvas();
 }
