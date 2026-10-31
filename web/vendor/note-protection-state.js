@@ -243,6 +243,18 @@
       if (bundle.schema_version !== 1 || bundle.operation_id !== m.id || !eq(bundle.scope,m.scope) || !Array.isArray(bundle.stores)) fail('bundle_binding');
       return bundle;
     }
+    const localWikiIntent = intent => intent?.purpose === 'local_wiki_protection';
+    function localWikiRecord(scope,value) {
+      if (!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.local_id)
+        || !value || value.localOnly !== true || value.base?.head_revision_id || value.base?.head_version
+        || value.raw?.source !== 'wiki-artifact' || value.draft?.source !== 'wiki-artifact'
+        || value.raw?.id != null || value.draft?.id != null || value.raw?.owner_id !== scope.owner
+        || value.draft?.owner_id !== scope.owner || value.raw?.local_id !== scope.local_id || value.draft?.local_id !== scope.local_id
+        || !Array.isArray(value.revisions) || value.revisions.some(r => r.imported || r.server_ref)
+        || !Array.isArray(value.outbox) || value.outbox.some(op => op.sent) || value.completed_outbox?.length
+        || value.archived_outbox?.length || value.conflict) fail('local_wiki_required');
+    }
+    const localWikiReceipt = (scope,id) => ({schema_version:1,purpose:'local_wiki_protection',operation_id:id,scope:copy(scope)});
     async function start(scope,intent,password,resolveKey) {
       if (!password) fail('key_required'); const ctx = own(scope), generation = epoch;
       if (Object.values(operations()).filter(inAccount).some(m => scopeKey(validateMarker(m).scope) === scopeKey(scope) && m.phase !== 'complete')) fail('operation_exists');
@@ -250,10 +262,21 @@
       freezing = copy(scope); change();
       try {
         await preflight(scope); active(ctx,generation);
+        const local = localWikiIntent(intent);
+        if (local) {
+          fields(intent,['schema_version','purpose']);
+          if (intent.schema_version !== 1) fail('local_wiki_intent');
+          localWikiRecord(scope,journal.export().contexts?.[globalThis.NowNoteHistory.key(scope)]?.notes?.[scope.local_id]);
+        }
         const id = crypto.randomUUID(), sources = [], memo = new Map();
         for (const store of stores()) {
           const raw = await store.read(); active(ctx,generation);
-          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope,{includeArchives:true}),scope,id,password,memo,resolveKey,intent) });
+          const entries=inventory(raw,store.kind,scope,{includeArchives:true});
+          if (local) for (const entry of entries) {
+            if (entry.type !== 'journal') fail('local_wiki_copy');
+            localWikiRecord(scope,entry.before);
+          }
+          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(entries,scope,id,password,memo,resolveKey,intent) });
           active(ctx,generation);
         }
         if (!sources.some(s => s.patches.length)) {
@@ -262,8 +285,10 @@
           active(ctx,generation);
         }
         const bundle = { schema_version: 1, scope: copy(scope), operation_id: id, intent: copy(intent), stores: sources, drain: null, prepared: null, work: null, receipt: null };
-        const marker = { schema_version: 1, id, scope: copy(scope), phase: 'drain_pending', cipher_bundle: '' };
+        if (local) bundle.receipt=localWikiReceipt(scope,id);
+        const marker = { schema_version: 1, id, scope: copy(scope), phase: local?'applying':'drain_pending', cipher_bundle: '' };
         await save(marker,bundle,password,ctx,generation);
+        if (local) return id;
         bundle.drain = await remote.drainPrepare(scope,copy(bundle.intent)); active(ctx,generation);
         marker.phase = 'draining'; await save(marker,bundle,password,ctx,generation);
         return id;
@@ -274,6 +299,13 @@
       if (running) fail('busy'); running = true;
       try {
         const b = await open(marker,password); active(ctx,generation);
+        const local = localWikiIntent(b.intent);
+        if (local) {
+          fields(b.intent,['schema_version','purpose']);
+          if (b.intent.schema_version !== 1 || !['applying','complete'].includes(marker.phase)
+            || b.drain !== null || b.prepared !== null || b.work !== null
+            || !eq(b.receipt,localWikiReceipt(marker.scope,marker.id))) fail('local_wiki_bundle');
+        }
         const persist = () => save(marker,b,password,ctx,generation);
         if (marker.phase === 'complete') return copy(b.receipt);
         if (marker.phase === 'drain_pending') {
@@ -316,8 +348,10 @@
         }
         if (marker.phase === 'server_committed') { marker.phase = 'applying'; await persist(); }
         if (marker.phase === 'applying') {
-          const currentStatus = await remote.status(marker.scope,copy(b.prepared),copy(b.work)); active(ctx,generation);
-          if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
+          if (!local) {
+            const currentStatus = await remote.status(marker.scope,copy(b.prepared),copy(b.work)); active(ctx,generation);
+            if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
+          }
           const adapters = stores();
           if (!eq(adapters.map(s => s.name),b.stores.map(s => s.name))) fail('store_inventory_changed');
           const knownCiphers = b.stores.flatMap(s => s.patches).flatMap(p => [p.after.protection_record,
@@ -362,6 +396,7 @@
       } finally { running = false; }
     }
     return { start,resume,status,
+      startLocalWiki:(scope,password,resolveKey)=>start(scope,{schema_version:1,purpose:'local_wiki_protection'},password,resolveKey),
       invalidate() { epoch++; },
       blocked(id) {
         if (freezing && inAccount({scope:freezing}) && freezing.local_id === id) return true;

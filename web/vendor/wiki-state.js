@@ -95,5 +95,39 @@
     }
     return {available:sources.every(source=>source.status!=='unavailable'),stale:sources.some(source=>source.status!=='ok'),sources};
   }
-  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus};
+  function sourceProtectionDependencies(roots,context,localId){
+    const ctx=scope(context),account=JSON.stringify([ctx.url,ctx.owner]),ids=new Set(),seen=new WeakSet();
+    const stack=roots.map(value=>({value,accountKnown:false}));
+    while(stack.length){
+      const {value,accountKnown}=stack.pop();
+      if(!value||typeof value!=='object'||seen.has(value))continue;seen.add(value);
+      if(Object.hasOwn(value,'protection_record')){
+        if(!globalThis.NowNoteProtectionState?.protectedRecord(value))throw Error('wiki_protection_copy');
+      }
+      if(value.source==='wiki-artifact'&&value.owner_id===ctx.owner){
+        let doc;try{doc=JSON.parse(value.content);}catch{throw Error('wiki_protection_format');}
+        if(P.canonicalJson(doc.scope)!==P.canonicalJson(ctx)){
+          if(accountKnown)throw Error('wiki_protection_scope');
+          continue;
+        }
+        if(doc.schema_version!==1||'wiki:'+doc.wiki_id!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
+          throw Error('wiki_protection_format');
+        for(const draft of doc.drafts){
+          if(!Array.isArray(draft.source_manifest)||!draft.source_manifest.length)throw Error('wiki_protection_format');
+          for(const ref of draft.source_manifest){
+            if(ref?.note_ref?.owner_id!==ctx.owner||typeof ref.note_ref.local_id!=='string')throw Error('wiki_protection_scope');
+            if(ref.note_ref.local_id===localId)ids.add(value.local_id);
+          }
+        }
+      }
+      for(const [name,child] of Object.entries(value)){
+        if(['protection_record','protection_operations'].includes(name))continue;
+        if(name==='contexts'){
+          if(child?.[account])stack.push({value:child[account],accountKnown:true});
+        }else stack.push({value:child,accountKnown});
+      }
+    }
+    return [...ids].sort();
+  }
+  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies};
 })();
