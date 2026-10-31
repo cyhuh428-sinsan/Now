@@ -3856,7 +3856,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if(tokens.has(s.source_etag)||!same(s.descriptor,catalog.entries[n]))fail('write_sources');tokens.add(s.source_etag);
     }
     const job=manifest.DSET[0].destination_key?.id;
-    if(typeof job!=='string'||!/^[1-9][0-9]*$/.test(job)||job===String(e.job_id)||catalog.entries.some(d=>['analysis_error','analysis_input','analysis_result'].includes(d.key.kind)&&d.key.id===job))fail('replan_job');
+    if(typeof job!=='string'||!/^[1-9][0-9]*$/.test(job)||catalog.entries.some(d=>['analysis_error','analysis_input','analysis_result'].includes(d.key.kind)&&d.key.id===job))fail('replan_job');
     const outputs=e.bundle_metadata.slot_nulls.map((s,n)=>{
       const key={...s.key,id:job},token=manifest.DSET[n].source_etag;uuid(token);
       if(tokens.has(token)||e.output_slots.some(o=>o.source_etag===token))fail('replan_token');tokens.add(token);

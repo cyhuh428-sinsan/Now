@@ -208,3 +208,15 @@ for(const change of [r=>{r.stored_result.receipt.owner_id='bob';},r=>{r.stored_r
 }
 assert.equal(replanManifestCalls,beforeStored);
 console.log('MA E3 AlreadyStored metadata: original execution/receipt scope and fixed path, no manifest/upload/commit after stored response, forgery denial PASS (synthetic only; typed proof/durable completion not yet wired)');
+const provisional=copy(settled);provisional.job_id_mode='provisional';
+provisional.claim_metadata_digest=await Q.hashJson({schema_version:3,...pick(request,[...fields,'execution_route','client_execution_confirmed']),job_id:12,job_id_mode:'provisional',output_slots});
+const unpostedCatalog={context:copy(newerCatalog.context),entries:copy(catalog.entries)};unpostedCatalog.catalog_digest=await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,...unpostedCatalog});
+const provisionalPlan=await A.createReplanWritePlan(scope,request,provisional,work,unpostedCatalog,previous,uid(203),'fixture-key',{...confirmation,target_epoch:2});
+const sameInteger=copy(replanManifest);sameInteger.source_catalog_digest=unpostedCatalog.catalog_digest;sameInteger.P=copy(unpostedCatalog.entries);sameInteger.S=unpostedCatalog.entries.map((descriptor,i)=>({descriptor,source_etag:uid(210+i)}));
+for(const o of sameInteger.DSET){o.destination_key.id='12';if(o.expected_binding)o.expected_binding.destination_key.id='12';}
+const sameOrigins=[...sameInteger.P.map(expectation),...sameInteger.DSET.map(o=>({destination_key:o.destination_key,is_null:o.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:replanId,semantic_origin_id:replanId}))];
+sameInteger.O=Q.keyOrder(sameOrigins.map(o=>o.destination_key)).map(key=>sameOrigins.find(o=>Q.canonicalJson(key)===Q.canonicalJson(o.destination_key)));
+await A.validateReplanWriteManifest(scope,provisionalPlan,unpostedCatalog,sameInteger);
+const collision=copy(replanManifest);for(const o of collision.DSET){o.destination_key.id='12';if(o.expected_binding)o.expected_binding.destination_key.id='12';}
+await assert.rejects(()=>A.validateReplanWriteManifest(scope,rekeyPlan,newerCatalog,collision),/replan_job/);
+console.log('MA replan SQLite provisional ID: same unused job integer with fresh operation/tokens accepted, actual current catalog collision denied PASS (synthetic only)');
