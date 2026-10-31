@@ -289,7 +289,7 @@
           if(dispatched.state!=='client_running'||dispatched.dispatch_receipt===null)fail('dispatch_unconfirmed');
           b.execution=dispatched;b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
           const handoff=Object.freeze({operation_id:id,scope:Object.freeze(structuredClone(marker.scope)),execution:structuredClone(dispatched),route:Object.freeze(structuredClone(b.route)),input:b.input,provider_state:'ready'});
-          tickets.set(handoff,{operation_id:id,scope:structuredClone(marker.scope),auth:c.auth,generation:epoch,execution:structuredClone(dispatched),observationStarted:false});
+          tickets.set(handoff,{operation_id:id,scope:structuredClone(marker.scope),auth:c.auth,generation:epoch,request:structuredClone(b.request),execution:structuredClone(dispatched),observationStarted:false,unavailableCore:null});
           return handoff;
         }finally{running=false;}
       },
@@ -332,6 +332,38 @@
           const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
           if(!same(readback.terminal.receipt,b.terminal.receipt))fail('terminal_checkpoint_readback');
           return structuredClone(b.terminal.receipt);
+        }finally{running=false;}
+      },
+      async reportUnavailable(handoff,observation) {
+        const ticket=tickets.get(handoff);if(!ticket)fail('handoff_unknown');
+        observation=structuredClone(observation);exact(observation,['provider_terminal_observed','unavailable_reason']);
+        if(observation.provider_terminal_observed!==true)fail('terminal_unobserved');
+        if(!['key_unavailable','cipher_store_failed','response_lost'].includes(observation.unavailable_reason))fail('unavailable_reason');
+        const c=own(ticket.scope),epoch=generation;
+        if(c.auth!==ticket.auth)fail('scope_changed');
+        if(ticket.unavailableCore!==null&&ticket.unavailableCore.unavailable_reason!==observation.unavailable_reason)fail('terminal_core_changed');
+        if(running)fail('busy');running=true;
+        try{
+          const b={request:ticket.request,execution:ticket.execution},observed=await fresh(ticket.scope,b,c,epoch);
+          const matches=(e,core)=>{
+            if(e.state!=='result_unavailable'||e.bundle_metadata!==null||e.terminal_receipt?.outcome!=='result_unavailable'
+              ||e.run_version!==core.run_version+1||e.lease_version!==core.lease_version)fail('terminal_receipt_changed');
+            return structuredClone(e.terminal_receipt);
+          };
+          if(observed.terminal_receipt!==null){
+            if(ticket.unavailableCore!==null)matches(observed,ticket.unavailableCore);
+            ticket.execution=observed;return structuredClone(observed.terminal_receipt);
+          }
+          if(!['client_running','cancel_requested'].includes(observed.state)||observed.dispatch_receipt===null)fail('terminal_state');
+          const core={...access(ticket.scope),execution_id:observed.execution_id,run_version:observed.run_version,lease_version:observed.lease_version,
+            dispatch_id:observed.dispatch_receipt.dispatch_id,claim_metadata_digest:observed.claim_metadata_digest,provider_terminal_observed:true,
+            outcome:'result_unavailable',bundle_metadata:null,local_checkpoint_confirmed:false,unavailable_reason:observation.unavailable_reason};
+          if(ticket.unavailableCore===null)ticket.unavailableCore=Object.freeze(structuredClone(core));
+          else if(!same(ticket.unavailableCore,core))fail('terminal_version_changed');
+          ticket.execution=observed;
+          const response=await request(structuredClone(ticket.scope),'/api/v2/notes/mixed-analysis-claims/settle','POST',structuredClone(ticket.unavailableCore));active(ticket.scope,c,epoch);
+          const checked=await validateExecution(ticket.scope,ticket.request,response);active(ticket.scope,c,epoch);progress(observed,checked);
+          const receipt=matches(checked,ticket.unavailableCore);ticket.execution=checked;return receipt;
         }finally{running=false;}
       },
     };

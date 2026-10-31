@@ -161,8 +161,8 @@ assert.equal(ready.provider_state,'ready');assert.equal(ready.input,input);asser
 const reserved=JSON.parse(await Q.decryptContent(known.status(knownId).cipher_bundle,'synthetic'));assert.equal(reserved.dispatch.handoff_reserved,true,'single handoff must be reserved durably before returning input');
 await assert.rejects(()=>known.dispatch(knownId,'synthetic',{...route,input,confirmed:true}),/provider_outcome_unknown/);
 console.log('MX dispatch: explicit exact confirmation, durable original core, lost-response status-first DR recovery, single handoff/no automatic Provider retry PASS (synthetic transport; Provider calls 0)');
-async function dispatchScenario({stale=false,failHandoff=false,hold=false,failTerminal=false,holdTerminal=false}={}) {
-  const state={current:copy(pending),calls:0,failHandoff,requests:[]},disk={value:{schema_version:1,contexts:{}}};
+async function dispatchScenario({stale=false,failHandoff=false,hold=false,failTerminal=false,holdTerminal=false,loseUnavailable=false}={}) {
+  const state={current:copy(pending),calls:0,failHandoff,requests:[],settleBodies:[],loseUnavailable},disk={value:{schema_version:1,contexts:{}}};
   let entered,release;const inside=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
   let enteredTerminal,releaseTerminal;const terminalInside=new Promise(r=>{enteredTerminal=r;}),terminalGate=new Promise(r=>{releaseTerminal=r;});
   const journal=box.NowNoteHistory.create({context:()=>({...context,online:false}),request:async()=>{},write:async(value,guard)=>{
@@ -174,8 +174,15 @@ async function dispatchScenario({stale=false,failHandoff=false,hold=false,failTe
     }
     disk.value=copy(value);
   }});
-  const controller=A.createExecution({context:()=>context,journal,request:async(s,path,method)=>{
+  const controller=A.createExecution({context:()=>context,journal,request:async(s,path,method,body)=>{
     state.requests.push({path,method});
+    if(path.endsWith('/settle')){
+      assert.equal(body.outcome,'result_unavailable');assert.equal(body.bundle_metadata,null);assert.equal(body.local_checkpoint_confirmed,false);assert.equal(body.provider_terminal_observed,true);
+      state.settleBodies.push(copy(body));
+      state.current={...copy(state.current),state:'result_unavailable',run_version:body.run_version+1,bundle_metadata:null,
+        terminal_receipt:{schema_version:3,execution_id:pending.execution_id,original_job_id:pending.job_id,dispatch_id:running.dispatch_receipt.dispatch_id,source_digest:pending.source_digest,terminal_run_version:body.run_version+1,outcome:'result_unavailable',bundle_digest:null,client_reported:true,external_settled:true,result_server_persisted:false}};
+      if(state.loseUnavailable){state.loseUnavailable=false;throw Error('unavailable_response_lost');}return copy(state.current);
+    }
     if(path.endsWith('/dispatch')){state.calls++;state.current=copy(running);if(hold){entered();await gate;}return copy(state.current);}
     return copy(method==='POST'?pending:state.current);
   }});
@@ -284,3 +291,25 @@ await heldTerminal.terminalInside;heldTerminal.controller.invalidate();heldTermi
 assert.equal(Q.canonicalJson(heldTerminal.disk.value),beforeHeld,'locking while the terminal journal write waits must preserve the previous disk marker');
 assert.equal(heldTerminal.controller.status(heldTerminal.id).phase,'analysis_running');assert.equal(heldTerminal.state.requests.some(r=>r.path.endsWith('/settle')),false);
 console.log('MX terminal boundaries: key invalidation/no request, checkpoint failure/no settle or new cipher, delayed write lock/disk unchanged PASS (synthetic only)');
+const unavailableObservation={provider_terminal_observed:true,unavailable_reason:'key_unavailable'};
+await assert.rejects(()=>unavailableKey.controller.reportUnavailable(unavailableHandoff,{...unavailableObservation,provider_terminal_observed:false}),/terminal_unobserved/);
+assert.equal(unavailableKey.state.requests.length,beforeInvalidation);
+const unavailableBefore=Q.canonicalJson(unavailableKey.disk.value),unavailableReceipt=await unavailableKey.controller.reportUnavailable(unavailableHandoff,unavailableObservation);
+assert.equal(unavailableReceipt.outcome,'result_unavailable');assert.equal(unavailableKey.state.settleBodies.length,1);
+assert.equal(Q.canonicalJson(unavailableKey.disk.value),unavailableBefore,'key-free metadata terminal must not rewrite the cipher journal');
+assert.equal(Q.canonicalJson(unavailableKey.state.settleBodies).includes('SYNTHETIC-PROVIDER-INPUT-'),false);
+assert.deepEqual(await unavailableKey.controller.reportUnavailable(unavailableHandoff,unavailableObservation),unavailableReceipt);assert.equal(unavailableKey.state.settleBodies.length,1);
+const lostUnavailable=await dispatchScenario({loseUnavailable:true}),lostUnavailableHandoff=await lostUnavailable.controller.dispatch(lostUnavailable.id,'synthetic',confirmed);
+lostUnavailable.controller.invalidate();
+await assert.rejects(()=>lostUnavailable.controller.reportUnavailable(lostUnavailableHandoff,unavailableObservation),/unavailable_response_lost/);
+await lostUnavailable.controller.reportUnavailable(lostUnavailableHandoff,unavailableObservation);assert.equal(lostUnavailable.state.settleBodies.length,1,'unavailable loss must recover the original TR before any POST');
+await assert.rejects(()=>lostUnavailable.controller.reportUnavailable(lostUnavailableHandoff,{...unavailableObservation,unavailable_reason:'cipher_store_failed'}),/terminal_core_changed/);assert.equal(lostUnavailable.state.settleBodies.length,1);
+const changedSourceUnavailable=await dispatchScenario(),changedSourceHandoff=await changedSourceUnavailable.controller.dispatch(changedSourceUnavailable.id,'synthetic',confirmed);
+changedSourceUnavailable.state.current.source_matches_current=false;changedSourceUnavailable.state.current.latest_context=copy(changedSourceUnavailable.state.current.latest_context);changedSourceUnavailable.state.current.latest_context.base.history_generation++;
+changedSourceUnavailable.controller.invalidate();assert.equal((await changedSourceUnavailable.controller.reportUnavailable(changedSourceHandoff,unavailableObservation)).outcome,'result_unavailable','terminal observation must not be discarded merely because the current source changed');
+const accountUnavailable=await dispatchScenario(),accountHandoff=await accountUnavailable.controller.dispatch(accountUnavailable.id,'synthetic',confirmed),accountRequests=accountUnavailable.state.requests.length;
+const originalContext=copy(context);context={...context,owner:'bob',auth:'different-account'};
+await assert.rejects(()=>accountUnavailable.controller.reportUnavailable(accountHandoff,unavailableObservation),/scope_changed/);
+context={...originalContext,auth:'new-authentication'};await assert.rejects(()=>accountUnavailable.controller.reportUnavailable(accountHandoff,unavailableObservation),/scope_changed/);
+assert.equal(accountUnavailable.state.requests.length,accountRequests);context=originalContext;
+console.log('MX unavailable metadata: positive terminal only, same auth after key invalidation, no raw/key/journal write, original TR recovery/no duplicate POST, other auth denied PASS (synthetic only)');
