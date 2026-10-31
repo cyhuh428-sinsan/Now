@@ -130,7 +130,7 @@ def test_generic_note_writes_cannot_bypass_wiki_review(client,subject):
     assert get_current(client,s,request["local_id"])["snapshot"]["note"]["content"]==request["note"]["content"]
 
 
-def test_protecting_all_wiki_history_allows_source_protection(client,subject):
+def test_protecting_all_wiki_history_allows_source_protection(client,subject,tmp_path):
     from .test_note_crypto import ROOT, prepare_body
     from .test_note_crypto_conversion import convert, read_all
     from app.services.wiki_guards import fully_protected
@@ -160,6 +160,35 @@ def test_protecting_all_wiki_history_allows_source_protection(client,subject):
     result=client.get(path,params={"owner_id":s["owner"]},headers=s["headers"])
     assert result.status_code==200,result.text
     assert result.json()["artifact"]["document"] is None
+    from app.db import Base
+    from app.services.note_backup import restore_empty
+    from app.services import note_mixed_metadata as mixed
+    from app.services.wiki_guards import require_source_protection
+    from app.services.wikis import get
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import Session
+    locals_=("wiki-source",request["local_id"])
+    def protected_slots(db,local):
+        return [(key,raw,kind,epoch) for key,_,raw,kind,epoch in mixed.slots(db,s["owner"],local)]
+    expected={local:protected_slots(s["db"],local) for local in locals_}
+    target=create_engine(f"sqlite:///{tmp_path / 'protected-wiki-restore.db'}")
+    try:
+        Base.metadata.create_all(target)
+        restore_empty(target,backup)
+        with Session(target) as restored:
+            assert all(fully_protected(restored,s["owner"],local) for local in locals_)
+            assert {local:protected_slots(restored,local) for local in locals_}==expected
+            require_source_protection(restored,s["owner"],"wiki-source")
+            view=get(restored,s["owner"],path.rsplit("/",1)[1])
+            assert view["artifact"]["protected"] is True
+            assert view["artifact"]["document"] is None
+            restored.rollback()
+            roundtrip=export_snapshot(restored)
+            validate_backup(roundtrip)
+            assert "Original quote" not in json.dumps(roundtrip)
+            assert "Generated body" not in json.dumps(roundtrip)
+    finally:
+        target.dispose()
 
 
 def test_wiki_backup_validates_index_dependencies_and_roundtrips_empty_database(client,subject,tmp_path):
