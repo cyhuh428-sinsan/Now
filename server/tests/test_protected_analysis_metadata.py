@@ -76,3 +76,40 @@ def test_legacy_recovery_metadata_rejects_bundle_without_terminal(client, subjec
     params = {**query(s, local), "server_instance_id": request["server_instance_id"], "execution_id": execution["execution_id"]}
     response = client.get(PA + "/claims/status", params=params, headers=s["headers"])
     assert response.status_code == 409
+
+
+@pytest.mark.parametrize("outcome", ["result_unavailable", "cancelled"])
+def test_legacy_recovery_metadata_rejects_empty_terminal_bundle(client, subject, outcome):
+    from app.models.protected_analysis import ProtectedAnalysisClaim
+    from .test_note_crypto_conversion import seed, convert
+    from .test_protected_analysis import claim_body
+
+    s, local = subject, "legacy-recovery-empty-terminal"
+    if outcome == "cancelled":
+        seed(client, s, local)
+        convert(client, s, local)
+        request = claim_body(client, s, local)
+        response = client.post(PA + "/claims", json=request, headers=s["headers"])
+        assert response.status_code == 201
+        execution = response.json()
+        action = {"schema_version": 1, **query(s, local), "server_instance_id": request["server_instance_id"],
+                  **{k: execution[k] for k in ("execution_id", "run_version", "lease_version")}}
+        response = client.post(PA + "/claims/abort", json=action, headers=s["headers"])
+    else:
+        request, execution = started(client, s, local)
+        action = {"schema_version": 1, **query(s, local), "server_instance_id": request["server_instance_id"],
+                  **{k: execution[k] for k in ("execution_id", "run_version", "lease_version")},
+                  "dispatch_id": execution["dispatch_receipt"]["dispatch_id"], "provider_terminal_observed": True,
+                  "outcome": outcome, "bundle_metadata": None, "local_checkpoint_confirmed": False, "unavailable_reason": "key_unavailable"}
+        response = client.post(PA + "/claims/settle", json=action, headers=s["headers"])
+    assert response.status_code == 200
+    params = {**query(s, local), "server_instance_id": request["server_instance_id"], "execution_id": execution["execution_id"]}
+    normal = client.get(PA + "/claims/status", params=params, headers=s["headers"])
+    assert normal.status_code == 200 and normal.json()["bundle_metadata"] is None
+    row = s["db"].get(ProtectedAnalysisClaim, execution["execution_id"])
+    progress = json.loads(row.progress_json)
+    progress["terminal_bundle"] = {}
+    row.progress_json = json.dumps(progress)
+    s["db"].commit()
+    damaged = client.get(PA + "/claims/status", params=params, headers=s["headers"])
+    assert damaged.status_code == 409
