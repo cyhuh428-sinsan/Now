@@ -8,11 +8,12 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
     <dl class="protection-scope"></dl>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
-    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button></section>
+    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button><button type="button" class="secondary-btn" data-action="transcript-edit">전사문 편집</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="create">현재 메모 생성</button><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="compare">미전송 내용 비교</button></div>
     <section class="protection-comparison hidden" aria-label="미전송 내용 비교"></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
+    <section class="protection-transcript hidden" aria-label="전사문 편집"><h3>전사문</h3><label>내용<textarea class="settings-input protection-transcript-draft" rows="8" aria-label="전사문 내용" spellcheck="false"></textarea></label><label><input type="checkbox" name="transcript-null">전사문 없음으로 저장</label><button type="button" class="primary-btn" data-action="transcript-save">전사문 저장</button></section>
     <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><div class="history-actions" role="group" aria-label="본문 보기"><button type="button" class="secondary-btn" data-action="editor-source" aria-pressed="true">원문 편집</button><button type="button" class="secondary-btn" data-action="editor-preview" aria-pressed="false">서식 보기</button></div><label class="protection-source-label">본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><article class="markdown-preview protection-preview hidden" aria-label="보호 메모 서식 보기" tabindex="0"></article><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section aria-label="보호 메모 분석"><h3>AI 분석</h3><select class="settings-select" name="analysis-operation" aria-label="분석 실행"></select><div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-prepare">분석 준비</button><button type="button" class="secondary-btn" data-action="analysis-resume">실행 상태 확인</button></div><div class="protection-analysis hidden"><label>제공업체<input class="settings-input" name="analysis-provider" readonly></label><label>전송 주소<input class="settings-input" name="analysis-endpoint"></label><label>모델<input class="settings-input" name="analysis-model"></label><label>전송할 입력<textarea class="settings-input" name="analysis-input" readonly></textarea></label><label><input type="checkbox" name="analysis-confirm">입력과 전송 대상을 확인했습니다</label><button type="button" class="primary-btn" data-action="analysis-run">분석 실행</button></div><pre class="protection-analysis-result" tabindex="0" aria-label="분석 결과"></pre></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-publish">서버에 결과 보관</button><button type="button" class="secondary-btn" data-action="analysis-replan">결과 보관 재계획</button></div>
@@ -23,7 +24,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null,replan:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null,replan:null,transcript:null,transcriptComposing:false};
   const keys = new Map();
   const analysisLabels={analysis_claiming:'실행 접수 확인 필요',analysis_claimed:'전송 확인 대기',analysis_dispatching:'전송 상태 확인 필요',analysis_running:'응답 확인 필요',analysis_terminal:'결과 보관 중',analysis_settling:'영수증 확인 필요',analysis_settled:'이 기기에 결과 보관됨',analysis_write_preparing:'서버 보관 준비 확인 필요',analysis_write_prepared:'암호문 전송 재개 필요',analysis_write_staged:'서버 보관 준비됨',analysis_write_committing:'게시 영수증 확인 필요',analysis_write_committed:'서버 저장됨 · 이 기기 검증 필요'};
   let askCancel = null;
@@ -32,8 +33,14 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     state.replan=null;$('.protection-replan').classList.add('hidden');$('.protection-replan-context').textContent='';$('[name="analysis-reuse-confirm"]').checked=false;
   }
   const status = text => { $('.protection-status').textContent=text; };
+  function resetTranscript() {
+    state.transcript=null;state.transcriptInitialText='';state.transcriptComposing=false;$('.protection-transcript').classList.add('hidden');
+    $('[name="transcript-null"]').checked=false;
+    const old=$('.protection-transcript-draft');old.value='';old.defaultValue='';const next=old.cloneNode(false);old.readOnly=true;old.replaceWith(next);next.disabled=false;next.readOnly=false;bindTranscript();
+  }
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    resetTranscript();
     resetReplan();
     state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';
     for(const field of ['provider','endpoint','model','input'])$('[name="analysis-'+field+'"]').value='';
@@ -69,7 +76,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const unlocked = api.canMutate(), info=state.info;
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
     $('[name="target"]').disabled=state.busy;
-    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected']) {
+    $('[name="representation"]').disabled=state.busy;
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
@@ -97,6 +105,11 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
     for(const mode of ['source','preview'])$('[data-action="editor-'+mode+'"]').disabled=state.busy || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
+    $('[data-action="transcript-edit"]').disabled=state.busy||!unlocked||!api.transcriptEdit||Boolean(info.pending)||row?.kind!=='typed'||d?.key.kind!=='recording_transcript';
+    $('[data-action="transcript-save"]').disabled=state.busy||!unlocked||!api.transcriptSave||Boolean(info.pending)||!state.transcript||state.transcriptComposing;
+    $('.protection-transcript-draft').readOnly=state.busy;
+    $('.protection-transcript-draft').disabled=$('[name="transcript-null"]').checked;
+    $('[name="transcript-null"]').disabled=state.busy;
     $('[data-action="restore"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog
       || row?.kind!=='typed' || !['revision_snapshot','offline_snapshot'].includes(d?.key.kind) || d.is_null || !d.revision_ref;
     $('[data-action="delete"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog?.context.base.current_exists;
@@ -122,6 +135,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       const section=document.createElement('form'); section.className='library-confirm';
       const label=document.createElement('label'); label.textContent=String(epoch).startsWith('analysis-')?(epoch==='analysis-output'?'분석 결과를 보관할 비밀번호':'보관된 분석 결과의 비밀번호'):(epoch==='resolve-local-bundle'?'내 변경으로 저장 확인 · 저장 비밀번호':epoch==='resolve-server-bundle'?'서버 현재본으로 저장 확인 · 저장 비밀번호':epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
+      if(epoch==='transcript-bundle')label.firstChild.textContent='전사문 저장 확인 · 저장 비밀번호';
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
       const finish=value=>{if(finished)return;finished=true;input.value='';section.remove();askCancel=null;resolve(value);};
@@ -187,7 +201,19 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if(name==='analysis-prepare') {
+        if(name==='transcript-edit') {
+          const row=state.info?.rows[Number($('[name="representation"]').value)];
+          resetTranscript();const edit=await api.transcriptEdit(state.info,row,resolveKey(token));
+          if(!valid(token))return;
+          state.transcript=edit;$('.protection-transcript-draft').value=edit.value??'';state.transcriptInitialText=$('.protection-transcript-draft').value;$('[name="transcript-null"]').checked=edit.value===null;
+          $('.protection-transcript').classList.remove('hidden');$('.protection-editor').classList.add('hidden');$('.protection-plain').textContent='';status('전사문 편집 중');
+        } else if(name==='transcript-save') {
+          if(!state.transcript||state.transcriptComposing)throw Error('입력을 마친 뒤 저장하세요.');
+          const edit=structuredClone(state.transcript),draft=$('.protection-transcript-draft').value;
+          const value=$('[name="transcript-null"]').checked?null:edit.value!==null&&draft===state.transcriptInitialText?edit.value:draft;
+          let password=await ask('transcript-bundle',true,token);if(!password||!valid(token))return;
+          try{await api.transcriptSave(state.info,edit,value,password,resolveKey(token));if(valid(token)){await load();if(state.run===token+1&&valid(state.run))status('전사문 저장됨');}}finally{password=null;keys.clear();}
+        } else if(name==='analysis-prepare') {
           resetReplan();
           const plan=await api.analysisPrepare(state.info,$('[name="analysis-operation"]').value||null,resolveKey(token));
           if(!valid(token))return;state.analysis=plan;
@@ -340,7 +366,13 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     if(anchor){e.preventDefault();$('.protection-preview').querySelector('#'+CSS.escape(anchor.getAttribute('href').slice(1)))?.scrollIntoView({block:'nearest'});}
   });
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
-  $('[name="representation"]').addEventListener('change',controls);
+  $('[name="representation"]').addEventListener('change',()=>{resetTranscript();controls();});
+  function bindTranscript() {
+    const editor=$('.protection-transcript-draft');
+    editor.addEventListener('compositionstart',()=>{state.transcriptComposing=true;controls();});
+    editor.addEventListener('compositionend',()=>{state.transcriptComposing=false;controls();});
+  }
+  bindTranscript();$('[name="transcript-null"]').addEventListener('change',controls);
   $('[name="analysis-confirm"]').addEventListener('change',controls);
   $('[name="analysis-reuse-confirm"]').addEventListener('change',controls);
   $('[name="analysis-operation"]').addEventListener('change',()=>{resetReplan();state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';controls();});

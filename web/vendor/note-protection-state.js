@@ -423,7 +423,7 @@
             b.receipt=copy(r.receipt);marker.phase='server_committed';await persist();
           }
           if(marker.phase==='server_committed'){
-            if(settle){b.work.local=copy(await settle(copy(marker.scope),copy(b.local),copy(b.work),copy(b.receipt),password,resolveKey));active(ctx,epoch);}
+            if(settle){b.work.local=copy(await settle(copy(marker.scope),copy(b.local),copy(b.work),copy(b.receipt),password,resolveKey,copy(b.prepared)));active(ctx,epoch);}
             marker.phase='applying';await persist();
           }
           if(marker.phase==='applying') {

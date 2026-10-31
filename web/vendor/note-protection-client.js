@@ -353,6 +353,26 @@
       lease_version:p.response.lease_version,base:clone(a.base),target_epoch:h.target_epoch,metadata_manifest_digest:p.digest,
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true}};
   }
+  async function verifyTranscriptPublication(scope,prepared,work,receipt,reader,resolveKey) {
+    scope=clone(scope);const p=clone(prepared),w=clone(work),r=clone(receipt),h=p.response.metadata_header;
+    if(p.version!==3 || h.purpose!=='mixed_transcript_write' || r.schema_version!==3 || r.purpose!==h.purpose
+      || r.operation_id!==p.id || r.mutation_id!==h.mutation_id || r.server_instance_id!==scope.instance
+      || r.owner_id!==scope.owner || r.local_id!==scope.local_id)fail('transcript_receipt');
+    const expected=clone(h.base);expected.base.history_generation++;
+    if(!eq(r.result,expected))fail('transcript_receipt');
+    const catalog=await reader.catalog(scope),key=h.control.expected_descriptor.key;
+    if(!eq(catalog.context,r.result)||catalog.entries.length!==p.manifest.P.length+1
+      ||p.manifest.P.some(old=>!catalog.entries.some(d=>eq(d,old))))fail('transcript_published');
+    const d=catalog.entries.find(d=>eq(d.key,key)),out=p.manifest.DSET[0],t=w.transfers.find(t=>eq(t.key,key));
+    if(!d||d.storage_operation_id!==p.id||d.semantic_origin_id!==p.id||d.origin_validator!=='linked_mixed_v1'
+      ||d.origin_row_required!==false||d.representation_epoch!==h.target_epoch||d.representation_kind!==out.output_kind
+      ||d.is_null!==h.control.is_null||!eq(d.expected_binding,out.expected_binding)
+      ||d.linked_slot_version!==h.control.expected_descriptor.linked_slot_version+1
+      ||d.ciphertext_sha256!==(d.is_null?null:t?.descriptor.ciphertext_sha256))fail('transcript_published');
+    const actual=await reader.read(scope,catalog,d,resolveKey);
+    if(!eq(actual.descriptor,d)||!eq(actual.origin,{value:h.operation_origin,legacy:null})||!eq(actual.value,w.transcript))fail('transcript_typed_value');
+    return {verified:true};
+  }
   async function buildImportWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
     scope=clone(scope);const p=clone(prepared),i=clone(intent),m=p.manifest,h=p.response.metadata_header;
     if(i.schema_version!==3 || i.purpose!=='mixed_offline_import' || h.purpose!==i.purpose || h.operation_id!==p.id
@@ -605,5 +625,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,planTranscript,buildTranscriptWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,planTranscript,buildTranscriptWork,verifyTranscriptPublication,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
 })();

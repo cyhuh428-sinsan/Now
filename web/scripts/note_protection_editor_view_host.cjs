@@ -14,10 +14,10 @@ app.whenReady().then(async()=>{
     result=await window.webContents.executeJavaScript(`(async()=>{
       const assert=(v,m)=>{if(!v)throw Error(m);},wait=()=>new Promise(r=>setTimeout(r,10));
       const original='# View test\\n\\n<details><summary>Fold</summary>\\n\\n**Bold**\\n\\n</details>\\n\\nhttps://example.invalid/page\\n\\n[File](D:/synthetic-only.md)\\n\\n<script>globalThis.BAD=true</script>\\n<img src="https://example.invalid/image" onerror="globalThis.BAD=true">';
-      let drafts=[],files=[],locked=0;
+      let drafts=[],files=[],locked=0,transcriptSaves=0,transcriptValues=[];
       const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'one',instance:'synthetic'};
       const info={scope,status:{crypto_epoch:1},catalog:{context:{base:{current_exists:true},current_mode:'protected'}},rows:[],pending:null};
-      const ui=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{locked++;},edit:async()=>({title:'View',content:original}),draft:async(i,n)=>{drafts.push(n.content);},openFile:p=>{files.push(p);}});
+      const ui=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{locked++;},edit:async()=>({title:'View',content:original}),draft:async(i,n)=>{drafts.push(n.content);},openFile:p=>{files.push(p);},transcriptEdit:async(i,row)=>({descriptor:row.descriptor,value:'TRANSCRIPT-ORIGINAL'}),transcriptSave:async(i,e,value,password)=>{assert(password==='transcript-journal-key','transcript_journal_key');transcriptSaves++;transcriptValues.push(value);}});
       await ui.open();
       const dialog=document.querySelector('#noteProtectionDialog'),button=n=>dialog.querySelector('[data-action="'+n+'"]');
       assert(button('analysis-prepare'),'analysis_prepare_missing');
@@ -49,7 +49,33 @@ app.whenReady().then(async()=>{
       const clean=dialog.querySelector('.protection-draft');
       assert(!editor.value&&!clean.value&&clean!==editor&&!preview.textContent,'lock_plaintext_or_native_history_retained');
       clean.focus();document.execCommand('undo');assert(!clean.value,'lock_undo_resurrected_plaintext');
-      assert(locked>0,'lock_missing');ui.invalidate();dialog.remove();
+      assert(locked>0,'lock_missing');
+      assert(button('transcript-edit')&&button('transcript-save'),'transcript_controls_missing');
+      info.rows=[{kind:'typed',label:'Transcript',descriptor:{key:{kind:'recording_transcript',id:'7',slot:'transcript'}}}];await ui.open();
+      assert(!button('transcript-edit').disabled,'transcript_edit_disabled');button('transcript-edit').click();await idle();
+      let td=dialog.querySelector('.protection-transcript-draft'),tn=dialog.querySelector('[name="transcript-null"]');
+      assert(td.value==='TRANSCRIPT-ORIGINAL'&&!button('transcript-save').disabled,'transcript_editor_missing');
+      td.dispatchEvent(new CompositionEvent('compositionstart'));assert(button('transcript-save').disabled,'transcript_composition_save_enabled');td.dispatchEvent(new CompositionEvent('compositionend'));assert(!button('transcript-save').disabled,'transcript_composition_save_stuck');
+      td.value='TRANSCRIPT-REPLACEMENT';td.dispatchEvent(new Event('input'));button('transcript-save').click();
+      for(let i=0;i<100&&!dialog.querySelector('form.library-confirm');i++)await wait();
+      let tf=dialog.querySelector('form.library-confirm');assert(tf,'transcript_confirm_missing');tf.querySelector('input').value='transcript-journal-key';tf.requestSubmit();await idle();
+      assert(transcriptSaves===1&&transcriptValues[0]==='TRANSCRIPT-REPLACEMENT','transcript_save_not_typed');
+      button('transcript-edit').click();await idle();td=dialog.querySelector('.protection-transcript-draft');tn=dialog.querySelector('[name="transcript-null"]');tn.checked=true;tn.dispatchEvent(new Event('change'));
+      assert(td.disabled,'transcript_null_draft_enabled');button('transcript-save').click();for(let i=0;i<100&&!dialog.querySelector('form.library-confirm');i++)await wait();
+      tf=dialog.querySelector('form.library-confirm');assert(tf,'transcript_null_confirm_missing');tf.querySelector('input').value='transcript-journal-key';tf.requestSubmit();await idle();
+      assert(transcriptSaves===2&&transcriptValues[1]===null,'transcript_null_collapsed_to_empty');
+      button('transcript-edit').click();await idle();td=dialog.querySelector('.protection-transcript-draft');td.focus();document.execCommand('insertText',false,'PRIVATE-TRANSCRIPT');ui.lock();
+      const clearedTranscript=dialog.querySelector('.protection-transcript-draft');assert(!td.value&&!clearedTranscript.value&&td!==clearedTranscript,'transcript_lock_retained_history');clearedTranscript.focus();document.execCommand('undo');assert(!clearedTranscript.value,'transcript_undo_resurrection');
+      globalThis.renderTranscriptPreview=async()=>{
+        for(const other of document.querySelectorAll('#noteProtectionDialog'))if(other!==dialog){other.close();other.remove();}
+        if(!dialog.isConnected)document.body.append(dialog);info.pending=null;info.analysisOperations=[];
+        info.rows=[{kind:'typed',label:'Transcript',descriptor:{key:{kind:'recording_transcript',id:'7',slot:'transcript'}}}];await ui.open();button('transcript-edit').click();await idle();
+        const section=dialog.querySelector('.protection-transcript');section.scrollIntoView({block:'center'});
+        const text=dialog.querySelector('.protection-transcript-draft');text.value='합성 전사문 편집 · 실제 사용자 자료 없음';
+        const rect=section.getBoundingClientRect(),input=text.getBoundingClientRect(),save=button('transcript-save').getBoundingClientRect();
+        assert(rect.left>=0&&rect.right<=innerWidth&&input.right<=rect.right&&save.top>=input.bottom,'transcript_layout_overlap:'+JSON.stringify({viewport:innerWidth,section:rect.toJSON(),input:input.toJSON(),save:save.toJSON()}));
+      };
+      ui.invalidate();dialog.remove();info.rows=[];
       let invoked=0,recorded=0,unavailable=0,published=0,replanned=0,replanResumed=0,release;
       const replanView={operation_id:'fixture-run',scope,catalog:{context:{base:{crypto_epoch:2,history_generation:7}}},original_source_context:{base:{base:{crypto_epoch:1,history_generation:3}}}};
       const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};
@@ -111,7 +137,7 @@ app.whenReady().then(async()=>{
         const a=lum(rgb(getComputedStyle(ab('analysis-replan')).color)),b=lum(rgb(getComputedStyle(panel).backgroundColor));
         assert((Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)>=4.5,'replan_command_contrast');
       };
-      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,publicationCommand:true,replanConfirmation:true,replanDistinctKeys:true,replanResume:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
+      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,transcriptEdit:true,transcriptNull:true,transcriptLockUndo:true,analysisConfirmation:true,freshOutputKey:true,publicationCommand:true,replanConfirmation:true,replanDistinctKeys:true,replanResume:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
     })()`,true);
     const capture=async name=>{
       const dir=process.env.NOWNOTE_QA_MANIFEST_DIR;if(!dir)return;
@@ -124,6 +150,13 @@ app.whenReady().then(async()=>{
     const mobile=await window.webContents.executeJavaScript(`(()=>{const d=document.querySelector('#noteProtectionDialog');if(!d.open)d.showModal();const s=d.querySelector('[name="analysis-operation"]');return {width:d.clientWidth,selectorWidth:s.getBoundingClientRect().width,dialogRight:d.getBoundingClientRect().right,viewport:innerWidth};})()`);
     if(mobile.selectorWidth<=mobile.width*0.8||mobile.dialogRight>mobile.viewport)throw Error('analysis_mobile_layout');
     result.mobileLayout=true;
+    const captureTranscript=async name=>{
+      await window.webContents.executeJavaScript('renderTranscriptPreview()');
+      await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      const dir=process.env.NOWNOTE_QA_MANIFEST_DIR;
+      if(dir){if(path.resolve(dir)!==path.resolve('D:/Project/Now/docs/2.4.0/qa'))throw Error('capture_directory_boundary');fs.writeFileSync(path.join(dir,'protected-transcript-'+name+'.png'),(await window.webContents.capturePage()).toPNG());}
+    };
+    window.setContentSize(1100,800);await captureTranscript('desktop');window.setContentSize(390,844);await captureTranscript('mobile');
     if(outbound)throw Error('preview_outbound_request');
     result.outboundRequests=outbound;
   }catch(error){result={ok:false,error:error.message};}

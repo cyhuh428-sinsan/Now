@@ -104,6 +104,12 @@ const receiptRemote=P.createRemote({request:async(s,path)=>{
 assert.equal((await receiptRemote.status(scope,actual,stagedWork)).receipt_matches_current,true);
 for(const bad of ['head','origin','slot']){receiptDamage=bad;await assert.rejects(receiptRemote.status(scope,actual,stagedWork),/receipt|origin|transcript/);}
 receiptDamage=null;
+assert.equal(typeof C.verifyTranscriptPublication,'function','MT complete requires typed readback, not metadata alone');
+const finalReceipt={schema_version:3,purpose:intent.purpose,operation_id:uid(3),mutation_id:intent.prepare.mutation_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,result:published};
+let typedDamage=null;
+const reader={catalog:async()=>({context:published,entries:[output]}),read:async()=>({descriptor:output,origin:{value:origin,legacy:null},value:typedDamage==='text'?'wrong':text})};
+await C.verifyTranscriptPublication(scope,actual,stagedWork,finalReceipt,reader,async()=> 'new-key');
+typedDamage='text';await assert.rejects(C.verifyTranscriptPublication(scope,actual,stagedWork,finalReceipt,reader,async()=> 'new-key'),/transcript/);typedDamage=null;
 damage='control';await assert.rejects(wire.prepareTranscript(scope,intent),/transcript/);damage=null;
 const extra=copy(intent);extra.prepare.transcript='PRIVATE';const before=calls.length;
 await assert.rejects(wire.prepareTranscript(scope,extra),/prepare|fields/);assert.equal(calls.length,before);
