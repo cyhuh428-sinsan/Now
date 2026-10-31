@@ -3790,6 +3790,16 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           return handoff;
         }finally{running=false;}
       },
+      async recoverDispatch(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!['analysis_dispatching','analysis_running'].includes(marker.phase))fail('operation_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),observed=await fresh(marker.scope,b,c,epoch);
+          if(observed.dispatch_receipt===null)return {provider_state:'not_dispatched',execution:structuredClone(observed)};
+          b.execution=observed;b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
+          return {provider_state:observed.terminal_receipt===null?'unknown':'terminal',execution:structuredClone(observed)};
+        }finally{running=false;}
+      },
       async recordTerminal(handoff,observation,password) {
         const ticket=tickets.get(handoff);if(!ticket)fail('handoff_unknown');
         if(ticket.observationStarted)fail('terminal_already_recorded');
@@ -4071,6 +4081,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           if(!password||!valid(token))return;
           try{
             handoff=await api.analysisBegin(plan,route,password);password=null;keys.clear();state.analysis=null;
+            if(handoff.provider_state!=='ready'){if(valid(token)){await load();status('원 dispatch를 확인했습니다. 분석을 재호출하지 않았습니다. 실행 상태를 확인하세요.');}return;}
             $('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';
             if(!valid(token))return;status('분석 응답 대기 중');
             observation=await api.analysisInvoke(handoff);
@@ -9470,7 +9481,7 @@ async function beginProtectedAnalysis(plan,route,password) {
   if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard();guard();protectedAnalysisConfig(route);
   const id=plan.operation_id||await noteProtectionAnalysis.start(plan.scope,plan.request,plan.input,route,password);guard();
-  await noteProtectionAnalysis.resumeClaim(id,password);guard();
+  if(["analysis_claiming","analysis_claimed"].includes(noteProtectionAnalysis.status(id).phase))await noteProtectionAnalysis.resumeClaim(id,password);guard();
   return noteProtectionAnalysis.dispatch(id,password,{...route,input:plan.input,confirmed:true});
 }
 
@@ -9482,9 +9493,12 @@ async function invokeProtectedAnalysis(handoff) {
   let response;
   try{response=await llmChatRequest(handoff.route.provider,config,handoff.input);}
   catch{throw Error("분석 응답이 미확정입니다. 자동 재호출하지 않습니다. 원 실행 상태를 확인하세요.");}
+  let body;
+  try{body=await response.text();}
+  catch{throw Error("분석 응답 본문이 미확정입니다. 자동 재호출하지 않습니다. 원 실행 상태를 확인하세요.");}
   if(!response.ok)return {provider_terminal_observed:true,outcome:"failed",result_json:null,error_message:"LLM HTTP "+response.status,error_code:"provider_error"};
   try{
-    const text=extractLlmChatText(handoff.route.provider,await response.json());
+    const text=extractLlmChatText(handoff.route.provider,JSON.parse(body));
     if(typeof text!=="string"||!text.trim())throw Error("empty_result");
     return {provider_terminal_observed:true,outcome:"done",result_json:JSON.stringify({summary:text}),error_message:null,error_code:null};
   }catch{return {provider_terminal_observed:true,outcome:"failed",result_json:null,error_message:"LLM 응답을 해석할 수 없습니다.",error_code:"invalid_result"};}
@@ -9498,6 +9512,15 @@ async function finishProtectedAnalysis(id,password) {
 
 async function resumeProtectedAnalysis(id,password) {
   const phase=noteProtectionAnalysis.status(id).phase;
+  if(phase==="analysis_dispatching"){
+    const recovered=await noteProtectionAnalysis.recoverDispatch(id,password);
+    if(recovered.provider_state==="not_dispatched")return "원 dispatch는 아직 확인되지 않았습니다. 분석 준비에서 입력과 전송 대상을 다시 확인하세요.";
+    if(recovered.execution.terminal_receipt?.outcome==="result_unavailable"){
+      await noteProtectionAnalysis.reconcileUnavailable(id,password);
+      return "외부 응답 종료는 확인됐지만 결과를 보존하지 못했습니다.";
+    }
+    return "원 dispatch를 확인했습니다. 응답 결과는 미확정이며 분석을 재호출하지 않았습니다.";
+  }
   if(phase==="analysis_running"||phase==="complete"){
     await noteProtectionAnalysis.reconcileUnavailable(id,password);
     return "외부 응답 종료는 확인됐지만 결과를 보존하지 못했습니다. 원 메모와 이전 분석은 보존되었습니다.";

@@ -50,7 +50,7 @@ app.whenReady().then(async()=>{
       let invoked=0,recorded=0,unavailable=0,release;
       const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};
       const analysis=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},
-        analysisPrepare:async()=>structuredClone(plan),analysisBegin:async(p,r,k)=>{assert(k==='fixture-key'&&r.model==='combo-name','analysis_confirmation_changed');return {operation_id:'fixture-run'};},
+        analysisPrepare:async()=>structuredClone(plan),analysisBegin:async(p,r,k)=>{assert(k==='fixture-key'&&r.model==='combo-name','analysis_confirmation_changed');return {operation_id:'fixture-run',provider_state:'ready'};},
         analysisInvoke:async()=>{invoked++;return new Promise(r=>{release=()=>r({provider_terminal_observed:true,outcome:'done',result_json:'SYNTHETIC-RESULT'});});},
         analysisRecord:async(h,o,k)=>{assert(k==='new-output-key','analysis_key_reused_across_provider');recorded++;},analysisFinish:async()=>'<script>not HTML</script> SYNTHETIC-RESULT',
         analysisUnavailable:async()=>{unavailable++;},

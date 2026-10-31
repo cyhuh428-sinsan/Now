@@ -313,6 +313,16 @@
           return handoff;
         }finally{running=false;}
       },
+      async recoverDispatch(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!['analysis_dispatching','analysis_running'].includes(marker.phase))fail('operation_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),observed=await fresh(marker.scope,b,c,epoch);
+          if(observed.dispatch_receipt===null)return {provider_state:'not_dispatched',execution:structuredClone(observed)};
+          b.execution=observed;b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
+          return {provider_state:observed.terminal_receipt===null?'unknown':'terminal',execution:structuredClone(observed)};
+        }finally{running=false;}
+      },
       async recordTerminal(handoff,observation,password) {
         const ticket=tickets.get(handoff);if(!ticket)fail('handoff_unknown');
         if(ticket.observationStarted)fail('terminal_already_recorded');

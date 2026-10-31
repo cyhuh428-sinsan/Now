@@ -188,6 +188,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           if(!password||!valid(token))return;
           try{
             handoff=await api.analysisBegin(plan,route,password);password=null;keys.clear();state.analysis=null;
+            if(handoff.provider_state!=='ready'){if(valid(token)){await load();status('원 dispatch를 확인했습니다. 분석을 재호출하지 않았습니다. 실행 상태를 확인하세요.');}return;}
             $('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';
             if(!valid(token))return;status('분석 응답 대기 중');
             observation=await api.analysisInvoke(handoff);
