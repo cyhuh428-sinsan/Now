@@ -597,7 +597,7 @@
       return mutation && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
-      async prepareAnalysis(s,intent,execution,catalog) {
+      async prepareAnalysis(s,intent,execution,catalog,probeOnly=false) {
         s=copy(s);validateScope(s);const i=copy(intent),e=copy(execution),c=copy(catalog),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
         const body=i.prepare;ensureScope(s,body);
         if(i.purpose!=='mixed_analysis_write'||body.schema_version!==3)fail('analysis_prepare_schema');
@@ -618,6 +618,7 @@
           if(known.schema_version!==3||known.status!=='operation'||!eq(known.original_execution,original))fail('analysis_original_execution');
           r=known.operation;
         }catch(error){if(error.status!==404||error.code!=='operation_not_found')throw error;}
+        if(!r&&probeOnly===true)return null;
         if(!r)r=await request(s,path+'/prepare','POST',copy(body));
         fields(r,['schema_version','purpose','operation_id','mutation_id','state','lease_version','expires_at','metadata_manifest_digest','metadata_header','counts','receipt','latest_context']);
         if(r.schema_version!==3||r.purpose!==i.purpose||r.operation_id!==e.execution_id||r.mutation_id!==body.mutation_id
