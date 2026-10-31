@@ -14,7 +14,7 @@ app.whenReady().then(async()=>{
     result=await window.webContents.executeJavaScript(`(async()=>{
       const assert=(v,m)=>{if(!v)throw Error(m);},wait=()=>new Promise(r=>setTimeout(r,10));
       const original='# View test\\n\\n<details><summary>Fold</summary>\\n\\n**Bold**\\n\\n</details>\\n\\nhttps://example.invalid/page\\n\\n[File](D:/synthetic-only.md)\\n\\n<script>globalThis.BAD=true</script>\\n<img src="https://example.invalid/image" onerror="globalThis.BAD=true">';
-      let drafts=[],files=[],locked=0,transcriptSaves=0,transcriptValues=[];
+      let drafts=[],files=[],locked=0,transcriptSaves=0,transcriptValues=[],analysisApplied=[];
       const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'one',instance:'synthetic'};
       const info={scope,status:{crypto_epoch:1},catalog:{context:{base:{current_exists:true},current_mode:'protected'}},rows:[],pending:null};
       const ui=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{locked++;},edit:async()=>({title:'View',content:original}),draft:async(i,n)=>{drafts.push(n.content);},openFile:p=>{files.push(p);},transcriptEdit:async(i,row)=>({descriptor:row.descriptor,value:'TRANSCRIPT-ORIGINAL'}),transcriptSave:async(i,e,value,password)=>{assert(password==='transcript-journal-key','transcript_journal_key');transcriptSaves++;transcriptValues.push(value);}});
@@ -76,6 +76,19 @@ app.whenReady().then(async()=>{
         assert(rect.left>=0&&rect.right<=innerWidth&&input.right<=rect.right&&save.top>=input.bottom,'transcript_layout_overlap:'+JSON.stringify({viewport:innerWidth,section:rect.toJSON(),input:input.toJSON(),save:save.toJSON()}));
       };
       ui.invalidate();dialog.remove();info.rows=[];
+      const applyUI=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},analysisApply:async(i,row,mode,password)=>{assert(password==='apply-key'&&row.descriptor.key.kind==='analysis_result','typed_apply_confirmation');analysisApplied.push(mode);}});
+      info.rows=[{kind:'typed',label:'Analysis result',descriptor:{key:{kind:'analysis_result',id:'7',slot:'result_json'},is_null:false}}];await applyUI.open();
+      const ap=document.querySelector('#noteProtectionDialog'),applyButton=name=>ap.querySelector('[data-action="analysis-'+name+'"]');
+      assert(applyButton('append')&&applyButton('approve'),'typed_apply_commands_missing');
+      for(const mode of ['append','approve']){
+        applyButton(mode).click();for(let i=0;i<100&&!ap.querySelector('form.library-confirm');i++)await wait();
+        const form=ap.querySelector('form.library-confirm');assert(form&&analysisApplied.length===(mode==='append'?0:1),'typed_apply_before_confirmation');form.querySelector('input').value='apply-key';form.requestSubmit();
+        for(let i=0;i<100&&applyButton(mode).disabled;i++)await wait();
+      }
+      assert(analysisApplied.join(',')==='append,approve','typed_apply_command_modes');
+      info.rows=[{kind:'typed',label:'Null',descriptor:{key:{kind:'analysis_result',id:'7',slot:'result_json'},is_null:true}}];await applyUI.open();
+      assert(applyButton('append').disabled&&applyButton('approve').disabled,'typed_null_result_apply_enabled');
+      applyUI.invalidate();ap.remove();info.rows=[];
       let invoked=0,recorded=0,unavailable=0,published=0,replanned=0,replanResumed=0,release;
       const replanView={operation_id:'fixture-run',scope,catalog:{context:{base:{crypto_epoch:2,history_generation:7}}},original_source_context:{base:{base:{crypto_epoch:1,history_generation:3}}}};
       const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};

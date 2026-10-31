@@ -4877,6 +4877,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
     <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button><button type="button" class="secondary-btn" data-action="transcript-edit">전사문 편집</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="create">현재 메모 생성</button><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
+    <div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-append">결과 이어붙이기</button><button type="button" class="secondary-btn" data-action="analysis-approve">결과 승인 반영</button></div>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="compare">미전송 내용 비교</button></div>
     <section class="protection-comparison hidden" aria-label="미전송 내용 비교"></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
@@ -4944,7 +4945,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
     $('[name="target"]').disabled=state.busy;
     $('[name="representation"]').disabled=state.busy;
-    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save']) {
+    for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-append','analysis-approve']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
@@ -4972,6 +4973,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
     for(const mode of ['source','preview'])$('[data-action="editor-'+mode+'"]').disabled=state.busy || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
+    for(const mode of ['append','approve'])$('[data-action="analysis-'+mode+'"]').disabled=state.busy||!unlocked||!api.analysisApply||Boolean(info.pending)
+      ||row?.kind!=='typed'||d?.key.kind!=='analysis_result'||d.is_null||mode==='append'&&!info.catalog?.context.base.current_exists;
     $('[data-action="transcript-edit"]').disabled=state.busy||!unlocked||!api.transcriptEdit||Boolean(info.pending)||row?.kind!=='typed'||d?.key.kind!=='recording_transcript';
     $('[data-action="transcript-save"]').disabled=state.busy||!unlocked||!api.transcriptSave||Boolean(info.pending)||!state.transcript||state.transcriptComposing;
     $('.protection-transcript-draft').readOnly=state.busy;
@@ -5003,6 +5006,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       const label=document.createElement('label'); label.textContent=String(epoch).startsWith('analysis-')?(epoch==='analysis-output'?'분석 결과를 보관할 비밀번호':'보관된 분석 결과의 비밀번호'):(epoch==='resolve-local-bundle'?'내 변경으로 저장 확인 · 저장 비밀번호':epoch==='resolve-server-bundle'?'서버 현재본으로 저장 확인 · 저장 비밀번호':epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       if(epoch==='transcript-bundle')label.firstChild.textContent='전사문 저장 확인 · 저장 비밀번호';
+      if(epoch==='analysis-append-bundle'||epoch==='analysis-approve-bundle')label.firstChild.textContent=(epoch==='analysis-append-bundle'?'결과 이어붙이기 확인':'결과 승인 반영 확인')+' · 저장 비밀번호';
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
       const finish=value=>{if(finished)return;finished=true;input.value='';section.remove();askCancel=null;resolve(value);};
@@ -5068,7 +5072,11 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if(name==='transcript-edit') {
+        if(name==='analysis-append'||name==='analysis-approve') {
+          const row=state.info?.rows[Number($('[name="representation"]').value)],mode=name==='analysis-append'?'append':'approve';
+          let password=await ask(name+'-bundle',true,token);if(!password||!valid(token))return;
+          try{await api.analysisApply(state.info,row,mode,password,resolveKey(token));if(valid(token))await load();}finally{password=null;keys.clear();}
+        } else if(name==='transcript-edit') {
           const row=state.info?.rows[Number($('[name="representation"]').value)];
           resetTranscript();const edit=await api.transcriptEdit(state.info,row,resolveKey(token));
           if(!valid(token))return;
@@ -10493,6 +10501,29 @@ function protectionViewKey() {
   return JSON.stringify([c.url,c.owner,c.auth,c.device,getSelectedTreeNode()?.id,protectionTargetId()]);
 }
 
+async function applyProtectedAnalysisResult(info,row,mode,password,resolveKey) {
+  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  const guard=protectionActionGuard();guard();
+  const d=row?.descriptor,catalog=info.catalog;
+  if(!['append','approve'].includes(mode)||info.pending||!catalog||row?.kind!=="typed"||d?.key.kind!=="analysis_result"||d.is_null
+    ||!catalog.entries.some(e=>NowNoteProtectionProtocol.canonicalJson(e)===NowNoteProtectionProtocol.canonicalJson(d))
+    ||mode==='append'&&!catalog.context.base.current_exists)throw Error("note_protection:analysis_apply_selection");
+  if(noteProtectionEditSession){await noteProtectionEditSession.queue;guard();if(noteProtectionEditSession?.value.dirty)throw Error("note_protection:unsent_draft");}
+  const original=await noteProtectionReader.read(info.scope,catalog,d,resolveKey);guard();
+  if(typeof original.value!=="string")throw Error("note_protection:analysis_apply_result");
+  const result=extractServerAnalysisResultText(original.value);
+  if(!result)throw Error("note_protection:analysis_apply_result");
+  const present=catalog.context.base.current_exists;
+  const note=structuredClone(present?await editProtectedCurrent(info,resolveKey):await createProtectedCurrent(info,resolveKey));guard();
+  if(note.owner_id!==info.scope.owner||note.local_id!==info.scope.local_id)throw Error("note_protection:analysis_apply_scope");
+  if(present&&noteProtectionEditSession?.value.dirty)throw Error("note_protection:unsent_draft");
+  const section=['## '+t("settings.server.analysis.sectionTitle"),'','- #'+d.key.id,'',result].join("\n");
+  note.content=[note.content||'',section].filter(part=>part.trim()).join("\n\n");
+  if(!present)note.title=t("settings.server.analysis.approvalSectionTitle")+' #'+d.key.id;
+  note.tags=JSON.stringify(extractTags(note.content));guard();
+  return await writeProtectedCurrent(info,note,password,resolveKey);
+}
+
 async function prepareProtectedTranscript(info,row,resolveKey) {
   if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
@@ -10744,6 +10775,7 @@ async function openNoteProtection({discover=false}={}) {
     },
     analysisFinish:finishProtectedAnalysis,analysisResume:resumeProtectedAnalysis,
     transcriptEdit:prepareProtectedTranscript,transcriptSave:saveProtectedTranscript,
+    analysisApply:applyProtectedAnalysisResult,
     analysisPublish:publishProtectedAnalysis,analysisReplanPrepare:prepareProtectedReplan,analysisReplanBegin:beginProtectedReplan,
     analysisUnavailable:(handoff,reason)=>noteProtectionAnalysis.reportUnavailable(handoff,{provider_terminal_observed:true,unavailable_reason:reason}),
     imports:async(info,resolveKey)=>(await prepareProtectedImport(info,resolveKey)).branches.map(r=>({
@@ -13989,6 +14021,9 @@ function handleServerConflictListClick(event) {
 
 function appendAnalysisResultToNote(job) {
   const node = findTreeNode(state.data.tree, job.note_local_id);
+  if(job.locked || job.required_capability || node?.protection_record || noteProtectionBlocked(job.note_local_id)) {
+    showNotice("보호된 분석 결과는 메모 보호 창에서 반영할 수 있습니다.","error");return;
+  }
   const resultText = extractServerAnalysisResultText(job.result_json);
   if (!node || !resultText) {
     setServerMessage(state.settings.server, "bad", "settings.server.analysis.applyMissing");
@@ -14022,6 +14057,10 @@ function appendAnalysisResultToNote(job) {
 }
 
 function approveAnalysisResult(job) {
+  const protectedNode=job.note_local_id?findTreeNode(state.data.tree,job.note_local_id):null;
+  if(job.locked || job.required_capability || protectedNode?.protection_record || noteProtectionBlocked(job.note_local_id)) {
+    showNotice("보호된 분석 결과는 메모 보호 창에서 반영할 수 있습니다.","error");return;
+  }
   const resultText = extractServerAnalysisResultText(job.result_json);
   if (!resultText) {
     setServerMessage(state.settings.server, "bad", "settings.server.analysis.applyMissing");
