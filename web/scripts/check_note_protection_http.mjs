@@ -39,7 +39,8 @@ try {
   const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
   const parentMode=process.argv.includes('--parent-mixed')?'mixed':process.argv.includes('--parent-plain')?'plain':null;
   const replicas=process.argv.includes('--physical-replicas');
-  const relatedOnly=process.argv.includes('--related-only');
+  const transcript=process.argv.includes('--transcript');
+  const relatedOnly=process.argv.includes('--related-only')||transcript;
   for(const mode of modes) {
     const credentials={};let branchId=null,replicaIds=null;
     const probe=process.argv.includes('--probe');
@@ -85,7 +86,7 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of probe?[0]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
+    for(const phase of probe?[0]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=[5,24].includes(phase)?path.join(own,mode+(phase===24?'-peer':'-fresh')):profile;

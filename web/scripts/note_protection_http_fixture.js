@@ -55,6 +55,57 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([31,32,33].includes(config.phase)){
+    state.selectedTreeId=target;render();await settle();await open();
+    const Q=NowNoteProtectionProtocol,same=(l,r)=>Q.canonicalJson(l)===Q.canonicalJson(r),replacement='HTTP-QA-MT-'+run+'\n';
+    const initial=await inspectNoteProtection();
+    if(config.phase===32&&!initial.catalog)initial.catalog=await noteProtectionReader.catalog(initial.scope);
+    const d=initial.catalog.entries.find(d=>d.key.kind==='recording_transcript');
+    assert(d,'transcript_descriptor_missing');
+    if(config.phase!==32){const select=dialog().querySelector('[name="representation"]');select.value=String(initial.rows.findIndex(r=>r.kind==='typed'&&same(r.descriptor.key,d.key)));select.dispatchEvent(new Event('change'));}
+    const ownMarkers=async()=>{const result=[];for(const marker of Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target)){const bundle=Q.parseJson(await Q.decryptContent(marker.cipher_bundle,password));if(bundle.intent?.purpose==='mixed_transcript_write')result.push({marker,bundle});}return result;};
+    if(config.phase===31){
+      assert((await ownMarkers()).length===0,'transcript_inherited_operation');
+      await action('transcript-edit',()=>!dialog().querySelector('.protection-transcript').classList.contains('hidden'));
+      const editor=dialog().querySelector('.protection-transcript-draft');assert(editor.value==='HTTP-QA-TRANSCRIPT-'+run+'\n','transcript_original_meaning');
+      editor.value=replacement;editor.dispatchEvent(new Event('input',{bubbles:true}));
+      globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'transcript_ready',owner:a.owner,local_id:target});
+      for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));assert(globalThis.__HTTP_CAPTURE_DONE__===true,'transcript_capture_failed');
+      const original=noteProtectionRemote.commit;let commits=0,lost=false;
+      noteProtectionRemote.commit=async(s,p,w)=>{const result=await original(s,p,w);if(p.response.purpose==='mixed_transcript_write'){commits++;lost=true;throw Error('qa_transcript_commit_response_lost');}return result;};
+      try{await action('transcript-save',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='committing'));}finally{noteProtectionRemote.commit=original;}
+      const rows=await ownMarkers();assert(rows.length===1&&rows[0].marker.phase==='committing'&&commits===1&&lost,'transcript_lost_receipt_not_retained');
+      const b=rows[0].bundle;assert(b.work.transcript===replacement&&b.work.transfers.length===1&&b.prepared.manifest.P.every(old=>!same(old.key,d.key)),'transcript_cipher_checkpoint');
+      emit({stage:'transcript_commit_response_lost',owner:a.owner,local_id:target,operation_id:b.prepared.id,local_operation_id:rows[0].marker.id});
+      for(const store of protectionStorageAdapters()){const raw=JSON.stringify(await store.read());assert(!raw.includes('HTTP-QA-MT-'+run)&&!raw.includes('HTTP-QA-TRANSCRIPT-'+run),'transcript_plaintext_store');}
+      button('lock').click();return {ok:true,mode:config.mode,phase:31,typedTranscriptEdit:true,cipherCheckpoint:true,commitResponseLost:true,providerCalls:0};
+    }
+    if(config.phase===32){
+      const rows=await ownMarkers();assert(rows.length===1&&rows[0].marker.phase==='committing','transcript_cold_marker');
+      const saved=rows[0],raw=saved.bundle.work.transfers[0].raw,original=noteProtectionRemote.commit;let commits=0;
+      noteProtectionRemote.commit=async()=>{commits++;throw Error('duplicate_transcript_commit_blocked');};
+      try{await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));}finally{noteProtectionRemote.commit=original;}
+      const current=(await ownMarkers())[0];assert(current.marker.phase==='complete'&&current.bundle.work.transfers[0].raw===raw&&current.bundle.work.local.verified===true&&commits===0,'transcript_cold_cipher_or_proof_changed');
+      const after=await inspectNoteProtection();assert(same(after.catalog.context,current.bundle.receipt.result),'transcript_cold_context');
+      for(const preserved of saved.bundle.prepared.manifest.P)assert(after.catalog.entries.some(d=>same(d,preserved)),'transcript_cold_preserved_changed');
+      const actual=after.catalog.entries.find(x=>same(x.key,d.key));assert((await noteProtectionReader.read(after.scope,after.catalog,actual,async()=>password)).value===replacement,'transcript_cold_value');
+      emit({stage:'transcript_cold_complete',owner:a.owner,local_id:target,operation_id:current.bundle.prepared.id,local_operation_id:current.marker.id});
+      return {ok:true,mode:config.mode,phase:32,coldTypedProof:true,originalCipherPreserved:true,duplicateCommit:commits,providerCalls:0};
+    }
+    await action('transcript-edit',()=>!dialog().querySelector('.protection-transcript').classList.contains('hidden'));
+    assert(dialog().querySelector('.protection-transcript-draft').value===replacement,'transcript_null_prior_value');
+    const nullBox=dialog().querySelector('[name="transcript-null"]');nullBox.checked=true;nullBox.dispatchEvent(new Event('change'));
+    const originalStage=noteProtectionRemote.stage;let staged=0;
+    noteProtectionRemote.stage=async(s,p,w,...rest)=>{if(p.response.purpose==='mixed_transcript_write'){assert(w.transfers.length===0&&w.transcript===null,'transcript_null_uploaded');staged++;}return originalStage(s,p,w,...rest);};
+    try{await action('transcript-save',()=>!dialog().querySelector('.protection-transcript-draft').value&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));}finally{noteProtectionRemote.stage=originalStage;}
+    const after=await inspectNoteProtection(),nullD=after.catalog.entries.find(x=>same(x.key,d.key));
+    assert(staged===1&&nullD.is_null&&nullD.linked_slot_version===d.linked_slot_version+1,'transcript_null_slot');
+    assert((await noteProtectionReader.read(after.scope,after.catalog,nullD,async()=>password)).value===null,'transcript_null_typed_value');
+    for(const old of initial.catalog.entries.filter(x=>!same(x.key,d.key)))assert(after.catalog.entries.some(x=>same(x,old)),'transcript_null_preserved_changed');
+    assert(after.catalog.context.base.head_version===initial.catalog.context.base.head_version&&after.catalog.context.base.history_generation===initial.catalog.context.base.history_generation+1,'transcript_null_head_changed');
+    for(const store of protectionStorageAdapters()){const raw=JSON.stringify(await store.read());assert(!raw.includes('HTTP-QA-MT-'+run)&&!raw.includes('HTTP-QA-TRANSCRIPT-'+run),'transcript_plaintext_store');}
+    button('lock').click();return {ok:true,mode:config.mode,phase:33,explicitNull:true,noCipherUpload:true,currentAndOthersPreserved:true,providerCalls:0};
+  }
   if([26,29].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
