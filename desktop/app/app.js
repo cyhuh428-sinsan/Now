@@ -8956,6 +8956,16 @@ const elements = {
   canvasView: $("#canvasView"),
   canvasCloseBtn: $("#canvasCloseBtn"),
   canvasTitleInput: $("#canvasTitleInput"),
+  canvasResourceSelect: $("#canvasResourceSelect"),
+  canvasNewBtn: $("#canvasNewBtn"),
+  canvasSaveBtn: $("#canvasSaveBtn"),
+  canvasSyncBtn: $("#canvasSyncBtn"),
+  canvasStatus: $("#canvasStatus"),
+  canvasConflict: $("#canvasConflict"),
+  canvasLocalCompare: $("#canvasLocalCompare"),
+  canvasRemoteCompare: $("#canvasRemoteCompare"),
+  canvasChooseLocalBtn: $("#canvasChooseLocalBtn"),
+  canvasChooseRemoteBtn: $("#canvasChooseRemoteBtn"),
   canvasAddNoteBtn: $("#canvasAddNoteBtn"),
   canvasAddTextBtn: $("#canvasAddTextBtn"),
   canvasConnectBtn: $("#canvasConnectBtn"),
@@ -11220,7 +11230,10 @@ async function initializeLibrary() {
         desktopExpected = structuredClone(value);
       }
       else await webWrite(value);
-    }, change: () => libraryUI?.refresh() });
+    }, change: () => {
+      libraryUI?.refresh();
+      if (elements.canvasView && !elements.canvasView.classList.contains("hidden")) renderCanvasResourceControls();
+    } });
   libraryUI = mountNowLibrary({
     store: libraryStore, contextKey: () => NowLibrary.key(libraryContext()),
     contextLabel: () => libraryContext().owner + (libraryContext().enabled ? " · 서버 연결" : " · 오프라인"),
@@ -12879,6 +12892,12 @@ function bindEvents() {
   $("#protectionBtn")?.addEventListener("click", () => openNoteProtection({discover:true}).catch(error => showNotice(error.message,"error")));
   elements.canvasCloseBtn?.addEventListener("click", closeCanvasView);
   elements.canvasTitleInput?.addEventListener("input", updateCanvasTitle);
+  elements.canvasResourceSelect?.addEventListener("change", () => canvasResourceAction(() => selectCanvasResource(elements.canvasResourceSelect.value)));
+  elements.canvasNewBtn?.addEventListener("click", () => canvasResourceAction(() => selectCanvasResource("new")));
+  elements.canvasSaveBtn?.addEventListener("click", () => canvasResourceAction(saveCanvasResource));
+  elements.canvasSyncBtn?.addEventListener("click", () => canvasResourceAction(syncCanvasResources));
+  elements.canvasChooseLocalBtn?.addEventListener("click", () => canvasResourceAction(() => resolveCanvasResource("local")));
+  elements.canvasChooseRemoteBtn?.addEventListener("click", () => canvasResourceAction(() => resolveCanvasResource("remote")));
   elements.canvasAddNoteBtn?.addEventListener("click", addSelectedNoteCanvasCard);
   elements.canvasAddTextBtn?.addEventListener("click", addTextCanvasCard);
   elements.canvasConnectBtn?.addEventListener("click", connectSelectedCanvasCards);
@@ -19751,6 +19770,125 @@ function groupBy(items, selector) {
   }, new Map());
 }
 
+let canvasResourceEditor = null;
+let canvasResourceBusy = false;
+
+async function canvasResourceAction(action) {
+  try { await action(); } catch (error) { showNotice(error.message, "error"); }
+}
+
+function canvasResourceContextActive(editor = canvasResourceEditor) {
+  if (!editor) return true;
+  const ctx = libraryContext();
+  return ctx.enabled && NowLibrary.key(ctx) === editor.key && ctx.auth === editor.auth;
+}
+
+function canvasResourcePayload(canvas) {
+  return NowLibrary.validate("canvases", {title:canvas.title,cards:structuredClone(canvas.cards),edges:structuredClone(canvas.edges),zoom:canvas.zoom});
+}
+
+function editCanvasResource(row) {
+  const ctx = libraryContext(), canvas = row ? normalizeCanvas({...row.payload,id:row.id,createdAt:row.created_at,updatedAt:row.updated_at}) : defaultCanvas();
+  canvasResourceEditor = {key:NowLibrary.key(ctx),auth:ctx.auth,id:canvas.id,version:row?.version || 0,canvas,dirty:false};
+  state.selectedCanvasCardIds = [];
+}
+
+async function selectCanvasResource(id) {
+  const editor=canvasResourceEditor, ctx=libraryContext();
+  if (editor?.dirty && !await confirmAction("저장 전 변경을 버리고 다른 맵을 열까요?")) { renderCanvas(); return; }
+  if (NowLibrary.key(libraryContext())!==NowLibrary.key(ctx) || libraryContext().auth!==ctx.auth) throw new Error("계정 또는 서버가 변경되었습니다.");
+  if (editor && !canvasResourceContextActive(editor)) throw new Error("계정 또는 서버가 변경되었습니다. 다시 열어주세요.");
+  if (ctx.enabled && libraryStore) {
+    const row=id==="new"?null:libraryStore.list("canvases").find(item=>item.id===id);
+    if (id!=="new" && (!row || row.readonly)) throw new Error("열 수 없는 맵입니다. 원본을 보존합니다.");
+    editCanvasResource(row);
+  } else {
+    canvasResourceEditor=null;
+    if (id==="new") {
+      if (state.data.canvases.length>=12) throw new Error("맵 저장 한도를 초과했습니다.");
+      const canvas=defaultCanvas();state.data.canvases.push(canvas);state.selectedCanvasId=canvas.id;persist();
+    } else state.selectedCanvasId=id;
+  }
+  renderCanvas();
+}
+
+async function saveCanvasResource() {
+  const ctx=libraryContext();
+  if (!canvasResourceContextActive()) throw new Error("계정 또는 서버가 변경되었습니다.");
+  if (!ctx.enabled || !libraryStore) { persist(); showNotice("기기에 저장했습니다."); return; }
+  const canvas=activeCanvas(), payload=canvasResourcePayload(canvas);
+  if (!canvasResourceEditor) {
+    if (!await confirmAction(ctx.owner+" 계정에 이 기기의 맵을 저장할까요?")) return;
+    if (NowLibrary.key(libraryContext())!==NowLibrary.key(ctx) || libraryContext().auth!==ctx.auth) throw new Error("계정이 변경되었습니다.");
+    if (JSON.stringify(canvasResourcePayload(activeCanvas()))!==JSON.stringify(payload)) throw new Error("맵이 변경되었습니다. 다시 확인하고 저장하세요.");
+    editCanvasResource(null);canvasResourceEditor.canvas=structuredClone(canvas);canvasResourceEditor.id=canvas.id;
+  }
+  const editor=canvasResourceEditor;
+  canvasResourceBusy=true;renderCanvasResourceControls();
+  try {
+    await libraryStore.put("canvases",editor.id,payload,{baseVersion:editor.version});
+    if (!canvasResourceContextActive(editor)) return;
+    await libraryStore.sync();
+    if (!canvasResourceContextActive(editor) || canvasResourceEditor!==editor) return;
+    const row=libraryStore.list("canvases").find(item=>item.id===editor.id);
+    if (row && !row.pending && !row.conflict) editor.version=row.version;
+    if (JSON.stringify(canvasResourcePayload(editor.canvas))===JSON.stringify(payload)) editor.dirty=false;
+  } finally { canvasResourceBusy=false;renderCanvasResourceControls(); }
+}
+
+async function syncCanvasResources() {
+  if (!libraryStore || !libraryContext().enabled || !canvasResourceContextActive()) throw new Error("현재 계정의 서버 연결을 확인하세요.");
+  const editor=canvasResourceEditor;
+  await libraryStore.sync();
+  if (!canvasResourceContextActive(editor)) return;
+  if (editor && !editor.dirty) {
+    const row=libraryStore.list("canvases").find(item=>item.id===editor.id);
+    if (row && !row.pending && !row.conflict) editCanvasResource(row);
+  }
+  renderCanvas();
+}
+
+async function resolveCanvasResource(choice) {
+  const editor=canvasResourceEditor;
+  if (!editor || !canvasResourceContextActive(editor)) throw new Error("현재 계정의 맵을 다시 열어주세요.");
+  const rows=libraryStore.list("canvases"), row=rows.find(item=>item.id===editor.id);
+  if (!row?.conflict) return;
+  await libraryStore.resolve("canvases",editor.id,choice,{remoteVersion:row.conflict.remote?.version || 0});
+  if (!canvasResourceContextActive(editor)) return;
+  await libraryStore.sync();
+  if (!canvasResourceContextActive(editor)) return;
+  const after=libraryStore.list("canvases"), next=after.find(item=>item.id===editor.id)
+    || after.find(item=>!rows.some(old=>old.id===item.id));
+  if (next) editCanvasResource(next); else editCanvasResource(null);
+  renderCanvas();
+}
+
+function renderCanvasResourceControls() {
+  if (!elements.canvasResourceSelect) return;
+  const ctx=libraryContext(), editor=canvasResourceEditor;
+  if (editor && !canvasResourceContextActive(editor)) { closeCanvasView(); return; }
+  const rows=ctx.enabled&&libraryStore?libraryStore.list("canvases"):state.data.canvases.map(canvas=>({id:canvas.id,payload:{title:canvas.title}}));
+  const selected=editor?.id || state.selectedCanvasId || state.data.canvases[0]?.id;
+  elements.canvasResourceSelect.innerHTML=rows.map(row=>`<option value="${escapeHtml(row.id)}">${escapeHtml(row.payload?.title || "누락 맵")}</option>`).join("");
+  if (!rows.some(row=>row.id===selected)) elements.canvasResourceSelect.add(new Option(editor?"새 맵":"기기 내 맵",selected));
+  elements.canvasResourceSelect.value=selected;
+  const row=rows.find(item=>item.id===selected), conflict=row?.conflict;
+  elements.canvasStatus.textContent=(ctx.enabled?ctx.owner+" · ":"기기 · ")+(conflict?"충돌":row?.error?"저장 실패":canvasResourceBusy?"저장 중":editor?.dirty?"변경됨":row?.pending?"전송 대기":!row&&editor?"저장 전":"저장됨");
+  elements.canvasConflict.hidden=!conflict;
+  elements.canvasLocalCompare.textContent=conflict?JSON.stringify(row.payload,null,2):"";
+  elements.canvasRemoteCompare.textContent=conflict?JSON.stringify(conflict.remote?.payload ?? null,null,2):"";
+  elements.canvasSaveBtn.disabled=canvasResourceBusy || Boolean(conflict);
+  elements.canvasSyncBtn.disabled=canvasResourceBusy || !ctx.enabled;
+  elements.canvasNewBtn.disabled=canvasResourceBusy;
+  elements.canvasResourceSelect.disabled=canvasResourceBusy;
+  const frozen=canvasResourceBusy || Boolean(conflict);
+  elements.canvasTitleInput.disabled=frozen;
+  elements.canvasBoard.inert=frozen;
+  for (const control of [elements.canvasAddNoteBtn,elements.canvasAddTextBtn,elements.canvasConnectBtn,elements.canvasDisconnectBtn,
+    elements.canvasRemoveBtn,elements.canvasDraftFromGraphBtn,elements.canvasZoomOutBtn,elements.canvasZoomInBtn,elements.canvasFitBtn,
+    elements.canvasMoveLeftBtn,elements.canvasMoveUpBtn,elements.canvasMoveDownBtn,elements.canvasMoveRightBtn]) if (control) control.disabled=frozen;
+}
+
 function defaultCanvas() {
   const now = new Date().toISOString();
   return {
@@ -19809,27 +19947,39 @@ function normalizeCanvasCard(card = {}) {
 }
 
 function activeCanvas() {
+  if (canvasResourceEditor) {
+    if (!canvasResourceContextActive()) throw new Error("계정 또는 서버가 변경되었습니다.");
+    return canvasResourceEditor.canvas;
+  }
   if (!Array.isArray(state.data.canvases)) state.data.canvases = [];
   if (state.data.canvases.length === 0) {
     state.data.canvases.push(defaultCanvas());
     persist();
   }
-  state.data.canvases[0] = normalizeCanvas(state.data.canvases[0]);
-  return state.data.canvases[0];
+  const index=Math.max(0,state.data.canvases.findIndex(canvas=>canvas.id===state.selectedCanvasId));
+  state.data.canvases[index] = normalizeCanvas(state.data.canvases[index]);
+  return state.data.canvases[index];
 }
 
 function markCanvasChanged(canvas = activeCanvas()) {
   canvas.updatedAt = new Date().toISOString();
+  if (canvasResourceEditor) { canvasResourceEditor.dirty=true;renderCanvasResourceControls();return; }
   persist();
 }
 
 function openCanvasView() {
   closePopupLayers();
+  const ctx=libraryContext();
+  if (ctx.enabled && libraryStore && (!canvasResourceEditor || !canvasResourceContextActive())) {
+    editCanvasResource(libraryStore.list("canvases").find(row=>!row.readonly) || null);
+  } else if (!ctx.enabled) canvasResourceEditor=null;
   elements.canvasView.classList.remove("hidden");
   renderCanvas();
 }
 
-function closeCanvasView() {
+async function closeCanvasView() {
+  if (canvasResourceEditor?.dirty && canvasResourceContextActive()
+    && !await confirmAction("저장 전 변경을 남겨두고 닫을까요?")) return;
   elements.canvasView.classList.add("hidden");
 }
 
@@ -19841,10 +19991,12 @@ function updateCanvasTitle() {
 }
 
 function renderCanvas() {
+  if (canvasResourceEditor && !canvasResourceContextActive()) { closeCanvasView();return; }
   const canvas = activeCanvas();
   elements.canvasTitleInput.value = canvas.title;
   renderCanvasSummary(canvas);
   renderCanvasBoard(canvas);
+  renderCanvasResourceControls();
 }
 
 function renderCanvasSummary(canvas) {
@@ -19892,12 +20044,12 @@ function renderCanvasBoard(canvas) {
   elements.canvasBoard.querySelectorAll("[data-canvas-card-id]").forEach((cardEl) => {
     bindCanvasCardDrag(cardEl, canvas);
     cardEl.addEventListener("click", () => toggleCanvasCardSelection(cardEl.dataset.canvasCardId));
-    cardEl.querySelector("[data-action='open-note']")?.addEventListener("click", (event) => {
+    cardEl.querySelector("[data-action='open-note']")?.addEventListener("click", async (event) => {
       event.stopPropagation();
       const card = canvas.cards.find((item) => item.id === cardEl.dataset.canvasCardId);
       if (card?.noteId && findTreeNode(state.data.tree, card.noteId)) {
-        closeCanvasView();
-        selectTreeNode(card.noteId);
+        await closeCanvasView();
+        if (elements.canvasView.classList.contains("hidden")) selectTreeNode(card.noteId);
       }
     });
     cardEl.querySelector("[data-action='text']")?.addEventListener("input", (event) => {
@@ -19917,7 +20069,7 @@ function canvasCardHtml(card, zoom) {
     ? `<textarea data-action="text" aria-label="텍스트 카드">${escapeHtml(card.text)}</textarea>`
     : `<p>${escapeHtml(note ? snippet(note.content || "") : "원본 메모 없음")}</p>`;
   const openButton = card.type === "note" && note
-    ? `<button class="small-btn" type="button" data-action="open-note">열기</button>`
+    ? `<button class="secondary-btn canvas-open-note" type="button" data-action="open-note">열기</button>`
     : "";
   return `
     <article class="canvas-board-card ${selected ? "selected" : ""}" tabindex="0" aria-label="${escapeHtml(title)}" data-canvas-card-id="${escapeHtml(card.id)}" style="left:${card.x * zoom}px; top:${card.y * zoom}px; width:${card.width * zoom}px;">
@@ -19943,7 +20095,7 @@ function bindCanvasCardDrag(cardEl, canvas) {
     elements.canvasBoard.querySelector(`[data-canvas-card-id="${CSS.escape(cardEl.dataset.canvasCardId)}"]`)?.focus();
   });
   header?.addEventListener("pointerdown", event => {
-    if (event.button !== 0 || event.target.closest("button")) return;
+    if (canvasResourceBusy || event.button !== 0 || event.target.closest("button")) return;
     const card = canvas.cards.find(item => item.id === cardEl.dataset.canvasCardId);
     if (!card) return;
     drag = {id:event.pointerId,x:event.clientX,y:event.clientY,left:card.x,top:card.y,card,moved:false};
@@ -19951,7 +20103,7 @@ function bindCanvasCardDrag(cardEl, canvas) {
     event.preventDefault();
   });
   header?.addEventListener("pointermove", event => {
-    if (!drag || event.pointerId !== drag.id || data !== state.data) return;
+    if (!drag || event.pointerId !== drag.id || data !== state.data || canvasResourceBusy || !canvasResourceContextActive()) return;
     const dx = (event.clientX - drag.x) / canvas.zoom, dy = (event.clientY - drag.y) / canvas.zoom;
     drag.moved ||= Math.abs(dx) + Math.abs(dy) > 3;
     if (!drag.moved) return;
@@ -19961,7 +20113,7 @@ function bindCanvasCardDrag(cardEl, canvas) {
   const finish = event => {
     if (!drag || event.pointerId !== drag.id) return;
     const last = drag; drag = null;
-    if (event.type !== "pointerup" || data !== state.data) {
+    if (event.type !== "pointerup" || data !== state.data || canvasResourceBusy || !canvasResourceContextActive()) {
       last.card.x = last.left; last.card.y = last.top;
     } else if (last.moved) {
       state.selectedCanvasCardIds = [last.card.id];

@@ -4164,11 +4164,17 @@ kbd {
 }
 
 .canvas-toolbar {
-  display: grid;
-  grid-template-columns: minmax(220px, 1fr) repeat(4, auto) 40px 40px auto;
-  gap: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
   align-items: center;
 }
+
+.canvas-toolbar input { flex:1 1 240px; min-width:0; }
+.canvas-toolbar button { flex:0 0 auto; white-space:nowrap; }
+.canvas-toolbar .icon-btn { width:36px; min-width:36px; height:36px; }
+.canvas-card .view-header { display:flex; flex-direction:row; align-items:center; }
+.canvas-card .view-header .icon-btn { flex:0 0 40px; width:40px; }
 
 .canvas-board {
   position: relative;
@@ -4261,6 +4267,15 @@ kbd {
 }
 
 .canvas-stage { position: relative; min-width: 100%; }
+.canvas-resource-bar { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+.canvas-resource-bar select { flex:1 1 180px; min-width:0; }
+.canvas-resource-bar button { flex:0 0 auto; min-width:56px; white-space:nowrap; }
+.canvas-resource-bar span { flex-basis:100%; font-size:12px; overflow-wrap:anywhere; }
+.canvas-compare { display:flex; flex-wrap:wrap; gap:12px; }
+.canvas-compare section { flex:1 1 240px; min-width:0; }
+.canvas-compare pre { max-height:240px; overflow:auto; font-size:12px; }
+.canvas-conflict > button { margin:8px 4px 8px 0; white-space:nowrap; }
+.canvas-open-note { min-height:28px; padding:4px 8px; }
 .canvas-world { position: absolute; transform-origin: top left; }
 .canvas-board-card header strong { overflow-wrap: anywhere; min-width: 0; }
 .canvas-board-card:focus-visible { outline: 2px solid var(--blue); }

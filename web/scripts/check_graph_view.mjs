@@ -6,6 +6,7 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import { setTimeout as delay } from "node:timers/promises";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -211,6 +212,53 @@ async function waitForCondition(page, expression, label, timeoutMs = DEFAULT_TIM
   throw new Error(`${label} 확인 시간이 초과되었습니다.`);
 }
 
+async function checkCanvasAccountUI(page) {
+  await page.send("Emulation.setDeviceMetricsOverride",{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(page,`(async()=> {
+    globalThis.canvasQaContext={url:"https://synthetic.invalid",owner:"canvas-a",enabled:true,auth:"synthetic"};
+    globalThis.canvasQaRows={};
+    libraryContext=()=>canvasQaContext;
+    requestLibrary=async(ctx,kind,id,method,body)=>{
+      const key=ctx.owner+"/"+kind+"/"+id;
+      if(method==="GET")return {items:Object.values(canvasQaRows).filter(row=>row.owner_id===ctx.owner&&row.kind===kind).map(({kind,...row})=>row)};
+      const old=canvasQaRows[key];
+      if((old?.version||0)!==body.base_version)throw Object.assign(Error("conflict"),{status:409,code:"version_conflict"});
+      const row={id,owner_id:ctx.owner,kind,schema_version:1,version:(old?.version||0)+1,payload:body.payload,created_at:"2026-10-31T00:00:00Z",updated_at:"2026-10-31T00:00:00Z",deleted_at:null};
+      canvasQaRows[key]=row;const {kind:ignored,...resource}=row;return {resource,mutation_id:body.mutation_id};
+    };
+    await initializeLibrary();canvasResourceEditor=null;openCanvasView();
+    elements.canvasAddTextBtn.click();elements.canvasTitleInput.value="Local map";elements.canvasTitleInput.dispatchEvent(new Event("input"));
+    elements.canvasSaveBtn.click();
+  })()`);
+  await waitForCondition(page,'libraryStore.list("canvases").some(row=>!row.pending&&row.version===1)',"Canvas actual save");
+  assert(await evaluate(page,'canvasResourceEditor.version===1 && !canvasResourceEditor.dirty'),"Canvas save receipt not applied");
+  await evaluate(page,`(() => {
+    const row=Object.values(canvasQaRows).find(row=>row.kind==="canvases");
+    row.version++;row.payload={...row.payload,title:"Remote map"};
+    elements.canvasTitleInput.value="Local changed";elements.canvasTitleInput.dispatchEvent(new Event("input"));
+    elements.canvasSaveBtn.click();
+  })()`);
+  await waitForCondition(page,'!elements.canvasConflict.hidden && !canvasResourceBusy',"Canvas conflict");
+  assert(await evaluate(page,'elements.canvasLocalCompare.textContent.includes("Local changed") && elements.canvasRemoteCompare.textContent.includes("Remote map")'),"Canvas conflict comparison missing");
+  assert(await evaluate(page,'elements.canvasTitleInput.disabled && elements.canvasBoard.inert && elements.canvasAddTextBtn.disabled'),"Canvas conflict must freeze edits until explicit resolution");
+  for(const width of [1280,390]){
+    await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:false});
+    await evaluate(page,'elements.canvasConflict.open=true');
+    if(process.env.NOWNOTE_CANVAS_QA_DIR){
+      const shot=await page.send("Page.captureScreenshot",{format:"png"});
+      await fs.writeFile(path.join(process.env.NOWNOTE_CANVAS_QA_DIR,`canvas-conflict-${process.argv.includes("--desktop")?"electron":"web"}-${width}.png`),Buffer.from(shot.data,"base64"));
+    }
+  }
+  await evaluate(page,'elements.canvasChooseRemoteBtn.click()');
+  await waitForCondition(page,'canvasResourceEditor.canvas.title==="Remote map" && elements.canvasConflict.hidden',"Canvas remote choice");
+  await evaluate(page,`(() => {
+    canvasQaContext={...canvasQaContext,owner:"canvas-b",auth:"other-synthetic"};
+    openCanvasView();
+  })()`);
+  assert(await evaluate(page,'!elements.canvasResourceSelect.textContent.includes("Remote map") && libraryStore.list("canvases").length===0'),"Canvas account switch exposed old map");
+  console.log("Canvas account UI: durable save receipt, conflict comparison, explicit remote choice, two widths and account isolation PASS (synthetic RPC)");
+}
+
 async function checkCanvasInteractions(page) {
   await page.send("Emulation.setDeviceMetricsOverride", {width:1280,height:900,deviceScaleFactor:1,mobile:false});
   await evaluate(page, `(() => {
@@ -245,13 +293,37 @@ async function checkCanvasInteractions(page) {
     state.selectedCanvasCardIds=[activeCanvas().cards[0].id];elements.canvasRemoveBtn.click();
   })()`);
   assert(await evaluate(page, 'activeCanvas().cards.length===1 && state.data.tree[0].content==="Original stays"'), "Canvas card removal changed original");
+  const touch = await evaluate(page, `(() => {
+    const c=activeCanvas();c.zoom=1;c.cards[0].x=80;c.cards[0].y=80;renderCanvas();
+    elements.canvasBoard.scrollLeft=0;elements.canvasBoard.scrollTop=0;
+    const r=elements.canvasBoard.querySelector("[data-canvas-drag]").getBoundingClientRect();
+    return {x:r.left+8,y:r.top+8};
+  })()`);
+  await page.send("Emulation.setTouchEmulationEnabled", {enabled:true,maxTouchPoints:1});
+  await page.send("Input.dispatchTouchEvent", {type:"touchStart",touchPoints:[{x:touch.x,y:touch.y}]});
+  await page.send("Input.dispatchTouchEvent", {type:"touchMove",touchPoints:[{x:touch.x+50,y:touch.y+20}]});
+  await page.send("Input.dispatchTouchEvent", {type:"touchEnd",touchPoints:[]});
+  assert(await evaluate(page, 'Math.abs(activeCanvas().cards[0].x-130)<2'), "Canvas touch drag wrong");
+  await page.send("Emulation.setTouchEmulationEnabled", {enabled:false});
+  await evaluate(page, 'elements.canvasBoard.querySelector("[data-canvas-card-id]").focus()');
+  await page.send("Input.dispatchKeyEvent", {type:"keyDown",key:"ArrowRight",code:"ArrowRight"});
+  await page.send("Input.dispatchKeyEvent", {type:"keyUp",key:"ArrowRight",code:"ArrowRight"});
+  assert(await evaluate(page, 'Math.abs(activeCanvas().cards[0].x-170)<2'), "Canvas keyboard movement wrong");
+  if (process.argv.includes("--desktop")) {
+    await evaluate(page, 'Promise.all([...storagePendingWrites])');
+    const saved=await evaluate(page, 'JSON.stringify(activeCanvas())');
+    await page.send("Page.reload");
+    await waitForCondition(page, 'typeof state!=="undefined" && state.data?.canvases?.length===1', "Canvas desktop reload");
+    assert(await evaluate(page, 'JSON.stringify(activeCanvas())')===saved, "Canvas desktop persisted value changed");
+    await evaluate(page, 'openCanvasView()');
+  }
   await page.send("Emulation.setDeviceMetricsOverride", {width:390,height:844,deviceScaleFactor:1,mobile:false});
   await evaluate(page, 'renderCanvas()');
   assert(await evaluate(page, `(() => {
     const view=elements.canvasView.querySelector(".canvas-card").getBoundingClientRect();
     return view.left>=0 && view.right<=innerWidth+1;
   })()`), "Canvas narrow dialog overflow");
-  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, disconnect, source-preserving remove and narrow layout PASS");
+  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, touch/keyboard, disconnect, source-preserving remove and narrow layout PASS");
 }
 
 function browserArgs(debugPort, userDataDir, appUrl) {
@@ -283,13 +355,16 @@ function stopBrowserProcess(browser) {
 async function runOnce() {
   assert(typeof WebSocket === "function", "현재 Node.js 런타임이 WebSocket을 지원하지 않습니다.");
 
-  const browserPath = await findBrowser();
+  const desktop = process.argv.includes("--desktop");
+  const browserPath = desktop ? createRequire(new URL("../../desktop/package.json",import.meta.url))("electron") : await findBrowser();
   const { server, port: webPort } = await startStaticServer();
   const debugPort = await freePort();
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nownote-graph-check-"));
   const appUrl = `http://127.0.0.1:${webPort}/index.html`;
-  const browser = spawn(browserPath, browserArgs(debugPort, tempDir, appUrl), {
-    env: { ...process.env, NOWNOTE_HEADLESS_CHECK: "1" },
+  const args=desktop ? [path.resolve(ROOT,"../desktop"),...browserArgs(debugPort,tempDir,appUrl).slice(0,-1)] : browserArgs(debugPort,tempDir,appUrl);
+  const browser = spawn(browserPath, args, {
+    env: { ...process.env, NOWNOTE_HEADLESS_CHECK: "1", ...(desktop ? {NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir} : {}) },
+    windowsHide: true,
     stdio: ["ignore", "ignore", "pipe"],
   });
 
@@ -304,6 +379,10 @@ async function runOnce() {
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
 
+    if (process.argv.includes("--canvas-account")) {
+      await checkCanvasAccountUI(page);
+      return;
+    }
     if (process.argv.includes("--canvas-only")) {
       await checkCanvasInteractions(page);
       return;

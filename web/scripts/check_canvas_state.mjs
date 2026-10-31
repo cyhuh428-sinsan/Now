@@ -6,7 +6,7 @@ import {webcrypto} from 'node:crypto';
 const failures=[];
 for(const file of ['../app.js','../../desktop/app/app.js']){
   const source=await fs.readFile(new URL(file,import.meta.url),'utf8');
-  const start=source.indexOf('function defaultCanvas() {');
+  const start=source.indexOf('let canvasResourceEditor = null;');
   const end=source.indexOf('function defaultCaptureCard() {',start);
   const state={data:{canvases:[],tree:[{id:'note',title:'Original',content:'untouched',children:[]}]},selectedCanvasCardIds:[]};
   const board={clientWidth:800,clientHeight:500,scrollLeft:0,scrollTop:0,querySelectorAll:()=>[],querySelector:()=>null};
@@ -16,6 +16,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
     persist:()=>saved++,findTreeNode:(tree,id)=>tree.find(n=>n.id===id),noteTitle:v=>v,
     snippet:v=>v,escapeHtml:v=>String(v),showNotice:()=>{},requestAnimationFrame:fn=>fn()});
   vm.runInContext(source.slice(start,end),box);
+  assert.equal(typeof box.saveCanvasResource,'function','Canvas must expose durable account-scoped save');
   for(const [name,check] of [
     ['drag divides by zoom and cancel restores',()=>{for(const zoom of [0.6,1,1.8]){
       const events={},header={addEventListener:(k,v)=>events[k]=v,setPointerCapture:()=>{}};
