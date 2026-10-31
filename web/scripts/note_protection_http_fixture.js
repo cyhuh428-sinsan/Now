@@ -113,9 +113,10 @@
     assert(remote.artifact.document.approvals.length===1,'wiki_ui_cold_approval_missing');
     clearWebSession();await login(b);await wikiWait(()=>!serverSyncRunning,'other_account_sync');await settle();
     document.querySelector('#wikiBtn').click();
-    await wikiWait(()=>Boolean(dialog()?.open),'other_account_dialog');
+    await wikiWait(()=>dialog()?.querySelector('[data-wiki-action=new]')?.disabled===false,'other_account_list_loaded');
     assert(!(await request('/api/v1/wikis?owner_id='+encodeURIComponent(b.owner))).items.length,'wiki_ui_foreign_server_list');
-    assert(!dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run)&&!dialog().querySelector('.wiki-body'),'wiki_ui_foreign_body_exposed');
+    assert(!dialog().querySelector('.library-item')&&!dialog().textContent.includes('HTTP QA Wiki '+run)
+      &&!dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run)&&!dialog().querySelector('.wiki-body'),'wiki_ui_foreign_body_exposed');
     clearWebSession();
     return {ok:true,mode:config.mode,phase:44,wikiId,processCold:true,serverApprovedRead:true,citationPreserved:true,accountIsolation:true,externalProviderCalls:0};
   }
