@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 const box={crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa};
-for(const name of ['protocol','state','analysis'])vm.runInNewContext(await readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
+for(const name of ['protocol','state','client','analysis'])vm.runInNewContext(await readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
 const Q=box.NowNoteProtectionProtocol,A=box.NowNoteProtectionAnalysis,copy=structuredClone,uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'one',instance:uid(1),device:'first'};
 const context={base:{head_version:0,head_revision_id:null,crypto_epoch:1,history_generation:1,protection_state:'protected',inventory_revision_ids:[],identity_state:'related_only',current_exists:false},current_mode:'absent',selected_physical_note_id:null,mixed_metadata_version:1};
@@ -44,8 +44,8 @@ console.log('MA initial plan/manifest: original settled TR/BM/C bytes/nulls, exa
 const names=['S','DSET','P','O','existing','verified_existing'],header=Object.fromEntries(Object.entries(manifest).filter(([k])=>!names.includes(k)));
 const operation={schema_version:3,purpose:plan.purpose,operation_id:settled.execution_id,mutation_id:uid(99),state:'prepared',lease_version:1,expires_at:running.expires_at,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:header,counts:verified.counts,receipt:null,latest_context:context};
 const originalExecution={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:settled.source_context,terminal_receipt:settled.terminal_receipt,bundle_metadata:settled.bundle_metadata};
-let prepareCalls=0,exists=false,losePrepare=true,commitCalls=0,loseCommit=true,publishedRows=[],resultContext=null,publishedCounts=null;const transportCalls=[],uploads=new Map();
-const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
+let prepareCalls=0,exists=false,losePrepare=true,commitCalls=0,loseCommit=true,publishedRows=[],resultContext=null,publishedCounts=null,wrongTypedOrigin=false;const transportCalls=[],uploads=new Map();
+const transport=async(s,path,method,body)=>{
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
  if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
  if(path.endsWith('/prepare')){prepareCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(plan.prepare));exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
@@ -67,10 +67,17 @@ const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,metho
   operation.receipt={schema_version:3,purpose:plan.purpose,operation_id:prepared.id,mutation_id:uid(99),server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,result:copy(resultContext),metadata_manifest_digest:prepared.digest,set_digests:copy(verified.set_digests),ciphertext_manifest_digest:publicationWork.commit.client_verified_ciphertext_manifest_digest,origin_expectations_digest:await Q.hashJson(manifest.O),committed_at:'2026-10-31T01:00:00.000000Z'};
   if(loseCommit){loseCommit=false;throw Error('fixture_commit_response_lost');}return copy(operation);
  }
- if(path.endsWith('/mixed-representations/context'))return {server_instance_id:scope.instance,context:copy(resultContext),catalog_digest:await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:resultContext,entries:publishedRows})};
+ if(path.endsWith('/mixed-representations/context'))return {schema_version:3,server_instance_id:scope.instance,context:copy(resultContext),counts:copy(publishedCounts),coverage:{supported_kinds:verified.counts.P.by_kind.map(r=>r.kind),scope_complete:true,full_protection_complete:false},catalog_digest:await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:resultContext,entries:publishedRows})};
  if(path.endsWith('/mixed-representations/catalog'))return {schema_version:3,context:copy(resultContext),catalog_digest:body.catalog_digest,entries:copy(publishedRows),counts:copy(publishedCounts),coverage:{supported_kinds:verified.counts.P.by_kind.map(r=>r.kind),scope_complete:true,full_protection_complete:false},next_cursor:null};
+ if(path.endsWith('/mixed-representations/metadata')||path.endsWith('/mixed-representations/representation')){
+  const descriptor=publishedRows.find(d=>d.key.kind===body.kind&&d.key.id===body.representation_id&&d.key.slot===body.slot);assert.ok(descriptor);
+  const common={schema_version:3,context:copy(resultContext),catalog_digest:body.catalog_digest,descriptor:copy(descriptor)};
+  if(path.endsWith('/metadata')){const origin=copy(header.operation_origin);if(wrongTypedOrigin)origin.source_digest='f'.repeat(64);return {...common,operation_origin:origin};}
+  const entry=uploads.get(Q.canonicalJson(descriptor.key));return {...common,total_chunks:descriptor.is_null?0:entry.core.total_chunks,total_bytes:descriptor.is_null?0:entry.raw.length,chunk_index:descriptor.is_null?null:body.chunk_index,data_base64:descriptor.is_null?null:entry.chunks[body.chunk_index].toString('base64')};
+ }
  throw Error('unexpected_transport');
-}});
+};
+const remote=box.NowNoteProtectionState.createRemote({request:transport});
 await assert.rejects(()=>remote.prepareAnalysis(scope,plan,settled,catalog),/fixture_prepare_response_lost/);
 const prepared=await remote.prepareAnalysis(scope,plan,settled,catalog);
 assert.equal(prepareCalls,1);assert.equal(prepared.id,settled.execution_id);assert.equal(prepared.digest,verified.metadata_manifest_digest);
@@ -103,3 +110,8 @@ operation.receipt.result.base.head_version++;operation.latest_context.base.head_
 await assert.rejects(()=>remote.status(scope,prepared,publicationWork),/analysis_receipt/);operation.receipt=storedReceipt;operation.latest_context=storedLatest;
 loseCommit=false;const directCommit=await remote.commit(scope,prepared,publicationWork);assert.equal(directCommit.receipt_matches_current,true);assert.equal(commitCalls,2);
 console.log('MA commit/status metadata: original lost-response receipt, G+1 only, current/P/O/cipher publication metadata and wrong-origin denial PASS (synthetic; no typed raw read/API/journal)');
+const reader=box.NowNoteProtectionClient.createReader({request:transport});
+const typedProof=await A.verifyInitialPublication(scope,request,settled,work,plan,prepared,directCommit.receipt,reader,'fixture-key');
+assert.equal(typedProof.operation_id,settled.execution_id);
+wrongTypedOrigin=true;await assert.rejects(()=>A.verifyInitialPublication(scope,request,settled,work,plan,prepared,directCommit.receipt,reader,'fixture-key'),/published_origin/);wrongTypedOrigin=false;
+console.log('MA typed publication: real cipher/key/meaning and null readback, exact original source provenance, preserved P/current and forged-source denial PASS (synthetic transport only)');

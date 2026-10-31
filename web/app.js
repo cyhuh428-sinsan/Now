@@ -3772,6 +3772,37 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       client_decryption_verified:true,target_epoch:plan.prepare.base.base.crypto_epoch};check();
     return {transfers,commit,initial_analysis:{request,execution,work:terminalWork,plan,catalog}};
   }
+  async function verifyInitialPublication(scope,request,execution,terminalWork,plan,prepared,receipt,reader,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);plan=structuredClone(plan);prepared=structuredClone(prepared);receipt=structuredClone(receipt);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    const originalCatalog={context:plan.prepare.base,catalog_digest:plan.prepare.expected_catalog_digest,entries:prepared.manifest.P};
+    const verified=await validateInitialWriteManifest(scope,plan,execution,originalCatalog,{...prepared.response.metadata_header,...prepared.manifest},active);check();
+    const values=await openTerminalBundle(scope,request,execution,terminalWork,password,active);check();
+    exact(receipt,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);
+    const expected=structuredClone(plan.prepare.base);expected.base.history_generation++;
+    if(receipt.schema_version!==3||receipt.purpose!==plan.purpose||receipt.operation_id!==execution.execution_id||receipt.mutation_id!==plan.prepare.mutation_id
+      ||receipt.owner_id!==scope.owner||receipt.local_id!==scope.local_id||receipt.server_instance_id!==scope.instance||receipt.metadata_manifest_digest!==verified.metadata_manifest_digest
+      ||!same(receipt.set_digests,verified.set_digests)||!same(receipt.result,expected))fail('published_receipt');
+    if(receipt.ciphertext_manifest_digest!==await Q().hashJson(terminalWork.bundle_metadata.ciphertext_manifest)||receipt.origin_expectations_digest!==await Q().hashJson(prepared.manifest.O))fail('published_receipt');check();
+    const catalog=await reader.catalog(scope);check();
+    if(!same(catalog.context,receipt.result)||catalog.entries.length!==prepared.manifest.P.length+prepared.manifest.DSET.length
+      ||prepared.manifest.P.some(d=>!catalog.entries.some(actual=>same(actual,d))))fail('published_preserved');
+    hex(catalog.catalog_digest);
+    for(const output of prepared.manifest.DSET){
+      const d=catalog.entries.find(d=>same(d.key,output.destination_key)),o=prepared.manifest.O.find(o=>same(o.destination_key,output.destination_key));
+      if(!d||!o)fail('published_missing');Q().validateDescriptor(d,3);
+      if(d.representation_kind!==output.output_kind||d.representation_epoch!==output.output_epoch||d.is_null!==output.is_null||!same(d.expected_binding,output.expected_binding)
+        ||!same(pick(d,['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id']),pick(o,['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id']))
+        ||d.linked_slot_version!==1)fail('published_origin');
+      const record=terminalWork.bundle_metadata.ciphertext_manifest.find(c=>same(c.destination_key,d.key));
+      if(d.ciphertext_sha256!==(output.is_null?null:record?.ciphertext_sha256))fail('published_cipher');
+      const value=await reader.read(scope,catalog,d,()=>password);check();
+      if(!same(value.descriptor,d)||!same(value.origin,{value:prepared.response.metadata_header.operation_origin,legacy:null}))fail('published_origin');
+      if(!same(value.value,values[d.key.slot]))fail('published_meaning');
+    }
+    return {operation_id:execution.execution_id,metadata_manifest_digest:verified.metadata_manifest_digest,published_catalog_digest:catalog.catalog_digest,
+      output_keys:prepared.manifest.DSET.map(d=>d.destination_key)};
+  }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
     const tickets=new WeakMap();
@@ -4029,7 +4060,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,buildInitialWriteWork,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
 
 ;
