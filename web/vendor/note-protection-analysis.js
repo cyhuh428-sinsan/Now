@@ -681,6 +681,26 @@
       const phase=replanPhases.includes(marker.phase)||replanComplete?b.replan?.previous_phase:marker.phase;
       if((replanPhases.includes(marker.phase)||replanComplete)!==(b.replan!==null))fail('replan_phase');
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
+      if(b.request.schema_version===1){
+        if(phase!=='analysis_settled'||b.publication!==null||b.terminal===null)fail('legacy_archive_phase');
+        if(b.route!==null)validateRoute(b.route);
+        exact(b.terminal,['work','settle_core','receipt']);
+        const originalScope={...marker.scope,device:b.request.device_id};
+        const values=await openLegacyTerminalBundle(originalScope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+        if(values.input_text!==b.input||!same(b.terminal.receipt,b.execution.terminal_receipt))fail('terminal_receipt_changed');
+        if(b.terminal.settle_core!==null){
+          const expected={schema_version:1,owner_id:originalScope.owner,local_id:originalScope.local_id,device_id:originalScope.device,server_instance_id:originalScope.instance,
+            execution_id:b.execution.execution_id,run_version:b.execution.run_version-1,lease_version:b.execution.lease_version,dispatch_id:b.execution.dispatch_receipt.dispatch_id,
+            provider_terminal_observed:true,outcome:b.terminal.work.bundle_metadata.outcome,bundle_metadata:b.terminal.work.bundle_metadata,local_checkpoint_confirmed:true,unavailable_reason:null};
+          if(!same(b.terminal.settle_core,expected))fail('terminal_core_changed');
+        }
+        if(b.dispatch!==null){
+          exact(b.dispatch,['request','handoff_reserved']);const d=b.dispatch.request;integer(d.lease_version,1);
+          const expected={schema_version:1,owner_id:originalScope.owner,local_id:originalScope.local_id,device_id:originalScope.device,server_instance_id:originalScope.instance,
+            execution_id:b.execution.execution_id,run_version:1,lease_version:d.lease_version,source_digest:b.execution.source_digest};
+          if(b.dispatch.handoff_reserved!==true||d.lease_version>b.execution.lease_version||!same(d,expected))fail('dispatch_binding');
+        }
+      }else{
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
       if((phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
@@ -731,6 +751,7 @@
           if(p.proof.operation_id!==b.execution.execution_id||p.proof.metadata_manifest_digest!==p.prepared.digest||!same(p.proof.output_keys,p.prepared.manifest.DSET.map(d=>d.destination_key)))fail('publication_proof_changed');
         }
       }
+      }
       if(b.replan!==null){
         const r=b.replan;exact(r,['previous_phase','catalog','plan','prepared','work','stored','receipt','proof',...(Object.hasOwn(r,'prior')?['prior']:[])]);
         if(Object.hasOwn(r,'prior')){
@@ -751,7 +772,7 @@
         if(!same(r.plan,original))fail('replan_plan_changed');
         if(r.prepared!==null){
           const p=r.prepared,verified=await validateReplanWriteManifest(marker.scope,r.plan,r.catalog,{...p.response.metadata_header,...p.manifest},()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
-          const expected={reference:r.plan.prepare.execution_ref,source_schema_version:3,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.execution.bundle_metadata};
+          const expected={reference:r.plan.prepare.execution_ref,source_schema_version:r.plan.prepare.execution_ref.schema_version,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.terminal.work.bundle_metadata};
           if(p.version!==3||p.path!=='/api/v2/notes/mixed-analysis-writes'||p.id!==p.response.operation_id||p.operation_id!==p.id||p.digest!==verified.metadata_manifest_digest
             ||p.response.metadata_manifest_digest!==p.digest||p.response.mutation_id!==r.plan.prepare.mutation_id||!same(p.response.counts,verified.counts)||!same(p.original_execution,expected))fail('replan_prepared');
         }
@@ -800,7 +821,7 @@
         if(!['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,...replanPhases,'complete'].includes(marker.phase))fail('terminal_checkpoint_missing');
         const b=await open(marker,password,c,epoch);
         if(b.terminal===null)fail('terminal_checkpoint_missing');
-        return openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
+        return openOriginalTerminalBundle({...marker.scope,device:b.request.device_id},b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
       },
       async start(scope,claim,input,route,password) {
         scope=structuredClone(scope);claim=structuredClone(claim);route=structuredClone(route);
@@ -1046,6 +1067,7 @@
         if(running)fail('busy');if(marker.phase!=='analysis_settled')fail('publication_phase');running=true;
         try{
           const b=await open(marker,password,c,epoch);
+          if(b.request.schema_version===1)fail('legacy_requires_replan');
           const plan=await createInitialWritePlan(marker.scope,b.request,b.execution,b.terminal.work,catalog,crypto.randomUUID(),password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
           b.publication={catalog,plan,prepared:null,work:null,receipt:null,proof:null};marker.phase='analysis_write_preparing';await save(marker,b,password,c,epoch);
           await open(status(id),password,c,epoch);active(marker.scope,c,epoch);return id;

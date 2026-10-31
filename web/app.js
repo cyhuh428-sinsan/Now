@@ -4270,6 +4270,26 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       const phase=replanPhases.includes(marker.phase)||replanComplete?b.replan?.previous_phase:marker.phase;
       if((replanPhases.includes(marker.phase)||replanComplete)!==(b.replan!==null))fail('replan_phase');
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
+      if(b.request.schema_version===1){
+        if(phase!=='analysis_settled'||b.publication!==null||b.terminal===null)fail('legacy_archive_phase');
+        if(b.route!==null)validateRoute(b.route);
+        exact(b.terminal,['work','settle_core','receipt']);
+        const originalScope={...marker.scope,device:b.request.device_id};
+        const values=await openLegacyTerminalBundle(originalScope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+        if(values.input_text!==b.input||!same(b.terminal.receipt,b.execution.terminal_receipt))fail('terminal_receipt_changed');
+        if(b.terminal.settle_core!==null){
+          const expected={schema_version:1,owner_id:originalScope.owner,local_id:originalScope.local_id,device_id:originalScope.device,server_instance_id:originalScope.instance,
+            execution_id:b.execution.execution_id,run_version:b.execution.run_version-1,lease_version:b.execution.lease_version,dispatch_id:b.execution.dispatch_receipt.dispatch_id,
+            provider_terminal_observed:true,outcome:b.terminal.work.bundle_metadata.outcome,bundle_metadata:b.terminal.work.bundle_metadata,local_checkpoint_confirmed:true,unavailable_reason:null};
+          if(!same(b.terminal.settle_core,expected))fail('terminal_core_changed');
+        }
+        if(b.dispatch!==null){
+          exact(b.dispatch,['request','handoff_reserved']);const d=b.dispatch.request;integer(d.lease_version,1);
+          const expected={schema_version:1,owner_id:originalScope.owner,local_id:originalScope.local_id,device_id:originalScope.device,server_instance_id:originalScope.instance,
+            execution_id:b.execution.execution_id,run_version:1,lease_version:d.lease_version,source_digest:b.execution.source_digest};
+          if(b.dispatch.handoff_reserved!==true||d.lease_version>b.execution.lease_version||!same(d,expected))fail('dispatch_binding');
+        }
+      }else{
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
       if((phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
@@ -4320,6 +4340,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           if(p.proof.operation_id!==b.execution.execution_id||p.proof.metadata_manifest_digest!==p.prepared.digest||!same(p.proof.output_keys,p.prepared.manifest.DSET.map(d=>d.destination_key)))fail('publication_proof_changed');
         }
       }
+      }
       if(b.replan!==null){
         const r=b.replan;exact(r,['previous_phase','catalog','plan','prepared','work','stored','receipt','proof',...(Object.hasOwn(r,'prior')?['prior']:[])]);
         if(Object.hasOwn(r,'prior')){
@@ -4340,7 +4361,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(!same(r.plan,original))fail('replan_plan_changed');
         if(r.prepared!==null){
           const p=r.prepared,verified=await validateReplanWriteManifest(marker.scope,r.plan,r.catalog,{...p.response.metadata_header,...p.manifest},()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
-          const expected={reference:r.plan.prepare.execution_ref,source_schema_version:3,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.execution.bundle_metadata};
+          const expected={reference:r.plan.prepare.execution_ref,source_schema_version:r.plan.prepare.execution_ref.schema_version,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.terminal.work.bundle_metadata};
           if(p.version!==3||p.path!=='/api/v2/notes/mixed-analysis-writes'||p.id!==p.response.operation_id||p.operation_id!==p.id||p.digest!==verified.metadata_manifest_digest
             ||p.response.metadata_manifest_digest!==p.digest||p.response.mutation_id!==r.plan.prepare.mutation_id||!same(p.response.counts,verified.counts)||!same(p.original_execution,expected))fail('replan_prepared');
         }
@@ -4389,7 +4410,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(!['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,...replanPhases,'complete'].includes(marker.phase))fail('terminal_checkpoint_missing');
         const b=await open(marker,password,c,epoch);
         if(b.terminal===null)fail('terminal_checkpoint_missing');
-        return openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
+        return openOriginalTerminalBundle({...marker.scope,device:b.request.device_id},b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
       },
       async start(scope,claim,input,route,password) {
         scope=structuredClone(scope);claim=structuredClone(claim);route=structuredClone(route);
@@ -4635,6 +4656,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(running)fail('busy');if(marker.phase!=='analysis_settled')fail('publication_phase');running=true;
         try{
           const b=await open(marker,password,c,epoch);
+          if(b.request.schema_version===1)fail('legacy_requires_replan');
           const plan=await createInitialWritePlan(marker.scope,b.request,b.execution,b.terminal.work,catalog,crypto.randomUUID(),password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
           b.publication={catalog,plan,prepared:null,work:null,receipt:null,proof:null};marker.phase='analysis_write_preparing';await save(marker,b,password,c,epoch);
           await open(status(id),password,c,epoch);active(marker.scope,c,epoch);return id;
@@ -4957,7 +4979,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           resetReplan();state.analysis=null;$('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';$('[name="analysis-confirm"]').checked=false;
           const id=$('[name="analysis-operation"]').value,password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
           const plan=await api.analysisReplanPrepare(state.info,id,password);if(!valid(token))return;
-          state.replan=plan;const source=plan.original_source_context.base.base,target=plan.catalog.context.base;
+          state.replan=plan;const originalBase=plan.original_source_context.base,source=originalBase.base||originalBase,target=plan.catalog.context.base;
           $('.protection-replan-context').textContent='원 분석: 보호 세대 '+source.crypto_epoch+' · 이력 '+source.history_generation+' / 저장 대상: 보호 세대 '+target.crypto_epoch+' · 이력 '+target.history_generation;
           $('.protection-replan').classList.remove('hidden');status('원 결과와 저장 대상을 확인하세요.');
         } else if(name==='analysis-replan-confirm') {
@@ -10340,6 +10362,7 @@ async function prepareProtectedAnalysis(info,id,resolveKey) {
     if(NowNoteProtectionProtocol.canonicalJson(noteProtectionAnalysis.status(id).scope)!==NowNoteProtectionProtocol.canonicalJson(info.scope))throw Error("원 분석과 선택한 메모가 다릅니다.");
     const password=await resolveKey({representation_epoch:"analysis-bundle",output:true});guard();
     const original=await noteProtectionAnalysis.inspectExecution(id,password);guard();
+    if(original.request?.schema_version===1)throw Error("구형 분석 결과는 결과 보관 재계획에서 확인하세요.");
     return {...original,operation_id:id,scope:structuredClone(info.scope)};
   }
   if(!info.catalog||info.pending)throw Error("현재 보호 상태를 먼저 확인하세요.");
@@ -10389,6 +10412,14 @@ async function finishProtectedAnalysis(id,password) {
 
 async function resumeProtectedAnalysis(id,password,resolveKey) {
   const phase=noteProtectionAnalysis.status(id).phase;
+  const guard=protectionActionGuard();guard();
+  if(phase==="complete"||phase==="analysis_settled"){
+    const original=await noteProtectionAnalysis.inspectExecution(id,password);guard();
+    if(phase==="complete"&&["done","failed"].includes(original.execution.terminal_receipt?.outcome)||phase==="analysis_settled"&&original.request?.schema_version===1){
+      const values=await noteProtectionAnalysis.readTerminal(id,password);guard();
+      return values.result_json??values.error_message??"";
+    }
+  }
   if(phase.startsWith("analysis_replan_"))return resumeProtectedReplan(id,password,resolveKey);
   if(phase.startsWith("analysis_write_"))return publishProtectedAnalysis(id,password);
   if(phase==="analysis_dispatching"){
@@ -10414,6 +10445,8 @@ async function publishProtectedAnalysis(id,password) {
   const guard=protectionActionGuard(),marker=noteProtectionAnalysis.status(id);guard();
   if(marker.scope.local_id!==protectionTargetId())throw Error("원 분석과 선택한 메모가 다릅니다.");
   if(marker.phase==="analysis_settled"){
+    const original=await noteProtectionAnalysis.inspectExecution(id,password);guard();
+    if(original.request?.schema_version===1)throw Error("구형 결과는 결과 보관 재계획으로 보관하세요.");
     const catalog=await noteProtectionReader.catalog(marker.scope);guard();
     await noteProtectionAnalysis.beginPublication(id,password,catalog);guard();
   }

@@ -9,7 +9,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const scope={url:'http://synthetic.invalid',owner:'alice',local_id:'one',device:'device',instance:'instance'};
   let context={...scope,enabled:true},enabled=true,invocations=0,serverCalls=[],observation={ok:true,json:async()=>({choices:[{message:{content:'ORIGINAL\r\n'}}]}),text:async()=>JSON.stringify({choices:[{message:{content:'ORIGINAL\r\n'}}]})};
   const config={provider:'omniroute',omniUrl:'http://127.0.0.1:1/v1',omniModel:'auto',omniApiKey:'synthetic-only',omniReasoning:''};
-  let phase='analysis_claimed',replan=null;
+  let phase='analysis_claimed',replan=null,legacy=false;
   const box=vm.createContext({URL,crypto:webcrypto,structuredClone,state:{settings:{llm:config}},
     NowNoteProtectionProtocol:{canonicalJson:JSON.stringify},noteProtectionIdentity:{instance:scope.instance},
     NowNoteProtectionState:{scopeKey:s=>JSON.stringify([s.url.replace(/\/+$/,''),s.owner,s.instance,s.local_id])},
@@ -19,7 +19,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
     noteProtectionAnalysis:{
       consumeHandoff:()=>{},
       status:id=>({scope:id==='other'?{...scope,local_id:'other'}:scope,phase}),
-      inspectExecution:async()=>({input:'ORIGINAL',route:{provider:'omniroute',endpoint:config.omniUrl,model:'auto'},execution:{source_context:{base:{base:{crypto_epoch:1,history_generation:1}}}}}),
+      inspectExecution:async()=>({request:{schema_version:legacy?1:3},input:'ORIGINAL',route:legacy?null:{provider:'omniroute',endpoint:config.omniUrl,model:'auto'},execution:{terminal_receipt:{outcome:'done'},source_context:{base:{base:{crypto_epoch:1,history_generation:1}}}}}),
       beginReplan:async(id,key,catalog,confirmation)=>{serverCalls.push({action:'replan_begin'});assert.equal(confirmation.confirmed_reuse_original_result,true);assert.equal(catalog.context.base.crypto_epoch,2);phase='analysis_replan_preparing';replan={plan:{prepare:{target_epoch:2}},stored:null};},
       inspectReplan:async()=>structuredClone(replan),
       resumeReplanPreparation:async()=>{serverCalls.push({action:'replan_prepare'});phase='analysis_replan_allocated';},
@@ -77,6 +77,12 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   await box.resumeProtectedAnalysis('one-run','fixture-key',async()=>'target-key');assert.deepEqual(serverCalls.slice(replanCold).map(c=>c.action),['replan_publish','publication_read']);
   phase='analysis_replan_stored';replan.stored={status:'already_stored'};const beforeStored=serverCalls.length;
   await box.resumeProtectedReplan('one-run','fixture-key',async()=>{throw Error('no target allocation key for stored result');});assert.deepEqual(serverCalls.slice(beforeStored).map(c=>c.action),['replan_stored','publication_read']);assert.equal(invocations,providerBefore);
+  phase='complete';const beforeCompleted=serverCalls.length;
+  assert.equal(await box.resumeProtectedAnalysis('one-run','fixture-key'),'PUBLISHED-ORIGINAL');assert.deepEqual(serverCalls.slice(beforeCompleted).map(c=>c.action),['publication_read']);
+  legacy=true;phase='analysis_settled';const beforeLegacy=serverCalls.length;
+  assert.equal(await box.resumeProtectedAnalysis('one-run','fixture-key'),'PUBLISHED-ORIGINAL');assert.deepEqual(serverCalls.slice(beforeLegacy).map(c=>c.action),['publication_read']);
+  const beforeLegacyPublish=serverCalls.length;await assert.rejects(()=>box.publishProtectedAnalysis('one-run','fixture-key'),/재계획/);assert.equal(serverCalls.length,beforeLegacyPublish);
+  await assert.rejects(()=>box.prepareProtectedAnalysis(info,'one-run',async()=>'fixture-key'),/재계획/);assert.equal(invocations,providerBefore);legacy=false;
   context={...context,owner:'bob'};const before=invocations;await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);context={...scope,enabled:true};
   vm.runInContext('noteProtectionInternalEnabled=false;',box);await assert.rejects(()=>box.beginProtectedAnalysis(plan,route,'fixture-key'));await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);
   await assert.rejects(()=>box.prepareProtectedReplan(info,'one-run','fixture-key'));await assert.rejects(()=>box.beginProtectedReplan(replanView,'fixture-key',{confirmed_reuse_original_result:true,target_epoch:2},async()=>'target-key'));await assert.rejects(()=>box.resumeProtectedReplan('one-run','fixture-key',async()=>'target-key'));assert.equal(invocations,before);

@@ -221,7 +221,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           resetReplan();state.analysis=null;$('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';$('[name="analysis-confirm"]').checked=false;
           const id=$('[name="analysis-operation"]').value,password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
           const plan=await api.analysisReplanPrepare(state.info,id,password);if(!valid(token))return;
-          state.replan=plan;const source=plan.original_source_context.base.base,target=plan.catalog.context.base;
+          state.replan=plan;const originalBase=plan.original_source_context.base,source=originalBase.base||originalBase,target=plan.catalog.context.base;
           $('.protection-replan-context').textContent='원 분석: 보호 세대 '+source.crypto_epoch+' · 이력 '+source.history_generation+' / 저장 대상: 보호 세대 '+target.crypto_epoch+' · 이력 '+target.history_generation;
           $('.protection-replan').classList.remove('hidden');status('원 결과와 저장 대상을 확인하세요.');
         } else if(name==='analysis-replan-confirm') {

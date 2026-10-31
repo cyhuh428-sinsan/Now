@@ -88,6 +88,12 @@ app.whenReady().then(async()=>{
       info.pending={id:'fixture-run',phase:'analysis_replan_committing'};info.analysisOperations=[info.pending];await analysis.open();ab('analysis-resume').click();
       await until(()=>panel.querySelector('form.library-confirm'),'replan_resume_old_key');key('replan-original-key');await until(()=>panel.querySelector('form.library-confirm'),'replan_resume_target_key');key('replan-target-key');
       await until(()=>replanResumed===1&&!ab('analysis-prepare').disabled,'replan_resume_finish');assert(invoked===1,'replan_resume_called_provider');
+      replanView.original_source_context={base:{crypto_epoch:1,history_generation:3}};
+      info.pending={id:'fixture-run',phase:'analysis_settled'};info.analysisOperations=[info.pending];await analysis.open();ab('analysis-replan').click();
+      await until(()=>panel.querySelector('form.library-confirm'),'legacy_replan_old_key');key('replan-original-key');
+      await until(()=>!panel.querySelector('.protection-replan').classList.contains('hidden')&&!ab('analysis-replan').disabled,'legacy_replan_context_wait');
+      assert(panel.querySelector('.protection-replan-context').textContent.includes('보호 세대 1 · 이력 3')&&ab('analysis-replan-confirm').disabled&&replanned===1&&invoked===1,'legacy_replan_source_or_confirmation');
+      analysis.lock();info.pending=null;info.analysisOperations=[];await analysis.open();
       ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_second_prepare_wait');field('model').value='combo-name';field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));ab('analysis-run').click();
       await until(()=>panel.querySelector('form.library-confirm'),'analysis_second_key_wait');key('fixture-key');await until(()=>invoked===2,'analysis_second_invoke_wait');
       analysis.lock();release();await until(()=>unavailable===1,'analysis_locked_terminal_wait');
