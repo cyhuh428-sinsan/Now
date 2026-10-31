@@ -551,6 +551,15 @@ async function runOnce() {
           const shot=await page.send("Page.captureScreenshot");
           await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
         }
+        await evaluate(page,'document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+        await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-diff"))',"Wiki comparison");
+        assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect(),p=d.querySelector(".wiki-diff");return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1&&p.textContent.includes("Supported")&&p.textContent.includes("Revised");})()'),"Wiki comparison must fit and retain both drafts");
+        if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+          const shot=await page.send("Page.captureScreenshot");
+          await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-compare-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+        }
+        await evaluate(page,'document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+        await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki reading");
       }
       if(!desktop){
         const exited=new Promise(resolve=>browser.once("exit",resolve));

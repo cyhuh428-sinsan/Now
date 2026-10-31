@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
-export async function verifyWikiFlow({evaluate}){
+export async function verifyWikiFlow({evaluate:run}){
+  const evaluate=async expression=>{try{return await run(expression);}catch(error){const state=await run('JSON.stringify({open:document.querySelector("#wikiDialog")?.open,status:document.querySelector("#wikiDialog [role=status]")?.textContent,body:document.querySelector("#wikiDialog .wiki-detail")?.textContent})');throw Error('Wiki fixture step '+expression.slice(0,240)+' '+state,{cause:error});}};
   assert.equal(await evaluate('typeof mountNowWiki'),'function','Wiki UI must be mounted from the product runtime');
   await evaluate('(async()=>{'
     +'wikiUI?.close();document.querySelector("#wikiDialog")?.remove();'
@@ -59,7 +60,7 @@ export async function verifyWikiFlow({evaluate}){
     +'state.data.tree=[source];state.data.deletedTree=[];state.data.daily={};state.data.worklogs={};state.data.archivedDaily=[];state.selectedTreeId=source.id;'
     +'noteHistoryProjectionScope=NowNoteHistory.key(noteHistoryContext());libraryNotesContext=NowLibrary.key(libraryContext());'
     +'globalThis.wikiActualCalls=0;llmChatRequest=async()=>{wikiActualCalls++;return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({title:"Durable Guide",topic:"Operations",sections:[{id:"one",title:"Finding",markdown:"**Supported** finding.",citation_ids:["c"]}],citations:[{id:"c",source_id:"source-1",quote:"Exact evidence."}]})}}]})};};'
-    +'const invoke=llmChatRequest;llmChatRequest=async(...args)=>{globalThis.wikiActualPrompt=JSON.parse(args[2]);return invoke(...args);};'
+    +'const invoke=llmChatRequest;llmChatRequest=async(...args)=>{globalThis.wikiActualPrompt=JSON.parse(args[2]);const response=await invoke(...args);if(wikiActualCalls>1)return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({title:"Updated Guide",topic:"Operations",sections:[{id:"one",title:"Finding",markdown:"**Revised** finding.",citation_ids:["c"]}],citations:[{id:"c",source_id:"source-1",quote:"Exact evidence."}]})}}]})};return response;};'
     +'document.querySelector("#wikiBtn")?.remove();initializeWikiNotebook();persist();persistSettings();render();document.querySelector("#wikiBtn").click();})()');
   for(let i=0;i<40 && !await evaluate('Boolean(document.querySelector("#wikiDialog [name=wiki-source]"))');i++)await new Promise(r=>setTimeout(r,25));
   await evaluate('(()=>{const q=document.querySelector("#wikiDialog [name=wiki-question]");q.value="장애 복구 절차는?";q.dispatchEvent(new Event("input",{bubbles:true}));})()');
@@ -74,13 +75,36 @@ export async function verifyWikiFlow({evaluate}){
   for(let i=0;i<60 && !await evaluate('Object.values(noteHistory.entries()).some(i=>i.draft.source==="wiki-artifact")');i++)await new Promise(r=>setTimeout(r,25));
   await evaluate('noteHistory.idle()');
   assert.equal(await evaluate('Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").localOnly'),true);
-  for(let i=0;i<60 && !await evaluate('!document.querySelector("#wikiDialog [data-wiki-action=approve]").disabled');i++)await new Promise(r=>setTimeout(r,25));
+  for(let i=0;i<60 && !await evaluate('document.querySelector("#wikiDialog [data-wiki-action=approve]")?.disabled===false');i++)await new Promise(r=>setTimeout(r,25));
   await evaluate('document.querySelector("#wikiDialog [data-wiki-action=approve]").click()');
   for(let i=0;i<80 && !await evaluate('JSON.parse(Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").draft.content).approvals.length===1');i++)await new Promise(r=>setTimeout(r,25));
   await evaluate('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()');
   assert.equal(await evaluate('Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").revisions.length'),2);
   assert.equal(await evaluate('findTreeNode(state.data.tree,"wiki-ui-source").content'),'Exact evidence.');
   assert.equal(await evaluate('flattenTree(state.data.tree).some(n=>String(n.id).startsWith("wiki:"))'),false);
+  assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [name=wiki-version]"))'),'Stored wiki drafts and approvals need a version selector');
+  await evaluate('(()=>{const n=findTreeNode(state.data.tree,"wiki-ui-source");n.content+="\\nUpdated source.";n.updatedAt=new Date().toISOString();persist();render();document.querySelector("#wikiDialog .library-item").click();})()');
+  for(let i=0;i<60 && !await evaluate('!document.querySelector("#wikiDialog [data-wiki-action=generate]").disabled');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=generate]").click()');
+  for(let i=0;i<60 && !await evaluate('Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-send]"))');i++)await new Promise(r=>setTimeout(r,25));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-send]").click()');
+  for(let i=0;i<60 && !await evaluate('document.querySelector("#wikiDialog .wiki-detail h3")?.textContent==="Updated Guide"');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog .wiki-detail h3")?.textContent==="Updated Guide"'),await evaluate('document.querySelector("#wikiDialog [role=status]").textContent'));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=save-draft]").click()');
+  for(let i=0;i<80 && !await evaluate('document.querySelector("#wikiDialog [data-wiki-action=approve]")?.disabled===false');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog .library-item").textContent.includes("Durable Guide")'),'Unapproved regeneration must not replace the approved list title');
+  await evaluate('document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+  for(let i=0;i<60 && !await evaluate('Boolean(document.querySelector("#wikiDialog .wiki-diff"))');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog .wiki-diff"))'),JSON.stringify(await evaluate('(()=>{const d=document.querySelector("#wikiDialog");return {status:d.querySelector("[role=status]")?.textContent,checked:d.querySelector("[name=wiki-compare]")?.checked,disabled:d.querySelector("[name=wiki-compare]")?.disabled,versions:[...d.querySelectorAll("[name=wiki-version] option")].map(o=>({value:o.value,selected:o.selected})),history:Object.values(noteHistory.entries()).filter(i=>i.draft.source==="wiki-artifact").map(i=>({drafts:JSON.parse(i.draft.content).drafts.length,revisions:i.revisions.length}))};})()')));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog .wiki-diff").textContent.includes("Supported") && document.querySelector("#wikiDialog .wiki-diff").textContent.includes("Revised")'));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog .wiki-source-changes").textContent.includes("판본 변경")'));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=approve]").click()');
+  for(let i=0;i<80 && !await evaluate('JSON.parse(Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").draft.content).approvals.length===2');i++)await new Promise(r=>setTimeout(r,25));
+  await evaluate('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()');
+  assert.equal(await evaluate('Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").revisions.length'),4);
+  assert.equal(await evaluate('JSON.parse(Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").draft.content).drafts[0].title'),'Durable Guide');
+  assert.equal(await evaluate('findTreeNode(state.data.tree,"wiki-ui-source").content'),'Exact evidence.\nUpdated source.');
   await evaluate('noteHistoryController.lock()');
   assert.equal(await evaluate('document.querySelector("#wikiDialog").open'),false);
   assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Exact evidence.")'),false);
@@ -92,8 +116,11 @@ export async function verifyWikiCold({evaluate}){
   await evaluate('wikiUI.open()');
   await evaluate('document.querySelector("#wikiDialog .library-item").click()');
   for(let i=0;i<60 && !await evaluate('Boolean(document.querySelector("#wikiDialog strong"))');i++)await new Promise(r=>setTimeout(r,25));
-  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'));
-  assert.equal(await evaluate('JSON.parse(Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").draft.content).approvals.length'),1);
+  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Updated Guide")'));
+  assert.equal(await evaluate('JSON.parse(Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").draft.content).approvals.length'),2);
   assert.equal(await evaluate('Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact").localOnly'),true);
   assert.equal(await evaluate('flattenTree(state.data.tree).some(n=>String(n.id).startsWith("wiki:"))'),false);
+  await evaluate('(()=>{const s=document.querySelector("#wikiDialog [name=wiki-version]");s.selectedIndex=0;s.dispatchEvent(new Event("change",{bubbles:true}));})()');
+  for(let i=0;i<60 && !await evaluate('document.querySelector("#wikiDialog .wiki-detail").textContent.includes("Durable Guide")');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'),'Cold historical view must recheck its own source version');
 }

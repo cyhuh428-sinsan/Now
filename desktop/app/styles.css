@@ -5547,6 +5547,12 @@ kbd {
 .wiki-body { margin: 16px 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
 .wiki-body blockquote { border-left-width: 1px; border-radius: 0; background: transparent; }
 .wiki-body pre { max-width: 100%; overflow: auto; }
+.wiki-review-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; margin-top: 16px; }
+.wiki-review-controls > label { display: grid; gap: 6px; min-width: 0; max-width: 100%; }
+.wiki-review-controls select { width: 100%; max-width: 100%; min-width: 0; }
+.wiki-review-controls .wiki-compare-toggle { display: flex; align-items: center; gap: 6px; min-height: 36px; }
+.wiki-diff { box-sizing: border-box; width: 100%; max-height: 480px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wiki-source-changes { padding-left: 20px; overflow-wrap: anywhere; }
 .wiki-body blockquote > button { display: block; margin-top: 8px; }
 .wiki-dialog .library-confirm p { white-space: pre-wrap; overflow-wrap: anywhere; }
 .wiki-dialog :is(button,select,input):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }

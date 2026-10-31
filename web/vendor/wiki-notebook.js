@@ -40,18 +40,23 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     for(const id of ids){values.set(id,await source(id,a));a.check();}
     const result=await W.capture(ids,scope(a.ctx),id=>values.get(id));a.check();return result;
   }
-  async function liveSources(draft,a){
-    const values=new Map();
-    for(const ref of draft.source_manifest){
+  async function liveSources(draft,a,doc=null){
+    const values=new Map(),refs=new Map();
+    for(const ref of (doc?doc.drafts.flatMap(value=>value.source_manifest):draft.source_manifest)){
       if(ref.note_ref.owner_id!==a.ctx.owner)throw Error('원본 계정이 다릅니다.');
-      values.set(ref.note_ref.local_id,await source(ref.note_ref.local_id,a,ref.origin==='server'));a.check();
+      const local=ref.note_ref.local_id;
+      refs.set(local,ref.origin==='server'||refs.get(local)===true);
+    }
+    for(const [local,server] of refs){
+      values.set(local,await source(local,a,server));a.check();
     }
     return values;
   }
+  const sourcesAvailable=(values,owner)=>[...values.values()].every(note=>note?.owner===owner&&note.status==='ok'&&!note.protected);
   function canRead(doc){
     const ctx=api.context(),h=api.history(),local='wiki:'+doc.wiki_id;
     if(!ctx.enabled||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx))||h.blocked(local)||h.view(local)?.base.crypto_epoch>0)return false;
-    return doc.drafts.at(-1).source_manifest.every(ref=>{
+    return doc.drafts.flatMap(draft=>draft.source_manifest).every(ref=>{
       const note=api.source(ref.note_ref.local_id);
       return ref.note_ref.owner_id===ctx.owner&&note?.owner===ctx.owner&&note.status==='ok'&&!note.protected
         &&(ctx.online!==false||ref.origin!=='server');
@@ -70,12 +75,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         if(remote){
           if(remote.artifact?.protected!==false||!remote.artifact.document||remote.resource?.deleted_at
             ||remote.source_status?.available!==true)return {available:false,stale:true,sources:[]};
-          if(P.canonicalJson(remote.artifact.document)===P.canonicalJson(doc))
+          const approved=remote.artifact.document.approvals.at(-1)?.draft_id||remote.artifact.document.drafts.at(-1)?.id;
+          if(approved===draft.id&&P.canonicalJson(remote.artifact.document)===P.canonicalJson(doc))
             return {available:true,stale:remote.source_status.stale,sources:[]};
         }
       }
     }
-    const values=await liveSources(draft,a);
+    const values=await liveSources(draft,a,doc);
+    if(!sourcesAvailable(values,a.ctx.owner))return {available:false,stale:true,sources:[]};
     const result=await W.sourceStatus(draft,scope(a.ctx),id=>values.get(id));a.check();return result;
   }
   async function list({sync=false}={}){
@@ -143,6 +150,11 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     append(before,doc);
     const localOnly=doc.drafts.some(d=>d.source_manifest.some(ref=>ref.origin!=='server'));
     if(item&&!item.localOnly&&localOnly)throw Error('로컬 자료는 새 로컬 위키에 저장하세요. 서버 위키는 보존했습니다.');
+    const visibility=await sourceStatus(doc.drafts.at(-1),doc);a.check();
+    if(!visibility.available)throw Error('출처·보호 상태를 확인할 수 없어 위키를 저장하지 않았습니다.');
+    const latest=a.h.view(local);
+    if(a.h.blocked(local)||Boolean(latest)!==Boolean(item)
+      ||(item&&(latest.draft.content!==item.draft.content||latest.localOnly!==item.localOnly)))throw Error('위키 판본 충돌입니다.');
     const now=new Date().toISOString();
     const note={...(item?.draft||{}),id:item?.draft.id||null,owner_id:a.ctx.owner,local_id:local,device_id:a.ctx.device,
       note_type:'tree',title:'AI Wiki '+doc.wiki_id,content:P.canonicalJson(doc),source:'wiki-artifact',
@@ -160,7 +172,9 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       ||doc.approvals.some(row=>row.draft_id===draftId))throw Error('위키 승인 판본 충돌입니다.');
     const unsigned={...draft};delete unsigned.draft_hash;
     if(await P.hashJson(unsigned)!==draft.draft_hash)throw Error('위키 초안 해시가 다릅니다.');a.check();
-    const live=await liveSources(draft,a),status=await W.sourceStatus(draft,scope(a.ctx),id=>live.get(id));a.check();
+    if(!canRead(doc))throw Error('원본·보호 상태를 확인할 수 없습니다.');
+    const live=await liveSources(draft,a,doc),status=await W.sourceStatus(draft,scope(a.ctx),id=>live.get(id));a.check();
+    if(!sourcesAvailable(live,a.ctx.owner))throw Error('원본·보호 상태를 확인할 수 없습니다.');
     if(!status.available||status.stale)throw Error('원본이 변경되었습니다. 갱신 후 검토하세요.');
     for(const citation of draft.citations){
       const manifest=draft.source_manifest.find(ref=>ref.id===citation.source_id);

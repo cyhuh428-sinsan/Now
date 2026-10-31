@@ -61,4 +61,23 @@ assert.equal((await book.list())[0].document,undefined,'Read failure must not ex
 ctx={...ctx,online:false};
 original.origin='server';
 assert.equal((await book.sourceStatus(draft,approved.document)).available,false,'Offline server sources require a fresh access check');
+ctx={...ctx,online:true};
+const secondSource={...original,origin:'local',status:'ok',localId:'second-source',content:'Fresh evidence.'};
+api.source=id=>id==='second-source'?structuredClone(secondSource):sourceNote(id);
+const historyDoc=structuredClone(approved.document),later=structuredClone(draft);
+later.id=webcrypto.randomUUID();later.generation_id=webcrypto.randomUUID();later.base_approved_revision_id=historyDoc.approvals.at(-1).id;
+later.source_manifest[0].note_ref.local_id='second-source';later.source_manifest[0].content_hash=await box.NowNoteProtectionProtocol.sha256(secondSource.content);
+later.citations[0].quote='Fresh evidence.';
+const laterUnsigned=structuredClone(later);delete laterUnsigned.draft_hash;
+later.draft_hash=await box.NowNoteProtectionProtocol.hashJson(laterUnsigned);
+historyDoc.drafts.push(later);historyDoc.document_version+=2;
+historyDoc.approvals.push({id:webcrypto.randomUUID(),parent_approved_revision_id:historyDoc.approvals.at(-1).id,
+  draft_id:later.id,draft_hash:later.draft_hash,source_manifest_hash:await box.NowNoteProtectionProtocol.hashJson(later.source_manifest),
+  approved_by:ctx.owner,approved_at:new Date().toISOString()});
+original.status='locked';
+assert.equal(book.canRead(historyDoc),false,'Past draft sources remain part of the protected wiki dependency scope');
+original.status='ok';original.origin='local';original.content='Changed evidence.';
+api.readRemote=async()=>({artifact:{protected:false,document:structuredClone(historyDoc),current_exists:true},
+  source_status:{available:true,stale:false}});
+assert.equal((await book.sourceStatus(historyDoc.drafts[0],historyDoc)).stale,true,'A past selected draft must not inherit the current approved draft freshness');
 console.log('Wiki notebook: local-only no upload, durable journal cold restore, explicit approval, source-change and account isolation PASS');
