@@ -154,6 +154,7 @@ export async function verifyWikiProtectionFlow({evaluate}){
   assert.ok(await evaluate('wikiOriginalGuard.includes("관련 위키")'),'Actual original-protection preflight must block before local wiki protection');
   assert.equal(await evaluate('wikiProtectionNetwork'),0);
   await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog .protection-copies input"))','Exact-copy ownership confirmation');
+  assert.equal(await evaluate('getComputedStyle(document.querySelector("#noteProtectionDialog section[aria-label=\\"보호 메모 분석\\"]")).display'),'none','Local wiki archives must not display an unusable server analysis section');
   await evaluate('document.querySelectorAll("#noteProtectionDialog .protection-copies input").forEach(input=>input.click());document.querySelector("#noteProtectionDialog [data-action=confirm]").click()');
   await wikiUntil(evaluate,'document.querySelectorAll("#noteProtectionDialog .protection-copies input").length===0&&document.querySelector("#noteProtectionDialog [data-action=conversion]")?.disabled===false','Copy attribution');
   await evaluate('document.querySelector("#noteProtectionDialog [data-action=conversion]").click()');
