@@ -55,6 +55,46 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([20,21].includes(config.phase)){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,before=await noteProtectionReader.catalog(scope);
+    const candidates=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&m.phase===(config.phase===20?'analysis_settled':'analysis_write_committing'));
+    assert(candidates.length===1,'publication_ui_marker_missing');const id=candidates[0].id,original=Q.parseJson(await Q.decryptContent(candidates[0].cipher_bundle,password));
+    let commitPosts=0;
+    if(config.phase===20){
+      noteProtectionAnalysis=NowNoteProtectionAnalysis.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:async(s,path,method,body)=>{
+        assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'publication_transport_scope');
+        const response=await fetch(url+path+(method==='GET'?'?'+new URLSearchParams(body):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...noteHistoryContext().headers,...(method==='GET'?{}:{'Content-Type':'application/json'})},...(method==='GET'?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(20000)});
+        const value=Q.parseJson(await response.text());
+        if(!response.ok)throw Object.assign(Error(value.detail?.code||'qa_publication_http'),{status:response.status,code:value.detail?.code});
+        if(method==='POST'&&path==='/api/v2/notes/mixed-analysis-writes/commit'){
+          commitPosts++;emit({stage:'analysis_publication_commit_response_deliberately_lost',owner:a.owner,local_id:target,operation_id:value.operation_id});throw Error('qa_publication_commit_response_lost');
+        }
+        return value;
+      }});
+      assert(!button('analysis-publish').disabled,'publication_ui_command_disabled');
+      await action('analysis-publish',()=>noteProtectionAnalysis.status(id).phase==='analysis_write_committing');
+      assert(status()==='qa_publication_commit_response_lost'&&commitPosts===1,'publication_loss_not_preserved');
+      const archived=Q.parseJson(await Q.decryptContent(noteProtectionAnalysis.status(id).cipher_bundle,password));
+      assert(Q.canonicalJson(archived.terminal)===Q.canonicalJson(original.terminal),'publication_original_terminal_changed');
+      assert(archived.publication.work.commit.operation_id===original.execution.execution_id,'publication_original_commit_changed');
+      emit({stage:'analysis_publication_ui_pending',owner:a.owner,local_id:target,operation_id:original.execution.execution_id,local_operation_id:id});
+    }else{
+      await action('analysis-resume',()=>noteProtectionAnalysis.status(id).phase==='complete'&&dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+      const archived=Q.parseJson(await Q.decryptContent(noteProtectionAnalysis.status(id).cipher_bundle,password));
+      assert(Q.canonicalJson(archived.publication.work)===Q.canonicalJson(original.publication.work)&&Q.canonicalJson(archived.terminal)===Q.canonicalJson(original.terminal),'publication_cold_original_changed');
+      assert(archived.publication.receipt.operation_id===original.execution.execution_id&&archived.publication.proof.operation_id===original.execution.execution_id,'publication_cold_proof_missing');
+      const now=await inspectNoteProtection(),index=now.rows.findIndex(r=>r.kind==='typed'&&r.descriptor.key.kind==='analysis_result'&&r.descriptor.key.id===String(original.execution.job_id));assert(index>=0,'publication_typed_result_missing');
+      dialog().querySelector('[name="representation"]').value=String(index);
+      await action('read',()=>dialog().querySelector('.protection-plain').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+      assert(Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'publication_cold_changed_catalog');
+      emit({stage:'analysis_publication_ready',owner:a.owner,local_id:target,operation_id:original.execution.execution_id,local_operation_id:id});
+      for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await wait();assert(globalThis.__HTTP_CAPTURE_DONE__===true,'publication_capture_unconfirmed');
+    }
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'publication_plain_result_persisted');
+    button('lock').click();clearWebSession();
+    return {ok:true,mode:config.mode,phase:config.phase,publicationUi:config.phase===20,commitResponseLost:config.phase===20,coldTypedPublication:config.phase===21,originalCipherAndTerminalPreserved:true,cipherOnlyJournal:true,providerCalls:0};
+  }
   if([18,19].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,before=await noteProtectionReader.catalog(scope);
