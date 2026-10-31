@@ -55,6 +55,54 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([34,35,36,37].includes(config.phase)){
+    const Q=NowNoteProtectionProtocol,same=(l,r)=>Q.canonicalJson(l)===Q.canonicalJson(r),expected='HTTP-QA-RESULT-'+run;
+    if(config.phase===37){
+      assert(!findTreeNode(state.data.tree,target),'approve_absent_inherited_current');
+      await openNoteProtection({discover:true});await settle();
+      const targets=dialog().querySelector('[name="target"]');assert([...targets.options].some(o=>o.value===target),'approve_absent_target_missing');targets.value=target;targets.dispatchEvent(new Event('change',{bubbles:true}));
+      await drive(()=>dialog().querySelector('.protection-scope').textContent.includes(target)&&status().includes('전환 준비 가능'),'approve_absent_target');
+      await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='complete'));
+    }else{state.selectedTreeId=target;render();await settle();await open();}
+    const initial=await inspectNoteProtection();if(config.phase===35&&!initial.catalog)initial.catalog=await noteProtectionReader.catalog(initial.scope);
+    const resultD=initial.catalog.entries.find(d=>d.key.kind==='analysis_result'&&!d.is_null);assert(resultD,'apply_original_result_missing');
+    const source=await noteProtectionReader.read(initial.scope,initial.catalog,resultD,async()=>password);assert(extractServerAnalysisResultText(source.value)===expected,'apply_original_result_value');
+    const ownWrites=async()=>{const result=[];for(const marker of Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target)){const bundle=Q.parseJson(await Q.decryptContent(marker.cipher_bundle,password));if(bundle.intent?.purpose==='mixed_note_write')result.push({marker,bundle});}return result;};
+    if(config.phase===35){
+      const pending=(await ownWrites()).filter(r=>r.marker.phase==='committing');assert(pending.length===1,'apply_cold_original_missing');const saved=pending[0],original=noteProtectionRemote.commit;let commits=0;
+      noteProtectionRemote.commit=async()=>{commits++;throw Error('duplicate_apply_commit_blocked');};
+      try{await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));}finally{noteProtectionRemote.commit=original;}
+      const restored=(await ownWrites()).find(r=>r.marker.id===saved.marker.id);assert(restored.marker.phase==='complete'&&commits===0&&same(restored.bundle.work.transfers,saved.bundle.work.transfers),'apply_cold_cipher_changed');
+      const after=await inspectNoteProtection(),inventory=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(after.catalog.context.selected_physical_note_id));
+      const note=(await noteProtectionReader.read(after.scope,after.catalog,inventory,async()=>password)).value.note;
+      assert(note.content.startsWith('HTTP-QA-RELATED-CURRENT-'+run+'\n')&&note.content.split(expected).length===2,'apply_cold_duplicate_or_current_changed');
+      for(const d of saved.bundle.prepared.manifest.P)assert(after.catalog.entries.some(row=>same(row,d)),'apply_cold_preserved_changed');
+      emit({stage:'analysis_apply_cold_complete',owner:a.owner,local_id:target,operation_id:restored.bundle.prepared.id,local_operation_id:restored.marker.id});
+      return {ok:true,mode:config.mode,phase:35,coldOriginalMw:true,originalCipherPreserved:true,duplicateCommit:commits,sourceResultPreserved:true,providerCalls:0};
+    }
+    const select=dialog().querySelector('[name="representation"]');select.value=String(initial.rows.findIndex(r=>r.kind==='typed'&&same(r.descriptor,resultD)));select.dispatchEvent(new Event('change'));
+    if(config.phase===34){
+      await action('read',()=>dialog().querySelector('.protection-plain').textContent.includes(expected));
+      globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'analysis_apply_ready',owner:a.owner,local_id:target});
+      for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));assert(globalThis.__HTTP_CAPTURE_DONE__===true,'analysis_apply_capture_failed');
+      const original=noteProtectionRemote.commit;let commits=0;
+      noteProtectionRemote.commit=async(s,p,w)=>{const result=await original(s,p,w);if(p.response.purpose==='mixed_note_write'){commits++;throw Error('qa_analysis_apply_commit_response_lost');}return result;};
+      try{await action('analysis-append',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='committing'));}finally{noteProtectionRemote.commit=original;}
+      const pending=(await ownWrites()).filter(r=>r.marker.phase==='committing');assert(pending.length===1&&commits===1&&pending[0].bundle.work.after.note.content.includes(expected),'apply_original_mw_checkpoint');
+      for(const store of protectionStorageAdapters()){const raw=JSON.stringify(await store.read());assert(!raw.includes(expected)&&!raw.includes('HTTP-QA-RELATED-CURRENT-'+run),'apply_plaintext_store');}
+      emit({stage:'analysis_apply_response_lost',owner:a.owner,local_id:target,operation_id:pending[0].bundle.prepared.id,local_operation_id:pending[0].marker.id});
+      button('lock').click();return {ok:true,mode:config.mode,phase:34,typedAppend:true,originalResultPreserved:true,mwCommitResponseLost:true,providerCalls:0};
+    }
+    if(config.phase===37)assert(!initial.catalog.context.base.current_exists&&button('analysis-append').disabled&&!button('analysis-approve').disabled,'approve_absent_wrong_controls');
+    await action('analysis-approve',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete')&&!dialog().querySelector('form.library-confirm'));
+    const after=await inspectNoteProtection(),inventory=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(after.catalog.context.selected_physical_note_id));
+    const note=(await noteProtectionReader.read(after.scope,after.catalog,inventory,async()=>password)).value.note;
+    assert(note.content.split(expected).length===(config.phase===37?2:3),'approval_not_applied_once');
+    for(const old of initial.catalog.entries.filter(d=>['analysis_input','analysis_result','analysis_error','recording_transcript'].includes(d.key.kind)))assert(after.catalog.entries.some(d=>same(d,old)),'approval_changed_linked_original');
+    assert((await noteProtectionReader.read(after.scope,after.catalog,resultD,async()=>password)).value===source.value,'approval_rewrote_original_result');
+    for(const store of protectionStorageAdapters()){const raw=JSON.stringify(await store.read());assert(!raw.includes(expected),'approval_plaintext_store');}
+    button('lock').click();return {ok:true,mode:config.mode,phase:config.phase,typedApproval:true,createdAbsent:config.phase===37,originalResultAndLinkedPreserved:true,providerCalls:0};
+  }
   if([31,32,33].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     const Q=NowNoteProtectionProtocol,same=(l,r)=>Q.canonicalJson(l)===Q.canonicalJson(r),replacement='HTTP-QA-MT-'+run+'\n';
