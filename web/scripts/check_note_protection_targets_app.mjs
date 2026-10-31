@@ -14,7 +14,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   };
   let ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic-session',enabled:true,online:true},active=true;
   box.noteHistoryContext=()=>structuredClone(ctx);box.protectionActionGuard=()=>()=>{if(!active)throw Error('scope_changed');};
-  box.getSelectedTreeNode=()=>null;box.noteHistory={protectionOperations:()=>({})};box.noteProtectionDiscoveredTargets=null;box.noteProtectionDiscoveryOnly=false;
+  box.getSelectedTreeNode=()=>null;box.noteHistory={protectionOperations:()=>({})};box.noteProtectionDiscoveredTargets=null;box.noteProtectionDiscoveryOnly=false;box.noteProtectionLocalWikiScope=null;
   const uuid='00000000-0000-4000-8000-000000000001';
   const item=local_id=>({local_id,identity_state:'related_only',protection_state:'protected',crypto_epoch:1,current_mode:'absent',current_exists:false});
   let calls=0;
@@ -30,6 +30,12 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   box.noteProtectionTargetId='';box.getSelectedTreeNode=()=>({id:'other-selection'});
   assert.equal(box.protectionTargetId(),'');box.noteProtectionDiscoveryOnly=true;
   assert.equal(box.protectionTargets().includes('other-selection'),false);passed++;
+  box.noteProtectionLocalWikiScope={url:ctx.url,owner:'alice',local_id:'wiki:synthetic-local'};
+  assert.deepEqual([...box.protectionTargets()],['wiki:synthetic-local']);
+  const previousContext=ctx;ctx={...ctx,owner:'bob',auth:'bob-local'};
+  assert.deepEqual([...box.protectionTargets()],[],'A local wiki target must not survive an account switch');
+  await assert.rejects(box.refresh(),/계정|서버/);
+  ctx=previousContext;box.noteProtectionLocalWikiScope=null;passed++;
   box.getSelectedTreeNode=()=>null;box.noteHistoryRequest=request;
   ctx={...ctx,owner:'bob',auth:'other-session'};assert.deepEqual([...box.protectionTargets()],[]);passed++;
   ctx={...ctx,owner:'alice',auth:'synthetic-session'};

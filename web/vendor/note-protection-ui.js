@@ -75,7 +75,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   }
   function controls() {
     const unlocked = api.canMutate(), info=state.info;
-    for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
+    for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) {b.disabled=state.busy;b.hidden=false;}
     $('[name="target"]').disabled=state.busy;
     $('[name="representation"]').disabled=state.busy;
     for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-append','analysis-approve']) {
@@ -84,6 +84,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
     if (!info) {$('[data-action="analysis-replan"]').disabled=true;$('[data-action="analysis-replan-confirm"]').disabled=true;return;}
+    $('section[aria-label="보호 메모 분석"]').hidden=Boolean(info.localWiki);
     const analysisId=$('[name="analysis-operation"]').value;
     $('[data-action="analysis-prepare"]').disabled=state.busy||!unlocked||!api.analysisPrepare||(!analysisId&&(!info.catalog||Boolean(info.pending)));
     $('[data-action="analysis-resume"]').disabled=state.busy||!unlocked||!analysisId;
@@ -125,6 +126,12 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
     $('[data-action="resume"]').hidden=!info.pending||info.pending.phase.startsWith('analysis_');
     $('[data-action="confirm"]').hidden=!state.copies.length;
+    if(info.localWiki){
+      for(const name of ['current_plain_transition','mixed_conversion','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-prepare','analysis-resume','analysis-run','analysis-publish','analysis-replan','analysis-replan-confirm','analysis-append','analysis-approve']){
+        const button=$('[data-action="'+name+'"]');if(button){button.disabled=true;button.hidden=true;}
+      }
+      $('[data-action="conversion"]').hidden=Boolean(info.pending)||info.status.crypto_epoch>0;
+    }
   }
   function requireAction(token) {
     if (!dialog.open || state.bound!==api.contextKey() || state.run!==token) throw Error('잠금 또는 대상 변경으로 이전 키 요청이 취소되었습니다.');
@@ -170,7 +177,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const info=await api.inspect(); if (!valid(token)) return;
     state.info=info;
     const dl=$('.protection-scope');dl.replaceChildren();
-    for(const [name,value] of [['서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],['서버 식별',info.scope.instance]]) {
+    for(const [name,value] of [[info.localWiki?'저장 계정 주소':'서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],[info.localWiki?'이 기기 식별':'서버 식별',info.scope.instance]]) {
       const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;dl.append(dt,dd);
     }
     const select=$('[name="representation"]');select.replaceChildren();
@@ -187,7 +194,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
     for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||replanLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
-    status(info.pending ? analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
   }
   async function action(name) {
     if (name==='close') {dialog.close();return;}

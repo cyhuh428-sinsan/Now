@@ -2410,6 +2410,20 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (bundle.schema_version !== 1 || bundle.operation_id !== m.id || !eq(bundle.scope,m.scope) || !Array.isArray(bundle.stores)) fail('bundle_binding');
       return bundle;
     }
+    const localWikiIntent = intent => intent?.purpose === 'local_wiki_protection';
+    function localWikiRecord(scope,value) {
+      if (!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.local_id)
+        || !value || value.localOnly !== true || value.base?.head_revision_id || value.base?.head_version
+        || value.base?.crypto_epoch || value.base?.history_generation || value.base?.server_instance_id || value.base?.snapshot
+        || value.base?.inventory_revision_ids?.length || value.base?.replica_count || value.receipts?.length
+        || value.raw?.source !== 'wiki-artifact' || value.draft?.source !== 'wiki-artifact'
+        || value.raw?.id != null || value.draft?.id != null || value.raw?.owner_id !== scope.owner
+        || value.draft?.owner_id !== scope.owner || value.raw?.local_id !== scope.local_id || value.draft?.local_id !== scope.local_id
+        || !Array.isArray(value.revisions) || value.revisions.some(r => r.imported || r.server_ref || r.import_request)
+        || !Array.isArray(value.outbox) || value.outbox.some(op => op.sent) || value.completed_outbox?.length
+        || value.archived_outbox?.length || value.conflict) fail('local_wiki_required');
+    }
+    const localWikiReceipt = (scope,id) => ({schema_version:1,purpose:'local_wiki_protection',operation_id:id,scope:copy(scope)});
     async function start(scope,intent,password,resolveKey) {
       if (!password) fail('key_required'); const ctx = own(scope), generation = epoch;
       if (Object.values(operations()).filter(inAccount).some(m => scopeKey(validateMarker(m).scope) === scopeKey(scope) && m.phase !== 'complete')) fail('operation_exists');
@@ -2417,10 +2431,21 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       freezing = copy(scope); change();
       try {
         await preflight(scope); active(ctx,generation);
+        const local = localWikiIntent(intent);
+        if (local) {
+          fields(intent,['schema_version','purpose']);
+          if (intent.schema_version !== 1) fail('local_wiki_intent');
+          localWikiRecord(scope,journal.export().contexts?.[globalThis.NowNoteHistory.key(scope)]?.notes?.[scope.local_id]);
+        }
         const id = crypto.randomUUID(), sources = [], memo = new Map();
         for (const store of stores()) {
           const raw = await store.read(); active(ctx,generation);
-          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(inventory(raw,store.kind,scope,{includeArchives:true}),scope,id,password,memo,resolveKey,intent) });
+          const entries=inventory(raw,store.kind,scope,{includeArchives:true});
+          if (local) for (const entry of entries) {
+            if (entry.type !== 'journal') fail('local_wiki_copy');
+            localWikiRecord(scope,entry.before);
+          }
+          sources.push({ name: store.name, ephemeral: Boolean(store.ephemeral), patches: await sealCopies(entries,scope,id,password,memo,resolveKey,intent) });
           active(ctx,generation);
         }
         if (!sources.some(s => s.patches.length)) {
@@ -2429,8 +2454,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           active(ctx,generation);
         }
         const bundle = { schema_version: 1, scope: copy(scope), operation_id: id, intent: copy(intent), stores: sources, drain: null, prepared: null, work: null, receipt: null };
-        const marker = { schema_version: 1, id, scope: copy(scope), phase: 'drain_pending', cipher_bundle: '' };
+        if (local) bundle.receipt=localWikiReceipt(scope,id);
+        const marker = { schema_version: 1, id, scope: copy(scope), phase: local?'applying':'drain_pending', cipher_bundle: '' };
         await save(marker,bundle,password,ctx,generation);
+        if (local) return id;
         bundle.drain = await remote.drainPrepare(scope,copy(bundle.intent)); active(ctx,generation);
         marker.phase = 'draining'; await save(marker,bundle,password,ctx,generation);
         return id;
@@ -2441,6 +2468,13 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (running) fail('busy'); running = true;
       try {
         const b = await open(marker,password); active(ctx,generation);
+        const local = localWikiIntent(b.intent);
+        if (local) {
+          fields(b.intent,['schema_version','purpose']);
+          if (b.intent.schema_version !== 1 || !['applying','complete'].includes(marker.phase)
+            || b.drain !== null || b.prepared !== null || b.work !== null
+            || !eq(b.receipt,localWikiReceipt(marker.scope,marker.id))) fail('local_wiki_bundle');
+        }
         const persist = () => save(marker,b,password,ctx,generation);
         if (marker.phase === 'complete') return copy(b.receipt);
         if (marker.phase === 'drain_pending') {
@@ -2483,8 +2517,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         }
         if (marker.phase === 'server_committed') { marker.phase = 'applying'; await persist(); }
         if (marker.phase === 'applying') {
-          const currentStatus = await remote.status(marker.scope,copy(b.prepared),copy(b.work)); active(ctx,generation);
-          if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
+          if (!local) {
+            const currentStatus = await remote.status(marker.scope,copy(b.prepared),copy(b.work)); active(ctx,generation);
+            if (currentStatus.state !== 'committed' || currentStatus.receipt_matches_current !== true || !eq(currentStatus.receipt,b.receipt)) fail('committed_not_current');
+          }
           const adapters = stores();
           if (!eq(adapters.map(s => s.name),b.stores.map(s => s.name))) fail('store_inventory_changed');
           const knownCiphers = b.stores.flatMap(s => s.patches).flatMap(p => [p.after.protection_record,
@@ -2529,6 +2565,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       } finally { running = false; }
     }
     return { start,resume,status,
+      startLocalWiki:(scope,password,resolveKey)=>start(scope,{schema_version:1,purpose:'local_wiki_protection'},password,resolveKey),
       invalidate() { epoch++; },
       blocked(id) {
         if (freezing && inAccount({scope:freezing}) && freezing.local_id === id) return true;
@@ -5182,7 +5219,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   }
   function controls() {
     const unlocked = api.canMutate(), info=state.info;
-    for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) b.disabled=state.busy;
+    for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) {b.disabled=state.busy;b.hidden=false;}
     $('[name="target"]').disabled=state.busy;
     $('[name="representation"]').disabled=state.busy;
     for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-append','analysis-approve']) {
@@ -5191,6 +5228,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
     if (!info) {$('[data-action="analysis-replan"]').disabled=true;$('[data-action="analysis-replan-confirm"]').disabled=true;return;}
+    $('section[aria-label="보호 메모 분석"]').hidden=Boolean(info.localWiki);
     const analysisId=$('[name="analysis-operation"]').value;
     $('[data-action="analysis-prepare"]').disabled=state.busy||!unlocked||!api.analysisPrepare||(!analysisId&&(!info.catalog||Boolean(info.pending)));
     $('[data-action="analysis-resume"]').disabled=state.busy||!unlocked||!analysisId;
@@ -5232,6 +5270,12 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
     $('[data-action="resume"]').hidden=!info.pending||info.pending.phase.startsWith('analysis_');
     $('[data-action="confirm"]').hidden=!state.copies.length;
+    if(info.localWiki){
+      for(const name of ['current_plain_transition','mixed_conversion','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-prepare','analysis-resume','analysis-run','analysis-publish','analysis-replan','analysis-replan-confirm','analysis-append','analysis-approve']){
+        const button=$('[data-action="'+name+'"]');if(button){button.disabled=true;button.hidden=true;}
+      }
+      $('[data-action="conversion"]').hidden=Boolean(info.pending)||info.status.crypto_epoch>0;
+    }
   }
   function requireAction(token) {
     if (!dialog.open || state.bound!==api.contextKey() || state.run!==token) throw Error('잠금 또는 대상 변경으로 이전 키 요청이 취소되었습니다.');
@@ -5277,7 +5321,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const info=await api.inspect(); if (!valid(token)) return;
     state.info=info;
     const dl=$('.protection-scope');dl.replaceChildren();
-    for(const [name,value] of [['서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],['서버 식별',info.scope.instance]]) {
+    for(const [name,value] of [[info.localWiki?'저장 계정 주소':'서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],[info.localWiki?'이 기기 식별':'서버 식별',info.scope.instance]]) {
       const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;dl.append(dt,dd);
     }
     const select=$('[name="representation"]');select.replaceChildren();
@@ -5294,7 +5338,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
     for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||replanLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
-    status(info.pending ? analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
   }
   async function action(name) {
     if (name==='close') {dialog.close();return;}
@@ -5599,7 +5643,50 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     }
     return {available:sources.every(source=>source.status!=='unavailable'),stale:sources.some(source=>source.status!=='ok'),sources};
   }
-  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus};
+  function sourceProtectionDependencies(roots,context,localId){
+    const ctx=scope(context),account=JSON.stringify([ctx.url,ctx.owner]),ids=new Set(),seen=new WeakSet();
+    const stack=roots.map(value=>({value,accountKnown:false}));
+    while(stack.length){
+      const {value,accountKnown}=stack.pop();
+      if(!value||typeof value!=='object'||seen.has(value))continue;seen.add(value);
+      if(Object.hasOwn(value,'protection_record')){
+        if(!globalThis.NowNoteProtectionState?.protectedRecord(value))throw Error('wiki_protection_copy');
+      }
+      if(value.source==='wiki-artifact'&&value.owner_id===ctx.owner){
+        let doc;try{doc=JSON.parse(value.content);}catch{throw Error('wiki_protection_format');}
+        if(P.canonicalJson(doc.scope)!==P.canonicalJson(ctx)){
+          if(accountKnown)throw Error('wiki_protection_scope');
+          continue;
+        }
+        if(doc.schema_version!==1||'wiki:'+doc.wiki_id!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
+          throw Error('wiki_protection_format');
+        for(const draft of doc.drafts){
+          if(!Array.isArray(draft.source_manifest)||!draft.source_manifest.length)throw Error('wiki_protection_format');
+          for(const ref of draft.source_manifest){
+            if(ref?.note_ref?.owner_id!==ctx.owner||typeof ref.note_ref.local_id!=='string')throw Error('wiki_protection_scope');
+            if(ref.note_ref.local_id===localId)ids.add(value.local_id);
+          }
+        }
+      }
+      for(const [name,child] of Object.entries(value)){
+        if(['protection_record','protection_operations'].includes(name))continue;
+        if(name==='contexts'){
+          if(child?.[account])stack.push({value:child[account],accountKnown:true});
+        }else stack.push({value:child,accountKnown});
+      }
+    }
+    return [...ids].sort();
+  }
+  async function localProtectionScope(context,localId){
+    const ctx=scope(context);
+    if(!ctx.owner||!context.device||!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(localId))
+      throw Error('wiki_local_protection_scope');
+    // This deterministic local namespace is not a server-instance assertion.
+    const digest=await P.sha256('NowNote local wiki protection v1\n'+P.canonicalJson({...ctx,local_id:localId}));
+    const instance=digest.slice(0,8)+'-'+digest.slice(8,12)+'-5'+digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
+    return {...ctx,instance,local_id:localId,device:context.device};
+  }
+  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies,localProtectionScope};
 })();
 
 ;
@@ -5912,7 +5999,10 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       item.onclick=()=>execute(async token=>{
         if(dirty&&!await ask('저장하지 않은 초안을 버리고 선택한 위키를 열까요?'))return;
         requireActive(token);
-        if(row.protected||!row.document){doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;}
+        if(row.protected||!row.document){
+          if(api.openProtection){await api.openProtection(row.id);return;}
+          doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
+        }
         doc=structuredClone(row.document);dirty=false;selected.clear();question='';
         choose(preferred(doc).id);comparing=false;
         message='';
@@ -6000,6 +6090,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         const result=await api.reject(structuredClone(doc),draft.id);requireActive(token);doc=result.document;
         rows=await api.list();requireActive(token);message=result.pending?'반려 기록 보존 · 서버 전송 대기':'반려 기록 저장 완료';
       },dirty||approved||rejected));
+      if(api.openProtection)actions.append(command('protect','위키 보호',()=>api.openProtection(doc.wiki_id),dirty));
       detail.append(actions);
     }
     layout.append(nav,detail);dialog.append(header,toolbar,status,layout);
@@ -10703,6 +10794,7 @@ let noteProtectionImport = null;
 let noteProtectionTranscript = null;
 let noteProtectionEditSession = null;
 let noteProtectionUI = null;
+let noteProtectionLocalWikiScope = null;
 let noteProtectionViewGeneration = 0;
 let noteProtectionInternalEnabled = false;
 let protectionApplying = false;
@@ -10762,7 +10854,7 @@ function protectionStorageAdapters() {
 }
 
 function initializeNoteProtection() {
-  const ctx = () => ({ ...noteHistoryContext(), instance: noteProtectionIdentity?.instance || "" });
+  const ctx = () => ({ ...noteHistoryContext(), instance: noteProtectionLocalWikiScope?.instance || noteProtectionIdentity?.instance || "" });
   const request = async (scope,path,method,body) => {
     const before = ctx();
     const generation = noteProtectionViewGeneration;
@@ -10789,7 +10881,7 @@ function initializeNoteProtection() {
       auth:ctx().auth,generation:noteProtectionViewGeneration }), stores:protectionStorageAdapters,
   });
   noteProtection = NowNoteProtectionState.create({ context: ctx, journal: noteHistory, stores: protectionStorageAdapters, remote,
-    preflight: async () => {
+    preflight: async scope => {
       if ([elements.treeContent,elements.treeTitleInput,elements.dailyContent,elements.worklogContent].some(e => e && isEditorComposing(e))) throw new Error("한글 입력을 마친 뒤 다시 시도하세요.");
       await noteHistoryCaptureChain;
       await Promise.all([...storagePendingWrites]);
@@ -10798,6 +10890,10 @@ function initializeNoteProtection() {
       noteHistoryTimers.clear();
       window.clearTimeout(serverSyncTimer);
       if (noteHistory.failure()) throw new Error(noteHistory.failure());
+      const roots=[];
+      for(const store of protectionStorageAdapters())roots.push(await store.read());
+      const dependencies=NowNoteWiki.sourceProtectionDependencies(roots,scope,scope.local_id);
+      if(dependencies.length)throw new Error("관련 위키 "+dependencies.length+"개를 먼저 전체 보호하세요. 원문은 변경하지 않았습니다.");
     },
     change: () => {
       const operations = noteHistory.protectionOperations();
@@ -11208,6 +11304,8 @@ function protectionTargetId() { return noteProtectionTargetId ?? getSelectedTree
 function protectionTargets() {
   const c=noteHistoryContext(),selected=noteProtectionDiscoveryOnly?null:getSelectedTreeNode(),ids=new Set(selected?[selected.id]:[]);
   if(!c.enabled)return [];
+  if(noteProtectionLocalWikiScope)return c.owner===noteProtectionLocalWikiScope.owner
+    &&c.url.replace(/\/+$/,"")===noteProtectionLocalWikiScope.url?[noteProtectionLocalWikiScope.local_id]:[];
   for(const marker of Object.values(noteHistory?.protectionOperations() || {})) {
     if(marker.scope.owner===c.owner && marker.scope.url===c.url)ids.add(marker.scope.local_id);
   }
@@ -11222,6 +11320,11 @@ function protectionDiscoveryBinding(ctx=noteHistoryContext()) {
 
 async function refreshProtectionTargets() {
   const ctx=noteHistoryContext(),binding=protectionDiscoveryBinding(ctx),guard=protectionActionGuard();
+  if(noteProtectionLocalWikiScope){
+    if(!ctx.enabled||ctx.owner!==noteProtectionLocalWikiScope.owner||ctx.url.replace(/\/+$/,"")!==noteProtectionLocalWikiScope.url)
+      throw Error("위키 보호 계정·서버가 변경되었습니다.");
+    return [noteProtectionLocalWikiScope.local_id];
+  }
   noteProtectionDiscoveredTargets=null;
   if(!ctx.enabled || !ctx.online || !ctx.url || !ctx.auth)throw Error("note_protection:targets_auth");
   const exact=(value,keys)=>value && typeof value==="object" && !Array.isArray(value)
@@ -11259,6 +11362,7 @@ async function refreshProtectionTargets() {
 }
 
 function protectionTargetLabel(id) {
+  if(noteProtectionLocalWikiScope?.local_id===id)return "로컬 전용 위키 · "+id;
   const cache=noteProtectionDiscoveredTargets;
   const item=cache?.binding===protectionDiscoveryBinding()?cache.items.find(row=>row.local_id===id):null;
   return item?(id||"(빈 ID)")+" · "+(item.identity_state==="related_only"?"연결 자료만":item.identity_state==="branch_only"?"분기 이력만":item.current_mode==="protected"?"보호":item.current_mode==="plain"?"평문":"현재 메모 없음"):id;
@@ -11483,6 +11587,7 @@ async function resumeProtectedReplan(id,password,resolveKey) {
 }
 
 async function inspectNoteProtection() {
+  if(noteProtectionLocalWikiScope)return inspectLocalWikiProtection();
   const id=protectionTargetId(), bound=protectionViewKey(), ctx=noteHistoryContext();
   if (typeof id!=="string" || !ctx.enabled || !ctx.online) throw new Error("인증된 서버와 메모를 선택하세요.");
   const status=await noteHistoryRequest(ctx,"crypto-transitions/status","GET",{local_id:id,device_id:ctx.device});
@@ -11506,10 +11611,11 @@ async function inspectNoteProtection() {
   ]};
 }
 
-async function openNoteProtection({discover=false}={}) {
+async function openNoteProtection({discover=false,target=null,localWikiScope=null}={}) {
   if (!noteProtectionClient) {showNotice("보호 저장소를 먼저 초기화하세요.","error");return;}
+  noteProtectionLocalWikiScope=localWikiScope;
   noteProtectionDiscoveryOnly=discover;
-  noteProtectionTargetId=discover?null:getSelectedTreeNode()?.id || protectionTargets()[0] || null;
+  noteProtectionTargetId=target ?? (discover?null:getSelectedTreeNode()?.id || protectionTargets()[0] || null);
   noteProtectionUI ||= mountNoteProtection({
     contextKey:protectionViewKey,canMutate:()=>noteProtectionInternalEnabled===true,
     targets:refreshProtectionTargets,target:protectionTargetId,targetLabel:protectionTargetLabel,selectTarget:id=>{
@@ -11557,6 +11663,10 @@ async function openNoteProtection({discover=false}={}) {
       return typeof value==="string"?value:value.note?.content ?? value.content ?? value.draft?.content ?? JSON.stringify(value,null,2);
     },
     convert:async(info,purpose,password,resolveKey)=>{
+      if(info.localWiki){
+        if(purpose!=="conversion")throw Error("로컬 위키는 전체 보호 경로를 사용하세요.");
+        return protectLocalWiki(info,password,resolveKey);
+      }
       const guard=protectionActionGuard();
       if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
       await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
@@ -11578,6 +11688,7 @@ async function openNoteProtection({discover=false}={}) {
       return resumeNoteProtection(id,password,(p,i,stores)=>NowNoteProtectionClient.buildWork(info.scope,p,i,password,noteProtectionRemote,stores,resolveKey),resolveKey,guard);
     },
     resume:async(info,password,resolveKey)=>{
+      if(info.localWiki)return protectLocalWiki(info,password,resolveKey);
       if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
       return resumeNoteProtection(info.pending.id,password,(p,i,stores)=>NowNoteProtectionClient.buildWork(info.scope,p,i,password,noteProtectionRemote,stores,resolveKey),resolveKey);
     },
@@ -12015,6 +12126,59 @@ function wikiConnection(){
   }};
 }
 
+async function inspectLocalWikiProtection(){
+  const scope=structuredClone(noteProtectionLocalWikiScope),guard=protectionActionGuard(),ctx=noteHistoryContext();
+  if(!scope||!ctx.enabled||ctx.owner!==scope.owner||ctx.url.replace(/\/+$/,"")!==scope.url)throw Error("위키 보호 계정이 다릅니다.");
+  const expected=await NowNoteWiki.localProtectionScope(ctx,scope.local_id);guard();
+  if(expected.instance!==scope.instance)throw Error("로컬 위키 식별이 다릅니다.");
+  const pending=Object.values(noteHistory.protectionOperations()).find(m=>m.phase!=="complete"
+    &&m.scope.owner===scope.owner&&m.scope.url===scope.url&&m.scope.local_id===scope.local_id);
+  if(pending&&pending.scope.instance!==scope.instance)throw Error("기존 전환의 식별이 다릅니다. 원본은 보존했습니다.");
+  const archives=await noteProtectionClient.archives(scope);guard();
+  let remaining=0;
+  for(const store of protectionStorageAdapters()){
+    const unknown=[],raw=await store.read();guard();
+    remaining+=NowNoteProtectionState.inventory(raw,store.kind,scope,{unverified:unknown}).length+unknown.length;
+  }
+  if(archives.length&&remaining&&!pending)throw Error("로컬 보호 미완료 · 평문 사본이 남아 있습니다. 복구 자료는 보존했습니다.");
+  return {scope,localWiki:true,status:{crypto_epoch:archives.length?1:0},catalog:null,pending,analysisOperations:[],
+    rows:archives.map(row=>({kind:"archive",...row,label:"이 기기 · "+row.store+" · "+row.path.join(" / ")}))};
+}
+
+async function protectLocalWiki(info,password,resolveKey){
+  if(!noteProtectionInternalEnabled||!info.localWiki)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  const guard=protectionActionGuard(),expected=await NowNoteWiki.localProtectionScope(noteHistoryContext(),info.scope.local_id);guard();
+  if(NowNoteProtectionProtocol.canonicalJson(expected)!==NowNoteProtectionProtocol.canonicalJson(info.scope)
+    ||NowNoteProtectionProtocol.canonicalJson(info.scope)!==NowNoteProtectionProtocol.canonicalJson(noteProtectionLocalWikiScope))
+    throw Error("로컬 위키 보호 대상이 변경되었습니다.");
+  protectionApplying=true;
+  try{
+    await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
+    noteHistoryUI?.close();wikiUI?.close();
+    const id=info.pending?.id||await noteProtection.startLocalWiki(info.scope,password,resolveKey);guard();
+    const receipt=await noteProtection.resume(id,password,undefined,resolveKey);guard();
+    render();return receipt;
+  }finally{protectionApplying=false;}
+}
+
+async function openWikiProtection(id){
+  const local="wiki:"+id,ctx=noteHistoryContext(),bound=wikiViewKey();
+  const expected=await NowNoteWiki.localProtectionScope(ctx,local);
+  if(bound!==wikiViewKey())throw Error("위키 보호 계정이 변경되었습니다.");
+  const record=noteHistory.export().contexts?.[NowNoteHistory.key(ctx)]?.notes?.[local];
+  const archived=record?.protection_record?.scope;
+  const localOnly=record?.localOnly===true||archived?.instance===expected.instance;
+  const pending=Object.values(noteHistory.protectionOperations()).find(m=>m.phase!=="complete"
+    &&m.scope.owner===ctx.owner&&m.scope.url===expected.url&&m.scope.local_id===local);
+  if(pending&&pending.scope.instance===expected.instance&&pending.scope.device!==ctx.device)
+    throw Error("미완료 로컬 전환은 시작한 기기에서 재개하세요. 사본은 보존했습니다.");
+  if(localOnly&&Object.values(noteHistory.protectionOperations()).some(m=>m.phase!=="complete"
+    &&m.scope.owner===ctx.owner&&m.scope.url===expected.url&&m.scope.local_id!==local))
+    throw Error("다른 보호 전환을 먼저 완료하세요.");
+  wikiUI.close();
+  return openNoteProtection({discover:true,target:local,localWikiScope:localOnly?expected:null});
+}
+
 function initializeWikiNotebook(){
   const book=createWikiNotebook({
     context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,
@@ -12024,7 +12188,7 @@ function initializeWikiNotebook(){
     readRemote:id=>wikiRead("/"+encodeURIComponent(id)),
   });
   wikiUI=mountNowWiki({
-    ...book,contextKey:wikiViewKey,connection:wikiConnection,
+    ...book,contextKey:wikiViewKey,connection:wikiConnection,openProtection:openWikiProtection,
     notes:()=>libraryNotes().filter(n=>wikiSourceNote(n.id)?.status==="ok"),
     openSource:ref=>{
       if(ref.owner_id!==noteHistoryContext().owner||!wikiSourceNote(ref.local_id))

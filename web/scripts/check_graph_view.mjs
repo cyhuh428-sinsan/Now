@@ -540,8 +540,8 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
-    if(process.argv.includes("--wiki")){
-      const {verifyWikiFlow,verifyWikiCold}=await import("./wiki_fixture.mjs");
+    if(process.argv.includes("--wiki")||process.argv.includes("--wiki-protection")){
+      const {verifyWikiFlow,verifyWikiCold,verifyWikiProtectionFlow,verifyWikiProtectionCold}=await import("./wiki_fixture.mjs");
       await verifyWikiFlow({evaluate:expression=>evaluate(page,expression)});
       await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki actual review");
       for(const width of [1280,390]){
@@ -561,6 +561,17 @@ async function runOnce() {
         await evaluate(page,'document.querySelector("#wikiDialog [name=wiki-compare]").click()');
         await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki reading");
       }
+      if(process.argv.includes("--wiki-protection")){
+        await verifyWikiProtectionFlow({evaluate:expression=>evaluate(page,expression)});
+        for(const width of [1280,390]){
+          await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+          assert(await evaluate(page,'(()=>{const d=document.querySelector("#noteProtectionDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Wiki protection dialog must fit the viewport");
+          if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+            const shot=await page.send("Page.captureScreenshot");
+            await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-protection-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+          }
+        }
+      }
       if(!desktop){
         const exited=new Promise(resolve=>browser.once("exit",resolve));
         await page.send("Browser.close").catch(()=>{});
@@ -571,9 +582,10 @@ async function runOnce() {
       browser.stderr.on("data",()=>{});
       const reopened=await waitForPageTarget(debugPort,webPort);
       browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
-      await waitForCondition(page,'typeof wikiUI!=="undefined" && Boolean(wikiUI) && typeof noteHistory!=="undefined" && Object.values(noteHistory.entries()).some(i=>i.draft.source==="wiki-artifact")',"Wiki cold journal");
-      await verifyWikiCold({evaluate:expression=>evaluate(page,expression)});
-      console.log("Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
+      await waitForCondition(page,'typeof wikiUI!=="undefined" && Boolean(wikiUI) && typeof noteHistory!=="undefined" && Object.keys(noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes||{}).some(id=>id.startsWith("wiki:"))',"Wiki cold journal");
+      if(process.argv.includes("--wiki-protection"))await verifyWikiProtectionCold({evaluate:expression=>evaluate(page,expression)});
+      else await verifyWikiCold({evaluate:expression=>evaluate(page,expression)});
+      console.log(process.argv.includes("--wiki-protection")?"Wiki local protection: actual source guard, copy attribution, zero network, all-store cipher settlement, key read/lock and process cold restore PASS":"Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
       return;
     }
     if(process.argv.includes("--document")){

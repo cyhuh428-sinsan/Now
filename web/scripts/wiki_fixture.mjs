@@ -83,6 +83,7 @@ export async function verifyWikiFlow({evaluate:run}){
   assert.equal(await evaluate('findTreeNode(state.data.tree,"wiki-ui-source").content'),'Exact evidence.');
   assert.equal(await evaluate('flattenTree(state.data.tree).some(n=>String(n.id).startsWith("wiki:"))'),false);
   assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [name=wiki-version]"))'),'Stored wiki drafts and approvals need a version selector');
+  assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [data-wiki-action=protect]"))'),'A saved wiki needs its own protection entry before original protection');
   await evaluate('(()=>{const n=findTreeNode(state.data.tree,"wiki-ui-source");n.content+="\\nUpdated source.";n.updatedAt=new Date().toISOString();persist();render();document.querySelector("#wikiDialog .library-item").click();})()');
   for(let i=0;i<60 && !await evaluate('!document.querySelector("#wikiDialog [data-wiki-action=generate]").disabled');i++)await new Promise(r=>setTimeout(r,25));
   assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'));
@@ -123,4 +124,55 @@ export async function verifyWikiCold({evaluate}){
   await evaluate('(()=>{const s=document.querySelector("#wikiDialog [name=wiki-version]");s.selectedIndex=0;s.dispatchEvent(new Event("change",{bubbles:true}));})()');
   for(let i=0;i<60 && !await evaluate('document.querySelector("#wikiDialog .wiki-detail").textContent.includes("Durable Guide")');i++)await new Promise(r=>setTimeout(r,25));
   assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'),'Cold historical view must recheck its own source version');
+}
+
+async function wikiUntil(evaluate,expression,label){
+  for(let n=0;n<120;n++){
+    if(await evaluate(expression))return;
+    await new Promise(resolve=>setTimeout(resolve,25));
+  }
+  throw Error(label+' · '+await evaluate('document.querySelector("#noteProtectionDialog .protection-status")?.textContent||"no protection dialog"'));
+}
+
+async function wikiProtectionRead(evaluate){
+  await evaluate('document.querySelector("#noteProtectionDialog [data-action=read]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog .library-confirm input[type=password]"))','Wiki archive key prompt');
+  await evaluate('(()=>{const f=document.querySelector("#noteProtectionDialog .library-confirm");f.querySelector("input").value="synthetic-wiki-ui-only";f.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));})()');
+  await wikiUntil(evaluate,'document.querySelector("#noteProtectionDialog .protection-plain")?.textContent.includes("Durable Guide")','Wiki archive read');
+  assert.ok(await evaluate('document.querySelector("#noteProtectionDialog .protection-plain").textContent.includes("Updated Guide")'),'All preserved drafts remain readable');
+  await evaluate('document.querySelector("#noteProtectionDialog [data-action=lock]").click()');
+  assert.equal(await evaluate('document.querySelector("#noteProtectionDialog .protection-plain").textContent'),'');
+}
+
+export async function verifyWikiProtectionFlow({evaluate}){
+  await evaluate('noteProtectionInternalEnabled=true;globalThis.wikiProtectionNetwork=0;globalThis.wikiProtectionFetch=fetch;fetch=async()=>{wikiProtectionNetwork++;throw Error("synthetic no network");};document.querySelector("#wikiDialog [data-wiki-action=protect]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog[open] [data-action=conversion]"))','Wiki protection entry');
+  await wikiUntil(evaluate,'document.querySelectorAll("#noteProtectionDialog .protection-scope dt").length===4','Wiki protection identity labels');
+  assert.ok(await evaluate('document.querySelector("#noteProtectionDialog [name=target]").textContent.includes("로컬 전용 위키")'));
+  assert.ok(await evaluate('document.querySelector("#noteProtectionDialog .protection-scope").textContent.includes("이 기기 식별")'),'A local archive namespace must not be presented as a verified server identity');
+  await evaluate('(async()=>{globalThis.wikiOriginalGuard="";const info=await inspectLocalWikiProtection();try{await noteProtection.start({...info.scope,local_id:"wiki-ui-source"},{schema_version:2,purpose:"conversion"},"synthetic-wiki-ui-only");}catch(error){wikiOriginalGuard=error.message;}render();})()');
+  assert.ok(await evaluate('wikiOriginalGuard.includes("관련 위키")'),'Actual original-protection preflight must block before local wiki protection');
+  assert.equal(await evaluate('wikiProtectionNetwork'),0);
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog .protection-copies input"))','Exact-copy ownership confirmation');
+  await evaluate('document.querySelectorAll("#noteProtectionDialog .protection-copies input").forEach(input=>input.click());document.querySelector("#noteProtectionDialog [data-action=confirm]").click()');
+  await wikiUntil(evaluate,'document.querySelectorAll("#noteProtectionDialog .protection-copies input").length===0&&document.querySelector("#noteProtectionDialog [data-action=conversion]")?.disabled===false','Copy attribution');
+  await evaluate('document.querySelector("#noteProtectionDialog [data-action=conversion]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog .library-confirm input[type=password]"))','Wiki protection password');
+  await evaluate('(()=>{const f=document.querySelector("#noteProtectionDialog .library-confirm");f.querySelector("input").value="synthetic-wiki-ui-only";f.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));})()');
+  await wikiUntil(evaluate,'document.querySelector("#noteProtectionDialog .protection-status")?.textContent.includes("이 기기 보호 완료")','Local wiki settlement');
+  assert.equal(await evaluate('wikiProtectionNetwork'),0,'Local protection must not publish any server resource');
+  assert.ok(await evaluate('(async()=>{for(const store of protectionStorageAdapters()){if(JSON.stringify(await store.read()).includes("Durable Guide"))return false;}return true;})()'),'All registered durable/fallback stores must lose wiki plaintext');
+  assert.equal(await evaluate('findTreeNode(state.data.tree,"wiki-ui-source").content'),'Exact evidence.\nUpdated source.');
+  assert.equal(await evaluate('(async()=>{const roots=[];for(const s of protectionStorageAdapters())roots.push(await s.read());return NowNoteWiki.sourceProtectionDependencies(roots,noteHistoryContext(),"wiki-ui-source").length;})()'),0);
+  await wikiProtectionRead(evaluate);
+  await evaluate('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);fetch=wikiProtectionFetch;})()');
+}
+
+export async function verifyWikiProtectionCold({evaluate}){
+  await evaluate('wikiUI.open()');
+  await evaluate('document.querySelector("#wikiDialog .library-item").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog[open] [name=representation] option"))','Cold local wiki archives');
+  assert.ok(await evaluate('document.querySelector("#noteProtectionDialog [name=target]").textContent.includes("로컬 전용 위키")'));
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
+  await wikiProtectionRead(evaluate);
 }

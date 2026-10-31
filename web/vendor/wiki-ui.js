@@ -110,7 +110,10 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       item.onclick=()=>execute(async token=>{
         if(dirty&&!await ask('저장하지 않은 초안을 버리고 선택한 위키를 열까요?'))return;
         requireActive(token);
-        if(row.protected||!row.document){doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;}
+        if(row.protected||!row.document){
+          if(api.openProtection){await api.openProtection(row.id);return;}
+          doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
+        }
         doc=structuredClone(row.document);dirty=false;selected.clear();question='';
         choose(preferred(doc).id);comparing=false;
         message='';
@@ -198,6 +201,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         const result=await api.reject(structuredClone(doc),draft.id);requireActive(token);doc=result.document;
         rows=await api.list();requireActive(token);message=result.pending?'반려 기록 보존 · 서버 전송 대기':'반려 기록 저장 완료';
       },dirty||approved||rejected));
+      if(api.openProtection)actions.append(command('protect','위키 보호',()=>api.openProtection(doc.wiki_id),dirty));
       detail.append(actions);
     }
     layout.append(nav,detail);dialog.append(header,toolbar,status,layout);
