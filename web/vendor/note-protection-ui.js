@@ -15,20 +15,26 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
     <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><div class="history-actions" role="group" aria-label="본문 보기"><button type="button" class="secondary-btn" data-action="editor-source" aria-pressed="true">원문 편집</button><button type="button" class="secondary-btn" data-action="editor-preview" aria-pressed="false">서식 보기</button></div><label class="protection-source-label">본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><article class="markdown-preview protection-preview hidden" aria-label="보호 메모 서식 보기" tabindex="0"></article><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
     <section aria-label="보호 메모 분석"><h3>AI 분석</h3><select class="settings-select" name="analysis-operation" aria-label="분석 실행"></select><div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-prepare">분석 준비</button><button type="button" class="secondary-btn" data-action="analysis-resume">실행 상태 확인</button></div><div class="protection-analysis hidden"><label>제공업체<input class="settings-input" name="analysis-provider" readonly></label><label>전송 주소<input class="settings-input" name="analysis-endpoint"></label><label>모델<input class="settings-input" name="analysis-model"></label><label>전송할 입력<textarea class="settings-input" name="analysis-input" readonly></textarea></label><label><input type="checkbox" name="analysis-confirm">입력과 전송 대상을 확인했습니다</label><button type="button" class="primary-btn" data-action="analysis-run">분석 실행</button></div><pre class="protection-analysis-result" tabindex="0" aria-label="분석 결과"></pre></section>
-    <div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-publish">서버에 결과 보관</button></div>
+    <div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-publish">서버에 결과 보관</button><button type="button" class="secondary-btn" data-action="analysis-replan">결과 보관 재계획</button></div>
+    <div class="protection-replan hidden"><p class="protection-replan-context"></p><label><input type="checkbox" name="analysis-reuse-confirm">원 분석 결과를 그대로 재사용합니다</label><button type="button" class="primary-btn" data-action="analysis-replan-confirm">확인한 대상으로 보관</button></div>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="imports">미전송 이력 조회</button></div>
     <section class="protection-imports hidden" aria-label="가져올 원 이력"><div class="protection-import-rows protection-copies"></div><button type="button" class="primary-btn" data-action="import-selected">선택 이력 가져오기</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null,replan:null};
   const keys = new Map();
   const analysisLabels={analysis_claiming:'실행 접수 확인 필요',analysis_claimed:'전송 확인 대기',analysis_dispatching:'전송 상태 확인 필요',analysis_running:'응답 확인 필요',analysis_terminal:'결과 보관 중',analysis_settling:'영수증 확인 필요',analysis_settled:'이 기기에 결과 보관됨',analysis_write_preparing:'서버 보관 준비 확인 필요',analysis_write_prepared:'암호문 전송 재개 필요',analysis_write_staged:'서버 보관 준비됨',analysis_write_committing:'게시 영수증 확인 필요',analysis_write_committed:'서버 저장됨 · 이 기기 검증 필요'};
   let askCancel = null;
+  const replanLabels={analysis_replan_preparing:'원 결과 보관 계획 확인 필요',analysis_replan_allocated:'새 저장 대상 확인됨',analysis_replan_stored:'기존 저장 결과 확인 필요',analysis_replan_prepared:'재계획 암호문 전송 대기',analysis_replan_staged:'재계획 게시 준비됨',analysis_replan_committing:'재계획 영수증 확인 필요',analysis_replan_committed:'재계획 저장됨 · 출처 확인 필요'};
+  function resetReplan() {
+    state.replan=null;$('.protection-replan').classList.add('hidden');$('.protection-replan-context').textContent='';$('[name="analysis-reuse-confirm"]').checked=false;
+  }
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    resetReplan();
     state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';
     for(const field of ['provider','endpoint','model','input'])$('[name="analysis-'+field+'"]').value='';
     $('[name="analysis-confirm"]').checked=false;
@@ -68,13 +74,16 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       b.disabled=state.busy || !unlocked || !info;
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
-    if (!info) return;
+    if (!info) {$('[data-action="analysis-replan"]').disabled=true;$('[data-action="analysis-replan-confirm"]').disabled=true;return;}
     const analysisId=$('[name="analysis-operation"]').value;
     $('[data-action="analysis-prepare"]').disabled=state.busy||!unlocked||!api.analysisPrepare||(!analysisId&&(!info.catalog||Boolean(info.pending)));
     $('[data-action="analysis-resume"]').disabled=state.busy||!unlocked||!analysisId;
     $('[data-action="analysis-run"]').disabled=state.busy||!unlocked||!state.analysis||!$('[name="analysis-confirm"]').checked
       ||Boolean(state.analysis?.operation_id&&state.analysis.execution?.state!=='client_pending');
     $('[data-action="analysis-publish"]').disabled=state.busy||!unlocked||!api.analysisPublish||!(info.analysisOperations||[]).some(r=>r.id===analysisId&&r.phase==='analysis_settled');
+    $('[data-action="analysis-replan"]').disabled=state.busy||!unlocked||!api.analysisReplanPrepare||!(info.analysisOperations||[]).some(r=>r.id===analysisId&&(r.phase==='analysis_settled'||r.phase.startsWith('analysis_write_')));
+    $('[data-action="analysis-replan-confirm"]').disabled=state.busy||!unlocked||!api.analysisReplanBegin||!state.replan||!$('[name="analysis-reuse-confirm"]').checked;
+    $('[name="analysis-reuse-confirm"]').disabled=state.busy;
     $('[name="analysis-operation"]').disabled=state.busy;
     $('[data-action="imports"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog;
     $('[data-action="import-selected"]').disabled=state.busy || !unlocked || Boolean(info.pending)
@@ -111,7 +120,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     return new Promise(resolve=>{
       let finished=false;
       const section=document.createElement('form'); section.className='library-confirm';
-      const label=document.createElement('label'); label.textContent=(epoch==='resolve-local-bundle'?'내 변경으로 저장 확인 · 저장 비밀번호':epoch==='resolve-server-bundle'?'서버 현재본으로 저장 확인 · 저장 비밀번호':epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
+      const label=document.createElement('label'); label.textContent=String(epoch).startsWith('analysis-')?(epoch==='analysis-output'?'분석 결과를 보관할 비밀번호':'보관된 분석 결과의 비밀번호'):(epoch==='resolve-local-bundle'?'내 변경으로 저장 확인 · 저장 비밀번호':epoch==='resolve-server-bundle'?'서버 현재본으로 저장 확인 · 저장 비밀번호':epoch==='import-bundle'?'이력 가져오기 확인 · 저장 비밀번호':epoch==='write-bundle'?'저장 비밀번호':epoch==='delete-bundle'?'메모 삭제 확인 · 저장 비밀번호':epoch==='restore-bundle'?'선택 이력 복원 확인 · 저장 비밀번호':epoch==='local:new'?'이 기기 저장 비밀번호':output?'전환 비밀번호':'이전 비밀번호')+' · epoch '+epoch;
       const input=document.createElement('input'); input.type='password'; input.autocomplete='off'; input.className='settings-input'; input.required=true; label.append(input);
       const cancel=document.createElement('button'), submit=document.createElement('button');
       cancel.type='button';submit.type='submit';cancel.className=submit.className='secondary-btn';cancel.textContent='취소';submit.textContent='확인';
@@ -158,9 +167,9 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       label.append(box,text);list.append(label);
     }
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
-    for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
+    for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||replanLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
-    status(info.pending ? analysisLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+    status(info.pending ? analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
   }
   async function action(name) {
     if (name==='close') {dialog.close();return;}
@@ -179,6 +188,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
         if(name==='analysis-prepare') {
+          resetReplan();
           const plan=await api.analysisPrepare(state.info,$('[name="analysis-operation"]').value||null,resolveKey(token));
           if(!valid(token))return;state.analysis=plan;
           for(const field of ['provider','endpoint','model'])$('[name="analysis-'+field+'"]').value=plan.route[field];
@@ -207,10 +217,25 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           const id=$('[name="analysis-operation"]').value;
           let password=await ask('analysis-publication',true,token);if(!password||!valid(token))return;
           try{const result=await api.analysisPublish(id,password);if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('서버 분석 결과 저장됨 · 현재 메모 미적용');}}}finally{password=null;keys.clear();}
+        } else if(name==='analysis-replan') {
+          resetReplan();state.analysis=null;$('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';$('[name="analysis-confirm"]').checked=false;
+          const id=$('[name="analysis-operation"]').value,password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
+          const plan=await api.analysisReplanPrepare(state.info,id,password);if(!valid(token))return;
+          state.replan=plan;const source=plan.original_source_context.base.base,target=plan.catalog.context.base;
+          $('.protection-replan-context').textContent='원 분석: 보호 세대 '+source.crypto_epoch+' · 이력 '+source.history_generation+' / 저장 대상: 보호 세대 '+target.crypto_epoch+' · 이력 '+target.history_generation;
+          $('.protection-replan').classList.remove('hidden');status('원 결과와 저장 대상을 확인하세요.');
+        } else if(name==='analysis-replan-confirm') {
+          const plan=state.replan;if(!plan||!$('[name="analysis-reuse-confirm"]').checked||$('[name="analysis-operation"]').value!==plan.operation_id)throw Error('원 결과 재사용과 저장 대상을 다시 확인하세요.');
+          let password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
+          try{
+            status('원 분석 결과 보관 중');
+            const result=await api.analysisReplanBegin(plan,password,{confirmed_reuse_original_result:true,target_epoch:plan.catalog.context.base.crypto_epoch},resolveKey(token));
+            if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('원 분석 결과 서버 보관됨 · 현재 메모 미적용');}}
+          }finally{password=null;keys.clear();}
         } else if(name==='analysis-resume') {
           const id=$('[name="analysis-operation"]').value;
           let password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
-          try{const result=await api.analysisResume(id,password);if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('원 실행 상태 확인됨');}}}finally{password=null;keys.clear();}
+          try{const result=await api.analysisResume(id,password,resolveKey(token));if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('원 실행 상태 확인됨');}}}finally{password=null;keys.clear();}
         } else if(name==='imports') {
           const rows=await api.imports(state.info,resolveKey(token));
           if(!valid(token))return;
@@ -317,7 +342,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   $('[name="representation"]').addEventListener('change',controls);
   $('[name="analysis-confirm"]').addEventListener('change',controls);
-  $('[name="analysis-operation"]').addEventListener('change',()=>{state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';controls();});
+  $('[name="analysis-reuse-confirm"]').addEventListener('change',controls);
+  $('[name="analysis-operation"]').addEventListener('change',()=>{resetReplan();state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';controls();});
   $('.protection-import-rows').addEventListener('change',controls);
   dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
   return {

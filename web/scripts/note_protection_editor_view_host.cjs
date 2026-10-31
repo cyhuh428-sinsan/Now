@@ -7,7 +7,7 @@ app.whenReady().then(async()=>{
   let window;let result;let outbound=0;
   try{
     session.defaultSession.webRequest.onBeforeRequest((d,done)=>{const cancel=!d.url.startsWith('data:');if(cancel)outbound++;done({cancel});});
-    window=new BrowserWindow({show:false,width:1100,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false}});
+    window=new BrowserWindow({show:false,width:1100,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false}});
     await window.loadURL('data:text/html,<html><body></body></html>');
     await window.webContents.executeJavaScript('document.head.append(Object.assign(document.createElement("style"),{textContent:'+JSON.stringify(fs.readFileSync(path.join(root,'web/styles.css'),'utf8'))+'}));void 0;');
     for(const name of ['marked.umd.js','purify.min.js','document-renderer.js','note-protection-ui.js'])await window.webContents.executeJavaScript(fs.readFileSync(path.join(root,'web/vendor',name),'utf8')+'\n;void 0;');
@@ -22,6 +22,7 @@ app.whenReady().then(async()=>{
       const dialog=document.querySelector('#noteProtectionDialog'),button=n=>dialog.querySelector('[data-action="'+n+'"]');
       assert(button('analysis-prepare'),'analysis_prepare_missing');
       assert(button('analysis-publish'),'analysis_publish_missing');
+      assert(button('analysis-replan')&&button('analysis-replan-confirm'),'analysis_replan_controls_missing');
       const idle=async()=>{for(let i=0;i<100&&button('edit').disabled;i++)await wait();};
       button('edit').click();await idle();
       const editor=dialog.querySelector('.protection-draft');assert(editor.value===original,'editor_source');
@@ -49,13 +50,17 @@ app.whenReady().then(async()=>{
       assert(!editor.value&&!clean.value&&clean!==editor&&!preview.textContent,'lock_plaintext_or_native_history_retained');
       clean.focus();document.execCommand('undo');assert(!clean.value,'lock_undo_resurrected_plaintext');
       assert(locked>0,'lock_missing');ui.invalidate();dialog.remove();
-      let invoked=0,recorded=0,unavailable=0,published=0,release;
+      let invoked=0,recorded=0,unavailable=0,published=0,replanned=0,replanResumed=0,release;
+      const replanView={operation_id:'fixture-run',scope,catalog:{context:{base:{crypto_epoch:2,history_generation:7}}},original_source_context:{base:{base:{crypto_epoch:1,history_generation:3}}}};
       const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};
       const analysis=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},phaseLabel:phase=>phase,
         analysisPrepare:async()=>structuredClone(plan),analysisBegin:async(p,r,k)=>{assert(k==='fixture-key'&&r.model==='combo-name','analysis_confirmation_changed');return {operation_id:'fixture-run',provider_state:'ready'};},
         analysisInvoke:async()=>{invoked++;return new Promise(r=>{release=()=>r({provider_terminal_observed:true,outcome:'done',result_json:'SYNTHETIC-RESULT'});});},
         analysisRecord:async(h,o,k)=>{assert(k==='new-output-key','analysis_key_reused_across_provider');recorded++;info.pending={id:'fixture-run',phase:'analysis_settled'};info.analysisOperations=[info.pending];},analysisFinish:async()=>'<script>not HTML</script> SYNTHETIC-RESULT',
         analysisPublish:async(id,k)=>{assert(id==='fixture-run'&&k==='publication-key','analysis_publication_binding');published++;info.pending=null;info.analysisOperations=[];return 'SERVER-SYNTHETIC-RESULT';},
+        analysisReplanPrepare:async(i,id,k)=>{assert(id==='fixture-run'&&k==='replan-original-key','replan_prepare_binding');return structuredClone(replanView);},
+        analysisReplanBegin:async(p,k,c,resolve)=>{assert(p.operation_id==='fixture-run'&&k==='replan-original-key'&&c.confirmed_reuse_original_result===true&&c.target_epoch===2,'replan_explicit_confirmation');const target=await resolve({representation_epoch:2,output:true});assert(target==='replan-target-key','replan_target_key');replanned++;info.pending=null;info.analysisOperations=[];return 'REPLANNED-SYNTHETIC-RESULT';},
+        analysisResume:async(id,k,resolve)=>{assert(id==='fixture-run'&&k==='replan-original-key'&&typeof resolve==='function','replan_resume_binding');assert(await resolve({representation_epoch:2,output:true})==='replan-target-key','replan_resume_key');replanResumed++;info.pending=null;info.analysisOperations=[];return 'RECOVERED-SYNTHETIC-RESULT';},
         analysisUnavailable:async()=>{unavailable++;},
       });await analysis.open();
       const panel=document.querySelector('#noteProtectionDialog'),ab=n=>panel.querySelector('[data-action="'+n+'"]'),field=n=>panel.querySelector('[name="analysis-'+n+'"]');
@@ -72,14 +77,45 @@ app.whenReady().then(async()=>{
       assert(panel.querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-RESULT')&&!panel.querySelector('script'),'analysis_result_unsafe_or_missing');
       assert(!ab('analysis-publish').disabled,'analysis_publish_disabled');ab('analysis-publish').click();await until(()=>panel.querySelector('form.library-confirm'),'analysis_publish_key_wait');key('publication-key');
       await until(()=>published===1&&!ab('analysis-prepare').disabled,'analysis_publish_wait');assert(invoked===1&&panel.querySelector('.protection-analysis-result').textContent==='SERVER-SYNTHETIC-RESULT'&&ab('analysis-publish').disabled,'analysis_publish_reinvoked_provider_or_state');
+      info.pending={id:'fixture-run',phase:'analysis_settled'};info.analysisOperations=[info.pending];await analysis.open();
+      ab('analysis-replan').click();await until(()=>panel.querySelector('form.library-confirm'),'replan_old_key_wait');key('replan-original-key');
+      await until(()=>!panel.querySelector('.protection-replan').classList.contains('hidden')&&!ab('analysis-replan').disabled,'replan_confirmation_wait');
+      assert(ab('analysis-replan-confirm').disabled&&replanned===0&&invoked===1,'replan_without_confirmation');
+      assert(panel.querySelector('.protection-replan-context').textContent.includes('2'),'replan_target_missing');
+      const reuse=panel.querySelector('[name="analysis-reuse-confirm"]');reuse.checked=true;reuse.dispatchEvent(new Event('change'));ab('analysis-replan-confirm').click();
+      await until(()=>panel.querySelector('form.library-confirm'),'replan_target_key_wait');key('replan-target-key');
+      await until(()=>replanned===1&&!ab('analysis-prepare').disabled,'replan_finish_wait');assert(invoked===1&&panel.querySelector('.protection-analysis-result').textContent==='REPLANNED-SYNTHETIC-RESULT','replan_called_provider_or_lost_result');
+      info.pending={id:'fixture-run',phase:'analysis_replan_committing'};info.analysisOperations=[info.pending];await analysis.open();ab('analysis-resume').click();
+      await until(()=>panel.querySelector('form.library-confirm'),'replan_resume_old_key');key('replan-original-key');await until(()=>panel.querySelector('form.library-confirm'),'replan_resume_target_key');key('replan-target-key');
+      await until(()=>replanResumed===1&&!ab('analysis-prepare').disabled,'replan_resume_finish');assert(invoked===1,'replan_resume_called_provider');
       ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_second_prepare_wait');field('model').value='combo-name';field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));ab('analysis-run').click();
       await until(()=>panel.querySelector('form.library-confirm'),'analysis_second_key_wait');key('fixture-key');await until(()=>invoked===2,'analysis_second_invoke_wait');
       analysis.lock();release();await until(()=>unavailable===1,'analysis_locked_terminal_wait');
       assert(recorded===1&&!panel.querySelector('.protection-analysis-result').textContent&&!field('input').value,'analysis_late_raw_after_lock');analysis.invalidate();
-      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,publicationCommand:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
+      globalThis.renderReplanPreview=async()=>{
+        document.documentElement.dataset.theme='dark';
+        info.pending={id:'fixture-run',phase:'analysis_settled'};info.analysisOperations=[info.pending];await analysis.open();
+        ab('analysis-replan').click();await until(()=>panel.querySelector('form.library-confirm'),'capture_replan_key');key('replan-original-key');
+        await until(()=>!panel.querySelector('.protection-replan').classList.contains('hidden')&&!ab('analysis-replan').disabled,'capture_replan_ready');
+        panel.querySelector('.protection-replan').scrollIntoView({block:'center'});
+        const rect=panel.querySelector('.protection-replan').getBoundingClientRect();assert(rect.width>0&&rect.left>=0&&rect.right<=innerWidth,'replan_panel_overflow');
+        const label=panel.querySelector('.protection-replan label').getBoundingClientRect(),submit=ab('analysis-replan-confirm').getBoundingClientRect();
+        assert(submit.top>=label.bottom&&submit.right<=innerWidth,'replan_confirmation_overlap');
+        const rgb=s=>s.match(/[0-9.]+/g).slice(0,3).map(Number),lum=c=>c.map(v=>{v/=255;return v<=0.04045?v/12.92:((v+0.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[0.2126,0.7152,0.0722][i],0);
+        const a=lum(rgb(getComputedStyle(ab('analysis-replan')).color)),b=lum(rgb(getComputedStyle(panel).backgroundColor));
+        assert((Math.max(a,b)+0.05)/(Math.min(a,b)+0.05)>=4.5,'replan_command_contrast');
+      };
+      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,publicationCommand:true,replanConfirmation:true,replanDistinctKeys:true,replanResume:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
     })()`,true);
-    window.setContentSize(390,844);
-    const mobile=await window.webContents.executeJavaScript(`(()=>{const d=document.querySelector('#noteProtectionDialog');d.showModal();const s=d.querySelector('[name="analysis-operation"]');return {width:d.clientWidth,selectorWidth:s.getBoundingClientRect().width,dialogRight:d.getBoundingClientRect().right,viewport:innerWidth};})()`);
+    const capture=async name=>{
+      const dir=process.env.NOWNOTE_QA_MANIFEST_DIR;if(!dir)return;
+      if(path.resolve(dir)!==path.resolve('D:/Project/Now/docs/2.4.0/qa'))throw Error('capture_directory_boundary');
+      await window.webContents.executeJavaScript('renderReplanPreview()');
+      await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      fs.mkdirSync(dir,{recursive:true});fs.writeFileSync(path.join(dir,'protected-replan-'+name+'.png'),(await window.webContents.capturePage()).toPNG());
+    };
+    await capture('desktop');window.setContentSize(390,844);await capture('mobile');
+    const mobile=await window.webContents.executeJavaScript(`(()=>{const d=document.querySelector('#noteProtectionDialog');if(!d.open)d.showModal();const s=d.querySelector('[name="analysis-operation"]');return {width:d.clientWidth,selectorWidth:s.getBoundingClientRect().width,dialogRight:d.getBoundingClientRect().right,viewport:innerWidth};})()`);
     if(mobile.selectorWidth<=mobile.width*0.8||mobile.dialogRight>mobile.viewport)throw Error('analysis_mobile_layout');
     result.mobileLayout=true;
     if(outbound)throw Error('preview_outbound_request');
