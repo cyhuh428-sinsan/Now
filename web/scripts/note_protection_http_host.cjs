@@ -6,6 +6,7 @@ const qaRoot=path.resolve('D:/tmp/now-240-e4b3a-http');
 if(!path.resolve(config.profile).startsWith(qaRoot+path.sep))throw Error('profile_boundary');
 app.setPath('userData',config.profile);app.disableHardwareAcceleration();
 const credentials=JSON.parse(fs.readFileSync(config.secrets,'utf8'));
+if(config.phase===24)credentials.a.device+='-peer';
 const tokenLine=fs.readFileSync(config.envFile,'utf8').split(/\r?\n/).find(v=>v.startsWith('NOW_QA_API_TOKEN='));
 let apiToken=tokenLine?.slice('NOW_QA_API_TOKEN='.length).trim();
 if(apiToken?.startsWith('"')&&apiToken.endsWith('"'))apiToken=apiToken.slice(1,-1);
@@ -71,19 +72,19 @@ app.whenReady().then(async()=>{
   });
   session.defaultSession.webRequest.onCompleted({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(u.pathname.startsWith('/api/'))persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,status:d.statusCode});});
   session.defaultSession.webRequest.onErrorOccurred({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750')persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,error:/^net::ERR_[A-Z_]+$/.test(d.error)?d.error:'network_error'});});
-  const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,...(config.mode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
+  const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,...(config.mode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
   window.webContents.on('console-message',(...args)=>{
     const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
     if(typeof message!=='string'||!message.startsWith('HTTP_QA_EVENT '))return;
-    try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','code'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});
+    try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','device_id','code'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});
       if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
         blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
       }
-      if(['analysis_ui_result_ready','analysis_publication_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
+      if(['analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          const name=(event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          const name=(event.stage==='analysis_replan_ready'?'analysis-replanned':event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
           fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage()).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
@@ -98,7 +99,7 @@ app.whenReady().then(async()=>{
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
     if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
-    if([15,17,19,20,21].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
+    if([15,17,19,20,21,22,23,24].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
     window.destroy();app.exit(0);
