@@ -12,5 +12,5 @@ const snapshot=await box.NowNoteWiki.capture(['source'],{url:'https://example.in
 const draft=await box.NowNoteWiki.validateDraft({title:'한글 위키',topic:'계약',
   sections:[{id:'section-1',title:'개요',markdown:'**정리한 내용**',citation_ids:['cite-1']}],
   citations:[{id:'cite-1',source_id:'source-1',quote:'정확한 인용 \u{20000}'}]},snapshot,{provider:'omniroute',model:'auto'});
-process.stdout.write(JSON.stringify({schema_version:1,wiki_id:webcrypto.randomUUID(),scope:snapshot.scope,
+process.stdout.write(JSON.stringify({schema_version:1,document_version:1,wiki_id:webcrypto.randomUUID(),scope:snapshot.scope,
   drafts:[draft],approvals:[],rejected_draft_ids:[]}));

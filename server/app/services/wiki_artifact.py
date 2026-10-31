@@ -4,12 +4,14 @@ from app.schemas.wiki import WikiArtifact
 
 def validate_append(previous: WikiArtifact | None, value: WikiArtifact, action: str):
     if previous is None:
-        if (action != "create" or len(value.drafts) != 1 or value.approvals or value.rejected_draft_ids
+        if (action != "create" or value.document_version != 1 or len(value.drafts) != 1 or value.approvals or value.rejected_draft_ids
                 or value.drafts[0].base_approved_revision_id is not None):
             raise ValueError("wiki_invalid_creation")
         return
     if previous.wiki_id != value.wiki_id or previous.scope != value.scope:
         raise ValueError("wiki_identity_changed")
+    if value.document_version != previous.document_version + 1:
+        raise ValueError("wiki_document_version")
     for field in ("drafts", "approvals", "rejected_draft_ids"):
         before, after = getattr(previous, field), getattr(value, field)
         if after[:len(before)] != before:

@@ -26,7 +26,7 @@ def artifact():
                                "source_revision_id":str(uuid4()),"head_version":1,"content_hash":"a"*64}],
            "provider":"omniroute","model":"auto","generated_at":"2026-10-31T00:00:00Z","validation_status":"citations_checked"}
     draft["draft_hash"]=digest(draft)
-    return {"schema_version":1,"wiki_id":str(uuid4()),"scope":scope,"drafts":[draft],"approvals":[],"rejected_draft_ids":[]}
+    return {"schema_version":1,"document_version":1,"wiki_id":str(uuid4()),"scope":scope,"drafts":[draft],"approvals":[],"rejected_draft_ids":[]}
 
 
 def test_plain_wiki_document_and_metadata_have_separate_boundaries():
@@ -66,6 +66,7 @@ def test_approval_binds_exact_draft_and_history_is_append_only():
     previous=artifact()
     old=WikiArtifact.model_validate(previous)
     approved=deepcopy(previous);draft=approved["drafts"][0]
+    approved["document_version"]=2
     approved["approvals"].append({"id":str(uuid4()),"parent_approved_revision_id":None,"draft_id":draft["id"],
                                  "draft_hash":draft["draft_hash"],"source_manifest_hash":digest(draft["source_manifest"]),
                                  "approved_by":"wiki-fixture","approved_at":"2026-10-31T01:00:00Z"})
@@ -84,7 +85,7 @@ def test_approval_binds_exact_draft_and_history_is_append_only():
 
 def test_rejection_keeps_original_text_and_rejects_later_approval():
     previous=WikiArtifact.model_validate(artifact())
-    value=previous.model_dump();value["rejected_draft_ids"]=[value["drafts"][0]["id"]]
+    value=previous.model_dump();value["document_version"]=2;value["rejected_draft_ids"]=[value["drafts"][0]["id"]]
     rejected=WikiArtifact.model_validate(value)
     validate_append(previous,rejected,"reject")
     assert rejected.drafts[0].sections[0].markdown=="Generated body"
@@ -93,3 +94,24 @@ def test_rejection_keeps_original_text_and_rejects_later_approval():
                          "approved_by":"wiki-fixture","approved_at":"2026-10-31T01:00:00Z"}]
     with pytest.raises(ValueError):
         WikiArtifact.model_validate(value)
+
+
+def test_publication_version_must_advance_with_each_document_append():
+    value=artifact()
+    previous=WikiArtifact.model_validate(value)
+    next_value=deepcopy(value)
+    next_value["rejected_draft_ids"]=[value["drafts"][0]["id"]]
+    with pytest.raises(ValueError):
+        validate_append(previous,WikiArtifact.model_validate(next_value),"reject")
+    next_value["document_version"]=2
+    validate_append(previous,WikiArtifact.model_validate(next_value),"reject")
+    invalid_creation=deepcopy(value);invalid_creation["document_version"]=2
+    with pytest.raises(ValueError):
+        validate_append(None,WikiArtifact.model_validate(invalid_creation),"create")
+
+
+def test_existing_source_baseline_revision_can_have_zero_head_version():
+    value=artifact();draft=value["drafts"][0]
+    draft["source_manifest"][0]["head_version"]=0
+    draft["draft_hash"]=digest({k:v for k,v in draft.items() if k!="draft_hash"})
+    assert WikiArtifact.model_validate(value).drafts[0].source_manifest[0].head_version==0

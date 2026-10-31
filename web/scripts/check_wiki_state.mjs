@@ -16,6 +16,8 @@ const notes={a:{owner:ctx.owner,localId:'a',status:'ok',origin:'server',revision
   b:{owner:ctx.owner,localId:'b',status:'ok',origin:'local',revisionId:null,headVersion:0,title:'Source B',content:'Local evidence.'}};
 const lookup=id=>notes[id];
 const snapshot=await W.capture(['a','b'],ctx,lookup);
+const baseline={...notes.a,headVersion:0};
+assert.equal((await W.capture(['a'],ctx,()=>baseline)).sources[0].manifest.head_version,0,'An existing server baseline revision may have version zero');
 assert.equal(snapshot.sources.length,2);assert.equal(snapshot.serverEligible,false);
 assert.equal(snapshot.sources[0].content,notes.a.content);
 const prompt=W.prompt(snapshot);

@@ -23,7 +23,7 @@
       const note=lookup(local);
       if(!eligible(note,ctx)||note.localId!==local||!text(note.title,240,true)
         ||!Number.isSafeInteger(note.headVersion)||note.headVersion<0
-        ||(note.origin==='server'&&(!text(note.revisionId,120)||note.headVersion<1))
+        ||(note.origin==='server'&&!text(note.revisionId,120))
         ||note.content.startsWith('NOW_ENCRYPTED_V1:'))throw Error('wiki_source_unavailable');
       const content=String(note.content);bytes+=size(content);
       if(bytes>524288)throw Error('wiki_source_budget');

@@ -57,7 +57,7 @@ class WikiSource(Strict):
 
     @model_validator(mode="after")
     def server_revision(self):
-        if self.origin == "server" and (self.source_revision_id is None or self.head_version < 1):
+        if self.origin == "server" and self.source_revision_id is None:
             raise ValueError("wiki_server_source_revision")
         return self
 
@@ -125,6 +125,7 @@ class WikiApproval(Strict):
 
 class WikiArtifact(Strict):
     schema_version: Literal[1]
+    document_version: int = Field(ge=1)
     wiki_id: Ident
     scope: WikiScope
     drafts: list[WikiDraft] = Field(min_length=1, max_length=1000)
