@@ -1972,7 +1972,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   const record = v => v !== null && typeof v === 'object' && !Array.isArray(v);
   const fail = code => { throw new Error('note_protection:' + code); };
   const protocol = () => globalThis.NowNoteProtectionProtocol;
-  const phases = ['drain_pending','draining','preparing','promoted','bundled','prepared','committing','server_committed','applying','complete','analysis_claiming','analysis_claimed'];
+  const phases = ['drain_pending','draining','preparing','promoted','bundled','prepared','committing','server_committed','applying','complete','analysis_claiming','analysis_claimed','analysis_dispatching','analysis_running'];
   const fields = (v, names) => { if (!record(v) || Object.keys(v).length !== names.length || names.some(k => !Object.hasOwn(v,k))) fail('marker_fields'); };
   function scopeKey(s) { return json([s.url.replace(/\/+$/, ''), s.owner, s.instance, s.local_id]); }
   function validateScope(s) {
@@ -3584,6 +3584,13 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       const marker=journal.protectionOperations()[id];if(!marker)fail('operation_missing');
       P().validateMarker(marker);own(marker.scope);return structuredClone(marker);
     };
+    const access=s=>({schema_version:3,owner_id:s.owner,local_id:s.local_id,device_id:s.device,server_instance_id:s.instance});
+    function progress(previous,checked) {
+      if(previous===null)return;
+      const fixed=['execution_id','job_id','job_id_mode','source_context','source_keys','source_digest','claim_metadata_digest','output_slots'];
+      if(!same(pick(checked,fixed),pick(previous,fixed))||checked.run_version<previous.run_version||checked.lease_version<previous.lease_version)fail('execution_changed');
+      for(const key of ['dispatch_receipt','terminal_receipt','bundle_metadata'])if(previous[key]!==null&&!same(previous[key],checked[key]))fail('execution_changed');
+    }
     async function save(marker,bundle,password,c,epoch) {
       active(marker.scope,c,epoch);
       marker.cipher_bundle=await Q().encryptContent(Q().canonicalJson(bundle),password);active(marker.scope,c,epoch);
@@ -3597,11 +3604,20 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     async function open(marker,password,c,epoch) {
       if(!password)fail('key_required');
       const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
-      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution']);
+      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[])]);
+      b.dispatch??=null;
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
       if((marker.phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
+      if(b.dispatch!==null){
+        exact(b.dispatch,['request','handoff_reserved']);
+        const d=b.dispatch.request;exact(d,[...Object.keys(access(marker.scope)),'execution_id','run_version','lease_version','source_digest','claim_metadata_digest']);
+        if(!same(pick(d,Object.keys(access(marker.scope))),access(marker.scope))||d.execution_id!==b.execution?.execution_id||d.run_version!==1
+          ||d.source_digest!==b.execution.source_digest||d.claim_metadata_digest!==b.execution.claim_metadata_digest||typeof b.dispatch.handoff_reserved!=='boolean')fail('dispatch_binding');
+        integer(d.lease_version,1);
+      }
+      if(['analysis_dispatching','analysis_running'].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase==='analysis_running')))fail('bundle_phase');
       return b;
     }
     return {
@@ -3619,7 +3635,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         running=true;
         try{
           const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'analysis_claiming',cipher_bundle:''};
-          const b={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope:structuredClone(scope),request:claim,input,route,execution:null};
+          const b={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope:structuredClone(scope),request:claim,input,route,execution:null,dispatch:null};
           await save(marker,b,password,c,epoch);return id;
         }finally{running=false;}
       },
@@ -3633,11 +3649,37 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             :await request(structuredClone(marker.scope),path+'/status','GET',{schema_version:3,owner_id:marker.scope.owner,local_id:marker.scope.local_id,device_id:marker.scope.device,server_instance_id:marker.scope.instance,execution_id:b.execution.execution_id});
           active(marker.scope,c,epoch);
           const checked=await validateExecution(marker.scope,b.request,response);active(marker.scope,c,epoch);
-          if(b.execution!==null){
-            const fixed=['execution_id','job_id','job_id_mode','source_context','source_keys','source_digest','claim_metadata_digest','output_slots'];
-            if(!same(pick(checked,fixed),pick(b.execution,fixed))||checked.run_version<b.execution.run_version||checked.lease_version<b.execution.lease_version)fail('execution_changed');
-          }
+          progress(b.execution,checked);
           b.execution=checked;marker.phase='analysis_claimed';await save(marker,b,password,c,epoch);return structuredClone(checked);
+        }finally{running=false;}
+      },
+      async dispatch(id,password,confirmation) {
+        confirmation=structuredClone(confirmation);
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(marker.phase==='analysis_running')fail('provider_outcome_unknown');
+        if(!['analysis_claimed','analysis_dispatching'].includes(marker.phase))fail('operation_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch);
+          exact(confirmation,['provider','endpoint','model','input','confirmed']);
+          if(confirmation.confirmed!==true||confirmation.input!==b.input||!same(pick(confirmation,['provider','endpoint','model']),b.route))fail('confirmation');
+          const path='/api/v2/notes/mixed-analysis-claims';
+          const observed=await request(structuredClone(marker.scope),path+'/status','GET',{...access(marker.scope),execution_id:b.execution.execution_id});active(marker.scope,c,epoch);
+          const checked=await validateExecution(marker.scope,b.request,observed);active(marker.scope,c,epoch);progress(b.execution,checked);b.execution=checked;
+          if(checked.dispatch_receipt!==null){
+            if(marker.phase!=='analysis_dispatching')fail('provider_outcome_unknown');
+            b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
+            return {operation_id:id,execution:structuredClone(checked),provider_state:checked.terminal_receipt===null?'unknown':'terminal'};
+          }
+          if(checked.state!=='client_pending'||checked.source_matches_current!==true)fail('source_changed');
+          if(marker.phase==='analysis_claimed'){
+            b.dispatch={request:{...access(marker.scope),execution_id:checked.execution_id,run_version:checked.run_version,lease_version:checked.lease_version,source_digest:checked.source_digest,claim_metadata_digest:checked.claim_metadata_digest},handoff_reserved:false};
+            marker.phase='analysis_dispatching';await save(marker,b,password,c,epoch);
+          }
+          const response=await request(structuredClone(marker.scope),path+'/dispatch','POST',structuredClone(b.dispatch.request));active(marker.scope,c,epoch);
+          const dispatched=await validateExecution(marker.scope,b.request,response);active(marker.scope,c,epoch);progress(b.execution,dispatched);
+          if(dispatched.state!=='client_running'||dispatched.dispatch_receipt===null)fail('dispatch_unconfirmed');
+          b.execution=dispatched;b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
+          return {operation_id:id,scope:structuredClone(marker.scope),execution:structuredClone(dispatched),route:structuredClone(b.route),input:b.input,provider_state:'ready'};
         }finally{running=false;}
       },
     };

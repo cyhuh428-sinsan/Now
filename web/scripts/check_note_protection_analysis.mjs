@@ -113,3 +113,89 @@ await entered;queued.invalidate();releaseWrite();await rejected;
 assert.equal(JSON.stringify(disk)===JSON.stringify(before),true,'invalidating while storage waits must not publish the marker');
 assert.equal(JSON.stringify(delayed.export())===JSON.stringify(before),true,'cancelled marker must roll back its memory projection exactly');
 console.log('MX claim journal: cipher-only before request, failed write/no call, immutable replay, cold resume, wrong key/account, late invalidation PASS (synthetic transport; no Provider)');
+context={...scope,enabled:true,auth:'dispatch-auth'};
+let dispatchDisk={schema_version:1,contexts:{}},dispatchState=copy(pending),dispatchCalls=0,dispatchLost=true;
+const dispatchJournal=box.NowNoteHistory.create({initial:dispatchDisk,context:()=>({...context,online:false}),request:async()=>{},write:async(value,guard)=>{assert.equal(guard.active(),true);dispatchDisk=copy(value);}});
+let activeDispatchJournal=dispatchJournal;
+const dispatchRequest=async(s,path,method,body)=>{
+  if(path.endsWith('/dispatch')){
+    assert.equal(method,'POST');dispatchCalls++;
+    assert.equal(Object.values(activeDispatchJournal.protectionOperations())[0].phase,'analysis_dispatching','dispatch core must be durable before POST');
+    assert.deepEqual(copy(body),{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,execution_id:pending.execution_id,run_version:1,lease_version:1,source_digest:pending.source_digest,claim_metadata_digest:pending.claim_metadata_digest});
+    dispatchState=copy(running);if(dispatchLost){dispatchLost=false;throw Error('dispatch_response_lost');}return copy(dispatchState);
+  }
+  if(method==='POST'){assert.deepEqual(copy(body),request);return copy(pending);}
+  assert.equal(path,'/api/v2/notes/mixed-analysis-claims/status');return copy(dispatchState);
+};
+const dispatcher=()=>A.createExecution({context:()=>context,journal:dispatchJournal,request:dispatchRequest});
+let dispatching=dispatcher();const dispatchId=await dispatching.start(scope,request,input,route,'synthetic');
+await dispatching.resumeClaim(dispatchId,'synthetic');
+await assert.rejects(()=>dispatching.dispatch(dispatchId,'synthetic',{...route,input,confirmed:1}),/confirmation/);
+await assert.rejects(()=>dispatching.dispatch(dispatchId,'synthetic',{...route,model:'different',input,confirmed:true}),/confirmation/);
+assert.equal(dispatchCalls,0);
+await assert.rejects(()=>dispatching.dispatch(dispatchId,'synthetic',{...route,input,confirmed:true}),/dispatch_response_lost/);
+assert.equal(dispatching.status(dispatchId).phase,'analysis_dispatching');
+dispatching=dispatcher();
+const handoff=await dispatching.dispatch(dispatchId,'synthetic',{...route,input,confirmed:true});
+assert.equal(dispatchCalls,1,'lost dispatch must recover the original DR before any metadata POST');
+assert.equal(handoff.provider_state,'unknown');assert.equal(Object.hasOwn(handoff,'input'),false,'status recovery is not authority to start or repeat the Provider');assert.deepEqual(handoff.execution.dispatch_receipt,running.dispatch_receipt);
+assert.equal(dispatching.status(dispatchId).phase,'analysis_running');
+assert.ok(!JSON.stringify(dispatchDisk).includes('SYNTHETIC-PROVIDER-INPUT-'));
+await assert.rejects(()=>dispatching.dispatch(dispatchId,'synthetic',{...route,input,confirmed:true}),/provider_outcome_unknown/);
+dispatching=dispatcher();await assert.rejects(()=>dispatching.dispatch(dispatchId,'synthetic',{...route,input,confirmed:true}),/provider_outcome_unknown/);
+assert.equal(dispatchCalls,1);
+const knownJournal=box.NowNoteHistory.create({context:()=>({...context,online:false}),request:async()=>{},write:async(value,guard)=>{assert.equal(guard.active(),true);}});
+activeDispatchJournal=knownJournal;dispatchState=copy(pending);dispatchLost=false;
+const known=A.createExecution({context:()=>context,journal:knownJournal,request:dispatchRequest});
+const knownId=await known.start(scope,request,input,route,'synthetic');await known.resumeClaim(knownId,'synthetic');
+const ready=await known.dispatch(knownId,'synthetic',{...route,input,confirmed:true});
+assert.equal(ready.provider_state,'ready');assert.equal(ready.input,input);assert.deepEqual(ready.route,route);
+const reserved=JSON.parse(await Q.decryptContent(known.status(knownId).cipher_bundle,'synthetic'));assert.equal(reserved.dispatch.handoff_reserved,true,'single handoff must be reserved durably before returning input');
+await assert.rejects(()=>known.dispatch(knownId,'synthetic',{...route,input,confirmed:true}),/provider_outcome_unknown/);
+console.log('MX dispatch: explicit exact confirmation, durable original core, lost-response status-first DR recovery, single handoff/no automatic Provider retry PASS (synthetic transport; Provider calls 0)');
+async function dispatchScenario({stale=false,failHandoff=false,hold=false}={}) {
+  const state={current:copy(pending),calls:0,failHandoff},disk={value:{schema_version:1,contexts:{}}};
+  let entered,release;const inside=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
+  const journal=box.NowNoteHistory.create({context:()=>({...context,online:false}),request:async()=>{},write:async(value,guard)=>{
+    assert.equal(guard.active(),true);
+    if(state.failHandoff&&Object.values(value.protection_operations||{}).some(m=>m.phase==='analysis_running'))throw Error('handoff_write_failed');
+    disk.value=copy(value);
+  }});
+  const controller=A.createExecution({context:()=>context,journal,request:async(s,path,method)=>{
+    if(path.endsWith('/dispatch')){state.calls++;state.current=copy(running);if(hold){entered();await gate;}return copy(state.current);}
+    return copy(method==='POST'?pending:state.current);
+  }});
+  const id=await controller.start(scope,request,input,route,'synthetic');await controller.resumeClaim(id,'synthetic');
+  if(stale){state.current.source_matches_current=false;state.current.latest_context=copy(state.current.latest_context);state.current.latest_context.base.history_generation++;}
+  return {controller,journal,id,state,disk,inside,release};
+}
+const confirmed={...route,input,confirmed:true};
+const stale=await dispatchScenario({stale:true});
+await assert.rejects(()=>stale.controller.dispatch(stale.id,'synthetic',confirmed),/source_changed/);assert.equal(stale.state.calls,0);
+const failedStore=await dispatchScenario({failHandoff:true});
+await assert.rejects(()=>failedStore.controller.dispatch(failedStore.id,'synthetic',confirmed),/handoff_write_failed/);
+assert.equal(failedStore.controller.status(failedStore.id).phase,'analysis_dispatching');assert.equal(failedStore.state.calls,1);
+failedStore.state.failHandoff=false;
+const afterFailedStore=await failedStore.controller.dispatch(failedStore.id,'synthetic',confirmed);
+assert.equal(afterFailedStore.provider_state,'unknown');assert.equal(Object.hasOwn(afterFailedStore,'input'),false);assert.equal(failedStore.state.calls,1);
+const lateDispatch=await dispatchScenario({hold:true});
+const dispatchingLate=lateDispatch.controller.dispatch(lateDispatch.id,'synthetic',confirmed),lateRejected=assert.rejects(()=>dispatchingLate,/scope_changed/);
+await lateDispatch.inside;lateDispatch.controller.invalidate();lateDispatch.release();await lateRejected;
+assert.equal(lateDispatch.controller.status(lateDispatch.id).phase,'analysis_dispatching');
+const terminalRecovery=A.createExecution({context:()=>context,journal:lateDispatch.journal,request:async()=>copy(unavailable)});
+const terminalRecovered=await terminalRecovery.dispatch(lateDispatch.id,'synthetic',confirmed);
+assert.equal(terminalRecovered.provider_state,'terminal');assert.equal(terminalRecovered.execution.terminal_receipt.outcome,'result_unavailable');assert.equal(Object.hasOwn(terminalRecovered,'input'),false);
+console.log('MX dispatch boundaries: stale source/no POST, failed durable handoff/no input, late invalidation, observed terminal distinct from unknown PASS (synthetic only)');
+const legacyMarker=execution.status(id),legacyBundle=Q.parseJson(await Q.decryptContent(legacyMarker.cipher_bundle,'synthetic'));
+delete legacyBundle.dispatch;legacyMarker.cipher_bundle=await Q.encryptContent(Q.canonicalJson(legacyBundle),'synthetic');await journal.saveProtection(legacyMarker);
+const legacyReader=A.createExecution({context:()=>context,journal,request:async()=>copy(pending)});
+await legacyReader.resumeClaim(id,'synthetic');
+const legacyReadback=Q.parseJson(await Q.decryptContent(legacyReader.status(id).cipher_bundle,'synthetic'));
+assert.equal(legacyReadback.input,input);assert.equal(legacyReadback.dispatch,null);
+const terminalReader=A.createExecution({context:()=>context,journal,request:async()=>copy(unavailable)});
+await terminalReader.resumeClaim(id,'synthetic');
+const replacedReceipt=copy(unavailable);replacedReceipt.dispatch_receipt.dispatch_id=uid(99);replacedReceipt.terminal_receipt.dispatch_id=uid(99);
+await A.validateExecution(scope,request,replacedReceipt);
+const badProgress=A.createExecution({context:()=>context,journal,request:async()=>replacedReceipt});
+await assert.rejects(()=>badProgress.resumeClaim(id,'synthetic'),/execution_changed/);
+console.log('MX compatibility: original claim-only cipher bundle and immutable observed DR/TR preserved PASS (synthetic only)');
