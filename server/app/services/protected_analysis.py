@@ -169,7 +169,14 @@ def claim(db, body):
 
 @store.atomic
 def status(db, owner, local, device, instance, ident):
-    return result(db, own(db, owner, local, device, instance, ident))
+    row = own(db, owner, local, device, instance, ident)
+    value = result(db, row)
+    bundle = json.loads(row.progress_json).get("terminal_bundle")
+    if bundle is not None and value["terminal_receipt"] is None:
+        error("inconsistent_analysis_claim")
+    value["original_request_metadata"] = fixed(row)["request"]
+    value["bundle_metadata"] = bundle
+    return value
 
 
 def cas(row, body):

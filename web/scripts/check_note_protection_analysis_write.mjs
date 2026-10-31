@@ -404,6 +404,11 @@ const legacyOriginal=Q.canonicalJson({request:legacyRequest,execution:legacyExec
 const legacyValues=await A.openLegacyTerminalBundle(scope,legacyRequest,legacyExecution,legacyWork,'fixture-key');
 assert.equal(legacyValues.input_text,input);assert.equal(legacyValues.result_json,result);assert.equal(legacyValues.error_message,null);
 assert.equal(Q.canonicalJson({request:legacyRequest,execution:legacyExecution,work:legacyWork}),legacyOriginal);
+const legacyRecovery={...copy(legacyExecution),original_request_metadata:copy(legacyRequest),bundle_metadata:copy(legacyWork.bundle_metadata)};
+assert.equal((await A.openLegacyTerminalBundle(scope,legacyRequest,legacyRecovery,legacyWork,'fixture-key')).input_text,input);
+for(const change of [e=>{delete e.bundle_metadata;},e=>{e.original_request_metadata.job_type='changed';},e=>{e.bundle_metadata.original_epoch=2;}]){
+ const bad=copy(legacyRecovery);change(bad);await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,bad,legacyWork,'fixture-key'));
+}
 await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,legacyExecution,legacyWork,'wrong-key'));
 for(const change of [e=>{e.terminal_receipt.schema_version=3;},e=>{e.dispatch_receipt.source_digest='0'.repeat(64);},e=>{e.original_job_id=13;},e=>{e.execution_state='client_running';},e=>{e.output_slots[0].initial_slot_version=1;}]){
  const bad=copy(legacyExecution);change(bad);await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,bad,legacyWork,'fixture-key'));

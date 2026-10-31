@@ -95,7 +95,9 @@
     for(const s of request.source_keys){exact(s,['key','representation_etag','slot_version','ciphertext_sha256','is_null']);Q().validateKey(s.key);hex(s.representation_etag);
       if(s.slot_version!==null)integer(s.slot_version);if(s.ciphertext_sha256!==null)hex(s.ciphertext_sha256);if(typeof s.is_null!=='boolean')fail('legacy_sources');}
     if(new Set(request.source_keys.map(s=>Q().canonicalJson(s.key))).size!==request.source_keys.length||!same(request.source_keys.map(s=>s.key),Q().keyOrder(request.source_keys.map(s=>s.key))))fail('source_order');
-    const e=execution;exact(e,['schema_version','execution_id','original_job_id','job_id_mode','execution_state','run_version','lease_version','expires_at','source_context','source_keys','source_digest','output_slots','dispatch_receipt','terminal_receipt','storage_receipts','current_context','source_matches_current']);
+    const e=execution,recovery=Object.hasOwn(e,'original_request_metadata')||Object.hasOwn(e,'bundle_metadata');
+    exact(e,['schema_version','execution_id','original_job_id','job_id_mode','execution_state','run_version','lease_version','expires_at','source_context','source_keys','source_digest','output_slots','dispatch_receipt','terminal_receipt','storage_receipts','current_context','source_matches_current',...(recovery?['original_request_metadata','bundle_metadata']:[])]);
+    if(recovery&&(!same(e.original_request_metadata,request)||!same(e.bundle_metadata,work.bundle_metadata)))fail('legacy_recovery_metadata');
     uuid(e.execution_id);integer(e.original_job_id,1);integer(e.run_version,3);integer(e.lease_version,1);hex(e.source_digest);
     if(e.schema_version!==1||e.original_job_id>2147483647||e.execution_state!=='client_settled'||!['allocated','provisional'].includes(e.job_id_mode)
       ||typeof e.expires_at!=='string'||!Number.isFinite(Date.parse(e.expires_at))||typeof e.source_matches_current!=='boolean'||!Array.isArray(e.storage_receipts)
