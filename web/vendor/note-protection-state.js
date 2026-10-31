@@ -597,8 +597,8 @@
       return mutation && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
-      async prepareAnalysis(s,intent,execution,catalog,probeOnly=false) {
-        s=copy(s);validateScope(s);const i=copy(intent),e=copy(execution),c=copy(catalog),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
+      async prepareAnalysis(s,intent,execution,catalog,probeOnly=false,cachedPrepared=null) {
+        s=copy(s);validateScope(s);const i=copy(intent),e=copy(execution),c=copy(catalog),cached=copy(cachedPrepared),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
         const body=i.prepare;ensureScope(s,body);
         if(i.purpose!=='mixed_analysis_write'||body.schema_version!==3)fail('analysis_prepare_schema');
         fields(i,['purpose','prepare','transfers']);fields(body,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id','base','expected_catalog_digest','execution_ref','bundle_metadata']);
@@ -626,6 +626,18 @@
           ||!['prepared','uploading','committed','stale','aborted','expired'].includes(r.state))fail('analysis_operation_identity');
         Q.validateContext(r.latest_context);
         const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r,original_execution:original};
+        if(probeOnly===true){
+          if(!eq(r.metadata_header,A.initialWriteHeader(s,body,e))||!/^[0-9a-f]{64}$/.test(p.digest))fail('analysis_probe_metadata');
+          p.manifest=null;p.probe_only=true;
+          if(cached!==null){
+            if(cached.version!==3||cached.path!==path||cached.id!==p.id||cached.digest!==p.digest||!eq(cached.response.metadata_header,r.metadata_header)
+              ||!eq(cached.original_execution,original))fail('analysis_probe_metadata');
+            const verified=await A.validateInitialWriteManifest(s,i,e,c,{...r.metadata_header,...cached.manifest});
+            if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,r.counts))fail('analysis_manifest_metadata');
+            p.manifest=copy(cached.manifest);
+          }
+          return p;
+        }
         const m=p.manifest=await pages(s,p),verified=await A.validateInitialWriteManifest(s,i,e,c,{...r.metadata_header,...m});
         if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,r.counts))fail('analysis_manifest_metadata');
         return p;

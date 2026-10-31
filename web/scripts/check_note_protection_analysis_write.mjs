@@ -50,7 +50,7 @@ const transport=async(s,path,method,body)=>{
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
  if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
  if(path.endsWith('/prepare')){prepareCalls++;assert.ok(Q.canonicalJson(body)===Q.canonicalJson(expectedPrepare),'original prepare core changed');if(activePubJournal){const saved=Q.parseJson(await Q.decryptContent(activePubJournal.protectionOperations()[activePubId].cipher_bundle,'fixture-key'));assert.ok(Q.canonicalJson(saved.publication.plan.prepare)===Q.canonicalJson(body),'prepare before durable plan');}exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
- if(path.endsWith('/manifest')){assert.equal(body.operation_id,settled.execution_id);assert.equal(body.metadata_manifest_digest,verified.metadata_manifest_digest);return {schema_version:3,section:body.section,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:copy(header),set_digests:copy(verified.set_digests),counts:copy(verified.counts),entries:copy(manifest[body.section]),next_cursor:null};}
+ if(path.endsWith('/manifest')){if(['stale','aborted','committed','expired'].includes(operation.state))throw Object.assign(Error('terminal_manifest_denied'),{status:operation.state==='expired'?410:409,code:operation.state==='expired'?'operation_expired':'operation_not_active'});assert.equal(body.operation_id,settled.execution_id);assert.equal(body.metadata_manifest_digest,verified.metadata_manifest_digest);return {schema_version:3,section:body.section,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:copy(header),set_digests:copy(verified.set_digests),counts:copy(verified.counts),entries:copy(manifest[body.section]),next_cursor:null};}
  if(path.endsWith('/chunks')){
   const k=Q.canonicalJson(body.entry_key),entry=uploads.get(k)||{core:copy(body),chunks:[]};entry.chunks[body.chunk_index]=Buffer.from(body.data_base64,'base64');uploads.set(k,entry);
   return {chunk_index:body.chunk_index,source_etag:body.source_etag};
@@ -365,3 +365,12 @@ const missingPrevious=makePreviousController({...marker,phase:'analysis_write_pr
 const postsBeforeMissing=prepareCalls;await missingPrevious.beginReplan(id,'fixture-key',replanFromCurrent,{confirmed_reuse_original_result:true,target_epoch:2});assert.equal(prepareCalls,postsBeforeMissing);
 assert.equal((await missingPrevious.inspectReplan(id,'fixture-key')).plan.prepare.previous_write_state,'none');exists=true;operation.state=previousState;operation.receipt=previousReceipt;
 console.log('MA E3 prior write boundaries: active intent preserved/denied, exact missing status does not POST old prepare, none plan keeps prior archive PASS (synthetic journal only)');
+const beforeTerminalProbe=transportCalls.length;
+const headerOnly=await remote.prepareAnalysis(scope,waiting.publication.plan,settled,waiting.publication.catalog,true);
+assert.equal(headerOnly.probe_only,true);assert.equal(headerOnly.manifest,null);assert.deepEqual(transportCalls.slice(beforeTerminalProbe).map(c=>c.path.split('/').at(-1)),['status']);
+await assert.rejects(()=>A.buildInitialWriteWork(scope,request,settled,work,waiting.publication.plan,headerOnly,waiting.publication.catalog,'fixture-key'),/write_sources/);
+const badCached=copy(waiting.publication.prepared);badCached.manifest.S=[];
+await assert.rejects(()=>remote.prepareAnalysis(scope,waiting.publication.plan,settled,waiting.publication.catalog,true,badCached));
+const savedProbeHeader=copy(operation.metadata_header);operation.metadata_header.operation_origin.source_digest='f'.repeat(64);
+await assert.rejects(()=>remote.prepareAnalysis(scope,waiting.publication.plan,settled,waiting.publication.catalog,true),/analysis_probe_metadata/);operation.metadata_header=savedProbeHeader;
+console.log('MA terminal probe: server-equivalent manifest 409/410, status only without cache/not publication proof, durable cached manifest/header tamper denial PASS (synthetic only)');

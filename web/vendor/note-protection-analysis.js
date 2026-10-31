@@ -204,6 +204,14 @@
       previous_write_state:previous.state,target_epoch:confirmation.target_epoch,confirmed_reuse_original_result:true},
       original:{scope:originalScope,request,execution,work:terminalWork}};
   }
+  function initialWriteHeader(scope,body,execution) {
+    const epoch=body.base.base.crypto_epoch;
+    return {schema_version:3,purpose:'mixed_analysis_write',operation_id:execution.execution_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,actor_device_id:scope.device,mutation_id:body.mutation_id,
+      base:body.base,source_catalog_digest:body.expected_catalog_digest,target_epoch:epoch,revision_ref:null,parent_ref:null,server_fields:null,
+      control:{request_type:'initial',execution_ref:body.execution_ref,previous_write_id:null,previous_write_state:'none',target_epoch:epoch,confirmed_reuse_original_result:false},
+      operation_origin:{purpose:'mixed_analysis_write',operation_id:execution.execution_id,execution_id:execution.execution_id,request_type:'initial',source_context:execution.source_context,
+        source_digest:execution.source_digest,terminal_receipt_digest:body.execution_ref.terminal_receipt_digest,original_bundle_digest:body.execution_ref.original_bundle_digest,previous_write_id:null}};
+  }
   async function validateInitialWriteManifest(scope,plan,execution,catalog,manifest,active=()=>true) {
     scope=structuredClone(scope);plan=structuredClone(plan);execution=structuredClone(execution);catalog=structuredClone(catalog);manifest=structuredClone(manifest);
     const check=()=>{if(active()!==true)fail('scope_changed');};check();
@@ -229,11 +237,7 @@
     const expectation=d=>({destination_key:d.key,...pick(d,['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'])});
     const origins=[...catalog.entries.map(expectation),...outputs.map(d=>({destination_key:d.destination_key,is_null:d.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:execution.execution_id,semantic_origin_id:execution.execution_id}))];
     const O=Q().keyOrder(origins.map(o=>o.destination_key)).map(key=>origins.find(o=>same(o.destination_key,key)));
-    const expected={schema_version:3,purpose:plan.purpose,operation_id:execution.execution_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,actor_device_id:scope.device,mutation_id:body.mutation_id,
-      base:body.base,source_catalog_digest:body.expected_catalog_digest,target_epoch:epoch,revision_ref:null,parent_ref:null,server_fields:null,
-      control:{request_type:'initial',execution_ref:expectedRef,previous_write_id:null,previous_write_state:'none',target_epoch:epoch,confirmed_reuse_original_result:false},
-      operation_origin:{purpose:plan.purpose,operation_id:execution.execution_id,execution_id:execution.execution_id,request_type:'initial',source_context:execution.source_context,
-        source_digest:execution.source_digest,terminal_receipt_digest:expectedRef.terminal_receipt_digest,original_bundle_digest:expectedRef.original_bundle_digest,previous_write_id:null},
+    const expected={...initialWriteHeader(scope,body,execution),
       S:manifest.S,DSET:outputs,P:catalog.entries,O,existing:[],verified_existing:[]};
     if(!same(manifest,expected))fail('write_manifest');
     return manifestProof(manifest,active);
@@ -818,7 +822,7 @@
           if(b.publication!==null){
             const guarded=async(...args)=>{active(marker.scope,c,epoch);const result=await request(...args);active(marker.scope,c,epoch);return result;};
             const remote=P().createRemote({request:guarded}),p=b.publication;
-            const known=await remote.prepareAnalysis(marker.scope,p.plan,b.execution,p.catalog,true);active(marker.scope,c,epoch);
+            const known=await remote.prepareAnalysis(marker.scope,p.plan,b.execution,p.catalog,true,p.prepared);active(marker.scope,c,epoch);
             if(known!==null){
               const state=known.response.state;
               if(['stale','aborted','expired'].includes(state))previous={operation_id:known.id,state};
@@ -1022,5 +1026,5 @@
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,initialWriteHeader,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
