@@ -54,13 +54,13 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
-  if([14,15,16].includes(config.phase)){
+  if([14,15,16,17].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,A=NowNoteProtectionAnalysis,Q=NowNoteProtectionProtocol;
     const before=await noteProtectionReader.catalog(scope);let postSettle=0;
     const transport=async(s,path,method,body)=>{
       assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'terminal_transport_scope_changed');
-      if(method==='POST'&&path.endsWith('/settle')){postSettle++;assert(config.phase!==15,'terminal_restart_reposted');}
+      if(method==='POST'&&path.endsWith('/settle')){postSettle++;assert(![15,17].includes(config.phase),'terminal_restart_reposted');}
       const value=await request(path+(method==='GET'?'?'+new URLSearchParams(body):''),method,method==='POST'?body:undefined);
       if(config.phase===14&&method==='POST'&&path.endsWith('/settle')){
         emit({stage:'analysis_terminal_settle_response_deliberately_lost',owner:a.owner,local_id:target,operation_id:value.execution_id});throw Error('qa_terminal_settle_response_lost');
@@ -81,6 +81,20 @@
       emit({stage:'analysis_terminal_cold_TR_BM_verified',owner:a.owner,local_id:target,operation_id:archived.execution.execution_id,local_operation_id:id});
       execution.invalidate();button('lock').click();clearWebSession();
       return {ok:true,mode:config.mode,phase:15,originalCipherTerminalColdResume:true,TRBMpreserved:true,settlePostCalls:postSettle,providerCalls:0,currentCatalogUnchanged:true};
+    }
+    if(config.phase===17){
+      const markers=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&m.phase==='analysis_running');
+      assert(markers.length===1,'unavailable_cold_marker_missing');const id=markers[0].id;
+      const original=Q.parseJson(await Q.decryptContent(markers[0].cipher_bundle,password));
+      let rejected=false;try{await execution.reconcileUnavailable(id,'wrong-key');}catch{rejected=true;}assert(rejected,'unavailable_wrong_key_accepted');
+      const receipt=await execution.reconcileUnavailable(id,password);assert(receipt.outcome==='result_unavailable'&&execution.status(id).phase==='complete'&&postSettle===0,'unavailable_cold_receipt_missing');
+      const archived=Q.parseJson(await Q.decryptContent(execution.status(id).cipher_bundle,password));
+      for(const key of ['request','input','route','dispatch'])assert(Q.canonicalJson(archived[key])===Q.canonicalJson(original[key]),'unavailable_cold_original_changed');
+      assert(archived.terminal===null&&archived.execution.terminal_receipt.execution_id===original.execution.execution_id,'unavailable_cold_raw_reconstructed');
+      assert(Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'unavailable_cold_changed_note');
+      emit({stage:'analysis_unavailable_cold_receipt_verified',owner:a.owner,local_id:target,operation_id:receipt.execution_id,local_operation_id:id});
+      execution.invalidate();button('lock').click();clearWebSession();
+      return {ok:true,mode:config.mode,phase:17,unavailableColdCipherArchive:true,originalReceiptOnly:true,settlePostCalls:postSettle,providerCalls:0,currentCatalogUnchanged:true};
     }
     assert(typeof config.syntheticProviderUrl==='string','synthetic_provider_missing');
     const descriptor=before.entries.find(d=>d.key.kind==='note_body'&&d.key.id===String(before.context.selected_physical_note_id));

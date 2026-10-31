@@ -3693,6 +3693,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       const terminalPhases=['analysis_terminal','analysis_settling','analysis_settled'];
       if(['analysis_dispatching','analysis_running',...terminalPhases].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase!=='analysis_dispatching')))fail('bundle_phase');
       if(terminalPhases.includes(marker.phase)!==(b.terminal!==null))fail('bundle_phase');
+      if(marker.phase==='complete'&&(b.execution?.state!=='result_unavailable'||b.execution.terminal_receipt?.outcome!=='result_unavailable'||b.execution.bundle_metadata!==null))fail('bundle_phase');
       if(b.terminal!==null){
         exact(b.terminal,['work','settle_core','receipt']);
         const values=await openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
@@ -3809,6 +3810,18 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
           if(!same(readback.terminal.receipt,b.terminal.receipt))fail('terminal_checkpoint_readback');
           return structuredClone(b.terminal.receipt);
+        }finally{running=false;}
+      },
+      async reconcileUnavailable(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!['analysis_running','complete'].includes(marker.phase))fail('operation_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),observed=await fresh(marker.scope,b,c,epoch);
+          if(observed.state!=='result_unavailable'||observed.terminal_receipt?.outcome!=='result_unavailable'||observed.bundle_metadata!==null||observed.dispatch_receipt===null)fail('unavailable_receipt_missing');
+          b.execution=observed;marker.phase='complete';await save(marker,b,password,c,epoch);
+          const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
+          if(!same(readback.execution,observed))fail('terminal_checkpoint_readback');
+          return structuredClone(observed.terminal_receipt);
         }finally{running=false;}
       },
       async reportUnavailable(handoff,observation) {
