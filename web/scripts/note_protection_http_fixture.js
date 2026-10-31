@@ -36,6 +36,59 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;
+  if([40,41,42].includes(config.phase)){
+    await libraryStore.sync();
+    const find=()=>libraryStore.list('canvases').find(row=>row.payload.title==='HTTP-QA-CANVAS-REMOTE2-'+run);
+    async function waitCanvas(done,label){
+      for(let i=0;i<2000;i++){if(done()&&!canvasResourceBusy)return;await wait();}
+      throw Error('canvas_'+label+'_timeout_uncertain');
+    }
+    if(config.phase===42){
+      const original=find();assert(original,'canvas_original_missing_before_account_switch');
+      clearWebSession();await login(b);await libraryStore.sync();canvasResourceEditor=null;openCanvasView();
+      assert(libraryStore.list('canvases').length===0&&!elements.canvasResourceSelect.textContent.includes(run),'canvas_other_account_exposed');
+      clearWebSession();await login(a);await libraryStore.sync();
+      assert(find()?.id===original.id,'canvas_same_account_recovery_missing');
+      return {ok:true,mode:config.mode,phase:42,accountIsolation:true,sameAccountRecovery:true,providerCalls:0};
+    }
+    if(config.phase===41){
+      const row=find();assert(row&&!row.pending&&!row.conflict&&row.version===4,'canvas_cold_resource_missing');
+      openCanvasView();await selectCanvasResource(row.id);
+      assert(activeCanvas().cards.length===2&&activeCanvas().edges.length===1&&activeCanvas().cards.some(card=>card.noteId===target),'canvas_cold_graph_changed');
+      assert(JSON.stringify(libraryStore.export()).includes(row.id),'canvas_cold_local_cache_missing');
+      return {ok:true,mode:config.mode,phase:41,mapId:row.id,coldServerMap:true,graphPreserved:true,providerCalls:0};
+    }
+    state.data.tree=[{id:target,title:'HTTP QA target',content:plain,children:[],level:1,status:'active'}];
+    state.selectedTreeId=target;canvasResourceEditor=null;openCanvasView();
+    elements.canvasAddNoteBtn.click();elements.canvasAddTextBtn.click();
+    state.selectedCanvasCardIds=activeCanvas().cards.map(card=>card.id);elements.canvasConnectBtn.click();
+    elements.canvasTitleInput.value='HTTP-QA-CANVAS-'+run;elements.canvasTitleInput.dispatchEvent(new Event('input'));
+    elements.canvasSaveBtn.click();
+    await waitCanvas(()=>libraryStore.list('canvases').some(row=>row.version===1&&!row.pending),'save');
+    const id=canvasResourceEditor.id;
+    const resource=()=>libraryStore.list('canvases').find(row=>row.id===id);
+    async function peer(version,title){
+      return request('/api/v1/canvases/'+id,'PUT',{owner_id:a.owner,schema_version:1,base_version:version,mutation_id:crypto.randomUUID(),payload:{...resource().payload,title}});
+    }
+    await peer(1,'HTTP-QA-CANVAS-REMOTE1-'+run);
+    elements.canvasTitleInput.value='HTTP-QA-CANVAS-LOCAL1-'+run;elements.canvasTitleInput.dispatchEvent(new Event('input'));
+    elements.canvasSaveBtn.click();await waitCanvas(()=>Boolean(resource()?.conflict),'local_conflict');
+    assert(!elements.canvasConflict.hidden&&elements.canvasBoard.inert,'canvas_conflict_not_frozen');
+    elements.canvasChooseLocalBtn.click();await waitCanvas(()=>resource()?.version===3&&!resource().pending&&!resource().conflict,'local_choice');
+    assert(resource().payload.title==='HTTP-QA-CANVAS-LOCAL1-'+run,'canvas_local_choice_changed');
+    await peer(3,'HTTP-QA-CANVAS-REMOTE2-'+run);
+    elements.canvasTitleInput.value='HTTP-QA-CANVAS-LOCAL2-'+run;elements.canvasTitleInput.dispatchEvent(new Event('input'));
+    elements.canvasSaveBtn.click();await waitCanvas(()=>Boolean(resource()?.conflict),'remote_conflict');
+    globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'canvas_ready',owner:a.owner,local_id:target});
+    for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));
+    assert(globalThis.__HTTP_CAPTURE_DONE__===true,'canvas_capture_failed');
+    elements.canvasChooseRemoteBtn.click();await waitCanvas(()=>resource()?.version===4&&!resource().pending&&!resource().conflict,'remote_choice');
+    assert(activeCanvas().title==='HTTP-QA-CANVAS-REMOTE2-'+run,'canvas_remote_choice_changed');
+    await settle();
+    const note=await request('/api/v2/notes/current?'+new URLSearchParams({owner_id:a.owner,local_id:target,device_id:a.device}));
+    assert(note.snapshot.note.content===plain,'canvas_changed_source_note');
+    return {ok:true,mode:config.mode,phase:40,mapId:id,actualHttpSave:true,localChoice:true,remoteChoice:true,sourcePreserved:true,providerCalls:0};
+  }
   const query=(local,extra={})=>new URLSearchParams({owner_id:a.owner,local_id:local,device_id:a.device,...extra});
   async function identity(){return request('/api/v2/notes/crypto-transitions/status?'+query(target));}
   const dialog=()=>document.querySelector('#noteProtectionDialog'),button=name=>dialog().querySelector('[data-action="'+name+'"]'),status=()=>dialog().querySelector('.protection-status').textContent;

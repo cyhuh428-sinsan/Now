@@ -81,6 +81,16 @@ app.whenReady().then(async()=>{
       if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
         blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
       }
+      if(event.stage==='canvas_ready')void(async()=>{
+        for(const [size,width,height]of [['desktop',1280,900],['mobile',390,844]]){
+          window.setContentSize(width,height);
+          await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          const name='canvas-'+config.run+'-'+config.mode+'-'+size+'.png';
+          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
+          persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
+        }
+        window.setContentSize(1280,900);await window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=true');
+      })().catch(()=>{persistEvidence({mode:config.mode,phase:config.phase,captureFailure:'canvas_capture_failed'});void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_ERROR__="capture_failed"');});
       if(['backup_restore_ready','analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready','transcript_ready','analysis_apply_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
           persistEvidence({mode:config.mode,phase:config.phase,captureStage:size+'_start'});
@@ -100,6 +110,10 @@ app.whenReady().then(async()=>{
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
+    if([40,41,42].includes(config.phase)){
+      if(providerAttempts!==0)throw Error('canvas_provider_attempt');
+      persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:0,closed:true}});
+    }
     if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
     if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
