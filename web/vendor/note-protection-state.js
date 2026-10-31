@@ -132,6 +132,44 @@
     walk(value,[],kind,null);
     return found;
   }
+  function validateBackupImport(current,incoming) {
+    const required=new Map(),available=new Set(),previousMarkers=new Map(),incomingMarkers=new Map();
+    function collect(value,scopes,restoring) {
+      if (!record(value) && !Array.isArray(value)) return;
+      if (protectedRecord(value)) scopes.set(scopeKey(value.protection_record.scope),copy(value.protection_record.scope));
+      if (Object.hasOwn(value,'protection_operations') && !record(value.protection_operations)) fail('backup_marker_map');
+      if (record(value.protection_operations)) {
+        for (const [id,marker] of Object.entries(value.protection_operations)) {
+          validateMarker(marker);
+          if (id!==marker.id || marker.phase!=='complete') fail('backup_unsettled');
+          const markers=restoring?incomingMarkers:previousMarkers;
+          if (markers.has(id) && protocol().canonicalJson(markers.get(id))!==protocol().canonicalJson(marker)) fail('backup_operation_changed');
+          markers.set(id,copy(marker));
+        }
+      }
+      for (const [name,child] of Object.entries(value)) {
+        if (!['protection_record','protectionScope','protection_operations'].includes(name)) collect(child,scopes,restoring);
+      }
+    }
+    collect(current,required,false);
+    const restored=new Map();collect(incoming,restored,true);
+    for (const key of restored.keys()) available.add(key);
+    const recordScopes=new Set(required.keys());
+    for (const [id,marker] of previousMarkers) {
+      const imported=incomingMarkers.get(id),key=scopeKey(marker.scope);
+      if (imported && protocol().canonicalJson(imported)!==protocol().canonicalJson(marker)) fail('backup_operation_changed');
+      if (!recordScopes.has(key)) {
+        required.set(key,copy(marker.scope));
+        if (imported) available.add(key);
+      }
+    }
+    for (const [key,scope] of required) {
+      if (!available.has(key)) fail('backup_protected_missing');
+      const unverified=[];
+      if (inventory(incoming,'data',scope,{unverified}).length || unverified.length) fail('backup_plaintext_protected');
+    }
+    return true;
+  }
   const at = (value,path) => path.reduce((v,k) => v?.[k],value);
   function put(value,path,next) {
     if (!path.length) return copy(next);
@@ -1096,5 +1134,5 @@
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateBackupImport,validateScope,validateMarker,protectedRecord,scopeKey });
 })();

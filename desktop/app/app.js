@@ -963,11 +963,12 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
-    const readable = () => data?.schema_version === 1 && record(data.contexts)
-      && Object.values(data.contexts).every(c => record(c) && record(c.notes)
+    const readable = (value=data) => value?.schema_version === 1 && record(value.contexts)
+      && (!Object.hasOwn(value,'protection_operations') || record(value.protection_operations))
+      && Object.entries(value.contexts).every(([account,c]) => record(c) && record(c.notes)
         && (!c.legacy_pending || (typeof c.legacy_pending.id === 'string' && record(c.legacy_pending.body) && Array.isArray(c.legacy_pending.body.notes)))
-        && Object.values(c.notes).every(item =>
-        protectedItem(item) || (record(item) && record(item.raw) && record(item.draft) && record(item.base)
+        && Object.entries(c.notes).every(([local,item]) =>
+        protectedItem(item) ? (key(item.protection_record.scope)===account && item.protection_record.scope.local_id===local) : (record(item) && record(item.raw) && record(item.draft) && record(item.base)
         && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
         && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
         && Array.isArray(item.outbox) && item.outbox.every(op => record(op) && record(op.body)) && Array.isArray(item.receipts))));
@@ -1228,8 +1229,15 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       await edit(snapshot.note);
       await seal(id, 'restore');
     }
+    function validateImport(value) {
+      if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
+      requireWritable();
+      if (!readable(value)) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+      globalThis.NowNoteProtectionState?.validateBackupImport({history:data},{history:value});
+      return true;
+    }
     return {
-      track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline, validateImport,
       blocked,
       protectionOperations: () => copy(data?.protection_operations || {}),
       async saveProtection(marker, guard = null) {
@@ -1291,16 +1299,20 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       hydrate(value) { if (!context().enabled) throw new Error('본인 계정으로 다시 인증하세요.'); generation++; data = value == null ? { schema_version: 1, contexts: {} } : copy(value); },
       async localOnly(id, value) { writableNote(id); requireWritable(); const item = entry(id); if (item && item.localOnly !== value) { item.localOnly = value; await save(); } },
       async import(value) {
-        if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
-        requireWritable(); generation++;
-        if (!value || value.schema_version !== 1 || !value.contexts) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+        validateImport(value);
         const previous = copy(data), next = copy(value);
+        if (previous.protection_operations || next.protection_operations) {
+          next.protection_operations={...(previous.protection_operations || {}),...(next.protection_operations || {})};
+        }
         next.recovery_archives = [...(previous.recovery_archives || []), ...(next.recovery_archives || []),
           { restored_at: new Date().toISOString(), contexts: previous.contexts }];
         for (const c of Object.values(next.contexts)) for (const item of Object.values(c.notes || {})) {
           if (item.outbox?.length && !item.conflict) item.conflict = { code: 'backup_restored', local: copy(item.draft), remote: null };
         }
-        data = next; await save();
+        globalThis.NowNoteProtectionState?.validateBackupImport({history:previous},{history:next});
+        generation++;data = next;
+        try {await save(true);}
+        catch(error) {if(data===next){data=previous;generation++;}throw error;}
       },
       async selectReplica(id, current) {
         writableNote(id);
@@ -2096,6 +2108,44 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     }
     walk(value,[],kind,null);
     return found;
+  }
+  function validateBackupImport(current,incoming) {
+    const required=new Map(),available=new Set(),previousMarkers=new Map(),incomingMarkers=new Map();
+    function collect(value,scopes,restoring) {
+      if (!record(value) && !Array.isArray(value)) return;
+      if (protectedRecord(value)) scopes.set(scopeKey(value.protection_record.scope),copy(value.protection_record.scope));
+      if (Object.hasOwn(value,'protection_operations') && !record(value.protection_operations)) fail('backup_marker_map');
+      if (record(value.protection_operations)) {
+        for (const [id,marker] of Object.entries(value.protection_operations)) {
+          validateMarker(marker);
+          if (id!==marker.id || marker.phase!=='complete') fail('backup_unsettled');
+          const markers=restoring?incomingMarkers:previousMarkers;
+          if (markers.has(id) && protocol().canonicalJson(markers.get(id))!==protocol().canonicalJson(marker)) fail('backup_operation_changed');
+          markers.set(id,copy(marker));
+        }
+      }
+      for (const [name,child] of Object.entries(value)) {
+        if (!['protection_record','protectionScope','protection_operations'].includes(name)) collect(child,scopes,restoring);
+      }
+    }
+    collect(current,required,false);
+    const restored=new Map();collect(incoming,restored,true);
+    for (const key of restored.keys()) available.add(key);
+    const recordScopes=new Set(required.keys());
+    for (const [id,marker] of previousMarkers) {
+      const imported=incomingMarkers.get(id),key=scopeKey(marker.scope);
+      if (imported && protocol().canonicalJson(imported)!==protocol().canonicalJson(marker)) fail('backup_operation_changed');
+      if (!recordScopes.has(key)) {
+        required.set(key,copy(marker.scope));
+        if (imported) available.add(key);
+      }
+    }
+    for (const [key,scope] of required) {
+      if (!available.has(key)) fail('backup_protected_missing');
+      const unverified=[];
+      if (inventory(incoming,'data',scope,{unverified}).length || unverified.length) fail('backup_plaintext_protected');
+    }
+    return true;
   }
   const at = (value,path) => path.reduce((v,k) => v?.[k],value);
   function put(value,path,next) {
@@ -3061,7 +3111,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateBackupImport,validateScope,validateMarker,protectedRecord,scopeKey });
 })();
 
 ;
@@ -24253,6 +24303,18 @@ function downloadText(filename, content, type) {
   }
 }
 
+async function validateProtectedBackupImport(parsed) {
+  requireProtectionSettled();
+  const guard=protectionActionGuard(),current=[];
+  await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
+  for (const store of protectionStorageAdapters()) {
+    current.push({[store.kind]:await store.read()});guard();
+  }
+  NowNoteProtectionState.validateBackupImport(current,parsed);
+  if (Object.hasOwn(parsed,"history")) noteHistory.validateImport(parsed.history);
+  guard();
+}
+
 function importData(event) {
   requireProtectionSettled();
   const file = event.target.files?.[0];
@@ -24266,6 +24328,8 @@ function importData(event) {
         showNotice(t("note.backupImportError"), "error");
         return;
       }
+      const importGuard=protectionActionGuard();
+      await validateProtectedBackupImport(parsed);importGuard();
       const summary = backupSummary(imported.data);
       if (!(await confirmAction(t("note.backupReplaceConfirm", {
         file: file.name,
@@ -24278,12 +24342,15 @@ function importData(event) {
       })))) {
         return;
       }
+      importGuard();await validateProtectedBackupImport(parsed);importGuard();
       createRecoverySnapshot("before-json-import");
       const preservedSnapshots = state.data.snapshots;
       const preservedReports = state.data.importReports;
       downloadCurrentBackup("nownote-before-import");
       if (Object.hasOwn(parsed, "history")) { noteHistoryCaptureEpoch++; await noteHistory.import(parsed.history); }
+      importGuard();
       if (Object.hasOwn(parsed, "library")) await libraryStore.import(parsed.library, { restore: true });
+      importGuard();
       state.data = backupDataShape(imported.data);
       state.data.snapshots = preservedSnapshots;
       state.data.importReports = preservedReports;
@@ -24298,8 +24365,9 @@ function importData(event) {
       persist();
       render();
       showNotice(t("note.importDone"), "success");
-    } catch {
-      showNotice(t("note.importReadError"), "error");
+    } catch (error) {
+      const protectedBackup=String(error?.message || "").startsWith("note_protection:backup_");
+      showNotice(protectedBackup ? "보호된 메모·이력을 평문 백업으로 교체할 수 없습니다. 기존 자료를 보존했습니다. 보호된 백업이나 명시적 편집·분기 가져오기를 사용하세요." : t("note.importReadError"), "error");
     } finally {
       event.target.value = "";
     }

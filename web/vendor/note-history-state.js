@@ -13,11 +13,12 @@
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
-    const readable = () => data?.schema_version === 1 && record(data.contexts)
-      && Object.values(data.contexts).every(c => record(c) && record(c.notes)
+    const readable = (value=data) => value?.schema_version === 1 && record(value.contexts)
+      && (!Object.hasOwn(value,'protection_operations') || record(value.protection_operations))
+      && Object.entries(value.contexts).every(([account,c]) => record(c) && record(c.notes)
         && (!c.legacy_pending || (typeof c.legacy_pending.id === 'string' && record(c.legacy_pending.body) && Array.isArray(c.legacy_pending.body.notes)))
-        && Object.values(c.notes).every(item =>
-        protectedItem(item) || (record(item) && record(item.raw) && record(item.draft) && record(item.base)
+        && Object.entries(c.notes).every(([local,item]) =>
+        protectedItem(item) ? (key(item.protection_record.scope)===account && item.protection_record.scope.local_id===local) : (record(item) && record(item.raw) && record(item.draft) && record(item.base)
         && Array.isArray(item.base.inventory_revision_ids) && Array.isArray(item.revisions)
         && item.revisions.every(r => record(r) && record(r.snapshot) && record(r.snapshot.note))
         && Array.isArray(item.outbox) && item.outbox.every(op => record(op) && record(op.body)) && Array.isArray(item.receipts))));
@@ -278,8 +279,15 @@
       await edit(snapshot.note);
       await seal(id, 'restore');
     }
+    function validateImport(value) {
+      if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
+      requireWritable();
+      if (!readable(value)) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+      globalThis.NowNoteProtectionState?.validateBackupImport({history:data},{history:value});
+      return true;
+    }
     return {
-      track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
+      track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline, validateImport,
       blocked,
       protectionOperations: () => copy(data?.protection_operations || {}),
       async saveProtection(marker, guard = null) {
@@ -341,16 +349,20 @@
       hydrate(value) { if (!context().enabled) throw new Error('본인 계정으로 다시 인증하세요.'); generation++; data = value == null ? { schema_version: 1, contexts: {} } : copy(value); },
       async localOnly(id, value) { writableNote(id); requireWritable(); const item = entry(id); if (item && item.localOnly !== value) { item.localOnly = value; await save(); } },
       async import(value) {
-        if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
-        requireWritable(); generation++;
-        if (!value || value.schema_version !== 1 || !value.contexts) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+        validateImport(value);
         const previous = copy(data), next = copy(value);
+        if (previous.protection_operations || next.protection_operations) {
+          next.protection_operations={...(previous.protection_operations || {}),...(next.protection_operations || {})};
+        }
         next.recovery_archives = [...(previous.recovery_archives || []), ...(next.recovery_archives || []),
           { restored_at: new Date().toISOString(), contexts: previous.contexts }];
         for (const c of Object.values(next.contexts)) for (const item of Object.values(c.notes || {})) {
           if (item.outbox?.length && !item.conflict) item.conflict = { code: 'backup_restored', local: copy(item.draft), remote: null };
         }
-        data = next; await save();
+        globalThis.NowNoteProtectionState?.validateBackupImport({history:previous},{history:next});
+        generation++;data = next;
+        try {await save(true);}
+        catch(error) {if(data===next){data=previous;generation++;}throw error;}
       },
       async selectReplica(id, current) {
         writableNote(id);
