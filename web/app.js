@@ -1972,7 +1972,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   const record = v => v !== null && typeof v === 'object' && !Array.isArray(v);
   const fail = code => { throw new Error('note_protection:' + code); };
   const protocol = () => globalThis.NowNoteProtectionProtocol;
-  const phases = ['drain_pending','draining','preparing','promoted','bundled','prepared','committing','server_committed','applying','complete','analysis_claiming','analysis_claimed','analysis_dispatching','analysis_running','analysis_terminal','analysis_settling','analysis_settled'];
+  const phases = ['drain_pending','draining','preparing','promoted','bundled','prepared','committing','server_committed','applying','complete','analysis_claiming','analysis_claimed','analysis_dispatching','analysis_running','analysis_terminal','analysis_settling','analysis_settled','analysis_write_preparing','analysis_write_prepared','analysis_write_staged','analysis_write_committing','analysis_write_committed'];
   const fields = (v, names) => { if (!record(v) || Object.keys(v).length !== names.length || names.some(k => !Object.hasOwn(v,k))) fail('marker_fields'); };
   function scopeKey(s) { return json([s.url.replace(/\/+$/, ''), s.owner, s.instance, s.local_id]); }
   function validateScope(s) {
@@ -3805,6 +3805,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
+    const publicationPhases=['analysis_write_preparing','analysis_write_prepared','analysis_write_staged','analysis_write_committing','analysis_write_committed'];
     const tickets=new WeakMap();
     let generation=0,running=false;
     const own=scope=>{
@@ -3849,9 +3850,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     async function open(marker,password,c,epoch) {
       if(!password)fail('key_required');
       const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
-      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[])]);
+      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[]),...(Object.hasOwn(b,'publication')?['publication']:[])]);
       b.dispatch??=null;
       b.terminal??=null;
+      b.publication??=null;
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
@@ -3863,10 +3865,11 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           ||d.source_digest!==b.execution.source_digest||d.claim_metadata_digest!==b.execution.claim_metadata_digest||typeof b.dispatch.handoff_reserved!=='boolean')fail('dispatch_binding');
         integer(d.lease_version,1);
       }
-      const terminalPhases=['analysis_terminal','analysis_settling','analysis_settled'];
+      const published=marker.phase==='complete'&&b.publication!==null;
+      const terminalPhases=['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,...(published?['complete']:[])];
       if(['analysis_dispatching','analysis_running',...terminalPhases].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase!=='analysis_dispatching')))fail('bundle_phase');
       if(terminalPhases.includes(marker.phase)!==(b.terminal!==null))fail('bundle_phase');
-      if(marker.phase==='complete'&&(b.execution?.state!=='result_unavailable'||b.execution.terminal_receipt?.outcome!=='result_unavailable'||b.execution.bundle_metadata!==null))fail('bundle_phase');
+      if(marker.phase==='complete'&&!published&&(b.execution?.state!=='result_unavailable'||b.execution.terminal_receipt?.outcome!=='result_unavailable'||b.execution.bundle_metadata!==null))fail('bundle_phase');
       if(b.terminal!==null){
         exact(b.terminal,['work','settle_core','receipt']);
         const values=await openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
@@ -3875,8 +3878,32 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const previous={...b.execution,run_version:b.execution.run_version-(b.execution.terminal_receipt===null?0:1)};
           if(!same(b.terminal.settle_core,terminalCore(marker.scope,previous,b.terminal.work.bundle_metadata)))fail('terminal_core_changed');
         }
-        if((marker.phase==='analysis_terminal')!==(b.terminal.settle_core===null)||(marker.phase==='analysis_settled')!==(b.terminal.receipt!==null))fail('bundle_phase');
+        if((marker.phase==='analysis_terminal')!==(b.terminal.settle_core===null)||(['analysis_settled',...publicationPhases].includes(marker.phase)||published)!==(b.terminal.receipt!==null))fail('bundle_phase');
         if(b.terminal.receipt!==null&&(!same(b.terminal.receipt,b.execution.terminal_receipt)||!same(b.execution.bundle_metadata,b.terminal.work.bundle_metadata)))fail('terminal_receipt_changed');
+      }
+      if((publicationPhases.includes(marker.phase)||published)!==(b.publication!==null))fail('publication_phase');
+      if(b.publication!==null){
+        const p=b.publication;exact(p,['catalog','plan','prepared','work','receipt','proof']);
+        const original=await createInitialWritePlan(marker.scope,b.request,b.execution,b.terminal.work,p.catalog,p.plan.prepare.mutation_id,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+        if(!same(original,p.plan))fail('publication_plan_changed');
+        if(marker.phase==='analysis_write_preparing'?(p.prepared!==null||p.work!==null):(p.prepared===null||p.work===null))fail('publication_phase');
+        if(p.prepared!==null){
+          const work=await buildInitialWriteWork(marker.scope,b.request,b.execution,b.terminal.work,p.plan,p.prepared,p.catalog,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+          if(!same(work,p.work))fail('publication_work_changed');
+          const originalExecution={reference:p.plan.prepare.execution_ref,source_schema_version:3,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.execution.bundle_metadata};
+          if(!same(p.prepared.original_execution,originalExecution))fail('publication_execution_changed');
+        }
+        if((marker.phase==='analysis_write_committed'||published)!==(p.receipt!==null)||(published)!==(p.proof!==null))fail('publication_phase');
+        if(p.receipt!==null){
+          const expected=structuredClone(p.plan.prepare.base);expected.base.history_generation++;
+          if(p.receipt.schema_version!==3||p.receipt.purpose!=='mixed_analysis_write'||p.receipt.operation_id!==b.execution.execution_id||p.receipt.mutation_id!==p.plan.prepare.mutation_id
+            ||p.receipt.owner_id!==marker.scope.owner||p.receipt.local_id!==marker.scope.local_id||p.receipt.server_instance_id!==marker.scope.instance
+            ||p.receipt.metadata_manifest_digest!==p.prepared.digest||p.receipt.ciphertext_manifest_digest!==p.work.commit.client_verified_ciphertext_manifest_digest||!same(p.receipt.result,expected))fail('publication_receipt_changed');
+        }
+        if(p.proof!==null){
+          exact(p.proof,['operation_id','metadata_manifest_digest','published_catalog_digest','output_keys']);hex(p.proof.published_catalog_digest);
+          if(p.proof.operation_id!==b.execution.execution_id||p.proof.metadata_manifest_digest!==p.prepared.digest||!same(p.proof.output_keys,p.prepared.manifest.DSET.map(d=>d.destination_key)))fail('publication_proof_changed');
+        }
       }
       return b;
     }
@@ -3897,8 +3924,9 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
       async readTerminal(id,password) {
         const marker=status(id),c=own(marker.scope),epoch=generation;
-        if(!['analysis_terminal','analysis_settling','analysis_settled'].includes(marker.phase))fail('terminal_checkpoint_missing');
+        if(!['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,'complete'].includes(marker.phase))fail('terminal_checkpoint_missing');
         const b=await open(marker,password,c,epoch);
+        if(b.terminal===null)fail('terminal_checkpoint_missing');
         return openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
       },
       async start(scope,claim,input,route,password) {
@@ -4012,6 +4040,60 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
           if(!same(readback.terminal.receipt,b.terminal.receipt))fail('terminal_checkpoint_readback');
           return structuredClone(b.terminal.receipt);
+        }finally{running=false;}
+      },
+      async beginPublication(id,password,catalog) {
+        catalog=structuredClone(catalog);const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(marker.phase!=='analysis_settled')fail('publication_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch);
+          const plan=await createInitialWritePlan(marker.scope,b.request,b.execution,b.terminal.work,catalog,crypto.randomUUID(),password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+          b.publication={catalog,plan,prepared:null,work:null,receipt:null,proof:null};marker.phase='analysis_write_preparing';await save(marker,b,password,c,epoch);
+          await open(status(id),password,c,epoch);active(marker.scope,c,epoch);return id;
+        }finally{running=false;}
+      },
+      async resumePublication(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(![...publicationPhases,'complete'].includes(marker.phase))fail('publication_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),p=b.publication;if(p===null)fail('publication_missing');
+          if(marker.phase==='complete')return structuredClone(p.receipt);
+          const guarded=async(...args)=>{active(marker.scope,c,epoch);const value=await request(...args);active(marker.scope,c,epoch);return value;};
+          const remote=P().createRemote({request:guarded}),reader=globalThis.NowNoteProtectionClient.createReader({request:guarded});
+          const persist=()=>save(marker,b,password,c,epoch),accept=async r=>{
+            if(r.state!=='committed'||r.receipt_matches_current!==true||r.receipt?.operation_id!==p.prepared.id)fail('publication_commit_unconfirmed');
+            p.receipt=structuredClone(r.receipt);marker.phase='analysis_write_committed';await persist();
+          };
+          if(marker.phase==='analysis_write_preparing'){
+            p.prepared=await remote.prepareAnalysis(marker.scope,p.plan,b.execution,p.catalog);active(marker.scope,c,epoch);
+            p.work=await buildInitialWriteWork(marker.scope,b.request,b.execution,b.terminal.work,p.plan,p.prepared,p.catalog,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+            marker.phase='analysis_write_prepared';await persist();
+          }
+          if(marker.phase==='analysis_write_prepared'){
+            const r=await remote.status(marker.scope,p.prepared,p.work);active(marker.scope,c,epoch);
+            if(r.state==='committed')await accept(r);
+            else{
+              if(!['prepared','uploading','ready'].includes(r.state)||r.lease_version!==p.work.commit.lease_version)fail('publication_remote_not_committable');
+              await remote.stage(marker.scope,p.prepared,p.work,password);active(marker.scope,c,epoch);marker.phase='analysis_write_staged';await persist();
+            }
+          }
+          if(marker.phase==='analysis_write_staged'){marker.phase='analysis_write_committing';await persist();}
+          if(marker.phase==='analysis_write_committing'){
+            let r=await remote.status(marker.scope,p.prepared,p.work);active(marker.scope,c,epoch);
+            if(r.state!=='committed'){
+              if(!['prepared','uploading','ready'].includes(r.state)||r.lease_version!==p.work.commit.lease_version)fail('publication_remote_not_committable');
+              r=await remote.commit(marker.scope,p.prepared,p.work);active(marker.scope,c,epoch);
+            }
+            await accept(r);
+          }
+          if(marker.phase==='analysis_write_committed'){
+            const r=await remote.status(marker.scope,p.prepared,p.work);active(marker.scope,c,epoch);
+            if(r.state!=='committed'||r.receipt_matches_current!==true||!same(r.receipt,p.receipt))fail('publication_receipt_changed');
+            p.proof=await verifyInitialPublication(marker.scope,b.request,b.execution,b.terminal.work,p.plan,p.prepared,p.receipt,reader,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+            marker.phase='complete';await persist();
+          }
+          const checked=await open(status(id),password,c,epoch);active(marker.scope,c,epoch);
+          if(marker.phase!=='complete'||!same(checked.publication.receipt,p.receipt))fail('publication_checkpoint_readback');return structuredClone(p.receipt);
         }finally{running=false;}
       },
       async reconcileUnavailable(id,password) {

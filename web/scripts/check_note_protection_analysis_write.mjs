@@ -4,6 +4,7 @@ import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 const box={crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa};
 for(const name of ['protocol','state','client','analysis'])vm.runInNewContext(await readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
+vm.runInNewContext(await readFile(new URL('../vendor/note-history-state.js',import.meta.url),'utf8'),box);
 const Q=box.NowNoteProtectionProtocol,A=box.NowNoteProtectionAnalysis,copy=structuredClone,uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'one',instance:uid(1),device:'first'};
 const context={base:{head_version:0,head_revision_id:null,crypto_epoch:1,history_generation:1,protection_state:'protected',inventory_revision_ids:[],identity_state:'related_only',current_exists:false},current_mode:'absent',selected_physical_note_id:null,mixed_metadata_version:1};
@@ -44,11 +45,11 @@ console.log('MA initial plan/manifest: original settled TR/BM/C bytes/nulls, exa
 const names=['S','DSET','P','O','existing','verified_existing'],header=Object.fromEntries(Object.entries(manifest).filter(([k])=>!names.includes(k)));
 const operation={schema_version:3,purpose:plan.purpose,operation_id:settled.execution_id,mutation_id:uid(99),state:'prepared',lease_version:1,expires_at:running.expires_at,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:header,counts:verified.counts,receipt:null,latest_context:context};
 const originalExecution={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:settled.source_context,terminal_receipt:settled.terminal_receipt,bundle_metadata:settled.bundle_metadata};
-let prepareCalls=0,exists=false,losePrepare=true,commitCalls=0,loseCommit=true,publishedRows=[],resultContext=null,publishedCounts=null,wrongTypedOrigin=false;const transportCalls=[],uploads=new Map();
+let prepareCalls=0,exists=false,losePrepare=true,commitCalls=0,loseCommit=true,publishedRows=[],resultContext=null,publishedCounts=null,wrongTypedOrigin=false,expectedPrepare=plan.prepare,activePubJournal=null,activePubId=null;const transportCalls=[],uploads=new Map();
 const transport=async(s,path,method,body)=>{
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
  if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
- if(path.endsWith('/prepare')){prepareCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(plan.prepare));exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
+ if(path.endsWith('/prepare')){prepareCalls++;assert.ok(Q.canonicalJson(body)===Q.canonicalJson(expectedPrepare),'original prepare core changed');if(activePubJournal){const saved=Q.parseJson(await Q.decryptContent(activePubJournal.protectionOperations()[activePubId].cipher_bundle,'fixture-key'));assert.ok(Q.canonicalJson(saved.publication.plan.prepare)===Q.canonicalJson(body),'prepare before durable plan');}exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
  if(path.endsWith('/manifest')){assert.equal(body.operation_id,settled.execution_id);assert.equal(body.metadata_manifest_digest,verified.metadata_manifest_digest);return {schema_version:3,section:body.section,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:copy(header),set_digests:copy(verified.set_digests),counts:copy(verified.counts),entries:copy(manifest[body.section]),next_cursor:null};}
  if(path.endsWith('/chunks')){
   const k=Q.canonicalJson(body.entry_key),entry=uploads.get(k)||{core:copy(body),chunks:[]};entry.chunks[body.chunk_index]=Buffer.from(body.data_base64,'base64');uploads.set(k,entry);
@@ -63,8 +64,9 @@ const transport=async(s,path,method,body)=>{
   return {chunk_index:body.chunk_index,total_chunks:entry.core.total_chunks,total_bytes:entry.raw.length,ciphertext_sha256:entry.hash,source_etag:entry.core.source_etag,data_base64:entry.chunks[body.chunk_index].toString('base64')};
  }
  if(path.endsWith('/commit')){
-  commitCalls++;assert.ok(Q.canonicalJson(body)===Q.canonicalJson(publicationWork.commit),'original commit core changed');operation.state='committed';operation.latest_context=copy(resultContext);
-  operation.receipt={schema_version:3,purpose:plan.purpose,operation_id:prepared.id,mutation_id:uid(99),server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,result:copy(resultContext),metadata_manifest_digest:prepared.digest,set_digests:copy(verified.set_digests),ciphertext_manifest_digest:publicationWork.commit.client_verified_ciphertext_manifest_digest,origin_expectations_digest:await Q.hashJson(manifest.O),committed_at:'2026-10-31T01:00:00.000000Z'};
+  const durable=activePubJournal?Q.parseJson(await Q.decryptContent(activePubJournal.protectionOperations()[activePubId].cipher_bundle,'fixture-key')).publication.work.commit:publicationWork.commit;
+  commitCalls++;assert.ok(Q.canonicalJson(body)===Q.canonicalJson(durable),'original durable commit core changed');operation.state='committed';operation.latest_context=copy(resultContext);
+  operation.receipt={schema_version:3,purpose:plan.purpose,operation_id:body.operation_id,mutation_id:body.mutation_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,result:copy(resultContext),metadata_manifest_digest:body.metadata_manifest_digest,set_digests:copy(verified.set_digests),ciphertext_manifest_digest:body.client_verified_ciphertext_manifest_digest,origin_expectations_digest:await Q.hashJson(manifest.O),committed_at:'2026-10-31T01:00:00.000000Z'};
   if(loseCommit){loseCommit=false;throw Error('fixture_commit_response_lost');}return copy(operation);
  }
  if(path.endsWith('/mixed-representations/context'))return {schema_version:3,server_instance_id:scope.instance,context:copy(resultContext),counts:copy(publishedCounts),coverage:{supported_kinds:verified.counts.P.by_kind.map(r=>r.kind),scope_complete:true,full_protection_complete:false},catalog_digest:await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:resultContext,entries:publishedRows})};
@@ -115,3 +117,39 @@ const typedProof=await A.verifyInitialPublication(scope,request,settled,work,pla
 assert.equal(typedProof.operation_id,settled.execution_id);
 wrongTypedOrigin=true;await assert.rejects(()=>A.verifyInitialPublication(scope,request,settled,work,plan,prepared,directCommit.receipt,reader,'fixture-key'),/published_origin/);wrongTypedOrigin=false;
 console.log('MA typed publication: real cipher/key/meaning and null readback, exact original source provenance, preserved P/current and forged-source denial PASS (synthetic transport only)');
+const ctx={...scope,enabled:true,online:false,auth:'fixture-auth'},id=uid(80),access={schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance};
+const terminalCore={...access,execution_id:settled.execution_id,run_version:2,lease_version:1,dispatch_id:running.dispatch_receipt.dispatch_id,claim_metadata_digest:settled.claim_metadata_digest,provider_terminal_observed:true,outcome:'done',bundle_metadata:work.bundle_metadata,local_checkpoint_confirmed:true,unavailable_reason:null};
+const archive={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope,request,input,route:{provider:'omniroute',endpoint:'https://synthetic.invalid/v1',model:'auto'},execution:settled,dispatch:{request:{...access,execution_id:settled.execution_id,run_version:1,lease_version:1,source_digest:settled.source_digest,claim_metadata_digest:settled.claim_metadata_digest},handoff_reserved:true},terminal:{work,settle_core:terminalCore,receipt:settled.terminal_receipt}};
+const marker={schema_version:1,id,scope,phase:'analysis_settled',cipher_bundle:await Q.encryptContent(Q.canonicalJson(archive),'fixture-key')};
+let disk={schema_version:1,contexts:{},protection_operations:{[id]:marker}},writeFail=true;
+const journal=box.NowNoteHistory.create({initial:copy(disk),context:()=>ctx,request:async()=>{},write:async(value,guard)=>{if(writeFail)throw Error('publication_store_failed');assert.equal(guard.active(),true);disk=copy(value);}});
+const publishing=A.createExecution({context:()=>ctx,journal,request:transport}),beforeStart=transportCalls.length;
+await assert.rejects(()=>publishing.beginPublication(id,'fixture-key',catalog),/publication_store_failed/);assert.equal(transportCalls.length,beforeStart);assert.equal(publishing.status(id).phase,'analysis_settled');
+writeFail=false;await publishing.beginPublication(id,'fixture-key',catalog);assert.equal(publishing.status(id).phase,'analysis_write_preparing');assert.equal(transportCalls.length,beforeStart);
+const started=Q.parseJson(await Q.decryptContent(publishing.status(id).cipher_bundle,'fixture-key'));expectedPrepare=started.publication.plan.prepare;
+// A new logical server fixture starts here; no real server state is reset.
+manifest.mutation_id=expectedPrepare.mutation_id;header.mutation_id=expectedPrepare.mutation_id;verified.metadata_manifest_digest=await Q.hashJson(manifest);
+Object.assign(operation,{mutation_id:expectedPrepare.mutation_id,state:'prepared',receipt:null,latest_context:copy(context),metadata_header:copy(header),metadata_manifest_digest:verified.metadata_manifest_digest});
+prepareCalls=0;exists=false;losePrepare=true;commitCalls=0;loseCommit=true;uploads.clear();activePubJournal=journal;activePubId=id;
+await assert.rejects(()=>publishing.resumePublication(id,'fixture-key'),/fixture_prepare_response_lost/);assert.equal(publishing.status(id).phase,'analysis_write_preparing');
+await assert.rejects(()=>publishing.resumePublication(id,'fixture-key'),/fixture_commit_response_lost/);assert.equal(publishing.status(id).phase,'analysis_write_committing');assert.equal(prepareCalls,1);assert.equal(commitCalls,1);
+const waiting=Q.parseJson(await Q.decryptContent(publishing.status(id).cipher_bundle,'fixture-key'));publishing.invalidate();
+const coldJournal=box.NowNoteHistory.create({initial:copy(disk),context:()=>ctx,request:async()=>{},write:async(value,guard)=>{assert.equal(guard.active(),true);disk=copy(value);}}),cold=A.createExecution({context:()=>ctx,journal:coldJournal,request:transport});activePubJournal=coldJournal;
+const beforeWrongKey=transportCalls.length;await assert.rejects(()=>cold.resumePublication(id,'wrong-key'));assert.equal(transportCalls.length,beforeWrongKey);
+const done=await cold.resumePublication(id,'fixture-key');assert.equal(done.operation_id,settled.execution_id);assert.equal(cold.status(id).phase,'complete');assert.equal(prepareCalls,1);assert.equal(commitCalls,1);
+const finished=Q.parseJson(await Q.decryptContent(cold.status(id).cipher_bundle,'fixture-key'));
+assert.ok(Q.canonicalJson(finished.publication.work)===Q.canonicalJson(waiting.publication.work),'cold publication must preserve original work/cipher/core');assert.ok(Q.canonicalJson(finished.terminal)===Q.canonicalJson(archive.terminal),'original terminal archive changed');
+assert.ok(!JSON.stringify(disk).includes('ORIGINAL')&&!JSON.stringify(disk).includes('fixture-key'),'publication leaked plaintext/key');
+const beforeComplete=transportCalls.length;await cold.resumePublication(id,'fixture-key');assert.equal(transportCalls.length,beforeComplete);
+console.log('MA publication journal: cipher plan/core before request, failed write/no call, original prepare/commit loss and cold status recovery, typed proof before complete, no duplicate POST/plaintext PASS (synthetic transport only)');
+const pendingMarker={...marker,phase:'analysis_write_committing',cipher_bundle:await Q.encryptContent(Q.canonicalJson(waiting),'fixture-key')};
+const makePendingJournal=()=>box.NowNoteHistory.create({initial:{schema_version:1,contexts:{},protection_operations:{[id]:copy(pendingMarker)}},context:()=>ctx,request:async()=>{},write:async(value,guard)=>{assert.equal(guard.active(),true);}});
+const wrongOriginJournal=makePendingJournal(),wrongOriginController=A.createExecution({context:()=>ctx,journal:wrongOriginJournal,request:transport});
+wrongTypedOrigin=true;await assert.rejects(()=>wrongOriginController.resumePublication(id,'fixture-key'),/published_origin/);wrongTypedOrigin=false;
+assert.equal(wrongOriginController.status(id).phase,'analysis_write_committed');assert.equal(commitCalls,1);
+await wrongOriginController.resumePublication(id,'fixture-key');assert.equal(wrongOriginController.status(id).phase,'complete');assert.equal(commitCalls,1);
+let entered,release;const inside=new Promise(r=>{entered=r;}),gate=new Promise(r=>{release=r;});
+const heldJournal=makePendingJournal(),held=A.createExecution({context:()=>ctx,journal:heldJournal,request:async(...args)=>{entered();await gate;return transport(...args);}}),heldBefore=held.status(id).cipher_bundle;
+const inflight=held.resumePublication(id,'fixture-key'),heldRejected=assert.rejects(()=>inflight,/scope_changed/);await inside;held.invalidate();release();await heldRejected;assert.equal(held.status(id).cipher_bundle,heldBefore);
+const beforeOtherAccount=transportCalls.length;ctx.owner='bob';await assert.rejects(()=>held.resumePublication(id,'fixture-key'),/scope_changed/);ctx.owner=scope.owner;assert.equal(transportCalls.length,beforeOtherAccount);
+console.log('MA publication boundaries: forged typed source stays pending, recovery no extra commit, late invalidate/cipher unchanged, other account/no request PASS (synthetic only)');
