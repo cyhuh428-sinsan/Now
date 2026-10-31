@@ -16,6 +16,7 @@ from app.services.note_sync import (
     as_naive_utc,
     group_shared_owner_ids,
     list_changed_notes,
+    legacy_note_visible,
     sort_notes_for_upsert,
     upsert_note as save_note,
 )
@@ -116,6 +117,7 @@ def search_notes(
     group_owner_ids = group_shared_owner_ids(db, owner_id=owner_id) if web_session_token else []
     stmt = (
         select(Note)
+        .where(legacy_note_visible())
         .where(
             or_(
                 Note.owner_id == owner_id,

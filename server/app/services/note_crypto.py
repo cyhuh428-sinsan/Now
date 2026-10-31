@@ -272,6 +272,8 @@ def prepare(db, body):
         if linked.exists(db, body.owner_id, body.local_id):
             error("related_representation_required")
     require_unfenced(db, [(body.owner_id, body.local_id)])
+    from app.services.wiki_guards import require_source_protection
+    require_source_protection(db, body.owner_id, body.local_id)
     if not schema2 and related_plaintext(db, body.owner_id, body.local_id):
         error("related_plaintext_unresolved")
     base = base_state(db, body.owner_id, body.local_id)

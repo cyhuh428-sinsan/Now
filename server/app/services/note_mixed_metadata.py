@@ -105,6 +105,8 @@ def mode(db, owner, local):
 
 
 def begin_update(db, owner, local):
+    from app.services.wiki_guards import require_review
+    require_review(db, [(owner, local)])
     if (owner, local) not in db.info.get(UPDATING, set()):
         head = db.get(NoteHead, (owner, local))
         if head is not None and head.crypto_epoch > 0:

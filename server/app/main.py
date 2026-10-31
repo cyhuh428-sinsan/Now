@@ -13,6 +13,7 @@ from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
 from app.api.mail import router as mail_router
 from app.api.library import router as library_router
+from app.api.wikis import router as wikis_router
 from app.api.group_messages import router as group_messages_router
 from app.api.messenger import router as messenger_router
 from app.api.monitor import router as monitor_router
@@ -55,11 +56,11 @@ def create_app() -> FastAPI:
         try:
             response = await call_next(request)
         except Exception:
-            if request.url.path.startswith("/api/v2/notes"):
+            if request.url.path.startswith(("/api/v2/notes", "/api/v1/wikis")):
                 return JSONResponse({"detail": {"code": "internal_error"}}, status_code=500,
                                     headers={"Cache-Control": "no-store"})
             raise
-        if request.url.path.startswith("/api/v2/notes"):
+        if request.url.path.startswith(("/api/v2/notes", "/api/v1/wikis")):
             response.headers["Cache-Control"] = "no-store"
         return response
     app.add_middleware(
@@ -106,6 +107,7 @@ def create_app() -> FastAPI:
     app.include_router(analysis_router)
     app.include_router(admin_router)
     app.include_router(library_router)
+    app.include_router(wikis_router)
     if web_app_dir is not None:
         @app.get("/app", include_in_schema=False)
         def web_app_compat_index() -> FileResponse:

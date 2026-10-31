@@ -356,6 +356,8 @@ def check_manifest(db, row):
 @atomic
 def commit(db, body):
     row = preparation.owned(db, body.owner_id, body.local_id, body.device_id, body.transition_id)
+    from app.services.wiki_guards import internal_write, require_source_protection
+    require_source_protection(db, row.owner_id, row.local_id)
     if row.actor_device_id != body.device_id:
         error("transition_actor_mismatch", 403)
     if body.server_instance_id != preparation.initialize_identity(db.connection()):
@@ -401,7 +403,8 @@ def commit(db, body):
     if cipher_digest != body.client_verified_ciphertext_manifest_digest:
         error("verification_manifest_mismatch")
     from app.services import note_mixed_metadata as mixed
-    mixed.begin_update(db, row.owner_id, row.local_id)
+    with internal_write(db, row.owner_id, row.local_id):
+        mixed.begin_update(db, row.owner_id, row.local_id)
     # Core Note UPDATE bypasses natural history capture and pins onupdate time.
     for key, text in replacements:
         kind, ident = key["kind"], key["id"]

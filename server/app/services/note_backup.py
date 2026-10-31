@@ -208,6 +208,7 @@ def validate_rows(items):
             connection.exec_driver_sql('PRAGMA query_only=ON')
             with Session(connection, autoflush=False) as validation:
                 validate_graphs(validation)
+                validate_wikis(validation)
                 validate_operations(validation)
                 validate_related_references(validation)
                 validate_executions(validation)
@@ -220,6 +221,44 @@ def validate_rows(items):
         raise ValueError('backup_references:' + code) from None
     finally:
         engine.dispose()
+
+
+def validate_wikis(db):
+    from app.services import wiki_guards as guard
+    from app.services.wikis import parse_document, dependencies
+    from app.schemas.note_v2 import Snapshot
+    rows = list(db.scalars(select(LibraryResource).where(LibraryResource.kind == 'wikis')))
+    indexes = {(row.owner_id, guard.link(row).artifact_local_id): row for row in rows}
+    for row in rows:
+        link = guard.link(row)
+        key = (row.owner_id, link.artifact_local_id)
+        if db.get(NoteHead, key) is None:
+            raise ValueError('backup_wiki_head')
+        refs = {(ref.owner_id, ref.local_id) for ref in link.dependencies}
+        for owner, local in refs:
+            source = db.get(NoteHead, (owner, local))
+            if source is None or (owner, local) in indexes:
+                raise ValueError('backup_wiki_source')
+            if source.crypto_epoch > 0 and not guard.fully_protected(db, *key):
+                raise ValueError('backup_wiki_plaintext_dependency')
+        snapshots = []
+        for model in (NoteRevision, NoteInventory, NoteOfflineBranch):
+            for record in db.scalars(select(model).where(model.owner_id == key[0], model.local_id == key[1])):
+                if record.representation_kind == 'snapshot_v1':
+                    snapshots.append(record.snapshot_json)
+                    before = getattr(record, 'before_snapshot_json', None)
+                    if before is not None:
+                        snapshots.append(before)
+        for raw in snapshots:
+            note = Snapshot.model_validate_json(raw).note
+            if note.source != 'wiki-artifact' or note.title != 'AI Wiki ' + row.id:
+                raise ValueError('backup_wiki_projection')
+            value = parse_document(note.content, row.owner_id, row.id)
+            if not set(dependencies([value])).issubset(refs):
+                raise ValueError('backup_wiki_dependencies')
+    for note in db.scalars(select(Note).where(Note.source == 'wiki-artifact')):
+        if (note.owner_id, note.local_id) not in indexes:
+            raise ValueError('backup_wiki_index')
 
 
 def validate_graphs(db):

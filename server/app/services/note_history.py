@@ -67,6 +67,8 @@ def prepare_history(db, owner, local_id):
 def require_legacy_writes(db, refs):
     refs = set(refs)
     lock_note_writes(db, [owner for owner, _ in refs])
+    from app.services.wiki_guards import require_review
+    require_review(db, refs)
     from app.services.note_crypto_fence import require_unfenced
     require_unfenced(db, refs)
     from app.services.related_text import active_drain

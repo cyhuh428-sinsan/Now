@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.core.capabilities import MAX_TREE_NOTE_LEVEL
 from app.models.note import Note, UserAccount
+from app.models.library import LibraryResource
 from app.schemas.note import NoteIn
 from app.services.note_history import capture_change, prepare_history, raw_snapshot, require_legacy_writes
 
@@ -90,6 +91,15 @@ def upsert_note(payload: NoteIn, db: Session) -> Note:
     return note
 
 
+def legacy_note_visible():
+    wiki = select(LibraryResource.id).where(
+        LibraryResource.owner_id == Note.owner_id,
+        LibraryResource.kind == "wikis",
+        "wiki:" + LibraryResource.id == Note.local_id,
+    ).exists()
+    return or_(Note.source.is_(None), Note.source != "wiki-artifact") & ~wiki
+
+
 def list_changed_notes(
     db: Session,
     *,
@@ -107,7 +117,7 @@ def list_changed_notes(
     owner_ids = [owner_id]
     if include_group_shared:
         owner_ids.extend(group_shared_owner_ids(db, owner_id=owner_id))
-    stmt = select(Note).where(
+    stmt = select(Note).where(legacy_note_visible()).where(
         or_(
             Note.owner_id == owner_id,
             Note.owner_id.in_(owner_ids[1:]) & (Note.note_type == "tree"),

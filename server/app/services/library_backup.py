@@ -33,7 +33,7 @@ def export_library(db: Session):
 class ResourceBackup(BaseModel):
     model_config = ConfigDict(extra="forbid")
     owner_id: str = Field(min_length=1, max_length=80)
-    kind: Literal["templates", "saved-queries", "canvases"]
+    kind: Literal["templates", "saved-queries", "canvases", "wikis"]
     id: UUID
     schema_version: Literal[1]
     version: int = Field(ge=1)
@@ -51,6 +51,14 @@ class MutationBackup(BaseModel):
     response_json: str
 
 
+def validate_wiki_link(owner, ident, payload):
+    from app.schemas.wiki import WikiLink
+    value = WikiLink.model_validate(payload)
+    if value.artifact_local_id != "wiki:" + str(ident) or any(ref.owner_id != owner for ref in value.dependencies):
+        raise ValueError("invalid wiki index")
+    return {(ref.owner_id, ref.local_id) for ref in value.dependencies}
+
+
 def validate_library_backup(backup):
     if backup.get("backup_schema_version") == 1:
         if any(key in backup.get("items", {}) for key in ("library_resources", "library_mutations")):
@@ -66,13 +74,16 @@ def validate_library_backup(backup):
         if key in resource_keys:
             raise ValueError("duplicate resource")
         resource_keys.add(key)
+        if row.kind == "wikis":
+            validate_payload(row.kind, json.loads(row.payload_json))
+            validate_wiki_link(row.owner_id, row.id, json.loads(row.payload_json))
         if row.deleted_at is None:
             validate_payload(row.kind, json.loads(row.payload_json))
             count_key = (row.owner_id, row.kind)
             active_counts[count_key] = active_counts.get(count_key, 0) + 1
             if active_counts[count_key] > resource_limit(row.kind):
                 raise ValueError("resource limit exceeded")
-        elif row.payload_json is not None:
+        elif row.payload_json is not None and row.kind != "wikis":
             raise ValueError("tombstone payload must be null")
         for date in (row.created_at, row.updated_at, row.deleted_at):
             if date and date.tzinfo is not None and date.utcoffset().total_seconds() != 0:
@@ -102,9 +113,14 @@ def validate_library_backup(backup):
                 parsed = ResourceBackup.model_validate(values)
                 if parsed.version > current.version:
                     continue
+                if current.kind == "wikis":
+                    prior = validate_wiki_link(row.owner_id, current.id, resource["payload"])
+                    present = validate_wiki_link(current.owner_id, current.id, json.loads(current.payload_json))
+                    if not prior.issubset(present):
+                        continue
                 if parsed.deleted_at is None:
                     validate_payload(current.kind, resource["payload"])
-                elif resource["payload"] is not None:
+                elif resource["payload"] is not None and current.kind != "wikis":
                     continue
                 valid_snapshot = True
                 break
@@ -122,6 +138,9 @@ def validate_library_backup(backup):
 def restore_library(db: Session, backup: dict):
     from app.api.admin import _verify_backup_payload
 
+    # Wiki indexes cannot be separated from protected Note history and receipts.
+    if any(row.get("kind") == "wikis" for row in backup.get("items", {}).get("library_resources", [])):
+        raise ValueError("wiki_requires_v3_backup")
     if any(check["status"] != "ok" for check in _verify_backup_payload(backup)):
         raise ValueError("invalid backup")
     resources, mutations = validate_library_backup(backup)

@@ -325,6 +325,8 @@ def import_branches(db, body, head):
 def mutate(db, body, operation):
     try:
         head, rows = scope(db, body.owner_id, body.local_id)
+        from app.services.wiki_guards import require_review
+        require_review(db, [(body.owner_id, body.local_id)])
         from app.services.note_crypto_fence import require_unfenced
         require_unfenced(db, [(body.owner_id, body.local_id)])
         check_epoch(head, body.crypto_epoch)

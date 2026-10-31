@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.models.library import LibraryMutation, LibraryResource
 from app.models.note import UserAccount, UserDevice
 from app.schemas.library import CanvasPayload, QueryPayload, TemplatePayload
+from app.schemas.wiki import WikiLink
 from app.services.user_accounts import hash_access_token, require_web_session_access
 
 
@@ -44,10 +45,10 @@ def library_user(db, owner_id, user_token, web_token):
 
 
 def validate_payload(kind, payload):
-    models = {"templates": TemplatePayload, "saved-queries": QueryPayload, "canvases": CanvasPayload}
+    models = {"templates": TemplatePayload, "saved-queries": QueryPayload, "canvases": CanvasPayload, "wikis": WikiLink}
     if kind not in models:
         error("invalid_resource_kind", 422)
-    limit = {"templates": 1024 * 1024, "saved-queries": 16 * 1024, "canvases": 2 * 1024 * 1024}[kind]
+    limit = {"templates": 1024 * 1024, "saved-queries": 16 * 1024, "canvases": 2 * 1024 * 1024, "wikis": 256 * 1024}[kind]
     try:
         encoded = canonical(payload)
     except (ValueError, TypeError):
