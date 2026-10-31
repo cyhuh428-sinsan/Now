@@ -3,15 +3,15 @@ export async function verifyWikiFlow({evaluate}){
   assert.equal(await evaluate('typeof mountNowWiki'),'function','Wiki UI must be mounted from the product runtime');
   await evaluate('(async()=>{'
     +'wikiUI?.close();document.querySelector("#wikiDialog")?.remove();'
-    +'globalThis.wikiFixture={owner:"alice",invoked:0,saved:[],opened:[]};'
+    +'globalThis.wikiFixture={owner:"alice",invoked:0,approved:0,saved:[],opened:[]};'
     +'const f=wikiFixture,ctx={url:"https://example.invalid",owner:"alice"};'
     +'const sources={a:{owner:"alice",localId:"a",status:"ok",origin:"local",revisionId:null,headVersion:0,title:"Evidence A",content:"Exact evidence."}};'
     +'f.ui=mountNowWiki({contextKey:()=>f.owner,notes:()=>[{id:"a",title:"Evidence A",origin:"local"}],list:async()=>f.saved,'
     +'capture:ids=>NowNoteWiki.capture(ids,ctx,id=>sources[id]),'
     +'connection:()=>({provider:"omniroute",model:"auto",endpoint:"https://gateway.invalid/v1",invoke:async()=>{f.invoked++;return JSON.stringify({title:"Guide",topic:"Operations",sections:[{id:"one",title:"Finding",markdown:"**Supported** finding.<img src=\\\"https://tracking.invalid/a\\\">",citation_ids:["c"]}],citations:[{id:"c",source_id:"source-1",quote:"Exact evidence."}]});}}),'
     +'save:async doc=>{f.saved=[{document:structuredClone(doc),pending:true}];return {pending:true};},'
-    +'approve:async doc=>{const value=structuredClone(doc);value.document_version++;value.approvals.push({id:crypto.randomUUID(),draft_id:value.drafts.at(-1).id});f.saved=[{document:value}];return {document:value};},'
-    +'reject:async doc=>({document:doc}),sourceStatus:draft=>NowNoteWiki.sourceStatus(draft,ctx,id=>sources[id]),'
+    +'approve:async doc=>{f.approved++;const value=structuredClone(doc);value.document_version++;value.approvals.push({id:crypto.randomUUID(),draft_id:value.drafts.at(-1).id});f.saved=[{document:value}];return {document:value};},'
+    +'reject:async doc=>({document:doc}),sourceStatus:async draft=>{if(f.sourceFailure)throw Error("source_read_failed");if(f.sourceUnavailable)return {available:false,stale:true,sources:[]};if(f.sourceChanged)return {available:true,stale:true,sources:[]};if(f.sourceGate)return new Promise(resolve=>{f.resolveSource=resolve;});return NowNoteWiki.sourceStatus(draft,ctx,id=>sources[id]);},'
     +'openSource:ref=>f.opened.push(ref.local_id)});await f.ui.open();})()');
   await evaluate('document.querySelector("#wikiDialog [name=wiki-source]").click();document.querySelector("#wikiDialog [data-wiki-action=generate]").click()');
   for(let i=0;i<30 && !await evaluate('Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-send]"))');i++)await new Promise(r=>setTimeout(r,25));
@@ -29,6 +29,25 @@ export async function verifyWikiFlow({evaluate}){
   assert.equal(await evaluate('wikiFixture.saved[0].document.approvals.length'),0,'Saving a draft is not approval');
   await evaluate('document.querySelector("#wikiDialog [data-wiki-action=source]").click()');
   assert.equal(await evaluate('wikiFixture.opened[0]'),'a');
+  for(const flag of ['sourceUnavailable','sourceFailure']){
+    await evaluate('(async()=>{wikiFixture.sourceUnavailable=false;wikiFixture.sourceFailure=false;wikiFixture['+JSON.stringify(flag)+']=true;await wikiFixture.ui.open();document.querySelector("#wikiDialog .library-item").click();})()');
+    await new Promise(r=>setTimeout(r,100));
+    assert.equal(await evaluate('document.querySelectorAll("#wikiDialog .wiki-body").length'),0,flag+': source unavailable/read failure must not render saved wiki text');
+    assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Exact evidence.")'),false,flag+': saved citations must stay hidden');
+  }
+  await evaluate('wikiFixture.sourceUnavailable=false;wikiFixture.sourceFailure=false');
+  await evaluate('(async()=>{wikiFixture.sourceChanged=true;await wikiFixture.ui.open();document.querySelector("#wikiDialog .library-item").click();})()');
+  for(let i=0;i<40 && !await evaluate('Boolean(document.querySelector("#wikiDialog .wiki-body strong"))');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'),'Plain source changes remain readable but need review');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=approve]").click()');
+  await new Promise(r=>setTimeout(r,100));
+  assert.equal(await evaluate('wikiFixture.approved'),0,'A stale draft must not reach the approval adapter');
+  await evaluate('wikiFixture.sourceChanged=false;wikiFixture.sourceGate=true;document.querySelector("#wikiDialog .library-item").click()');
+  for(let i=0;i<40 && !await evaluate('typeof wikiFixture.resolveSource==="function"');i++)await new Promise(r=>setTimeout(r,25));
+  assert.equal(await evaluate('document.querySelectorAll("#wikiDialog .wiki-body").length'),0,'Previously visible text must be hidden while fresh source access is pending');
+  await evaluate('wikiFixture.sourceGate=false;wikiFixture.resolveSource({available:true,stale:false,sources:[]})');
+  for(let i=0;i<40 && !await evaluate('Boolean(document.querySelector("#wikiDialog .wiki-body strong"))');i++)await new Promise(r=>setTimeout(r,25));
+  assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Exact evidence.")'),'Positive access restores the view only after verification');
   await evaluate('wikiFixture.owner="bob";wikiFixture.ui.check()');
   assert.equal(await evaluate('document.querySelector("#wikiDialog").open'),false);
   assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Exact evidence.")'),false,'Account changes must clear rendered evidence');

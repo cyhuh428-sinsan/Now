@@ -47,4 +47,18 @@ await assert.rejects(()=>book.approve(doc,draft.id),/source|원본|판본|충돌
 ctx={...ctx,owner:'bob',auth:'other'};
 assert.equal((await book.list()).length,0);
 assert.equal(Object.keys(saved.contexts).length,1,'Account switch must not erase the original journal');
+ctx={...ctx,owner:'alice',auth:'synthetic'};
+original.content='Exact evidence.';
+await history.localOnly(local,false);
+api.listRemote=async()=>[{id:doc.wiki_id}];
+let reads=0;
+api.readRemote=async()=>{reads++;return {artifact:{protected:true,document:null,current_exists:true},source_status:{available:true,stale:false}};};
+const protectedRows=await book.list();
+assert.ok(reads>0,'A managed local journal must not skip the server wiki protection state');
+assert.equal(protectedRows[0].document,undefined,'Server-protected wikis must not return a cached plaintext document');
+api.readRemote=async()=>{throw Error('server_read_failed');};
+assert.equal((await book.list())[0].document,undefined,'Read failure must not expose a cached server wiki');
+ctx={...ctx,online:false};
+original.origin='server';
+assert.equal((await book.sourceStatus(draft,approved.document)).available,false,'Offline server sources require a fresh access check');
 console.log('Wiki notebook: local-only no upload, durable journal cold restore, explicit approval, source-change and account isolation PASS');
