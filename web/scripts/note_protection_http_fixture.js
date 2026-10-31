@@ -55,6 +55,43 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===26){
+    state.selectedTreeId=target;render();await settle();await open();
+    await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+    const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,A=NowNoteProtectionAnalysis,baseKeys=['head_version','head_revision_id','crypto_epoch','history_generation','protection_state','inventory_revision_ids','identity_state','current_exists'];
+    const identityState=await identity(),page=await request('/api/v2/notes/representations?'+query(target,{representation_schema:2,limit:500}));
+    assert(!page.next_cursor,'legacy_fixture_catalog_not_bounded');
+    await Q.verifyCatalog([page],{schema_version:2,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,context:page.context,catalog_digest:page.catalog_digest});
+    const bodies=page.items.filter(d=>d.key.kind==='note_body');assert(bodies.length===1&&!bodies[0].is_null,'legacy_fixture_source_not_unique');const d=bodies[0];
+    const sourceContext={server_instance_id:scope.instance,base:Object.fromEntries(baseKeys.map(k=>[k,identityState[k]])),catalog_digest:page.catalog_digest};
+    const nativeScope={schema_version:1,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance};
+    const claim={...nativeScope,mutation_id:crypto.randomUUID(),source_context:sourceContext,source_keys:[{key:d.key,representation_etag:d.representation_etag,slot_version:d.slot_version??null,ciphertext_sha256:d.ciphertext_sha256,is_null:d.is_null}],job_type:'memo_summary',prompt_version:'single_source_v1',source_job_id:null,execution_route:'client_provider',client_execution_confirmed:true};
+    const prefix='/api/v2/notes/protected-analysis',claimed=await request(prefix+'/claims','POST',claim);
+    const dispatch={...nativeScope,execution_id:claimed.execution_id,run_version:claimed.run_version,lease_version:claimed.lease_version,source_digest:claimed.source_digest};
+    const dispatched=await request(prefix+'/claims/dispatch','POST',dispatch),input='SYNTHETIC-LLM-INPUT-'+run+'\n'+plain;
+    const provider=await fetch(config.syntheticProviderUrl+'/chat/completions',{method:'POST',headers:{Authorization:'Bearer synthetic-only','Content-Type':'application/json'},body:JSON.stringify({model:'auto',stream:false,messages:[{role:'user',content:input}]}),signal:AbortSignal.timeout(20000)});
+    assert(provider.ok,'legacy_synthetic_provider_failed');const answer=(await provider.json()).choices[0].message.content;assert(answer==='SYNTHETIC-LLM-RESULT-'+run+'\r\n','legacy_provider_value');
+    const values={input_text:input,result_json:JSON.stringify({summary:answer}),error_message:null},transfers=[],records=[],nulls=[];
+    for(const slot of dispatched.output_slots){const value=values[slot.key.slot];nulls.push({key:slot.key,is_null:value===null});if(value===null)continue;
+      const raw=await Q.encryptRepresentation(value,{key:slot.key,output_kind:'linked_text_envelope_v1',output_epoch:1,is_null:false,expected_binding:slot.expected_binding,operation_origin:null},password);
+      transfers.push({key:slot.key,raw});records.push({entry_key:slot.key,destination_key:slot.key,source_etag:crypto.randomUUID(),output_kind:'linked_text_envelope_v1',target_epoch:1,total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:await Q.sha256(raw)});
+    }
+    const bm={source_digest:dispatched.source_digest,original_job_id:dispatched.original_job_id,original_epoch:1,outcome:'done',error_code:null,slot_nulls:nulls,ciphertext_manifest:records};bm.bundle_digest=await Q.hashJson(bm);
+    const terminalCore={...nativeScope,execution_id:dispatched.execution_id,run_version:dispatched.run_version,lease_version:dispatched.lease_version,dispatch_id:dispatched.dispatch_receipt.dispatch_id,provider_terminal_observed:true,outcome:'done',bundle_metadata:bm,local_checkpoint_confirmed:true,unavailable_reason:null};
+    const settled=await request(prefix+'/claims/settle','POST',terminalCore),nativeStatus=await request(prefix+'/claims/status?'+new URLSearchParams({...nativeScope,execution_id:dispatched.execution_id}));
+    assert(Q.canonicalJson(nativeStatus.original_request_metadata)===Q.canonicalJson(claim)&&Q.canonicalJson(nativeStatus.bundle_metadata)===Q.canonicalJson(bm),'legacy_read_metadata_changed');
+    const originalWork={transfers,bundle_metadata:bm};assert((await A.openLegacyTerminalBundle(scope,claim,nativeStatus,originalWork,password)).result_json===values.result_json,'legacy_original_cipher_value');
+    assert(Q.canonicalJson(settled.terminal_receipt)===Q.canonicalJson(nativeStatus.terminal_receipt),'legacy_native_receipt_changed');
+    await action('current_plain_transition',()=>status().includes('전환 준비 가능'));
+    await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
+    const current=await inspectNoteProtection();assert(current.catalog.context.base.crypto_epoch===2,'legacy_target_epoch_missing');
+    const id=crypto.randomUUID(),archive={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope,request:claim,input,route:{provider:'omniroute',endpoint:config.syntheticProviderUrl,model:'auto'},execution:nativeStatus,dispatch:{request:dispatch,handoff_reserved:true},terminal:{work:originalWork,settle_core:terminalCore,receipt:nativeStatus.terminal_receipt}};
+    await noteHistory.saveProtection({schema_version:1,id,scope,phase:'analysis_settled',cipher_bundle:await Q.encryptContent(Q.canonicalJson(archive),password)},{active:()=>true});await settle();
+    await open();await action('analysis-resume',()=>dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'legacy_plain_result_persisted');
+    emit({stage:'legacy_analysis_cipher_archive_restored',owner:a.owner,local_id:target,operation_id:dispatched.execution_id,local_operation_id:id});button('lock').click();clearWebSession();
+    return {ok:true,mode:config.mode,phase:26,nativeSchema:1,verifiedRecoveryMetadata:true,originalCipherArchive:true,targetEpoch:2,providerCalls:1};
+  }
   if(config.phase===24){
     const originalDevice=config.mode==='web'?'web-client':a.device.replace(/-peer$/,'');
     assert(!isHostedWebClient(),'peer_client_must_support_distinct_device');
@@ -95,22 +132,24 @@
     emit({stage:'analysis_replan_aborted_before_upload',owner:a.owner,local_id:target,operation_id:record.prepared.id,local_operation_id:id});button('lock').click();clearWebSession();
     return {ok:true,mode:config.mode,phase:25,priorCipherPreserved:true,ownPreparedWriteAborted:true,providerCalls:0};
   }
-  if([22,23].includes(config.phase)){
+  if([22,23,27,28].includes(config.phase)){
+    const preparing=[22,27].includes(config.phase);
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,before=await noteProtectionReader.catalog(scope);
-    const candidates=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&(config.phase===22?['analysis_settled','analysis_replan_prepared'].includes(m.phase):m.phase==='analysis_replan_committing'));
+    const candidates=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&(preparing?['analysis_settled','analysis_replan_prepared'].includes(m.phase):m.phase==='analysis_replan_committing'));
     assert(candidates.length===1,'replan_ui_marker_missing');const id=candidates[0].id,original=Q.parseJson(await Q.decryptContent(candidates[0].cipher_bundle,password));
     let commitPosts=0;
     noteProtectionAnalysis=NowNoteProtectionAnalysis.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:async(s,path,method,body)=>{
         assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'replan_transport_scope');
-        if(method==='POST'&&path==='/api/v2/notes/mixed-analysis-writes/commit'){commitPosts++;assert(config.phase===22,'replan_cold_commit_reposted');}
+        if(method==='POST'&&path==='/api/v2/notes/mixed-analysis-writes/commit'){commitPosts++;assert(preparing,'replan_cold_commit_reposted');}
         const response=await fetch(url+path+(method==='GET'?'?'+new URLSearchParams(body):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...noteHistoryContext().headers,...(method==='GET'?{}:{'Content-Type':'application/json'})},...(method==='GET'?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(20000)});
         const value=Q.parseJson(await response.text());if(!response.ok)throw Object.assign(Error(value.detail?.code||'qa_replan_http'),{status:response.status,code:value.detail?.code});
         if(method==='POST'&&path==='/api/v2/notes/mixed-analysis-writes/commit'){emit({stage:'analysis_replan_commit_response_deliberately_lost',owner:a.owner,local_id:target,operation_id:value.operation_id});throw Error('qa_replan_commit_response_lost');}
         return value;
     }});
-    if(config.phase===22){
-      assert(before.context.base.head_version>original.execution.source_context.base.base.head_version&&before.context.base.history_generation>original.execution.source_context.base.base.history_generation,'peer_source_change_not_observed');
+    if(preparing){
+      const source=original.execution.source_context.base.base||original.execution.source_context.base;
+      assert(before.context.base.head_version>source.head_version&&before.context.base.history_generation>source.history_generation,'peer_source_change_not_observed');
       assert(!button('analysis-replan').disabled,'replan_ui_command_disabled');
       await action('analysis-replan',()=>!dialog().querySelector('.protection-replan').classList.contains('hidden'));
       assert(button('analysis-replan-confirm').disabled,'replan_ui_missing_confirmation');
@@ -132,14 +171,14 @@
       const now=await inspectNoteProtection(),key=r.prepared.manifest.DSET.find(d=>d.destination_key.kind==='analysis_result').destination_key,index=now.rows.findIndex(row=>row.kind==='typed'&&Q.canonicalJson(row.descriptor.key)===Q.canonicalJson(key));assert(index>=0,'replan_typed_result_missing');
       dialog().querySelector('[name="representation"]').value=String(index);await action('read',()=>dialog().querySelector('.protection-plain').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
       const body=now.catalog.entries.find(d=>d.key.kind==='note_body'&&d.key.id===String(now.catalog.context.selected_physical_note_id)),current=await noteProtectionReader.read(scope,now.catalog,body,async()=>password);
-      assert(current.value==='HTTP-QA-PEER-'+run+'\n'&&Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'replan_overwrote_peer_current_or_cold_catalog');
+      assert(current.value===(original.request.schema_version===1?plain:'HTTP-QA-PEER-'+run+'\n')&&Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'replan_overwrote_peer_current_or_cold_catalog');
       const otherNote=await request('/api/v2/notes/current?'+query(other));assert(otherNote.snapshot.note.content==='HTTP-QA-PRESERVE-'+run,'replan_changed_other');
       emit({stage:'analysis_replan_ready',owner:a.owner,local_id:target,operation_id:r.prepared.id,local_operation_id:id});
       for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__&&!globalThis.__HTTP_CAPTURE_ERROR__;i++)await wait();assert(!globalThis.__HTTP_CAPTURE_ERROR__,'replan_capture_failed');assert(globalThis.__HTTP_CAPTURE_DONE__===true,'replan_capture_unconfirmed');
     }
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'replan_plain_result_persisted');
     button('lock').click();clearWebSession();
-    return {ok:true,mode:config.mode,phase:config.phase,replanUi:config.phase===22,commitResponseLost:config.phase===22,coldTypedReplan:config.phase===23,commitPosts,originalSourceAndCipherPreserved:true,peerCurrentPreserved:true,cipherOnlyJournal:true,providerCalls:0};
+    return {ok:true,mode:config.mode,phase:config.phase,replanUi:preparing,commitResponseLost:preparing,coldTypedReplan:!preparing,sourceSchema:original.request.schema_version,commitPosts,originalSourceAndCipherPreserved:true,peerCurrentPreserved:true,cipherOnlyJournal:true,providerCalls:0};
   }
   if([20,21].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();

@@ -56,10 +56,10 @@ async function closeSyntheticProvider(){
   if(syntheticProvider){
     const provider=syntheticProvider;await provider.close();
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{port:provider.port,...provider.stats(),attempts:providerAttempts,closed:!provider.isListening()}});syntheticProvider=null;
-  }else if([15,17,19,20,21,22,23,24,25].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
+  }else if([15,17,19,20,21,22,23,24,25,27,28].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
 }
 app.whenReady().then(async()=>{
-  if([14,16,18].includes(config.phase)){
+  if([14,16,18,26].includes(config.phase)){
     syntheticProvider=await require('./note_protection_http_provider.cjs').startSyntheticProvider({run:config.run,mode:config.mode,purpose:config.phase===18?'ui':'core'});
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProviderStarted:{port:syntheticProvider.port,loopbackOnly:true,externalCalls:0}});
   }
@@ -101,7 +101,7 @@ app.whenReady().then(async()=>{
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
     if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
-    if([15,17,19,20,21,22,23,24,25].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
+    if([15,17,19,20,21,22,23,24,25,27,28].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
     window.destroy();app.exit(0);
