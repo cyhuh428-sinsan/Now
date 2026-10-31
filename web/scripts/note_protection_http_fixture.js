@@ -98,6 +98,7 @@
       const committed=await request(prefix+'/commit','POST',{...nativeScope,write_id:intent.write_id,mutation_id:prepare.mutation_id,target_epoch:1,metadata_manifest_digest:intent.metadata_manifest_digest,client_verified_ciphertext_manifest_digest:await Q.hashJson(records)});
       assert(committed.state==='committed'&&committed.receipt.write_id===intent.write_id&&committed.receipt.execution_id===dispatched.execution_id,'legacy_native_commit_unconfirmed');nativeReceipt=committed.receipt;
     }
+    await open();
     await action('current_plain_transition',()=>status().includes('전환 준비 가능'));
     await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
     const current=await inspectNoteProtection();assert(current.catalog.context.base.crypto_epoch===2,'legacy_target_epoch_missing');
