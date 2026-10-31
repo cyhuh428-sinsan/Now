@@ -26,6 +26,12 @@ assert.ok(!prompt.includes('apiKey'));
 const output={title:'Knowledge guide',topic:'Topic',sections:[{id:'section-1',title:'Overview',markdown:'Compiled finding.',citation_ids:['cite-1']}],
   citations:[{id:'cite-1',source_id:'source-1',quote:'Original quoted evidence.'}]};
 const draft=await W.validateDraft(output,snapshot,{provider:'omniroute',model:'auto'});
+const approvalId=webcrypto.randomUUID();
+const revised=await W.validateDraft(output,snapshot,{provider:'omniroute',model:'auto'},{baseApprovedRevisionId:approvalId});
+assert.equal(revised.base_approved_revision_id,approvalId,'Regeneration must bind the selected approved revision before hashing');
+const unsigned=structuredClone(revised);delete unsigned.draft_hash;
+assert.equal(revised.draft_hash,await box.NowNoteProtectionProtocol.hashJson(unsigned));
+await assert.rejects(()=>W.validateDraft(output,snapshot,{provider:'omniroute',model:'auto'},{baseApprovedRevisionId:'wrong'}),/approval_base/);
 assert.equal(draft.validation_status,'citations_checked');
 assert.equal(draft.citations[0].quote,output.citations[0].quote);
 assert.equal(draft.source_manifest.length,2);

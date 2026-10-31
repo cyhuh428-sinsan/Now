@@ -40,7 +40,10 @@
       rules:['JSON 객체만 반환','모든 절에 출처를 연결','자료 밖 출처/인용문을 만들지 않음','불확실한 주장은 불확실하다고 표시'],
       sources:snapshot.sources.map(({id,title,content})=>({id,title,content}))});
   }
-  async function validateDraft(input,snapshot,connection){
+  async function validateDraft(input,snapshot,connection,{baseApprovedRevisionId=null}={}){
+    if(baseApprovedRevisionId!==null && (typeof baseApprovedRevisionId!=='string'
+      ||!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(baseApprovedRevisionId)))
+      throw Error('wiki_invalid_approval_base');
     let value;
     try{value=typeof input==='string'?JSON.parse(input):copy(input);}catch{throw Error('wiki_invalid_json');}
     fields(value,['title','topic','sections','citations']);
@@ -65,7 +68,7 @@
       sectionIds.add(section.id);
     }
     if(!text(connection.provider,80)||!text(connection.model,240))throw Error('wiki_invalid_model');
-    const draft={id:crypto.randomUUID(),generation_id:crypto.randomUUID(),base_approved_revision_id:null,
+    const draft={id:crypto.randomUUID(),generation_id:crypto.randomUUID(),base_approved_revision_id:baseApprovedRevisionId,
       scope:copy(snapshot.scope),title:value.title,topic:value.topic,sections:value.sections,citations:value.citations,
       source_manifest:snapshot.sources.map(source=>copy(source.manifest)),provider:connection.provider,model:connection.model,
       generated_at:new Date().toISOString(),validation_status:'citations_checked'};

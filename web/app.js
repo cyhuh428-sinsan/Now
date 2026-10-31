@@ -11075,7 +11075,10 @@ async function noteHistoryRequest(ctx, path, method, body) {
   if (noteHistory?.legacyPending()) throw new Error("기존 동기화 응답을 먼저 확인해야 합니다. 편집본은 보존했습니다.");
   const query = new URLSearchParams({ owner_id: ctx.owner });
   if (method === "GET") Object.entries(body || {}).forEach(([name, value]) => { if (value != null) query.set(name, String(value)); });
-  const response = await fetch(ctx.url + "/api/v2/notes/" + path + (method === "GET" ? "?" + query : ""), {
+  const wiki = String(body?.local_id || "").match(/^wiki:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/);
+  const publication = wiki && ((path === "current" && method === "PUT") || (path === "revisions/import" && method === "POST"));
+  const route = publication ? "/api/v1/wikis/" + wiki[1] + "/" + path : "/api/v2/notes/" + path;
+  const response = await fetch(ctx.url + route + (method === "GET" ? "?" + query : ""), {
     method, cache: "no-store", headers: { ...ctx.headers, ...(method !== "GET" ? { "Content-Type": "application/json" } : {}) },
     ...(method !== "GET" ? { body: JSON.stringify(body) } : {}), signal: AbortSignal.timeout(20000),
   });
@@ -11099,6 +11102,7 @@ function noteHistoryWireNotes() {
 
 function noteHistoryProject(note) {
   if (!note || note.owner_id !== noteHistoryContext().owner) return;
+  if (note.source === "wiki-artifact") return;
   const managed = noteHistory?.view(note.local_id);
   if (note.note_type === "tree") {
     const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
@@ -11155,6 +11159,7 @@ function noteHistoryCaptureDrafts(options = {}) {
   const seen = new Set(notes.map(note => note.local_id));
   for (const [id, item] of Object.entries(noteHistory.entries())) {
     if (noteProtectionBlocked(id)) continue;
+    if (item.draft.source === "wiki-artifact") continue;
     if (!seen.has(id) && !item.draft.deleted_at) notes.push({ ...item.draft, content: "", deleted_at: new Date().toISOString() });
   }
   for (const note of notes) {
