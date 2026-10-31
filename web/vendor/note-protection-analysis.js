@@ -379,6 +379,19 @@
     if(response.schema_version!==3||response.status!=='already_stored'||!same(response.original_execution,expected))fail('analysis_original_execution');
     Q().validateContext(response.latest_context);
     const stored=response.stored_result;exact(stored,['schema_version','operation_id','status_path','receipt']);uuid(stored.operation_id);
+    if(stored.schema_version===1){
+      if(reference.schema_version!==1||stored.status_path!=='/api/v2/notes/protected-analysis/status')fail('stored_schema');
+      const r=stored.receipt;exact(r,['write_id','purpose','execution_id','job_id','recording_id','source_digest','origin_digest','crypto_epoch','history_generation','slot_receipts','metadata_manifest_digest','ciphertext_manifest_digest']);
+      if(r.write_id!==stored.operation_id||r.purpose!=='protected_analysis_write'||r.execution_id!==e.execution_id||r.recording_id!==null||r.source_digest!==e.source_digest)fail('stored_receipt');
+      integer(r.job_id,1);integer(r.crypto_epoch,1);integer(r.history_generation,1);if(r.job_id>2147483647)fail('job_id');
+      for(const name of ['origin_digest','metadata_manifest_digest','ciphertext_manifest_digest'])hex(r[name]);
+      const nulls=plan.original.work.bundle_metadata.slot_nulls;
+      if(!Array.isArray(r.slot_receipts)||r.slot_receipts.length!==3)fail('stored_receipt');
+      for(let i=0;i<3;i++){const slot=r.slot_receipts[i];exact(slot,['key','is_null','slot_version','storage_operation_id']);integer(slot.slot_version,1);
+        if(!same(slot.key,{kind:slots[i][0],id:String(r.job_id),slot:slots[i][1]})||slot.is_null!==nulls[i].is_null||slot.storage_operation_id!==r.write_id)fail('stored_receipt');}
+      // The original status and typed values must still confirm this metadata.
+      return response;
+    }
     if(stored.schema_version!==3||stored.status_path!=='/api/v2/notes/mixed-analysis-writes/status')fail('stored_schema');
     const r=stored.receipt;
     exact(r,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);

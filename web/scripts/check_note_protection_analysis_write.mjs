@@ -428,3 +428,9 @@ const legacyRemote=box.NowNoteProtectionState.createRemote({request:async(s,path
 }});
 await legacyRemote.replanAnalysis(scope,legacyPlan,newerCatalog);
 console.log('E1 to MA allocation/cipher: native original metadata returned unchanged, target-key new envelope and exact original values PASS (synthetic; journal/UI/API pending)');
+const nativeStored={schema_version:3,status:'already_stored',original_execution:copy(legacyPrepared.original_execution),latest_context:copy(newerCatalog.context),stored_result:{schema_version:1,operation_id:uid(903),status_path:'/api/v2/notes/protected-analysis/status',receipt:{write_id:uid(903),purpose:'protected_analysis_write',execution_id:legacyExecution.execution_id,job_id:12,recording_id:null,source_digest:legacySourceDigest,origin_digest:'c'.repeat(64),crypto_epoch:1,history_generation:2,slot_receipts:legacyWork.bundle_metadata.slot_nulls.map(n=>({key:copy(n.key),is_null:n.is_null,slot_version:1,storage_operation_id:uid(903)})),metadata_manifest_digest:'d'.repeat(64),ciphertext_manifest_digest:'e'.repeat(64)}}};
+assert.equal(Q.canonicalJson(await A.validateStoredAnalysisResult(scope,legacyPlan,newerCatalog,nativeStored)),Q.canonicalJson(nativeStored));
+for(const change of [r=>{r.stored_result.status_path='/untrusted';},r=>{r.stored_result.receipt.execution_id=uid(904);},r=>{r.stored_result.receipt.slot_receipts[0].is_null=false;},r=>{r.stored_result.receipt.schema_version=3;},r=>{r.stored_result.receipt.source_digest='0'.repeat(64);}]){
+ const bad=copy(nativeStored);change(bad);await assert.rejects(()=>A.validateStoredAnalysisResult(scope,legacyPlan,newerCatalog,bad));
+}
+console.log('E1 native AlreadyStored metadata: original receipt shape/fixed path/reference/null slots preserved and forgery denial PASS (metadata only; original status/typed proof/journal/UI pending)');
