@@ -12,9 +12,9 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   let phase='analysis_claimed';
   const box=vm.createContext({URL,crypto:webcrypto,structuredClone,state:{settings:{llm:config}},
     NowNoteProtectionProtocol:{canonicalJson:JSON.stringify},noteProtectionIdentity:{instance:scope.instance},
-    noteHistoryContext:()=>context,protectionActionGuard:()=>()=>{},isLlmConfigured:()=>true,
+    noteHistoryContext:()=>context,protectionActionGuard:()=>()=>{},protectionTargetId:()=>scope.local_id,isLlmConfigured:()=>true,
     omniRouteBaseUrl:s=>s.trim().replace(/\/+$/,''),
-    noteProtectionReader:{read:async()=>({value:'SOURCE\r\n'})},
+    noteProtectionReader:{read:async()=>({value:'SOURCE\r\n'}),catalog:async()=>{serverCalls.push({action:'publication_catalog'});return info.catalog;}},
     noteProtectionAnalysis:{
       consumeHandoff:()=>{},
       status:id=>({scope:id==='other'?{...scope,local_id:'other'}:scope,phase}),
@@ -22,6 +22,9 @@ for(const file of ['web/app.js','desktop/app/app.js']){
       start:async(s,r,input,route,key)=>{serverCalls.push({action:'start',key,input,route});return 'one-run';},
       resumeClaim:async id=>{assert.notEqual(phase,'analysis_dispatching');serverCalls.push({action:'claim',id});},
       recoverDispatch:async()=>{serverCalls.push({action:'status_only'});return {provider_state:'not_dispatched'};},
+      beginPublication:async()=>{serverCalls.push({action:'publication_begin'});phase='analysis_write_preparing';},
+      resumePublication:async()=>{serverCalls.push({action:'publication_resume'});phase='complete';return {operation_id:'one-run'};},
+      readTerminal:async()=>{serverCalls.push({action:'publication_read'});return {result_json:'PUBLISHED-ORIGINAL'};},
       dispatch:async(id,key,c)=>{serverCalls.push({action:'dispatch',id,key,confirmation:c});return {operation_id:id,scope,route:{provider:c.provider,endpoint:c.endpoint,model:c.model},input:c.input};},
     },
     llmChatRequest:async(provider,c,input)=>{invocations++;assert.equal(c.omniModel,'combo-name');assert.equal(input,'ORIGINAL');return observation;},
@@ -48,6 +51,12 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   assert.ok((await box.resumeProtectedAnalysis('one-run','fixture-key')).includes('아직 확인되지'));
   assert.equal(serverCalls.length,callsBefore+1);assert.equal(serverCalls.at(-1).action,'status_only');assert.equal(invocations,providerBefore);
   await box.beginProtectedAnalysis(existing,{...route,model:'combo-name'},'fixture-key');assert.equal(serverCalls.at(-1).action,'dispatch');assert.equal(serverCalls.length,callsBefore+2);
+  phase='analysis_settled';const publicationStart=serverCalls.length;
+  assert.equal(await box.publishProtectedAnalysis('one-run','fixture-key'),'PUBLISHED-ORIGINAL');assert.equal(invocations,providerBefore);
+  assert.deepEqual(serverCalls.slice(publicationStart).map(c=>c.action),['publication_catalog','publication_begin','publication_resume','publication_read']);
+  phase='analysis_write_committing';const publicationResume=serverCalls.length;
+  assert.equal(await box.resumeProtectedAnalysis('one-run','fixture-key'),'PUBLISHED-ORIGINAL');assert.deepEqual(serverCalls.slice(publicationResume).map(c=>c.action),['publication_resume','publication_read']);
+  const wrongTargetBefore=serverCalls.length;await assert.rejects(()=>box.publishProtectedAnalysis('other','fixture-key'));assert.equal(serverCalls.length,wrongTargetBefore);
   context={...context,owner:'bob'};const before=invocations;await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);context={...scope,enabled:true};
   vm.runInContext('noteProtectionInternalEnabled=false;',box);await assert.rejects(()=>box.beginProtectedAnalysis(plan,route,'fixture-key'));await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);
 }

@@ -21,6 +21,7 @@ app.whenReady().then(async()=>{
       await ui.open();
       const dialog=document.querySelector('#noteProtectionDialog'),button=n=>dialog.querySelector('[data-action="'+n+'"]');
       assert(button('analysis-prepare'),'analysis_prepare_missing');
+      assert(button('analysis-publish'),'analysis_publish_missing');
       const idle=async()=>{for(let i=0;i<100&&button('edit').disabled;i++)await wait();};
       button('edit').click();await idle();
       const editor=dialog.querySelector('.protection-draft');assert(editor.value===original,'editor_source');
@@ -48,12 +49,13 @@ app.whenReady().then(async()=>{
       assert(!editor.value&&!clean.value&&clean!==editor&&!preview.textContent,'lock_plaintext_or_native_history_retained');
       clean.focus();document.execCommand('undo');assert(!clean.value,'lock_undo_resurrected_plaintext');
       assert(locked>0,'lock_missing');ui.invalidate();dialog.remove();
-      let invoked=0,recorded=0,unavailable=0,release;
+      let invoked=0,recorded=0,unavailable=0,published=0,release;
       const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};
-      const analysis=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},
+      const analysis=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},phaseLabel:phase=>phase,
         analysisPrepare:async()=>structuredClone(plan),analysisBegin:async(p,r,k)=>{assert(k==='fixture-key'&&r.model==='combo-name','analysis_confirmation_changed');return {operation_id:'fixture-run',provider_state:'ready'};},
         analysisInvoke:async()=>{invoked++;return new Promise(r=>{release=()=>r({provider_terminal_observed:true,outcome:'done',result_json:'SYNTHETIC-RESULT'});});},
-        analysisRecord:async(h,o,k)=>{assert(k==='new-output-key','analysis_key_reused_across_provider');recorded++;},analysisFinish:async()=>'<script>not HTML</script> SYNTHETIC-RESULT',
+        analysisRecord:async(h,o,k)=>{assert(k==='new-output-key','analysis_key_reused_across_provider');recorded++;info.pending={id:'fixture-run',phase:'analysis_settled'};info.analysisOperations=[info.pending];},analysisFinish:async()=>'<script>not HTML</script> SYNTHETIC-RESULT',
+        analysisPublish:async(id,k)=>{assert(id==='fixture-run'&&k==='publication-key','analysis_publication_binding');published++;info.pending=null;info.analysisOperations=[];return 'SERVER-SYNTHETIC-RESULT';},
         analysisUnavailable:async()=>{unavailable++;},
       });await analysis.open();
       const panel=document.querySelector('#noteProtectionDialog'),ab=n=>panel.querySelector('[data-action="'+n+'"]'),field=n=>panel.querySelector('[name="analysis-'+n+'"]');
@@ -68,11 +70,13 @@ app.whenReady().then(async()=>{
       release();await until(()=>panel.querySelector('form.library-confirm'),'analysis_new_key_wait');key('new-output-key');
       await until(()=>recorded===1&&!ab('analysis-prepare').disabled,'analysis_finish_wait');
       assert(panel.querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-RESULT')&&!panel.querySelector('script'),'analysis_result_unsafe_or_missing');
+      assert(!ab('analysis-publish').disabled,'analysis_publish_disabled');ab('analysis-publish').click();await until(()=>panel.querySelector('form.library-confirm'),'analysis_publish_key_wait');key('publication-key');
+      await until(()=>published===1&&!ab('analysis-prepare').disabled,'analysis_publish_wait');assert(invoked===1&&panel.querySelector('.protection-analysis-result').textContent==='SERVER-SYNTHETIC-RESULT'&&ab('analysis-publish').disabled,'analysis_publish_reinvoked_provider_or_state');
       ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_second_prepare_wait');field('model').value='combo-name';field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));ab('analysis-run').click();
       await until(()=>panel.querySelector('form.library-confirm'),'analysis_second_key_wait');key('fixture-key');await until(()=>invoked===2,'analysis_second_invoke_wait');
       analysis.lock();release();await until(()=>unavailable===1,'analysis_locked_terminal_wait');
       assert(recorded===1&&!panel.querySelector('.protection-analysis-result').textContent&&!field('input').value,'analysis_late_raw_after_lock');analysis.invalidate();
-      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
+      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,publicationCommand:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
     })()`,true);
     window.setContentSize(390,844);
     const mobile=await window.webContents.executeJavaScript(`(()=>{const d=document.querySelector('#noteProtectionDialog');d.showModal();const s=d.querySelector('[name="analysis-operation"]');return {width:d.clientWidth,selectorWidth:s.getBoundingClientRect().width,dialogRight:d.getBoundingClientRect().right,viewport:innerWidth};})()`);
