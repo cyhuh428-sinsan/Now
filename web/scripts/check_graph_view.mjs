@@ -489,6 +489,9 @@ async function checkBlockReferences(page) {
   assert(await evaluate(page,'getSelectedTreeNode().content.trim()===blockQaClipboard'),"Insert must store the reference, not a copied body");
   await evaluate(page,'setDocumentMode(true)');
   assert((await inspect()).body.includes("Copyable"),"Inserted reference must render");
+  await evaluate(page,'globalThis.blockQaBeforeCopy=getSelectedTreeNode().content;elements.toastRegion.replaceChildren();document.querySelector("#noteBlockCopyBtn").click()');
+  await waitForCondition(page,'elements.toastRegion.childElementCount>0',"Formatted copy guard");
+  assert(await evaluate(page,'getSelectedTreeNode().content===blockQaBeforeCopy && !elements.markdownPreview.classList.contains("hidden")'),"Formatted copy must not silently anchor a different source cursor");
   await evaluate(page,'elements.markdownPreview.querySelector("[data-note-reference]").click()');
   assert(await evaluate(page,'state.selectedTreeId==="block-copy-source" && elements.treeContent.selectionStart===0'),"Reference must navigate to the original block");
   for(const width of [1280,390]){

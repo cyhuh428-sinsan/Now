@@ -22931,6 +22931,7 @@ function renderLinkPanel() {
 function initializeBlockReferences() {
   let savedSelection=null,insertion=null;
   const remember=()=>{
+    if(!elements.markdownPreview.classList.contains("hidden")){savedSelection=null;return;}
     const node=getSelectedTreeNode();
     if(node)savedSelection={id:node.id,text:elements.treeContent.value,start:elements.treeContent.selectionStart,end:elements.treeContent.selectionEnd};
   };
@@ -22957,6 +22958,8 @@ function initializeBlockReferences() {
   const sourceMode=()=>{if(!elements.markdownPreview.classList.contains("hidden"))setDocumentMode(false);};
   for(const [id,label,action] of [
     ["noteBlockCopyBtn","블록 참조 복사",async()=>{
+      if(!elements.markdownPreview.classList.contains("hidden"))
+        throw Error("원문 편집에서 참조할 블록을 선택하세요.");
       const {node,ctx}=commandGuard();sourceMode();
       const range=selection(),result=NowNoteBlocks.anchor(range.text,range.start,range.end);
       if(result.source!==range.text && !applyTreeEditorText("block-anchor",result.source,range))throw Error("원문 변경을 저장하지 못했습니다.");
