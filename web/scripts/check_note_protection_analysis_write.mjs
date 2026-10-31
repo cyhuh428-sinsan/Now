@@ -264,3 +264,44 @@ storedWrongSource=true;await assert.rejects(()=>A.verifyStoredAnalysisPublicatio
 const savedPublished=copy(publishedRows);publishedRows=publishedRows.filter(d=>d.key.id!=='12'||d.key.kind!=='analysis_error');publishedCounts={...stats(publishedRows),by_kind:verified.counts.P.by_kind.map(r=>({kind:r.kind,...stats(publishedRows.filter(d=>d.key.kind===r.kind))}))};
 await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',()=>'fixture-key',storedStatus),/stored_outputs/);publishedRows=savedPublished;
 console.log('MA E3 AlreadyStored typed proof: existing initial result under newer current catalog, original execution/source/nulls and decrypted exact meaning, missing/forged source denied PASS (synthetic only; no durable replan/UI)');
+let replanDisk={schema_version:1,contexts:{},protection_operations:{[id]:copy(marker)}},failReplanWrite=true,replanRequests=0,allocationRequest=async()=>{replanRequests++;throw Error('unexpected_replan_rpc');};
+const durableReplanJournal=box.NowNoteHistory.create({initial:copy(replanDisk),context:()=>ctx,request:async()=>{},write:async(v,g)=>{assert.equal(g.active(),true);if(failReplanWrite)throw Error('replan_plan_store_failed');replanDisk=copy(v);}});
+const durableReplan=A.createExecution({context:()=>ctx,journal:durableReplanJournal,request:(...args)=>allocationRequest(...args)});
+await assert.rejects(()=>durableReplan.beginReplan(id,'fixture-key',newerCatalog,{...confirmation,target_epoch:2}),/replan_plan_store_failed/);
+assert.equal(durableReplan.status(id).phase,'analysis_settled');assert.equal(replanRequests,0);
+failReplanWrite=false;await durableReplan.beginReplan(id,'fixture-key',newerCatalog,{...confirmation,target_epoch:2});
+assert.equal(durableReplan.status(id).phase,'analysis_replan_preparing');assert.equal(replanRequests,0);
+const replanCheckpoint=Q.parseJson(await Q.decryptContent(durableReplan.status(id).cipher_bundle,'fixture-key'));
+assert.equal(Q.canonicalJson(replanCheckpoint.terminal),Q.canonicalJson(archive.terminal));assert.equal(replanCheckpoint.replan.plan.prepare.base.base.crypto_epoch,2);
+assert.ok(!JSON.stringify(replanDisk).includes('ORIGINAL')&&!JSON.stringify(replanDisk).includes('fixture-key'));
+const coldReplanJournal=box.NowNoteHistory.create({initial:copy(replanDisk),context:()=>ctx,request:async()=>{},write:async(v,g)=>{assert.equal(g.active(),true);replanDisk=copy(v);}});
+const coldReplan=A.createExecution({context:()=>ctx,journal:coldReplanJournal,request:(...args)=>allocationRequest(...args)});
+await assert.rejects(()=>coldReplan.inspectReplan(id,'wrong-key'));assert.equal(replanRequests,0);
+assert.equal(Q.canonicalJson(await coldReplan.inspectReplan(id,'fixture-key')),Q.canonicalJson(replanCheckpoint.replan));
+console.log('MA E3 replan durable plan: cipher before RPC, failed write preserves original settled archive, new epoch confirmation and immutable plan survive cold key verification PASS (synthetic journal only; resume/UI pending)');
+const allocationPlan=replanCheckpoint.replan.plan,allocationManifest=copy(replanManifest);allocationManifest.mutation_id=allocationPlan.prepare.mutation_id;
+const allocationVerified=await A.validateReplanWriteManifest(scope,allocationPlan,newerCatalog,allocationManifest);
+const allocationHeader=Object.fromEntries(Object.entries(allocationManifest).filter(([key])=>!names.includes(key)));
+const allocationOperation={...copy(replanOperation),mutation_id:allocationPlan.prepare.mutation_id,metadata_manifest_digest:allocationVerified.metadata_manifest_digest,metadata_header:allocationHeader,counts:allocationVerified.counts};
+let allocationPost=0,allocationGet=0,loseAllocation=true;
+allocationRequest=async(s,path,method,body)=>{
+ replanRequests++;
+ if(path.endsWith('/replan')){allocationPost++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(allocationPlan.prepare));const saved=Q.parseJson(await Q.decryptContent(coldReplan.status(id).cipher_bundle,'fixture-key'));assert.equal(Q.canonicalJson(saved.replan.plan.prepare),Q.canonicalJson(body));if(loseAllocation){loseAllocation=false;throw Error('allocation_response_lost');}return {schema_version:3,status:'prepared',operation:copy(allocationOperation),original_execution:copy(replanOriginal)};}
+ if(path.endsWith('/status')){allocationGet++;return {schema_version:3,status:'operation',operation:copy(allocationOperation),original_execution:copy(replanOriginal)};}
+ if(path.endsWith('/manifest'))return {schema_version:3,section:body.section,metadata_manifest_digest:allocationVerified.metadata_manifest_digest,metadata_header:copy(allocationHeader),set_digests:copy(allocationVerified.set_digests),counts:copy(allocationVerified.counts),entries:copy(allocationManifest[body.section]),next_cursor:null};
+ throw Error('unexpected_allocation_rpc');
+};
+await assert.rejects(()=>coldReplan.resumeReplanPreparation(id,'fixture-key'),/allocation_response_lost/);assert.equal(coldReplan.status(id).phase,'analysis_replan_preparing');
+await coldReplan.resumeReplanPreparation(id,'fixture-key');assert.equal(coldReplan.status(id).phase,'analysis_replan_allocated');assert.equal(allocationPost,2);
+const allocated=await coldReplan.inspectReplan(id,'fixture-key');assert.equal(allocated.prepared.id,replanId);assert.equal(allocated.work,null);assert.equal(Q.canonicalJson(allocated.plan),Q.canonicalJson(allocationPlan));
+await coldReplan.resumeReplanPreparation(id,'fixture-key');assert.equal(allocationPost,2);assert.equal(allocationGet,1);
+console.log('MA E3 replan durable allocation: saved immutable request before POST, lost response replay, checked six-set allocation checkpoint before encryption, known ID GET only PASS (synthetic journal/transport; result checkpoint/UI pending)');
+const storedPendingMarker={...copy(marker),phase:'analysis_replan_preparing',cipher_bundle:await Q.encryptContent(Q.canonicalJson(replanCheckpoint),'fixture-key')};
+let storedRequests=0;
+const storedPendingJournal=box.NowNoteHistory.create({initial:{schema_version:1,contexts:{},protection_operations:{[id]:storedPendingMarker}},context:()=>ctx,request:async()=>{},write:async(v,g)=>{assert.equal(g.active(),true);}});
+const storedPending=A.createExecution({context:()=>ctx,journal:storedPendingJournal,request:async(s,path,method,body)=>{storedRequests++;assert.equal(path,'/api/v2/notes/mixed-analysis-writes/replan');assert.equal(Q.canonicalJson(body),Q.canonicalJson(allocationPlan.prepare));return copy(storedResponse);}});
+await assert.rejects(()=>storedPending.resumeReplanPreparation(id,'wrong-key'));assert.equal(storedRequests,0);
+await storedPending.resumeReplanPreparation(id,'fixture-key');assert.equal(storedPending.status(id).phase,'analysis_replan_stored');assert.equal(storedRequests,1);
+const storedCheckpoint=await storedPending.inspectReplan(id,'fixture-key');assert.equal(storedCheckpoint.prepared,null);assert.equal(storedCheckpoint.work,null);assert.equal(storedCheckpoint.proof,null);
+await storedPending.resumeReplanPreparation(id,'fixture-key');assert.equal(storedRequests,1);
+console.log('MA E3 AlreadyStored durable metadata: original response preserved without output allocation/cipher/commit, wrong key before RPC, still pending until receipt/typed proof PASS (synthetic journal only)');

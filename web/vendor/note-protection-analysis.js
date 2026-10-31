@@ -509,6 +509,7 @@
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
     const publicationPhases=['analysis_write_preparing','analysis_write_prepared','analysis_write_staged','analysis_write_committing','analysis_write_committed'];
+    const replanPhases=['analysis_replan_preparing','analysis_replan_allocated','analysis_replan_stored'];
     const tickets=new WeakMap();
     let generation=0,running=false;
     const own=scope=>{
@@ -553,14 +554,17 @@
     async function open(marker,password,c,epoch) {
       if(!password)fail('key_required');
       const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
-      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[]),...(Object.hasOwn(b,'publication')?['publication']:[])]);
+      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[]),...(Object.hasOwn(b,'publication')?['publication']:[]),...(Object.hasOwn(b,'replan')?['replan']:[])]);
       b.dispatch??=null;
       b.terminal??=null;
       b.publication??=null;
+      b.replan??=null;
+      const phase=replanPhases.includes(marker.phase)?'analysis_settled':marker.phase;
+      if(replanPhases.includes(marker.phase)!==(b.replan!==null))fail('replan_phase');
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
-      if((marker.phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
+      if((phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
       if(b.dispatch!==null){
         exact(b.dispatch,['request','handoff_reserved']);
         const d=b.dispatch.request;exact(d,[...Object.keys(access(marker.scope)),'execution_id','run_version','lease_version','source_digest','claim_metadata_digest']);
@@ -568,11 +572,11 @@
           ||d.source_digest!==b.execution.source_digest||d.claim_metadata_digest!==b.execution.claim_metadata_digest||typeof b.dispatch.handoff_reserved!=='boolean')fail('dispatch_binding');
         integer(d.lease_version,1);
       }
-      const published=marker.phase==='complete'&&b.publication!==null;
+      const published=phase==='complete'&&b.publication!==null;
       const terminalPhases=['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,...(published?['complete']:[])];
-      if(['analysis_dispatching','analysis_running',...terminalPhases].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase!=='analysis_dispatching')))fail('bundle_phase');
-      if(terminalPhases.includes(marker.phase)!==(b.terminal!==null))fail('bundle_phase');
-      if(marker.phase==='complete'&&!published&&(b.execution?.state!=='result_unavailable'||b.execution.terminal_receipt?.outcome!=='result_unavailable'||b.execution.bundle_metadata!==null))fail('bundle_phase');
+      if(['analysis_dispatching','analysis_running',...terminalPhases].includes(phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(phase!=='analysis_dispatching')))fail('bundle_phase');
+      if(terminalPhases.includes(phase)!==(b.terminal!==null))fail('bundle_phase');
+      if(phase==='complete'&&!published&&(b.execution?.state!=='result_unavailable'||b.execution.terminal_receipt?.outcome!=='result_unavailable'||b.execution.bundle_metadata!==null))fail('bundle_phase');
       if(b.terminal!==null){
         exact(b.terminal,['work','settle_core','receipt']);
         const values=await openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
@@ -581,22 +585,22 @@
           const previous={...b.execution,run_version:b.execution.run_version-(b.execution.terminal_receipt===null?0:1)};
           if(!same(b.terminal.settle_core,terminalCore(marker.scope,previous,b.terminal.work.bundle_metadata)))fail('terminal_core_changed');
         }
-        if((marker.phase==='analysis_terminal')!==(b.terminal.settle_core===null)||(['analysis_settled',...publicationPhases].includes(marker.phase)||published)!==(b.terminal.receipt!==null))fail('bundle_phase');
+        if((phase==='analysis_terminal')!==(b.terminal.settle_core===null)||(['analysis_settled',...publicationPhases].includes(phase)||published)!==(b.terminal.receipt!==null))fail('bundle_phase');
         if(b.terminal.receipt!==null&&(!same(b.terminal.receipt,b.execution.terminal_receipt)||!same(b.execution.bundle_metadata,b.terminal.work.bundle_metadata)))fail('terminal_receipt_changed');
       }
-      if((publicationPhases.includes(marker.phase)||published)!==(b.publication!==null))fail('publication_phase');
+      if((publicationPhases.includes(phase)||published)!==(b.publication!==null))fail('publication_phase');
       if(b.publication!==null){
         const p=b.publication;exact(p,['catalog','plan','prepared','work','receipt','proof']);
         const original=await createInitialWritePlan(marker.scope,b.request,b.execution,b.terminal.work,p.catalog,p.plan.prepare.mutation_id,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
         if(!same(original,p.plan))fail('publication_plan_changed');
-        if(marker.phase==='analysis_write_preparing'?(p.prepared!==null||p.work!==null):(p.prepared===null||p.work===null))fail('publication_phase');
+        if(phase==='analysis_write_preparing'?(p.prepared!==null||p.work!==null):(p.prepared===null||p.work===null))fail('publication_phase');
         if(p.prepared!==null){
           const work=await buildInitialWriteWork(marker.scope,b.request,b.execution,b.terminal.work,p.plan,p.prepared,p.catalog,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
           if(!same(work,p.work))fail('publication_work_changed');
           const originalExecution={reference:p.plan.prepare.execution_ref,source_schema_version:3,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.execution.bundle_metadata};
           if(!same(p.prepared.original_execution,originalExecution))fail('publication_execution_changed');
         }
-        if((marker.phase==='analysis_write_committed'||published)!==(p.receipt!==null)||(published)!==(p.proof!==null))fail('publication_phase');
+        if((phase==='analysis_write_committed'||published)!==(p.receipt!==null)||(published)!==(p.proof!==null))fail('publication_phase');
         if(p.receipt!==null){
           const expected=structuredClone(p.plan.prepare.base);expected.base.history_generation++;
           if(p.receipt.schema_version!==3||p.receipt.purpose!=='mixed_analysis_write'||p.receipt.operation_id!==b.execution.execution_id||p.receipt.mutation_id!==p.plan.prepare.mutation_id
@@ -607,6 +611,22 @@
           exact(p.proof,['operation_id','metadata_manifest_digest','published_catalog_digest','output_keys']);hex(p.proof.published_catalog_digest);
           if(p.proof.operation_id!==b.execution.execution_id||p.proof.metadata_manifest_digest!==p.prepared.digest||!same(p.proof.output_keys,p.prepared.manifest.DSET.map(d=>d.destination_key)))fail('publication_proof_changed');
         }
+      }
+      if(b.replan!==null){
+        const r=b.replan;exact(r,['previous_phase','catalog','plan','prepared','work','stored','receipt','proof']);
+        if(r.previous_phase!=='analysis_settled'||b.publication!==null||r.work!==null||r.receipt!==null||r.proof!==null)fail('replan_phase');
+        if((marker.phase==='analysis_replan_allocated')!==(r.prepared!==null)||(marker.phase==='analysis_replan_stored')!==(r.stored!==null))fail('replan_phase');
+        const original=await createReplanWritePlan(marker.scope,b.request,b.execution,b.terminal.work,r.catalog,
+          {operation_id:null,state:'none'},r.plan.prepare.mutation_id,password,
+          {confirmed_reuse_original_result:true,target_epoch:r.catalog.context.base.crypto_epoch},()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+        if(!same(r.plan,original))fail('replan_plan_changed');
+        if(r.prepared!==null){
+          const p=r.prepared,verified=await validateReplanWriteManifest(marker.scope,r.plan,r.catalog,{...p.response.metadata_header,...p.manifest},()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+          const expected={reference:r.plan.prepare.execution_ref,source_schema_version:3,source_context:b.execution.source_context,terminal_receipt:b.execution.terminal_receipt,bundle_metadata:b.execution.bundle_metadata};
+          if(p.version!==3||p.path!=='/api/v2/notes/mixed-analysis-writes'||p.id!==p.response.operation_id||p.operation_id!==p.id||p.digest!==verified.metadata_manifest_digest
+            ||p.response.metadata_manifest_digest!==p.digest||p.response.mutation_id!==r.plan.prepare.mutation_id||!same(p.response.counts,verified.counts)||!same(p.original_execution,expected))fail('replan_prepared');
+        }
+        if(r.stored!==null){await validateStoredAnalysisResult(marker.scope,r.plan,r.catalog,r.stored,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);}
       }
       return b;
     }
@@ -627,7 +647,7 @@
       },
       async readTerminal(id,password) {
         const marker=status(id),c=own(marker.scope),epoch=generation;
-        if(!['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,'complete'].includes(marker.phase))fail('terminal_checkpoint_missing');
+        if(!['analysis_terminal','analysis_settling','analysis_settled',...publicationPhases,...replanPhases,'complete'].includes(marker.phase))fail('terminal_checkpoint_missing');
         const b=await open(marker,password,c,epoch);
         if(b.terminal===null)fail('terminal_checkpoint_missing');
         return openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
@@ -743,6 +763,39 @@
           const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
           if(!same(readback.terminal.receipt,b.terminal.receipt))fail('terminal_checkpoint_readback');
           return structuredClone(b.terminal.receipt);
+        }finally{running=false;}
+      },
+      async inspectReplan(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        const b=await open(marker,password,c,epoch);active(marker.scope,c,epoch);
+        if(b.replan===null)fail('replan_missing');return structuredClone(b.replan);
+      },
+      async beginReplan(id,password,catalog,confirmation) {
+        catalog=structuredClone(catalog);confirmation=structuredClone(confirmation);
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(marker.phase!=='analysis_settled')fail('replan_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch);
+          const plan=await createReplanWritePlan(marker.scope,b.request,b.execution,b.terminal.work,catalog,
+            {operation_id:null,state:'none'},crypto.randomUUID(),password,confirmation,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+          b.replan={previous_phase:marker.phase,catalog,plan,prepared:null,work:null,stored:null,receipt:null,proof:null};
+          marker.phase='analysis_replan_preparing';await save(marker,b,password,c,epoch);
+          await open(status(id),password,c,epoch);active(marker.scope,c,epoch);return id;
+        }finally{running=false;}
+      },
+      async resumeReplanPreparation(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!replanPhases.includes(marker.phase))fail('replan_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),r=b.replan;
+          if(r.stored!==null)return structuredClone(r.stored);
+          const guarded=async(...args)=>{active(marker.scope,c,epoch);const result=await request(...args);active(marker.scope,c,epoch);return result;};
+          const remote=P().createRemote({request:guarded});
+          const prepared=await remote.replanAnalysis(marker.scope,r.plan,r.catalog,r.prepared);active(marker.scope,c,epoch);
+          if(prepared.status==='already_stored'){r.stored=prepared;marker.phase='analysis_replan_stored';}
+          else{r.prepared=prepared;marker.phase='analysis_replan_allocated';}
+          await save(marker,b,password,c,epoch);await open(status(id),password,c,epoch);active(marker.scope,c,epoch);
+          return structuredClone(prepared);
         }finally{running=false;}
       },
       async beginPublication(id,password,catalog) {
