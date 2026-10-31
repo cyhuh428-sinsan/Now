@@ -253,9 +253,11 @@ console.log('MA E3 replan typed proof: G+1 only, full preserved catalog, new cip
 const storedResponse={...copy(replanStored),latest_context:copy(resultContext)};
 let storedWrongSource=false;
 const storedReader=box.NowNoteProtectionClient.createReader({request:async(...args)=>{const r=await transport(...args);if(args[1].endsWith('/metadata')){r.operation_origin=copy(args[3].representation_id==='12'?header.operation_origin:replanHeader.operation_origin);if(storedWrongSource&&args[3].representation_id==='12')r.operation_origin.source_digest='f'.repeat(64);}return r;}});
-const storedStatus=async(s,path,method,body)=>{assert.equal(path,'/api/v2/notes/mixed-analysis-writes/status');assert.equal(method,'GET');assert.equal(body.operation_id,settled.execution_id);return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};};
+const storedStatus=async(s,path,method,body)=>{assert.equal(path,'/api/v2/notes/mixed-analysis-writes/status');assert.equal(method,'GET');assert.equal(body.operation_id,settled.execution_id);return {schema_version:3,status:'operation',operation:{...copy(operation),latest_context:copy(resultContext)},original_execution:copy(originalExecution)};};
 const storedProof=await A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,storedResponse,storedReader,'fixture-key',descriptor=>descriptor.representation_epoch===1?'fixture-key':'new-epoch-key',storedStatus);
 assert.equal(storedProof.operation_id,settled.execution_id);assert.equal(storedProof.output_keys.length,3);
+const oldStoredView=copy(storedResponse);oldStoredView.latest_context=copy(context);
+await A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,oldStoredView,storedReader,'fixture-key',()=>'fixture-key',storedStatus);
 for(const change of [r=>{r.stored_result.receipt.metadata_manifest_digest='d'.repeat(64);},r=>{r.stored_result.receipt.set_digests.S='d'.repeat(64);},r=>{r.stored_result.receipt.ciphertext_manifest_digest='d'.repeat(64);}]){
  const bad=copy(storedResponse);change(bad);await assert.rejects(()=>A.verifyStoredAnalysisPublication(scope,rekeyPlan,newerCatalog,bad,storedReader,'fixture-key',()=>'fixture-key',storedStatus),/stored_receipt_unconfirmed/);
 }
@@ -289,6 +291,16 @@ allocationRequest=async(s,path,method,body)=>{
  if(path.endsWith('/replan')){allocationPost++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(allocationPlan.prepare));const saved=Q.parseJson(await Q.decryptContent(coldReplan.status(id).cipher_bundle,'fixture-key'));assert.equal(Q.canonicalJson(saved.replan.plan.prepare),Q.canonicalJson(body));if(loseAllocation){loseAllocation=false;throw Error('allocation_response_lost');}return {schema_version:3,status:'prepared',operation:copy(allocationOperation),original_execution:copy(replanOriginal)};}
  if(path.endsWith('/status')){allocationGet++;return {schema_version:3,status:'operation',operation:copy(allocationOperation),original_execution:copy(replanOriginal)};}
  if(path.endsWith('/manifest'))return {schema_version:3,section:body.section,metadata_manifest_digest:allocationVerified.metadata_manifest_digest,metadata_header:copy(allocationHeader),set_digests:copy(allocationVerified.set_digests),counts:copy(allocationVerified.counts),entries:copy(allocationManifest[body.section]),next_cursor:null};
+ if(path.endsWith('/chunks')||path.endsWith('/entries/seal')||path.endsWith('/staged'))return transport(s,path,method,body);
+ if(path.endsWith('/commit')){
+  replanCommitCalls++;const saved=Q.parseJson(await Q.decryptContent(activeReplanController.status(id).cipher_bundle,'fixture-key'));assert.equal(activeReplanController.status(id).phase,'analysis_replan_committing');assert.equal(Q.canonicalJson(body),Q.canonicalJson(saved.replan.work.commit));
+  resultContext=copy(newerCatalog.context);resultContext.base.history_generation++;
+  publishedRows=[...copy(newerCatalog.entries),...allocationManifest.DSET.map((o,i)=>({...copy(d),key:copy(o.destination_key),representation_kind:o.output_kind,representation_epoch:o.output_epoch,is_null:o.is_null,representation_etag:uid(400+i),storage_operation_id:replanId,semantic_origin_id:replanId,origin_validator:'linked_mixed_v1',expected_binding:copy(o.expected_binding),ciphertext_sha256:o.is_null?null:uploads.get(Q.canonicalJson(o.destination_key)).hash}))];
+  publishedRows=Q.keyOrder(publishedRows.map(d=>d.key)).map(key=>publishedRows.find(d=>Q.canonicalJson(d.key)===Q.canonicalJson(key)));publishedCounts={...stats(publishedRows),by_kind:verified.counts.P.by_kind.map(r=>({kind:r.kind,...stats(publishedRows.filter(d=>d.key.kind===r.kind))}))};
+  allocationOperation.state='committed';allocationOperation.latest_context=copy(resultContext);allocationOperation.receipt={...copy(replanReceipt),mutation_id:body.mutation_id,metadata_manifest_digest:allocationVerified.metadata_manifest_digest,set_digests:copy(allocationVerified.set_digests),ciphertext_manifest_digest:body.client_verified_ciphertext_manifest_digest,result:copy(resultContext)};
+  if(loseReplanCommit){loseReplanCommit=false;throw Error('replan_commit_response_lost');}return copy(allocationOperation);
+ }
+ if(path.includes('/mixed-representations/')){const r=await transport(s,path,method,body);if(path.endsWith('/metadata'))r.operation_origin=copy(body.representation_id==='33'?allocationHeader.operation_origin:header.operation_origin);return r;}
  throw Error('unexpected_allocation_rpc');
 };
 await assert.rejects(()=>coldReplan.resumeReplanPreparation(id,'fixture-key'),/allocation_response_lost/);assert.equal(coldReplan.status(id).phase,'analysis_replan_preparing');
@@ -299,7 +311,7 @@ console.log('MA E3 replan durable allocation: saved immutable request before POS
 const storedPendingMarker={...copy(marker),phase:'analysis_replan_preparing',cipher_bundle:await Q.encryptContent(Q.canonicalJson(replanCheckpoint),'fixture-key')};
 let storedRequests=0;
 const storedPendingJournal=box.NowNoteHistory.create({initial:{schema_version:1,contexts:{},protection_operations:{[id]:storedPendingMarker}},context:()=>ctx,request:async()=>{},write:async(v,g)=>{assert.equal(g.active(),true);}});
-const storedPending=A.createExecution({context:()=>ctx,journal:storedPendingJournal,request:async(s,path,method,body)=>{storedRequests++;assert.equal(path,'/api/v2/notes/mixed-analysis-writes/replan');assert.equal(Q.canonicalJson(body),Q.canonicalJson(allocationPlan.prepare));return copy(storedResponse);}});
+const storedPending=A.createExecution({context:()=>ctx,journal:storedPendingJournal,request:async(s,path,method,body)=>{storedRequests++;if(path.endsWith('/replan')){assert.equal(Q.canonicalJson(body),Q.canonicalJson(allocationPlan.prepare));return copy(storedResponse);}if(path.endsWith('/status'))return storedStatus(s,path,method,body);return transport(s,path,method,body);}});
 await assert.rejects(()=>storedPending.resumeReplanPreparation(id,'wrong-key'));assert.equal(storedRequests,0);
 await storedPending.resumeReplanPreparation(id,'fixture-key');assert.equal(storedPending.status(id).phase,'analysis_replan_stored');assert.equal(storedRequests,1);
 const storedCheckpoint=await storedPending.inspectReplan(id,'fixture-key');assert.equal(storedCheckpoint.prepared,null);assert.equal(storedCheckpoint.work,null);assert.equal(storedCheckpoint.proof,null);
@@ -316,3 +328,22 @@ const afterCipherJournal=box.NowNoteHistory.create({initial:copy(replanDisk),con
 await afterCipher.prepareReplanCipher(id,'fixture-key','new-epoch-key');assert.equal(Q.canonicalJson((await afterCipher.inspectReplan(id,'fixture-key')).work),checkpointBytes);
 assert.ok(!JSON.stringify(replanDisk).includes('ORIGINAL')&&!JSON.stringify(replanDisk).includes('new-epoch-key'));
 console.log('MA E3 replan durable cipher: checked allocation before encrypt, original and target keys distinct, saved/readback before upload, cold cached bytes/core no regeneration, original terminal still readable PASS (synthetic only; publication/UI pending)');
+let replanCommitCalls=0,loseReplanCommit=true,activeReplanController=coldReplan;
+await assert.rejects(()=>coldReplan.resumeReplanPublication(id,'fixture-key','new-epoch-key'),/replan_commit_response_lost/);
+assert.equal(coldReplan.status(id).phase,'analysis_replan_committing');assert.equal(replanCommitCalls,1);
+const committingReplan=await coldReplan.inspectReplan(id,'fixture-key');assert.equal(Q.canonicalJson(committingReplan.work),checkpointBytes);
+const publicationReplanJournal=box.NowNoteHistory.create({initial:copy(replanDisk),context:()=>ctx,request:async()=>{},write:async(v,g)=>{assert.equal(g.active(),true);replanDisk=copy(v);}});
+const publicationReplan=A.createExecution({context:()=>ctx,journal:publicationReplanJournal,request:(...args)=>allocationRequest(...args)});activeReplanController=publicationReplan;
+const beforeBadTarget=replanRequests;await assert.rejects(()=>publicationReplan.resumeReplanPublication(id,'fixture-key','wrong-key'));assert.equal(replanRequests,beforeBadTarget);
+await publicationReplan.resumeReplanPublication(id,'fixture-key','new-epoch-key');assert.equal(publicationReplan.status(id).phase,'complete');assert.equal(replanCommitCalls,1);
+const finalReplan=await publicationReplan.inspectReplan(id,'fixture-key');assert.equal(Q.canonicalJson(finalReplan.work),checkpointBytes);assert.equal(finalReplan.proof.output_keys.length,3);
+assert.equal((await publicationReplan.readTerminal(id,'fixture-key')).result_json,result);
+assert.ok(!JSON.stringify(replanDisk).includes('ORIGINAL')&&!JSON.stringify(replanDisk).includes('new-epoch-key'));
+console.log('MA E3 replan durable publication: cipher/core before upload/commit, lost commit cold original receipt recovery, no extra POST/Provider, typed source/value proof before complete and original archive preserved PASS (synthetic only; UI/actual server pending)');
+await storedPending.completeStoredReplan(id,'fixture-key',()=>'fixture-key');assert.equal(storedPending.status(id).phase,'complete');
+const completeStoredCheckpoint=await storedPending.inspectReplan(id,'fixture-key');
+assert.equal(completeStoredCheckpoint.work,null);assert.equal(completeStoredCheckpoint.prepared,null);assert.equal(completeStoredCheckpoint.proof.operation_id,settled.execution_id);
+assert.equal(Q.canonicalJson(completeStoredCheckpoint.stored),Q.canonicalJson(storedResponse));assert.equal(Q.canonicalJson(completeStoredCheckpoint.receipt),Q.canonicalJson(storedResponse.stored_result.receipt));
+const storedRequestsAtComplete=storedRequests;await storedPending.completeStoredReplan(id,'fixture-key',()=>'fixture-key');assert.equal(storedRequests,storedRequestsAtComplete);
+assert.equal((await storedPending.readTerminal(id,'fixture-key')).result_json,result);
+console.log('MA E3 AlreadyStored durable completion: original status receipt plus typed origin/value proof before complete, no invented allocation/cipher/commit, immutable original response and result preserved PASS (synthetic only; UI/actual server pending)');
