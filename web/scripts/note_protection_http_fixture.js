@@ -55,6 +55,68 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([38,39].includes(config.phase)){
+    state.selectedTreeId=target;render();await settle();await open();
+    const Q=NowNoteProtectionProtocol,same=(l,r)=>Q.canonicalJson(l)===Q.canonicalJson(r);
+    const initial=await inspectNoteProtection(),currentD=initial.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(initial.catalog.context.selected_physical_note_id));
+    const original=await noteProtectionReader.read(initial.scope,initial.catalog,currentD,async()=>password);
+    assert(original.value.note.content==='HTTP-QA-RELATED-CURRENT-'+run+'\n','backup_original_current');
+    if(config.phase===39){
+      assert(initial.catalog.context.current_mode==='plain','backup_cold_mode_changed');
+      const historyD=initial.catalog.entries.find(d=>d.key.kind==='revision_snapshot'&&d.representation_epoch>0&&!d.is_null);
+      assert(historyD,'backup_cold_protected_history_missing');
+      await noteProtectionReader.read(initial.scope,initial.catalog,historyD,async()=>password);
+      const saved=noteHistory.export(),local=saved.contexts[NowNoteHistory.key(initial.scope)].notes[target];
+      assert(NowNoteProtectionState.protectedRecord(local),'backup_cold_cipher_journal_missing');
+      assert(saved.recovery_archives.some(a=>NowNoteProtectionState.protectedRecord(a.contexts?.[NowNoteHistory.key(initial.scope)]?.notes?.[target])),'backup_cold_original_archive_missing');
+      for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-RELATED-CURRENT-'+run),'backup_cold_plaintext_store');
+      button('lock').click();return {ok:true,mode:config.mode,phase:39,coldCipherJournal:true,plainCurrentAndCipherHistory:true,originalCurrent:true,providerCalls:0};
+    }
+    const sourceDownload=downloadText,sourceNotice=showNotice;let backup,downloads=0,notices=[],confirmations=0;
+    downloadText=(name,text,mime)=>{assert(mime==='application/json','backup_download_type');downloads++;backup=JSON.parse(text);};
+    showNotice=(message,type)=>{notices.push({message,type});return sourceNotice(message,type);};
+    const input=elements.importInput;
+    async function importFile(value,expectedConfirm){
+      const transfer=new DataTransfer();transfer.items.add(new File([JSON.stringify(value)],'synthetic-backup.json',{type:'application/json'}));
+      input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));
+      let confirmed=false;
+      for(let i=0;i<2500;i++){
+        if(!elements.confirmDialog.classList.contains('hidden')){
+          confirmations++;assert(expectedConfirm&&!confirmed,'backup_unexpected_confirmation');confirmed=true;elements.confirmOkBtn.click();
+        }
+        if(input.value===''){await settle();assert(confirmed===expectedConfirm,'backup_confirmation_missing');return;}
+        await wait();
+      }
+      throw Error('backup_file_reader_timeout');
+    }
+    try{
+      downloadCurrentBackup('qa-protected');const protectedBackup=structuredClone(backup);
+      assert(protectedBackup.history&&downloads===1&&!JSON.stringify(protectedBackup).includes('HTTP-QA-RELATED-CURRENT-'+run),'backup_cipher_export_missing');
+      const bad=structuredClone(protectedBackup),record={raw:structuredClone(original.value.note),draft:structuredClone(original.value.note),base:{inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[]};
+      bad.history.contexts[NowNoteHistory.key(initial.scope)].notes[target]=record;
+      const beforeData=Q.canonicalJson(state.data),beforeHistory=Q.canonicalJson(noteHistory.export());
+      await importFile(bad,false);
+      assert(downloads===1&&confirmations===0&&Q.canonicalJson(state.data)===beforeData&&Q.canonicalJson(noteHistory.export())===beforeHistory,'backup_plain_rejection_changed_original');
+      assert(notices.some(n=>n.type==='error'&&n.message.includes('보호된 메모')),'backup_guard_notice_missing');
+      globalThis.__HTTP_CAPTURE_DONE__=undefined;emit({stage:'backup_restore_ready',owner:a.owner,local_id:target});
+      for(let i=0;i<100&&!globalThis.__HTTP_CAPTURE_DONE__;i++)await new Promise(r=>setTimeout(r,50));assert(globalThis.__HTTP_CAPTURE_DONE__===true,'backup_capture_failed');
+      notices=[];await importFile(protectedBackup,true);
+      assert(notices.some(n=>n.type==='success'),'backup_cipher_restore_failed');
+      const restored=noteHistory.export().contexts[NowNoteHistory.key(initial.scope)].notes[target];
+      assert(same(restored.protection_record,protectedBackup.history.contexts[NowNoteHistory.key(initial.scope)].notes[target].protection_record),'backup_cipher_restore_reencrypted');
+      state.selectedTreeId=target;render();await settle();await open();
+      const count=Object.keys(noteHistory.protectionOperations()).length;
+      await action('current_plain_transition',()=>Object.keys(noteHistory.protectionOperations()).length===count+1&&Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
+      const plainMode=await inspectNoteProtection();assert(plainMode.catalog.context.current_mode==='plain','backup_CP_failed');
+      downloadCurrentBackup('qa-mixed');const mixedBackup=structuredClone(backup);
+      notices=[];await importFile(mixedBackup,true);assert(notices.some(n=>n.type==='success'),'backup_mixed_restore_failed');
+      state.selectedTreeId=target;render();await settle();await open();
+      const after=await inspectNoteProtection();assert(same(after.catalog.context,plainMode.catalog.context),'backup_restore_changed_server');
+      for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-RELATED-CURRENT-'+run),'backup_restore_plaintext_store');
+      emit({stage:'backup_restored',owner:a.owner,local_id:target});
+      button('lock').click();return {ok:true,mode:config.mode,phase:38,actualFileReader:true,plainBackupRejected:true,originalPreserved:true,cipherRestore:true,mixedRestore:true,serverUnchanged:true,providerCalls:0};
+    }finally{downloadText=sourceDownload;showNotice=sourceNotice;}
+  }
   if([34,35,36,37].includes(config.phase)){
     const Q=NowNoteProtectionProtocol,same=(l,r)=>Q.canonicalJson(l)===Q.canonicalJson(r),expected='HTTP-QA-RESULT-'+run;
     if(config.phase===37){

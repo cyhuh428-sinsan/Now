@@ -488,7 +488,7 @@ def test_postgres_empty_restore_reserved_publication_and_allocator_rollback(clie
     import os,base64
     url=os.environ.get('NOW_E5_TEST_POSTGRES_URL')
     if not url:pytest.skip('E5 전용 PostgreSQL QA URL 필요')
-    from sqlalchemy import create_engine,event,inspect,select,text
+    from sqlalchemy import create_engine,event,inspect,select,text,func
     from sqlalchemy.engine import make_url
     from sqlalchemy.orm import Session
     from sqlalchemy.schema import CreateSchema,DropSchema
@@ -544,14 +544,33 @@ def test_postgres_empty_restore_reserved_publication_and_allocator_rollback(clie
             for table in inspect(connection).get_table_names():
                 assert connection.scalar(text('SELECT COUNT(*) FROM '+connection.dialect.identifier_preparer.quote(table)))==0
         assert restore_empty(target,backup)['section_counts']==backup['section_counts']
+        def backend():
+            with Session(target,autoflush=False) as request_db:yield request_db
+        app.dependency_overrides[get_db]=backend
+        from app.models.note import SyncLog
+        inserted=False
+        def concurrent_log(connection,cursor,statement,parameters,context,executemany):
+            nonlocal inserted
+            if not inserted and statement.lstrip().startswith('SELECT notes.'):
+                inserted=True
+                with target.begin() as writer:
+                    writer.execute(SyncLog.__table__.insert().values(owner_id=s['owner'],device_id='actor'))
+        event.listen(target,'after_cursor_execute',concurrent_log)
+        try:
+            response=client.get('/api/v1/admin/export/all',params={'backup_schema_version':3},headers=admin_headers)
+        finally:event.remove(target,'after_cursor_execute',concurrent_log)
+        assert inserted and response.status_code==200 and response.headers['cache-control']=='no-store'
+        exported=response.json()
+        assert exported['section_counts']==backup['section_counts'],'PG snapshot must exclude a row committed after the first section read'
+        for section in backup['items']:
+            if section not in ('users','devices'):assert exported['items'][section]==backup['items'][section]
+        with target.connect() as connection:
+            assert connection.scalar(select(func.count()).select_from(SyncLog))==len(backup['items']['sync_logs'])+1
         with Session(target,autoflush=False) as restored:
             assert all(row.access_token_hash is None and row.access_token_value is None for row in restored.scalars(select(UserDevice)))
             # Explicit synthetic reauthentication uses the existing management function, not restore.
             _,token=issue_user_device_access_token(restored,owner_id=s['owner'],device_id='actor',display_name='E5 synthetic QA')
             restored.commit()
-            def backend():
-                with Session(target,autoflush=False) as request_db:yield request_db
-            app.dependency_overrides[get_db]=backend
             headers={**admin_headers,'X-Now-User-Token':token}
             from .test_note_v2 import body as note_body
             response=client.put('/api/v2/notes/current',json=note_body(s,'e5-unrelated-note'),headers=headers)

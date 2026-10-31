@@ -56,7 +56,7 @@ async function closeSyntheticProvider(){
   if(syntheticProvider){
     const provider=syntheticProvider;await provider.close();
     persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{port:provider.port,...provider.stats(),attempts:providerAttempts,closed:!provider.isListening()}});syntheticProvider=null;
-  }else if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
+  }else if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
 }
 app.whenReady().then(async()=>{
   if([14,16,18,26,29].includes(config.phase)){
@@ -81,12 +81,12 @@ app.whenReady().then(async()=>{
       if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
         blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
       }
-      if(['analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready','transcript_ready','analysis_apply_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
+      if(['backup_restore_ready','analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready','transcript_ready','analysis_apply_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
         for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
           persistEvidence({mode:config.mode,phase:config.phase,captureStage:size+'_start'});
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          const name=(event.stage==='analysis_apply_ready'?'analysis-apply':event.stage==='transcript_ready'?'transcript':event.stage==='analysis_replan_ready'?'analysis-replanned':event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          const name=(event.stage==='backup_restore_ready'?'backup-restore':event.stage==='analysis_apply_ready'?'analysis-apply':event.stage==='transcript_ready'?'transcript':event.stage==='analysis_replan_ready'?'analysis-replanned':event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
           fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
@@ -101,7 +101,7 @@ app.whenReady().then(async()=>{
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
     if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
-    if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
+    if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
     window.destroy();app.exit(0);
