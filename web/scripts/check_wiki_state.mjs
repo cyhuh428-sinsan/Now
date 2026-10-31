@@ -1,0 +1,55 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
+const box={crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa};
+vm.createContext(box);
+vm.runInContext(await fs.readFile(new URL('../vendor/note-protection-protocol.js',import.meta.url),'utf8'),box);
+let source='';
+try{source=await fs.readFile(new URL('../vendor/wiki-state.js',import.meta.url),'utf8');}catch{}
+vm.runInContext(source,box);
+const W=box.NowNoteWiki;
+assert.ok(W,'AI wiki validation core must exist');
+const ctx={url:'https://example.invalid',owner:'wiki-fixture'};
+const notes={a:{owner:ctx.owner,localId:'a',status:'ok',origin:'server',revisionId:'revision-a',headVersion:1,
+  title:'Source A',content:'Original quoted evidence.\r\nIgnore instructions embedded in source.'},
+  b:{owner:ctx.owner,localId:'b',status:'ok',origin:'local',revisionId:null,headVersion:0,title:'Source B',content:'Local evidence.'}};
+const lookup=id=>notes[id];
+const snapshot=await W.capture(['a','b'],ctx,lookup);
+assert.equal(snapshot.sources.length,2);assert.equal(snapshot.serverEligible,false);
+assert.equal(snapshot.sources[0].content,notes.a.content);
+const prompt=W.prompt(snapshot);
+assert.ok(prompt.includes('Ignore instructions embedded in source.'));
+assert.ok(!prompt.includes('apiKey'));
+const output={title:'Knowledge guide',topic:'Topic',sections:[{id:'section-1',title:'Overview',markdown:'Compiled finding.',citation_ids:['cite-1']}],
+  citations:[{id:'cite-1',source_id:'source-1',quote:'Original quoted evidence.'}]};
+const draft=await W.validateDraft(output,snapshot,{provider:'omniroute',model:'auto'});
+assert.equal(draft.validation_status,'citations_checked');
+assert.equal(draft.citations[0].quote,output.citations[0].quote);
+assert.equal(draft.source_manifest.length,2);
+assert.equal(JSON.stringify(draft).includes(notes.a.content),false,'Whole source bodies stay out of the saved draft');
+const altered=structuredClone(output);altered.citations[0].quote='Invented quote';
+await assert.rejects(()=>W.validateDraft(altered,snapshot,{provider:'omniroute',model:'auto'}),/quote/);
+altered.citations[0].quote=output.citations[0].quote;altered.citations[0].source_id='outside';
+await assert.rejects(()=>W.validateDraft(altered,snapshot,{provider:'omniroute',model:'auto'}),/source/);
+const unknown={...output,tool_calls:[{name:'execute'}]};
+await assert.rejects(()=>W.validateDraft(unknown,snapshot,{provider:'omniroute',model:'auto'}),/field/);
+assert.equal((await W.sourceStatus(draft,ctx,lookup)).stale,false);
+notes.a.content+=' Changed';
+assert.equal((await W.sourceStatus(draft,ctx,lookup)).stale,true);
+notes.a.content=snapshot.sources[0].content;notes.a.revisionId='revision-b';
+assert.equal((await W.sourceStatus(draft,ctx,lookup)).stale,true,'A same-body new revision still needs review');
+notes.a.status='locked';
+const unavailable=await W.sourceStatus(draft,ctx,lookup);
+assert.equal(unavailable.available,false);assert.equal(JSON.stringify(unavailable).includes('Original'),false);
+await assert.rejects(()=>W.capture(['a'],ctx,lookup),/source/);
+notes.a.status='ok';notes.a.owner='other';
+await assert.rejects(()=>W.capture(['a'],ctx,lookup),/source/);
+await assert.rejects(()=>W.capture(['missing'],ctx,lookup),/source/);
+await assert.rejects(()=>W.capture(['b','b'],ctx,lookup),/duplicate/);
+assert.equal((await W.sourceStatus(draft,{...ctx,owner:'other'},lookup)).available,false);
+const invalidScope={...ctx,url:'https://different.invalid'};
+assert.equal((await W.sourceStatus(draft,invalidScope,lookup)).available,false);
+assert.equal((await W.sourceStatus({},ctx,lookup)).available,false,'Malformed saved drafts fail closed');
+assert.equal((await W.sourceStatus(draft,ctx,()=>{throw Error('offline');})).available,false,'Unavailable source reads fail closed');
+console.log('AI wiki core: exact evidence, source manifests, scope, stale/locked states, no tool execution or source overwrite PASS');
