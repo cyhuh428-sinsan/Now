@@ -394,3 +394,18 @@ await assert.rejects(()=>remote.prepareAnalysis(scope,waiting.publication.plan,s
 const savedProbeHeader=copy(operation.metadata_header);operation.metadata_header.operation_origin.source_digest='f'.repeat(64);
 await assert.rejects(()=>remote.prepareAnalysis(scope,waiting.publication.plan,settled,waiting.publication.catalog,true),/analysis_probe_metadata/);operation.metadata_header=savedProbeHeader;
 console.log('MA terminal probe: server-equivalent manifest 409/410, status only without cache/not publication proof, durable cached manifest/header tamper denial PASS (synthetic only)');
+const legacyRequest={...copy(request),schema_version:1,source_context:{server_instance_id:scope.instance,base:copy(context.base),catalog_digest:'a'.repeat(64)},source_keys:[{key:copy(d.key),representation_etag:'b'.repeat(64),slot_version:1,ciphertext_sha256:null,is_null:true}]};
+const legacySourceDigest=await Q.hashJson(pick(legacyRequest,fields)),legacyWork=copy(work);delete legacyWork.bundle_metadata.schema_version;legacyWork.bundle_metadata.source_digest=legacySourceDigest;
+legacyWork.bundle_metadata.bundle_digest=await Q.hashJson(pick(legacyWork.bundle_metadata,Object.keys(legacyWork.bundle_metadata).filter(k=>k!=='bundle_digest')));
+const legacyDispatch={execution_id:settled.execution_id,dispatch_id:uid(5),source_digest:legacySourceDigest,run_version:2};
+const legacyReceipt={...copy(settled.terminal_receipt),source_digest:legacySourceDigest,bundle_digest:legacyWork.bundle_metadata.bundle_digest};delete legacyReceipt.schema_version;
+const legacyExecution={schema_version:1,execution_id:settled.execution_id,original_job_id:12,job_id_mode:'allocated',execution_state:'client_settled',run_version:3,lease_version:1,expires_at:running.expires_at,source_context:copy(legacyRequest.source_context),source_keys:copy(legacyRequest.source_keys),source_digest:legacySourceDigest,output_slots:output_slots.map(o=>({key:copy(o.key),initial_slot_version:0,expected_binding:copy(o.expected_binding)})),dispatch_receipt:legacyDispatch,terminal_receipt:legacyReceipt,storage_receipts:[],current_context:{},source_matches_current:false};
+const legacyOriginal=Q.canonicalJson({request:legacyRequest,execution:legacyExecution,work:legacyWork});
+const legacyValues=await A.openLegacyTerminalBundle(scope,legacyRequest,legacyExecution,legacyWork,'fixture-key');
+assert.equal(legacyValues.input_text,input);assert.equal(legacyValues.result_json,result);assert.equal(legacyValues.error_message,null);
+assert.equal(Q.canonicalJson({request:legacyRequest,execution:legacyExecution,work:legacyWork}),legacyOriginal);
+await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,legacyExecution,legacyWork,'wrong-key'));
+for(const change of [e=>{e.terminal_receipt.schema_version=3;},e=>{e.dispatch_receipt.source_digest='0'.repeat(64);},e=>{e.original_job_id=13;},e=>{e.execution_state='client_running';},e=>{e.output_slots[0].initial_slot_version=1;}]){
+ const bad=copy(legacyExecution);change(bad);await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,bad,legacyWork,'fixture-key'));
+}
+console.log('E1 original terminal: native schema1 SC/DR/TR/BM preserved, original cipher/null/exact CRLF values and wrong-key/tamper denial PASS (pure synthetic; bridge/journal/UI pending)');

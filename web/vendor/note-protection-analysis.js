@@ -79,6 +79,53 @@
     }
     return values;
   }
+  async function openLegacyTerminalBundle(scope,request,execution,work,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);work=structuredClone(work);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();if(!password)fail('key_required');
+    globalThis.NowNoteProtectionState.validateScope(scope);
+    exact(request,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id',...controlFields]);
+    if(request.schema_version!==1||request.owner_id!==scope.owner||request.local_id!==scope.local_id||request.device_id!==scope.device||request.server_instance_id!==scope.instance)fail('legacy_scope');
+    uuid(request.mutation_id);exact(request.source_context,['server_instance_id','base','catalog_digest']);
+    const base=request.source_context.base;Q().validateBase(base);hex(request.source_context.catalog_digest);
+    if(request.source_context.server_instance_id!==scope.instance||base.crypto_epoch<1||base.protection_state!=='protected'||base.identity_state==='empty'
+      ||request.execution_route!=='client_provider'||request.client_execution_confirmed!==true||request.prompt_version!=='single_source_v1'
+      ||typeof request.job_type!=='string'||![...request.job_type].length||[...request.job_type].length>60)fail('legacy_request');
+    if(request.source_job_id!==null){integer(request.source_job_id,1);if(request.source_job_id>2147483647)fail('job_id');}
+    if(!Array.isArray(request.source_keys)||!request.source_keys.length)fail('legacy_sources');
+    for(const s of request.source_keys){exact(s,['key','representation_etag','slot_version','ciphertext_sha256','is_null']);Q().validateKey(s.key);hex(s.representation_etag);
+      if(s.slot_version!==null)integer(s.slot_version);if(s.ciphertext_sha256!==null)hex(s.ciphertext_sha256);if(typeof s.is_null!=='boolean')fail('legacy_sources');}
+    if(new Set(request.source_keys.map(s=>Q().canonicalJson(s.key))).size!==request.source_keys.length||!same(request.source_keys.map(s=>s.key),Q().keyOrder(request.source_keys.map(s=>s.key))))fail('source_order');
+    const e=execution;exact(e,['schema_version','execution_id','original_job_id','job_id_mode','execution_state','run_version','lease_version','expires_at','source_context','source_keys','source_digest','output_slots','dispatch_receipt','terminal_receipt','storage_receipts','current_context','source_matches_current']);
+    uuid(e.execution_id);integer(e.original_job_id,1);integer(e.run_version,3);integer(e.lease_version,1);hex(e.source_digest);
+    if(e.schema_version!==1||e.original_job_id>2147483647||e.execution_state!=='client_settled'||!['allocated','provisional'].includes(e.job_id_mode)
+      ||typeof e.expires_at!=='string'||!Number.isFinite(Date.parse(e.expires_at))||typeof e.source_matches_current!=='boolean'||!Array.isArray(e.storage_receipts)
+      ||!e.current_context||typeof e.current_context!=='object'||Array.isArray(e.current_context)
+      ||!same(e.source_context,request.source_context)||!same(e.source_keys,request.source_keys)||await Q().hashJson(pick(request,sourceFields))!==e.source_digest)fail('legacy_execution');check();
+    if(!Array.isArray(e.output_slots)||e.output_slots.length!==3)fail('output_slots');
+    for(let i=0;i<3;i++){const s=e.output_slots[i],key={kind:slots[i][0],id:String(e.original_job_id),slot:slots[i][1]};exact(s,['key','initial_slot_version','expected_binding']);Q().validateBinding(s.expected_binding);
+      if(s.initial_slot_version!==0||!same(s.key,key)||!same(s.expected_binding,{server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,transition_id:e.execution_id,crypto_epoch:base.crypto_epoch,destination_key:key,revision_ref:null,parent_ref:null}))fail('legacy_output');}
+    const dr=e.dispatch_receipt,tr=e.terminal_receipt,bm=work.bundle_metadata;exact(work,['transfers','bundle_metadata']);
+    exact(dr,['execution_id','dispatch_id','source_digest','run_version']);uuid(dr.dispatch_id);
+    if(!same(dr,{execution_id:e.execution_id,dispatch_id:dr.dispatch_id,source_digest:e.source_digest,run_version:2}))fail('legacy_dispatch');
+    exact(bm,['source_digest','original_job_id','original_epoch','outcome','error_code','slot_nulls','ciphertext_manifest','bundle_digest']);
+    if(bm.source_digest!==e.source_digest||bm.original_job_id!==e.original_job_id||bm.original_epoch!==base.crypto_epoch||!['done','failed'].includes(bm.outcome)
+      ||(bm.outcome==='done'?bm.error_code!==null:!['provider_error','invalid_result'].includes(bm.error_code)))fail('legacy_bundle');
+    hex(bm.bundle_digest);if(await Q().hashJson(pick(bm,Object.keys(bm).filter(k=>k!=='bundle_digest')))!==bm.bundle_digest)fail('bundle_digest');check();
+    exact(tr,['execution_id','original_job_id','dispatch_id','source_digest','terminal_run_version','outcome','bundle_digest','client_reported','external_settled','result_server_persisted']);
+    if(!same(tr,{execution_id:e.execution_id,original_job_id:e.original_job_id,dispatch_id:dr.dispatch_id,source_digest:e.source_digest,terminal_run_version:e.run_version,outcome:bm.outcome,bundle_digest:bm.bundle_digest,client_reported:true,external_settled:true,result_server_persisted:false}))fail('legacy_receipt');
+    if(!Array.isArray(bm.slot_nulls)||bm.slot_nulls.length!==3||!Array.isArray(bm.ciphertext_manifest)||!Array.isArray(work.transfers))fail('bundle_slots');
+    for(let i=0;i<3;i++){const n=bm.slot_nulls[i];exact(n,['key','is_null']);if(!same(n.key,e.output_slots[i].key)||typeof n.is_null!=='boolean')fail('bundle_slots');}
+    const nulls=Object.fromEntries(bm.slot_nulls.map(s=>[s.key.slot,s.is_null]));
+    if(nulls.input_text||(bm.outcome==='done'?(nulls.result_json||!nulls.error_message):!nulls.result_json))fail('bundle_nulls');
+    const required=bm.slot_nulls.filter(s=>!s.is_null);if(bm.ciphertext_manifest.length!==required.length||work.transfers.length!==required.length)fail('terminal_cipher_set');
+    const values={input_text:null,result_json:null,error_message:null};
+    for(let i=0;i<required.length;i++){const c=bm.ciphertext_manifest[i],t=work.transfers[i];exact(c,['entry_key','destination_key','source_etag','output_kind','target_epoch','total_bytes','ciphertext_sha256']);exact(t,['key','raw']);uuid(c.source_etag);integer(c.total_bytes,1);hex(c.ciphertext_sha256);
+      if(!same(c.entry_key,required[i].key)||!same(c.destination_key,required[i].key)||!same(t.key,c.destination_key)||c.output_kind!=='linked_text_envelope_v1'||c.target_epoch!==base.crypto_epoch||typeof t.raw!=='string'||new TextEncoder().encode(t.raw).length!==c.total_bytes||await Q().sha256(t.raw)!==c.ciphertext_sha256)fail('legacy_cipher');check();
+      const slot=e.output_slots.find(s=>same(s.key,c.destination_key)),derived={execution_id:e.execution_id,source_context:{base:{base}}};
+      values[t.key.slot]=await Q().decryptRepresentation(t.raw,terminalDescriptor(derived,{...slot,source_etag:c.source_etag},c.ciphertext_sha256),{value:null,legacy:null},async()=>password,3);check();
+    }
+    return values;
+  }
   function validateObservation(observation) {
     exact(observation,['provider_terminal_observed','outcome','result_json','error_message','error_code']);
     if(observation.provider_terminal_observed!==true)fail('terminal_unobserved');
@@ -1040,5 +1087,5 @@
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,initialWriteHeader,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,openLegacyTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,initialWriteHeader,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
