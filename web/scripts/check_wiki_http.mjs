@@ -18,7 +18,7 @@ const own=path.resolve('D:/tmp/now-240-wiki-http-'+randomUUID());
 const storePath=path.join(own,'store.json');
 const manifest={run,owner,device,sourceId,wikiId:null,stage:'preflight',outcome:'running',requests:[],providerCalls:0,
   serverResources:'retained synthetic QA',sourceHashes:{}};
-for(const file of ['note-history-state.js','note-protection-protocol.js','wiki-state.js','wiki-notebook.js'])
+for(const file of ['note-history-state.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','wiki-state.js','wiki-notebook.js'])
   manifest.sourceHashes[file]=createHash('sha256').update(await fs.readFile(new URL('../vendor/'+file,import.meta.url))).digest('hex');
 const save=()=>fs.writeFile(path.join(directory,'wiki-http-'+run+'.json'),JSON.stringify(manifest,null,2));
 await save();
@@ -65,7 +65,7 @@ try{
     headers:{Authorization:'Bearer '+token,'X-Now-User-Token':userToken}};
   const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa,
     URLSearchParams,AbortSignal,fetch:recordFetch});
-  for(const file of ['note-protection-protocol.js','note-history-state.js','wiki-state.js','wiki-notebook.js'])
+  for(const file of ['note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-history-state.js','wiki-state.js','wiki-notebook.js'])
     vm.runInContext(await fs.readFile(new URL('../vendor/'+file,import.meta.url),'utf8'),box);
   const app=localApp;
   const start=app.indexOf('async function noteHistoryRequest('),end=app.indexOf('\nfunction noteHistoryWireNotes()',start);
@@ -156,8 +156,60 @@ try{
   manifest.sourceCurrentHash=await P.sha256(projection.content);manifest.originalRevision=originalRevision;
   manifest.wikiContentHash=await P.sha256(P.canonicalJson(remote.artifact.document));
   manifest.sourceRevision=(await request('current','GET',{local_id:sourceId})).head_revision_id;
+  if(process.argv.includes('--protection')){
+    const S=box.NowNoteProtectionState,C=box.NowNoteProtectionClient,password='synthetic-wiki-protection-'+run;
+    const stores=()=>[{name:'history',kind:'history',read:async()=>history.export(),
+      cas:(before,after,guard)=>history.replaceProtectionStore(before,after,guard)}];
+    const remoteRequest=(scope,route,method,body)=>http(method,route+(method==='GET'?'?'+new URLSearchParams(
+      Object.entries(body).filter(([,value])=>value!==null).map(([key,value])=>[key,String(value)])):''),method==='GET'?undefined:body);
+    const reader=C.createReader({request:remoteRequest});
+    manifest.protection=[];await save();
+    async function protect(local){
+      const status=await request('crypto-transitions/status','GET',{local_id:local,device_id:device});
+      const scope={url:base,owner,device,instance:status.server_instance_id,local_id:local};
+      const context=()=>({...ctx,...scope});
+      const client=C.create({context,stores});
+      const copies=await client.copies(scope);
+      await client.confirm(scope,copies,copies.map(row=>row.id));
+      const remote=S.createRemote({request:remoteRequest});
+      const controller=S.create({context,journal:history,stores,remote,preflight:async()=>{
+        assert.equal(W.sourceProtectionDependencies([history.export()],scope,local).length,0,'Every local wiki dependency must settle before original protection');
+      }});
+      const branches=history.view(local).revisions.filter(row=>!row.imported).map(row=>({
+        revision_id:row.revision_id,parent_ref:row.parent_ref,origin_device_id:row.snapshot.note.device_id||device}));
+      const intent=C.plan(scope,'conversion',status,null,branches);
+      manifest.stage=local===manifest.localId?'protect_wiki':'protect_original';await save();
+      const operation=await controller.start(scope,intent,password);
+      await controller.resume(operation,password,(prepared,plan,localStores)=>C.buildWork(scope,prepared,plan,password,remote,localStores));
+      assert.equal(controller.status(operation).phase,'complete');assert.equal(history.blocked(local),true);
+      const current=await request('crypto-transitions/status','GET',{local_id:local,device_id:device});
+      assert.equal(current.crypto_epoch,1);assert.equal(current.protection_state,'protected');
+      const catalog=await reader.catalog(scope);
+      const body=catalog.entries.find(row=>row.key.kind==='note_body');assert.ok(body);
+      const value=(await reader.read(scope,catalog,body,async()=>password)).value;
+      manifest.protection.push({localId:local,operationId:operation,instance:scope.instance,epoch:current.crypto_epoch,
+        headVersion:current.head_version,generation:current.history_generation,entries:catalog.entries.length,bodyHash:await P.sha256(value)});
+      await save();return {scope,catalog,value};
+    }
+    const wiki=await protect(manifest.localId),preserved=P.parseJson(wiki.value);
+    assert.equal(preserved.document_version,6);assert.equal(preserved.approvals.length,2);assert.equal(preserved.drafts.length,3);
+    assert.equal(await P.sha256(wiki.value),manifest.wikiContentHash);
+    assert.ok(!JSON.stringify(readStoreFile(storePath).store.values).includes('Wiki HTTP guide'),'Local wiki copies must settle to cipher too');
+    remote=await http('GET','/api/v1/wikis/'+doc.wiki_id+query());
+    assert.equal(remote.artifact.protected,true);assert.equal(remote.artifact.document,null);
+    const originalProtected=await protect(sourceId);
+    assert.equal(originalProtected.value,projection.content);
+    const old=originalProtected.catalog.entries.find(row=>row.key.kind==='revision_snapshot'&&row.revision_ref?.id===originalRevision);
+    assert.ok(old,'Original historical revision remains in the protected catalog');
+    const historical=(await reader.read(originalProtected.scope,originalProtected.catalog,old,async()=>password)).value;
+    assert.equal(historical.note.content,original);
+    history=make(readStoreFile(storePath).store.values['nownote.history.v1']);box.noteHistory=history;
+    assert.equal(history.blocked(sourceId),true);assert.equal(history.blocked(manifest.localId),true);
+    const protectedRows=await book.list();assert.equal(protectedRows[0].document,undefined);assert.equal(protectedRows[0].protected,true);
+    manifest.protectionOutcome='PASS';manifest.stage='protected_cold';await save();
+  }
   manifest.outcome='PASS';manifest.stage='complete';await save();
-  console.log('Wiki real WSL HTTP: draft/approval, stale rejection/regeneration, CAS/original receipt, cold journal, v1 isolation and protection prerequisite PASS; run='+run);
+  console.log((process.argv.includes('--protection')?'Wiki real WSL protection: server prerequisite, whole wiki/history settlement, original protection resume, exact decrypted evidence and cold cipher journal PASS; run=':'Wiki real WSL HTTP: draft/approval, stale rejection/regeneration, CAS/original receipt, cold journal, v1 isolation and protection prerequisite PASS; run=')+run);
 }catch(error){
   manifest.outcome='FAIL';manifest.errorType=error.name;
   manifest.errorFrame=String(error.stack||'').match(/check_wiki_http\.mjs:\d+:\d+/)?.[0]||null;
