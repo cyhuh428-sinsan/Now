@@ -568,9 +568,9 @@
       exact(route,['provider','endpoint','model']);
       for(const key of ['provider','endpoint','model'])if(typeof route[key]!=='string'||!route[key])fail('route');
     }
-    async function open(marker,password,c,epoch) {
+    async function open(marker,password,c,epoch,opened=null) {
       if(!password)fail('key_required');
-      const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
+      const b=opened??Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
       exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[]),...(Object.hasOwn(b,'publication')?['publication']:[]),...(Object.hasOwn(b,'replan')?['replan']:[])]);
       b.dispatch??=null;
       b.terminal??=null;
@@ -631,7 +631,14 @@
         }
       }
       if(b.replan!==null){
-        const r=b.replan;exact(r,['previous_phase','catalog','plan','prepared','work','stored','receipt','proof']);
+        const r=b.replan;exact(r,['previous_phase','catalog','plan','prepared','work','stored','receipt','proof',...(Object.hasOwn(r,'prior')?['prior']:[])]);
+        if(Object.hasOwn(r,'prior')){
+          exact(r.prior,['phase','record']);
+          if(!replanPhases.includes(r.prior.phase)||!r.prior.record?.prepared
+            ||r.plan.prepare.previous_write_id!==r.prior.record.prepared.id
+            ||r.previous_phase!==r.prior.record.previous_phase)fail('replan_prior');
+          await open({...marker,phase:r.prior.phase},password,c,epoch,{...b,replan:r.prior.record});active(marker.scope,c,epoch);
+        }
         const storedComplete=replanComplete&&r.stored!==null;
         if(!['analysis_settled',...publicationPhases].includes(r.previous_phase))fail('replan_phase');
         if((['analysis_replan_allocated',...replanWorkPhases].includes(marker.phase)||replanComplete&&!storedComplete)!==(r.prepared!==null)||(marker.phase==='analysis_replan_stored'||storedComplete)!==(r.stored!==null)
@@ -815,11 +822,18 @@
       async beginReplan(id,password,catalog,confirmation) {
         catalog=structuredClone(catalog);confirmation=structuredClone(confirmation);
         const marker=status(id),c=own(marker.scope),epoch=generation;
-        if(running)fail('busy');if(!['analysis_settled',...publicationPhases].includes(marker.phase))fail('replan_phase');running=true;
+        if(running)fail('busy');if(!['analysis_settled',...publicationPhases,...replanPhases].includes(marker.phase))fail('replan_phase');running=true;
         try{
           const b=await open(marker,password,c,epoch);
           let previous={operation_id:null,state:'none'};
-          if(b.publication!==null){
+          const prior=b.replan===null?null:{phase:marker.phase,record:structuredClone(b.replan)};
+          if(prior!==null){
+            const r=prior.record;if(r.prepared===null)fail('replan_previous_allocation_unconfirmed');
+            const guarded=async(...args)=>{active(marker.scope,c,epoch);const result=await request(...args);active(marker.scope,c,epoch);return result;};
+            const known=await P().createRemote({request:guarded}).replanAnalysis(marker.scope,r.plan,r.catalog,r.prepared);active(marker.scope,c,epoch);
+            if(!['stale','aborted','expired'].includes(known.response.state))fail(known.response.state==='committed'?'replan_previous_write_committed':'replan_previous_write_active');
+            previous={operation_id:known.id,state:known.response.state};
+          }else if(b.publication!==null){
             const guarded=async(...args)=>{active(marker.scope,c,epoch);const result=await request(...args);active(marker.scope,c,epoch);return result;};
             const remote=P().createRemote({request:guarded}),p=b.publication;
             const known=await remote.prepareAnalysis(marker.scope,p.plan,b.execution,p.catalog,true,p.prepared);active(marker.scope,c,epoch);
@@ -831,7 +845,7 @@
           }
           const plan=await createReplanWritePlan(marker.scope,b.request,b.execution,b.terminal.work,catalog,
             previous,crypto.randomUUID(),password,confirmation,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
-          b.replan={previous_phase:marker.phase,catalog,plan,prepared:null,work:null,stored:null,receipt:null,proof:null};
+          b.replan={previous_phase:prior?.record.previous_phase??marker.phase,catalog,plan,prepared:null,work:null,stored:null,receipt:null,proof:null,...(prior?{prior}:{})};
           marker.phase='analysis_replan_preparing';await save(marker,b,password,c,epoch);
           await open(status(id),password,c,epoch);active(marker.scope,c,epoch);return id;
         }finally{running=false;}

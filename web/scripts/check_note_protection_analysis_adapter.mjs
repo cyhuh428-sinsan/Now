@@ -72,6 +72,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   let targetAsks=0;const replanStart=serverCalls.length;
   assert.equal(await box.beginProtectedReplan(replanView,'fixture-key',{confirmed_reuse_original_result:true,target_epoch:2},async d=>{targetAsks++;assert.equal(d.representation_epoch,2);assert.equal(d.output,true);return 'target-key';}),'PUBLISHED-ORIGINAL');
   assert.deepEqual(serverCalls.slice(replanStart).map(c=>c.action),['replan_begin','replan_prepare','replan_cipher','replan_publish','publication_read']);assert.equal(targetAsks,1);assert.equal(invocations,providerBefore);
+  phase='analysis_replan_allocated';await box.prepareProtectedReplan(info,'one-run','fixture-key');
   phase='analysis_replan_committing';const replanCold=serverCalls.length;
   await box.resumeProtectedAnalysis('one-run','fixture-key',async()=>'target-key');assert.deepEqual(serverCalls.slice(replanCold).map(c=>c.action),['replan_publish','publication_read']);
   phase='analysis_replan_stored';replan.stored={status:'already_stored'};const beforeStored=serverCalls.length;

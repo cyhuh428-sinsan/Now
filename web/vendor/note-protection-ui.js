@@ -81,7 +81,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="analysis-run"]').disabled=state.busy||!unlocked||!state.analysis||!$('[name="analysis-confirm"]').checked
       ||Boolean(state.analysis?.operation_id&&state.analysis.execution?.state!=='client_pending');
     $('[data-action="analysis-publish"]').disabled=state.busy||!unlocked||!api.analysisPublish||!(info.analysisOperations||[]).some(r=>r.id===analysisId&&r.phase==='analysis_settled');
-    $('[data-action="analysis-replan"]').disabled=state.busy||!unlocked||!api.analysisReplanPrepare||!(info.analysisOperations||[]).some(r=>r.id===analysisId&&(r.phase==='analysis_settled'||r.phase.startsWith('analysis_write_')));
+    $('[data-action="analysis-replan"]').disabled=state.busy||!unlocked||!api.analysisReplanPrepare||!(info.analysisOperations||[]).some(r=>r.id===analysisId&&(r.phase==='analysis_settled'||r.phase.startsWith('analysis_write_')||r.phase.startsWith('analysis_replan_')));
     $('[data-action="analysis-replan-confirm"]').disabled=state.busy||!unlocked||!api.analysisReplanBegin||!state.replan||!$('[name="analysis-reuse-confirm"]').checked;
     $('[name="analysis-reuse-confirm"]').disabled=state.busy;
     $('[name="analysis-operation"]').disabled=state.busy;
