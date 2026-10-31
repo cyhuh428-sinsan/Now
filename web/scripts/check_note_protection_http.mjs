@@ -47,6 +47,10 @@ try {
   const relatedOnly=process.argv.includes('--related-only')||process.argv.includes('--late-analysis')||transcript||analysisApply||analysisAbsent||backupRestore;
   const lateAnalysis=process.argv.includes('--late-analysis');
   for(const mode of modes) {
+    const run=crypto.randomBytes(6).toString('hex');
+    manifest.clientRuns ||= {};
+    if(Object.values(manifest.clientRuns).includes(run))throw Error('qa_case_run_collision');
+    manifest.clientRuns[mode]=run;await save();
     const credentials={};let branchId=null,replicaIds=null;
     const probe=process.argv.includes('--probe');
     for(const suffix of probe?[]:['a','b']) {
