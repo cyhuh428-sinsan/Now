@@ -22,7 +22,7 @@ for (const surface of ['web', 'desktop/app']) {
   vm.runInContext(app.slice(start,end), context);
   assert.equal(vm.runInContext('buildServerSyncNotes({}).length', context), 0, `${surface}: unsupported history must never fall back to v1 upload`);
   let historyCalls=0;
-  const syncContext=vm.createContext({serverSyncRunning:true,serverSyncQueued:false,
+  const syncContext=vm.createContext({vaultHistoryApplying:false,serverSyncRunning:true,serverSyncQueued:false,
     requireProtectionSettled:()=>{},
     noteHistoryCaptureChain:Promise.resolve(),noteHistory:{sync:async()=>{historyCalls++;}},noteHistoryController:{resume:async()=>{}},t:x=>x});
   const syncStart=app.indexOf('async function syncWebNotesToServer('),syncEnd=app.indexOf('\nfunction classifySyncFailureAction',syncStart);
@@ -30,11 +30,15 @@ for (const surface of ['web', 'desktop/app']) {
   await vm.runInContext('syncWebNotesToServer()',syncContext);
   assert.equal(historyCalls,0,`${surface}: automatic/manual sync must not start v2 while v1 is running`);
   assert.equal(syncContext.serverSyncQueued,true);
+  syncContext.serverSyncQueued=false;syncContext.vaultHistoryApplying=true;
+  await vm.runInContext('syncWebNotesToServer()',syncContext);
+  assert.equal(historyCalls,0);
+  assert.equal(syncContext.serverSyncQueued,false,`${surface}: Vault pause must not enqueue normal synchronization`);
   let currentContext={url:'https://server.test',owner:'alice',auth:'old-session',enabled:true},entered,release;
   const requested=new Promise(resolve=>{entered=resolve;}),response=new Promise(resolve=>{release=resolve;});
   let applied=0,completed=0;
   const noop=()=>{};
-  const lateContext=vm.createContext({serverSyncRunning:false,serverSyncQueued:false,noteHistoryCaptureEpoch:0,
+  const lateContext=vm.createContext({vaultHistoryApplying:false,serverSyncRunning:false,serverSyncQueued:false,noteHistoryCaptureEpoch:0,
     requireProtectionSettled:noop,
     noteHistoryCaptureChain:Promise.resolve(),noteHistoryContext:()=>currentContext,
     NowNoteHistory:{key:c=>JSON.stringify([c.url,c.owner])},NowLibrary:{key:()=>''},libraryContext:()=>({}),
@@ -52,12 +56,13 @@ for (const surface of ['web', 'desktop/app']) {
   release({ok:true,json:async()=>({pushed_notes:[],pulled_notes:[]})});await operation;
   assert.equal(applied,0,`${surface}: a late v1 response must not apply to another authenticated context`);
   assert.equal(completed,0,`${surface}: a late v1 response must not acknowledge another context journal`);
-  const captureStart=app.indexOf('function noteHistoryCaptureDrafts()'),captureEnd=app.indexOf('\nasync function noteHistoryFlush()',captureStart);
+  const captureStart=app.indexOf('function noteHistoryCaptureDrafts('),captureEnd=app.indexOf('\nasync function noteHistoryFlush()',captureStart);
+  assert.ok(captureStart>=0&&captureEnd>captureStart);
   const captureCtx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'token',enabled:true,online:true};
   const raw={id:null,owner_id:'alice',local_id:'branch',device_id:'original',note_type:'tree',title:'Branch',content:'UNCHANGED\r\n',parent_local_id:null,level:1,tags:null,source:null,deleted_at:null,created_at:'2026-10-30T00:00:00.000001Z',updated_at:'2026-10-30T00:00:00.000001Z',client_updated_at:null};
   let wire={...raw,tags:'[]',source:'web-tree',client_updated_at:'2026-10-31T00:00:00.000002Z'},scheduled=0;
   const tree={id:'branch',shared:false,serverShared:false};
-  const captureBox=vm.createContext({crypto:webcrypto,structuredClone,Set,Map,
+  const captureBox=vm.createContext({vaultHistoryApplying:false,crypto:webcrypto,structuredClone,Set,Map,
     noteHistoryProjection:false,noteHistoryContext:()=>captureCtx,noteHistoryCaptureEpoch:0,noteHistoryProjectionScope:'',
     noteHistoryCaptureChain:Promise.resolve(),noteHistoryEnrolling:new Set(),noteHistoryTimers:new Map(),noteHistoryRemoteCache:new Map(),noteHistoryLastError:'',
     noteHistoryWireNotes:()=>[structuredClone(wire)],noteProtectionBlocked:()=>false,findTreeNode:()=>tree,isTreeNodeSharedForServer:n=>n.shared,
@@ -74,6 +79,10 @@ for (const surface of ['web', 'desktop/app']) {
   assert.equal(history.view('branch').dirty,false,`${surface}: normalized source/tags must not create a phantom unsent edit`);
   assert.equal(scheduled,0);
   wire={...wire,content:'ACTUAL-EDIT\r\n'};
+  captureBox.vaultHistoryApplying=true;
+  vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
+  assert.equal(history.view('branch').draft.content,raw.content,`${surface}: Vault pause must preserve the prepared baseline`);
+  captureBox.vaultHistoryApplying=false;
   vm.runInContext('noteHistoryCaptureDrafts()',captureBox);await captureBox.noteHistoryCaptureChain;
   assert.equal(history.view('branch').draft.content,wire.content);
   assert.equal(history.view('branch').draft.client_updated_at,wire.client_updated_at);
