@@ -45,7 +45,7 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;
-  if([43,44].includes(config.phase)){
+  if([43,44,45,46].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function wikiWait(done,label){
       for(let i=0;i<1600;i++){if(done())return;await wait();}
@@ -58,10 +58,12 @@
     const query='?owner_id='+encodeURIComponent(a.owner),dialog=()=>document.querySelector('#wikiDialog');
     const artifact=()=>Object.values(noteHistory.entries()).find(item=>item.draft.source==='wiki-artifact');
     const stored=()=>artifact()?NowNoteProtectionProtocol.parseJson(artifact().draft.content):null;
-    const source=await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target));
-    assert(source.snapshot.note.content===plain,'wiki_ui_original_source_changed');
-    assert(findTreeNode(state.data.tree,target)?.content.replace(/\r\n/g,'\n')===plain.replace(/\r\n/g,'\n'),'wiki_ui_source_not_projected');
-    state.selectedTreeId=target;render();
+    if(config.phase!==46){
+      const source=await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target));
+      assert(source.snapshot.note.content===plain,'wiki_ui_original_source_changed');
+      assert(findTreeNode(state.data.tree,target)?.content.replace(/\r\n/g,'\n')===plain.replace(/\r\n/g,'\n'),'wiki_ui_source_not_projected');
+      state.selectedTreeId=target;render();
+    }
     if(config.phase===43){
       let modelCalls=0;
       state.settings.llm={...defaultLlmSettings(),provider:'omniroute',omniUrl:'https://synthetic.invalid/v1',omniModel:'auto',omniApiKey:'synthetic-ui-only'};
@@ -101,6 +103,69 @@
       await noteHistory.idle();await settle();
       return {ok:true,mode:config.mode,phase:43,wikiId:stored().wiki_id,documentVersion:stored().document_version,
         actualMenu:true,explicitModelConfirmation:true,syntheticModelCalls:modelCalls,externalProviderCalls:0,serverDraftAndApproval:true,sourcePreserved:true};
+    }
+    if([45,46].includes(config.phase)){
+      const list=await request('/api/v1/wikis'+query);assert(list.items.length===1,'wiki_protection_list_changed');
+      const wikiId=list.items[0].id,local='wiki:'+wikiId;
+      const pd=()=>document.querySelector('#noteProtectionDialog'),pb=name=>pd()?.querySelector('[data-action="'+name+'"]');
+      const ps=()=>pd()?.querySelector('.protection-status')?.textContent||'';
+      const completed=id=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===id&&row.phase==='complete');
+      async function protectionWait(done,label){
+        for(let i=0;i<2500;i++){
+          const form=pd()?.querySelector('form.library-confirm');
+          if(form){form.querySelector('input').value=password;form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}
+          if(done()&&pb('refresh')?.disabled===false)return;
+          await wait();
+        }
+        throw Error('wiki_protection_'+label+'_timeout_uncertain');
+      }
+      async function copies(){
+        const boxes=[...pd().querySelectorAll('.protection-copies input')];boxes.forEach(box=>box.checked=true);
+        if(boxes.length){pb('confirm').click();await protectionWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
+      }
+      async function sourceProtection(){
+        await openNoteProtection({discover:true,target});await copies();
+        pb('conversion').click();await protectionWait(()=>completed(target),'source_complete');
+      }
+      if(config.phase===45){
+        await openNoteProtection({discover:true,target});await copies();
+        pb('conversion').click();await protectionWait(()=>ps().includes('위키')&&ps().includes('먼저'),'source_prerequisite');
+        assert(!completed(target),'wiki_protection_original_completed_early');
+        pb('close').click();
+      }
+      document.querySelector('#wikiBtn').click();
+      await wikiWait(()=>dialog()?.querySelector('.library-item')?.disabled===false,'protected_entry_list');
+      dialog().querySelector('.library-item').click();
+      if(config.phase===45){
+        await wikiWait(()=>dialog()?.querySelector('[data-wiki-action=protect]')?.disabled===false,'protect_button');
+        dialog().querySelector('[data-wiki-action=protect]').click();
+      }
+      await protectionWait(()=>pd()?.open&&pd().querySelector('.protection-scope')?.textContent.includes(local),'wiki_target');
+      if(config.phase===45){
+        await copies();pb('conversion').click();await protectionWait(()=>completed(local),'wiki_complete');
+        const remote=await request('/api/v1/wikis/'+wikiId+query);
+        assert(remote.artifact.protected===true&&!remote.artifact.document,'wiki_protection_remote_still_plain');
+        pb('close').click();await sourceProtection();pb('close').click();
+        await openNoteProtection({discover:true,target:local});
+      }
+      const select=pd().querySelector('[name=representation]'),row=[...select.options].find(option=>option.textContent.startsWith('note_body ·'));
+      assert(row,'wiki_protection_body_slot_missing');select.value=row.value;
+      pb('wiki-preview').click();
+      await protectionWait(()=>dialog()?.open&&Boolean(dialog().querySelector('.wiki-body strong')),'structured_read');
+      assert(dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run),'wiki_protection_citation_missing');
+      assert(!dialog().querySelector('[data-wiki-action=approve],[data-wiki-action=save-draft],[data-wiki-action=generate]'),'wiki_protection_readonly_actions');
+      noteProtectionUI.lock();
+      assert(!dialog().open&&!dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run),'wiki_protection_lock_left_plaintext');
+      for(const store of protectionStorageAdapters()){
+        const raw=JSON.stringify(await store.read());
+        assert(!raw.includes('HTTP-QA-ORIGINAL-'+run)&&!raw.includes('Supported')&&!raw.includes('HTTP QA Wiki '+run),'wiki_protection_store_plaintext');
+      }
+      const scope={...(await inspectNoteProtection()).scope,local_id:target};
+      const sourceCatalog=await noteProtectionReader.catalog(scope);
+      assert(sourceCatalog.context.current_mode==='protected','wiki_protection_source_not_protected');
+      await noteHistory.idle();await settle();
+      return {ok:true,mode:config.mode,phase:config.phase,wikiId,sourcePrerequisite:config.phase===45,wikiAndSourceProtected:true,
+        structuredReadonly:true,lockClears:true,allStorePlaintextAbsent:true,processCold:config.phase===46,externalProviderCalls:0};
     }
     document.querySelector('#wikiBtn').click();
     await wikiWait(()=>dialog()?.querySelector('.library-item')?.disabled===false,'cold_list');
