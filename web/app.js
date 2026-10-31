@@ -3916,6 +3916,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   const $ = s => dialog.querySelector(s);
   const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null};
   const keys = new Map();
+  const analysisLabels={analysis_claiming:'실행 접수 확인 필요',analysis_claimed:'전송 확인 대기',analysis_dispatching:'전송 상태 확인 필요',analysis_running:'응답 확인 필요',analysis_terminal:'결과 보관 중',analysis_settling:'영수증 확인 필요',analysis_settled:'결과 보관됨'};
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
@@ -4047,7 +4048,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       label.append(box,text);list.append(label);
     }
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
-    for(const row of info.analysisOperations||[])executions.append(new Option(row.phase+' · '+row.id,row.id));
+    for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
     status(info.pending ? api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
   }

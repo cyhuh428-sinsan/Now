@@ -9,6 +9,7 @@ app.whenReady().then(async()=>{
     session.defaultSession.webRequest.onBeforeRequest((d,done)=>{const cancel=!d.url.startsWith('data:');if(cancel)outbound++;done({cancel});});
     window=new BrowserWindow({show:false,width:1100,height:800,webPreferences:{contextIsolation:true,nodeIntegration:false}});
     await window.loadURL('data:text/html,<html><body></body></html>');
+    await window.webContents.executeJavaScript('document.head.append(Object.assign(document.createElement("style"),{textContent:'+JSON.stringify(fs.readFileSync(path.join(root,'web/styles.css'),'utf8'))+'}));void 0;');
     for(const name of ['marked.umd.js','purify.min.js','document-renderer.js','note-protection-ui.js'])await window.webContents.executeJavaScript(fs.readFileSync(path.join(root,'web/vendor',name),'utf8')+'\n;void 0;');
     result=await window.webContents.executeJavaScript(`(async()=>{
       const assert=(v,m)=>{if(!v)throw Error(m);},wait=()=>new Promise(r=>setTimeout(r,10));
@@ -56,6 +57,7 @@ app.whenReady().then(async()=>{
         analysisUnavailable:async()=>{unavailable++;},
       });await analysis.open();
       const panel=document.querySelector('#noteProtectionDialog'),ab=n=>panel.querySelector('[data-action="'+n+'"]'),field=n=>panel.querySelector('[name="analysis-'+n+'"]');
+      assert(field('operation').getBoundingClientRect().width>panel.clientWidth*0.8,'analysis_execution_selector_squeezed');
       const until=async(predicate,label)=>{for(let i=0;i<200;i++){if(predicate())return;await wait();}throw Error(label);};
       const key=k=>{const form=panel.querySelector('form.library-confirm');assert(form,'analysis_key_prompt_missing');form.querySelector('input').value=k;form.requestSubmit();};
       ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_prepare_wait');
@@ -72,6 +74,10 @@ app.whenReady().then(async()=>{
       assert(recorded===1&&!panel.querySelector('.protection-analysis-result').textContent&&!field('input').value,'analysis_late_raw_after_lock');analysis.invalidate();
       return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
     })()`,true);
+    window.setContentSize(390,844);
+    const mobile=await window.webContents.executeJavaScript(`(()=>{const d=document.querySelector('#noteProtectionDialog');d.showModal();const s=d.querySelector('[name="analysis-operation"]');return {width:d.clientWidth,selectorWidth:s.getBoundingClientRect().width,dialogRight:d.getBoundingClientRect().right,viewport:innerWidth};})()`);
+    if(mobile.selectorWidth<=mobile.width*0.8||mobile.dialogRight>mobile.viewport)throw Error('analysis_mobile_layout');
+    result.mobileLayout=true;
     if(outbound)throw Error('preview_outbound_request');
     result.outboundRequests=outbound;
   }catch(error){result={ok:false,error:error.message};}
