@@ -289,6 +289,20 @@ async function checkCanvasInteractions(page) {
     elements.canvasDisconnectBtn.click();
   })()`);
   assert(await evaluate(page, 'activeCanvas().edges.length===0 && activeCanvas().cards.length===2'), "Canvas disconnect deletes cards");
+  const references=await evaluate(page,`(() => {
+    const source=structuredClone(state.data.tree[0]);
+    state.data.tree=[{id:"moved-parent",title:"Parent",content:"",children:[{...source,title:"Moved source",parentId:"moved-parent",level:2}],level:1}];
+    renderCanvas();
+    const moved=elements.canvasBoard.textContent.includes("Moved source");
+    state.data.tree=[];renderCanvas();
+    const missing=elements.canvasBoard.textContent.includes("원본 메모 없음")&&activeCanvas().cards.length===2;
+    state.data.tree=[source];state.selectedTreeId=null;renderCanvas();
+    elements.canvasBoard.querySelector("[data-action='open-note']").click();
+    return {moved,missing};
+  })()`);
+  assert(references.moved&&references.missing,"Canvas moved/missing original reference changed");
+  await waitForCondition(page,'state.selectedTreeId==="canvas-source" && elements.canvasView.classList.contains("hidden")',"Canvas source open");
+  await evaluate(page,'elements.canvasBtn.click()');
   await evaluate(page, `(() => {
     state.selectedCanvasCardIds=[activeCanvas().cards[0].id];elements.canvasRemoveBtn.click();
   })()`);
@@ -323,7 +337,7 @@ async function checkCanvasInteractions(page) {
     const view=elements.canvasView.querySelector(".canvas-card").getBoundingClientRect();
     return view.left>=0 && view.right<=innerWidth+1;
   })()`), "Canvas narrow dialog overflow");
-  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, touch/keyboard, disconnect, source-preserving remove and narrow layout PASS");
+  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, touch/keyboard, moved/missing/source open, disconnect, source-preserving remove and narrow layout PASS");
 }
 
 function browserArgs(debugPort, userDataDir, appUrl) {
