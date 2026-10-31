@@ -134,17 +134,34 @@ async function wikiUntil(evaluate,expression,label){
   throw Error(label+' · '+await evaluate('document.querySelector("#noteProtectionDialog .protection-status")?.textContent||"no protection dialog"'));
 }
 
-async function wikiProtectionRead(evaluate){
+async function wikiProtectionRead(evaluate,capture){
+  const modelCalls=await evaluate('globalThis.wikiActualCalls||0');
   await evaluate('document.querySelector("#noteProtectionDialog [data-action=read]").click()');
   await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog .library-confirm input[type=password]"))','Wiki archive key prompt');
   await evaluate('(()=>{const f=document.querySelector("#noteProtectionDialog .library-confirm");f.querySelector("input").value="synthetic-wiki-ui-only";f.dispatchEvent(new Event("submit",{bubbles:true,cancelable:true}));})()');
   await wikiUntil(evaluate,'document.querySelector("#noteProtectionDialog .protection-plain")?.textContent.includes("Durable Guide")','Wiki archive read');
   assert.ok(await evaluate('document.querySelector("#noteProtectionDialog .protection-plain").textContent.includes("Updated Guide")'),'All preserved drafts remain readable');
-  await evaluate('document.querySelector("#noteProtectionDialog [data-action=lock]").click()');
+  assert.ok(await evaluate('Boolean(document.querySelector("#noteProtectionDialog [data-action=wiki-preview]"))'),'Key-verified wiki archives also need a structured read-only view');
+  await evaluate('document.querySelector("#noteProtectionDialog [data-action=wiki-preview]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog[open] .wiki-body strong"))','Protected wiki structured reading');
+  assert.equal(await evaluate('document.querySelectorAll("#wikiDialog [data-wiki-action=approve],#wikiDialog [data-wiki-action=save-draft],#wikiDialog [data-wiki-action=generate]").length'),0,'Protected preview must not expose general write or model actions');
+  assert.equal(await evaluate('document.querySelector("#noteProtectionDialog .protection-plain").textContent'),'','Raw plaintext is cleared when opening structured reading');
+  await evaluate('document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog .wiki-diff"))','Protected wiki immutable comparison');
+  assert.ok(await evaluate('document.querySelector("#wikiDialog .wiki-diff").textContent.includes("Supported")&&document.querySelector("#wikiDialog .wiki-diff").textContent.includes("Revised")'));
+  if(capture)await capture();
+  await evaluate('document.querySelector("#wikiDialog header button").click()');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
+  await evaluate('document.querySelector("#noteProtectionDialog [data-action=wiki-preview]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog[open] .wiki-body strong"))','Protected wiki second reading');
+  await evaluate('noteProtectionUI.lock()');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").open'),false,'Protection lock must also close the structured view');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
+  assert.equal(await evaluate('globalThis.wikiActualCalls||0'),modelCalls,'Reading protected drafts must not invoke any model');
   assert.equal(await evaluate('document.querySelector("#noteProtectionDialog .protection-plain").textContent'),'');
 }
 
-export async function verifyWikiProtectionFlow({evaluate}){
+export async function verifyWikiProtectionFlow({evaluate,capture}){
   await evaluate('noteProtectionInternalEnabled=true;globalThis.wikiProtectionNetwork=0;globalThis.wikiProtectionFetch=fetch;fetch=async()=>{wikiProtectionNetwork++;throw Error("synthetic no network");};document.querySelector("#wikiDialog [data-wiki-action=protect]").click()');
   await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog[open] [data-action=conversion]"))','Wiki protection entry');
   await wikiUntil(evaluate,'document.querySelectorAll("#noteProtectionDialog .protection-scope dt").length===4','Wiki protection identity labels');
@@ -165,7 +182,7 @@ export async function verifyWikiProtectionFlow({evaluate}){
   assert.ok(await evaluate('(async()=>{for(const store of protectionStorageAdapters()){if(JSON.stringify(await store.read()).includes("Durable Guide"))return false;}return true;})()'),'All registered durable/fallback stores must lose wiki plaintext');
   assert.equal(await evaluate('findTreeNode(state.data.tree,"wiki-ui-source").content'),'Exact evidence.\nUpdated source.');
   assert.equal(await evaluate('(async()=>{const roots=[];for(const s of protectionStorageAdapters())roots.push(await s.read());return NowNoteWiki.sourceProtectionDependencies(roots,noteHistoryContext(),"wiki-ui-source").length;})()'),0);
-  await wikiProtectionRead(evaluate);
+  await wikiProtectionRead(evaluate,capture);
   await evaluate('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);fetch=wikiProtectionFetch;})()');
 }
 
@@ -176,4 +193,8 @@ export async function verifyWikiProtectionCold({evaluate}){
   assert.ok(await evaluate('document.querySelector("#noteProtectionDialog [name=target]").textContent.includes("로컬 전용 위키")'));
   assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
   await wikiProtectionRead(evaluate);
+  await evaluate('wikiUI.open()');
+  assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [data-wiki-action=generate]"))'),'Normal wiki entry must not remain in protected read-only mode');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
+  await evaluate('document.querySelector("#wikiDialog header button").click()');
 }

@@ -191,5 +191,45 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       throw Error('이미 승인·반려했거나 없는 초안입니다.');
     doc.document_version++;doc.rejected_draft_ids.push(draftId);return save(doc);
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject};
+  async function inspectProtected(value,local){
+    const a=action(),doc=parse(value,a.ctx,local);
+    if(!idOf(local))throw Error('위키 형식이 다릅니다.');
+    const ids=new Set();
+    for(const draft of doc.drafts){
+      if(!draft||typeof draft.id!=='string'||ids.has(draft.id)||typeof draft.title!=='string'||typeof draft.topic!=='string'
+        ||P.canonicalJson(draft.scope)!==P.canonicalJson(doc.scope)||!Array.isArray(draft.sections)||!draft.sections.length
+        ||!Array.isArray(draft.citations)||!draft.citations.length||!Array.isArray(draft.source_manifest)||!draft.source_manifest.length)
+        throw Error('위키 저장 형식이 다릅니다.');
+      ids.add(draft.id);
+      const refs=new Set(),citations=new Set();
+      for(const ref of draft.source_manifest){
+        if(!ref||typeof ref.id!=='string'||refs.has(ref.id)||ref.note_ref?.owner_id!==a.ctx.owner
+          ||typeof ref.note_ref.local_id!=='string')throw Error('위키 출처 계정·형식이 다릅니다.');
+        refs.add(ref.id);
+      }
+      for(const citation of draft.citations){
+        if(!citation||typeof citation.id!=='string'||citations.has(citation.id)||typeof citation.quote!=='string'||!refs.has(citation.source_id))
+          throw Error('위키 인용 형식이 다릅니다.');
+        citations.add(citation.id);
+      }
+      if(draft.sections.some(section=>!section||typeof section.title!=='string'||typeof section.markdown!=='string'
+        ||!Array.isArray(section.citation_ids)||section.citation_ids.some(id=>!citations.has(id))))
+        throw Error('위키 절 형식이 다릅니다.');
+      const unsigned=copy(draft);delete unsigned.draft_hash;
+      if(await P.hashJson(unsigned)!==draft.draft_hash)throw Error('위키 초안 해시가 다릅니다.');a.check();
+    }
+    let parent=null;const approvals=new Set(),approvedDrafts=new Set();
+    for(const row of doc.approvals){
+      const draft=doc.drafts.find(d=>d.id===row?.draft_id);
+      if(!draft||typeof row.id!=='string'||!row.id||approvals.has(row.id)||approvedDrafts.has(row.draft_id)
+        ||row.approved_by!==a.ctx.owner||row.parent_approved_revision_id!==parent||draft.base_approved_revision_id!==parent
+        ||row.draft_hash!==draft.draft_hash||row.source_manifest_hash!==await P.hashJson(draft.source_manifest))
+        throw Error('위키 검토 해시·연결이 다릅니다.');
+      a.check();approvals.add(row.id);approvedDrafts.add(row.draft_id);parent=row.id;
+    }
+    if(new Set(doc.rejected_draft_ids).size!==doc.rejected_draft_ids.length
+      ||doc.rejected_draft_ids.some(id=>!ids.has(id)||approvedDrafts.has(id)))throw Error('위키 검토 형식이 다릅니다.');
+    a.check();return copy(doc);
+  }
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected};
 };

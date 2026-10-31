@@ -8,7 +8,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
     <dl class="protection-scope"></dl>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
-    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button><button type="button" class="secondary-btn" data-action="transcript-edit">전사문 편집</button></section>
+    <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="wiki-preview">위키 보기</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button><button type="button" class="secondary-btn" data-action="transcript-edit">전사문 편집</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="create">현재 메모 생성</button><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-append">결과 이어붙이기</button><button type="button" class="secondary-btn" data-action="analysis-approve">결과 승인 반영</button></div>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="compare">미전송 내용 비교</button></div>
@@ -78,6 +78,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     for (const b of dialog.querySelectorAll('button:not([data-action="close"]):not([data-action="lock"])')) {b.disabled=state.busy;b.hidden=false;}
     $('[name="target"]').disabled=state.busy;
     $('[name="representation"]').disabled=state.busy;
+    $('[data-action="wiki-preview"]').hidden=!info||!info.scope.local_id.startsWith('wiki:')||!api.wikiPreview;
     for (const purpose of ['conversion','current_plain_transition','mixed_conversion','confirm','resume','edit','compare','save','restore','delete','create','imports','import-selected','transcript-edit','transcript-save','analysis-append','analysis-approve']) {
       const b=$(`[data-action="${purpose}"]`);
       b.disabled=state.busy || !unlocked || !info;
@@ -107,6 +108,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="save"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !state.editorNote || state.composing;
     for(const mode of ['source','preview'])$('[data-action="editor-'+mode+'"]').disabled=state.busy || !state.editorNote || state.composing;
     const row=info.rows[Number($('[name="representation"]').value)],d=row?.descriptor;
+    $('[data-action="wiki-preview"]').disabled=state.busy||!row||Boolean(d?.is_null);
     for(const mode of ['append','approve'])$('[data-action="analysis-'+mode+'"]').disabled=state.busy||!unlocked||!api.analysisApply||Boolean(info.pending)
       ||row?.kind!=='typed'||d?.key.kind!=='analysis_result'||d.is_null||mode==='append'&&!info.catalog?.context.base.current_exists;
     $('[data-action="transcript-edit"]').disabled=state.busy||!unlocked||!api.transcriptEdit||Boolean(info.pending)||row?.kind!=='typed'||d?.key.kind!=='recording_transcript';
@@ -204,12 +206,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     try {
       if (!valid(token)) throw Error('인증 또는 메모가 변경되었습니다. 다시 여세요.');
       if (name==='refresh') await load();
-      else if (name==='read') {
+      else if (name==='read'||name==='wiki-preview') {
         const row=state.info?.rows[Number($('[name="representation"]').value)];
         if (!row) throw Error('열람할 표현이 없습니다.');
         $('.protection-plain').textContent='';
         const value=await api.read(state.info,row,resolveKey(token));
-        if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
+        if (valid(token)) {
+          if(name==='wiki-preview'){await api.wikiPreview(state.info,value);if(valid(token))status('보호된 위키 · 읽기 전용');}
+          else{$('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨');}
+        }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
         if(name==='analysis-append'||name==='analysis-approve') {

@@ -562,7 +562,16 @@ async function runOnce() {
         await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki reading");
       }
       if(process.argv.includes("--wiki-protection")){
-        await verifyWikiProtectionFlow({evaluate:expression=>evaluate(page,expression)});
+        await verifyWikiProtectionFlow({evaluate:expression=>evaluate(page,expression),capture:async()=>{
+          for(const width of [1280,390]){
+            await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+            assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Protected wiki reading must fit the viewport");
+            if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+              const shot=await page.send("Page.captureScreenshot");
+              await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-protected-reading-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+            }
+          }
+        }});
         for(const width of [1280,390]){
           await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
           assert(await evaluate(page,'(()=>{const d=document.querySelector("#noteProtectionDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Wiki protection dialog must fit the viewport");

@@ -4,7 +4,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   dialog.id='wikiDialog';dialog.className='library-dialog wiki-dialog';
   dialog.setAttribute('aria-labelledby','wikiTitle');
   let rows=[],doc=null,dirty=false,busy=false,readable=false,epoch=0,bound='',message='',topic='',question='',confirmation=null,previous=null;
-  let viewId='',beforeId='',comparing=false;
+  let viewId='',beforeId='',comparing=false,readOnly=false;
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
   const valid=token=>dialog.open&&token===epoch&&bound===api.contextKey();
@@ -22,11 +22,11 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
-    viewId='';beforeId='';comparing=false;
+    viewId='';beforeId='';comparing=false;readOnly=false;
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
-    if(dialog.open&&(bound!==api.contextKey()||(readable&&doc&&api.canRead&&!api.canRead(doc))))close();
+    if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
     rows=rows.map(row=>({id:row.id||row.document?.wiki_id,unavailable:true,error:'출처·보호 상태 확인 필요'}));
@@ -36,14 +36,15 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   }
   function command(action,label,fn,disabled=false){
     const b=node('button',label,'secondary-btn');b.type='button';b.dataset.wikiAction=action;b.disabled=disabled||busy;
-    b.onclick=()=>execute(fn);return b;
+    b.onclick=()=>{if(!readOnly)void execute(fn);};return b;
   }
   async function execute(fn){
     check();if(!dialog.open||busy)return;
     const token=epoch;busy=true;readable=false;render();
     try{await fn(token);}catch(error){if(valid(token))message=error.message;}
     finally{
-      if(valid(token)&&doc){
+      if(valid(token)&&doc&&readOnly){readable=true;message='보호된 저장 판본 · 읽기 전용';}
+      if(valid(token)&&doc&&!readOnly){
         try{
           const state=await api.sourceStatus(current(),doc);requireActive(token);
           if(state.available!==true)conceal();
@@ -89,7 +90,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     header.firstChild.id='wikiTitle';
     const exit=node('button','닫기','ghost-btn');exit.type='button';exit.onclick=close;header.append(exit);
     const toolbar=node('div',undefined,'library-toolbar');
-    toolbar.append(command('new','새 위키',async token=>{
+    if(!readOnly)toolbar.append(command('new','새 위키',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 버리고 새 위키를 만들까요?'))return;
       requireActive(token);doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;
     }),command('refresh','동기화',async token=>{const next=await api.list({sync:true});requireActive(token);rows=next;message='목록을 갱신했습니다.';}));
@@ -121,6 +122,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }
     if(!rows.length)nav.append(node('p','저장된 위키 없음'));
     const detail=node('section',undefined,'wiki-detail');detail.setAttribute('aria-label','위키 검토');
+    if(!readOnly){
     const picker=node('details');picker.open=!doc;picker.append(node('summary','자료 선택'));
     const choices=node('div',undefined,'wiki-source-list');
     for(const source of api.notes()){
@@ -136,6 +138,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dirty)generateButton.title='현재 초안을 먼저 저장하세요.';
     questionInput.oninput=()=>{question=questionInput.value;generateButton.textContent=question.trim()?'질문 초안 생성':doc?'갱신 초안 생성':'초안 생성';};
     questionLabel.append(questionInput);detail.append(questionLabel,generateButton);
+    }
     if(doc&&readable){
       const draft=current(),approved=doc.approvals.some(a=>a.draft_id===draft.id),rejected=doc.rejected_draft_ids.includes(draft.id);
       const controls=node('div',undefined,'wiki-review-controls');
@@ -166,7 +169,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         for(const id of section.citation_ids){
           const citation=draft.citations.find(c=>c.id===id),source=draft.source_manifest.find(s=>s.id===citation.source_id);
           const quote=node('blockquote',citation.quote),link=command('source','원문 보기',()=>api.openSource(source.note_ref));
-          quote.append(link);body.append(quote);
+          if(!readOnly)quote.append(link);body.append(quote);
         }
       });
       if(comparing&&beforeId){
@@ -177,7 +180,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         else for(const part of changes){const span=node(part.added?'ins':part.removed?'del':'span',part.value);diff.append(span);}
         const oldSources=new Map(before.source_manifest.map(ref=>[NowNoteProtectionProtocol.canonicalJson(ref.note_ref),ref]));
         const newSources=new Map(draft.source_manifest.map(ref=>[NowNoteProtectionProtocol.canonicalJson(ref.note_ref),ref]));
-        const sourceChanges=node('ul',undefined,'wiki-source-changes'),titles=new Map(api.notes().map(n=>[n.id,n.title]));
+        const sourceChanges=node('ul',undefined,'wiki-source-changes'),titles=new Map((readOnly?[]:api.notes()).map(n=>[n.id,n.title]));
         sourceChanges.setAttribute('aria-label','출처 판본 차이');
         for(const key of new Set([...oldSources.keys(),...newSources.keys()])){
           const left=oldSources.get(key),right=newSources.get(key),ref=right||left;
@@ -188,6 +191,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }
         detail.append(diff,sourceChanges);
       }else detail.append(toc,body);
+      if(!readOnly){
       const actions=node('div',undefined,'library-actions');
       actions.append(command('save-draft','초안 저장',async token=>{
         const result=await api.save(structuredClone(doc));requireActive(token);dirty=false;
@@ -203,12 +207,17 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       },dirty||approved||rejected));
       if(api.openProtection)actions.append(command('protect','위키 보호',()=>api.openProtection(doc.wiki_id),dirty));
       detail.append(actions);
+      }
     }
     layout.append(nav,detail);dialog.append(header,toolbar,status,layout);
   }
   dialog.addEventListener('cancel',event=>{event.preventDefault();if(confirmation)confirmation(false);else close();});
   document.body.append(dialog);
-  return {close,check,async open(){
+  return {close,check,openProtected(value){
+    close();previous=document.activeElement;bound=api.contextKey();epoch++;
+    doc=structuredClone(value);rows=[{document:structuredClone(value)}];readOnly=true;readable=true;
+    message='보호된 저장 판본 · 읽기 전용';choose(preferred(doc).id);dialog.showModal();render();
+  },async open(){
     close();previous=document.activeElement;bound=api.contextKey();epoch++;const token=epoch;
     dialog.showModal();busy=true;render();
     try{const next=await api.list();requireActive(token);rows=next;}

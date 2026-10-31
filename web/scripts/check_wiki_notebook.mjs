@@ -80,4 +80,14 @@ original.status='ok';original.origin='local';original.content='Changed evidence.
 api.readRemote=async()=>({artifact:{protected:false,document:structuredClone(historyDoc),current_exists:true},
   source_status:{available:true,stale:false}});
 assert.equal((await book.sourceStatus(historyDoc.drafts[0],historyDoc)).stale,true,'A past selected draft must not inherit the current approved draft freshness');
-console.log('Wiki notebook: local-only no upload, durable journal cold restore, explicit approval, source-change and account isolation PASS');
+assert.equal(typeof book.inspectProtected,'function','A verified decrypted wiki needs a read-only parser rather than a general-write bypass');
+const beforePreview=JSON.stringify(saved);
+const preview=await book.inspectProtected(box.NowNoteProtectionProtocol.canonicalJson(approved.document),local);
+assert.equal(preview.approvals.length,1);assert.equal(JSON.stringify(saved),beforePreview);
+const damaged=structuredClone(approved.document);damaged.drafts[0].sections[0].markdown='Tampered evidence.';
+await assert.rejects(()=>book.inspectProtected(JSON.stringify(damaged),local),/해시|hash/);
+const falseApproval=structuredClone(approved.document);falseApproval.approvals[0].source_manifest_hash='0'.repeat(64);
+await assert.rejects(()=>book.inspectProtected(JSON.stringify(falseApproval),local),/해시|검토|hash/,'Read-only approval labels must retain the exact source-manifest binding');
+await assert.rejects(()=>book.inspectProtected(JSON.stringify(approved.document),'wiki:'+webcrypto.randomUUID()),/형식|계정|서버/);
+assert.equal(JSON.stringify(saved),beforePreview,'Read-only preview must never unlock or rewrite the durable journal');
+console.log('Wiki notebook: local-only no upload, durable cold restore, explicit approval, source-change/account isolation and verified read-only parsing PASS');
