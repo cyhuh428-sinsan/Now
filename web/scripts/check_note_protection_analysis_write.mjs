@@ -3,7 +3,7 @@ import {readFile} from 'node:fs/promises';
 import {webcrypto} from 'node:crypto';
 import vm from 'node:vm';
 const box={crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa};
-for(const name of ['protocol','analysis'])vm.runInNewContext(await readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
+for(const name of ['protocol','state','analysis'])vm.runInNewContext(await readFile(new URL('../vendor/note-protection-'+name+'.js',import.meta.url),'utf8'),box);
 const Q=box.NowNoteProtectionProtocol,A=box.NowNoteProtectionAnalysis,copy=structuredClone,uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
 const scope={url:'https://synthetic.invalid',owner:'alice',local_id:'one',instance:uid(1),device:'first'};
 const context={base:{head_version:0,head_revision_id:null,crypto_epoch:1,history_generation:1,protection_state:'protected',inventory_revision_ids:[],identity_state:'related_only',current_exists:false},current_mode:'absent',selected_physical_note_id:null,mixed_metadata_version:1};
@@ -41,3 +41,21 @@ for(const change of [m=>{m.operation_id=uid(70);},m=>{m.DSET[1].source_etag=uid(
  const wrong=copy(manifest);change(wrong);await assert.rejects(()=>A.validateInitialWriteManifest(scope,plan,settled,catalog,wrong));
 }
 console.log('MA initial plan/manifest: original settled TR/BM/C bytes/nulls, exact six sets and digest, scope/catalog, wrong key/tamper/stale/unknown denial PASS (pure synthetic; no API/journal/Provider)');
+const names=['S','DSET','P','O','existing','verified_existing'],header=Object.fromEntries(Object.entries(manifest).filter(([k])=>!names.includes(k)));
+const operation={schema_version:3,purpose:plan.purpose,operation_id:settled.execution_id,mutation_id:uid(99),state:'prepared',lease_version:1,expires_at:running.expires_at,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:header,counts:verified.counts,receipt:null,latest_context:context};
+const originalExecution={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:settled.source_context,terminal_receipt:settled.terminal_receipt,bundle_metadata:settled.bundle_metadata};
+let prepareCalls=0,exists=false,losePrepare=true;const transportCalls=[];
+const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
+ assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
+ if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
+ if(path.endsWith('/prepare')){prepareCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(plan.prepare));exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
+ if(path.endsWith('/manifest')){assert.equal(body.operation_id,settled.execution_id);assert.equal(body.metadata_manifest_digest,verified.metadata_manifest_digest);return {schema_version:3,section:body.section,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:copy(header),set_digests:copy(verified.set_digests),counts:copy(verified.counts),entries:copy(manifest[body.section]),next_cursor:null};}
+ throw Error('unexpected_transport');
+}});
+await assert.rejects(()=>remote.prepareAnalysis(scope,plan,settled,catalog),/fixture_prepare_response_lost/);
+const prepared=await remote.prepareAnalysis(scope,plan,settled,catalog);
+assert.equal(prepareCalls,1);assert.equal(prepared.id,settled.execution_id);assert.equal(prepared.digest,verified.metadata_manifest_digest);
+assert.ok(Q.canonicalJson(prepared.manifest)===Q.canonicalJson(Object.fromEntries(names.map(name=>[name,manifest[name]]))),'original six section arrays must be unchanged');assert.equal(transportCalls.filter(c=>c.path.endsWith('/manifest')).length,6);
+console.log('MA prepare transport: original operation status before retry, no duplicate POST after lost response, exact six-page manifest PASS (synthetic HTTP; no server/journal/Provider)');
+const wrongRef=copy(plan);wrongRef.prepare.execution_ref.execution_id=uid(88);const beforeBadRequest=transportCalls.length;
+await assert.rejects(()=>remote.prepareAnalysis(scope,wrongRef,settled,catalog));assert.equal(transportCalls.length,beforeBadRequest,'wrong original execution must fail before any request');

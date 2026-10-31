@@ -2413,7 +2413,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (b.owner_id !== s.owner || b.local_id !== s.local_id || b.device_id !== s.device || b.server_instance_id !== s.instance) fail('wire_scope');
     };
     async function pages(s,p) {
-      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
+      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
       const result = {}; let header = null, setDigests = p.response.set_digests || null;
       for (const section of sections) {
         let cursor = null; const seen = new Set(), entries = [];
@@ -2426,7 +2426,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             if (page.schema_version !== 2 || !eq(page.metadata_context,p.response.metadata_context) || !eq(page.set_counts,p.response.set_counts)) fail('manifest_context');
             entries.push(...page.items);
           } else {
-            if (setDigests === null && ['mixed_note_write','mixed_offline_import'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
+            if (setDigests === null && ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
             if (page.schema_version !== 3 || page.section !== section || !eq(page.metadata_header,p.response.metadata_header)
               || !eq(page.set_digests,setDigests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
             header = page.metadata_header; entries.push(...page.entries);
@@ -2544,6 +2544,38 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       return mutation && response.state==='committed' ? {...response,receipt_matches_current:true} : response;
     }
     const transport = {
+      async prepareAnalysis(s,intent,execution,catalog) {
+        s=copy(s);validateScope(s);const i=copy(intent),e=copy(execution),c=copy(catalog),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
+        const body=i.prepare;ensureScope(s,body);
+        if(i.purpose!=='mixed_analysis_write'||body.schema_version!==3)fail('analysis_prepare_schema');
+        fields(i,['purpose','prepare','transfers']);fields(body,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id','base','expected_catalog_digest','execution_ref','bundle_metadata']);
+        Q.validateContext(body.base);
+        if(e.state!=='client_settled'||!['done','failed'].includes(e.terminal_receipt?.outcome)||!eq(body.bundle_metadata,e.bundle_metadata)
+          ||!eq(body.base,c.context)||body.expected_catalog_digest!==c.catalog_digest
+          ||!eq(e.source_context,{server_instance_id:s.instance,base:body.base,catalog_digest:body.expected_catalog_digest}))fail('analysis_original_execution');
+        await A.validateBundle(e,body.bundle_metadata);
+        const reference={schema_version:3,execution_id:e.execution_id,terminal_run_version:e.terminal_receipt.terminal_run_version,
+          terminal_receipt_digest:await Q.hashJson(e.terminal_receipt),original_bundle_digest:e.bundle_metadata.bundle_digest};
+        if(!eq(body.execution_ref,reference))fail('analysis_original_execution');
+        const original={reference:copy(body.execution_ref),source_schema_version:3,source_context:copy(e.source_context),terminal_receipt:copy(e.terminal_receipt),bundle_metadata:copy(e.bundle_metadata)};
+        const path='/api/v2/notes/mixed-analysis-writes';let r;
+        try{
+          const known=await request(s,path+'/status','GET',{...access(s,3),operation_id:e.execution_id});
+          fields(known,['schema_version','status','operation','original_execution']);
+          if(known.schema_version!==3||known.status!=='operation'||!eq(known.original_execution,original))fail('analysis_original_execution');
+          r=known.operation;
+        }catch(error){if(error.status!==404||error.code!=='operation_not_found')throw error;}
+        if(!r)r=await request(s,path+'/prepare','POST',copy(body));
+        fields(r,['schema_version','purpose','operation_id','mutation_id','state','lease_version','expires_at','metadata_manifest_digest','metadata_header','counts','receipt','latest_context']);
+        if(r.schema_version!==3||r.purpose!==i.purpose||r.operation_id!==e.execution_id||r.mutation_id!==body.mutation_id
+          ||!Number.isSafeInteger(r.lease_version)||r.lease_version<1||typeof r.expires_at!=='string'||!Number.isFinite(Date.parse(r.expires_at))
+          ||!['prepared','uploading','committed','stale','aborted','expired'].includes(r.state))fail('analysis_operation_identity');
+        Q.validateContext(r.latest_context);
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r,original_execution:original};
+        const m=p.manifest=await pages(s,p),verified=await A.validateInitialWriteManifest(s,i,e,c,{...r.metadata_header,...m});
+        if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,r.counts))fail('analysis_manifest_metadata');
+        return p;
+      },
       async prepareImport(s,intent) {
         s=copy(s);validateScope(s);
         const i=copy(intent), Q=protocol();
