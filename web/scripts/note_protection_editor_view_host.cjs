@@ -19,6 +19,7 @@ app.whenReady().then(async()=>{
       const ui=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{locked++;},edit:async()=>({title:'View',content:original}),draft:async(i,n)=>{drafts.push(n.content);},openFile:p=>{files.push(p);}});
       await ui.open();
       const dialog=document.querySelector('#noteProtectionDialog'),button=n=>dialog.querySelector('[data-action="'+n+'"]');
+      assert(button('analysis-prepare'),'analysis_prepare_missing');
       const idle=async()=>{for(let i=0;i<100&&button('edit').disabled;i++)await wait();};
       button('edit').click();await idle();
       const editor=dialog.querySelector('.protection-draft');assert(editor.value===original,'editor_source');
@@ -45,8 +46,31 @@ app.whenReady().then(async()=>{
       const clean=dialog.querySelector('.protection-draft');
       assert(!editor.value&&!clean.value&&clean!==editor&&!preview.textContent,'lock_plaintext_or_native_history_retained');
       clean.focus();document.execCommand('undo');assert(!clean.value,'lock_undo_resurrected_plaintext');
-      assert(locked>0,'lock_missing');ui.invalidate();
-      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,transport:'none',osIME:'not run'};
+      assert(locked>0,'lock_missing');ui.invalidate();dialog.remove();
+      let invoked=0,recorded=0,unavailable=0,release;
+      const plan={scope,operation_id:null,input:'SYNTHETIC-ANALYSIS-INPUT',route:{provider:'omniroute',endpoint:'http://127.0.0.1:1/v1',model:'auto'}};
+      const analysis=mountNoteProtection({contextKey:()=> 'one',canMutate:()=>true,targets:async()=>['one'],target:()=> 'one',selectTarget:()=>{},inspect:async()=>info,copies:async()=>[],lock:()=>{},
+        analysisPrepare:async()=>structuredClone(plan),analysisBegin:async(p,r,k)=>{assert(k==='fixture-key'&&r.model==='combo-name','analysis_confirmation_changed');return {operation_id:'fixture-run'};},
+        analysisInvoke:async()=>{invoked++;return new Promise(r=>{release=()=>r({provider_terminal_observed:true,outcome:'done',result_json:'SYNTHETIC-RESULT'});});},
+        analysisRecord:async(h,o,k)=>{assert(k==='new-output-key','analysis_key_reused_across_provider');recorded++;},analysisFinish:async()=>'<script>not HTML</script> SYNTHETIC-RESULT',
+        analysisUnavailable:async()=>{unavailable++;},
+      });await analysis.open();
+      const panel=document.querySelector('#noteProtectionDialog'),ab=n=>panel.querySelector('[data-action="'+n+'"]'),field=n=>panel.querySelector('[name="analysis-'+n+'"]');
+      const until=async(predicate,label)=>{for(let i=0;i<200;i++){if(predicate())return;await wait();}throw Error(label);};
+      const key=k=>{const form=panel.querySelector('form.library-confirm');assert(form,'analysis_key_prompt_missing');form.querySelector('input').value=k;form.requestSubmit();};
+      ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_prepare_wait');
+      assert(field('input').value===plan.input&&field('input').readOnly&&ab('analysis-run').disabled&&invoked===0,'analysis_unconfirmed_dispatched');
+      field('model').value='combo-name';field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));ab('analysis-run').click();
+      await until(()=>panel.querySelector('form.library-confirm'),'analysis_initial_key_wait');key('fixture-key');await until(()=>invoked===1,'analysis_invoke_wait');
+      assert(!panel.querySelector('form.library-confirm')&&!field('input').value,'analysis_input_retained_during_provider');
+      release();await until(()=>panel.querySelector('form.library-confirm'),'analysis_new_key_wait');key('new-output-key');
+      await until(()=>recorded===1&&!ab('analysis-prepare').disabled,'analysis_finish_wait');
+      assert(panel.querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-RESULT')&&!panel.querySelector('script'),'analysis_result_unsafe_or_missing');
+      ab('analysis-prepare').click();await until(()=>!ab('analysis-prepare').disabled,'analysis_second_prepare_wait');field('model').value='combo-name';field('confirm').checked=true;field('confirm').dispatchEvent(new Event('change'));ab('analysis-run').click();
+      await until(()=>panel.querySelector('form.library-confirm'),'analysis_second_key_wait');key('fixture-key');await until(()=>invoked===2,'analysis_second_invoke_wait');
+      analysis.lock();release();await until(()=>unavailable===1,'analysis_locked_terminal_wait');
+      assert(recorded===1&&!panel.querySelector('.protection-analysis-result').textContent&&!field('input').value,'analysis_late_raw_after_lock');analysis.invalidate();
+      return {ok:true,sanitizedPreview:true,sourceSelectionPreserved:true,nativeUndoRedo:true,lockCleared:true,analysisConfirmation:true,freshOutputKey:true,lateTerminalMetadataOnly:true,transport:'none',osIME:'not run'};
     })()`,true);
     if(outbound)throw Error('preview_outbound_request');
     result.outboundRequests=outbound;

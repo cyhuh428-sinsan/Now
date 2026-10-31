@@ -232,6 +232,25 @@
     }
     return {
       status,invalidate(){generation++;},
+      consumeHandoff(handoff) {
+        const ticket=tickets.get(handoff);if(!ticket)fail('handoff_unknown');
+        const c=own(ticket.scope);
+        if(c.auth!==ticket.auth||generation!==ticket.generation)fail('terminal_key_unavailable');
+        if(ticket.providerStarted||ticket.observationStarted)fail('provider_already_started');
+        if(status(ticket.operation_id).phase!=='analysis_running')fail('operation_phase');
+        ticket.providerStarted=true;
+      },
+      async inspectExecution(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        const b=await open(marker,password,c,epoch);active(marker.scope,c,epoch);
+        return structuredClone({request:b.request,input:b.input,route:b.route,execution:b.execution});
+      },
+      async readTerminal(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(!['analysis_terminal','analysis_settling','analysis_settled'].includes(marker.phase))fail('terminal_checkpoint_missing');
+        const b=await open(marker,password,c,epoch);
+        return openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});
+      },
       async start(scope,claim,input,route,password) {
         scope=structuredClone(scope);claim=structuredClone(claim);route=structuredClone(route);
         if(!password)fail('key_required');if(typeof input!=='string')fail('input');

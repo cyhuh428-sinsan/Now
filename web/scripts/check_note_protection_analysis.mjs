@@ -330,3 +330,17 @@ const pendingRecovery=await dispatchScenario();await pendingRecovery.controller.
 await assert.rejects(()=>pendingRecovery.controller.reconcileUnavailable(pendingRecovery.id,'synthetic'),/unavailable_receipt_missing/);
 assert.equal(pendingRecovery.controller.status(pendingRecovery.id).phase,'analysis_running');assert.equal(pendingRecovery.state.settleBodies.length,0);
 console.log('MX unavailable cold reconciliation: key required before GET, original TR only, cipher archive preserved, no Provider/POST, unknown stays pending PASS (synthetic only)');
+await assert.rejects(()=>coldTerminal.inspectExecution(knownId,'wrong'));
+const inspected=await coldTerminal.inspectExecution(knownId,'synthetic');
+assert.equal(inspected.input,input);assert.equal(Q.canonicalJson(inspected.route),Q.canonicalJson(route));
+assert.equal(inspected.execution.terminal_receipt.bundle_digest,recoveredReceipt.bundle_digest);
+inspected.route.endpoint='https://changed.invalid';
+assert.equal((await coldTerminal.inspectExecution(knownId,'synthetic')).route.endpoint,route.endpoint);
+const readTerminal=await coldTerminal.readTerminal(knownId,'synthetic');
+assert.equal(readTerminal.input_text,input);assert.equal(readTerminal.result_json,terminalObservation.result_json);
+await assert.rejects(()=>pendingRecovery.controller.readTerminal(pendingRecovery.id,'synthetic'),/terminal_checkpoint_missing/);
+const consuming=await dispatchScenario(),consumingHandoff=await consuming.controller.dispatch(consuming.id,'synthetic',confirmed);
+consuming.controller.consumeHandoff(consumingHandoff);
+assert.throws(()=>consuming.controller.consumeHandoff(consumingHandoff),/provider_already_started/);
+const lockedConsumption=await dispatchScenario(),lockedHandoff=await lockedConsumption.controller.dispatch(lockedConsumption.id,'synthetic',confirmed);
+lockedConsumption.controller.invalidate();assert.throws(()=>lockedConsumption.controller.consumeHandoff(lockedHandoff),/terminal_key_unavailable/);

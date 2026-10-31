@@ -14,18 +14,22 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <section class="protection-comparison hidden" aria-label="미전송 내용 비교"></section>
     <pre class="protection-plain" tabindex="0" aria-label="보호 메모 원문"></pre>
     <section class="protection-editor hidden" aria-label="보호 메모 편집"><label>제목<input class="settings-input protection-title" aria-label="보호 메모 제목"></label><div class="history-actions" role="group" aria-label="본문 보기"><button type="button" class="secondary-btn" data-action="editor-source" aria-pressed="true">원문 편집</button><button type="button" class="secondary-btn" data-action="editor-preview" aria-pressed="false">서식 보기</button></div><label class="protection-source-label">본문<textarea class="settings-input protection-draft" aria-label="보호 메모 본문" spellcheck="false"></textarea></label><article class="markdown-preview protection-preview hidden" aria-label="보호 메모 서식 보기" tabindex="0"></article><button type="button" class="primary-btn" data-action="save">서버 저장</button></section>
+    <section aria-label="보호 메모 분석"><h3>AI 분석</h3><select class="settings-select" name="analysis-operation" aria-label="분석 실행"></select><div class="history-actions"><button type="button" class="secondary-btn" data-action="analysis-prepare">분석 준비</button><button type="button" class="secondary-btn" data-action="analysis-resume">실행 상태 확인</button></div><div class="protection-analysis hidden"><label>제공업체<input class="settings-input" name="analysis-provider" readonly></label><label>전송 주소<input class="settings-input" name="analysis-endpoint"></label><label>모델<input class="settings-input" name="analysis-model"></label><label>전송할 입력<textarea class="settings-input" name="analysis-input" readonly></textarea></label><label><input type="checkbox" name="analysis-confirm">입력과 전송 대상을 확인했습니다</label><button type="button" class="primary-btn" data-action="analysis-run">분석 실행</button></div><pre class="protection-analysis-result" tabindex="0" aria-label="분석 결과"></pre></section>
     <section class="protection-copies" aria-label="귀속 확인할 옛 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="imports">미전송 이력 조회</button></div>
     <section class="protection-imports hidden" aria-label="가져올 원 이력"><div class="protection-import-rows protection-copies"></div><button type="button" class="primary-btn" data-action="import-selected">선택 이력 가져오기</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="confirm">선택 사본 귀속 확인</button><button type="button" class="primary-btn" data-action="conversion">전체 보호</button><button type="button" class="secondary-btn" data-action="current_plain_transition">현재만 평문</button><button type="button" class="secondary-btn" data-action="mixed_conversion">재암호화</button><button type="button" class="primary-btn" data-action="resume">전환 재개</button></div>`;
   document.body.append(dialog);
   const $ = s => dialog.querySelector(s);
-  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null};
+  const state = {bound:'',run:0,busy:false,info:null,copies:[],importRows:[],previous:null,editorNote:null,composing:false,compared:null,editorSelection:null,analysis:null};
   const keys = new Map();
   let askCancel = null;
   const status = text => { $('.protection-status').textContent=text; };
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';
+    for(const field of ['provider','endpoint','model','input'])$('[name="analysis-'+field+'"]').value='';
+    $('[name="analysis-confirm"]').checked=false;
     state.compared=null;$('.protection-comparison').replaceChildren();$('.protection-comparison').classList.add('hidden');
     state.editorNote=null;state.composing=false;state.editorSelection=null;
     // Replacing cleared inputs also discards the browser's native Undo history.
@@ -63,6 +67,11 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       b.title=unlocked?'':'전체 보호 검증 전에는 변경할 수 없습니다.';
     }
     if (!info) return;
+    const analysisId=$('[name="analysis-operation"]').value;
+    $('[data-action="analysis-prepare"]').disabled=state.busy||!unlocked||!api.analysisPrepare||(!analysisId&&(!info.catalog||Boolean(info.pending)));
+    $('[data-action="analysis-resume"]').disabled=state.busy||!unlocked||!analysisId;
+    $('[data-action="analysis-run"]').disabled=state.busy||!unlocked||!state.analysis||!$('[name="analysis-confirm"]').checked;
+    $('[name="analysis-operation"]').disabled=state.busy;
     $('[data-action="imports"]').disabled=state.busy || !unlocked || Boolean(info.pending) || !info.catalog;
     $('[data-action="import-selected"]').disabled=state.busy || !unlocked || Boolean(info.pending)
       || !state.importRows.length || !$('.protection-import-rows input:checked');
@@ -85,7 +94,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
     $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
-    $('[data-action="resume"]').hidden=!info.pending;
+    $('[data-action="resume"]').hidden=!info.pending||info.pending.phase.startsWith('analysis_');
     $('[data-action="confirm"]').hidden=!state.copies.length;
   }
   function requireAction(token) {
@@ -144,6 +153,9 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       text.textContent=[item.store,item.path.join(' / '),item.title,item.updated_at].filter(Boolean).join(' · ');
       label.append(box,text);list.append(label);
     }
+    const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
+    for(const row of info.analysisOperations||[])executions.append(new Option(row.phase+' · '+row.id,row.id));
+    if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
     status(info.pending ? api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
   }
   async function action(name) {
@@ -162,7 +174,35 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
         if (valid(token)) { $('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨'); }
       } else {
         if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
-        if(name==='imports') {
+        if(name==='analysis-prepare') {
+          const plan=await api.analysisPrepare(state.info,$('[name="analysis-operation"]').value||null,resolveKey(token));
+          if(!valid(token))return;state.analysis=plan;
+          for(const field of ['provider','endpoint','model'])$('[name="analysis-'+field+'"]').value=plan.route[field];
+          for(const field of ['endpoint','model'])$('[name="analysis-'+field+'"]').readOnly=Boolean(plan.operation_id)||!['omniroute','ollama'].includes(plan.route.provider);
+          $('[name="analysis-input"]').value=plan.input;$('[name="analysis-confirm"]').checked=false;
+          $('.protection-analysis').classList.remove('hidden');$('.protection-analysis-result').textContent='';status('입력과 전송 대상을 확인하세요.');
+        } else if(name==='analysis-run') {
+          if(!state.analysis||!$('[name="analysis-confirm"]').checked)throw Error('입력과 전송 대상을 확인하세요.');
+          const plan=state.analysis,route={provider:plan.route.provider,endpoint:$('[name="analysis-endpoint"]').value,model:$('[name="analysis-model"]').value};
+          let password=await ask('analysis-bundle',true,token),handoff,observation;
+          if(!password||!valid(token))return;
+          try{
+            handoff=await api.analysisBegin(plan,route,password);password=null;keys.clear();state.analysis=null;
+            $('.protection-analysis').classList.add('hidden');$('[name="analysis-input"]').value='';
+            if(!valid(token))return;status('분석 응답 대기 중');
+            observation=await api.analysisInvoke(handoff);
+            if(!valid(token)){await api.analysisUnavailable(handoff,'key_unavailable');return;}
+            password=await ask('analysis-output',true,token);
+            if(!password||!valid(token)){await api.analysisUnavailable(handoff,'key_unavailable');return;}
+            await api.analysisRecord(handoff,observation,password);observation=null;
+            const result=await api.analysisFinish(handoff.operation_id,password);
+            if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('분석 결과 암호화 보관됨 · 현재 메모 미적용');}}
+          }finally{password=null;observation=null;keys.clear();}
+        } else if(name==='analysis-resume') {
+          const id=$('[name="analysis-operation"]').value;
+          let password=await ask('analysis-bundle',true,token);if(!password||!valid(token))return;
+          try{const result=await api.analysisResume(id,password);if(valid(token)){await load();if(valid(state.run)){$('.protection-analysis-result').textContent=result;status('원 실행 상태 확인됨');}}}finally{password=null;keys.clear();}
+        } else if(name==='imports') {
           const rows=await api.imports(state.info,resolveKey(token));
           if(!valid(token))return;
           state.importRows=rows;const list=$('.protection-import-rows');list.replaceChildren();
@@ -267,6 +307,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   });
   $('[name="target"]').addEventListener('change',()=>{api.selectTarget($('[name="target"]').value);state.bound=api.contextKey();void action('refresh');});
   $('[name="representation"]').addEventListener('change',controls);
+  $('[name="analysis-confirm"]').addEventListener('change',controls);
+  $('[name="analysis-operation"]').addEventListener('change',()=>{state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';controls();});
   $('.protection-import-rows').addEventListener('change',controls);
   dialog.addEventListener('close',()=>{if(dialog.open)return;++state.run;wipe();state.info=null;state.copies=[];$('.protection-copies').replaceChildren();$('[name="representation"]').replaceChildren();state.previous?.focus();});
   return {
