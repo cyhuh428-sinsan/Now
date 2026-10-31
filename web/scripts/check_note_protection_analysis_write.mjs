@@ -305,3 +305,14 @@ await storedPending.resumeReplanPreparation(id,'fixture-key');assert.equal(store
 const storedCheckpoint=await storedPending.inspectReplan(id,'fixture-key');assert.equal(storedCheckpoint.prepared,null);assert.equal(storedCheckpoint.work,null);assert.equal(storedCheckpoint.proof,null);
 await storedPending.resumeReplanPreparation(id,'fixture-key');assert.equal(storedRequests,1);
 console.log('MA E3 AlreadyStored durable metadata: original response preserved without output allocation/cipher/commit, wrong key before RPC, still pending until receipt/typed proof PASS (synthetic journal only)');
+await coldReplan.prepareReplanCipher(id,'fixture-key','new-epoch-key');
+assert.equal(coldReplan.status(id).phase,'analysis_replan_prepared');
+const cipherCheckpoint=await coldReplan.inspectReplan(id,'fixture-key'),checkpointBytes=Q.canonicalJson(cipherCheckpoint.work),requestsAtCipher=replanRequests;
+await A.verifyReplanWriteWork(scope,cipherCheckpoint.plan,cipherCheckpoint.prepared,cipherCheckpoint.catalog,cipherCheckpoint.work,'fixture-key','new-epoch-key');
+await coldReplan.prepareReplanCipher(id,'fixture-key','new-epoch-key');assert.equal(Q.canonicalJson((await coldReplan.inspectReplan(id,'fixture-key')).work),checkpointBytes);assert.equal(replanRequests,requestsAtCipher);
+await assert.rejects(()=>coldReplan.prepareReplanCipher(id,'fixture-key','wrong-key'));assert.equal(replanRequests,requestsAtCipher);
+assert.equal((await coldReplan.readTerminal(id,'fixture-key')).result_json,result);
+const afterCipherJournal=box.NowNoteHistory.create({initial:copy(replanDisk),context:()=>ctx,request:async()=>{},write:async()=>{}}),afterCipher=A.createExecution({context:()=>ctx,journal:afterCipherJournal,request:async()=>{throw Error('no_rpc_for_cached_cipher');}});
+await afterCipher.prepareReplanCipher(id,'fixture-key','new-epoch-key');assert.equal(Q.canonicalJson((await afterCipher.inspectReplan(id,'fixture-key')).work),checkpointBytes);
+assert.ok(!JSON.stringify(replanDisk).includes('ORIGINAL')&&!JSON.stringify(replanDisk).includes('new-epoch-key'));
+console.log('MA E3 replan durable cipher: checked allocation before encrypt, original and target keys distinct, saved/readback before upload, cold cached bytes/core no regeneration, original terminal still readable PASS (synthetic only; publication/UI pending)');
