@@ -265,7 +265,17 @@ def export_devices(
 
 
 @router.get("/export/all")
-def export_all(db: Session = Depends(get_db)) -> JSONResponse:
+def export_all(db: Session = Depends(get_db), backup_schema_version: int = Query(default=2, ge=2, le=3)) -> JSONResponse:
+    if backup_schema_version == 3:
+        from app.services.note_backup import export_snapshot
+        try:
+            snapshot = export_snapshot(db)
+        except (ValueError, TypeError, KeyError, AttributeError):
+            raise HTTPException(status_code=409, detail={'code': 'backup_inconsistent'}, headers={'Cache-Control': 'no-store'}) from None
+        return JSONResponse(content=snapshot, headers={
+            'Cache-Control': 'no-store',
+            'Content-Disposition': 'attachment; filename="nownote-server-backup-v3.json"',
+        })
     from app.models.note_crypto import NoteCryptoFence
     from app.models.note_history import NoteHead
     from app.services.note_crypto_fence import require_unfenced
@@ -945,6 +955,14 @@ def _backup_content_sha256(payload: dict) -> str:
 
 
 def _verify_backup_payload(payload: dict) -> list[dict[str, str]]:
+    if payload.get('backup_schema_version') == 3:
+        from app.services.note_backup import validate_backup
+        try:
+            validate_backup(payload)
+            valid = True
+        except (ValueError, TypeError, KeyError, AttributeError):
+            valid = False
+        return [_verify_check('v3 복구 백업', valid, '동일 snapshot과 필수 section 검증', '정상' if valid else '오류')]
     checks = [
         _verify_check(
             "백업 이름",
@@ -1053,8 +1071,13 @@ def _backup_verify_summary(payload: dict) -> dict:
         value = items.get(section)
         summary[section] = len(value) if isinstance(value, list) else None
     summary["exported_at"] = payload.get("exported_at")
-    if payload.get("backup_schema_version") == 2:
+    if payload.get("backup_schema_version") in (2, 3):
         for section in ("library_resources", "library_mutations"):
+            value = items.get(section)
+            summary[section] = len(value) if isinstance(value, list) else None
+    if payload.get("backup_schema_version") == 3:
+        from app.services.note_backup import SECTIONS
+        for section in SECTIONS:
             value = items.get(section)
             summary[section] = len(value) if isinstance(value, list) else None
     summary["content_sha256"] = payload.get("content_sha256")
