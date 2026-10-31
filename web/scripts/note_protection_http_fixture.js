@@ -54,6 +54,53 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if(config.phase===12||config.phase===13){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,A=NowNoteProtectionAnalysis,Q=NowNoteProtectionProtocol;
+    let postCount=0,getCount=0;
+    const transport=async(s,path,method,body)=>{
+      assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'claim_transport_scope_changed');
+      if(method==='POST')postCount++;else getCount++;
+      const value=await request(path+(method==='GET'?'?'+new URLSearchParams(body):''),method,method==='POST'?body:undefined);
+      if(config.phase===12&&method==='POST'){
+        emit({stage:'analysis_claim_response_deliberately_lost',owner:a.owner,local_id:target,operation_id:value.execution_id});
+        throw Error('qa_claim_response_lost');
+      }
+      return value;
+    };
+    const execution=A.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:transport});
+    const input='HTTP-QA-CLAIM-INPUT-'+run+'\r\n';
+    if(config.phase===12){
+      const catalog=info.catalog,descriptor=catalog.entries.find(d=>d.key.kind==='note_body'&&d.key.id===String(catalog.context.selected_physical_note_id));
+      const claim={schema_version:3,owner_id:a.owner,local_id:target,device_id:a.device,server_instance_id:scope.instance,mutation_id:crypto.randomUUID(),source_context:{server_instance_id:scope.instance,base:catalog.context,catalog_digest:catalog.catalog_digest},source_keys:[{descriptor}],job_type:'memo_summary',prompt_version:'single_source_v1',source_job_id:null,execution_route:'client_provider',client_execution_confirmed:true};
+      const id=await execution.start(scope,claim,input,{provider:'omniroute',endpoint:'https://synthetic.invalid/v1',model:'auto'},password);
+      assert(postCount===0&&execution.status(id).phase==='analysis_claiming','claim_before_cipher_checkpoint');
+      let lost=false;try{await execution.resumeClaim(id,password);}catch(error){lost=error.message==='qa_claim_response_lost';}
+      assert(lost&&postCount===1&&execution.status(id).phase==='analysis_claiming','claim_loss_not_preserved');
+      for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-CLAIM-INPUT-'),'claim_plaintext_persisted');
+      execution.invalidate();button('lock').click();clearWebSession();
+      return {ok:true,mode:config.mode,phase:12,claimResponseLostAfterServer:true,cipherCheckpointPreserved:true,providerCalls:0};
+    }
+    const markers=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&m.phase==='analysis_claiming');
+    assert(markers.length===1,'claim_cold_marker_missing');const id=markers[0].id;
+    const original=Q.parseJson(await Q.decryptContent(markers[0].cipher_bundle,password));
+    assert(original.input===input&&original.execution===null&&original.route.model==='auto','claim_cold_bundle_changed');
+    let wrong=false;try{await execution.resumeClaim(id,'wrong');}catch{wrong=true;}
+    assert(wrong&&postCount===0&&getCount===0,'claim_wrong_key_called_server');
+    const claimed=await execution.resumeClaim(id,password);
+    assert(postCount===1&&claimed.state==='client_pending'&&claimed.dispatch_receipt===null,'claim_cold_not_same_pending');
+    const observed=await execution.resumeClaim(id,password);assert(postCount===1&&getCount===1&&Q.canonicalJson(observed)===Q.canonicalJson(claimed),'claim_status_reposted');
+    const access={schema_version:3,owner_id:a.owner,local_id:target,device_id:a.device,server_instance_id:scope.instance,execution_id:claimed.execution_id};
+    await request('/api/v2/notes/mixed-analysis-claims/cancel','POST',{...access,run_version:claimed.run_version,lease_version:claimed.lease_version});
+    const terminal=await execution.resumeClaim(id,password);assert(terminal.state==='cancelled'&&terminal.dispatch_receipt===null,'claim_cancel_status_not_preserved');
+    const settled=Q.parseJson(await Q.decryptContent(execution.status(id).cipher_bundle,password));
+    assert(settled.input===input&&Q.canonicalJson(settled.request)===Q.canonicalJson(original.request)&&Q.canonicalJson(settled.execution.terminal_receipt)===Q.canonicalJson(terminal.terminal_receipt),'claim_terminal_archive_changed');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('HTTP-QA-CLAIM-INPUT-'),'claim_cold_plaintext_persisted');
+    emit({stage:'analysis_claim_cold_resume_verified',owner:a.owner,local_id:target,operation_id:terminal.execution_id,local_operation_id:id});
+    execution.invalidate();button('lock').click();clearWebSession();await login(b);
+    let denied=false;try{await execution.resumeClaim(id,password);}catch{denied=true;}assert(denied&&postCount===1&&getCount===2,'claim_other_account_called_server');
+    clearWebSession();return {ok:true,mode:config.mode,phase:13,originalClaimColdResume:true,statusOnlyAfterKnown:true,wrongKeyAccountDenied:true,cipherOnlyArchive:true,providerCalls:0};
+  }
   if(config.phase===11){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,catalog=info.catalog,Q=NowNoteProtectionProtocol,A=NowNoteProtectionAnalysis;
