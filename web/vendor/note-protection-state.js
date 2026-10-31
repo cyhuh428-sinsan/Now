@@ -646,7 +646,7 @@
         s=copy(s);validateScope(s);const i=copy(intent),c=copy(catalog),saved=copy(known),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
         await A.validateReplanWritePlan(s,i,c);
         const body=i.prepare,e=i.original.execution,path='/api/v2/notes/mixed-analysis-writes';
-        const original={reference:copy(body.execution_ref),source_schema_version:3,source_context:copy(e.source_context),terminal_receipt:copy(e.terminal_receipt),bundle_metadata:copy(e.bundle_metadata)};
+        const original={reference:copy(body.execution_ref),source_schema_version:body.execution_ref.schema_version,source_context:copy(e.source_context),terminal_receipt:copy(e.terminal_receipt),bundle_metadata:copy(i.original.work.bundle_metadata)};
         if(saved){
           if(saved.version!==3||saved.path!==path||saved.id!==saved.response?.operation_id||saved.response.mutation_id!==body.mutation_id||!eq(saved.original_execution,original))fail('analysis_operation_identity');
           const v=await A.validateReplanWriteManifest(s,i,c,{...saved.response.metadata_header,...saved.manifest});
@@ -947,7 +947,7 @@
           if(p.response.metadata_header.control.request_type==='replan'){
             const a=work.replanned_analysis;fields(a,['plan','catalog']);
             await A.verifyReplanWriteWork(s,a.plan,p,a.catalog,work,analysisOriginalPassword,password);
-            const o=a.plan.original;initialMeaning=await A.openTerminalBundle(o.scope,o.request,o.execution,o.work,analysisOriginalPassword);
+            const o=a.plan.original;initialMeaning=await A.openOriginalTerminalBundle(o.scope,o.request,o.execution,o.work,analysisOriginalPassword);
           }else{
             const a=work.initial_analysis;fields(a,['request','execution','work','plan','catalog']);
             const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});

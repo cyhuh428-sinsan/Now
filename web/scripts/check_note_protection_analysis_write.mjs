@@ -409,3 +409,22 @@ for(const change of [e=>{e.terminal_receipt.schema_version=3;},e=>{e.dispatch_re
  const bad=copy(legacyExecution);change(bad);await assert.rejects(()=>A.openLegacyTerminalBundle(scope,legacyRequest,bad,legacyWork,'fixture-key'));
 }
 console.log('E1 original terminal: native schema1 SC/DR/TR/BM preserved, original cipher/null/exact CRLF values and wrong-key/tamper denial PASS (pure synthetic; bridge/journal/UI pending)');
+const legacyPlan=await A.createReplanWritePlan(scope,legacyRequest,legacyExecution,legacyWork,newerCatalog,{operation_id:null,state:'none'},uid(901),'fixture-key',{confirmed_reuse_original_result:true,target_epoch:2});
+assert.equal(legacyPlan.prepare.execution_ref.schema_version,1);assert.equal(legacyPlan.prepare.execution_ref.terminal_receipt_digest,await Q.hashJson(legacyReceipt));
+assert.equal(Q.canonicalJson(legacyPlan.original.execution),Q.canonicalJson(legacyExecution));assert.equal(Q.canonicalJson(legacyPlan.original.work),Q.canonicalJson(legacyWork));
+await A.validateReplanWritePlan(scope,legacyPlan,newerCatalog);
+const legacyManifest=copy(replanManifest);legacyManifest.mutation_id=legacyPlan.prepare.mutation_id;legacyManifest.control.execution_ref=copy(legacyPlan.prepare.execution_ref);legacyManifest.operation_origin.execution_ref=copy(legacyPlan.prepare.execution_ref);legacyManifest.operation_origin.original_source_context=copy(legacyRequest.source_context);
+await A.validateReplanWriteManifest(scope,legacyPlan,newerCatalog,legacyManifest);
+console.log('E1 to MA replan plan/manifest: original native receipt hash and source preserved, explicit target epoch and fresh schema3 output binding PASS (pure synthetic; journal/UI/API pending)');
+const legacyProof=await A.validateReplanWriteManifest(scope,legacyPlan,newerCatalog,legacyManifest),legacyHeader=Object.fromEntries(Object.entries(legacyManifest).filter(([k])=>!names.includes(k)));
+const legacyPrepared={...copy(replanPrepared),digest:legacyProof.metadata_manifest_digest,manifest:legacyManifest,response:{...copy(replanPrepared.response),mutation_id:legacyPlan.prepare.mutation_id,metadata_manifest_digest:legacyProof.metadata_manifest_digest,metadata_header:legacyHeader,counts:legacyProof.counts},original_execution:{reference:legacyPlan.prepare.execution_ref,source_schema_version:1,source_context:legacyRequest.source_context,terminal_receipt:legacyReceipt,bundle_metadata:legacyWork.bundle_metadata}};
+const legacyRebound=await A.buildReplanWriteWork(scope,legacyPlan,legacyPrepared,newerCatalog,'fixture-key','legacy-target-key');
+await A.verifyReplanWriteWork(scope,legacyPlan,legacyPrepared,newerCatalog,legacyRebound,'fixture-key','legacy-target-key');
+assert.equal(Q.canonicalJson(legacyPlan.original.work),Q.canonicalJson(legacyWork));
+const legacyRemote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
+ if(path.endsWith('/replan'))return {schema_version:3,status:'prepared',operation:copy(legacyPrepared.response),original_execution:copy(legacyPrepared.original_execution)};
+ if(path.endsWith('/manifest'))return {schema_version:3,section:body.section,metadata_manifest_digest:legacyProof.metadata_manifest_digest,metadata_header:copy(legacyHeader),set_digests:copy(legacyProof.set_digests),counts:copy(legacyProof.counts),entries:copy(legacyManifest[body.section]),next_cursor:null};
+ throw Error('unexpected_legacy_remote');
+}});
+await legacyRemote.replanAnalysis(scope,legacyPlan,newerCatalog);
+console.log('E1 to MA allocation/cipher: native original metadata returned unchanged, target-key new envelope and exact original values PASS (synthetic; journal/UI/API pending)');

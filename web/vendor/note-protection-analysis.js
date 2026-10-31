@@ -79,9 +79,9 @@
     }
     return values;
   }
-  async function openLegacyTerminalBundle(scope,request,execution,work,password,active=()=>true) {
+  async function legacyTerminalBundle(scope,request,execution,work,password,active,metadataOnly) {
     scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);work=structuredClone(work);
-    const check=()=>{if(active()!==true)fail('scope_changed');};check();if(!password)fail('key_required');
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();if(!metadataOnly&&!password)fail('key_required');
     globalThis.NowNoteProtectionState.validateScope(scope);
     exact(request,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id',...controlFields]);
     if(request.schema_version!==1||request.owner_id!==scope.owner||request.local_id!==scope.local_id||request.device_id!==scope.device||request.server_instance_id!==scope.instance)fail('legacy_scope');
@@ -122,9 +122,22 @@
     for(let i=0;i<required.length;i++){const c=bm.ciphertext_manifest[i],t=work.transfers[i];exact(c,['entry_key','destination_key','source_etag','output_kind','target_epoch','total_bytes','ciphertext_sha256']);exact(t,['key','raw']);uuid(c.source_etag);integer(c.total_bytes,1);hex(c.ciphertext_sha256);
       if(!same(c.entry_key,required[i].key)||!same(c.destination_key,required[i].key)||!same(t.key,c.destination_key)||c.output_kind!=='linked_text_envelope_v1'||c.target_epoch!==base.crypto_epoch||typeof t.raw!=='string'||new TextEncoder().encode(t.raw).length!==c.total_bytes||await Q().sha256(t.raw)!==c.ciphertext_sha256)fail('legacy_cipher');check();
       const slot=e.output_slots.find(s=>same(s.key,c.destination_key)),derived={execution_id:e.execution_id,source_context:{base:{base}}};
-      values[t.key.slot]=await Q().decryptRepresentation(t.raw,terminalDescriptor(derived,{...slot,source_etag:c.source_etag},c.ciphertext_sha256),{value:null,legacy:null},async()=>password,3);check();
+      if(!metadataOnly)values[t.key.slot]=await Q().decryptRepresentation(t.raw,terminalDescriptor(derived,{...slot,source_etag:c.source_etag},c.ciphertext_sha256),{value:null,legacy:null},async()=>password,3);check();
     }
-    return values;
+    return metadataOnly?null:values;
+  }
+  async function openLegacyTerminalBundle(scope,request,execution,work,password,active=()=>true) {
+    return legacyTerminalBundle(scope,request,execution,work,password,active,false);
+  }
+  async function openOriginalTerminalBundle(scope,request,execution,work,password,active=()=>true) {
+    return request.schema_version===1?openLegacyTerminalBundle(scope,request,execution,work,password,active):openTerminalBundle(scope,request,execution,work,password,active);
+  }
+  async function validateOriginalTerminal(scope,request,execution,work,active) {
+    if(request.schema_version===1)return legacyTerminalBundle(scope,request,execution,work,null,active,true);
+    await validateExecution(scope,request,execution);
+    if(active()!==true)fail('scope_changed');
+    if(execution.state!=='client_settled'||!['done','failed'].includes(execution.terminal_receipt?.outcome)||!same(execution.bundle_metadata,work.bundle_metadata))fail('terminal_unsettled');
+    await validateBundle(execution,work.bundle_metadata);
   }
   function validateObservation(observation) {
     exact(observation,['provider_terminal_observed','outcome','result_json','error_message','error_code']);
@@ -234,8 +247,7 @@
     exact(previous,['operation_id','state']);
     if(previous.operation_id===null?previous.state!=='none':!['stale','aborted','expired'].includes(previous.state))fail('previous_write_state');
     if(previous.operation_id!==null)uuid(previous.operation_id);
-    await validateExecution(originalScope,request,execution);check();
-    if(execution.state!=='client_settled'||!['done','failed'].includes(execution.terminal_receipt?.outcome))fail('terminal_unsettled');
+    await validateOriginalTerminal(originalScope,request,execution,terminalWork,active);check();
     if(!Array.isArray(catalog.entries))fail('catalog');
     for(const d of catalog.entries){
       Q().validateDescriptor(d,3);
@@ -243,8 +255,8 @@
     }
     const keys=catalog.entries.map(d=>d.key);if(!same(keys,Q().keyOrder(keys)))fail('catalog_order');
     if(await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:catalog.context,entries:catalog.entries})!==catalog.catalog_digest)fail('catalog_digest');check();
-    await openTerminalBundle(originalScope,request,execution,terminalWork,password,active);check();
-    const execution_ref={schema_version:3,execution_id:execution.execution_id,terminal_run_version:execution.terminal_receipt.terminal_run_version,
+    await openOriginalTerminalBundle(originalScope,request,execution,terminalWork,password,active);check();
+    const execution_ref={schema_version:request.schema_version,execution_id:execution.execution_id,terminal_run_version:execution.terminal_receipt.terminal_run_version,
       terminal_receipt_digest:await Q().hashJson(execution.terminal_receipt),original_bundle_digest:terminalWork.bundle_metadata.bundle_digest};check();
     return {purpose:'mixed_analysis_write',request_type:'replan',prepare:{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
       mutation_id:mutationId,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref,previous_write_id:previous.operation_id,
@@ -308,15 +320,13 @@
     const body=plan.prepare,original=plan.original,e=original.execution;
     const originalScope={...scope,device:original.request.device_id};
     if(!same(original.scope,originalScope)||plan.purpose!=='mixed_analysis_write'||plan.request_type!=='replan')fail('write_scope');
-    await validateExecution(originalScope,original.request,e);check();
-    if(e.state!=='client_settled'||!['done','failed'].includes(e.terminal_receipt?.outcome)||!same(e.bundle_metadata,original.work.bundle_metadata))fail('terminal_unsettled');
-    await validateBundle(e,original.work.bundle_metadata);check();
+    await validateOriginalTerminal(originalScope,original.request,e,original.work,active);check();
     exact(body,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id','base','expected_catalog_digest','execution_ref','previous_write_id','previous_write_state','target_epoch','confirmed_reuse_original_result']);
     uuid(body.mutation_id);Q().validateContext(catalog.context);
     if(body.previous_write_id===null?body.previous_write_state!=='none':!['stale','aborted','expired'].includes(body.previous_write_state))fail('previous_write_state');
     if(body.previous_write_id!==null)uuid(body.previous_write_id);
-    const reference={schema_version:3,execution_id:e.execution_id,terminal_run_version:e.terminal_receipt.terminal_run_version,
-      terminal_receipt_digest:await Q().hashJson(e.terminal_receipt),original_bundle_digest:e.bundle_metadata.bundle_digest};check();
+    const reference={schema_version:original.request.schema_version,execution_id:e.execution_id,terminal_run_version:e.terminal_receipt.terminal_run_version,
+      terminal_receipt_digest:await Q().hashJson(e.terminal_receipt),original_bundle_digest:original.work.bundle_metadata.bundle_digest};check();
     const epoch=catalog.context.base.crypto_epoch;
     const expectedBody={schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
       mutation_id:body.mutation_id,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref:reference,
@@ -344,9 +354,9 @@
     }
     const job=manifest.DSET[0].destination_key?.id;
     if(typeof job!=='string'||!/^[1-9][0-9]*$/.test(job)||catalog.entries.some(d=>['analysis_error','analysis_input','analysis_result'].includes(d.key.kind)&&d.key.id===job))fail('replan_job');
-    const outputs=e.bundle_metadata.slot_nulls.map((s,n)=>{
+    const outputs=plan.original.work.bundle_metadata.slot_nulls.map((s,n)=>{
       const key={...s.key,id:job},token=manifest.DSET[n].source_etag;uuid(token);
-      if(tokens.has(token)||e.output_slots.some(o=>o.source_etag===token))fail('replan_token');tokens.add(token);
+      if(tokens.has(token)||e.output_slots.some(o=>o.source_etag===token)||plan.original.work.bundle_metadata.ciphertext_manifest.some(o=>o.source_etag===token))fail('replan_token');tokens.add(token);
       return {destination_key:key,source_keys:[],source_etag:token,output_kind:'linked_text_envelope_v1',output_epoch:epoch,is_null:s.is_null,
         expected_binding:s.is_null?null:{server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,transition_id:manifest.operation_id,crypto_epoch:epoch,destination_key:key,revision_ref:null,parent_ref:null}};
     });
@@ -365,7 +375,7 @@
     const {execution:e,reference}=await validateReplanWritePlan(scope,plan,catalog,active);
     if(active()!==true)fail('scope_changed');
     exact(response,['schema_version','status','stored_result','original_execution','latest_context']);
-    const expected={reference,source_schema_version:3,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:e.bundle_metadata};
+    const expected={reference,source_schema_version:plan.prepare.execution_ref.schema_version,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:plan.original.work.bundle_metadata};
     if(response.schema_version!==3||response.status!=='already_stored'||!same(response.original_execution,expected))fail('analysis_original_execution');
     Q().validateContext(response.latest_context);
     const stored=response.stored_result;exact(stored,['schema_version','operation_id','status_path','receipt']);uuid(stored.operation_id);
@@ -382,12 +392,12 @@
   }
   async function replanValues(scope,plan,prepared,catalog,password,active) {
     const v=await validateReplanWriteManifest(scope,plan,catalog,{...prepared.response.metadata_header,...prepared.manifest},active);
-    const e=plan.original.execution,original={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:e.bundle_metadata};
+    const e=plan.original.execution,original={reference:plan.prepare.execution_ref,source_schema_version:plan.prepare.execution_ref.schema_version,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:plan.original.work.bundle_metadata};
     if(prepared.version!==3||prepared.path!=='/api/v2/notes/mixed-analysis-writes'||prepared.id!==prepared.response.operation_id||prepared.operation_id!==prepared.id
       ||prepared.digest!==v.metadata_manifest_digest||prepared.response.metadata_manifest_digest!==prepared.digest||prepared.response.mutation_id!==plan.prepare.mutation_id
       ||!same(prepared.original_execution,original)||!same(prepared.response.counts,v.counts))fail('write_prepared');
     integer(prepared.response.lease_version,1);
-    return openTerminalBundle(plan.original.scope,plan.original.request,e,plan.original.work,password,active);
+    return openOriginalTerminalBundle(plan.original.scope,plan.original.request,e,plan.original.work,password,active);
   }
   function replanDescriptor(prepared,output,digest) {
     return {key:output.destination_key,representation_kind:output.output_kind,representation_epoch:output.output_epoch,is_null:false,
@@ -1087,5 +1097,5 @@
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,openLegacyTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,initialWriteHeader,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,openLegacyTerminalBundle,openOriginalTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,initialWriteHeader,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,verifyReplanPublication,verifyStoredAnalysisPublication,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
