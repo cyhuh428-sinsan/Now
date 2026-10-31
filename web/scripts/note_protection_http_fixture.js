@@ -823,6 +823,23 @@
     const initial=await inspectNoteProtection();
     assert(initial.scope.local_id===target&&initial.status.crypto_epoch===0&&!initial.catalog,'related_scope_not_pristine');
     assert(!findTreeNode(state.data.tree,target),'discovery_created_placeholder_tree');
+    let lateRelease,latePending,originalRequestJson,lateObserved=false;
+    if(config.lateAnalysis){
+      renderServerSettings();
+      originalRequestJson=requestServerJson;
+      const gate=new Promise(resolve=>lateRelease=resolve);
+      requestServerJson=async(server,path,...args)=>{
+        const value=await originalRequestJson(server,path,...args);
+        if(path.startsWith('/api/v1/analysis/jobs?')){
+          assert(Array.isArray(value)&&value.some(job=>job.note_local_id===target
+            &&(job.input_text||'').includes('HTTP-QA-LINKED-'+run)),'late_analysis_real_plain_response_missing');
+          lateObserved=true;await gate;
+        }
+        return value;
+      };
+      latePending=refreshServerAnalysisJobs();
+      await drive(()=>lateObserved,'late_analysis_response_held');
+    }
     await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.scope.local_id===target&&m.phase==='complete'));
     const before=await inspectNoteProtection();
     assert(before.catalog.context.base.identity_state==='related_only'&&before.catalog.context.current_mode==='absent','related_protection_created_current');
@@ -851,6 +868,10 @@
     const inventory=after.catalog.entries.find(d=>d.key.kind==='inventory_snapshot'&&d.key.id===String(after.catalog.context.selected_physical_note_id));
     const current=await noteProtectionReader.read(after.scope,after.catalog,inventory,async()=>password);
     assert(current.value.note.content==='HTTP-QA-RELATED-CURRENT-'+run+'\n','related_created_current_wrong_content');
+    if(config.lateAnalysis){
+      lateRelease();await latePending;requestServerJson=originalRequestJson;await settle();
+      assert(lateObserved,'late_analysis_response_not_observed');
+    }
     for(const store of protectionStorageAdapters()){
       const value=await store.read(),prefixes=['HTTP-QA-LINKED-','HTTP-QA-RESULT-','HTTP-QA-TRANSCRIPT-','HTTP-QA-RELATED-CURRENT-'];
       if(prefixes.some(prefix=>JSON.stringify(value).includes(prefix+run))){
@@ -866,7 +887,7 @@
     }
     button('lock').click();clearWebSession();await login(b);
     assert(!(await refreshProtectionTargets()).includes(target)&&!protectionTargets().includes(target),'other_account_inherited_related_target');
-    clearWebSession();return {ok:true,mode:config.mode,phase:10,relatedOnlyDiscovered:true,createdCurrent:true,linkedPreserved:true,nullBefore:true,accountIsolation:true};
+    clearWebSession();return {ok:true,mode:config.mode,phase:10,relatedOnlyDiscovered:true,createdCurrent:true,linkedPreserved:true,nullBefore:true,accountIsolation:true,lateAnalysisGuarded:config.lateAnalysis===true};
   }
   if(config.phase===7){
     state.selectedTreeId=target;render();await settle();await open();

@@ -14,6 +14,31 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
     if (process.argv[2] && !name.includes(process.argv[2])) return;
     await action(); passed++;
   }
+  for(const name of ['refreshServerAnalysisJobs','analysisJobCommand','updateAnalysisJob','createSelectedNoteAnalysisJob'])
+  for(const field of ['input_text','result_json','error_message','metadata'])
+  for(const point of ['generation','protected','account','normal'])await check('late-analysis-response-'+name+'-'+field+'-'+point,async()=>{
+    let release,entered,protectedNow=false,disk;
+    const ready=new Promise(resolve=>entered=resolve),gate=new Promise(resolve=>release=resolve);
+    const b={state:{settings:{server:{ownerId:'alice',url:'https://synthetic.invalid',analysisJobs:[]}}},
+      scope:{owner:'alice',url:'https://synthetic.invalid',device:'one',auth:'synthetic',enabled:true},
+      noteProtectionViewGeneration:0,noteHistoryCaptureEpoch:0,noteProtectionBlocked:id=>id==='protected-note'&&protectedNow,
+      saveServerSettingsFromForm(){},prepareServerRequest:()=>true,renderServerStatus(){},renderServerSettings(){},
+      normalizeOwnerId:value=>value,t:value=>value,setServerMessage(){},setServerRawMessage(){},
+      elements:{serverAnalysisTypeSelect:{value:'memo_summary'}},isEncryptedContent:()=>false,
+      getSelectedTreeNode:()=>({id:'protected-note',title:'Synthetic',content:'INPUT'}),
+      requestServerJson:async()=>{entered();await gate;const job={id:1,note_local_id:'protected-note',input_text:null,result_json:null,error_message:null};if(field!=='metadata')job[field]='SYNTHETIC-LATE-PLAIN';return name==='refreshServerAnalysisJobs'?[job]:job;},
+      persistSettings:()=>{disk=structuredClone(b.state.settings);}};
+    b.noteHistoryContext=()=>({...b.scope});
+    vm.createContext(b);vm.runInContext([extract('captureServerAnalysisGuard'),extract('replaceServerAnalysisJob'),extract(name)].join('\n')+'\nglobalThis.run='+name+';',b);
+    const pendingResponse=b.run({id:1},name==='analysisJobCommand'?'cancel':{},'synthetic');await ready;
+    if(point==='generation')b.noteProtectionViewGeneration++;
+    if(point==='protected')protectedNow=true;
+    if(point==='account'){b.scope={...b.scope,owner:'bob',auth:'new-session'};b.state.settings.server={ownerId:'bob',analysisJobs:[]};}
+    release();await pendingResponse;
+    assert.equal(JSON.stringify(disk??b.state.settings).includes('SYNTHETIC-LATE-PLAIN'),point==='normal'&&field!=='metadata',
+      'Only a current, unprotected analysis response may enter persistent settings');
+    if(field==='metadata'&&point==='protected')assert.equal((disk??b.state.settings).server.analysisJobs[0]?.id,1,'Protected metadata-only rows remain visible');
+  });
   let pending = true, confirmLate = false, accessed = 0, owner='alice',switchAccount=false;
   const box = { state:{ selectedDate:'2026-10-30',data:{ daily:{'2026-10-30':{content:'SYNTHETIC-PLAIN'}},archivedDaily:[{id:'old',date:'2026-10-30',content:'SYNTHETIC-PLAIN'}] } },
     elements:{ dailyContent:{ readOnly:false,classList:{toggle(){}},focus(){} },appendTimeBtn:{},archiveSelectedBtn:{} },

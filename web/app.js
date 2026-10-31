@@ -15277,13 +15277,28 @@ async function cancelAnalysisJob(job) {
   await analysisJobCommand(job, "cancel", "settings.server.analysis.cancelled");
 }
 
+function captureServerAnalysisGuard(server) {
+  const before={...noteHistoryContext()},generation=noteProtectionViewGeneration,epoch=noteHistoryCaptureEpoch;
+  return jobs=>{
+    const current=noteHistoryContext();
+    if(server!==state.settings.server || generation!==noteProtectionViewGeneration || epoch!==noteHistoryCaptureEpoch
+      || ["url","owner","device","auth","enabled"].some(key=>before[key]!==current[key]))
+      throw new Error("분석 응답의 계정·보호 상태가 변경되었습니다. 현재 목록을 다시 확인하세요.");
+    if(jobs.some(job=>job?.note_local_id && noteProtectionBlocked(job.note_local_id)
+      && ["input_text","result_json","error_message"].some(key=>typeof job[key]==="string" && job[key].length)))
+      throw new Error("보호된 분석의 원문은 일반 목록에 저장할 수 없습니다. 보호 메모에서 확인하세요.");
+  };
+}
+
 async function analysisJobCommand(job, command, messageKey) {
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
+  const accept=captureServerAnalysisGuard(server);
   try {
     const updated = await requestServerJson(server, `/api/v1/analysis/jobs/${job.id}/${command}`, {
       method: "POST",
     });
+    accept([updated]);
     replaceServerAnalysisJob(updated);
     server.lastCheckedAt = new Date().toISOString();
     setServerMessage(server, "ok", messageKey);
@@ -15298,11 +15313,13 @@ async function analysisJobCommand(job, command, messageKey) {
 async function updateAnalysisJob(job, payload, messageKey) {
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
+  const accept=captureServerAnalysisGuard(server);
   try {
     const updated = await requestServerJson(server, `/api/v1/analysis/jobs/${job.id}`, {
       method: "PATCH",
       body: JSON.stringify(payload),
     });
+    accept([updated]);
     replaceServerAnalysisJob(updated);
     server.lastCheckedAt = new Date().toISOString();
     setServerMessage(server, "ok", messageKey);
@@ -15725,6 +15742,7 @@ async function createSelectedNoteAnalysisJob() {
   saveServerSettingsFromForm(t("settings.server.analysis.creating"), "settings.server.analysis.creating");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
+  const accept=captureServerAnalysisGuard(server);
 
   const selected = getSelectedTreeNode();
   const jobType = elements.serverAnalysisTypeSelect?.value || "memo_summary";
@@ -15766,6 +15784,7 @@ async function createSelectedNoteAnalysisJob() {
         input_text: inputText,
       }),
     });
+    accept([job]);
     server.analysisJobs = [job, ...(server.analysisJobs || [])].slice(0, 5);
     server.lastCheckedAt = new Date().toISOString();
     setServerMessage(server, "ok", "settings.server.analysis.created");
@@ -15781,6 +15800,7 @@ async function refreshServerAnalysisJobs() {
   saveServerSettingsFromForm(t("settings.server.analysis.loading"), "settings.server.analysis.loading");
   const server = state.settings.server;
   if (!prepareServerRequest(server)) return;
+  const accept=captureServerAnalysisGuard(server);
 
   renderServerStatus("testing", t("settings.server.analysis.loading"));
   try {
@@ -15788,6 +15808,7 @@ async function refreshServerAnalysisJobs() {
       server,
       `/api/v1/analysis/jobs?owner_id=${encodeURIComponent(normalizeOwnerId(server.ownerId))}`,
     );
+    accept(Array.isArray(jobs)?jobs:[]);
     server.analysisJobs = Array.isArray(jobs) ? jobs.slice(0, 5) : [];
     server.lastCheckedAt = new Date().toISOString();
     setServerMessage(server, "ok", "settings.server.analysis.loaded");
