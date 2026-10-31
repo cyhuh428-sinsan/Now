@@ -19794,6 +19794,7 @@ function editCanvasResource(row) {
 }
 
 async function selectCanvasResource(id) {
+  if (canvasResourceBusy) return;
   const editor=canvasResourceEditor, ctx=libraryContext();
   if (editor?.dirty && !await confirmAction("저장 전 변경을 버리고 다른 맵을 열까요?")) { renderCanvas(); return; }
   if (NowLibrary.key(libraryContext())!==NowLibrary.key(ctx) || libraryContext().auth!==ctx.auth) throw new Error("계정 또는 서버가 변경되었습니다.");
@@ -19813,6 +19814,7 @@ async function selectCanvasResource(id) {
 }
 
 async function saveCanvasResource() {
+  if (canvasResourceBusy) return;
   const ctx=libraryContext();
   if (!canvasResourceContextActive()) throw new Error("계정 또는 서버가 변경되었습니다.");
   if (!ctx.enabled || !libraryStore) { persist(); showNotice("기기에 저장했습니다."); return; }
@@ -19837,30 +19839,42 @@ async function saveCanvasResource() {
 }
 
 async function syncCanvasResources() {
+  if (canvasResourceBusy) return;
   if (!libraryStore || !libraryContext().enabled || !canvasResourceContextActive()) throw new Error("현재 계정의 서버 연결을 확인하세요.");
   const editor=canvasResourceEditor;
-  await libraryStore.sync();
-  if (!canvasResourceContextActive(editor)) return;
-  if (editor && !editor.dirty) {
-    const row=libraryStore.list("canvases").find(item=>item.id===editor.id);
-    if (row && !row.pending && !row.conflict) editCanvasResource(row);
+  canvasResourceBusy=true;renderCanvasResourceControls();
+  try {
+    await libraryStore.sync();
+    if (!canvasResourceContextActive(editor) || canvasResourceEditor!==editor) return;
+    if (editor && !editor.dirty) {
+      const row=libraryStore.list("canvases").find(item=>item.id===editor.id);
+      if (row && !row.pending && !row.conflict) editCanvasResource(row);
+    }
+    renderCanvas();
+  } finally {
+    canvasResourceBusy=false;renderCanvasResourceControls();
   }
-  renderCanvas();
 }
 
 async function resolveCanvasResource(choice) {
+  if (canvasResourceBusy) return;
   const editor=canvasResourceEditor;
   if (!editor || !canvasResourceContextActive(editor)) throw new Error("현재 계정의 맵을 다시 열어주세요.");
   const rows=libraryStore.list("canvases"), row=rows.find(item=>item.id===editor.id);
   if (!row?.conflict) return;
-  await libraryStore.resolve("canvases",editor.id,choice,{remoteVersion:row.conflict.remote?.version || 0});
-  if (!canvasResourceContextActive(editor)) return;
-  await libraryStore.sync();
-  if (!canvasResourceContextActive(editor)) return;
-  const after=libraryStore.list("canvases"), next=after.find(item=>item.id===editor.id)
-    || after.find(item=>!rows.some(old=>old.id===item.id));
-  if (next) editCanvasResource(next); else editCanvasResource(null);
-  renderCanvas();
+  canvasResourceBusy=true;renderCanvasResourceControls();
+  try {
+    await libraryStore.resolve("canvases",editor.id,choice,{remoteVersion:row.conflict.remote?.version || 0});
+    if (!canvasResourceContextActive(editor) || canvasResourceEditor!==editor) return;
+    await libraryStore.sync();
+    if (!canvasResourceContextActive(editor) || canvasResourceEditor!==editor) return;
+    const after=libraryStore.list("canvases"), next=after.find(item=>item.id===editor.id)
+      || after.find(item=>!rows.some(old=>old.id===item.id));
+    if (next) editCanvasResource(next); else editCanvasResource(null);
+    renderCanvas();
+  } finally {
+    canvasResourceBusy=false;renderCanvasResourceControls();
+  }
 }
 
 function renderCanvasResourceControls() {
@@ -19881,6 +19895,8 @@ function renderCanvasResourceControls() {
   elements.canvasSyncBtn.disabled=canvasResourceBusy || !ctx.enabled;
   elements.canvasNewBtn.disabled=canvasResourceBusy;
   elements.canvasResourceSelect.disabled=canvasResourceBusy;
+  elements.canvasChooseLocalBtn.disabled=canvasResourceBusy;
+  elements.canvasChooseRemoteBtn.disabled=canvasResourceBusy;
   const frozen=canvasResourceBusy || Boolean(conflict);
   elements.canvasTitleInput.disabled=frozen;
   elements.canvasBoard.inert=frozen;
