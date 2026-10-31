@@ -650,8 +650,17 @@
     const current=await noteProtectionReader.read(after.scope,after.catalog,inventory,async()=>password);
     assert(current.value.note.content==='HTTP-QA-RELATED-CURRENT-'+run+'\n','related_created_current_wrong_content');
     for(const store of protectionStorageAdapters()){
-      const raw=JSON.stringify(await store.read());
-      for(const prefix of ['HTTP-QA-LINKED-','HTTP-QA-RESULT-','HTTP-QA-TRANSCRIPT-','HTTP-QA-RELATED-CURRENT-'])assert(!raw.includes(prefix+run),'related_scope_local_plaintext_residue');
+      const value=await store.read(),prefixes=['HTTP-QA-LINKED-','HTTP-QA-RESULT-','HTTP-QA-TRANSCRIPT-','HTTP-QA-RELATED-CURRENT-'];
+      if(prefixes.some(prefix=>JSON.stringify(value).includes(prefix+run))){
+        emit({stage:'related_plaintext_store',owner:a.owner,local_id:target,code:store.name+(store.ephemeral?':ephemeral':':persistent')});
+        let count=0;
+        function scan(v,path){
+          if(typeof v==='string'&&prefixes.some(prefix=>v.includes(prefix+run))){
+            if(count++<12)emit({stage:'related_plaintext_path',owner:a.owner,local_id:target,code:path.map(k=>/^(?:[A-Za-z_]{1,30}|[0-9]{1,5})$/.test(String(k))?String(k):'*').join('.')});
+          }else if(v&&typeof v==='object')for(const [key,child]of Object.entries(v))scan(child,[...path,key]);
+        }
+        scan(value,[]);throw Error('related_scope_local_plaintext_residue');
+      }
     }
     button('lock').click();clearWebSession();await login(b);
     assert(!(await refreshProtectionTargets()).includes(target)&&!protectionTargets().includes(target),'other_account_inherited_related_target');
