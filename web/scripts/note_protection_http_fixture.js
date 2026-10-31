@@ -55,7 +55,7 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
-  if(config.phase===26){
+  if([26,29].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     await action('resume',()=>Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete'));
     const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,A=NowNoteProtectionAnalysis,baseKeys=['head_version','head_revision_id','crypto_epoch','history_generation','protection_state','inventory_revision_ids','identity_state','current_exists'];
@@ -82,15 +82,61 @@
     assert(Q.canonicalJson(nativeStatus.original_request_metadata)===Q.canonicalJson(claim)&&Q.canonicalJson(nativeStatus.bundle_metadata)===Q.canonicalJson(bm),'legacy_read_metadata_changed');
     const originalWork={transfers,bundle_metadata:bm};assert((await A.openLegacyTerminalBundle(scope,claim,nativeStatus,originalWork,password)).result_json===values.result_json,'legacy_original_cipher_value');
     assert(Q.canonicalJson(settled.terminal_receipt)===Q.canonicalJson(nativeStatus.terminal_receipt),'legacy_native_receipt_changed');
+    let nativeReceipt=null;
+    if(config.phase===29){
+      const prepare={...nativeScope,mutation_id:crypto.randomUUID(),execution_id:dispatched.execution_id,terminal_run_version:nativeStatus.terminal_receipt.terminal_run_version,terminal_receipt_digest:await Q.hashJson(nativeStatus.terminal_receipt),base:sourceContext.base,bundle_metadata:bm};
+      const intent=await request(prefix+'/result-prepare','POST',prepare);
+      assert(intent.write_id===dispatched.execution_id&&await Q.hashJson({...intent.metadata_context,slots:intent.slots,origin:intent.origin})===intent.metadata_manifest_digest,'legacy_native_prepare_binding');
+      for(const output of intent.slots){if(output.is_null)continue;const transfer=transfers.find(t=>Q.canonicalJson(t.key)===Q.canonicalJson(output.key)),record=records.find(r=>Q.canonicalJson(r.destination_key)===Q.canonicalJson(output.key));
+        assert(transfer&&record&&record.source_etag===output.source_etag&&Q.canonicalJson(output.expected_binding)===Q.canonicalJson(dispatched.output_slots.find(s=>s.key.kind===output.key.kind).expected_binding),'legacy_native_output_binding');
+        const bytes=new TextEncoder().encode(transfer.raw),total=Math.ceil(bytes.length/262144),common={schema_version:1,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,transition_id:intent.write_id,entry_key:output.key,source_etag:output.source_etag,target_epoch:1,total_chunks:total,total_bytes:bytes.length};
+        for(let i=0;i<total;i++){const chunk=bytes.slice(i*262144,(i+1)*262144);await request(prefix+'/chunks','PUT',{...common,chunk_index:i,chunk_sha256:await Q.sha256(chunk),data_base64:btoa(String.fromCharCode(...chunk))});}
+        await request(prefix+'/entries/seal','POST',{...common,ciphertext_sha256:record.ciphertext_sha256});let readback='';
+        for(let i=0;i<total;i++){const r=await request(prefix+'/staged?'+new URLSearchParams({owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,write_id:intent.write_id,metadata_manifest_digest:intent.metadata_manifest_digest,kind:output.key.kind,representation_id:output.key.id,slot:output.key.slot,source_etag:output.source_etag,chunk_index:i}));assert(r.sealed&&r.total_chunks===total&&r.total_bytes===bytes.length&&r.chunk_index===i&&r.ciphertext_sha256===record.ciphertext_sha256,'legacy_native_staged_frame');readback+=atob(r.data_base64);}
+        assert(new TextDecoder().decode(Uint8Array.from(readback,c=>c.charCodeAt(0)))===transfer.raw,'legacy_native_cipher_readback');
+      }
+      const committed=await request(prefix+'/commit','POST',{...nativeScope,write_id:intent.write_id,mutation_id:prepare.mutation_id,target_epoch:1,metadata_manifest_digest:intent.metadata_manifest_digest,client_verified_ciphertext_manifest_digest:await Q.hashJson(records)});
+      assert(committed.state==='committed'&&committed.receipt.write_id===intent.write_id&&committed.receipt.execution_id===dispatched.execution_id,'legacy_native_commit_unconfirmed');nativeReceipt=committed.receipt;
+    }
     await action('current_plain_transition',()=>status().includes('전환 준비 가능'));
     await action('mixed_conversion',()=>status().includes('전환 준비 가능'));
     const current=await inspectNoteProtection();assert(current.catalog.context.base.crypto_epoch===2,'legacy_target_epoch_missing');
     const id=crypto.randomUUID(),archive={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope,request:claim,input,route:{provider:'omniroute',endpoint:config.syntheticProviderUrl,model:'auto'},execution:nativeStatus,dispatch:{request:dispatch,handoff_reserved:true},terminal:{work:originalWork,settle_core:terminalCore,receipt:nativeStatus.terminal_receipt}};
     await noteHistory.saveProtection({schema_version:1,id,scope,phase:'analysis_settled',cipher_bundle:await Q.encryptContent(Q.canonicalJson(archive),password)},{active:()=>true});await settle();
     await open();await action('analysis-resume',()=>dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+    if(config.phase===29){
+      const before=await noteProtectionReader.catalog(scope);let replanPosts=0,nativeReads=0;
+      noteProtectionAnalysis=A.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:async(s,path,method,body)=>{
+        assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'legacy_stored_scope');
+        if(path==='/api/v2/notes/mixed-analysis-writes/replan'&&method==='POST')replanPosts++;
+        if(path==='/api/v2/notes/protected-analysis/status'&&method==='GET')nativeReads++;
+        assert(!['/commit','/chunks','/entries/seal'].some(end=>path.endsWith(end)),'legacy_stored_attempted_new_publication');
+        return request(path+(method==='GET'?'?'+new URLSearchParams(body):''),method,method==='GET'?undefined:body);
+      }});
+      await action('analysis-replan',()=>!dialog().querySelector('.protection-replan').classList.contains('hidden'));
+      const checkbox=dialog().querySelector('[name="analysis-reuse-confirm"]');checkbox.checked=true;checkbox.dispatchEvent(new Event('change'));
+      await action('analysis-replan-confirm',()=>noteProtectionAnalysis.status(id).phase==='complete'&&dialog().querySelector('.protection-analysis-result').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+      const complete=await noteProtectionAnalysis.inspectReplan(id,password);
+      assert(replanPosts===1&&nativeReads===1&&complete.stored.stored_result.schema_version===1&&complete.prepared===null&&complete.work===null&&Q.canonicalJson(complete.receipt)===Q.canonicalJson(nativeReceipt),'legacy_stored_not_original_receipt');
+      assert(Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'legacy_stored_changed_catalog');
+      emit({stage:'legacy_already_stored_native_receipt_verified',owner:a.owner,local_id:target,operation_id:nativeReceipt.write_id,local_operation_id:id});
+    }
     for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'legacy_plain_result_persisted');
     emit({stage:'legacy_analysis_cipher_archive_restored',owner:a.owner,local_id:target,operation_id:dispatched.execution_id,local_operation_id:id});button('lock').click();clearWebSession();
-    return {ok:true,mode:config.mode,phase:26,nativeSchema:1,verifiedRecoveryMetadata:true,originalCipherArchive:true,targetEpoch:2,providerCalls:1};
+    return {ok:true,mode:config.mode,phase:config.phase,nativeSchema:1,verifiedRecoveryMetadata:true,originalCipherArchive:true,targetEpoch:2,nativeAlreadyStored:config.phase===29,providerCalls:1};
+  }
+  if(config.phase===30){
+    state.selectedTreeId=target;render();await settle();await open();const Q=NowNoteProtectionProtocol,info=await inspectNoteProtection();
+    const matches=[];for(const m of Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target&&m.phase==='complete')){const b=Q.parseJson(await Q.decryptContent(m.cipher_bundle,password));if(b.purpose==='mixed_analysis_execution'&&b.request?.schema_version===1)matches.push({id:m.id,b});}
+    assert(matches.length===1,'legacy_stored_cold_archive_missing');const {id,b}=matches[0],r=b.replan;
+    assert(r.stored?.stored_result.schema_version===1&&r.prepared===null&&r.work===null&&r.proof.operation_id===r.receipt.write_id,'legacy_stored_cold_proof_missing');
+    assert((await resumeProtectedAnalysis(id,password)).includes('SYNTHETIC-LLM-RESULT-'+run),'legacy_stored_cold_result');
+    const index=info.rows.findIndex(row=>row.kind==='typed'&&row.descriptor.key.kind==='analysis_result'&&row.descriptor.key.id===String(r.receipt.job_id));assert(index>=0,'legacy_stored_cold_typed_missing');
+    dialog().querySelector('[name="representation"]').value=String(index);await action('read',()=>dialog().querySelector('.protection-plain').textContent.includes('SYNTHETIC-LLM-RESULT-'+run));
+    emit({stage:'analysis_replan_ready',owner:a.owner,local_id:target,operation_id:r.receipt.write_id,local_operation_id:id});
+    for(let i=0;i<300&&!globalThis.__HTTP_CAPTURE_DONE__&&!globalThis.__HTTP_CAPTURE_ERROR__;i++)await wait();assert(globalThis.__HTTP_CAPTURE_DONE__===true,'legacy_stored_capture_unconfirmed');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'legacy_stored_cold_plaintext');
+    button('lock').click();clearWebSession();return {ok:true,mode:config.mode,phase:30,nativeReceiptColdRead:true,typedResult:true,newPublication:false,providerCalls:0};
   }
   if(config.phase===24){
     const originalDevice=config.mode==='web'?'web-client':a.device.replace(/-peer$/,'');
