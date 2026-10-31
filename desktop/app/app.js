@@ -3630,6 +3630,70 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     }
     return e;
   }
+  async function createInitialWritePlan(scope,request,execution,work,catalog,mutationId,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);work=structuredClone(work);catalog=structuredClone(catalog);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();uuid(mutationId);
+    await validateExecution(scope,request,execution);check();
+    if(execution.state!=='client_settled'||!['done','failed'].includes(execution.terminal_receipt?.outcome))fail('terminal_unsettled');
+    Q().validateContext(catalog.context);
+    if(execution.source_matches_current!==true||!same(catalog.context,request.source_context.base)||!same(catalog.context,execution.latest_context)
+      ||catalog.catalog_digest!==request.source_context.catalog_digest)fail('source_changed');
+    if(!Array.isArray(catalog.entries))fail('catalog');
+    for(const d of catalog.entries){
+      Q().validateDescriptor(d,3);
+      if(d.expected_binding&&(d.expected_binding.owner_id!==scope.owner||d.expected_binding.local_id!==scope.local_id||d.expected_binding.server_instance_id!==scope.instance))fail('source_scope');
+    }
+    const keys=catalog.entries.map(d=>d.key);
+    if(!same(keys,Q().keyOrder(keys))||request.source_keys.some(s=>!catalog.entries.some(d=>same(d,s.descriptor))))fail('source_changed');
+    const digest=await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:catalog.context,entries:catalog.entries});check();
+    if(digest!==catalog.catalog_digest)fail('catalog_digest');
+    await openTerminalBundle(scope,request,execution,work,password,active);check();
+    const execution_ref={schema_version:3,execution_id:execution.execution_id,terminal_run_version:execution.terminal_receipt.terminal_run_version,
+      terminal_receipt_digest:await Q().hashJson(execution.terminal_receipt),original_bundle_digest:work.bundle_metadata.bundle_digest};check();
+    return {purpose:'mixed_analysis_write',prepare:{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      mutation_id:mutationId,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref,bundle_metadata:work.bundle_metadata},transfers:work.transfers};
+  }
+  async function validateInitialWriteManifest(scope,plan,execution,catalog,manifest,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);execution=structuredClone(execution);catalog=structuredClone(catalog);manifest=structuredClone(manifest);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    exact(plan,['purpose','prepare','transfers']);const body=plan.prepare;
+    exact(body,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id','base','expected_catalog_digest','execution_ref','bundle_metadata']);
+    if(plan.purpose!=='mixed_analysis_write'||body.schema_version!==3||body.owner_id!==scope.owner||body.local_id!==scope.local_id||body.device_id!==scope.device||body.server_instance_id!==scope.instance)fail('write_scope');
+    uuid(body.mutation_id);Q().validateContext(body.base);
+    if(execution.state!=='client_settled'||!['done','failed'].includes(execution.terminal_receipt?.outcome)||!same(body.bundle_metadata,execution.bundle_metadata))fail('terminal_unsettled');
+    await validateBundle(execution,body.bundle_metadata);check();
+    const expectedRef={schema_version:3,execution_id:execution.execution_id,terminal_run_version:execution.terminal_receipt.terminal_run_version,
+      terminal_receipt_digest:await Q().hashJson(execution.terminal_receipt),original_bundle_digest:body.bundle_metadata.bundle_digest};check();
+    if(!same(body.execution_ref,expectedRef)||!same(body.base,catalog.context)||!same(execution.source_context,{server_instance_id:scope.instance,base:body.base,catalog_digest:body.expected_catalog_digest}))fail('write_source');
+    for(const d of catalog.entries)Q().validateDescriptor(d,3);
+    if(await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:catalog.context,entries:catalog.entries})!==body.expected_catalog_digest)fail('catalog_digest');check();
+    if(!Array.isArray(manifest.S)||manifest.S.length!==catalog.entries.length)fail('write_sources');
+    const tokens=new Set();for(let n=0;n<manifest.S.length;n++){
+      const s=manifest.S[n];exact(s,['descriptor','source_etag']);uuid(s.source_etag);
+      if(tokens.has(s.source_etag)||!same(s.descriptor,catalog.entries[n]))fail('write_sources');tokens.add(s.source_etag);
+    }
+    const epoch=body.base.base.crypto_epoch,outputs=execution.output_slots.map((s,i)=>({destination_key:s.key,source_keys:[],source_etag:s.source_etag,
+      output_kind:'linked_text_envelope_v1',output_epoch:epoch,is_null:body.bundle_metadata.slot_nulls[i].is_null,
+      expected_binding:body.bundle_metadata.slot_nulls[i].is_null?null:s.expected_binding}));
+    const expectation=d=>({destination_key:d.key,...pick(d,['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'])});
+    const origins=[...catalog.entries.map(expectation),...outputs.map(d=>({destination_key:d.destination_key,is_null:d.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:execution.execution_id,semantic_origin_id:execution.execution_id}))];
+    const O=Q().keyOrder(origins.map(o=>o.destination_key)).map(key=>origins.find(o=>same(o.destination_key,key)));
+    const expected={schema_version:3,purpose:plan.purpose,operation_id:execution.execution_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,actor_device_id:scope.device,mutation_id:body.mutation_id,
+      base:body.base,source_catalog_digest:body.expected_catalog_digest,target_epoch:epoch,revision_ref:null,parent_ref:null,server_fields:null,
+      control:{request_type:'initial',execution_ref:expectedRef,previous_write_id:null,previous_write_state:'none',target_epoch:epoch,confirmed_reuse_original_result:false},
+      operation_origin:{purpose:plan.purpose,operation_id:execution.execution_id,execution_id:execution.execution_id,request_type:'initial',source_context:execution.source_context,
+        source_digest:execution.source_digest,terminal_receipt_digest:expectedRef.terminal_receipt_digest,original_bundle_digest:expectedRef.original_bundle_digest,previous_write_id:null},
+      S:manifest.S,DSET:outputs,P:catalog.entries,O,existing:[],verified_existing:[]};
+    if(!same(manifest,expected))fail('write_manifest');
+    const names=['S','DSET','P','O','existing','verified_existing'],set_digests={},counts={},kinds=['analysis_error','analysis_input','analysis_result','inventory_snapshot','note_body','offline_snapshot','recording_transcript','reserved_offline_snapshot','revision_before','revision_snapshot'];
+    for(const name of names){
+      set_digests[name]=await Q().hashJson(manifest[name]);check();
+      const rows=manifest[name].map(e=>['S','existing','verified_existing'].includes(name)?e.descriptor:['DSET','O'].includes(name)?{...e,key:e.destination_key}:e);
+      counts[name]={total:rows.length,nonnull:rows.filter(d=>!d.is_null).length,nulls:rows.filter(d=>d.is_null).length,
+        by_kind:kinds.map(kind=>{const part=rows.filter(d=>d.key.kind===kind);return {kind,total:part.length,nonnull:part.filter(d=>!d.is_null).length,nulls:part.filter(d=>d.is_null).length};})};
+    }
+    const metadata_manifest_digest=await Q().hashJson(manifest);check();return {metadata_manifest_digest,set_digests,counts};
+  }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
     const tickets=new WeakMap();
@@ -3887,7 +3951,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,createExecution});
 })();
 
 ;
