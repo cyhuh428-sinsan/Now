@@ -153,3 +153,58 @@ const heldJournal=makePendingJournal(),held=A.createExecution({context:()=>ctx,j
 const inflight=held.resumePublication(id,'fixture-key'),heldRejected=assert.rejects(()=>inflight,/scope_changed/);await inside;held.invalidate();release();await heldRejected;assert.equal(held.status(id).cipher_bundle,heldBefore);
 const beforeOtherAccount=transportCalls.length;ctx.owner='bob';await assert.rejects(()=>held.resumePublication(id,'fixture-key'),/scope_changed/);ctx.owner=scope.owner;assert.equal(transportCalls.length,beforeOtherAccount);
 console.log('MA publication boundaries: forged typed source stays pending, recovery no extra commit, late invalidate/cipher unchanged, other account/no request PASS (synthetic only)');
+const freshCatalog=await reader.catalog(scope),previous={operation_id:null,state:'none'},confirmation={confirmed_reuse_original_result:true,target_epoch:freshCatalog.context.base.crypto_epoch};
+const replanned=await A.createReplanWritePlan(scope,request,settled,work,freshCatalog,previous,uid(201),'fixture-key',confirmation);
+assert.equal(replanned.request_type,'replan');assert.equal(replanned.prepare.base.base.history_generation,2);assert.equal(replanned.original.execution.source_context.base.base.history_generation,1);
+assert.equal(Q.canonicalJson(replanned.prepare.execution_ref),Q.canonicalJson(plan.prepare.execution_ref));assert.equal(Q.canonicalJson(replanned.original.work),Q.canonicalJson(work));
+assert.equal(replanned.prepare.previous_write_id,null);assert.equal(replanned.prepare.previous_write_state,'none');assert.equal(replanned.prepare.confirmed_reuse_original_result,true);
+await assert.rejects(()=>A.createReplanWritePlan(scope,request,settled,work,freshCatalog,previous,uid(201),'wrong-key',confirmation));
+await assert.rejects(()=>A.createReplanWritePlan(scope,request,settled,work,freshCatalog,previous,uid(201),'fixture-key',{...confirmation,confirmed_reuse_original_result:1}),/reuse_confirmation/);
+await assert.rejects(()=>A.createReplanWritePlan(scope,request,settled,work,freshCatalog,{operation_id:uid(40),state:'prepared'},uid(201),'fixture-key',confirmation),/previous_write_state/);
+const peerPlan=await A.createReplanWritePlan({...scope,device:'second'},request,settled,work,freshCatalog,previous,uid(202),'fixture-key',confirmation);
+assert.equal(peerPlan.prepare.device_id,'second');assert.equal(peerPlan.original.scope.device,'first');assert.equal(peerPlan.original.request.device_id,'first');
+const newerCatalog=copy(freshCatalog);newerCatalog.context.base.crypto_epoch=2;newerCatalog.catalog_digest=await Q.hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:newerCatalog.context,entries:newerCatalog.entries});
+const rekeyPlan=await A.createReplanWritePlan(scope,request,settled,work,newerCatalog,previous,uid(203),'fixture-key',{...confirmation,target_epoch:2});
+assert.equal(rekeyPlan.prepare.target_epoch,2);assert.equal(rekeyPlan.original.work.bundle_metadata.original_epoch,1);
+console.log('MA E3 replan plan: explicit original-result reuse, fresh base/target epoch, original SC/TR/BM/C immutable, source actor retained/new actor separate, wrong key/state/confirmation denial PASS (pure synthetic only)');
+const replanId=uid(204),newJob='33',replanManifest=copy(manifest);
+Object.assign(replanManifest,{operation_id:replanId,mutation_id:rekeyPlan.prepare.mutation_id,base:newerCatalog.context,source_catalog_digest:newerCatalog.catalog_digest,target_epoch:2,
+ control:{request_type:'replan',...pick(rekeyPlan.prepare,['execution_ref','previous_write_id','previous_write_state','target_epoch','confirmed_reuse_original_result'])},
+ operation_origin:{purpose:'mixed_analysis_write',operation_id:replanId,request_type:'replan',execution_ref:rekeyPlan.prepare.execution_ref,original_source_context:settled.source_context,previous_write_id:null},
+ S:newerCatalog.entries.map((descriptor,i)=>({descriptor,source_etag:uid(210+i)})),P:newerCatalog.entries});
+replanManifest.DSET=outputs.map((o,i)=>{const key={...o.destination_key,id:newJob};return {...o,destination_key:key,source_etag:uid(220+i),output_epoch:2,
+ expected_binding:o.is_null?null:{...o.expected_binding,transition_id:replanId,crypto_epoch:2,destination_key:key}};});
+const replanOrigins=[...newerCatalog.entries.map(expectation),...replanManifest.DSET.map(o=>({destination_key:o.destination_key,is_null:o.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:replanId,semantic_origin_id:replanId}))];
+replanManifest.O=Q.keyOrder(replanOrigins.map(o=>o.destination_key)).map(key=>replanOrigins.find(o=>Q.canonicalJson(o.destination_key)===Q.canonicalJson(key)));
+const replanVerified=await A.validateReplanWriteManifest(scope,rekeyPlan,newerCatalog,replanManifest);
+assert.equal(replanVerified.metadata_manifest_digest,await Q.hashJson(replanManifest));assert.equal(replanVerified.counts.DSET.total,3);
+for(const change of [m=>{m.operation_id=settled.execution_id;},m=>{m.DSET[1].destination_key.id='34';},m=>{m.DSET[1].source_etag=m.DSET[0].source_etag;},m=>{m.DSET[1].expected_binding.crypto_epoch=1;},m=>{m.P=[];},m=>{m.operation_origin.original_source_context.base.base.history_generation=2;},m=>{m.control.confirmed_reuse_original_result=false;},m=>{m.DSET[0].is_null=false;},m=>{m.existing=[{}];}]){
+ const bad=copy(replanManifest);change(bad);await assert.rejects(()=>A.validateReplanWriteManifest(scope,rekeyPlan,newerCatalog,bad));
+}
+console.log('MA E3 replan manifest: new job/operation/target bindings, exact original provenance/nulls, preserved catalog and all six sets/digests; forged identity/source/token/binding denial PASS (pure synthetic only)');
+const replanHeader=Object.fromEntries(Object.entries(replanManifest).filter(([k])=>!names.includes(k)));
+const replanOperation={...copy(operation),operation_id:replanId,mutation_id:rekeyPlan.prepare.mutation_id,state:'prepared',metadata_manifest_digest:replanVerified.metadata_manifest_digest,metadata_header:replanHeader,counts:replanVerified.counts,receipt:null,latest_context:newerCatalog.context};
+const replanOriginal={...copy(originalExecution),reference:rekeyPlan.prepare.execution_ref};
+let replanCalls=0,replanLose=true,replanGet=0,replanManifestCalls=0,replanForged=false,replanStored=null;
+const replanRemote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
+ assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));
+ if(path.endsWith('/replan')){replanCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(rekeyPlan.prepare));if(replanLose){replanLose=false;throw Error('replan_response_lost');}if(replanStored)return copy(replanStored);const out={schema_version:3,status:'prepared',operation:copy(replanOperation),original_execution:copy(replanOriginal)};if(replanForged)out.original_execution.source_context.base.base.history_generation++;return out;}
+ if(path.endsWith('/status')){replanGet++;assert.equal(body.operation_id,replanId);return {schema_version:3,status:'operation',operation:copy(replanOperation),original_execution:copy(replanOriginal)};}
+ if(path.endsWith('/manifest')){replanManifestCalls++;return {schema_version:3,section:body.section,metadata_manifest_digest:replanVerified.metadata_manifest_digest,metadata_header:copy(replanHeader),set_digests:copy(replanVerified.set_digests),counts:copy(replanVerified.counts),entries:copy(replanManifest[body.section]),next_cursor:null};}
+ throw Error('unexpected_replan_request');
+}});
+await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog),/replan_response_lost/);
+const replanPrepared=await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog);
+assert.equal(replanPrepared.id,replanId);assert.equal(replanPrepared.digest,replanVerified.metadata_manifest_digest);assert.equal(replanCalls,2);assert.equal(replanGet,0);
+await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog,replanPrepared);assert.equal(replanCalls,2);assert.equal(replanGet,1);
+replanForged=true;const manifestBefore=replanManifestCalls;await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog),/analysis_original_execution/);assert.equal(replanManifestCalls,manifestBefore);replanForged=false;
+const badPlan=copy(rekeyPlan);badPlan.prepare.target_epoch=1;const beforeInvalid=replanCalls;await assert.rejects(()=>replanRemote.replanAnalysis(scope,badPlan,newerCatalog));assert.equal(replanCalls,beforeInvalid);
+console.log('MA E3 replan transport: immutable request replay after loss, known operation GET only, six-set verification and forged original/pre-request denial PASS (synthetic HTTP only; no durable replan/UI)');
+replanStored={schema_version:3,status:'already_stored',stored_result:{schema_version:3,operation_id:settled.execution_id,status_path:'/api/v2/notes/mixed-analysis-writes/status',receipt:copy(operation.receipt)},original_execution:copy(replanOriginal),latest_context:newerCatalog.context};
+const beforeStored=replanManifestCalls,storedMetadata=await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog);
+assert.equal(storedMetadata.status,'already_stored');assert.equal(Q.canonicalJson(storedMetadata),Q.canonicalJson(replanStored));assert.equal(replanManifestCalls,beforeStored);
+for(const change of [r=>{r.stored_result.receipt.owner_id='bob';},r=>{r.stored_result.status_path='https://untrusted.invalid';},r=>{r.original_execution.reference.original_bundle_digest='0'.repeat(64);},r=>{r.stored_result.receipt.set_digests.extra='a'.repeat(64);},r=>{r.stored_result.operation_id=uid(700);}]){
+ const good=copy(replanStored);change(replanStored);await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog));replanStored=good;
+}
+assert.equal(replanManifestCalls,beforeStored);
+console.log('MA E3 AlreadyStored metadata: original execution/receipt scope and fixed path, no manifest/upload/commit after stored response, forgery denial PASS (synthetic only; typed proof/durable completion not yet wired)');

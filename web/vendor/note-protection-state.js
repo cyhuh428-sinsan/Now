@@ -629,6 +629,35 @@
         if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,r.counts))fail('analysis_manifest_metadata');
         return p;
       },
+      async replanAnalysis(s,intent,catalog,known=null) {
+        s=copy(s);validateScope(s);const i=copy(intent),c=copy(catalog),saved=copy(known),Q=protocol(),A=globalThis.NowNoteProtectionAnalysis;
+        await A.validateReplanWritePlan(s,i,c);
+        const body=i.prepare,e=i.original.execution,path='/api/v2/notes/mixed-analysis-writes';
+        const original={reference:copy(body.execution_ref),source_schema_version:3,source_context:copy(e.source_context),terminal_receipt:copy(e.terminal_receipt),bundle_metadata:copy(e.bundle_metadata)};
+        if(saved){
+          if(saved.version!==3||saved.path!==path||saved.id!==saved.response?.operation_id||saved.response.mutation_id!==body.mutation_id||!eq(saved.original_execution,original))fail('analysis_operation_identity');
+          const v=await A.validateReplanWriteManifest(s,i,c,{...saved.response.metadata_header,...saved.manifest});
+          if(v.metadata_manifest_digest!==saved.digest||!eq(v.counts,saved.response.counts))fail('analysis_manifest_metadata');
+        }
+        // The allocation ID is unknown until the response: replay only the original immutable request.
+        const wrapped=saved?await request(s,path+'/status','GET',{...access(s,3),operation_id:saved.id})
+          :await request(s,path+'/replan','POST',copy(body));
+        if(!saved&&wrapped?.status==='already_stored')return A.validateStoredAnalysisResult(s,i,c,wrapped);
+        fields(wrapped,['schema_version','status','operation','original_execution']);
+        if(wrapped.schema_version!==3||wrapped.status!==(saved?'operation':'prepared')||!eq(wrapped.original_execution,original))fail('analysis_original_execution');
+        const r=wrapped.operation;
+        fields(r,['schema_version','purpose','operation_id','mutation_id','state','lease_version','expires_at','metadata_manifest_digest','metadata_header','counts','receipt','latest_context']);
+        if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(r.operation_id)||r.operation_id===e.execution_id
+          ||r.schema_version!==3||r.purpose!==i.purpose||r.mutation_id!==body.mutation_id||saved&&(r.operation_id!==saved.id||r.metadata_manifest_digest!==saved.digest)
+          ||!Number.isSafeInteger(r.lease_version)||r.lease_version<1||typeof r.expires_at!=='string'||!Number.isFinite(Date.parse(r.expires_at))
+          ||!['prepared','uploading','committed','stale','aborted','expired'].includes(r.state))fail('analysis_operation_identity');
+        Q.validateContext(r.latest_context);
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r,original_execution:original};
+        p.manifest=await pages(s,p);
+        const v=await A.validateReplanWriteManifest(s,i,c,{...r.metadata_header,...p.manifest});
+        if(v.metadata_manifest_digest!==p.digest||!eq(v.counts,r.counts))fail('analysis_manifest_metadata');
+        return p;
+      },
       async prepareImport(s,intent) {
         s=copy(s);validateScope(s);
         const i=copy(intent), Q=protocol();

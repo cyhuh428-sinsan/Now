@@ -176,6 +176,34 @@
     return {purpose:'mixed_analysis_write',prepare:{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
       mutation_id:mutationId,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref,bundle_metadata:work.bundle_metadata},transfers:work.transfers};
   }
+  async function createReplanWritePlan(scope,request,execution,terminalWork,catalog,previous,mutationId,password,confirmation,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);catalog=structuredClone(catalog);previous=structuredClone(previous);confirmation=structuredClone(confirmation);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();uuid(mutationId);
+    globalThis.NowNoteProtectionState.validateScope(scope);
+    const originalScope={...scope,device:request.device_id};globalThis.NowNoteProtectionState.validateScope(originalScope);
+    exact(confirmation,['confirmed_reuse_original_result','target_epoch']);
+    Q().validateContext(catalog.context);
+    if(confirmation.confirmed_reuse_original_result!==true||confirmation.target_epoch!==catalog.context.base.crypto_epoch||confirmation.target_epoch<1)fail('reuse_confirmation');
+    exact(previous,['operation_id','state']);
+    if(previous.operation_id===null?previous.state!=='none':!['stale','aborted','expired'].includes(previous.state))fail('previous_write_state');
+    if(previous.operation_id!==null)uuid(previous.operation_id);
+    await validateExecution(originalScope,request,execution);check();
+    if(execution.state!=='client_settled'||!['done','failed'].includes(execution.terminal_receipt?.outcome))fail('terminal_unsettled');
+    if(!Array.isArray(catalog.entries))fail('catalog');
+    for(const d of catalog.entries){
+      Q().validateDescriptor(d,3);
+      if(d.expected_binding&&(d.expected_binding.owner_id!==scope.owner||d.expected_binding.local_id!==scope.local_id||d.expected_binding.server_instance_id!==scope.instance))fail('source_scope');
+    }
+    const keys=catalog.entries.map(d=>d.key);if(!same(keys,Q().keyOrder(keys)))fail('catalog_order');
+    if(await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:catalog.context,entries:catalog.entries})!==catalog.catalog_digest)fail('catalog_digest');check();
+    await openTerminalBundle(originalScope,request,execution,terminalWork,password,active);check();
+    const execution_ref={schema_version:3,execution_id:execution.execution_id,terminal_run_version:execution.terminal_receipt.terminal_run_version,
+      terminal_receipt_digest:await Q().hashJson(execution.terminal_receipt),original_bundle_digest:terminalWork.bundle_metadata.bundle_digest};check();
+    return {purpose:'mixed_analysis_write',request_type:'replan',prepare:{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      mutation_id:mutationId,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref,previous_write_id:previous.operation_id,
+      previous_write_state:previous.state,target_epoch:confirmation.target_epoch,confirmed_reuse_original_result:true},
+      original:{scope:originalScope,request,execution,work:terminalWork}};
+  }
   async function validateInitialWriteManifest(scope,plan,execution,catalog,manifest,active=()=>true) {
     scope=structuredClone(scope);plan=structuredClone(plan);execution=structuredClone(execution);catalog=structuredClone(catalog);manifest=structuredClone(manifest);
     const check=()=>{if(active()!==true)fail('scope_changed');};check();
@@ -208,6 +236,10 @@
         source_digest:execution.source_digest,terminal_receipt_digest:expectedRef.terminal_receipt_digest,original_bundle_digest:expectedRef.original_bundle_digest,previous_write_id:null},
       S:manifest.S,DSET:outputs,P:catalog.entries,O,existing:[],verified_existing:[]};
     if(!same(manifest,expected))fail('write_manifest');
+    return manifestProof(manifest,active);
+  }
+  async function manifestProof(manifest,active) {
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
     const names=['S','DSET','P','O','existing','verified_existing'],set_digests={},counts={},kinds=['analysis_error','analysis_input','analysis_result','inventory_snapshot','note_body','offline_snapshot','recording_transcript','reserved_offline_snapshot','revision_before','revision_snapshot'];
     for(const name of names){
       set_digests[name]=await Q().hashJson(manifest[name]);check();
@@ -216,6 +248,86 @@
         by_kind:kinds.map(kind=>{const part=rows.filter(d=>d.key.kind===kind);return {kind,total:part.length,nonnull:part.filter(d=>!d.is_null).length,nulls:part.filter(d=>d.is_null).length};})};
     }
     const metadata_manifest_digest=await Q().hashJson(manifest);check();return {metadata_manifest_digest,set_digests,counts};
+  }
+  async function validateReplanWritePlan(scope,plan,catalog,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);catalog=structuredClone(catalog);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    globalThis.NowNoteProtectionState.validateScope(scope);
+    exact(plan,['purpose','request_type','prepare','original']);exact(plan.original,['scope','request','execution','work']);
+    const body=plan.prepare,original=plan.original,e=original.execution;
+    const originalScope={...scope,device:original.request.device_id};
+    if(!same(original.scope,originalScope)||plan.purpose!=='mixed_analysis_write'||plan.request_type!=='replan')fail('write_scope');
+    await validateExecution(originalScope,original.request,e);check();
+    if(e.state!=='client_settled'||!['done','failed'].includes(e.terminal_receipt?.outcome)||!same(e.bundle_metadata,original.work.bundle_metadata))fail('terminal_unsettled');
+    await validateBundle(e,original.work.bundle_metadata);check();
+    exact(body,['schema_version','owner_id','local_id','device_id','server_instance_id','mutation_id','base','expected_catalog_digest','execution_ref','previous_write_id','previous_write_state','target_epoch','confirmed_reuse_original_result']);
+    uuid(body.mutation_id);Q().validateContext(catalog.context);
+    if(body.previous_write_id===null?body.previous_write_state!=='none':!['stale','aborted','expired'].includes(body.previous_write_state))fail('previous_write_state');
+    if(body.previous_write_id!==null)uuid(body.previous_write_id);
+    const reference={schema_version:3,execution_id:e.execution_id,terminal_run_version:e.terminal_receipt.terminal_run_version,
+      terminal_receipt_digest:await Q().hashJson(e.terminal_receipt),original_bundle_digest:e.bundle_metadata.bundle_digest};check();
+    const epoch=catalog.context.base.crypto_epoch;
+    const expectedBody={schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      mutation_id:body.mutation_id,base:catalog.context,expected_catalog_digest:catalog.catalog_digest,execution_ref:reference,
+      previous_write_id:body.previous_write_id,previous_write_state:body.previous_write_state,target_epoch:epoch,confirmed_reuse_original_result:true};
+    if(epoch<1||!same(body,expectedBody)||!Array.isArray(catalog.entries))fail('write_source');
+    for(const d of catalog.entries){
+      Q().validateDescriptor(d,3);
+      if(d.expected_binding&&(d.expected_binding.owner_id!==scope.owner||d.expected_binding.local_id!==scope.local_id||d.expected_binding.server_instance_id!==scope.instance))fail('source_scope');
+    }
+    const keys=catalog.entries.map(d=>d.key);if(!same(keys,Q().keyOrder(keys)))fail('catalog_order');
+    if(await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,context:catalog.context,entries:catalog.entries})!==body.expected_catalog_digest)fail('catalog_digest');check();
+    return {execution:e,reference,epoch};
+  }
+  async function validateReplanWriteManifest(scope,plan,catalog,manifest,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);catalog=structuredClone(catalog);manifest=structuredClone(manifest);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    const {execution:e,reference,epoch}=await validateReplanWritePlan(scope,plan,catalog,active);check();
+    const body=plan.prepare;uuid(manifest.operation_id);
+    if(manifest.operation_id===e.execution_id||manifest.operation_id===body.previous_write_id)fail('replan_identity');
+    if(!Array.isArray(manifest.S)||manifest.S.length!==catalog.entries.length||!Array.isArray(manifest.DSET)||manifest.DSET.length!==3)fail('write_sources');
+    const tokens=new Set();
+    for(let n=0;n<manifest.S.length;n++){
+      const s=manifest.S[n];exact(s,['descriptor','source_etag']);uuid(s.source_etag);
+      if(tokens.has(s.source_etag)||!same(s.descriptor,catalog.entries[n]))fail('write_sources');tokens.add(s.source_etag);
+    }
+    const job=manifest.DSET[0].destination_key?.id;
+    if(typeof job!=='string'||!/^[1-9][0-9]*$/.test(job)||job===String(e.job_id)||catalog.entries.some(d=>['analysis_error','analysis_input','analysis_result'].includes(d.key.kind)&&d.key.id===job))fail('replan_job');
+    const outputs=e.bundle_metadata.slot_nulls.map((s,n)=>{
+      const key={...s.key,id:job},token=manifest.DSET[n].source_etag;uuid(token);
+      if(tokens.has(token)||e.output_slots.some(o=>o.source_etag===token))fail('replan_token');tokens.add(token);
+      return {destination_key:key,source_keys:[],source_etag:token,output_kind:'linked_text_envelope_v1',output_epoch:epoch,is_null:s.is_null,
+        expected_binding:s.is_null?null:{server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,transition_id:manifest.operation_id,crypto_epoch:epoch,destination_key:key,revision_ref:null,parent_ref:null}};
+    });
+    const origins=[...catalog.entries.map(d=>({destination_key:d.key,...pick(d,['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'])})),
+      ...outputs.map(d=>({destination_key:d.destination_key,is_null:d.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:manifest.operation_id,semantic_origin_id:manifest.operation_id}))];
+    const expected={schema_version:3,purpose:plan.purpose,operation_id:manifest.operation_id,server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,actor_device_id:scope.device,mutation_id:body.mutation_id,
+      base:body.base,source_catalog_digest:body.expected_catalog_digest,target_epoch:epoch,revision_ref:null,parent_ref:null,server_fields:null,
+      control:{request_type:'replan',execution_ref:reference,...pick(body,['previous_write_id','previous_write_state','target_epoch','confirmed_reuse_original_result'])},
+      operation_origin:{purpose:plan.purpose,operation_id:manifest.operation_id,request_type:'replan',execution_ref:reference,original_source_context:e.source_context,previous_write_id:body.previous_write_id},
+      S:manifest.S,DSET:outputs,P:catalog.entries,O:Q().keyOrder(origins.map(o=>o.destination_key)).map(key=>origins.find(o=>same(o.destination_key,key))),existing:[],verified_existing:[]};
+    if(!same(manifest,expected))fail('write_manifest');
+    return manifestProof(manifest,active);
+  }
+  async function validateStoredAnalysisResult(scope,plan,catalog,response,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);catalog=structuredClone(catalog);response=structuredClone(response);
+    const {execution:e,reference}=await validateReplanWritePlan(scope,plan,catalog,active);
+    if(active()!==true)fail('scope_changed');
+    exact(response,['schema_version','status','stored_result','original_execution','latest_context']);
+    const expected={reference,source_schema_version:3,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:e.bundle_metadata};
+    if(response.schema_version!==3||response.status!=='already_stored'||!same(response.original_execution,expected))fail('analysis_original_execution');
+    Q().validateContext(response.latest_context);
+    const stored=response.stored_result;exact(stored,['schema_version','operation_id','status_path','receipt']);uuid(stored.operation_id);
+    if(stored.schema_version!==3||stored.status_path!=='/api/v2/notes/mixed-analysis-writes/status')fail('stored_schema');
+    const r=stored.receipt;
+    exact(r,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);
+    if(r.schema_version!==3||r.purpose!=='mixed_analysis_write'||r.operation_id!==stored.operation_id||r.owner_id!==scope.owner||r.local_id!==scope.local_id||r.server_instance_id!==scope.instance)fail('stored_receipt');
+    uuid(r.mutation_id);Q().validateContext(r.result);
+    if(r.result.base.crypto_epoch<1||typeof r.committed_at!=='string'||!Number.isFinite(Date.parse(r.committed_at)))fail('stored_receipt');
+    for(const name of ['metadata_manifest_digest','ciphertext_manifest_digest','origin_expectations_digest'])hex(r[name]);
+    const names=['S','DSET','P','O','existing','verified_existing'];exact(r.set_digests,names);for(const name of names)hex(r.set_digests[name]);
+    // Metadata is not publication proof: typed origin, ciphertext and meaning are verified separately.
+    return response;
   }
   async function buildInitialWriteWork(scope,request,execution,terminalWork,plan,prepared,catalog,password,active=()=>true) {
     scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);
@@ -607,5 +719,5 @@
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,buildInitialWriteWork,verifyInitialPublication,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
