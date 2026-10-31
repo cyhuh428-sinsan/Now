@@ -94,5 +94,76 @@
     }
     return e;
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle});
+  function createExecution({context,journal,request,change=()=>{}}) {
+    const P=()=>globalThis.NowNoteProtectionState;
+    let generation=0,running=false;
+    const own=scope=>{
+      P().validateScope(scope);const c=structuredClone(context());
+      if(!c.enabled||c.owner!==scope.owner||c.device!==scope.device||c.instance!==scope.instance||String(c.url).replace(/\/+$/,'')!==scope.url.replace(/\/+$/,''))fail('scope_changed');
+      return c;
+    };
+    const active=(scope,c,epoch)=>{const now=own(scope);if(epoch!==generation||now.auth!==c.auth)fail('scope_changed');};
+    const status=id=>{
+      const marker=journal.protectionOperations()[id];if(!marker)fail('operation_missing');
+      P().validateMarker(marker);own(marker.scope);return structuredClone(marker);
+    };
+    async function save(marker,bundle,password,c,epoch) {
+      active(marker.scope,c,epoch);
+      marker.cipher_bundle=await Q().encryptContent(Q().canonicalJson(bundle),password);active(marker.scope,c,epoch);
+      P().validateMarker(marker);await journal.saveProtection(structuredClone(marker));active(marker.scope,c,epoch);
+      if(!same(status(marker.id),marker))fail('marker_readback');change();
+    }
+    function validateRoute(route) {
+      exact(route,['provider','endpoint','model']);
+      for(const key of ['provider','endpoint','model'])if(typeof route[key]!=='string'||!route[key])fail('route');
+    }
+    async function open(marker,password,c,epoch) {
+      if(!password)fail('key_required');
+      const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
+      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution']);
+      if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
+      validateRequest(marker.scope,b.request);validateRoute(b.route);
+      if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
+      if((marker.phase==='analysis_claiming')!==(b.execution===null))fail('bundle_phase');
+      return b;
+    }
+    return {
+      status,invalidate(){generation++;},
+      async start(scope,claim,input,route,password) {
+        scope=structuredClone(scope);claim=structuredClone(claim);route=structuredClone(route);
+        if(!password)fail('key_required');if(typeof input!=='string')fail('input');
+        validateRequest(scope,claim);validateRoute(route);
+        const c=own(scope),epoch=generation;
+        if(running)fail('busy');
+        for(const marker of Object.values(journal.protectionOperations())){
+          if(marker?.scope?.owner!==scope.owner||String(marker?.scope?.url||'').replace(/\/+$/,'')!==scope.url.replace(/\/+$/,''))continue;
+          P().validateMarker(marker);if(marker.scope.local_id===scope.local_id&&marker.phase!=='complete')fail('operation_exists');
+        }
+        running=true;
+        try{
+          const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'analysis_claiming',cipher_bundle:''};
+          const b={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope:structuredClone(scope),request:claim,input,route,execution:null};
+          await save(marker,b,password,c,epoch);return id;
+        }finally{running=false;}
+      },
+      async resumeClaim(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!['analysis_claiming','analysis_claimed'].includes(marker.phase))fail('operation_phase');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),path='/api/v2/notes/mixed-analysis-claims';
+          const response=b.execution===null
+            ?await request(structuredClone(marker.scope),path,'POST',structuredClone(b.request))
+            :await request(structuredClone(marker.scope),path+'/status','GET',{schema_version:3,owner_id:marker.scope.owner,local_id:marker.scope.local_id,device_id:marker.scope.device,server_instance_id:marker.scope.instance,execution_id:b.execution.execution_id});
+          active(marker.scope,c,epoch);
+          const checked=await validateExecution(marker.scope,b.request,response);active(marker.scope,c,epoch);
+          if(b.execution!==null){
+            const fixed=['execution_id','job_id','job_id_mode','source_context','source_keys','source_digest','claim_metadata_digest','output_slots'];
+            if(!same(pick(checked,fixed),pick(b.execution,fixed))||checked.run_version<b.execution.run_version||checked.lease_version<b.execution.lease_version)fail('execution_changed');
+          }
+          b.execution=checked;marker.phase='analysis_claimed';await save(marker,b,password,c,epoch);return structuredClone(checked);
+        }finally{running=false;}
+      },
+    };
+  }
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,createExecution});
 })();
