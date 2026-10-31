@@ -45,6 +45,80 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;
+  if([43,44].includes(config.phase)){
+    if(isDesktopClient())await loadServerSharedNotes({replace:true});
+    async function wikiWait(done,label){
+      for(let i=0;i<1600;i++){if(done())return;await wait();}
+      const message=document.querySelector('#wikiDialog [role=status]')?.textContent||'';
+      const known=[['계정·서버 또는 선택이 변경되었습니다.','view_changed'],['계정·서버가 변경되었습니다. 원문은 보존했습니다.','source_scope_changed'],['설정에서 LLM 연결을 먼저 확인하세요.','llm_not_configured']];
+      emit({stage:'wiki_ui_timeout',code:/^wiki_[a-z_]+$/.test(message)?message:known.find(([text])=>message===text)?.[1]||'unclassified_status'});
+      throw Error('wiki_ui_'+label+'_timeout_uncertain');
+    }
+    await wikiWait(()=>!serverSyncRunning,'initial_sync');await settle();
+    const query='?owner_id='+encodeURIComponent(a.owner),dialog=()=>document.querySelector('#wikiDialog');
+    const artifact=()=>Object.values(noteHistory.entries()).find(item=>item.draft.source==='wiki-artifact');
+    const stored=()=>artifact()?NowNoteProtectionProtocol.parseJson(artifact().draft.content):null;
+    const source=await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target));
+    assert(source.snapshot.note.content===plain,'wiki_ui_original_source_changed');
+    assert(findTreeNode(state.data.tree,target)?.content.replace(/\r\n/g,'\n')===plain.replace(/\r\n/g,'\n'),'wiki_ui_source_not_projected');
+    state.selectedTreeId=target;render();
+    if(config.phase===43){
+      let modelCalls=0;
+      state.settings.llm={...defaultLlmSettings(),provider:'omniroute',omniUrl:'https://synthetic.invalid/v1',omniModel:'auto',omniApiKey:'synthetic-ui-only'};
+      llmChatRequest=async(provider,settings,input)=>{
+        assert(provider==='omniroute','wiki_ui_provider_changed');modelCalls++;
+        const prompt=JSON.parse(input);
+        assert(JSON.stringify(prompt).includes('HTTP-QA-ORIGINAL-'+run),'wiki_ui_prompt_missing_selected_source');
+        return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({title:'HTTP QA Wiki '+run,topic:'Synthetic QA',
+          sections:[{id:'one',title:'Finding',markdown:'**Supported** hosted finding.',citation_ids:['c']}],
+          citations:[{id:'c',source_id:'source-1',quote:'HTTP-QA-ORIGINAL-'+run}]})}}]})};
+      };
+      document.querySelector('#wikiBtn').click();
+      await wikiWait(()=>dialog()?.querySelector('[name=wiki-source]')?.disabled===false
+        &&dialog()?.querySelector('[data-wiki-action=generate]')?.disabled===false,'source_list');
+      const checkbox=[...dialog().querySelectorAll('[name=wiki-source]')].find(row=>row.value===target);
+      assert(checkbox,'wiki_ui_target_source_missing');checkbox.click();
+      assert(checkbox.checked,'wiki_ui_target_not_selected');
+      dialog().querySelector('[data-wiki-action=generate]').click();
+      await wikiWait(()=>Boolean(dialog().querySelector('[data-wiki-action=confirm-send]')),'confirmation');
+      assert(modelCalls===0,'wiki_ui_model_called_before_confirmation');
+      dialog().querySelector('[data-wiki-action=confirm-send]').click();
+      await wikiWait(()=>Boolean(dialog().querySelector('.wiki-body strong')),'generated_draft');
+      assert(modelCalls===1,'wiki_ui_synthetic_model_count');
+      dialog().querySelector('[data-wiki-action=save-draft]').click();
+      await wikiWait(()=>Boolean(stored()?.drafts.length===1&&artifact().outbox.length===0&&!artifact().dirty),'draft_saved');
+      assert(!artifact().localOnly&&stored().approvals.length===0,'wiki_ui_draft_wrong_storage_scope');
+      const remoteDraft=await request('/api/v1/wikis/'+stored().wiki_id+query);
+      assert(remoteDraft.artifact.document.approvals.length===0,'wiki_ui_draft_auto_approved');
+      await wikiWait(()=>dialog().querySelector('[data-wiki-action=approve]')?.disabled===false,'approval_ready');
+      dialog().querySelector('[data-wiki-action=approve]').click();
+      await wikiWait(()=>Boolean(stored()?.approvals.length===1&&artifact().outbox.length===0&&!artifact().dirty),'approved_saved');
+      const remote=await request('/api/v1/wikis/'+stored().wiki_id+query);
+      assert(remote.artifact.document.approvals.length===1&&!remote.source_status.stale,'wiki_ui_remote_approval_missing');
+      assert(Object.keys(remote.resource.payload).sort().join(',')==='artifact_local_id,dependencies','wiki_ui_index_contains_plaintext');
+      assert(!findTreeNode(state.data.tree,'wiki:'+stored().wiki_id),'wiki_ui_artifact_leaked_into_note_tree');
+      assert((await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target))).snapshot.note.content===plain,'wiki_ui_save_changed_source');
+      await noteHistory.idle();await settle();
+      return {ok:true,mode:config.mode,phase:43,wikiId:stored().wiki_id,documentVersion:stored().document_version,
+        actualMenu:true,explicitModelConfirmation:true,syntheticModelCalls:modelCalls,externalProviderCalls:0,serverDraftAndApproval:true,sourcePreserved:true};
+    }
+    document.querySelector('#wikiBtn').click();
+    await wikiWait(()=>dialog()?.querySelector('.library-item')?.disabled===false,'cold_list');
+    dialog().querySelector('.library-item').click();
+    await wikiWait(()=>Boolean(dialog().querySelector('.wiki-body strong')),'cold_body');
+    assert(dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run),'wiki_ui_cold_citation_missing');
+    const items=await request('/api/v1/wikis'+query);
+    assert(items.items.length===1,'wiki_ui_cold_server_list_changed');
+    const wikiId=items.items[0].id,remote=await request('/api/v1/wikis/'+wikiId+query);
+    assert(remote.artifact.document.approvals.length===1,'wiki_ui_cold_approval_missing');
+    clearWebSession();await login(b);await wikiWait(()=>!serverSyncRunning,'other_account_sync');await settle();
+    document.querySelector('#wikiBtn').click();
+    await wikiWait(()=>Boolean(dialog()?.open),'other_account_dialog');
+    assert(!(await request('/api/v1/wikis?owner_id='+encodeURIComponent(b.owner))).items.length,'wiki_ui_foreign_server_list');
+    assert(!dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run)&&!dialog().querySelector('.wiki-body'),'wiki_ui_foreign_body_exposed');
+    clearWebSession();
+    return {ok:true,mode:config.mode,phase:44,wikiId,processCold:true,serverApprovedRead:true,citationPreserved:true,accountIsolation:true,externalProviderCalls:0};
+  }
   if([40,41,42].includes(config.phase)){
     await libraryStore.sync();
     const find=()=>libraryStore.list('canvases').find(row=>row.payload.title==='HTTP-QA-CANVAS-REMOTE2-'+run);
