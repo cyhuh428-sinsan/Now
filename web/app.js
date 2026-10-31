@@ -20128,6 +20128,15 @@ function canvasCardTitle(card) {
   return note ? noteTitle(note.title) : "누락 메모";
 }
 
+function nextCanvasCardPosition(canvas) {
+  let slot=0, x, y;
+  do {
+    x=80+(slot%3)*420;
+    y=80+Math.floor(slot++/3)*280;
+  } while (canvas.cards.some(card=>x<card.x+card.width+20 && x+260>card.x && y<card.y+220 && y+220>card.y));
+  return {x,y};
+}
+
 function addSelectedNoteCanvasCard() {
   const selected = getSelectedTreeNode();
   if (!selected) {
@@ -20135,12 +20144,10 @@ function addSelectedNoteCanvasCard() {
     return;
   }
   const canvas = activeCanvas();
-  const offset = canvas.cards.length * 24;
   canvas.cards.push(normalizeCanvasCard({
     type: "note",
     noteId: selected.id,
-    x: 80 + offset,
-    y: 80 + offset,
+    ...nextCanvasCardPosition(canvas),
   }));
   markCanvasChanged(canvas);
   renderCanvas();
@@ -20148,12 +20155,10 @@ function addSelectedNoteCanvasCard() {
 
 function addTextCanvasCard() {
   const canvas = activeCanvas();
-  const offset = canvas.cards.length * 24;
   const card = normalizeCanvasCard({
     type: "text",
     text: "새 생각",
-    x: 120 + offset,
-    y: 120 + offset,
+    ...nextCanvasCardPosition(canvas),
   });
   canvas.cards.push(card);
   state.selectedCanvasCardIds = [card.id];
