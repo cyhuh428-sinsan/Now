@@ -107,6 +107,16 @@ def test_future_approval_branch_reserves_dependencies_but_does_not_publish(clien
     protection=client.post(ROOT,json=prepare_body(client,s,"wiki-source"),headers=s["headers"])
     assert protection.status_code==409,protection.text
     assert protection.json()["detail"]["code"]=="wiki_protection_required"
+    from app.services.note_backup import export_snapshot,validate_backup
+    from app.api.admin import _backup_content_sha256
+    backup=export_snapshot(s["db"])
+    backup["items"]["library_resources"]=[]
+    backup["items"]["library_mutations"]=[]
+    for section in ("library_resources","library_mutations"):
+        backup["summary"][section]=backup["section_counts"][section]=0
+    backup["content_sha256"]=_backup_content_sha256({k:v for k,v in backup.items() if k!="content_sha256"})
+    with pytest.raises(ValueError,match="backup_wiki_index"):
+        validate_backup(backup)
 
 def test_generic_note_writes_cannot_bypass_wiki_review(client,subject):
     s=subject
@@ -220,3 +230,44 @@ def test_wiki_artifact_is_not_a_legacy_tree_or_group_search_result(client,subjec
     response=client.post("/api/v1/notes",json=legacy,headers=s["headers"])
     assert response.status_code==409,response.text
     assert response.json()["detail"]["code"]=="wiki_review_required"
+
+
+def test_wiki_whole_mixed_conversion_and_key_rotation_are_allowed(client,subject,monkeypatch):
+    from app.core import capabilities
+    from .test_note_mixed import ready_rc,cp_request
+    from .test_note_crypto_conversion import convert
+    from app.services.wiki_guards import fully_protected
+    monkeypatch.setattr(capabilities,"MIXED_MUTATIONS_ENABLED",True)
+    s=subject
+    _,_,request,path=make(client,s)
+    assert put(client,s,path,request).status_code==200
+    convert(client,s,request["local_id"])
+    for epoch in (2,3):
+        _,_,_,commit,_=ready_rc(client,s,request["local_id"])
+        response=client.post("/api/v2/notes/mixed-conversions/commit",json=commit,headers=s["headers"])
+        assert response.status_code==200,response.text
+        assert response.json()["receipt"]["result"]["base"]["crypto_epoch"]==epoch
+        s["db"].expire_all()
+        assert fully_protected(s["db"],s["owner"],request["local_id"])
+    cp=cp_request(client,s,request["local_id"])
+    denied=client.post("/api/v2/notes/current-plain/quote",json=cp,headers=s["headers"])
+    assert denied.status_code==409,denied.text
+    assert denied.json()["detail"]["code"]=="wiki_review_required"
+
+
+def test_source_commit_original_receipt_survives_later_wiki_rotation(client,subject):
+    from .test_note_crypto import ROOT,prepare
+    from .test_note_crypto_conversion import convert
+    s=subject
+    _,_,request,path=make(client,s)
+    assert put(client,s,path,request).status_code==200
+    convert(client,s,request["local_id"])
+    commit,original,_,_=convert(client,s,"wiki-source")
+    prepare(client,s,request["local_id"])
+    response=client.post(ROOT+"/commit",json=commit,headers=s["headers"])
+    assert response.status_code==200,response.text
+    assert response.json()["receipt"]==original["receipt"]
+    changed={**commit,"target_epoch":commit["target_epoch"]+1}
+    refused=client.post(ROOT+"/commit",json=changed,headers=s["headers"])
+    assert refused.status_code==409,refused.text
+    assert refused.json()["detail"]["code"]=="idempotency_mismatch"

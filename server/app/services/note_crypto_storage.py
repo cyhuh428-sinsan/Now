@@ -357,7 +357,6 @@ def check_manifest(db, row):
 def commit(db, body):
     row = preparation.owned(db, body.owner_id, body.local_id, body.device_id, body.transition_id)
     from app.services.wiki_guards import internal_write, require_source_protection
-    require_source_protection(db, row.owner_id, row.local_id)
     if row.actor_device_id != body.device_id:
         error("transition_actor_mismatch", 403)
     if body.server_instance_id != preparation.initialize_identity(db.connection()):
@@ -373,6 +372,7 @@ def commit(db, body):
         if row.commit_conditions_json != core:
             error("idempotency_mismatch")
         return committed_result(db, row)
+    require_source_protection(db, row.owner_id, row.local_id)
     row = active(db, body.owner_id, body.local_id, body.device_id, body.transition_id)
     condition = json.loads(row.conditions_json)
     base, request = condition["base"], condition["request"]

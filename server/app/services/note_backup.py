@@ -229,6 +229,9 @@ def validate_wikis(db):
     from app.schemas.note_v2 import Snapshot
     rows = list(db.scalars(select(LibraryResource).where(LibraryResource.kind == 'wikis')))
     indexes = {(row.owner_id, guard.link(row).artifact_local_id): row for row in rows}
+    for head in db.scalars(select(NoteHead)):
+        if guard.wiki_id(head.local_id) is not None and (head.owner_id, head.local_id) not in indexes:
+            raise ValueError('backup_wiki_index')
     for row in rows:
         link = guard.link(row)
         key = (row.owner_id, link.artifact_local_id)

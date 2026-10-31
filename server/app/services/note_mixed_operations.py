@@ -164,6 +164,9 @@ def prepare(db, body, purpose):
             error("idempotency_mismatch")
         expire(db, previous)
         return {"created": False, **result(db, previous)}
+    if purpose == CP:
+        from app.services.wiki_guards import require_review
+        require_review(db, [(body.owner_id, body.local_id)])
     require_unfenced(db, [(body.owner_id, body.local_id)])
     from app.services.related_drain import ready
     drainer, ready_base = ready(db, SimpleNamespace(owner_id=body.owner_id, local_id=body.local_id, device_id=body.device_id,
@@ -720,7 +723,13 @@ def replay(db, row, body, core):
 
 
 def publish(db, row, m, body, values, core, records):
-    meta.begin_update(db, row.owner_id, row.local_id)
+    if row.purpose == RC:
+        from app.services.wiki_guards import internal_write, require_source_protection
+        require_source_protection(db, row.owner_id, row.local_id)
+        with internal_write(db, row.owner_id, row.local_id):
+            meta.begin_update(db, row.owner_id, row.local_id)
+    else:
+        meta.begin_update(db, row.owner_id, row.local_id)
     if row.purpose == CP:
         publish_plain(db, row, m, body, values)
     else:
