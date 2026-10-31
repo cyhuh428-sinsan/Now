@@ -5531,3 +5531,27 @@ kbd {
 .note-block-dialog input { box-sizing: border-box; width: 100%; min-width: 0; }
 .note-block-dialog [role="status"] { min-height: 20px; margin: 8px 0; font-size: 13px; color: var(--red); overflow-wrap: anywhere; }
 .note-block-dialog :is(button,input):focus-visible, .note-reference-source:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+.wiki-dialog { width: min(1100px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+.wiki-dialog [role="status"] { min-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.wiki-layout { grid-template-columns: minmax(160px, 230px) minmax(0, 1fr); align-items: start; }
+.wiki-layout > nav, .wiki-detail, .wiki-body { min-width: 0; overflow-wrap: anywhere; }
+.wiki-layout > nav { display: grid; gap: 6px; }
+.wiki-detail h3 { font-size: 20px; margin: 20px 0 8px; }
+.wiki-detail h4 { font-size: 17px; margin: 24px 0 8px; scroll-margin-top: 12px; }
+.wiki-source-list { display: grid; gap: 6px; max-height: 220px; overflow: auto; padding: 8px 0; }
+.wiki-source-list label { display: flex; align-items: baseline; gap: 8px; padding: 4px; }
+.wiki-detail > nav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 16px; }
+.wiki-detail > button { margin-top: 12px; }
+.wiki-detail > label { display: grid; gap: 6px; margin-top: 12px; }
+.wiki-detail textarea { box-sizing: border-box; width: 100%; min-width: 0; resize: vertical; }
+.wiki-body { margin: 16px 0; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.wiki-body blockquote { border-left-width: 1px; border-radius: 0; background: transparent; }
+.wiki-body pre { max-width: 100%; overflow: auto; }
+.wiki-body blockquote > button { display: block; margin-top: 8px; }
+.wiki-dialog .library-confirm p { white-space: pre-wrap; overflow-wrap: anywhere; }
+.wiki-dialog :is(button,select,input):focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
+@media (max-width: 600px) {
+  .wiki-layout { grid-template-columns: minmax(0, 1fr); }
+  .wiki-layout > nav { max-height: 160px; overflow: auto; }
+  .wiki-dialog { padding: 12px; }
+}

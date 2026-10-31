@@ -9,6 +9,15 @@ const note={id:null,owner_id:'alice',local_id:id,device_id:'one',note_type:'tree
   content:'{"drafts":["preserve exact"]}',source:'wiki-artifact',parent_local_id:null,level:1,deleted_at:null};
 for(const surface of ['web','desktop/app']){
   const app=await read(surface+'/app.js');
+  assert.ok(app.includes('initializeWikiNotebook()'),surface+': product startup must consume the wiki notebook');
+  assert.ok(app.includes('createWikiNotebook({'),surface+': product must use the existing durable journal adapter');
+  assert.ok(app.includes('wikiUI?.check()'),surface+': account/protection context changes must invalidate displayed wiki text');
+  const viewStart=app.indexOf('function wikiViewKey()'),viewEnd=app.indexOf('\nfunction wikiSourceNote(',viewStart);
+  let actor='one';
+  const viewBox=vm.createContext({noteHistoryContext:()=>({...ctx,device:actor}),noteHistoryCaptureEpoch:0,noteProtectionViewGeneration:0});
+  vm.runInContext(app.slice(viewStart,viewEnd),viewBox);
+  const firstKey=vm.runInContext('wikiViewKey()',viewBox);actor='two';
+  assert.notEqual(vm.runInContext('wikiViewKey()',viewBox),firstKey,surface+': a changed actor must invalidate pending consent and results');
   const captureStart=app.indexOf('function noteHistoryCaptureDrafts('),captureEnd=app.indexOf('\nasync function noteHistoryFlush()',captureStart);
   const box=vm.createContext({structuredClone,crypto:webcrypto,vaultHistoryApplying:false,noteHistoryProjection:false,
     noteHistoryContext:()=>ctx,noteHistoryCaptureEpoch:0,noteHistoryProjectionScope:'',noteHistoryCaptureChain:Promise.resolve(),

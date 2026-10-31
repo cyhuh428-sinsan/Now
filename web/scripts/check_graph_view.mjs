@@ -540,6 +540,33 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
+    if(process.argv.includes("--wiki")){
+      const {verifyWikiFlow,verifyWikiCold}=await import("./wiki_fixture.mjs");
+      await verifyWikiFlow({evaluate:expression=>evaluate(page,expression)});
+      await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki actual review");
+      for(const width of [1280,390]){
+        await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+        assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Wiki dialog must fit the viewport");
+        if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+          const shot=await page.send("Page.captureScreenshot");
+          await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+        }
+      }
+      if(!desktop){
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA browser normal close timeout");})]);
+      }else stopBrowserProcess(browser);
+      browserClient.close();await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",...(desktop?{NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir}:{})},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      await waitForCondition(page,'typeof wikiUI!=="undefined" && Boolean(wikiUI) && typeof noteHistory!=="undefined" && Object.values(noteHistory.entries()).some(i=>i.draft.source==="wiki-artifact")',"Wiki cold journal");
+      await verifyWikiCold({evaluate:expression=>evaluate(page,expression)});
+      console.log("Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
+      return;
+    }
     if(process.argv.includes("--document")){
       const {verifyDocumentFlow}=await import("./document_fixture.mjs");
       const click=async selector=>{
