@@ -2878,7 +2878,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         }
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
-      async stage(s,p,work,password,localStores = [],resolveKey) {
+      async stage(s,p,work,password,localStores = [],resolveKey,analysisOriginalPassword) {
         const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
         if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
@@ -2890,11 +2890,18 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         const resolve = resolveKey || keyResolver || (async () => password);
         let initialMeaning=null;
         if(analyzing){
-          const a=work.initial_analysis,A=globalThis.NowNoteProtectionAnalysis;fields(a,['request','execution','work','plan','catalog']);
-          const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
-          if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
-          initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
-          if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+          const A=globalThis.NowNoteProtectionAnalysis;
+          if(p.response.metadata_header.control.request_type==='replan'){
+            const a=work.replanned_analysis;fields(a,['plan','catalog']);
+            await A.verifyReplanWriteWork(s,a.plan,p,a.catalog,work,analysisOriginalPassword,password);
+            const o=a.plan.original;initialMeaning=await A.openTerminalBundle(o.scope,o.request,o.execution,o.work,analysisOriginalPassword);
+          }else{
+            const a=work.initial_analysis;fields(a,['request','execution','work','plan','catalog']);
+            const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
+            if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
+            initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
+            if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+          }
         }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
         const imported=new Map();
@@ -3893,6 +3900,62 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     // Metadata is not publication proof: typed origin, ciphertext and meaning are verified separately.
     return response;
   }
+  async function replanValues(scope,plan,prepared,catalog,password,active) {
+    const v=await validateReplanWriteManifest(scope,plan,catalog,{...prepared.response.metadata_header,...prepared.manifest},active);
+    const e=plan.original.execution,original={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:e.source_context,terminal_receipt:e.terminal_receipt,bundle_metadata:e.bundle_metadata};
+    if(prepared.version!==3||prepared.path!=='/api/v2/notes/mixed-analysis-writes'||prepared.id!==prepared.response.operation_id||prepared.operation_id!==prepared.id
+      ||prepared.digest!==v.metadata_manifest_digest||prepared.response.metadata_manifest_digest!==prepared.digest||prepared.response.mutation_id!==plan.prepare.mutation_id
+      ||!same(prepared.original_execution,original)||!same(prepared.response.counts,v.counts))fail('write_prepared');
+    integer(prepared.response.lease_version,1);
+    return openTerminalBundle(plan.original.scope,plan.original.request,e,plan.original.work,password,active);
+  }
+  function replanDescriptor(prepared,output,digest) {
+    return {key:output.destination_key,representation_kind:output.output_kind,representation_epoch:output.output_epoch,is_null:false,
+      representation_version:1,representation_etag:output.source_etag,storage_operation_id:prepared.id,semantic_origin_id:prepared.id,origin_validator:'linked_mixed_v1',origin_row_required:false,
+      expected_binding:output.expected_binding,revision_ref:null,parent_ref:null,physical_note_id:null,inventory_revision_id:null,linked_slot_version:1,ciphertext_sha256:digest};
+  }
+  async function replanCommit(scope,plan,prepared,records) {
+    return {schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      operation_id:prepared.id,lease_version:prepared.response.lease_version,mutation_id:plan.prepare.mutation_id,base:plan.prepare.base,
+      metadata_manifest_digest:prepared.digest,client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true,target_epoch:plan.prepare.target_epoch};
+  }
+  async function buildReplanWriteWork(scope,plan,prepared,catalog,originalPassword,targetPassword,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();if(!targetPassword)fail('key_required');
+    const values=await replanValues(scope,plan,prepared,catalog,originalPassword,active);check();
+    const transfers=[],records=[];
+    for(const output of prepared.manifest.DSET){
+      if(output.is_null)continue;
+      const key=output.destination_key,value=values[key.slot],origin={value:prepared.response.metadata_header.operation_origin,legacy:null};
+      const destination={key,...pick(output,['output_kind','output_epoch','is_null','expected_binding']),operation_origin:origin.value};
+      const raw=await Q().encryptRepresentation(value,destination,targetPassword);check();
+      const digest=await Q().sha256(raw);check();const descriptor=replanDescriptor(prepared,output,digest);
+      if(await Q().decryptRepresentation(raw,descriptor,origin,async()=>targetPassword,3)!==value)fail('replan_readback');check();
+      transfers.push({key,raw,descriptor,origin,semantic:value});
+      records.push({entry_key:key,destination_key:key,source_etag:output.source_etag,output_kind:output.output_kind,target_epoch:output.output_epoch,total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:digest});
+    }
+    const commit=await replanCommit(scope,plan,prepared,records);check();
+    return {transfers,commit,replanned_analysis:{plan,catalog}};
+  }
+  async function verifyReplanWriteWork(scope,plan,prepared,catalog,work,originalPassword,targetPassword,active=()=>true) {
+    scope=structuredClone(scope);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);work=structuredClone(work);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();if(!targetPassword)fail('key_required');
+    const values=await replanValues(scope,plan,prepared,catalog,originalPassword,active);check();
+    exact(work,['transfers','commit','replanned_analysis']);exact(work.replanned_analysis,['plan','catalog']);
+    if(!same(work.replanned_analysis,{plan,catalog})||!Array.isArray(work.transfers))fail('replan_work');
+    const outputs=prepared.manifest.DSET.filter(d=>!d.is_null),records=[];
+    if(work.transfers.length!==outputs.length)fail('replan_cipher_set');
+    for(let n=0;n<outputs.length;n++){
+      const o=outputs[n],t=work.transfers[n],key=o.destination_key;exact(t,['key','raw','descriptor','origin','semantic']);
+      if(!same(t.key,key)||typeof t.raw!=='string'||!same(t.semantic,values[key.slot]))fail('replan_meaning');
+      const digest=await Q().sha256(t.raw);check();const descriptor=replanDescriptor(prepared,o,digest);
+      if(!same(t.descriptor,descriptor)||!same(t.origin,{value:prepared.response.metadata_header.operation_origin,legacy:null}))fail('replan_cipher_binding');
+      if(await Q().decryptRepresentation(t.raw,descriptor,t.origin,async()=>targetPassword,3)!==values[key.slot])fail('replan_readback');check();
+      records.push({entry_key:key,destination_key:key,source_etag:o.source_etag,output_kind:o.output_kind,target_epoch:o.output_epoch,total_bytes:new TextEncoder().encode(t.raw).length,ciphertext_sha256:digest});
+    }
+    const expected=await replanCommit(scope,plan,prepared,records);check();if(!same(work.commit,expected))fail('replan_commit');
+    return {ciphertext_manifest_digest:expected.client_verified_ciphertext_manifest_digest,output_keys:outputs.map(d=>d.destination_key)};
+  }
   async function buildInitialWriteWork(scope,request,execution,terminalWork,plan,prepared,catalog,password,active=()=>true) {
     scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);
     const check=()=>{if(active()!==true)fail('scope_changed');};check();
@@ -4283,7 +4346,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildInitialWriteWork,verifyInitialPublication,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,createReplanWritePlan,validateReplanWritePlan,validateInitialWriteManifest,validateReplanWriteManifest,validateStoredAnalysisResult,buildReplanWriteWork,verifyReplanWriteWork,buildInitialWriteWork,verifyInitialPublication,createExecution});
 })();
 
 ;

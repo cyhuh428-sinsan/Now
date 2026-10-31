@@ -191,6 +191,7 @@ const replanRemote=box.NowNoteProtectionState.createRemote({request:async(s,path
  if(path.endsWith('/replan')){replanCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(rekeyPlan.prepare));if(replanLose){replanLose=false;throw Error('replan_response_lost');}if(replanStored)return copy(replanStored);const out={schema_version:3,status:'prepared',operation:copy(replanOperation),original_execution:copy(replanOriginal)};if(replanForged)out.original_execution.source_context.base.base.history_generation++;return out;}
  if(path.endsWith('/status')){replanGet++;assert.equal(body.operation_id,replanId);return {schema_version:3,status:'operation',operation:copy(replanOperation),original_execution:copy(replanOriginal)};}
  if(path.endsWith('/manifest')){replanManifestCalls++;return {schema_version:3,section:body.section,metadata_manifest_digest:replanVerified.metadata_manifest_digest,metadata_header:copy(replanHeader),set_digests:copy(replanVerified.set_digests),counts:copy(replanVerified.counts),entries:copy(replanManifest[body.section]),next_cursor:null};}
+ if(path.endsWith('/chunks')||path.endsWith('/entries/seal')||path.endsWith('/staged'))return transport(s,path,method,body);
  throw Error('unexpected_replan_request');
 }});
 await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog),/replan_response_lost/);
@@ -220,3 +221,21 @@ await A.validateReplanWriteManifest(scope,provisionalPlan,unpostedCatalog,sameIn
 const collision=copy(replanManifest);for(const o of collision.DSET){o.destination_key.id='12';if(o.expected_binding)o.expected_binding.destination_key.id='12';}
 await assert.rejects(()=>A.validateReplanWriteManifest(scope,rekeyPlan,newerCatalog,collision),/replan_job/);
 console.log('MA replan SQLite provisional ID: same unused job integer with fresh operation/tokens accepted, actual current catalog collision denied PASS (synthetic only)');
+const replanWork=await A.buildReplanWriteWork(scope,rekeyPlan,replanPrepared,newerCatalog,'fixture-key','new-epoch-key');
+assert.equal(replanWork.transfers.length,2);assert.equal(replanWork.commit.target_epoch,2);assert.equal(replanWork.commit.operation_id,replanId);
+assert.equal(Q.canonicalJson(replanWork).includes('new-epoch-key'),false);assert.equal(Q.canonicalJson(work),original);
+for(const t of replanWork.transfers){assert.ok(!work.transfers.some(old=>old.raw===t.raw));assert.equal(t.key.id,'33');assert.equal(t.descriptor.representation_epoch,2);assert.equal(t.origin.value.original_source_context.base.base.history_generation,1);assert.equal(await Q.decryptRepresentation(t.raw,t.descriptor,t.origin,async()=>'new-epoch-key',3),t.key.slot==='input_text'?input:result);}
+const cached=Q.canonicalJson(replanWork);await A.verifyReplanWriteWork(scope,rekeyPlan,replanPrepared,newerCatalog,replanWork,'fixture-key','new-epoch-key');assert.equal(Q.canonicalJson(replanWork),cached);
+await assert.rejects(()=>A.verifyReplanWriteWork(scope,rekeyPlan,replanPrepared,newerCatalog,replanWork,'wrong-key','new-epoch-key'));
+await assert.rejects(()=>A.verifyReplanWriteWork(scope,rekeyPlan,replanPrepared,newerCatalog,replanWork,'fixture-key','wrong-key'));
+for(const change of [w=>{w.transfers[0].raw+='x';},w=>{w.transfers[0].semantic='forged';},w=>{w.commit.client_verified_ciphertext_manifest_digest='f'.repeat(64);},w=>{w.transfers[0].origin.value.original_source_context.base.base.history_generation++;}]){
+ const bad=copy(replanWork);change(bad);await assert.rejects(()=>A.verifyReplanWriteWork(scope,rekeyPlan,replanPrepared,newerCatalog,bad,'fixture-key','new-epoch-key'));
+}
+console.log('MA E3 replan ciphertext: original key/values preserved, distinct target key/new binding, exact CRLF/JSON/null, cached cipher verification without regeneration and forgery/key denial PASS (pure synthetic only; no journal/stage/UI)');
+const transfersBefore=uploads.size;
+await assert.rejects(()=>replanRemote.stage(scope,replanPrepared,replanWork,'wrong-key',[],undefined,'fixture-key'));assert.equal(uploads.size,transfersBefore);
+await replanRemote.stage(scope,replanPrepared,replanWork,'new-epoch-key',[],undefined,'fixture-key');
+assert.equal(uploads.size,transfersBefore+2);
+for(const t of replanWork.transfers)assert.equal(uploads.get(Q.canonicalJson(t.key)).raw.toString('utf8'),t.raw);
+assert.equal(Q.canonicalJson(replanWork),cached);assert.equal(Q.canonicalJson(work),original);
+console.log('MA E3 replan stage: original-key verification before upload, new-key exact cipher chunks/seal/readback, null excluded, cached bytes immutable PASS (synthetic transport only; no durable replan/UI)');

@@ -913,7 +913,7 @@
         }
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
-      async stage(s,p,work,password,localStores = [],resolveKey) {
+      async stage(s,p,work,password,localStores = [],resolveKey,analysisOriginalPassword) {
         const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
         if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
@@ -925,11 +925,18 @@
         const resolve = resolveKey || keyResolver || (async () => password);
         let initialMeaning=null;
         if(analyzing){
-          const a=work.initial_analysis,A=globalThis.NowNoteProtectionAnalysis;fields(a,['request','execution','work','plan','catalog']);
-          const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
-          if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
-          initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
-          if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+          const A=globalThis.NowNoteProtectionAnalysis;
+          if(p.response.metadata_header.control.request_type==='replan'){
+            const a=work.replanned_analysis;fields(a,['plan','catalog']);
+            await A.verifyReplanWriteWork(s,a.plan,p,a.catalog,work,analysisOriginalPassword,password);
+            const o=a.plan.original;initialMeaning=await A.openTerminalBundle(o.scope,o.request,o.execution,o.work,analysisOriginalPassword);
+          }else{
+            const a=work.initial_analysis;fields(a,['request','execution','work','plan','catalog']);
+            const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
+            if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
+            initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
+            if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+          }
         }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
         const imported=new Map();
