@@ -3531,6 +3531,39 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     if(await Q().hashJson(pick(bm,Object.keys(bm).filter(k=>k!=='bundle_digest')))!==bm.bundle_digest)fail('bundle_digest');
     return bm;
   }
+  async function buildTerminalBundle(scope,request,execution,input,observation,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);observation=structuredClone(observation);
+    const check=()=>{if(active()!==true)fail('scope_changed');};
+    check();if(!password)fail('key_required');if(typeof input!=='string')fail('input');
+    exact(observation,['provider_terminal_observed','outcome','result_json','error_message','error_code']);
+    if(observation.provider_terminal_observed!==true)fail('terminal_unobserved');
+    const done=observation.outcome==='done';
+    if(!['done','failed'].includes(observation.outcome)||(done
+      ?typeof observation.result_json!=='string'||observation.error_message!==null||observation.error_code!==null
+      :observation.result_json!==null||typeof observation.error_message!=='string'||!['provider_error','invalid_result'].includes(observation.error_code)))fail('terminal_shape');
+    await validateExecution(scope,request,execution);check();
+    if(!['client_running','cancel_requested'].includes(execution.state)||execution.dispatch_receipt===null||execution.terminal_receipt!==null)fail('terminal_state');
+    const values={input_text:input,result_json:observation.result_json,error_message:observation.error_message};
+    const transfers=[],ciphertext_manifest=[],slot_nulls=[],epoch=execution.source_context.base.base.crypto_epoch;
+    for(const slot of execution.output_slots){
+      const value=values[slot.key.slot],is_null=value===null;slot_nulls.push({key:structuredClone(slot.key),is_null});
+      if(is_null)continue;
+      const destination={key:slot.key,output_kind:'linked_text_envelope_v1',output_epoch:epoch,is_null:false,expected_binding:slot.expected_binding,operation_origin:null};
+      const raw=await Q().encryptRepresentation(value,destination,password);check();
+      const digest=await Q().sha256(raw);check();
+      const descriptor={key:slot.key,representation_kind:'linked_text_envelope_v1',representation_epoch:epoch,is_null:false,representation_version:1,representation_etag:slot.source_etag,
+        storage_operation_id:execution.execution_id,semantic_origin_id:null,origin_validator:'linked_v1',origin_row_required:false,expected_binding:slot.expected_binding,
+        revision_ref:null,parent_ref:null,physical_note_id:null,inventory_revision_id:null,linked_slot_version:1,ciphertext_sha256:digest};
+      const recovered=await Q().decryptRepresentation(raw,descriptor,{value:null,legacy:null},async()=>password,3);check();
+      if(recovered!==value)fail('terminal_readback');
+      transfers.push({key:structuredClone(slot.key),raw});
+      ciphertext_manifest.push({entry_key:structuredClone(slot.key),destination_key:structuredClone(slot.key),source_etag:slot.source_etag,output_kind:'linked_text_envelope_v1',target_epoch:epoch,total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:digest});
+    }
+    const metadata={schema_version:3,source_digest:execution.source_digest,original_job_id:execution.job_id,original_epoch:epoch,outcome:observation.outcome,error_code:observation.error_code,slot_nulls,ciphertext_manifest};
+    metadata.bundle_digest=await Q().hashJson(metadata);check();
+    await validateBundle(execution,metadata);check();
+    return {transfers,bundle_metadata:metadata};
+  }
   async function validateExecution(scope,request,e) {
     scope=structuredClone(scope);request=structuredClone(request);e=structuredClone(e);
     validateRequest(scope,request);
@@ -3684,7 +3717,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,createExecution});
 })();
 
 ;

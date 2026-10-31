@@ -199,3 +199,31 @@ await A.validateExecution(scope,request,replacedReceipt);
 const badProgress=A.createExecution({context:()=>context,journal,request:async()=>replacedReceipt});
 await assert.rejects(()=>badProgress.resumeClaim(id,'synthetic'),/execution_changed/);
 console.log('MX compatibility: original claim-only cipher bundle and immutable observed DR/TR preserved PASS (synthetic only)');
+for(const outcome of ['done','failed']){
+  const observation={provider_terminal_observed:true,outcome,result_json:outcome==='done'?' { "summary": "SYNTHETIC-RESULT" }\r\n':null,error_message:outcome==='failed'?'\uFEFFSYNTHETIC-ERROR\r\n':null,error_code:outcome==='failed'?'provider_error':null};
+  const work=await A.buildTerminalBundle(scope,request,running,input,observation,'synthetic');
+  await A.validateBundle(running,work.bundle_metadata);
+  assert.equal(work.transfers.length,2);assert.equal(work.bundle_metadata.original_epoch,1);
+  assert.equal(JSON.stringify(work).includes('SYNTHETIC-RESULT'),false);assert.equal(JSON.stringify(work).includes('SYNTHETIC-ERROR'),false);
+  for(const slot of output_slots){
+    const expected=slot.key.slot==='input_text'?input:observation[slot.key.slot];
+    const transfer=work.transfers.find(t=>Q.canonicalJson(t.key)===Q.canonicalJson(slot.key));
+    if(expected===null){assert.equal(transfer,undefined);continue;}
+    const d={...copy(descriptor),key:slot.key,representation_kind:'linked_text_envelope_v1',representation_epoch:1,is_null:false,representation_etag:slot.source_etag,storage_operation_id:running.execution_id,expected_binding:slot.expected_binding,ciphertext_sha256:await Q.sha256(transfer.raw)};
+    assert.equal(await Q.decryptRepresentation(transfer.raw,d,{value:null,legacy:null},async()=> 'synthetic',3),expected,'terminal cipher must preserve original text including CRLF/FEFF/JSON whitespace');
+    const c=work.bundle_metadata.ciphertext_manifest.find(c=>Q.canonicalJson(c.destination_key)===Q.canonicalJson(slot.key));
+    assert.equal(c.total_bytes,Buffer.byteLength(transfer.raw));assert.equal(c.ciphertext_sha256,await Q.sha256(transfer.raw));
+  }
+}
+const terminalObservation={provider_terminal_observed:true,outcome:'done',result_json:'SYNTHETIC-FROZEN-RESULT',error_message:null,error_code:null};
+const mutableObservation=copy(terminalObservation),building=A.buildTerminalBundle(scope,request,running,input,mutableObservation,'synthetic');
+mutableObservation.result_json='changed-after-await';
+const frozenWork=await building;assert.equal(frozenWork.bundle_metadata.outcome,'done');
+const frozenTransfer=frozenWork.transfers.find(t=>t.key.slot==='result_json'),resultSlot=output_slots.find(s=>s.key.slot==='result_json');
+const frozenDescriptor={...copy(descriptor),key:resultSlot.key,representation_kind:'linked_text_envelope_v1',representation_epoch:1,is_null:false,representation_etag:resultSlot.source_etag,storage_operation_id:running.execution_id,expected_binding:resultSlot.expected_binding,ciphertext_sha256:await Q.sha256(frozenTransfer.raw)};
+assert.equal(await Q.decryptRepresentation(frozenTransfer.raw,frozenDescriptor,{value:null,legacy:null},async()=> 'synthetic',3),terminalObservation.result_json);
+await assert.rejects(()=>A.buildTerminalBundle(scope,request,running,input,{...terminalObservation,provider_terminal_observed:false},'synthetic'),/terminal_unobserved/);
+await assert.rejects(()=>A.buildTerminalBundle(scope,request,running,input,{...terminalObservation,error_message:'unexpected'},'synthetic'),/terminal_shape/);
+await assert.rejects(()=>A.buildTerminalBundle(scope,request,running,input,terminalObservation,''),/key_required/);
+let activeCalls=0;await assert.rejects(()=>A.buildTerminalBundle(scope,request,running,input,terminalObservation,'synthetic',()=>++activeCalls<3),/scope_changed/);
+console.log('MX terminal bundle: original job/epoch/slots, done/failed/null shape, real cipher readback/exact CRLF/FEFF/JSON, frozen observation and terminal/key/late guards PASS (synthetic; no journal/API/Provider)');
