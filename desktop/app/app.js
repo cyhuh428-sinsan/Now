@@ -499,7 +499,7 @@ window.NowMarkdown = (() => {
 /* NowNote 사용자 템플릿·저장조건. Note 동기화와 분리된 durable outbox. */
 (() => {
   'use strict';
-  const kinds = ['templates', 'saved-queries'];
+  const kinds = ['templates', 'saved-queries', 'canvases'];
   const copy = value => structuredClone(value);
   const uuid = () => crypto.randomUUID();
   const key = ctx => JSON.stringify([String(ctx.url || '').replace(/\/+$/, ''), ctx.owner || 'local']);
@@ -508,8 +508,34 @@ window.NowMarkdown = (() => {
     if (!object(v) || Object.keys(v).some(k => !allowed.includes(k))) throw new Error('지원하지 않는 형식입니다. 원본을 보존합니다.');
   };
   const strings = v => Array.isArray(v) && v.every(s => typeof s === 'string');
+  function validateCanvas(payload) {
+    fields(payload, ['title','cards','edges','zoom']);
+    const text=(value,max,empty=true)=>typeof value==='string' && value.length<=max && (empty||value.length>0);
+    const number=(value,min,max=Infinity)=>typeof value==='number' && Number.isFinite(value) && value>=min && value<=max;
+    if (!text(payload.title,80,false) || !Array.isArray(payload.cards) || payload.cards.length>500
+      || !Array.isArray(payload.edges) || payload.edges.length>1000 || !number(payload.zoom,0.1,1.8)) throw new Error('맵 형식 또는 한도가 올바르지 않습니다.');
+    const ids=new Set(), edges=new Set(), pairs=new Set();
+    for (const card of payload.cards) {
+      fields(card,['id','type','noteId','text','x','y','width','color']);
+      if (!text(card.id,120,false) || ids.has(card.id) || !['note','text'].includes(card.type)
+        || !text(card.noteId??'',120) || !text(card.text??'',600) || !text(card.color??'blue',24)
+        || !number(card.x,0) || !number(card.y,0) || !number(card.width,180,360)
+        || (card.type==='note' && card.text) || (card.type==='text' && card.noteId)) throw new Error('카드 형식 또는 중복 ID를 확인하세요.');
+      ids.add(card.id);
+    }
+    for (const edge of payload.edges) {
+      fields(edge,['id','from','to','label']);
+      const pair=JSON.stringify([edge.from,edge.to]);
+      if (!text(edge.id,120,false) || edges.has(edge.id) || !ids.has(edge.from) || !ids.has(edge.to)
+        || edge.from===edge.to || pairs.has(pair) || !text(edge.label??'',60)) throw new Error('연결 대상 또는 중복 연결을 확인하세요.');
+      edges.add(edge.id); pairs.add(pair);
+    }
+    if (new TextEncoder().encode(JSON.stringify(payload)).length>2097152) throw new Error('맵 저장 용량 한도를 초과했습니다. 원본을 보존합니다.');
+    return copy(payload);
+  }
   function validate(kind, payload) {
     if (!kinds.includes(kind)) throw new Error('지원하지 않는 자원입니다.');
+    if (kind==='canvases') return validateCanvas(payload);
     fields(payload, kind === 'templates' ? ['name', 'description', 'title_template', 'content_template', 'properties', 'variables'] : ['name', 'order', 'filter', 'sort']);
     if (typeof payload.name !== 'string' || !payload.name.trim() || payload.name.length > 240) throw new Error('이름은 1~240자로 입력하세요.');
     if (kind === 'templates') {
@@ -620,7 +646,7 @@ window.NowMarkdown = (() => {
         map.set(op.id, { ...old, payload: copy(op.body.payload), deleted_at: op.method === 'DELETE' ? 'pending' : null, pending: true, error: op.error, readonly: !supported({ ...old, payload: op.body.payload, deleted_at: op.method === 'DELETE' ? 'pending' : null }) });
       }
       return [...map.values()].filter(r => !r.deleted_at).map(r => ({ ...r, conflict: copy(c.conflicts[resourceKey(kind, r.id)] || null) }))
-        .sort((a, b) => (a.payload?.order || 0) - (b.payload?.order || 0) || String(a.payload?.name || a.id).localeCompare(String(b.payload?.name || b.id), 'ko'));
+        .sort((a, b) => (a.payload?.order || 0) - (b.payload?.order || 0) || String(a.payload?.name || a.payload?.title || a.id).localeCompare(String(b.payload?.name || b.payload?.title || b.id), 'ko'));
     };
     async function enqueue(kind, id, method, payload, { baseVersion } = {}) {
       writable();
@@ -640,7 +666,7 @@ window.NowMarkdown = (() => {
       }
       if (method === 'PUT') {
         payload = validate(kind, payload);
-        if (!existing && list(kind).length >= 100) throw new Error('종류별 최대 100개입니다.');
+        if (!existing && list(kind).length >= (kind==='canvases'?12:100)) throw new Error('종류별 저장 한도를 초과했습니다.');
       }
       const previous = c.outbox.filter(o => o.kind === kind && o.id === id).at(-1);
       if (previous && !previous.sent) {
@@ -666,8 +692,16 @@ window.NowMarkdown = (() => {
         return active();
       };
       try {
-        for (const kind of kinds) if (!await pull(kind)) return;
         delete c.error;
+        const unsupported=new Set();
+        for (const kind of kinds) {
+          try { if (!await pull(kind)) return; }
+          catch (error) {
+            if (kind!=='canvases' || ![404,405].includes(error.status)) throw error;
+            unsupported.add(kind);
+            c.error='서버가 마인드맵 저장을 지원하지 않습니다. 로컬 변경은 보존됩니다.';
+          }
+        }
         // One immutable request at a time; subsequent local edits wait for its actual receipt version.
         const attempted = new Set();
         while (true) {
@@ -676,6 +710,9 @@ window.NowMarkdown = (() => {
           attempted.add(op);
           const rk = resourceKey(op.kind, op.id);
           if (!active()) return;
+          if (unsupported.has(op.kind)) {
+            op.error={code:'unsupported_resource',message:c.error};await save();continue;
+          }
           if (c.conflicts[rk] || op.body.base_version === null) continue;
           try {
             fields(op.body, ['owner_id', 'schema_version', 'base_version', 'mutation_id', ...(op.method === 'PUT' ? ['payload'] : [])]);

@@ -49,3 +49,4 @@ def resource_router(kind: str) -> APIRouter:
 router = APIRouter()
 router.include_router(resource_router("templates"))
 router.include_router(resource_router("saved-queries"))
+router.include_router(resource_router("canvases"))

@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.library import LibraryMutation, LibraryResource
 from app.models.note import UserAccount, UserDevice
-from app.schemas.library import QueryPayload, TemplatePayload
+from app.schemas.library import CanvasPayload, QueryPayload, TemplatePayload
 from app.services.user_accounts import hash_access_token, require_web_session_access
 
 
@@ -44,7 +44,10 @@ def library_user(db, owner_id, user_token, web_token):
 
 
 def validate_payload(kind, payload):
-    limit = 1024 * 1024 if kind == "templates" else 16 * 1024
+    models = {"templates": TemplatePayload, "saved-queries": QueryPayload, "canvases": CanvasPayload}
+    if kind not in models:
+        error("invalid_resource_kind", 422)
+    limit = {"templates": 1024 * 1024, "saved-queries": 16 * 1024, "canvases": 2 * 1024 * 1024}[kind]
     try:
         encoded = canonical(payload)
     except (ValueError, TypeError):
@@ -54,7 +57,7 @@ def validate_payload(kind, payload):
     if kind == "templates" and isinstance(payload.get("content_template"), str):
         if "NOW_ENCRYPTED_V1:" in payload["content_template"]:
             error("encrypted_template_forbidden", 422)
-    model = TemplatePayload if kind == "templates" else QueryPayload
+    model = models[kind]
     from pydantic import ValidationError
     try:
         model.model_validate(payload)
@@ -100,7 +103,7 @@ def mutate(db: Session, *, owner_id, kind, resource_id, body, deleting=False):
             count = db.scalar(select(func.count()).select_from(LibraryResource).where(
                 LibraryResource.owner_id == owner_id, LibraryResource.kind == kind,
                 LibraryResource.deleted_at.is_(None)))
-            if count >= 100:
+            if count >= resource_limit(kind):
                 error("resource_limit")
             row = LibraryResource(owner_id=owner_id, kind=kind, id=resource_id,
                                   version=0, created_at=datetime.now(timezone.utc).replace(tzinfo=None))
@@ -123,3 +126,7 @@ def mutate(db: Session, *, owner_id, kind, resource_id, body, deleting=False):
     except Exception:
         db.rollback()
         raise
+
+
+def resource_limit(kind):
+    return 12 if kind == "canvases" else 100

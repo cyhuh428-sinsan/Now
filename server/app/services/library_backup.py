@@ -10,7 +10,7 @@ from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
 from app.models.library import LibraryMutation, LibraryResource
-from app.services.library import validate_payload
+from app.services.library import resource_limit, validate_payload
 
 
 def export_library(db: Session):
@@ -33,7 +33,7 @@ def export_library(db: Session):
 class ResourceBackup(BaseModel):
     model_config = ConfigDict(extra="forbid")
     owner_id: str = Field(min_length=1, max_length=80)
-    kind: Literal["templates", "saved-queries"]
+    kind: Literal["templates", "saved-queries", "canvases"]
     id: UUID
     schema_version: Literal[1]
     version: int = Field(ge=1)
@@ -70,7 +70,7 @@ def validate_library_backup(backup):
             validate_payload(row.kind, json.loads(row.payload_json))
             count_key = (row.owner_id, row.kind)
             active_counts[count_key] = active_counts.get(count_key, 0) + 1
-            if active_counts[count_key] > 100:
+            if active_counts[count_key] > resource_limit(row.kind):
                 raise ValueError("resource limit exceeded")
         elif row.payload_json is not None:
             raise ValueError("tombstone payload must be null")
@@ -142,7 +142,7 @@ def restore_library(db: Session, backup: dict):
             existing = db.scalar(select(func.count()).select_from(LibraryResource).where(
                 LibraryResource.owner_id == owner, LibraryResource.kind == kind,
                 LibraryResource.deleted_at.is_(None)))
-            if existing + count > 100:
+            if existing + count > resource_limit(kind):
                 raise ValueError("resource limit exceeded")
         for row in resources:
             values = row.model_dump()

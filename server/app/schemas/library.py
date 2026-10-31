@@ -72,6 +72,50 @@ class QueryPayload(StrictModel):
     sort: Sort = Field(default_factory=Sort)
 
 
+class CanvasCard(StrictModel):
+    id: str = Field(min_length=1, max_length=120)
+    type: Literal["note", "text"]
+    noteId: str = Field(default="", max_length=120)
+    text: str = Field(default="", max_length=600)
+    x: float = Field(ge=0, allow_inf_nan=False)
+    y: float = Field(ge=0, allow_inf_nan=False)
+    width: float = Field(ge=180, le=360, allow_inf_nan=False)
+    color: str = Field(default="blue", max_length=24)
+
+    @model_validator(mode="after")
+    def no_note_body_cache(self):
+        if (self.type == "note" and self.text) or (self.type == "text" and self.noteId):
+            raise ValueError("note_reference_or_text_only")
+        return self
+
+
+class CanvasEdge(StrictModel):
+    id: str = Field(min_length=1, max_length=120)
+    from_: str = Field(alias="from", min_length=1, max_length=120)
+    to: str = Field(min_length=1, max_length=120)
+    label: str = Field(default="", max_length=60)
+
+
+class CanvasPayload(StrictModel):
+    title: str = Field(min_length=1, max_length=80)
+    cards: list[CanvasCard] = Field(max_length=500)
+    edges: list[CanvasEdge] = Field(max_length=1000)
+    zoom: float = Field(ge=0.1, le=1.8, allow_inf_nan=False)
+
+    @model_validator(mode="after")
+    def valid_graph(self):
+        ids = {card.id for card in self.cards}
+        if len(ids) != len(self.cards) or len({edge.id for edge in self.edges}) != len(self.edges):
+            raise ValueError("duplicate_graph_id")
+        pairs = set()
+        for edge in self.edges:
+            pair = (edge.from_, edge.to)
+            if edge.from_ == edge.to or not set(pair) <= ids or pair in pairs:
+                raise ValueError("invalid_graph_edge")
+            pairs.add(pair)
+        return self
+
+
 class Mutation(StrictModel):
     owner_id: str = Field(min_length=1, max_length=80)
     schema_version: Literal[1]
