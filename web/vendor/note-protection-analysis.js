@@ -54,16 +54,44 @@
     if(await Q().hashJson(pick(bm,Object.keys(bm).filter(k=>k!=='bundle_digest')))!==bm.bundle_digest)fail('bundle_digest');
     return bm;
   }
-  async function buildTerminalBundle(scope,request,execution,input,observation,password,active=()=>true) {
-    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);observation=structuredClone(observation);
+  function terminalDescriptor(execution,slot,digest) {
+    return {key:slot.key,representation_kind:'linked_text_envelope_v1',representation_epoch:execution.source_context.base.base.crypto_epoch,is_null:false,
+      representation_version:1,representation_etag:slot.source_etag,storage_operation_id:execution.execution_id,semantic_origin_id:null,origin_validator:'linked_v1',origin_row_required:false,
+      expected_binding:slot.expected_binding,revision_ref:null,parent_ref:null,physical_note_id:null,inventory_revision_id:null,linked_slot_version:1,ciphertext_sha256:digest};
+  }
+  async function openTerminalBundle(scope,request,execution,work,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);work=structuredClone(work);
     const check=()=>{if(active()!==true)fail('scope_changed');};
-    check();if(!password)fail('key_required');if(typeof input!=='string')fail('input');
+    check();if(!password)fail('key_required');
+    await validateExecution(scope,request,execution);check();
+    exact(work,['transfers','bundle_metadata']);await validateBundle(execution,work.bundle_metadata);check();
+    if(execution.dispatch_receipt===null)fail('terminal_state');
+    if(execution.bundle_metadata!==null&&!same(execution.bundle_metadata,work.bundle_metadata))fail('terminal_bundle_changed');
+    const records=work.bundle_metadata.ciphertext_manifest;
+    if(!Array.isArray(work.transfers)||work.transfers.length!==records.length)fail('terminal_cipher_set');
+    const values={input_text:null,result_json:null,error_message:null};
+    for(let i=0;i<records.length;i++){
+      const c=records[i],t=work.transfers[i];exact(t,['key','raw']);
+      if(!same(t.key,c.destination_key)||typeof t.raw!=='string'||new TextEncoder().encode(t.raw).length!==c.total_bytes)fail('terminal_cipher_length');
+      if(await Q().sha256(t.raw)!==c.ciphertext_sha256)fail('terminal_cipher_digest');check();
+      const slot=execution.output_slots.find(s=>same(s.key,t.key));
+      values[t.key.slot]=await Q().decryptRepresentation(t.raw,terminalDescriptor(execution,slot,c.ciphertext_sha256),{value:null,legacy:null},async()=>password,3);check();
+    }
+    return values;
+  }
+  function validateObservation(observation) {
     exact(observation,['provider_terminal_observed','outcome','result_json','error_message','error_code']);
     if(observation.provider_terminal_observed!==true)fail('terminal_unobserved');
     const done=observation.outcome==='done';
     if(!['done','failed'].includes(observation.outcome)||(done
       ?typeof observation.result_json!=='string'||observation.error_message!==null||observation.error_code!==null
       :observation.result_json!==null||typeof observation.error_message!=='string'||!['provider_error','invalid_result'].includes(observation.error_code)))fail('terminal_shape');
+  }
+  async function buildTerminalBundle(scope,request,execution,input,observation,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);observation=structuredClone(observation);
+    const check=()=>{if(active()!==true)fail('scope_changed');};
+    check();if(!password)fail('key_required');if(typeof input!=='string')fail('input');
+    validateObservation(observation);
     await validateExecution(scope,request,execution);check();
     if(!['client_running','cancel_requested'].includes(execution.state)||execution.dispatch_receipt===null||execution.terminal_receipt!==null)fail('terminal_state');
     const values={input_text:input,result_json:observation.result_json,error_message:observation.error_message};
@@ -74,9 +102,7 @@
       const destination={key:slot.key,output_kind:'linked_text_envelope_v1',output_epoch:epoch,is_null:false,expected_binding:slot.expected_binding,operation_origin:null};
       const raw=await Q().encryptRepresentation(value,destination,password);check();
       const digest=await Q().sha256(raw);check();
-      const descriptor={key:slot.key,representation_kind:'linked_text_envelope_v1',representation_epoch:epoch,is_null:false,representation_version:1,representation_etag:slot.source_etag,
-        storage_operation_id:execution.execution_id,semantic_origin_id:null,origin_validator:'linked_v1',origin_row_required:false,expected_binding:slot.expected_binding,
-        revision_ref:null,parent_ref:null,physical_note_id:null,inventory_revision_id:null,linked_slot_version:1,ciphertext_sha256:digest};
+      const descriptor=terminalDescriptor(execution,slot,digest);
       const recovered=await Q().decryptRepresentation(raw,descriptor,{value:null,legacy:null},async()=>password,3);check();
       if(recovered!==value)fail('terminal_readback');
       transfers.push({key:structuredClone(slot.key),raw});
@@ -129,6 +155,7 @@
   }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
+    const tickets=new WeakMap();
     let generation=0,running=false;
     const own=scope=>{
       P().validateScope(scope);const c=structuredClone(context());
@@ -147,6 +174,18 @@
       if(!same(pick(checked,fixed),pick(previous,fixed))||checked.run_version<previous.run_version||checked.lease_version<previous.lease_version)fail('execution_changed');
       for(const key of ['dispatch_receipt','terminal_receipt','bundle_metadata'])if(previous[key]!==null&&!same(previous[key],checked[key]))fail('execution_changed');
     }
+    const terminalCore=(scope,e,bm)=>({...access(scope),execution_id:e.execution_id,run_version:e.run_version,lease_version:e.lease_version,
+      dispatch_id:e.dispatch_receipt.dispatch_id,claim_metadata_digest:e.claim_metadata_digest,provider_terminal_observed:true,outcome:bm.outcome,
+      bundle_metadata:structuredClone(bm),local_checkpoint_confirmed:true,unavailable_reason:null});
+    async function fresh(scope,b,c,epoch) {
+      const response=await request(structuredClone(scope),'/api/v2/notes/mixed-analysis-claims/status','GET',{...access(scope),execution_id:b.execution.execution_id});active(scope,c,epoch);
+      const checked=await validateExecution(scope,b.request,response);active(scope,c,epoch);progress(b.execution,checked);return checked;
+    }
+    function receiptMatches(e,core,work) {
+      if(e.state!=='client_settled'||e.terminal_receipt===null||!same(e.bundle_metadata,work.bundle_metadata)
+        ||e.terminal_receipt.outcome!==work.bundle_metadata.outcome||e.run_version!==core.run_version+1||e.lease_version!==core.lease_version)fail('terminal_receipt_changed');
+      return structuredClone(e.terminal_receipt);
+    }
     async function save(marker,bundle,password,c,epoch) {
       active(marker.scope,c,epoch);
       marker.cipher_bundle=await Q().encryptContent(Q().canonicalJson(bundle),password);active(marker.scope,c,epoch);
@@ -160,8 +199,9 @@
     async function open(marker,password,c,epoch) {
       if(!password)fail('key_required');
       const b=Q().parseJson(await Q().decryptContent(marker.cipher_bundle,password));active(marker.scope,c,epoch);
-      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[])]);
+      exact(b,['schema_version','purpose','operation_id','scope','request','input','route','execution',...(Object.hasOwn(b,'dispatch')?['dispatch']:[]),...(Object.hasOwn(b,'terminal')?['terminal']:[])]);
       b.dispatch??=null;
+      b.terminal??=null;
       if(b.schema_version!==1||b.purpose!=='mixed_analysis_execution'||b.operation_id!==marker.id||!same(b.scope,marker.scope)||typeof b.input!=='string')fail('bundle_binding');
       validateRequest(marker.scope,b.request);validateRoute(b.route);
       if(b.execution!==null){await validateExecution(marker.scope,b.request,b.execution);active(marker.scope,c,epoch);}
@@ -173,7 +213,20 @@
           ||d.source_digest!==b.execution.source_digest||d.claim_metadata_digest!==b.execution.claim_metadata_digest||typeof b.dispatch.handoff_reserved!=='boolean')fail('dispatch_binding');
         integer(d.lease_version,1);
       }
-      if(['analysis_dispatching','analysis_running'].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase==='analysis_running')))fail('bundle_phase');
+      const terminalPhases=['analysis_terminal','analysis_settling','analysis_settled'];
+      if(['analysis_dispatching','analysis_running',...terminalPhases].includes(marker.phase)&&(b.dispatch===null||b.dispatch.handoff_reserved!==(marker.phase!=='analysis_dispatching')))fail('bundle_phase');
+      if(terminalPhases.includes(marker.phase)!==(b.terminal!==null))fail('bundle_phase');
+      if(b.terminal!==null){
+        exact(b.terminal,['work','settle_core','receipt']);
+        const values=await openTerminalBundle(marker.scope,b.request,b.execution,b.terminal.work,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+        if(values.input_text!==b.input)fail('terminal_input_changed');
+        if(b.terminal.settle_core!==null){
+          const previous={...b.execution,run_version:b.execution.run_version-(b.execution.terminal_receipt===null?0:1)};
+          if(!same(b.terminal.settle_core,terminalCore(marker.scope,previous,b.terminal.work.bundle_metadata)))fail('terminal_core_changed');
+        }
+        if((marker.phase==='analysis_terminal')!==(b.terminal.settle_core===null)||(marker.phase==='analysis_settled')!==(b.terminal.receipt!==null))fail('bundle_phase');
+        if(b.terminal.receipt!==null&&(!same(b.terminal.receipt,b.execution.terminal_receipt)||!same(b.execution.bundle_metadata,b.terminal.work.bundle_metadata)))fail('terminal_receipt_changed');
+      }
       return b;
     }
     return {
@@ -191,7 +244,7 @@
         running=true;
         try{
           const id=crypto.randomUUID(),marker={schema_version:1,id,scope,phase:'analysis_claiming',cipher_bundle:''};
-          const b={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope:structuredClone(scope),request:claim,input,route,execution:null,dispatch:null};
+          const b={schema_version:1,purpose:'mixed_analysis_execution',operation_id:id,scope:structuredClone(scope),request:claim,input,route,execution:null,dispatch:null,terminal:null};
           await save(marker,b,password,c,epoch);return id;
         }finally{running=false;}
       },
@@ -235,10 +288,53 @@
           const dispatched=await validateExecution(marker.scope,b.request,response);active(marker.scope,c,epoch);progress(b.execution,dispatched);
           if(dispatched.state!=='client_running'||dispatched.dispatch_receipt===null)fail('dispatch_unconfirmed');
           b.execution=dispatched;b.dispatch.handoff_reserved=true;marker.phase='analysis_running';await save(marker,b,password,c,epoch);
-          return {operation_id:id,scope:structuredClone(marker.scope),execution:structuredClone(dispatched),route:structuredClone(b.route),input:b.input,provider_state:'ready'};
+          const handoff=Object.freeze({operation_id:id,scope:Object.freeze(structuredClone(marker.scope)),execution:structuredClone(dispatched),route:Object.freeze(structuredClone(b.route)),input:b.input,provider_state:'ready'});
+          tickets.set(handoff,{operation_id:id,scope:structuredClone(marker.scope),auth:c.auth,generation:epoch,execution:structuredClone(dispatched),observationStarted:false});
+          return handoff;
+        }finally{running=false;}
+      },
+      async recordTerminal(handoff,observation,password) {
+        const ticket=tickets.get(handoff);if(!ticket)fail('handoff_unknown');
+        if(ticket.observationStarted)fail('terminal_already_recorded');
+        const marker=status(ticket.operation_id),c=own(marker.scope),epoch=generation;
+        if(c.auth!==ticket.auth||epoch!==ticket.generation)fail('terminal_key_unavailable');
+        observation=structuredClone(observation);validateObservation(observation);
+        if(running)fail('busy');if(marker.phase!=='analysis_running')fail('terminal_already_recorded');running=true;
+        try{
+          const b=await open(marker,password,c,epoch);progress(ticket.execution,b.execution);
+          b.execution=await fresh(marker.scope,b,c,epoch);
+          if(b.execution.terminal_receipt!==null)fail('terminal_already_recorded');
+          ticket.observationStarted=true;
+          const work=await buildTerminalBundle(marker.scope,b.request,b.execution,b.input,observation,password,()=>{active(marker.scope,c,epoch);return true;});active(marker.scope,c,epoch);
+          b.terminal={work,settle_core:null,receipt:null};marker.phase='analysis_terminal';await save(marker,b,password,c,epoch);
+          const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
+          if(!same(readback.terminal.work,work))fail('terminal_checkpoint_readback');
+          return {operation_id:marker.id,bundle_metadata:structuredClone(work.bundle_metadata)};
+        }finally{running=false;}
+      },
+      async settleTerminal(id,password) {
+        const marker=status(id),c=own(marker.scope),epoch=generation;
+        if(running)fail('busy');if(!['analysis_terminal','analysis_settling','analysis_settled'].includes(marker.phase))fail('terminal_checkpoint_missing');running=true;
+        try{
+          const b=await open(marker,password,c,epoch),observed=await fresh(marker.scope,b,c,epoch);
+          if(observed.terminal_receipt!==null){
+            if(b.terminal.settle_core===null)fail('terminal_core_missing');
+            b.terminal.receipt=receiptMatches(observed,b.terminal.settle_core,b.terminal.work);b.execution=observed;marker.phase='analysis_settled';await save(marker,b,password,c,epoch);
+            return structuredClone(b.terminal.receipt);
+          }
+          if(!['client_running','cancel_requested'].includes(observed.state))fail('terminal_state');
+          if(b.terminal.settle_core===null){
+            b.execution=observed;b.terminal.settle_core=terminalCore(marker.scope,observed,b.terminal.work.bundle_metadata);marker.phase='analysis_settling';await save(marker,b,password,c,epoch);
+          }else if(!same(b.terminal.settle_core,terminalCore(marker.scope,observed,b.terminal.work.bundle_metadata)))fail('terminal_version_changed');
+          const response=await request(structuredClone(marker.scope),'/api/v2/notes/mixed-analysis-claims/settle','POST',structuredClone(b.terminal.settle_core));active(marker.scope,c,epoch);
+          const checked=await validateExecution(marker.scope,b.request,response);active(marker.scope,c,epoch);progress(observed,checked);
+          b.terminal.receipt=receiptMatches(checked,b.terminal.settle_core,b.terminal.work);b.execution=checked;marker.phase='analysis_settled';await save(marker,b,password,c,epoch);
+          const readback=await open(status(marker.id),password,c,epoch);active(marker.scope,c,epoch);
+          if(!same(readback.terminal.receipt,b.terminal.receipt))fail('terminal_checkpoint_readback');
+          return structuredClone(b.terminal.receipt);
         }finally{running=false;}
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createExecution});
 })();
