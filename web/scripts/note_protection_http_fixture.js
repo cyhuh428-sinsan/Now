@@ -75,10 +75,30 @@
     emit({stage:'analysis_peer_source_changed',owner:a.owner,local_id:target,device_id:a.device});button('lock').click();clearWebSession();
     return {ok:true,mode:config.mode,phase:24,peerClient:'desktop',peerDeviceId:a.device,distinctDevice:true,isolatedPeer:true,sourceChanged:true,headVersion:c.base.head_version,historyGeneration:c.base.history_generation,providerCalls:0};
   }
+  if(config.phase===25){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol;
+    const markers=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target&&m.phase==='analysis_settled');assert(markers.length===1,'repeat_original_missing');const id=markers[0].id;
+    noteProtectionAnalysis=NowNoteProtectionAnalysis.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:async(s,path,method,body)=>{
+      assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'repeat_scope');
+      if(path.endsWith('/chunks'))throw Error('qa_repeat_before_upload');
+      const response=await fetch(url+path+(method==='GET'?'?'+new URLSearchParams(body):''),{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...noteHistoryContext().headers,...(method==='GET'?{}:{'Content-Type':'application/json'})},...(method==='GET'?{}:{body:JSON.stringify(body)}),signal:AbortSignal.timeout(20000)});
+      const value=Q.parseJson(await response.text());assert(response.ok,'repeat_prepare_http');return value;
+    }});
+    await action('analysis-replan',()=>!dialog().querySelector('.protection-replan').classList.contains('hidden'));
+    const checkbox=dialog().querySelector('[name="analysis-reuse-confirm"]');checkbox.checked=true;checkbox.dispatchEvent(new Event('change'));
+    await action('analysis-replan-confirm',()=>noteProtectionAnalysis.status(id).phase==='analysis_replan_prepared');
+    assert(status()==='qa_repeat_before_upload','repeat_did_not_stop_before_upload');
+    const record=await noteProtectionAnalysis.inspectReplan(id,password);assert(record.work.transfers.length===2,'repeat_cipher_missing');
+    const stopped=await request('/api/v2/notes/mixed-analysis-writes/abort','POST',{schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,operation_id:record.prepared.id,lease_version:record.prepared.response.lease_version});
+    assert(stopped.state==='aborted'&&stopped.operation_id===record.prepared.id,'repeat_abort_unconfirmed');
+    emit({stage:'analysis_replan_aborted_before_upload',owner:a.owner,local_id:target,operation_id:record.prepared.id,local_operation_id:id});button('lock').click();clearWebSession();
+    return {ok:true,mode:config.mode,phase:25,priorCipherPreserved:true,ownPreparedWriteAborted:true,providerCalls:0};
+  }
   if([22,23].includes(config.phase)){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,Q=NowNoteProtectionProtocol,before=await noteProtectionReader.catalog(scope);
-    const candidates=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&m.phase===(config.phase===22?'analysis_settled':'analysis_replan_committing'));
+    const candidates=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&(config.phase===22?['analysis_settled','analysis_replan_prepared'].includes(m.phase):m.phase==='analysis_replan_committing'));
     assert(candidates.length===1,'replan_ui_marker_missing');const id=candidates[0].id,original=Q.parseJson(await Q.decryptContent(candidates[0].cipher_bundle,password));
     let commitPosts=0;
     noteProtectionAnalysis=NowNoteProtectionAnalysis.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:async(s,path,method,body)=>{
@@ -99,6 +119,7 @@
       assert(status()==='qa_replan_commit_response_lost'&&commitPosts===1,'replan_loss_not_preserved');
       const archived=Q.parseJson(await Q.decryptContent(noteProtectionAnalysis.status(id).cipher_bundle,password)),r=archived.replan;
       assert(Q.canonicalJson(archived.terminal)===Q.canonicalJson(original.terminal),'replan_original_terminal_changed');
+      if(original.replan){assert(r.plan.prepare.previous_write_id===original.replan.prepared.id&&r.plan.prepare.previous_write_state==='aborted','repeat_prior_link_missing');assert(Q.canonicalJson(r.prior.record)===Q.canonicalJson(original.replan),'repeat_prior_cipher_changed');}
       assert(Q.canonicalJson(r.plan.original.work)===Q.canonicalJson(original.terminal.work)&&Q.canonicalJson(r.plan.original.execution.source_context)===Q.canonicalJson(original.execution.source_context),'replan_original_source_or_cipher_changed');
       assert(Q.canonicalJson(r.plan.prepare.base)===Q.canonicalJson(before.context)&&r.prepared.id!==original.execution.execution_id,'replan_new_binding_or_base_missing');
       assert(r.work.transfers.every(t=>!original.terminal.work.transfers.some(old=>old.raw===t.raw)),'replan_reused_original_cipher');
