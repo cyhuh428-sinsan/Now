@@ -867,8 +867,8 @@
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
       async stage(s,p,work,password,localStores = [],resolveKey) {
-        const importing=p.response.purpose==='mixed_offline_import';
-        if(importing) {s=copy(s);p=copy(p);work=copy(work);}
+        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
+        if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
         const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
@@ -876,6 +876,14 @@
         const meaning = new Map((await transport.readSources(s,p,password,localStores,resolveKey,work.source_origins || [])).map(v=>[json(v.key),v.value]));
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const resolve = resolveKey || keyResolver || (async () => password);
+        let initialMeaning=null;
+        if(analyzing){
+          const a=work.initial_analysis,A=globalThis.NowNoteProtectionAnalysis;fields(a,['request','execution','work','plan','catalog']);
+          const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
+          if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
+          initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
+          if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+        }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
         const imported=new Map();
         if(importing) {
@@ -950,7 +958,7 @@
           const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          const expected=importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+          const expected=analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
             : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
           if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);

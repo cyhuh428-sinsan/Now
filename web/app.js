@@ -2832,8 +2832,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
       async stage(s,p,work,password,localStores = [],resolveKey) {
-        const importing=p.response.purpose==='mixed_offline_import';
-        if(importing) {s=copy(s);p=copy(p);work=copy(work);}
+        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
+        if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
         const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
@@ -2841,6 +2841,14 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         const meaning = new Map((await transport.readSources(s,p,password,localStores,resolveKey,work.source_origins || [])).map(v=>[json(v.key),v.value]));
         const semanticEq = (a,b) => protocol().canonicalJson(a) === protocol().canonicalJson(b);
         const resolve = resolveKey || keyResolver || (async () => password);
+        let initialMeaning=null;
+        if(analyzing){
+          const a=work.initial_analysis,A=globalThis.NowNoteProtectionAnalysis;fields(a,['request','execution','work','plan','catalog']);
+          const verified=await A.validateInitialWriteManifest(s,a.plan,a.execution,a.catalog,{...p.response.metadata_header,...fixed});
+          if(verified.metadata_manifest_digest!==p.digest||!eq(verified.counts,p.response.counts))fail('analysis_manifest_metadata');
+          initialMeaning=await A.openTerminalBundle(s,a.request,a.execution,a.work,password);
+          if(!eq(work.transfers.map(t=>({key:t.key,raw:t.raw})),a.work.transfers)||!eq(a.plan.transfers,a.work.transfers))fail('analysis_original_cipher');
+        }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
         const imported=new Map();
         if(importing) {
@@ -2915,7 +2923,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          const expected=importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+          const expected=analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
             : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
           if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -3726,6 +3734,26 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     }
     const metadata_manifest_digest=await Q().hashJson(manifest);check();return {metadata_manifest_digest,set_digests,counts};
   }
+  async function buildInitialWriteWork(scope,request,execution,terminalWork,plan,prepared,catalog,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    const verified=await validateInitialWriteManifest(scope,plan,execution,catalog,{...prepared.response.metadata_header,...prepared.manifest},active);check();
+    if(prepared.version!==3||prepared.path!=='/api/v2/notes/mixed-analysis-writes'||prepared.id!==execution.execution_id||prepared.digest!==verified.metadata_manifest_digest
+      ||prepared.response.operation_id!==prepared.id||prepared.response.mutation_id!==plan.prepare.mutation_id||!same(prepared.response.counts,verified.counts))fail('write_prepared');
+    integer(prepared.response.lease_version,1);
+    const values=await openTerminalBundle(scope,request,execution,terminalWork,password,active);check();
+    if(!same(plan.transfers,terminalWork.transfers)||!same(plan.prepare.bundle_metadata,terminalWork.bundle_metadata))fail('write_original_cipher');
+    const transfers=terminalWork.transfers.map(t=>{
+      const slot=execution.output_slots.find(s=>same(s.key,t.key)),record=terminalWork.bundle_metadata.ciphertext_manifest.find(c=>same(c.destination_key,t.key));
+      if(!slot||!record)fail('write_original_cipher');
+      return {key:t.key,raw:t.raw,descriptor:terminalDescriptor(execution,slot,record.ciphertext_sha256),origin:{value:null,legacy:null},semantic:values[t.key.slot]};
+    });
+    const commit={schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      operation_id:prepared.id,lease_version:prepared.response.lease_version,mutation_id:plan.prepare.mutation_id,base:plan.prepare.base,
+      metadata_manifest_digest:prepared.digest,client_verified_ciphertext_manifest_digest:await Q().hashJson(terminalWork.bundle_metadata.ciphertext_manifest),
+      client_decryption_verified:true,target_epoch:plan.prepare.base.base.crypto_epoch};check();
+    return {transfers,commit,initial_analysis:{request,execution,work:terminalWork,plan,catalog}};
+  }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
     const tickets=new WeakMap();
@@ -3983,7 +4011,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,buildInitialWriteWork,createExecution});
 })();
 
 ;

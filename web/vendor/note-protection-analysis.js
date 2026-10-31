@@ -217,6 +217,26 @@
     }
     const metadata_manifest_digest=await Q().hashJson(manifest);check();return {metadata_manifest_digest,set_digests,counts};
   }
+  async function buildInitialWriteWork(scope,request,execution,terminalWork,plan,prepared,catalog,password,active=()=>true) {
+    scope=structuredClone(scope);request=structuredClone(request);execution=structuredClone(execution);terminalWork=structuredClone(terminalWork);plan=structuredClone(plan);prepared=structuredClone(prepared);catalog=structuredClone(catalog);
+    const check=()=>{if(active()!==true)fail('scope_changed');};check();
+    const verified=await validateInitialWriteManifest(scope,plan,execution,catalog,{...prepared.response.metadata_header,...prepared.manifest},active);check();
+    if(prepared.version!==3||prepared.path!=='/api/v2/notes/mixed-analysis-writes'||prepared.id!==execution.execution_id||prepared.digest!==verified.metadata_manifest_digest
+      ||prepared.response.operation_id!==prepared.id||prepared.response.mutation_id!==plan.prepare.mutation_id||!same(prepared.response.counts,verified.counts))fail('write_prepared');
+    integer(prepared.response.lease_version,1);
+    const values=await openTerminalBundle(scope,request,execution,terminalWork,password,active);check();
+    if(!same(plan.transfers,terminalWork.transfers)||!same(plan.prepare.bundle_metadata,terminalWork.bundle_metadata))fail('write_original_cipher');
+    const transfers=terminalWork.transfers.map(t=>{
+      const slot=execution.output_slots.find(s=>same(s.key,t.key)),record=terminalWork.bundle_metadata.ciphertext_manifest.find(c=>same(c.destination_key,t.key));
+      if(!slot||!record)fail('write_original_cipher');
+      return {key:t.key,raw:t.raw,descriptor:terminalDescriptor(execution,slot,record.ciphertext_sha256),origin:{value:null,legacy:null},semantic:values[t.key.slot]};
+    });
+    const commit={schema_version:3,owner_id:scope.owner,local_id:scope.local_id,device_id:scope.device,server_instance_id:scope.instance,
+      operation_id:prepared.id,lease_version:prepared.response.lease_version,mutation_id:plan.prepare.mutation_id,base:plan.prepare.base,
+      metadata_manifest_digest:prepared.digest,client_verified_ciphertext_manifest_digest:await Q().hashJson(terminalWork.bundle_metadata.ciphertext_manifest),
+      client_decryption_verified:true,target_epoch:plan.prepare.base.base.crypto_epoch};check();
+    return {transfers,commit,initial_analysis:{request,execution,work:terminalWork,plan,catalog}};
+  }
   function createExecution({context,journal,request,change=()=>{}}) {
     const P=()=>globalThis.NowNoteProtectionState;
     const tickets=new WeakMap();
@@ -474,5 +494,5 @@
       },
     };
   }
-  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,createExecution});
+  globalThis.NowNoteProtectionAnalysis=Object.freeze({validateRequest,validateExecution,validateBundle,buildTerminalBundle,openTerminalBundle,createInitialWritePlan,validateInitialWriteManifest,buildInitialWriteWork,createExecution});
 })();

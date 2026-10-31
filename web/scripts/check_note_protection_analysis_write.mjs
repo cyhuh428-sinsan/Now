@@ -44,12 +44,24 @@ console.log('MA initial plan/manifest: original settled TR/BM/C bytes/nulls, exa
 const names=['S','DSET','P','O','existing','verified_existing'],header=Object.fromEntries(Object.entries(manifest).filter(([k])=>!names.includes(k)));
 const operation={schema_version:3,purpose:plan.purpose,operation_id:settled.execution_id,mutation_id:uid(99),state:'prepared',lease_version:1,expires_at:running.expires_at,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:header,counts:verified.counts,receipt:null,latest_context:context};
 const originalExecution={reference:plan.prepare.execution_ref,source_schema_version:3,source_context:settled.source_context,terminal_receipt:settled.terminal_receipt,bundle_metadata:settled.bundle_metadata};
-let prepareCalls=0,exists=false,losePrepare=true;const transportCalls=[];
+let prepareCalls=0,exists=false,losePrepare=true;const transportCalls=[],uploads=new Map();
 const remote=box.NowNoteProtectionState.createRemote({request:async(s,path,method,body)=>{
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));transportCalls.push({path,method});
  if(path.endsWith('/status')){if(!exists)throw Object.assign(Error('not_found'),{status:404,code:'operation_not_found'});return {schema_version:3,status:'operation',operation:copy(operation),original_execution:copy(originalExecution)};}
  if(path.endsWith('/prepare')){prepareCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(plan.prepare));exists=true;if(losePrepare){losePrepare=false;throw Error('fixture_prepare_response_lost');}return copy(operation);}
  if(path.endsWith('/manifest')){assert.equal(body.operation_id,settled.execution_id);assert.equal(body.metadata_manifest_digest,verified.metadata_manifest_digest);return {schema_version:3,section:body.section,metadata_manifest_digest:verified.metadata_manifest_digest,metadata_header:copy(header),set_digests:copy(verified.set_digests),counts:copy(verified.counts),entries:copy(manifest[body.section]),next_cursor:null};}
+ if(path.endsWith('/chunks')){
+  const k=Q.canonicalJson(body.entry_key),entry=uploads.get(k)||{core:copy(body),chunks:[]};entry.chunks[body.chunk_index]=Buffer.from(body.data_base64,'base64');uploads.set(k,entry);
+  return {chunk_index:body.chunk_index,source_etag:body.source_etag};
+ }
+ if(path.endsWith('/entries/seal')){
+  const entry=uploads.get(Q.canonicalJson(body.entry_key));assert.ok(entry);entry.raw=Buffer.concat(entry.chunks);entry.hash=await Q.sha256(new Uint8Array(entry.raw));assert.equal(entry.hash,body.ciphertext_sha256);
+  return {sealed:true,ciphertext_sha256:entry.hash};
+ }
+ if(path.endsWith('/staged')){
+  const entry=uploads.get(Q.canonicalJson({kind:body.kind,id:body.representation_id,slot:body.slot}));assert.ok(entry?.raw);
+  return {chunk_index:body.chunk_index,total_chunks:entry.core.total_chunks,total_bytes:entry.raw.length,ciphertext_sha256:entry.hash,source_etag:entry.core.source_etag,data_base64:entry.chunks[body.chunk_index].toString('base64')};
+ }
  throw Error('unexpected_transport');
 }});
 await assert.rejects(()=>remote.prepareAnalysis(scope,plan,settled,catalog),/fixture_prepare_response_lost/);
@@ -59,3 +71,14 @@ assert.ok(Q.canonicalJson(prepared.manifest)===Q.canonicalJson(Object.fromEntrie
 console.log('MA prepare transport: original operation status before retry, no duplicate POST after lost response, exact six-page manifest PASS (synthetic HTTP; no server/journal/Provider)');
 const wrongRef=copy(plan);wrongRef.prepare.execution_ref.execution_id=uid(88);const beforeBadRequest=transportCalls.length;
 await assert.rejects(()=>remote.prepareAnalysis(scope,wrongRef,settled,catalog));assert.equal(transportCalls.length,beforeBadRequest,'wrong original execution must fail before any request');
+const publicationWork=await A.buildInitialWriteWork(scope,request,settled,work,plan,prepared,catalog,'fixture-key');
+assert.equal(Q.canonicalJson(publicationWork.transfers.map(t=>({key:t.key,raw:t.raw}))),Q.canonicalJson(work.transfers));
+assert.equal(publicationWork.transfers.find(t=>t.key.kind==='analysis_result').semantic,result);
+assert.equal(publicationWork.commit.target_epoch,1);assert.equal(publicationWork.commit.operation_id,settled.execution_id);
+assert.equal(publicationWork.commit.client_verified_ciphertext_manifest_digest,await Q.hashJson(work.bundle_metadata.ciphertext_manifest));
+await remote.stage(scope,prepared,publicationWork,'fixture-key');assert.equal(uploads.size,2);
+for(const t of work.transfers)assert.ok(uploads.get(Q.canonicalJson(t.key)).raw.toString('utf8')===t.raw,'staged bytes must equal original terminal ciphertext');
+const semanticTamper=copy(publicationWork);semanticTamper.transfers[0].semantic='altered';const puts=transportCalls.filter(c=>c.path.endsWith('/chunks')).length;
+await assert.rejects(()=>remote.stage(scope,prepared,semanticTamper,'fixture-key'),/output_semantic/);
+assert.equal(transportCalls.filter(c=>c.path.endsWith('/chunks')).length,puts);
+console.log('MA initial stage: original ciphertext uploads/readback and real decrypt/meaning before commit, null excluded, semantic tamper/no upload PASS (synthetic transport only)');
