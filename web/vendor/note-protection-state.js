@@ -337,6 +337,7 @@
     };
   }
   function createWrite(options) {return createMutation(options,'mixed_note_write');}
+  function createTranscript(options) {return createMutation(options,'mixed_transcript_write');}
   function createImport(options) {return createMutation(options,'mixed_offline_import');}
   function createMutation({context,journal,remote,capture,settle,apply,change=()=>{}},purpose) {
     let generation=0,running=false;
@@ -399,7 +400,7 @@
           const persist=()=>save(marker,b,password,ctx,epoch);
           if(marker.phase==='complete') return copy(b.receipt);
           if(marker.phase==='preparing') {
-            b.prepared=await remote[purpose==='mixed_offline_import'?'prepareImport':'prepareWrite'](copy(marker.scope),copy(b.intent));active(ctx,epoch);
+            b.prepared=await remote[purpose==='mixed_offline_import'?'prepareImport':purpose==='mixed_transcript_write'?'prepareTranscript':'prepareWrite'](copy(marker.scope),copy(b.intent));active(ctx,epoch);
             marker.phase='promoted';await persist();
           }
           if(marker.phase==='promoted') {
@@ -448,7 +449,7 @@
       if (b.owner_id !== s.owner || b.local_id !== s.local_id || b.device_id !== s.device || b.server_instance_id !== s.instance) fail('wire_scope');
     };
     async function pages(s,p) {
-      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
+      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import','mixed_analysis_write','mixed_transcript_write'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
       const result = {}; let header = null, setDigests = p.response.set_digests || null;
       for (const section of sections) {
         let cursor = null; const seen = new Set(), entries = [];
@@ -461,7 +462,7 @@
             if (page.schema_version !== 2 || !eq(page.metadata_context,p.response.metadata_context) || !eq(page.set_counts,p.response.set_counts)) fail('manifest_context');
             entries.push(...page.items);
           } else {
-            if (setDigests === null && ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
+            if (setDigests === null && ['mixed_note_write','mixed_offline_import','mixed_analysis_write','mixed_transcript_write'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
             if (page.schema_version !== 3 || page.section !== section || !eq(page.metadata_header,p.response.metadata_header)
               || !eq(page.set_digests,setDigests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
             header = page.metadata_header; entries.push(...page.entries);
@@ -486,10 +487,10 @@
       return result;
     }
     async function normalized(s,p,response,work) {
-      const analyzing=p.response.purpose==='mixed_analysis_write';
-      if(analyzing){
+      const analyzing=p.response.purpose==='mixed_analysis_write',transcript=p.response.purpose==='mixed_transcript_write';
+      if(analyzing||transcript){
         s=copy(s);p=copy(p);response=copy(response);work=copy(work);
-        if(Object.hasOwn(response,'status')){
+        if(analyzing&&Object.hasOwn(response,'status')){
           fields(response,['schema_version','status','operation','original_execution']);
           if(response.schema_version!==3||response.status!=='operation'||!eq(response.original_execution,p.original_execution))fail('analysis_original_execution');
           response=response.operation;
@@ -498,7 +499,7 @@
         if(response.metadata_manifest_digest!==p.digest||!eq(response.metadata_header,p.response.metadata_header)||!eq(response.counts,p.response.counts))fail('analysis_operation_changed');
       }
       const writing=p.response.purpose==='mixed_note_write';
-      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing||analyzing;
+      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing||analyzing||transcript;
       if ((response.operation_id || response.transition_id) !== p.id) fail('operation_identity');
       if(mutation && (response.schema_version!==3 || response.purpose!==p.response.purpose || response.mutation_id!==p.response.mutation_id)) fail('receipt_identity');
       if (response.state === 'committed') {
@@ -512,7 +513,7 @@
           for(const name of ['S','DSET','P','O','existing','verified_existing']) {
             if(r.set_digests?.[name]!==await protocol().hashJson(p.manifest[name])) fail('receipt_manifest');
           }
-          if(analyzing){
+          if(analyzing||transcript){
             fields(r,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);
             fields(r.set_digests,['S','DSET','P','O','existing','verified_existing']);
             const expected=copy(p.response.metadata_header.base);expected.base.history_generation++;
@@ -572,7 +573,7 @@
         } while (cursor !== null);
         const actual = await protocol().verifyCatalog(received,{ schema_version:p.version === 3 ? 3 : 2,
           server_instance_id:s.instance, owner_id:s.owner,local_id:s.local_id,device_id:s.device,context,catalog_digest:digest });
-        if(importing||analyzing) {
+        if(importing||analyzing||transcript) {
           if(actual.length!==p.manifest.P.length+p.manifest.DSET.length
             || p.manifest.P.some(old=>!actual.some(d=>eq(d,old)))) fail('import_published_preserved');
           for(const output of p.manifest.DSET) {
@@ -588,6 +589,7 @@
           if (!d || d.representation_kind !== output.output_kind || d.representation_epoch !== output.output_epoch || d.is_null !== output.is_null
             || !eq(d.expected_binding,output.expected_binding)) fail('published_representation_changed');
           if (p.version === 3 && d.storage_operation_id !== p.id) fail('published_origin_changed');
+          if (transcript && d.linked_slot_version !== p.response.metadata_header.control.expected_descriptor.linked_slot_version+1) fail('transcript_slot_version');
           const t = work?.transfers.find(t => eq(t.key,d.key));
           if (!output.is_null && output.output_epoch > 0 && (!t || d.ciphertext_sha256 !== t.descriptor.ciphertext_sha256)) fail('published_cipher_changed');
         }
@@ -770,6 +772,24 @@
         if(!eq(m.DSET,expectedOutputs) || !eq(m.O,orderedO) || !eq(m.existing,expectedExisting) || !eq(m.verified_existing,expectedProof)) fail('import_manifest_sets');
         return p;
       },
+      async prepareTranscript(s,intent) {
+        s=copy(s);validateScope(s);const i=copy(intent);
+        if(i.schema_version!==3 || i.purpose!=='mixed_transcript_write') fail('prepare_schema');
+        fields(i.prepare,['mutation_id','base','expected_catalog_digest','recording_id','expected_descriptor','is_null']);
+        const a=i.prepare,d=protocol().validateDescriptor(a.expected_descriptor,3);protocol().validateContext(a.base);
+        if(!Number.isSafeInteger(a.recording_id)||a.recording_id<1||a.recording_id>2147483647||typeof a.is_null!=='boolean'
+          ||d.key.kind!=='recording_transcript'||d.key.id!==String(a.recording_id)||a.base.base.crypto_epoch<1)fail('transcript_prepare');
+        const body={...access(s,3),...a};ensureScope(s,body);
+        const path='/api/v2/notes/mixed-transcript-writes',r=await request(s,path+'/prepare','POST',body),h=r.metadata_header;
+        if(r.schema_version!==3||r.purpose!==i.purpose||!r.operation_id||r.mutation_id!==a.mutation_id
+          ||h?.operation_id!==r.operation_id||h.mutation_id!==a.mutation_id||h.owner_id!==s.owner||h.local_id!==s.local_id
+          ||h.actor_device_id!==s.device||h.server_instance_id!==s.instance||!eq(h.base,a.base)
+          ||h.source_catalog_digest!==a.expected_catalog_digest||h.target_epoch!==a.base.base.crypto_epoch
+          ||!eq(h.control,{recording_id:a.recording_id,expected_descriptor:d,is_null:a.is_null})
+          ||!eq(h.operation_origin,{purpose:i.purpose,operation_id:r.operation_id,recording_id:a.recording_id,previous_descriptor:d}))fail('transcript_identity');
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r};
+        p.manifest=await pages(s,p);return p;
+      },
       async prepareWrite(s,intent) {
         s=copy(s);
         const i=copy(intent);
@@ -932,8 +952,8 @@
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
       async stage(s,p,work,password,localStores = [],resolveKey,analysisOriginalPassword) {
-        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
-        if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
+        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write',transcript=p.response.purpose==='mixed_transcript_write';
+        if(importing||analyzing||transcript) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
         const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
@@ -957,6 +977,8 @@
           }
         }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
+        if(transcript && ((work.transcript!==null&&typeof work.transcript!=='string')
+          || (work.transcript===null)!==p.response.metadata_header.control.is_null || work.commit.target_epoch!==p.response.metadata_header.target_epoch))fail('transcript_meaning');
         const imported=new Map();
         if(importing) {
           const entries=p.response.metadata_header.control.entries,branches=work.branches;
@@ -1030,7 +1052,8 @@
           const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          const expected=analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+          if(transcript && !eq(t.origin,{value:p.response.metadata_header.operation_origin,legacy:null}))fail('transcript_origin');
+          const expected=transcript ? work.transcript : analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
             : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
           if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -1073,5 +1096,5 @@
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
 })();

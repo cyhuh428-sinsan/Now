@@ -287,6 +287,72 @@
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true,projection,
       plain_after:afterOutput.output_epoch===0?clone(after.note):null,plain_before:!previous.is_null&&previous.output_epoch===0?clone(before.note):null}};
   }
+  async function planTranscript(scope,catalog,descriptor,value,sourceOrigins=[]) {
+    scope=clone(scope);catalog=clone(catalog);descriptor=clone(descriptor);P().validateScope(scope);
+    Q().validateContext(catalog.context);Q().validateDescriptor(descriptor,3);
+    if(value!==null && typeof value!=='string') fail('transcript_value');
+    const id=Number(descriptor.key.id);
+    if(descriptor.key.kind!=='recording_transcript' || !Number.isSafeInteger(id) || id<1 || id>2147483647
+      || descriptor.linked_slot_version===null || catalog.context.base.crypto_epoch<1
+      || !catalog.entries.some(d=>eq(d,descriptor))) fail('transcript_source');
+    catalog.entries.forEach(d=>Q().validateDescriptor(d,3));
+    if(!eq(Q().keyOrder(catalog.entries.map(d=>d.key)),catalog.entries.map(d=>d.key))
+      || await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,
+        context:catalog.context,entries:catalog.entries})!==catalog.catalog_digest) fail('transcript_catalog');
+    return {schema_version:3,purpose:'mixed_transcript_write',catalog,transcript:value,source_origins:clone(sourceOrigins),prepare:{mutation_id:crypto.randomUUID(),
+      base:clone(catalog.context),expected_catalog_digest:catalog.catalog_digest,recording_id:id,expected_descriptor:descriptor,is_null:value===null}};
+  }
+  async function buildTranscriptWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
+    scope=clone(scope);const p=clone(prepared),i=clone(intent),h=p.response?.metadata_header,m=p.manifest,a=i.prepare;
+    if(p.version!==3 || i.schema_version!==3 || i.purpose!=='mixed_transcript_write' || h?.purpose!==i.purpose) fail('transcript_purpose');
+    const planned=await planTranscript(scope,i.catalog,a.expected_descriptor,i.transcript,i.source_origins||[]);
+    if(!eq({...planned.prepare,mutation_id:a.mutation_id},a)) fail('transcript_prepare');
+    const control={recording_id:a.recording_id,expected_descriptor:a.expected_descriptor,is_null:a.is_null};
+    const origin={purpose:i.purpose,operation_id:p.id,recording_id:a.recording_id,previous_descriptor:a.expected_descriptor};
+    if(h.operation_id!==p.id || h.owner_id!==scope.owner || h.local_id!==scope.local_id || h.server_instance_id!==scope.instance
+      || h.actor_device_id!==scope.device || h.mutation_id!==a.mutation_id || !eq(h.base,a.base)
+      || h.source_catalog_digest!==a.expected_catalog_digest || h.target_epoch!==a.base.base.crypto_epoch
+      || h.revision_ref!==null || h.parent_ref!==null || h.server_fields!==null || !eq(h.control,control)
+      || !eq(h.operation_origin,origin)) fail('transcript_binding');
+    const key=a.expected_descriptor.key,preserved=i.catalog.entries.filter(d=>!eq(d.key,key));
+    if(!eq(Object.keys(m).sort(),['S','DSET','P','O','existing','verified_existing'].sort())
+      || m.S.length!==1 || !eq(m.S[0].descriptor,a.expected_descriptor) || m.DSET.length!==1
+      || !eq(m.P,preserved) || m.existing.length || m.verified_existing.length) fail('transcript_manifest');
+    const d=Q().validateDestination(m.DSET[0],i.purpose),token=m.S[0].source_etag;
+    const binding={server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,transition_id:p.id,
+      crypto_epoch:h.target_epoch,destination_key:key,revision_ref:null,parent_ref:null};
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(token)
+      || token===d.source_etag || !eq(d.destination_key,key) || !eq(d.source_keys,[key])
+      || d.output_kind!=='linked_text_envelope_v1' || d.output_epoch!==h.target_epoch || d.is_null!==a.is_null
+      || !eq(d.expected_binding,a.is_null?null:binding)) fail('transcript_destination');
+    const originFields=['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'];
+    const expectedO=preserved.map(v=>({destination_key:v.key,...Object.fromEntries(originFields.map(k=>[k,v[k]]))}));
+    expectedO.push({destination_key:key,is_null:a.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:p.id,semantic_origin_id:p.id});
+    const orderedO=Q().keyOrder(expectedO.map(o=>o.destination_key)).map(k=>expectedO.find(o=>eq(o.destination_key,k)));
+    if(!eq(m.O,orderedO) || await Q().hashJson({...h,...m})!==p.digest) fail('transcript_origin');
+    const sources=await remote.readSources(scope,p,password,localStores,resolveKey,i.source_origins||[]);
+    if(sources.length!==1 || !eq(sources[0].key,key) || (sources[0].value!==null && typeof sources[0].value!=='string')
+      || a.expected_descriptor.is_null!==(sources[0].value===null)) fail('transcript_source');
+    const transfers=[],records=[];
+    if(!a.is_null) {
+      const resolve=resolveKey||(async()=>password),outputKey=()=>resolve({key,representation_epoch:h.target_epoch,output:true});
+      const raw=await Q().encryptRepresentation(i.transcript,{key,output_kind:d.output_kind,output_epoch:d.output_epoch,is_null:false,
+        expected_binding:d.expected_binding,operation_origin:origin},await outputKey());
+      const hash=await Q().sha256(raw),descriptor={key,representation_kind:d.output_kind,representation_epoch:d.output_epoch,is_null:false,
+        representation_version:1,representation_etag:d.source_etag,storage_operation_id:p.id,semantic_origin_id:p.id,
+        origin_validator:'linked_mixed_v1',origin_row_required:false,expected_binding:d.expected_binding,revision_ref:null,parent_ref:null,
+        physical_note_id:null,inventory_revision_id:null,linked_slot_version:a.expected_descriptor.linked_slot_version+1,ciphertext_sha256:hash};
+      Q().validateDescriptor(descriptor,3);
+      const verifiedOrigin={value:origin,legacy:null};
+      if(!eq(await Q().decryptRepresentation(raw,descriptor,verifiedOrigin,outputKey,3),i.transcript)) fail('transcript_output');
+      transfers.push({key,raw,descriptor,origin:verifiedOrigin,semantic:i.transcript});
+      records.push({entry_key:key,destination_key:key,source_etag:d.source_etag,output_kind:d.output_kind,target_epoch:d.output_epoch,
+        total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
+    }
+    return {transcript:i.transcript,transfers,source_origins:clone(i.source_origins||[]),commit:{...access(scope),operation_id:p.id,mutation_id:a.mutation_id,
+      lease_version:p.response.lease_version,base:clone(a.base),target_epoch:h.target_epoch,metadata_manifest_digest:p.digest,
+      client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true}};
+  }
   async function buildImportWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
     scope=clone(scope);const p=clone(prepared),i=clone(intent),m=p.manifest,h=p.response.metadata_header;
     if(i.schema_version!==3 || i.purpose!=='mixed_offline_import' || h.purpose!==i.purpose || h.operation_id!==p.id
@@ -539,5 +605,5 @@
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,planTranscript,buildTranscriptWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
 })();

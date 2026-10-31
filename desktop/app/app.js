@@ -2302,6 +2302,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     };
   }
   function createWrite(options) {return createMutation(options,'mixed_note_write');}
+  function createTranscript(options) {return createMutation(options,'mixed_transcript_write');}
   function createImport(options) {return createMutation(options,'mixed_offline_import');}
   function createMutation({context,journal,remote,capture,settle,apply,change=()=>{}},purpose) {
     let generation=0,running=false;
@@ -2364,7 +2365,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const persist=()=>save(marker,b,password,ctx,epoch);
           if(marker.phase==='complete') return copy(b.receipt);
           if(marker.phase==='preparing') {
-            b.prepared=await remote[purpose==='mixed_offline_import'?'prepareImport':'prepareWrite'](copy(marker.scope),copy(b.intent));active(ctx,epoch);
+            b.prepared=await remote[purpose==='mixed_offline_import'?'prepareImport':purpose==='mixed_transcript_write'?'prepareTranscript':'prepareWrite'](copy(marker.scope),copy(b.intent));active(ctx,epoch);
             marker.phase='promoted';await persist();
           }
           if(marker.phase==='promoted') {
@@ -2413,7 +2414,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       if (b.owner_id !== s.owner || b.local_id !== s.local_id || b.device_id !== s.device || b.server_instance_id !== s.instance) fail('wire_scope');
     };
     async function pages(s,p) {
-      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
+      const sections = p.version === 2 ? [null] : ['mixed_note_write','mixed_offline_import','mixed_analysis_write','mixed_transcript_write'].includes(p.response.purpose) ? ['S','DSET','P','O','existing','verified_existing'] : ['S','DSET','P','O'];
       const result = {}; let header = null, setDigests = p.response.set_digests || null;
       for (const section of sections) {
         let cursor = null; const seen = new Set(), entries = [];
@@ -2426,7 +2427,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             if (page.schema_version !== 2 || !eq(page.metadata_context,p.response.metadata_context) || !eq(page.set_counts,p.response.set_counts)) fail('manifest_context');
             entries.push(...page.items);
           } else {
-            if (setDigests === null && ['mixed_note_write','mixed_offline_import','mixed_analysis_write'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
+            if (setDigests === null && ['mixed_note_write','mixed_offline_import','mixed_analysis_write','mixed_transcript_write'].includes(p.response.purpose)) setDigests = copy(page.set_digests);
             if (page.schema_version !== 3 || page.section !== section || !eq(page.metadata_header,p.response.metadata_header)
               || !eq(page.set_digests,setDigests) || !eq(page.counts,p.response.counts)) fail('manifest_context');
             header = page.metadata_header; entries.push(...page.entries);
@@ -2451,10 +2452,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       return result;
     }
     async function normalized(s,p,response,work) {
-      const analyzing=p.response.purpose==='mixed_analysis_write';
-      if(analyzing){
+      const analyzing=p.response.purpose==='mixed_analysis_write',transcript=p.response.purpose==='mixed_transcript_write';
+      if(analyzing||transcript){
         s=copy(s);p=copy(p);response=copy(response);work=copy(work);
-        if(Object.hasOwn(response,'status')){
+        if(analyzing&&Object.hasOwn(response,'status')){
           fields(response,['schema_version','status','operation','original_execution']);
           if(response.schema_version!==3||response.status!=='operation'||!eq(response.original_execution,p.original_execution))fail('analysis_original_execution');
           response=response.operation;
@@ -2463,7 +2464,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(response.metadata_manifest_digest!==p.digest||!eq(response.metadata_header,p.response.metadata_header)||!eq(response.counts,p.response.counts))fail('analysis_operation_changed');
       }
       const writing=p.response.purpose==='mixed_note_write';
-      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing||analyzing;
+      const importing=p.response.purpose==='mixed_offline_import',mutation=writing||importing||analyzing||transcript;
       if ((response.operation_id || response.transition_id) !== p.id) fail('operation_identity');
       if(mutation && (response.schema_version!==3 || response.purpose!==p.response.purpose || response.mutation_id!==p.response.mutation_id)) fail('receipt_identity');
       if (response.state === 'committed') {
@@ -2477,7 +2478,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           for(const name of ['S','DSET','P','O','existing','verified_existing']) {
             if(r.set_digests?.[name]!==await protocol().hashJson(p.manifest[name])) fail('receipt_manifest');
           }
-          if(analyzing){
+          if(analyzing||transcript){
             fields(r,['schema_version','purpose','operation_id','mutation_id','server_instance_id','owner_id','local_id','result','metadata_manifest_digest','set_digests','ciphertext_manifest_digest','origin_expectations_digest','committed_at']);
             fields(r.set_digests,['S','DSET','P','O','existing','verified_existing']);
             const expected=copy(p.response.metadata_header.base);expected.base.history_generation++;
@@ -2537,7 +2538,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         } while (cursor !== null);
         const actual = await protocol().verifyCatalog(received,{ schema_version:p.version === 3 ? 3 : 2,
           server_instance_id:s.instance, owner_id:s.owner,local_id:s.local_id,device_id:s.device,context,catalog_digest:digest });
-        if(importing||analyzing) {
+        if(importing||analyzing||transcript) {
           if(actual.length!==p.manifest.P.length+p.manifest.DSET.length
             || p.manifest.P.some(old=>!actual.some(d=>eq(d,old)))) fail('import_published_preserved');
           for(const output of p.manifest.DSET) {
@@ -2553,6 +2554,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           if (!d || d.representation_kind !== output.output_kind || d.representation_epoch !== output.output_epoch || d.is_null !== output.is_null
             || !eq(d.expected_binding,output.expected_binding)) fail('published_representation_changed');
           if (p.version === 3 && d.storage_operation_id !== p.id) fail('published_origin_changed');
+          if (transcript && d.linked_slot_version !== p.response.metadata_header.control.expected_descriptor.linked_slot_version+1) fail('transcript_slot_version');
           const t = work?.transfers.find(t => eq(t.key,d.key));
           if (!output.is_null && output.output_epoch > 0 && (!t || d.ciphertext_sha256 !== t.descriptor.ciphertext_sha256)) fail('published_cipher_changed');
         }
@@ -2735,6 +2737,24 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         if(!eq(m.DSET,expectedOutputs) || !eq(m.O,orderedO) || !eq(m.existing,expectedExisting) || !eq(m.verified_existing,expectedProof)) fail('import_manifest_sets');
         return p;
       },
+      async prepareTranscript(s,intent) {
+        s=copy(s);validateScope(s);const i=copy(intent);
+        if(i.schema_version!==3 || i.purpose!=='mixed_transcript_write') fail('prepare_schema');
+        fields(i.prepare,['mutation_id','base','expected_catalog_digest','recording_id','expected_descriptor','is_null']);
+        const a=i.prepare,d=protocol().validateDescriptor(a.expected_descriptor,3);protocol().validateContext(a.base);
+        if(!Number.isSafeInteger(a.recording_id)||a.recording_id<1||a.recording_id>2147483647||typeof a.is_null!=='boolean'
+          ||d.key.kind!=='recording_transcript'||d.key.id!==String(a.recording_id)||a.base.base.crypto_epoch<1)fail('transcript_prepare');
+        const body={...access(s,3),...a};ensureScope(s,body);
+        const path='/api/v2/notes/mixed-transcript-writes',r=await request(s,path+'/prepare','POST',body),h=r.metadata_header;
+        if(r.schema_version!==3||r.purpose!==i.purpose||!r.operation_id||r.mutation_id!==a.mutation_id
+          ||h?.operation_id!==r.operation_id||h.mutation_id!==a.mutation_id||h.owner_id!==s.owner||h.local_id!==s.local_id
+          ||h.actor_device_id!==s.device||h.server_instance_id!==s.instance||!eq(h.base,a.base)
+          ||h.source_catalog_digest!==a.expected_catalog_digest||h.target_epoch!==a.base.base.crypto_epoch
+          ||!eq(h.control,{recording_id:a.recording_id,expected_descriptor:d,is_null:a.is_null})
+          ||!eq(h.operation_origin,{purpose:i.purpose,operation_id:r.operation_id,recording_id:a.recording_id,previous_descriptor:d}))fail('transcript_identity');
+        const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r};
+        p.manifest=await pages(s,p);return p;
+      },
       async prepareWrite(s,intent) {
         s=copy(s);
         const i=copy(intent);
@@ -2897,8 +2917,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
         return [...meaning].map(([key,value]) => ({key:JSON.parse(key),value}));
       },
       async stage(s,p,work,password,localStores = [],resolveKey,analysisOriginalPassword) {
-        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write';
-        if(importing||analyzing) {s=copy(s);p=copy(p);work=copy(work);}
+        const importing=p.response.purpose==='mixed_offline_import',analyzing=p.response.purpose==='mixed_analysis_write',transcript=p.response.purpose==='mixed_transcript_write';
+        if(importing||analyzing||transcript) {s=copy(s);p=copy(p);work=copy(work);}
         const fixed = await pages(s,p);
         if (!eq(fixed,p.manifest) || !Array.isArray(work.transfers)) fail('manifest_changed');
         const destinations = p.version === 3 ? fixed.DSET.filter(d => !d.is_null && d.output_epoch > 0) : fixed.entries;
@@ -2922,6 +2942,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           }
         }
         const writing=p.response.metadata_header?.purpose==='mixed_note_write';
+        if(transcript && ((work.transcript!==null&&typeof work.transcript!=='string')
+          || (work.transcript===null)!==p.response.metadata_header.control.is_null || work.commit.target_epoch!==p.response.metadata_header.target_epoch))fail('transcript_meaning');
         const imported=new Map();
         if(importing) {
           const entries=p.response.metadata_header.control.entries,branches=work.branches;
@@ -2995,7 +3017,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           const outputKey = descriptor => resolve({...descriptor,output:p.response.metadata_header?.purpose !== 'current_plain_transition' && !(writing && key.kind==='revision_before')});
           const plain = await protocol().decryptRepresentation(t.raw,t.descriptor,t.origin,outputKey,3);
           const keys = p.version === 3 ? d.source_keys : [d.key];
-          const expected=analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
+          if(transcript && !eq(t.origin,{value:p.response.metadata_header.operation_origin,legacy:null}))fail('transcript_origin');
+          const expected=transcript ? work.transcript : analyzing ? initialMeaning[key.slot] : importing ? imported.get(key.id) : writing && key.kind!=='revision_before' ? key.kind==='note_body'?after.note.content:after
             : keys.length===1 && meaning.has(json(keys[0])) ? meaning.get(json(keys[0])) : undefined;
           if (expected===undefined || !semanticEq(plain,expected) || !semanticEq(plain,t.semantic)) fail('output_semantic');
           const data = new TextEncoder().encode(t.raw), hash = await protocol().sha256(data), total = Math.ceil(data.length / 262144);
@@ -3038,7 +3061,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     };
     return transport;
   }
-  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
+  globalThis.NowNoteProtectionState = Object.freeze({ create,createWrite,createTranscript,createImport,createRemote,inventory,validateScope,validateMarker,protectedRecord,scopeKey });
 })();
 
 ;
@@ -3331,6 +3354,72 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
       client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true,projection,
       plain_after:afterOutput.output_epoch===0?clone(after.note):null,plain_before:!previous.is_null&&previous.output_epoch===0?clone(before.note):null}};
   }
+  async function planTranscript(scope,catalog,descriptor,value,sourceOrigins=[]) {
+    scope=clone(scope);catalog=clone(catalog);descriptor=clone(descriptor);P().validateScope(scope);
+    Q().validateContext(catalog.context);Q().validateDescriptor(descriptor,3);
+    if(value!==null && typeof value!=='string') fail('transcript_value');
+    const id=Number(descriptor.key.id);
+    if(descriptor.key.kind!=='recording_transcript' || !Number.isSafeInteger(id) || id<1 || id>2147483647
+      || descriptor.linked_slot_version===null || catalog.context.base.crypto_epoch<1
+      || !catalog.entries.some(d=>eq(d,descriptor))) fail('transcript_source');
+    catalog.entries.forEach(d=>Q().validateDescriptor(d,3));
+    if(!eq(Q().keyOrder(catalog.entries.map(d=>d.key)),catalog.entries.map(d=>d.key))
+      || await Q().hashJson({server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,
+        context:catalog.context,entries:catalog.entries})!==catalog.catalog_digest) fail('transcript_catalog');
+    return {schema_version:3,purpose:'mixed_transcript_write',catalog,transcript:value,source_origins:clone(sourceOrigins),prepare:{mutation_id:crypto.randomUUID(),
+      base:clone(catalog.context),expected_catalog_digest:catalog.catalog_digest,recording_id:id,expected_descriptor:descriptor,is_null:value===null}};
+  }
+  async function buildTranscriptWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
+    scope=clone(scope);const p=clone(prepared),i=clone(intent),h=p.response?.metadata_header,m=p.manifest,a=i.prepare;
+    if(p.version!==3 || i.schema_version!==3 || i.purpose!=='mixed_transcript_write' || h?.purpose!==i.purpose) fail('transcript_purpose');
+    const planned=await planTranscript(scope,i.catalog,a.expected_descriptor,i.transcript,i.source_origins||[]);
+    if(!eq({...planned.prepare,mutation_id:a.mutation_id},a)) fail('transcript_prepare');
+    const control={recording_id:a.recording_id,expected_descriptor:a.expected_descriptor,is_null:a.is_null};
+    const origin={purpose:i.purpose,operation_id:p.id,recording_id:a.recording_id,previous_descriptor:a.expected_descriptor};
+    if(h.operation_id!==p.id || h.owner_id!==scope.owner || h.local_id!==scope.local_id || h.server_instance_id!==scope.instance
+      || h.actor_device_id!==scope.device || h.mutation_id!==a.mutation_id || !eq(h.base,a.base)
+      || h.source_catalog_digest!==a.expected_catalog_digest || h.target_epoch!==a.base.base.crypto_epoch
+      || h.revision_ref!==null || h.parent_ref!==null || h.server_fields!==null || !eq(h.control,control)
+      || !eq(h.operation_origin,origin)) fail('transcript_binding');
+    const key=a.expected_descriptor.key,preserved=i.catalog.entries.filter(d=>!eq(d.key,key));
+    if(!eq(Object.keys(m).sort(),['S','DSET','P','O','existing','verified_existing'].sort())
+      || m.S.length!==1 || !eq(m.S[0].descriptor,a.expected_descriptor) || m.DSET.length!==1
+      || !eq(m.P,preserved) || m.existing.length || m.verified_existing.length) fail('transcript_manifest');
+    const d=Q().validateDestination(m.DSET[0],i.purpose),token=m.S[0].source_etag;
+    const binding={server_instance_id:scope.instance,owner_id:scope.owner,local_id:scope.local_id,transition_id:p.id,
+      crypto_epoch:h.target_epoch,destination_key:key,revision_ref:null,parent_ref:null};
+    if(!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(token)
+      || token===d.source_etag || !eq(d.destination_key,key) || !eq(d.source_keys,[key])
+      || d.output_kind!=='linked_text_envelope_v1' || d.output_epoch!==h.target_epoch || d.is_null!==a.is_null
+      || !eq(d.expected_binding,a.is_null?null:binding)) fail('transcript_destination');
+    const originFields=['is_null','origin_validator','origin_row_required','storage_operation_id','semantic_origin_id'];
+    const expectedO=preserved.map(v=>({destination_key:v.key,...Object.fromEntries(originFields.map(k=>[k,v[k]]))}));
+    expectedO.push({destination_key:key,is_null:a.is_null,origin_validator:'linked_mixed_v1',origin_row_required:false,storage_operation_id:p.id,semantic_origin_id:p.id});
+    const orderedO=Q().keyOrder(expectedO.map(o=>o.destination_key)).map(k=>expectedO.find(o=>eq(o.destination_key,k)));
+    if(!eq(m.O,orderedO) || await Q().hashJson({...h,...m})!==p.digest) fail('transcript_origin');
+    const sources=await remote.readSources(scope,p,password,localStores,resolveKey,i.source_origins||[]);
+    if(sources.length!==1 || !eq(sources[0].key,key) || (sources[0].value!==null && typeof sources[0].value!=='string')
+      || a.expected_descriptor.is_null!==(sources[0].value===null)) fail('transcript_source');
+    const transfers=[],records=[];
+    if(!a.is_null) {
+      const resolve=resolveKey||(async()=>password),outputKey=()=>resolve({key,representation_epoch:h.target_epoch,output:true});
+      const raw=await Q().encryptRepresentation(i.transcript,{key,output_kind:d.output_kind,output_epoch:d.output_epoch,is_null:false,
+        expected_binding:d.expected_binding,operation_origin:origin},await outputKey());
+      const hash=await Q().sha256(raw),descriptor={key,representation_kind:d.output_kind,representation_epoch:d.output_epoch,is_null:false,
+        representation_version:1,representation_etag:d.source_etag,storage_operation_id:p.id,semantic_origin_id:p.id,
+        origin_validator:'linked_mixed_v1',origin_row_required:false,expected_binding:d.expected_binding,revision_ref:null,parent_ref:null,
+        physical_note_id:null,inventory_revision_id:null,linked_slot_version:a.expected_descriptor.linked_slot_version+1,ciphertext_sha256:hash};
+      Q().validateDescriptor(descriptor,3);
+      const verifiedOrigin={value:origin,legacy:null};
+      if(!eq(await Q().decryptRepresentation(raw,descriptor,verifiedOrigin,outputKey,3),i.transcript)) fail('transcript_output');
+      transfers.push({key,raw,descriptor,origin:verifiedOrigin,semantic:i.transcript});
+      records.push({entry_key:key,destination_key:key,source_etag:d.source_etag,output_kind:d.output_kind,target_epoch:d.output_epoch,
+        total_bytes:new TextEncoder().encode(raw).length,ciphertext_sha256:hash});
+    }
+    return {transcript:i.transcript,transfers,source_origins:clone(i.source_origins||[]),commit:{...access(scope),operation_id:p.id,mutation_id:a.mutation_id,
+      lease_version:p.response.lease_version,base:clone(a.base),target_epoch:h.target_epoch,metadata_manifest_digest:p.digest,
+      client_verified_ciphertext_manifest_digest:await Q().hashJson(records),client_decryption_verified:true}};
+  }
   async function buildImportWork(scope,prepared,intent,password,remote,localStores=[],resolveKey) {
     scope=clone(scope);const p=clone(prepared),i=clone(intent),m=p.manifest,h=p.response.metadata_header;
     if(i.schema_version!==3 || i.purpose!=='mixed_offline_import' || h.purpose!==i.purpose || h.operation_id!==p.id
@@ -3583,7 +3672,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     } else fail('work_purpose');
     return {schema_version:3,purpose,drain,prepare,source_origins:clone(sourceOrigins)};
   }
-  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
+  globalThis.NowNoteProtectionClient = Object.freeze({create,buildWork,buildWriteWork,planTranscript,buildTranscriptWork,buildImportWork,planImport,settleImportJournal,settlePendingWrite,createReader,plan});
 })();
 
 ;
