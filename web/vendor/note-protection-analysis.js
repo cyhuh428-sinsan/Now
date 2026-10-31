@@ -110,7 +110,7 @@
     async function save(marker,bundle,password,c,epoch) {
       active(marker.scope,c,epoch);
       marker.cipher_bundle=await Q().encryptContent(Q().canonicalJson(bundle),password);active(marker.scope,c,epoch);
-      P().validateMarker(marker);await journal.saveProtection(structuredClone(marker));active(marker.scope,c,epoch);
+      P().validateMarker(marker);await journal.saveProtection(structuredClone(marker),{active:()=>{active(marker.scope,c,epoch);return true;}});active(marker.scope,c,epoch);
       if(!same(status(marker.id),marker))fail('marker_readback');change();
     }
     function validateRoute(route) {

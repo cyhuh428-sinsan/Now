@@ -1232,14 +1232,21 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
       blocked,
       protectionOperations: () => copy(data?.protection_operations || {}),
-      async saveProtection(marker) {
+      async saveProtection(marker, guard = null) {
+        guard?.active?.();
         requireWritable(); globalThis.NowNoteProtectionState.validateMarker(marker);
         if (marker.scope.owner !== context().owner || marker.scope.url.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) throw new Error('보호 원장의 소유자가 다릅니다.');
-        const source = data, epoch = generation, ctx = { ...context() }, previous = copy(data.protection_operations || {});
+        const source = data, epoch = generation, ctx = { ...context() }, hadOperations = Object.hasOwn(data,'protection_operations');
+        const hadMarker = Object.hasOwn(data.protection_operations || {},marker.id);
+        const previous = hadMarker ? copy(data.protection_operations[marker.id]) : null;
         data.protection_operations ||= {}; data.protection_operations[marker.id] = copy(marker);
         const assigned = data.protection_operations[marker.id];
-        try { await save(true); } catch (error) {
-          if (data === source && active(ctx,epoch) && data.protection_operations[marker.id] === assigned) data.protection_operations = previous;
+        try { await save(true,guard); } catch (error) {
+          if (data === source && active(ctx,epoch) && data.protection_operations[marker.id] === assigned) {
+            if (hadMarker) data.protection_operations[marker.id] = previous;
+            else delete data.protection_operations[marker.id];
+            if (!hadOperations && !Object.keys(data.protection_operations).length) delete data.protection_operations;
+          }
           throw error;
         }
       },
@@ -2154,7 +2161,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     async function save(m,bundle,password,ctx,generation) {
       active(ctx,generation);
       m.cipher_bundle = await protocol().encryptContent(json(bundle),password); active(ctx,generation);
-      validateMarker(m); await journal.saveProtection(m); active(ctx,generation);
+      validateMarker(m); await journal.saveProtection(m,{active:()=>{active(ctx,generation);return true;}}); active(ctx,generation);
       if (!eq(status(m.id),m)) fail('marker_readback'); change();
     }
     async function open(m,password) {
@@ -2324,7 +2331,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     async function save(marker,bundle,password,ctx,epoch) {
       active(ctx,epoch);
       marker.cipher_bundle=await protocol().encryptContent(json(bundle),password);active(ctx,epoch);
-      validateMarker(marker);await journal.saveProtection(copy(marker));active(ctx,epoch);
+      validateMarker(marker);await journal.saveProtection(copy(marker),{active:()=>active(ctx,epoch)});active(ctx,epoch);
       if(!same(status(marker.id),marker)) fail('marker_readback');change();
     }
     async function open(marker,password) {
@@ -3580,7 +3587,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     async function save(marker,bundle,password,c,epoch) {
       active(marker.scope,c,epoch);
       marker.cipher_bundle=await Q().encryptContent(Q().canonicalJson(bundle),password);active(marker.scope,c,epoch);
-      P().validateMarker(marker);await journal.saveProtection(structuredClone(marker));active(marker.scope,c,epoch);
+      P().validateMarker(marker);await journal.saveProtection(structuredClone(marker),{active:()=>{active(marker.scope,c,epoch);return true;}});active(marker.scope,c,epoch);
       if(!same(status(marker.id),marker))fail('marker_readback');change();
     }
     function validateRoute(route) {

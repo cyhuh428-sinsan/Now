@@ -100,4 +100,16 @@ const late=execution.resumeClaim(second,'synthetic');
 await new Promise(r=>setTimeout(r,10));execution.invalidate();release();
 await assert.rejects(()=>late,/scope_changed/);
 assert.equal(execution.status(second).phase,'analysis_claiming');
+let enteredWrite,releaseWrite;
+const entered=new Promise(r=>{enteredWrite=r;}),writeGate=new Promise(r=>{releaseWrite=r;});
+const before={schema_version:1,contexts:{}};let disk=copy(before);
+const delayed=box.NowNoteHistory.create({initial:before,context:()=>({...context,online:false}),request:async()=>{},write:async(value,guard)=>{
+  enteredWrite();await writeGate;if(!guard.active())throw Error('cancelled_before_disk');disk=copy(value);
+}});
+const queued=A.createExecution({context:()=>context,journal:delayed,request:async()=>{throw Error('unexpected_request');}});
+const storing=queued.start(scope,request,input,route,'synthetic');
+const rejected=assert.rejects(()=>storing,/scope_changed|cancelled|인증/);
+await entered;queued.invalidate();releaseWrite();await rejected;
+assert.equal(JSON.stringify(disk)===JSON.stringify(before),true,'invalidating while storage waits must not publish the marker');
+assert.equal(JSON.stringify(delayed.export())===JSON.stringify(before),true,'cancelled marker must roll back its memory projection exactly');
 console.log('MX claim journal: cipher-only before request, failed write/no call, immutable replay, cold resume, wrong key/account, late invalidation PASS (synthetic transport; no Provider)');

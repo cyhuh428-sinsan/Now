@@ -196,7 +196,7 @@
     async function save(m,bundle,password,ctx,generation) {
       active(ctx,generation);
       m.cipher_bundle = await protocol().encryptContent(json(bundle),password); active(ctx,generation);
-      validateMarker(m); await journal.saveProtection(m); active(ctx,generation);
+      validateMarker(m); await journal.saveProtection(m,{active:()=>{active(ctx,generation);return true;}}); active(ctx,generation);
       if (!eq(status(m.id),m)) fail('marker_readback'); change();
     }
     async function open(m,password) {
@@ -366,7 +366,7 @@
     async function save(marker,bundle,password,ctx,epoch) {
       active(ctx,epoch);
       marker.cipher_bundle=await protocol().encryptContent(json(bundle),password);active(ctx,epoch);
-      validateMarker(marker);await journal.saveProtection(copy(marker));active(ctx,epoch);
+      validateMarker(marker);await journal.saveProtection(copy(marker),{active:()=>active(ctx,epoch)});active(ctx,epoch);
       if(!same(status(marker.id),marker)) fail('marker_readback');change();
     }
     async function open(marker,password) {

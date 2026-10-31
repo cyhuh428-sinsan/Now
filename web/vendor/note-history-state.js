@@ -282,14 +282,21 @@
       track, edit, seal, sync, compare, importPending, restore, restoreLocal, bindBaseline,
       blocked,
       protectionOperations: () => copy(data?.protection_operations || {}),
-      async saveProtection(marker) {
+      async saveProtection(marker, guard = null) {
+        guard?.active?.();
         requireWritable(); globalThis.NowNoteProtectionState.validateMarker(marker);
         if (marker.scope.owner !== context().owner || marker.scope.url.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) throw new Error('보호 원장의 소유자가 다릅니다.');
-        const source = data, epoch = generation, ctx = { ...context() }, previous = copy(data.protection_operations || {});
+        const source = data, epoch = generation, ctx = { ...context() }, hadOperations = Object.hasOwn(data,'protection_operations');
+        const hadMarker = Object.hasOwn(data.protection_operations || {},marker.id);
+        const previous = hadMarker ? copy(data.protection_operations[marker.id]) : null;
         data.protection_operations ||= {}; data.protection_operations[marker.id] = copy(marker);
         const assigned = data.protection_operations[marker.id];
-        try { await save(true); } catch (error) {
-          if (data === source && active(ctx,epoch) && data.protection_operations[marker.id] === assigned) data.protection_operations = previous;
+        try { await save(true,guard); } catch (error) {
+          if (data === source && active(ctx,epoch) && data.protection_operations[marker.id] === assigned) {
+            if (hadMarker) data.protection_operations[marker.id] = previous;
+            else delete data.protection_operations[marker.id];
+            if (!hadOperations && !Object.keys(data.protection_operations).length) delete data.protection_operations;
+          }
           throw error;
         }
       },
