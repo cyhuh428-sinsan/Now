@@ -631,7 +631,9 @@ async function runOnce() {
     }
     if(process.argv.includes("--blocks")){
       await checkBlockReferences(page);
-      if(!desktop){
+      const forceKill=desktop||process.argv.includes("--force-kill");
+      console.log("Block QA process restart: "+(forceKill?"forced":"normal"));
+      if(!forceKill){
         const exited=new Promise(resolve=>browser.once("exit",resolve));
         await page.send("Browser.close").catch(()=>{});
         await Promise.race([exited,delay(5000).then(()=>{throw Error("QA browser normal close timeout");})]);
