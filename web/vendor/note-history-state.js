@@ -336,6 +336,7 @@
       view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),
+      idle: () => Promise.all([writes, running]),
       failure: () => failed?.message || '',
       status() {
         const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}).filter(v => !protectedItem(v)) : [];
@@ -373,5 +374,25 @@
       },
     };
   }
-  globalThis.NowNoteHistory = { create, key, meaning, same };
+  async function prepareExternalEdit(initial, context, note, options = {}) {
+    if (!context.enabled || note.owner_id !== context.owner) throw new Error('현재 계정과 이력 소유자가 다릅니다.');
+    if (!note.local_id || ['__proto__','prototype','constructor'].includes(note.local_id)) throw new Error('메모 이력 기준을 확인하세요.');
+    let staged=initial == null?{schema_version:1,contexts:{}}:copy(initial);
+    const editor=create({initial:staged,context:()=>context,write:async value=>{staged=value;},
+      request:async()=>{throw new Error('외부 편집 준비에서는 서버를 호출하지 않습니다.');}});
+    if (editor.status().unsupported) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존합니다.');
+    if (editor.legacyPending()) throw new Error('기존 동기화 응답을 먼저 확인하세요.');
+    const expected=copy(staged.contexts[key(context)]?.notes?.[note.local_id] || null);
+    if (!expected && !options.newNote) throw new Error('메모 이력 기준을 먼저 확인하세요.');
+    if (expected?.protection_record || expected?.base?.crypto_epoch>0 || String(expected?.draft?.content || '').startsWith('NOW_ENCRYPTED_V1:'))
+      throw new Error('보호 이력은 일반 Vault 가져오기로 변경할 수 없습니다.');
+    if (expected?.conflict) throw new Error('기존 메모 충돌을 먼저 해결하세요.');
+    if (expected) await editor.seal(note.local_id,'before_external_import');
+    else await editor.track(note,null,{localOnly:Boolean(options.localOnly),needsBaseline:Boolean(options.needsBaseline)});
+    await editor.edit(note);
+    await editor.seal(note.local_id,'external_import');
+    return {scope:{url:String(context.url || '').replace(/\/+$/,''),owner:context.owner},local_id:note.local_id,
+      expected,next:copy(staged.contexts[key(context)].notes[note.local_id])};
+  }
+  globalThis.NowNoteHistory = { create, key, meaning, same, prepareExternalEdit };
 })();

@@ -1323,6 +1323,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),
+      idle: () => Promise.all([writes, running]),
       failure: () => failed?.message || '',
       status() {
         const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}).filter(v => !protectedItem(v)) : [];
@@ -1360,7 +1361,27 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       },
     };
   }
-  globalThis.NowNoteHistory = { create, key, meaning, same };
+  async function prepareExternalEdit(initial, context, note, options = {}) {
+    if (!context.enabled || note.owner_id !== context.owner) throw new Error('현재 계정과 이력 소유자가 다릅니다.');
+    if (!note.local_id || ['__proto__','prototype','constructor'].includes(note.local_id)) throw new Error('메모 이력 기준을 확인하세요.');
+    let staged=initial == null?{schema_version:1,contexts:{}}:copy(initial);
+    const editor=create({initial:staged,context:()=>context,write:async value=>{staged=value;},
+      request:async()=>{throw new Error('외부 편집 준비에서는 서버를 호출하지 않습니다.');}});
+    if (editor.status().unsupported) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존합니다.');
+    if (editor.legacyPending()) throw new Error('기존 동기화 응답을 먼저 확인하세요.');
+    const expected=copy(staged.contexts[key(context)]?.notes?.[note.local_id] || null);
+    if (!expected && !options.newNote) throw new Error('메모 이력 기준을 먼저 확인하세요.');
+    if (expected?.protection_record || expected?.base?.crypto_epoch>0 || String(expected?.draft?.content || '').startsWith('NOW_ENCRYPTED_V1:'))
+      throw new Error('보호 이력은 일반 Vault 가져오기로 변경할 수 없습니다.');
+    if (expected?.conflict) throw new Error('기존 메모 충돌을 먼저 해결하세요.');
+    if (expected) await editor.seal(note.local_id,'before_external_import');
+    else await editor.track(note,null,{localOnly:Boolean(options.localOnly),needsBaseline:Boolean(options.needsBaseline)});
+    await editor.edit(note);
+    await editor.seal(note.local_id,'external_import');
+    return {scope:{url:String(context.url || '').replace(/\/+$/,''),owner:context.owner},local_id:note.local_id,
+      expected,next:copy(staged.contexts[key(context)].notes[note.local_id])};
+  }
+  globalThis.NowNoteHistory = { create, key, meaning, same, prepareExternalEdit };
 })();
 
 ;
@@ -7850,6 +7871,7 @@ let vaultInfo = null;
 let vaultPreview = null;
 let vaultRecoveryInfo = null;
 let vaultBusy = false;
+let vaultHistoryApplying = false;
 let vaultResultText = "";
 const vaultChoices = new Map();
 let webLoginMode = "login";
@@ -10999,7 +11021,8 @@ function noteHistoryAcceptRemote(note) {
   return !noteHistoryEnrolling.has(note.local_id) && !noteHistory?.manages(note.local_id);
 }
 
-function noteHistoryCaptureDrafts() {
+function noteHistoryCaptureDrafts(options = {}) {
+  if (vaultHistoryApplying && !options.allowVault) return;
   if (!noteHistory || noteHistoryProjection || !noteHistoryContext().enabled) return;
   const ctx = noteHistoryContext(), scope = NowNoteHistory.key(ctx), epoch = noteHistoryCaptureEpoch;
   if (noteHistoryProjectionScope && scope !== noteHistoryProjectionScope) {
@@ -11052,6 +11075,7 @@ function noteHistoryCaptureDrafts() {
 }
 
 async function noteHistoryFlush() {
+  if (vaultHistoryApplying) return;
   await noteHistoryCaptureChain;
   if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
   while (serverSyncRunning) await new Promise(resolve => setTimeout(resolve, 30));
@@ -11095,7 +11119,7 @@ async function initializeNoteHistory() {
   });
   noteHistoryController = {
     lock() { noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close(); },
-    async resume() {
+    async resume({renderView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
       if (noteHistory.suspended()) {
@@ -11108,7 +11132,7 @@ async function initializeNoteHistory() {
       try {
         const drafts = Object.values(noteHistory.entries()).map(item => item.draft).sort((a, b) => a.level - b.level);
         drafts.forEach(noteHistoryProject);
-        render();
+        if(renderView)render();
       } finally { noteHistoryProjection = false; }
     },
   };
@@ -13124,6 +13148,68 @@ async function chooseVaultFolder() {
   }
 }
 
+async function prepareVaultHistorySelection(history,ctx,item,selection) {
+  if (selection.action!=="toNowNote") return selection;
+  const source=item.vault;
+  if (!source) throw new Error("Vault 원본을 다시 비교하세요.");
+  const id=item.local?.id || source.id || crypto.randomUUID();
+  const old=history?.contexts?.[NowNoteHistory.key(ctx)]?.notes?.[id];
+  if (item.local && !old) return selection;
+  let node=item.local?findTreeNode(state.data.tree,id):null;
+  if (item.local && !node) throw new Error("메모 위치가 변경되었습니다. 다시 비교하세요.");
+  if (!node) {
+    const parts=(item.paths.vault || "").split("/"), index=parts.at(-1)==="_index.md";
+    const parent=selection.targetParentId?findTreeNode(state.data.tree,selection.targetParentId):null;
+    const now=new Date().toISOString();
+    node={id,title:source.title || (index?parts.at(-2):parts.at(-1).replace(/\.md$/i,"")),content:source.body || "",
+      parentId:parent?.id || null,level:index?parts.length-1:3,tags:source.tags || [],createdAt:now,updatedAt:now};
+  } else node={...node,title:source.title || node.title,content:source.body || "",tags:source.tags || [],updatedAt:new Date().toISOString()};
+  const now=new Date().toISOString();
+  let note=old?.draft?{...old.draft,title:node.title,content:node.content,tags:node.tags.join(","),client_updated_at:node.updatedAt}
+    :{id:null,created_at:now,updated_at:now,...treeNodeToServerNote(node,{ownerId:ctx.owner,deviceId:ctx.device},null)};
+  if (old?.draft && JSON.stringify(tagsFromServerNote(old.draft))===JSON.stringify(node.tags)) note.tags=old.draft.tags;
+  const historyPatch=await NowNoteHistory.prepareExternalEdit(history,ctx,note,
+    {newNote:!item.local,localOnly:state.settings.server.mode!=="server" || node.shared===false,needsBaseline:state.settings.server.mode==="server"});
+  return {...selection,...(!item.local?{importId:id}:{}),historyPatch};
+}
+
+async function withVaultHistoryPaused(action,{project=false}={}) {
+  requireProtectionSettled();
+  if ([elements.treeContent,elements.treeTitleInput,elements.dailyContent,elements.worklogContent].some(editor=>editor&&isEditorComposing(editor)))
+    throw new Error("한글 입력을 마친 뒤 다시 시도하세요.");
+  const ctx={...noteHistoryContext()},sameContext=()=>NowNoteHistory.key(noteHistoryContext())===NowNoteHistory.key(ctx)
+    &&noteHistoryContext().auth===ctx.auth&&noteHistoryContext().enabled;
+  const guard=()=>{if(!sameContext())throw new Error("계정 또는 서버가 변경되었습니다. 다시 비교하세요.");};
+  const views=[elements.treeView,elements.dailyView,elements.resultsView].filter(Boolean).map(view=>[view,view.inert]);
+  let locked=false,restored=true;
+  vaultHistoryApplying=true;views.forEach(([view])=>{view.inert=true;});
+  try {
+    noteHistoryCaptureDrafts({allowVault:true});await noteHistoryCaptureChain;
+    if(noteHistory.failure() || noteHistoryLastError) throw new Error("먼저 저장하지 못한 메모 이력을 확인하세요. 원문을 유지했습니다.");
+    clearTimeout(serverSyncTimer);
+    while(serverSyncRunning){await new Promise(resolve=>setTimeout(resolve,25));guard();}
+    await Promise.all([...storagePendingWrites]);guard();
+    const journal=noteHistory;
+    noteHistoryUI?.close();
+    await journal.idle();guard();
+    if(journal.failure()) throw new Error("이력을 저장하지 못했습니다. 편집본을 유지했습니다.");
+    noteHistoryController.lock();locked=true;
+    await journal.idle();guard();
+    let history=await readStorage(NOTE_HISTORY_KEY);
+    if(typeof history==="string")history=JSON.parse(history);
+    if(project){
+      await noteHistoryController.resume({renderView:false});guard();
+      writeStorage(STORAGE_KEY,state.data);await Promise.all([...storagePendingWrites]);guard();
+      history=noteHistory.export();
+    }
+    return await action(history,ctx,guard);
+  } finally {
+    try { if(locked&&sameContext())await noteHistoryController.resume({renderView:false}); }
+    catch(error){restored=false;vaultInfo={...vaultInfo,recoveryRequired:true};throw new Error("이력을 다시 불러오지 못했습니다. 원본을 보존했으며 다시 실행해 확인하세요.");}
+    finally {vaultHistoryApplying=!restored;if(restored)views.forEach(([view,inert])=>{view.inert=inert;});}
+  }
+}
+
 async function previewVaultChanges() {
   if (!isDesktopClient() || !vaultInfo?.path || vaultBusy) return;
   vaultBusy = true;
@@ -13131,7 +13217,9 @@ async function previewVaultChanges() {
   vaultChoices.clear();
   renderVaultSettings();
   try {
-    vaultPreview = await window.nownoteDesktop.vault.preview({ direction: elements.vaultDirectionSelect.value });
+    await withVaultHistoryPaused(async (_history,_ctx,guard)=>{
+      vaultPreview=await window.nownoteDesktop.vault.preview({direction:elements.vaultDirectionSelect.value});guard();
+    },{project:true});
     vaultResultText = `${vaultPreview.items.length} ${vaultText("compared")}`;
   } catch (error) {
     vaultResultText = error.message;
@@ -13150,7 +13238,21 @@ async function applyVaultChanges() {
   vaultBusy = true;
   renderVaultSettings();
   try {
-    const result = await window.nownoteDesktop.vault.apply({ planId: vaultPreview.planId, selections });
+    const result = await withVaultHistoryPaused(async (history,ctx,guard)=>{
+      const prepared=[];
+      for (const selection of selections) {
+        const item=vaultPreview.items.find(row=>row.itemId===selection.itemId);
+        if(!item)throw new Error("Vault 비교가 변경되었습니다.");
+        prepared.push(await prepareVaultHistorySelection(history,ctx,item,selection));guard();
+      }
+      const applied=await window.nownoteDesktop.vault.apply({planId:vaultPreview.planId,selections:prepared});guard();
+      if(applied.applied.some(row=>prepared.find(selection=>selection.itemId===row.itemId)?.action==="toNowNote")){
+        const value=await readStorage(STORAGE_KEY);guard();
+        state.data=typeof value==="string"?JSON.parse(value):value;normalizeData();
+      }
+      return applied;
+    });
+    render();
     vaultResultText = `${vaultText("applied")} ${result.applied.length} · ${vaultText("failed")} ${result.failed.length} · ${vaultText("skipped")} ${result.skipped.length}`;
     const cleanupPaths = result.applied.map((item) => item.tempCleanupPath).filter(Boolean);
     if (cleanupPaths.length) vaultResultText += ` · ${vaultText("cleanupPending")}: ${cleanupPaths.join(", ")}`;
@@ -13163,10 +13265,7 @@ async function applyVaultChanges() {
       showNotice(vaultText("cleanupPending"), "error");
     }
     if (result.applied.some((item) => selections.find((choice) => choice.itemId === item.itemId)?.action === "toNowNote")) {
-      const refreshed = await readStorage(STORAGE_KEY);
-      state.data = typeof refreshed === "string" ? JSON.parse(refreshed) : refreshed;
-      normalizeData();
-      render();
+      scheduleServerSync({force:true});
     }
     vaultInfo = await window.nownoteDesktop.vault.status();
     vaultRecoveryInfo = vaultInfo?.recoveryRequired ? await window.nownoteDesktop.vault.recoveryStatus() : null;
@@ -14805,6 +14904,7 @@ async function issueDeviceToken() {
 }
 
 async function syncWebNotesToServer(message = t("settings.server.syncing"), options = {}) {
+  if (vaultHistoryApplying) return;
   requireProtectionSettled();
   if (serverSyncRunning) {
     serverSyncQueued = true;
@@ -17949,6 +18049,7 @@ function closeDeletedTreeBox() {
 }
 
 function handleShortcuts(event) {
+  if (vaultHistoryApplying) return;
   if (handleShortcutCapture(event)) return;
   if (isPrimaryShortcut(event, "f") && !event.shiftKey && !event.altKey) {
     if (!featureEnabled("search")) return;
@@ -24411,7 +24512,7 @@ function persist() {
 }
 
 function scheduleServerSync(options = {}) {
-  if (hostedWebSyncSuspended) return;
+  if (hostedWebSyncSuspended || vaultHistoryApplying) return;
   const server = state.settings.server || defaultServerSettings();
   if (server.mode !== "server" || !server.url) return;
   if (isHostedWebClient() && !server.webSessionToken) return;

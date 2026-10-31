@@ -7,6 +7,8 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
+import vm from "node:vm";
+import {webcrypto,randomUUID} from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -212,6 +214,77 @@ async function waitForCondition(page, expression, label, timeoutMs = DEFAULT_TIM
   throw new Error(`${label} 확인 시간이 초과되었습니다.`);
 }
 
+async function seedVaultHistoryFixture(profile) {
+  const box={crypto:webcrypto,structuredClone};
+  vm.runInNewContext(await fs.readFile(path.join(ROOT,"vendor/note-history-state.js"),"utf8"),box);
+  const now=new Date().toISOString(),revision=randomUUID();
+  const note={id:1,owner_id:"vault-fixture",device_id:"fixture-device",local_id:"t",note_type:"tree",title:"Topic",content:"before",
+    parent_local_id:null,level:1,tags:"",source:"web-tree",created_at:now,updated_at:now,client_updated_at:now,deleted_at:null};
+  const ctx={url:"",owner:"vault-fixture",device:"fixture-device",enabled:true,auth:""};
+  const history=box.NowNoteHistory.create({context:()=>ctx,request:async()=>{throw Error("network_forbidden");},write:async()=>{}});
+  await history.track(note,{head_version:1,head_revision_id:revision,inventory_revision_ids:[revision],crypto_epoch:0,replica_count:1,snapshot:{schema_version:1,note}},{localOnly:true});
+  const vault=path.join(profile,"vault");
+  await fs.mkdir(path.join(vault,"Topic"),{recursive:true});
+  const {renderManagedMarkdown}=createRequire(import.meta.url)(path.resolve(ROOT,"../desktop/vault-markdown.cjs"));
+  await fs.writeFile(path.join(vault,"Topic/_index.md"),renderManagedMarkdown({id:"t",kind:"topic",title:"Topic",body:"Vault에서 변경한 합성 본문",tags:[]}));
+  await fs.writeFile(path.join(profile,"nownote-desktop-store.json"),JSON.stringify({version:1,updatedAt:null,values:{
+    "nownote.web.v1":{tree:[{id:"t",title:"Topic",content:"before",level:1,parentId:null,tags:[],children:[],status:"active",shared:false,serverShared:false,createdAt:now,updatedAt:now}],daily:{},archivedDaily:[],deletedTree:[]},
+    "nownote.web.settings.v1":{server:{mode:"local",url:"",ownerId:"vault-fixture",deviceId:"fixture-device",autoSync:false}},
+    "nownote.history.v1":history.export(),"nownote.vault.v1":{path:vault,baselines:{},lastSuccessAt:null}
+  }}));
+}
+
+async function checkVaultHistoryUI(page,profile,cold=false) {
+  const imported="Vault에서 변경한 합성 본문";
+  if(!cold){
+    await evaluate(page,'elements.settingsBtn.click()');
+    await evaluate(page,'refreshVaultStatus()');
+    await evaluate(page,'elements.vaultDirectionSelect.value="both";elements.vaultPreviewBtn.click()');
+    await waitForCondition(page,'Boolean(vaultPreview?.items.some(item=>item.itemId==="t")) && !vaultBusy',"Vault actual preview");
+    const diagnose=process.argv.includes("--vault-diagnose");
+    const snapshot=()=>fs.readFile(path.join(profile,"nownote-desktop-store.json"),"utf8").then(JSON.parse);
+    const before=diagnose?await snapshot():null;
+    await evaluate(page,`(() => {
+      const row=[...elements.vaultItems.querySelectorAll(".vault-item")].find(row=>row.querySelector("strong")?.textContent==="Topic");
+      const select=row.querySelector("select");select.value="toNowNote";select.dispatchEvent(new Event("change"));
+      ${process.argv.includes("--vault-diagnose")?"":"elements.vaultApplyBtn.click();"}
+    })()`);
+    if(diagnose){
+      const selected=await snapshot();
+      await evaluate(page,'globalThis.vaultQaWrites=[];globalThis.vaultQaWriteStorage=writeStorage;writeStorage=(key,value)=>{vaultQaWrites.push({key,stack:new Error().stack.split("\\n").slice(1,6)});return vaultQaWriteStorage(key,value);};');
+      await evaluate(page,'withVaultHistoryPaused(async(history,ctx)=>{const item=vaultPreview.items.find(row=>row.itemId==="t");await prepareVaultHistorySelection(history,ctx,item,{itemId:"t",action:"toNowNote"});})');
+      const prepared=await snapshot();
+      const differences=(a,b,p="")=>{
+        if(JSON.stringify(a)===JSON.stringify(b))return [];
+        if(a&&b&&typeof a==="object"&&typeof b==="object")
+          return [...new Set([...Object.keys(a),...Object.keys(b)])].flatMap(key=>differences(a[key],b[key],p+"/"+key));
+        return [p];
+      };
+      console.log(JSON.stringify({diagnosticOnly:true,selection:differences(before,selected),preparation:differences(selected,prepared),writes:await evaluate(page,'vaultQaWrites')}));
+      assert(JSON.stringify(before)===JSON.stringify(prepared),"Vault preparation must not change the previewed store");
+      return;
+    }
+  }
+  try {
+    await waitForCondition(page,`Boolean(noteHistory?.view("t")?.draft.content===${JSON.stringify(imported)}) && !vaultBusy`,"Vault canonical import");
+  } catch(error) {
+    const diagnostic=await evaluate(page,'({busy:vaultBusy,blocked:vaultHistoryApplying,result:vaultResultText,history:noteHistory.status(),suspended:noteHistory.suspended(),choices:[...vaultChoices.values()].map(choice=>choice.action)})');
+    throw Error(error.message+" "+JSON.stringify(diagnostic));
+  }
+  const state=await evaluate(page,`(() => {
+    const item=noteHistory.view("t"),node=findTreeNode(state.data.tree,"t");
+    return {body:node.content,raw:item.raw.content,revisions:item.revisions.map(r=>r.reason),outbox:item.outbox.length,
+      blocked:vaultHistoryApplying,status:vaultResultText};
+  })()`);
+  assert(state.body===imported&&state.raw==="before"&&state.revisions.at(-1)==="external_import"&&state.outbox===1&&!state.blocked,"Vault UI/history mismatch");
+  const disk=JSON.parse(await fs.readFile(path.join(profile,"nownote-desktop-store.json"),"utf8"));
+  assert(disk.values["nownote.web.v1"].tree[0].content===imported,"Vault projection missing on disk");
+  assert(disk.values["nownote.history.v1"].contexts[JSON.stringify(["","vault-fixture"])].notes.t.outbox.length===1,"Vault queued revision missing on disk");
+  const original=await fs.readFile(path.join(profile,"vault/Topic/_index.md"),"utf8");
+  assert(original.endsWith(imported),"Vault source was rewritten");
+  console.log(cold?"Vault actual source Electron cold process: imported body, raw baseline and one pending revision preserved PASS":"Vault actual source Electron UI/IPC: preview, explicit import and atomic body/history storage PASS");
+}
+
 async function checkCanvasAccountUI(page) {
   await page.send("Emulation.setDeviceMetricsOverride",{width:1280,height:900,deviceScaleFactor:1,mobile:false});
   await evaluate(page,`(async()=> {
@@ -374,9 +447,13 @@ async function runOnce() {
   const { server, port: webPort } = await startStaticServer();
   const debugPort = await freePort();
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nownote-graph-check-"));
+  if(process.argv.includes("--vault-history")){
+    assert(desktop,"Vault UI QA requires isolated source Electron");
+    await seedVaultHistoryFixture(tempDir);
+  }
   const appUrl = `http://127.0.0.1:${webPort}/index.html`;
   const args=desktop ? [path.resolve(ROOT,"../desktop"),...browserArgs(debugPort,tempDir,appUrl).slice(0,-1)] : browserArgs(debugPort,tempDir,appUrl);
-  const browser = spawn(browserPath, args, {
+  let browser = spawn(browserPath, args, {
     env: { ...process.env, NOWNOTE_HEADLESS_CHECK: "1", ...(desktop ? {NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir} : {}) },
     windowsHide: true,
     stdio: ["ignore", "ignore", "pipe"],
@@ -393,6 +470,18 @@ async function runOnce() {
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
 
+    if(process.argv.includes("--vault-history")){
+      await checkVaultHistoryUI(page,tempDir);
+      if(process.argv.includes("--vault-diagnose"))return;
+      browserClient.close();stopBrowserProcess(browser);await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      await waitForCondition(page,'typeof noteHistory!=="undefined" && Boolean(noteHistory?.view("t"))',"Vault cold journal");
+      await checkVaultHistoryUI(page,tempDir,true);
+      return;
+    }
     if (process.argv.includes("--canvas-account")) {
       await checkCanvasAccountUI(page);
       return;
