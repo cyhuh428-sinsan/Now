@@ -54,6 +54,66 @@
   }
   async function open(){await openNoteProtection();assert(dialog()?.open,'protection_dialog_absent');await settle();}
   async function action(name,done,key=password){button(name).click();await drive(done,name,key);await settle();}
+  if([14,15,16].includes(config.phase)){
+    state.selectedTreeId=target;render();await settle();await open();
+    const info=await inspectNoteProtection(),scope=info.scope,A=NowNoteProtectionAnalysis,Q=NowNoteProtectionProtocol;
+    const before=await noteProtectionReader.catalog(scope);let postSettle=0;
+    const transport=async(s,path,method,body)=>{
+      assert(Q.canonicalJson(s)===Q.canonicalJson(scope),'terminal_transport_scope_changed');
+      if(method==='POST'&&path.endsWith('/settle')){postSettle++;assert(config.phase!==15,'terminal_restart_reposted');}
+      const value=await request(path+(method==='GET'?'?'+new URLSearchParams(body):''),method,method==='POST'?body:undefined);
+      if(config.phase===14&&method==='POST'&&path.endsWith('/settle')){
+        emit({stage:'analysis_terminal_settle_response_deliberately_lost',owner:a.owner,local_id:target,operation_id:value.execution_id});throw Error('qa_terminal_settle_response_lost');
+      }
+      return value;
+    };
+    const execution=A.createExecution({context:()=>({...noteHistoryContext(),instance:noteProtectionIdentity?.instance||''}),journal:noteHistory,request:transport});
+    if(config.phase===15){
+      const markers=Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.owner===a.owner&&m.scope.local_id===target&&m.phase==='analysis_settling');
+      assert(markers.length===1,'terminal_cold_marker_missing');const id=markers[0].id;
+      const original=Q.parseJson(await Q.decryptContent(markers[0].cipher_bundle,password));
+      const receipt=await execution.settleTerminal(id,password);assert(postSettle===0&&receipt.bundle_digest===original.terminal.work.bundle_metadata.bundle_digest,'terminal_cold_receipt_changed');
+      const archived=Q.parseJson(await Q.decryptContent(execution.status(id).cipher_bundle,password));
+      assert(Q.canonicalJson(archived.terminal.work)===Q.canonicalJson(original.terminal.work)&&Q.canonicalJson(archived.terminal.settle_core)===Q.canonicalJson(original.terminal.settle_core),'terminal_cold_cipher_or_core_changed');
+      const values=await A.openTerminalBundle(scope,archived.request,archived.execution,archived.terminal.work,password);
+      assert(values.result_json===JSON.stringify({summary:'SYNTHETIC-LLM-RESULT-'+run+'\r\n'})&&values.input_text===archived.input&&values.error_message===null,'terminal_cold_meaning_changed');
+      const after=await noteProtectionReader.catalog(scope);assert(Q.canonicalJson(before)===Q.canonicalJson(after),'terminal_cold_changed_note');
+      emit({stage:'analysis_terminal_cold_TR_BM_verified',owner:a.owner,local_id:target,operation_id:archived.execution.execution_id,local_operation_id:id});
+      execution.invalidate();button('lock').click();clearWebSession();
+      return {ok:true,mode:config.mode,phase:15,originalCipherTerminalColdResume:true,TRBMpreserved:true,settlePostCalls:postSettle,providerCalls:0,currentCatalogUnchanged:true};
+    }
+    assert(typeof config.syntheticProviderUrl==='string','synthetic_provider_missing');
+    const descriptor=before.entries.find(d=>d.key.kind==='note_body'&&d.key.id===String(before.context.selected_physical_note_id));
+    const source=await noteProtectionReader.read(scope,before,descriptor,async()=>password);
+    assert(source.value===plain,'terminal_selected_source_meaning_changed');
+    const input='SYNTHETIC-LLM-INPUT-'+run+'\n'+source.value,route={provider:'omniroute',endpoint:config.syntheticProviderUrl,model:'auto'};
+    const claim={schema_version:3,owner_id:a.owner,local_id:target,device_id:a.device,server_instance_id:scope.instance,mutation_id:crypto.randomUUID(),source_context:{server_instance_id:scope.instance,base:before.context,catalog_digest:before.catalog_digest},source_keys:[{descriptor}],job_type:'memo_summary',prompt_version:'single_source_v1',source_job_id:null,execution_route:'client_provider',client_execution_confirmed:true};
+    const id=await execution.start(scope,claim,input,route,password);await execution.resumeClaim(id,password);
+    const handoff=await execution.dispatch(id,password,{...route,input,confirmed:true});assert(handoff.provider_state==='ready','terminal_provider_handoff_missing');
+    const response=await llmChatRequest(handoff.route.provider,{omniUrl:handoff.route.endpoint,omniApiKey:'synthetic-only',omniModel:handoff.route.model,omniReasoning:''},handoff.input);
+    assert(response.ok,'synthetic_provider_http_failure');const text=extractLlmChatText('omniroute',await response.json());
+    assert(text==='SYNTHETIC-LLM-RESULT-'+run+'\r\n','synthetic_provider_result_changed');
+    const observation={provider_terminal_observed:true,outcome:'done',result_json:JSON.stringify({summary:text}),error_message:null,error_code:null};
+    if(config.phase===16){
+      const previous=Q.canonicalJson(noteHistory.export());execution.invalidate();button('lock').click();
+      let denied=false;try{await execution.recordTerminal(handoff,observation,password);}catch(error){denied=error.message==='note_protection_analysis:terminal_key_unavailable';}assert(denied,'terminal_after_lock_saved_raw');
+      const receipt=await execution.reportUnavailable(handoff,{provider_terminal_observed:true,unavailable_reason:'key_unavailable'});
+      assert(receipt.outcome==='result_unavailable'&&Q.canonicalJson(noteHistory.export())===previous,'terminal_unavailable_changed_journal');
+      assert(Q.canonicalJson(await noteProtectionReader.catalog(scope))===Q.canonicalJson(before),'terminal_unavailable_changed_note');
+      emit({stage:'analysis_terminal_unavailable_verified',owner:a.owner,local_id:target,operation_id:receipt.execution_id,local_operation_id:id});
+      clearWebSession();await login(b);let blocked=false;try{await execution.reportUnavailable(handoff,{provider_terminal_observed:true,unavailable_reason:'key_unavailable'});}catch{blocked=true;}
+      assert(blocked&&postSettle===1,'terminal_unavailable_other_account_called_server');clearWebSession();
+      return {ok:true,mode:config.mode,phase:16,observedSyntheticProviderTerminal:true,keyInvalidatedMetadataOnly:true,cipherJournalUnchanged:true,providerCalls:1,currentCatalogUnchanged:true};
+    }
+    await execution.recordTerminal(handoff,observation,password);
+    assert(execution.status(id).phase==='analysis_terminal'&&postSettle===0,'terminal_post_before_durable_bundle');
+    let lost=false;try{await execution.settleTerminal(id,password);}catch(error){lost=error.message==='qa_terminal_settle_response_lost';}
+    assert(lost&&postSettle===1&&execution.status(id).phase==='analysis_settling','terminal_settle_loss_not_preserved');
+    for(const store of protectionStorageAdapters())assert(!JSON.stringify(await store.read()).includes('SYNTHETIC-LLM-RESULT-'),'terminal_plaintext_persisted');
+    emit({stage:'analysis_terminal_cipher_checkpoint_verified',owner:a.owner,local_id:target,operation_id:handoff.execution.execution_id,local_operation_id:id});
+    execution.invalidate();button('lock').click();clearWebSession();
+    return {ok:true,mode:config.mode,phase:14,observedSyntheticProviderTerminal:true,cipherCheckpointBeforeSettle:true,settleResponseLost:true,providerCalls:1};
+  }
   if(config.phase===12||config.phase===13){
     state.selectedTreeId=target;render();await settle();await open();
     const info=await inspectNoteProtection(),scope=info.scope,A=NowNoteProtectionAnalysis,Q=NowNoteProtectionProtocol;
