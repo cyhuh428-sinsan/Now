@@ -2631,6 +2631,11 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
           ||!['prepared','uploading','committed','stale','aborted','expired'].includes(r.state))fail('analysis_operation_identity');
         Q.validateContext(r.latest_context);
         const p={version:3,path,id:r.operation_id,operation_id:r.operation_id,digest:r.metadata_manifest_digest,response:r,original_execution:original};
+        if(saved){
+          if(!eq(r.metadata_header,saved.response.metadata_header)||!eq(r.counts,saved.response.counts))fail('analysis_manifest_metadata');
+          p.manifest=copy(saved.manifest);
+          return p;
+        }
         p.manifest=await pages(s,p);
         const v=await A.validateReplanWriteManifest(s,i,c,{...r.metadata_header,...p.manifest});
         if(v.metadata_manifest_digest!==p.digest||!eq(v.counts,r.counts))fail('analysis_manifest_metadata');

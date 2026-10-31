@@ -190,7 +190,7 @@ const replanRemote=box.NowNoteProtectionState.createRemote({request:async(s,path
  assert.equal(Q.canonicalJson(s),Q.canonicalJson(scope));
  if(path.endsWith('/replan')){replanCalls++;assert.equal(Q.canonicalJson(body),Q.canonicalJson(rekeyPlan.prepare));if(replanLose){replanLose=false;throw Error('replan_response_lost');}if(replanStored)return copy(replanStored);const out={schema_version:3,status:'prepared',operation:copy(replanOperation),original_execution:copy(replanOriginal)};if(replanForged)out.original_execution.source_context.base.base.history_generation++;return out;}
  if(path.endsWith('/status')){replanGet++;assert.equal(body.operation_id,replanId);return {schema_version:3,status:'operation',operation:copy(replanOperation),original_execution:copy(replanOriginal)};}
- if(path.endsWith('/manifest')){replanManifestCalls++;return {schema_version:3,section:body.section,metadata_manifest_digest:replanVerified.metadata_manifest_digest,metadata_header:copy(replanHeader),set_digests:copy(replanVerified.set_digests),counts:copy(replanVerified.counts),entries:copy(replanManifest[body.section]),next_cursor:null};}
+ if(path.endsWith('/manifest')){replanManifestCalls++;if(['stale','aborted','committed','expired'].includes(replanOperation.state))throw Error('terminal_replan_manifest_denied');return {schema_version:3,section:body.section,metadata_manifest_digest:replanVerified.metadata_manifest_digest,metadata_header:copy(replanHeader),set_digests:copy(replanVerified.set_digests),counts:copy(replanVerified.counts),entries:copy(replanManifest[body.section]),next_cursor:null};}
  if(path.endsWith('/chunks')||path.endsWith('/entries/seal')||path.endsWith('/staged'))return transport(s,path,method,body);
  throw Error('unexpected_replan_request');
 }});
@@ -198,6 +198,12 @@ await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalo
 const replanPrepared=await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog);
 assert.equal(replanPrepared.id,replanId);assert.equal(replanPrepared.digest,replanVerified.metadata_manifest_digest);assert.equal(replanCalls,2);assert.equal(replanGet,0);
 await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog,replanPrepared);assert.equal(replanCalls,2);assert.equal(replanGet,1);
+for(const state of ['stale','aborted','expired','committed']){
+ replanOperation.state=state;const count=replanManifestCalls;
+ const probed=await replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog,replanPrepared);
+ assert.equal(probed.response.state,state);assert.equal(Q.canonicalJson(probed.manifest),Q.canonicalJson(replanPrepared.manifest));assert.equal(replanManifestCalls,count);
+}
+replanOperation.state='prepared';
 replanForged=true;const manifestBefore=replanManifestCalls;await assert.rejects(()=>replanRemote.replanAnalysis(scope,rekeyPlan,newerCatalog),/analysis_original_execution/);assert.equal(replanManifestCalls,manifestBefore);replanForged=false;
 const badPlan=copy(rekeyPlan);badPlan.prepare.target_epoch=1;const beforeInvalid=replanCalls;await assert.rejects(()=>replanRemote.replanAnalysis(scope,badPlan,newerCatalog));assert.equal(replanCalls,beforeInvalid);
 console.log('MA E3 replan transport: immutable request replay after loss, known operation GET only, six-set verification and forged original/pre-request denial PASS (synthetic HTTP only; no durable replan/UI)');
