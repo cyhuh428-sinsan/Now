@@ -362,9 +362,13 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         try{
           const remote=await api.readRemote(row.id);active();
           if(remote.resource?.owner_id!==a.ctx.owner||remote.resource.id!==row.id)throw Error('위키 조회 계정이 다릅니다.');
+          if(Boolean(known.get(row.id)?.deleted_at)!==Boolean(remote.resource.deleted_at))value.state_issue='trash_state_changed';
           if(remote.resource.deleted_at||remote.artifact?.protected||!remote.artifact?.document){result.push({...value,protected:remote.artifact?.protected===true,deleted:Boolean(remote.resource.deleted_at),unavailable:true});continue;}
           const current=await api.readCurrent('wiki:'+row.id);active();
-          if(current.crypto_epoch>0||current.identity_state!=='coherent'||current.snapshot?.note?.deleted_at||current.snapshot?.note?.owner_id!==a.ctx.owner
+          if(current.crypto_epoch>0){result.push({...value,protected:true,unavailable:true,state_issue:'protection_state_changed'});continue;}
+          if(current.head_revision_id!==remote.artifact.head_revision_id)value.state_issue='revision_changed';
+          if(current.snapshot?.note?.deleted_at)value.state_issue='trash_state_changed';
+          if(current.identity_state!=='coherent'||current.snapshot?.note?.deleted_at||current.snapshot?.note?.owner_id!==a.ctx.owner
             ||current.snapshot.note.local_id!=='wiki:'+row.id||current.head_revision_id!==remote.artifact.head_revision_id
             ||current.snapshot.note.content!==P.canonicalJson(remote.artifact.document))throw Error('위키 판본이 다릅니다.');
           raw=current.snapshot.note.content;

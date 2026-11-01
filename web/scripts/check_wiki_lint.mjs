@@ -33,6 +33,13 @@ const orphan={scope,rows:[{...clone(rows[0]),relation_checks:[{draft_id:rows[0].
 assert.ok((await L.lintWikiCatalog(orphan,{})).findings.some(f=>f.rule_code==='wiki_lint_orphan'&&f.severity==='information'));
 const legacy=clone(input);legacy.rows[0].document.schema_version=3;
 assert.equal((await L.lintWikiCatalog(legacy,{})).excluded,1);
+const missingSchema=clone(input);delete missingSchema.rows[0].document.schema_version;
+assert.ok((await L.lintWikiCatalog(missingSchema,{})).findings.some(f=>f.rule_code==='wiki_lint_document_invalid'),'a missing required schema is damaged, not a supported future-format exclusion');
+const hiddenTopic=clone(input);hiddenTopic.rows[0].protected=true;delete hiddenTopic.rows[0].document;
+const topicResult=await L.lintWikiCatalog(hiddenTopic,{topic:hiddenTopic.rows[1].document.drafts[0].topic});
+assert.equal(topicResult.excluded,1,'a hidden topic cannot be certified outside the requested scope');
+const stateChanged=clone(input);stateChanged.rows[0].state_issue='trash_state_changed';stateChanged.rows[0].unavailable=true;
+assert.ok((await L.lintWikiCatalog(stateChanged,{})).findings.some(f=>f.rule_code==='wiki_lint_trash_state_changed'&&f.severity==='warning'));
 const badBinding=clone(input),source=badBinding.rows[0].document,target=badBinding.rows[1].document,draft=source.drafts[0],approval=target.approvals[0];
 draft.relations[0].to_ref={kind:'approved',wiki_id:target.wiki_id,draft_id:approval.draft_id,approval_id:approval.id,draft_hash:'f'.repeat(64),section_id:'s1'};
 delete draft.draft_hash;draft.draft_hash=await P.hashJson(draft);source.approvals[0].draft_hash=draft.draft_hash;

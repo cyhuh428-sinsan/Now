@@ -21,13 +21,14 @@
       check(uuid(row.id));
       if(row.document?.scope&&!equal(row.document.scope,snapshot.scope)){state.set(row.id,'foreign');continue;}
       if(row.protected||row.deleted||row.unavailable||row.pending||!row.document){state.set(row.id,'excluded');continue;}
-      if(![1,2].includes(row.document.schema_version)){state.set(row.id,'unsupported');continue;}
+      if(Number.isInteger(row.document.schema_version)&&row.document.schema_version>2){state.set(row.id,'unsupported');continue;}
       try{
         const document=await W.validateDocument(row.document,snapshot.scope);check(document.wiki_id===row.id);
         valid.set(row.id,document);state.set(row.id,'valid');
       }catch{state.set(row.id,'invalid');}
     }
-    const selected=new Set(snapshot.rows.filter(row=>(!ids.length||ids.includes(row.id))&&(!topic||latest(valid.get(row.id)||{drafts:[],approvals:[]})?.topic===topic)).map(r=>r.id));
+    const selected=new Set(snapshot.rows.filter(row=>(!ids.length||ids.includes(row.id))
+      &&(!topic||state.get(row.id)!=='valid'||latest(valid.get(row.id))?.topic===topic)).map(r=>r.id));
     const finding=(row,rule,severity,observation,recommendation,extra={})=>{
       check(report.findings.length<5000,'wiki_lint_limit');
       report.findings.push({rule_code:rule,wiki_id:row?.id??null,document_version:valid.get(row?.id)?.document_version??null,
@@ -39,6 +40,10 @@
       if(!selected.has(row.id)){report.out_of_scope++;continue;}
       const kind=state.get(row.id);
       if(kind==='foreign'){report.excluded++;finding(null,'wiki_lint_scope_excluded','information','현재 계정 밖의 자료를 제외했습니다.','현재 계정의 범위를 확인하세요.');continue;}
+      if(row.state_issue){
+        check(['trash_state_changed','protection_state_changed','revision_changed'].includes(row.state_issue));
+        finding(row,'wiki_lint_'+row.state_issue,'warning','검사 도중 색인·현재 메모의 상태가 일치하지 않았습니다.','자료를 변경하지 않았습니다. 현재 상태를 확인한 뒤 다시 점검하세요.');
+      }
       if(row.origin==='server'&&row.index_status==='missing')finding(row,'wiki_lint_index_missing','error','서버 위키 색인을 확인하지 못했습니다.','현재 메모와 색인을 대조하세요.');
       if(kind==='excluded'||kind==='unsupported'){
         report.excluded++;finding(row,kind==='unsupported'?'wiki_lint_schema_unsupported':'wiki_lint_unreadable_excluded','information',

@@ -223,6 +223,17 @@ assert.equal(history.view('wiki:'+derivedDocument.wiki_id).draft.content,box.Now
 assert.equal(typeof ordinary.lintSnapshot,'function','Lint needs a read-only snapshot rather than list() hydration');
 const beforeLint=box.NowNoteProtectionProtocol.canonicalJson(history.export()),lintWrites=writes;
 const lintSnapshot=await ordinary.lintSnapshot();assert.ok(lintSnapshot.rows.length>=3);assert.equal(lintSnapshot.scope.owner,ctx.owner);
+const lintDoc=lintSnapshot.rows.find(r=>r.document?.approvals.length)?.document;assert.ok(lintDoc);
+let remoteDeleted=null,currentEpoch=1;
+const emptyHistory=box.NowNoteHistory.create({context:()=>ctx,write:async()=>{throw Error('Lint must not persist');},request:async()=>{throw Error('unexpected request');}});
+const remoteLint=box.createWikiNotebook({...api,context:()=>({...ctx,online:true}),history:()=>emptyHistory,
+  listRemote:async()=>[{id:lintDoc.wiki_id,owner_id:ctx.owner,deleted_at:null}],
+  readRemote:async()=>({resource:{id:lintDoc.wiki_id,owner_id:ctx.owner,deleted_at:remoteDeleted},artifact:{protected:false,document:lintDoc,head_revision_id:'head'}}),
+  readCurrent:async()=>({crypto_epoch:currentEpoch})});
+let remoteLintResult=await remoteLint.lintSnapshot();
+assert.equal(remoteLintResult.rows[0].state_issue,'protection_state_changed');assert.equal(remoteLintResult.rows[0].protected,true);
+remoteDeleted='2026-11-02T00:00:00Z';currentEpoch=0;remoteLintResult=await remoteLint.lintSnapshot();
+assert.equal(remoteLintResult.rows[0].state_issue,'trash_state_changed');assert.equal(remoteLintResult.rows[0].deleted,true);
 assert.equal(writes,lintWrites);assert.equal(box.NowNoteProtectionProtocol.canonicalJson(history.export()),beforeLint,'snapshot inspection does not observe lifecycle or track server rows');
 assert.equal(typeof book.deriveLint,'function','explicit Lint report save must use the durable existing operation journal');
 api.lintSnapshot=()=>ordinary.lintSnapshot();

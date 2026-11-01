@@ -7244,9 +7244,13 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         try{
           const remote=await api.readRemote(row.id);active();
           if(remote.resource?.owner_id!==a.ctx.owner||remote.resource.id!==row.id)throw Error('위키 조회 계정이 다릅니다.');
+          if(Boolean(known.get(row.id)?.deleted_at)!==Boolean(remote.resource.deleted_at))value.state_issue='trash_state_changed';
           if(remote.resource.deleted_at||remote.artifact?.protected||!remote.artifact?.document){result.push({...value,protected:remote.artifact?.protected===true,deleted:Boolean(remote.resource.deleted_at),unavailable:true});continue;}
           const current=await api.readCurrent('wiki:'+row.id);active();
-          if(current.crypto_epoch>0||current.identity_state!=='coherent'||current.snapshot?.note?.deleted_at||current.snapshot?.note?.owner_id!==a.ctx.owner
+          if(current.crypto_epoch>0){result.push({...value,protected:true,unavailable:true,state_issue:'protection_state_changed'});continue;}
+          if(current.head_revision_id!==remote.artifact.head_revision_id)value.state_issue='revision_changed';
+          if(current.snapshot?.note?.deleted_at)value.state_issue='trash_state_changed';
+          if(current.identity_state!=='coherent'||current.snapshot?.note?.deleted_at||current.snapshot?.note?.owner_id!==a.ctx.owner
             ||current.snapshot.note.local_id!=='wiki:'+row.id||current.head_revision_id!==remote.artifact.head_revision_id
             ||current.snapshot.note.content!==P.canonicalJson(remote.artifact.document))throw Error('위키 판본이 다릅니다.');
           raw=current.snapshot.note.content;
@@ -8624,13 +8628,14 @@ globalThis.createWikiQueryNotebook=function createWikiQueryNotebook(api){
       check(uuid(row.id));
       if(row.document?.scope&&!equal(row.document.scope,snapshot.scope)){state.set(row.id,'foreign');continue;}
       if(row.protected||row.deleted||row.unavailable||row.pending||!row.document){state.set(row.id,'excluded');continue;}
-      if(![1,2].includes(row.document.schema_version)){state.set(row.id,'unsupported');continue;}
+      if(Number.isInteger(row.document.schema_version)&&row.document.schema_version>2){state.set(row.id,'unsupported');continue;}
       try{
         const document=await W.validateDocument(row.document,snapshot.scope);check(document.wiki_id===row.id);
         valid.set(row.id,document);state.set(row.id,'valid');
       }catch{state.set(row.id,'invalid');}
     }
-    const selected=new Set(snapshot.rows.filter(row=>(!ids.length||ids.includes(row.id))&&(!topic||latest(valid.get(row.id)||{drafts:[],approvals:[]})?.topic===topic)).map(r=>r.id));
+    const selected=new Set(snapshot.rows.filter(row=>(!ids.length||ids.includes(row.id))
+      &&(!topic||state.get(row.id)!=='valid'||latest(valid.get(row.id))?.topic===topic)).map(r=>r.id));
     const finding=(row,rule,severity,observation,recommendation,extra={})=>{
       check(report.findings.length<5000,'wiki_lint_limit');
       report.findings.push({rule_code:rule,wiki_id:row?.id??null,document_version:valid.get(row?.id)?.document_version??null,
@@ -8642,6 +8647,10 @@ globalThis.createWikiQueryNotebook=function createWikiQueryNotebook(api){
       if(!selected.has(row.id)){report.out_of_scope++;continue;}
       const kind=state.get(row.id);
       if(kind==='foreign'){report.excluded++;finding(null,'wiki_lint_scope_excluded','information','현재 계정 밖의 자료를 제외했습니다.','현재 계정의 범위를 확인하세요.');continue;}
+      if(row.state_issue){
+        check(['trash_state_changed','protection_state_changed','revision_changed'].includes(row.state_issue));
+        finding(row,'wiki_lint_'+row.state_issue,'warning','검사 도중 색인·현재 메모의 상태가 일치하지 않았습니다.','자료를 변경하지 않았습니다. 현재 상태를 확인한 뒤 다시 점검하세요.');
+      }
       if(row.origin==='server'&&row.index_status==='missing')finding(row,'wiki_lint_index_missing','error','서버 위키 색인을 확인하지 못했습니다.','현재 메모와 색인을 대조하세요.');
       if(kind==='excluded'||kind==='unsupported'){
         report.excluded++;finding(row,kind==='unsupported'?'wiki_lint_schema_unsupported':'wiki_lint_unreadable_excluded','information',
@@ -8730,7 +8739,9 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let queryOriginal=null;
   let protectedQueryAccess=null;
   let queryPrimary=6,queryRelated=3;
+  let semanticReview=false;
   let lintMode=false,lintScope='all',lintSnapshot=null,lintReport=null,lintSelection=null;
+  let lintOriginal=null;
   const lintIds=new Set();
   const queryIds=new Set();
   const ingestFiles=new Set(),ingestNotes=new Set();
@@ -8750,6 +8761,8 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
+    lintOriginal=null;
+    semanticReview=false;
     lintMode=false;lintScope='all';lintSnapshot=null;lintReport=null;lintSelection=null;lintIds.clear();
     queryMode=false;queryText='';queryScope='all';querySnapshot=null;queryAnswer=null;queryConnection=null;queryOriginal=null;protectedQueryAccess=null;queryPrimary=6;queryRelated=3;queryIds.clear();
     graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
@@ -8770,6 +8783,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
+    lintOriginal=null;lintSelection=null;semanticReview=false;
     lintMode=false;lintSnapshot=null;lintReport=null;lintIds.clear();
     queryMode=false;queryText='';querySnapshot=null;queryAnswer=null;queryIds.clear();
     relationEditor=null;
@@ -8843,7 +8857,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     querySnapshot=snapshot;queryAnswer=null;queryOriginal=null;message='';
   }
   async function queryRun(token){
-    const snapshot=querySnapshot,connection=api.connection();
+    const snapshot=querySnapshot,connection=api.connection(semanticReview?'wiki-lint':'wiki-query');
     const prompt=await NowWikiQuery.buildWikiQueryPrompt(snapshot);requireActive(token);
     const bytes=new TextEncoder().encode(prompt).length;
     const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n승인 위키 '+snapshot.pages.length+'개 · '+bytes+' bytes\n'
@@ -8878,7 +8892,8 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       querySnapshot=null;queryAnswer=null;queryOriginal=null;
       for(const element of detail.querySelectorAll('[data-wiki-query-preview],[data-wiki-query-answer],[data-wiki-query-original],[data-wiki-action=query-run]'))element.remove();
     };
-    detail.append(node('h3','위키에 질문'));
+    detail.append(node('h3',semanticReview?'AI 의미 검토 후보':'위키에 질문'));
+    if(semanticReview)detail.append(node('p','모순·연결 누락은 AI의 검토 후보입니다. 결정적 Lint 결과와 구별하며 사실성은 원문으로 확인하세요.'));
     if(readOnly)detail.append(node('p','보호된 승인 판본 · 메모리에서만 사용 · 원본 최신성은 별도 확인'));
     const label=node('label','질문'),input=node('textarea',undefined,'settings-input');
     input.name='wiki-query-question';input.rows=3;input.maxLength=4000;input.value=queryText;input.disabled=busy;
@@ -8969,13 +8984,23 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       const selection=lintScope==='selected'?{wiki_ids:[...lintIds]}:lintScope==='topic'?{topic}:{};
       const snapshot=await api.lintSnapshot();requireActive(token);
       const report=await NowWikiLint.lintWikiCatalog(snapshot,selection);requireActive(token);
-      lintSnapshot=snapshot;lintReport=report;lintSelection=structuredClone(selection);message='';
+      lintSnapshot=snapshot;lintReport=report;lintSelection=structuredClone(selection);lintOriginal=null;message='';
     }));
     if(!lintReport||busy)return;
     const report=node('section');report.dataset.wikiLintReport='';
     report.append(node('h4','점검 결과'),node('p','검사 '+lintReport.checked+' · 제외 '+lintReport.excluded+' · 범위 밖 '+lintReport.out_of_scope),
       node('p','오류 '+lintReport.errors+' · 검토 '+lintReport.warnings+' · 정보 '+lintReport.information),
       node('p','출처 확인 '+lintReport.source_checked+' · 미확인/제외 '+lintReport.source_excluded+' · 관계 확인 '+lintReport.relation_checked+' · 미확인/제외 '+lintReport.relation_excluded));
+    if(api.query)report.append(command('lint-ai','선택형 AI 의미 검토',async token=>{
+      const snapshot=lintSnapshot,selection=lintSelection;
+      const selected=snapshot.rows.filter(row=>(!selection.wiki_ids||selection.wiki_ids.includes(row.id))
+        &&(!selection.topic||row.document?.drafts.find(d=>d.id===row.document.approvals.at(-1)?.draft_id)?.topic===selection.topic));
+      if(selected.length!==lintReport.checked||selected.length>6||lintReport.excluded)throw Error('선택한 승인 위키 1~6개의 범위를 다시 확인하세요.');
+      requireActive(token);semanticReview=true;queryMode=true;querySnapshot=null;queryAnswer=null;queryOriginal=null;
+      queryText='선택한 위키의 내용 모순과 누락된 연결을 검토해 주세요. 정확한 인용을 붙이고, 근거가 없는 추론은 불확실한 후보로 구별하세요. 오류가 있다고 단정하거나 수정하지 마세요.';
+      queryScope='selected';queryIds.clear();for(const row of selected)queryIds.add(row.id);queryPrimary=selected.length;queryRelated=0;
+      lintMode=false;message='전송할 고정 판본을 확인한 뒤 별도로 동의하세요.';
+    },lintReport.checked===0||lintReport.excluded>0||lintReport.checked>6));
     if(api.ingest?.deriveLint)report.append(command('lint-save','보고서를 위키 초안으로 저장',async token=>{
       const snapshot=lintSnapshot,selection=lintSelection,resultReport=lintReport;
       if(!await ask('점검 보고서를 새 위키 초안으로 검토할까요? 검사한 위키의 고정 판본과 보호 의존을 보존하며 승인은 별도입니다.'))return;
@@ -8991,6 +9016,13 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(finding.wiki_id){
         item.append(node('small',finding.wiki_id+' · 판본 '+(finding.document_version??'미확인')));
         const row=lintSnapshot.rows.find(r=>r.id===finding.wiki_id);
+        const draft=Array.isArray(row?.document?.drafts)?row.document.drafts.find(d=>d.id===finding.draft_id):null;
+        const ref=draft&&NowNoteWiki.evidenceOf(draft).find(r=>r.id===finding.evidence_id);
+        if(ref&&api.readOriginal&&!row.protected&&!row.deleted&&!row.unavailable)item.append(command('lint-original','원본 고정 판본',async token=>{
+          const proof=await api.readOriginal(ref);requireActive(token);
+          lintOriginal={hash:ref.content_hash,revision:ref.source_revision_id||ref.draft_id||'local',
+            content:proof.kind==='note'?proof.content:proof.draft.sections.map(s=>s.title+'\n'+s.markdown).join('\n\n')};
+        }));
         if(row?.document&&!row.protected&&!row.deleted&&!row.unavailable)item.append(command('lint-open','위키 검토',async token=>{
           const value=await NowNoteWiki.validateDocument(row.document,lintSnapshot.scope);requireActive(token);
           if(!api.canRead(value))throw Error('위키 접근 상태가 변경되었습니다.');
@@ -8998,6 +9030,9 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }));
       }
       report.append(item);
+    }
+    if(lintOriginal){
+      const original=node('section');original.dataset.wikiLintOriginal='';original.append(node('h4','원본 고정 판본'),node('small',lintOriginal.revision+' · '+lintOriginal.hash),node('pre',lintOriginal.content,'wiki-source-preview'));report.append(original);
     }
     detail.append(report);
   }
@@ -9084,7 +9119,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }));
     if(api.query&&(!readOnly||protectedQueryAccess))toolbar.append(command('query','위키에 질문',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 닫고 질문할까요?'))return;
-      requireActive(token);queryMode=true;querySnapshot=null;queryAnswer=null;graphCatalog=null;sourceMode=false;if(!readOnly)doc=null;dirty=false;trashMode=false;message='';
+      requireActive(token);semanticReview=false;queryMode=true;querySnapshot=null;queryAnswer=null;graphCatalog=null;sourceMode=false;if(!readOnly)doc=null;dirty=false;trashMode=false;message='';
     }));
     if(!readOnly&&api.sources)toolbar.append(command('sources',sourceMode?'지식 탐색':'자료 적재',async token=>{
       const next=sourceMode?[]:await api.sources.list();requireActive(token);
@@ -12419,13 +12454,14 @@ function voiceAuthHeaders(apiKey) {
 // ollama_llm_repository.dart와 같은 값을 쓴다 — 제품 전체가 같은 답을 내야 한다.
 async function llmChatRequest(provider, config, prompt, options = null) {
   const wiki=options!==null;
-  if(wiki&&(!options||Object.keys(options).length!==2||options.purpose!=="wiki-ingest"||options.maxOutputTokens!==4096))
+  if(wiki&&(!options||Object.keys(options).length!==2||!Object.hasOwn({"wiki-ingest":4096,"wiki-query":2048,"wiki-lint":2048},options.purpose)
+    ||options.maxOutputTokens!==({"wiki-ingest":4096,"wiki-query":2048,"wiki-lint":2048})[options.purpose]))
     throw new Error("위키 요청 출력 예산이 다릅니다.");
   const requestBody=body=>{
     if(!wiki)return body;
-    if(provider==="gemini")return {...body,generationConfig:{...body.generationConfig,maxOutputTokens:4096}};
-    if(["openai","groq"].includes(provider)){const {max_tokens,...rest}=body;return {...rest,max_completion_tokens:4096};}
-    return {...body,max_tokens:4096};
+    if(provider==="gemini")return {...body,generationConfig:{...body.generationConfig,maxOutputTokens:options.maxOutputTokens}};
+    if(["openai","groq"].includes(provider)){const {max_tokens,...rest}=body;return {...rest,max_completion_tokens:options.maxOutputTokens};}
+    return {...body,max_tokens:options.maxOutputTokens};
   };
   const post=(url,request)=>fetch(url,wiki?{...request,signal:AbortSignal.timeout(60000)}:request);
   const requesters = {
@@ -15483,7 +15519,9 @@ async function wikiServerRequest(path,method,body){
   return result;
 }
 
-function wikiConnection(){
+function wikiConnection(purpose="wiki-ingest"){
+  const outputTokens=({"wiki-ingest":4096,"wiki-query":2048,"wiki-lint":2048})[purpose];
+  if(!Object.hasOwn({"wiki-ingest":4096,"wiki-query":2048,"wiki-lint":2048},purpose))throw new Error("위키 요청 목적이 다릅니다.");
   const config=structuredClone(state.settings.llm),provider=config.provider;
   if(!isLlmConfigured(config))throw new Error("설정에서 LLM 연결을 먼저 확인하세요.");
   const defaults={
@@ -15505,11 +15543,11 @@ function wikiConnection(){
   if(!model||!endpoint)throw new Error("지원하지 않는 LLM 연결입니다.");
   const key=wikiViewKey();let invoked=false;
   const unchanged=()=>JSON.stringify(state.settings.llm)===JSON.stringify(config);
-  return {provider,model,endpoint,reasoning:provider==="omniroute"?config.omniReasoning||"":"",outputTokens:4096,callLimit:1,invoke:async prompt=>{
+  return {provider,model,endpoint,reasoning:provider==="omniroute"?config.omniReasoning||"":"",outputTokens,callLimit:1,invoke:async prompt=>{
     if(key!==wikiViewKey())throw new Error("계정·보호 상태가 변경되었습니다.");
     if(!unchanged())throw new Error("LLM 설정·모델이 변경되었습니다. 전송 범위를 다시 확인하세요.");
     if(invoked)throw new Error("위키 생성 요청은 작업당 한 번만 전송합니다.");invoked=true;
-    const response=await llmChatRequest(provider,config,prompt,{purpose:"wiki-ingest",maxOutputTokens:4096});
+    const response=await llmChatRequest(provider,config,prompt,{purpose,maxOutputTokens:outputTokens});
     if(key!==wikiViewKey())throw new Error("계정·보호 상태가 변경되었습니다.");
     if(!unchanged())throw new Error("LLM 설정·모델이 변경되었습니다.");
     if(!response.ok)throw new Error("LLM 응답 실패: HTTP "+response.status);

@@ -30,7 +30,7 @@ globalThis.runWikiQueryUiFixture=async function(phase){
     await until(()=>button('query-run')&&!button('query-run').disabled,'query_cancel');check(calls===0,'query_cancel_model');
     await click('query-run');await until(()=>button('confirm-send'),'query_confirm_again');await click('confirm-send');
     await until(()=>document.querySelector('[data-wiki-query-answer]'),'query_answer');
-    check(calls===1&&requestBody.max_tokens===4096&&requestBody.model==='Combo/auto'&&requestBody.reasoning_effort==='high','query_registered_request');
+    check(calls===1&&requestBody.max_tokens===2048&&requestBody.model==='Combo/auto'&&requestBody.reasoning_effort==='high','query_registered_request');
     check(document.querySelector('[data-wiki-query-answer]').textContent.includes('Synthetic compiled finding'),'query_claim');
     check(document.querySelector('[data-wiki-query-answer] a')?.getAttribute('href')==='#wiki-query-citation-c1','query_claim_citation_link');
     if(globalThis.WIKI_QUERY_QA_CAPTURE)await new Promise(resolve=>{globalThis.WIKI_QUERY_QA_FRAME={release:resolve};});

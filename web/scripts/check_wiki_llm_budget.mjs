@@ -21,12 +21,22 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
     const limit=provider==='gemini'?wiki.generationConfig.maxOutputTokens:['openai','groq'].includes(provider)?wiki.max_completion_tokens:wiki.max_tokens;
     assert.equal(limit,4096,provider+' Wiki output bound');
     assert.equal(calls.at(-1).bounded,true,'Wiki request needs a bounded one-attempt deadline');
+    for(const purpose of ['wiki-query','wiki-lint']){
+      await box.llmChatRequest(provider,config,'bounded review',{purpose,maxOutputTokens:2048});const body=calls.at(-1).body;
+      assert.equal(provider==='gemini'?body.generationConfig.maxOutputTokens:['openai','groq'].includes(provider)?body.max_completion_tokens:body.max_tokens,2048);
+      const attempts=calls.length;await assert.rejects(()=>box.llmChatRequest(provider,config,'wrong bound',{purpose,maxOutputTokens:4096}));assert.equal(calls.length,attempts);
+    }
     if(['openai','groq'].includes(provider))assert.equal(wiki.max_tokens,undefined,'do not send conflicting token fields');
     if(provider==='omniroute'){assert.equal(wiki.model,config.omniModel);assert.equal(wiki.reasoning_effort,'high');assert.equal(calls.at(-1).url,'https://registered.invalid/v1/chat/completions');}
     const before=calls.length;
     await assert.rejects(()=>box.llmChatRequest(provider,config,'invalid',{purpose:'wiki-ingest',maxOutputTokens:8192}),/위키|wiki/);assert.equal(calls.length,before);
   }
   const connection=box.wikiConnection();assert.equal(connection.outputTokens,4096);assert.equal(connection.callLimit,1);
+  for(const purpose of ['wiki-query','wiki-lint']){
+    const bounded=box.wikiConnection(purpose);assert.equal(bounded.outputTokens,2048,purpose+' must use its approved bound');
+    await bounded.invoke('synthetic semantic review');assert.equal(calls.at(-1).body.max_tokens,2048);
+  }
+  assert.throws(()=>box.wikiConnection('unknown'),/위키|wiki/);
   assert.equal(connection.reasoning,'high');const start=calls.length;await connection.invoke('synthetic only');await assert.rejects(()=>connection.invoke('duplicate'),/한 번|1회/);assert.equal(calls.length,start+1);
   const late=box.wikiConnection();key='owner-b';await assert.rejects(()=>late.invoke('do not send'),/계정|보호/);key='owner-a';
   const changed=box.wikiConnection();box.state.settings.llm.omniModel='different';await assert.rejects(()=>changed.invoke('do not send'),/설정|모델/);box.state.settings.llm.omniModel=config.omniModel;
