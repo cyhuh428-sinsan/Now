@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.models.library import LibraryResource
 from app.models.note_history import NoteHead
-from app.schemas.wiki import WikiLink
+from app.schemas.wiki import WikiLink, WikiLinkV2, digest
 from app.services.note_crypto_fence import error
 
 INTERNAL = "nownote_wiki_internal_write"
@@ -25,7 +25,10 @@ def wiki_id(local):
 
 def link(row):
     try:
-        value = WikiLink.model_validate(json.loads(row.payload_json))
+        value = (WikiLinkV2 if row.schema_version == 2 else WikiLink).model_validate(json.loads(row.payload_json))
+        if row.schema_version not in (1,2):error("inconsistent_wiki_index")
+        if row.schema_version == 2 and value.lineage_manifest_hash != digest(value.model_dump(exclude={"lineage_manifest_hash"})):
+            error("inconsistent_wiki_index")
     except (ValueError, TypeError):
         error("inconsistent_wiki_index")
     if (value.artifact_local_id != "wiki:" + row.id
@@ -82,7 +85,8 @@ def require_source_protection(db, owner, local):
     pending = []
     for row in rows:
         value = link(row)
-        if any(ref.owner_id == owner and ref.local_id == local for ref in value.dependencies):
+        if (any(ref.owner_id == owner and ref.local_id == local for ref in value.dependencies)
+                or any(ref.owner_id == owner and "wiki:"+ref.wiki_id == local for ref in getattr(value,"wiki_dependencies",[]))):
             if not fully_protected(db, owner, value.artifact_local_id):
                 pending.append(row.id)
     if pending:

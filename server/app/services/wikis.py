@@ -10,7 +10,7 @@ from app.models.library import LibraryMutation, LibraryResource
 from app.models.note import Note, UserAccount
 from app.models.note_history import NoteHead, NoteRevision
 from app.models.note_v2 import NoteMutation, NoteOfflineBranch
-from app.schemas.wiki import WikiArtifact, WikiLink, canonical
+from app.schemas.wiki import WikiArtifact, WikiArtifactV2, WikiLink, canonical
 from app.services import note_v2 as notes
 from app.services.library import resource_payload, error as resource_error
 from app.services.note_crypto_fence import error, require_unfenced
@@ -24,7 +24,8 @@ def parse_document(content, owner, ident):
     try:
         if len(content.encode("utf-8")) > 2097152:
             error("wiki_artifact_capacity", 413)
-        value = WikiArtifact.model_validate(json.loads(content))
+        raw = json.loads(content)
+        value = (WikiArtifactV2 if raw.get("schema_version") == 2 else WikiArtifact).model_validate(raw)
     except (ValueError, TypeError):
         error("wiki_invalid_document", 422)
     if value.wiki_id != ident or value.scope.owner != owner:
@@ -52,7 +53,9 @@ def document(db, owner, local):
 
 def dependencies(values):
     return sorted({(source.note_ref.owner_id, source.note_ref.local_id)
-                   for value in values for draft in value.drafts for source in draft.source_manifest})
+                   for value in values for draft in value.drafts
+                   for source in getattr(draft,"evidence_manifest",getattr(draft,"source_manifest",[]))
+                   if getattr(source,"kind","note")=="note"})
 
 
 def require_plain_sources(db, owner, refs):
@@ -68,6 +71,11 @@ def require_plain_sources(db, owner, refs):
 
 
 def verify_sources(db, owner, values, *, current=False):
+    if any(isinstance(value,WikiArtifactV2) for value in values):
+        from app.services.wiki_v2 import evidence, validate_evidence
+        for value in values:
+            for draft in value.drafts:validate_evidence(db,owner,evidence(draft),current=current)
+        return
     require_plain_sources(db, owner, dependencies(values))
     cache = {}
     for value in values:
@@ -138,8 +146,10 @@ def mutate(db, ident, body, operation):
         require_active_user_device(db, owner_id=body.owner_id, device_id=body.device_id)
         db.scalar(select(UserAccount).where(UserAccount.owner_id == body.owner_id).with_for_update())
         head, rows = notes.scope(db, body.owner_id, local)
+        existing_index=db.get(LibraryResource,(body.owner_id,"wikis",ident))
         values = [parse_document(body.note.content, body.owner_id, ident)] if operation == "put" else [
             parse_document(entry.snapshot.note.content, body.owner_id, ident) for entry in body.entries]
+        if any(isinstance(value,WikiArtifactV2) for value in values):error("wiki_operation_required")
         incoming = [body.note] if operation == "put" else [entry.snapshot.note for entry in body.entries]
         if any(value.note_type != "tree" or value.source != "wiki-artifact" or value.deleted_at is not None
                or value.parent_local_id is not None or value.level != 1 or value.title != "AI Wiki " + ident for value in incoming):
@@ -156,6 +166,8 @@ def mutate(db, ident, body, operation):
             replay = notes.replay(db, body, operation, head)
             db.commit()
             return replay
+        if existing_index is not None and existing_index.schema_version == 2:
+            error("wiki_operation_required")
         require_unfenced(db, [(body.owner_id, local)])
         row = db.get(LibraryResource, (body.owner_id, "wikis", ident))
         if row is None and (head is not None or rows):

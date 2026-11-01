@@ -2,7 +2,7 @@
 from typing import Annotated, Literal
 from pydantic import BeforeValidator, Field, model_validator
 from app.schemas.wiki import (
-    Strict, Ident, Hash, EvidenceV2, WikiArtifactV2, canonical, digest, _unique,
+    Strict, Ident, Hash, LabelId, EvidenceV2, WikiArtifactV2, canonical, digest, _unique,
 )
 
 
@@ -135,3 +135,4 @@ class OperationRecord(Strict):
     state: Literal["prepared", "committed", "aborted"]
     manifest: PrepareOperation
     reserved_bytes: int = Field(ge=131072, le=131072)
+    verified_inputs: dict[LabelId, Ident] = Field(default_factory=dict, max_length=30)

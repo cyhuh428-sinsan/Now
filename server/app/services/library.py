@@ -77,6 +77,10 @@ def resource_payload(row):
 
 
 def mutate(db: Session, *, owner_id, kind, resource_id, body, deleting=False):
+    if kind == "wikis":
+        error("wiki_review_required")
+    if kind == "wiki-operations":
+        error("invalid_resource_kind",422)
     encoded_payload = None if deleting else validate_payload(kind, body.payload)
     request_hash = hashlib.sha256(canonical({
         "kind": kind, "id": resource_id, "deleting": deleting,

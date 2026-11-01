@@ -54,8 +54,10 @@ def recovery_metadata(items):
               row['state'] == 'promoted' and operation_states.get(row['transition_id']) in active]
     executions = [{name: row[name] for name in ('owner_id', 'local_id', 'id', 'state')}
                   for row in items['note_protected_analysis_claims'] if row['state'] in ('client_pending', 'client_running', 'cancel_requested')]
+    wiki_pending=any(row['kind']=='wiki-operations' and json.loads(row['payload_json'])['state']=='prepared'
+                     for row in items['library_resources'])
     return {'requires_reauthentication': True, 'includes_client_journals': False,
-            'requires_reconciliation': bool(operations or drains or executions),
+            'requires_reconciliation': bool(operations or drains or executions or wiki_pending),
             'incomplete_operations': operations, 'incomplete_drains': drains, 'incomplete_executions': executions}
 
 
@@ -209,6 +211,8 @@ def validate_rows(items):
             with Session(connection, autoflush=False) as validation:
                 validate_graphs(validation)
                 validate_wikis(validation)
+                from app.services.wiki_operations import validate_operation_rows
+                validate_operation_rows(validation)
                 validate_operations(validation)
                 validate_related_references(validation)
                 validate_executions(validation)
@@ -228,6 +232,7 @@ def validate_wikis(db):
     from app.services.wikis import parse_document, dependencies
     from app.schemas.note_v2 import Snapshot
     rows = list(db.scalars(select(LibraryResource).where(LibraryResource.kind == 'wikis')))
+    relation_cache=set()
     indexes = {(row.owner_id, guard.link(row).artifact_local_id): row for row in rows}
     for head in db.scalars(select(NoteHead)):
         if guard.wiki_id(head.local_id) is not None and (head.owner_id, head.local_id) not in indexes:
@@ -238,6 +243,12 @@ def validate_wikis(db):
         if db.get(NoteHead, key) is None:
             raise ValueError('backup_wiki_head')
         refs = {(ref.owner_id, ref.local_id) for ref in link.dependencies}
+        for dependency in getattr(link,"wiki_dependencies",[]):
+            upper=db.get(LibraryResource,(dependency.owner_id,"wikis",dependency.wiki_id))
+            if upper is None:raise ValueError('backup_wiki_source')
+            if not guard.fully_protected(db,*key):
+                source_head=db.get(NoteHead,(dependency.owner_id,"wiki:"+dependency.wiki_id))
+                if source_head is None or source_head.crypto_epoch>0:raise ValueError('backup_wiki_plaintext_dependency')
         for owner, local in refs:
             source = db.get(NoteHead, (owner, local))
             if source is None or (owner, local) in indexes:
@@ -254,11 +265,23 @@ def validate_wikis(db):
                         snapshots.append(before)
         for raw in snapshots:
             note = Snapshot.model_validate_json(raw).note
-            if note.source != 'wiki-artifact' or note.title != 'AI Wiki ' + row.id:
+            if (note.source != 'wiki-artifact' or note.title != 'AI Wiki ' + row.id or note.note_type!='tree'
+                    or note.parent_local_id is not None or note.level!=1 or note.deleted_at is not None):
                 raise ValueError('backup_wiki_projection')
             value = parse_document(note.content, row.owner_id, row.id)
             if not set(dependencies([value])).issubset(refs):
                 raise ValueError('backup_wiki_dependencies')
+            from app.schemas.wiki import WikiArtifactV2
+            if isinstance(value,WikiArtifactV2):
+                if row.schema_version!=2:raise ValueError('backup_wiki_schema_floor')
+                from app.services.wiki_v2 import evidence,validate_evidence
+                from app.services.wiki_v2 import validate_archived_relations
+                validate_archived_relations(db,row.owner_id,value,relation_cache)
+                declared={canonical_ref for canonical_ref in [json.dumps(r.model_dump(),sort_keys=True) for r in link.wiki_dependencies]}
+                for draft in value.drafts:
+                    leaves,ancestors,_=validate_evidence(db,row.owner_id,evidence(draft),archive=True)
+                    if not leaves.issubset(refs) or not {json.dumps(r,sort_keys=True) for r in ancestors.values()}.issubset(declared):
+                        raise ValueError('backup_wiki_dependencies')
     for note in db.scalars(select(Note).where(Note.source == 'wiki-artifact')):
         if (note.owner_id, note.local_id) not in indexes:
             raise ValueError('backup_wiki_index')
@@ -774,6 +797,9 @@ def restore_empty(engine, backup):
             restore_sequences(connection, backup)
         with Session(connection, autoflush=False) as restored:
             validate_graphs(restored)
+            validate_wikis(restored)
+            from app.services.wiki_operations import validate_operation_rows
+            validate_operation_rows(restored)
             validate_operations(restored)
             validate_related_references(restored)
             validate_executions(restored)
