@@ -437,6 +437,61 @@ def get_operation(db,owner,operation_id):
                 receipt=json.loads(receipt.response_json))
 
 
+def generation_provenance(db, owner, document):
+    from app.models.note_history import NoteRevision
+    from app.services.wikis import parse_document
+    from app.schemas.wiki import uuid_text
+
+    wanted = {(d.id, d.draft_hash) for d in document.drafts if getattr(d, "schema_version", None) == 2}
+    entries, ambiguous, operations = {}, set(), {}
+    rows = db.scalars(select(NoteMutation).where(NoteMutation.owner_id == owner,
+        NoteMutation.local_id == "wiki:" + document.wiki_id, NoteMutation.operation == "wiki_operation"))
+    for row in rows:
+        try:
+            conditions = json.loads(row.conditions_json)
+            if set(conditions) != {"operation_id", "manifest_hash", "result_document_hash"}:
+                continue
+            ident = uuid_text(conditions["operation_id"])
+            if ident not in operations:
+                try:
+                    operations[ident] = get_operation(db, owner, ident)
+                except (HTTPException, ValueError, KeyError, TypeError):
+                    operations[ident] = None
+            original = operations[ident]
+            if not original or original["state"] != "committed" or original["manifest_hash"] != conditions["manifest_hash"]:
+                continue
+            manifest = original["manifest"]
+            change = next((c for c in manifest["changes"] if c["wiki_id"] == document.wiki_id
+                and c["note_mutation_id"] == row.mutation_id and c["action"] in {"create_draft", "append_draft"}), None)
+            if not change or change["result_document_hash"] != conditions["result_document_hash"]:
+                continue
+            page = next(p for p in original["receipt"]["pages"] if p["wiki_id"] == document.wiki_id)
+            revision = db.get(NoteRevision, page["result_revision_id"])
+            if revision is None or revision.owner_id != owner or revision.local_id != "wiki:" + document.wiki_id \
+                    or revision.representation_epoch != 0 or revision.representation_kind != "snapshot_v1":
+                continue
+            note = json.loads(revision.snapshot_json)["note"]
+            if note.get("source") != "wiki-artifact":
+                continue
+            result = parse_document(note["content"], owner, document.wiki_id)
+            if digest(result.model_dump()) != change["result_document_hash"]:
+                continue
+            draft = result.drafts[-1]
+            key = (draft.id, draft.draft_hash)
+            if key not in wanted or not any(b["wiki_id"] == document.wiki_id and b["draft_id"] == draft.id
+                    and b["draft_hash"] == draft.draft_hash for b in manifest["draft_bindings"]):
+                continue
+            entry = dict(draft_id=draft.id, draft_hash=draft.draft_hash, operation_id=ident,
+                manifest_hash=manifest["manifest_hash"], result_revision_id=page["result_revision_id"],
+                result_document_hash=change["result_document_hash"])
+            if key in entries and entries[key] != entry:
+                ambiguous.add(key)
+            entries[key] = entry
+        except (HTTPException, ValueError, KeyError, TypeError, StopIteration):
+            continue
+    return dict(schema_version=1, entries=[entries[key] for key in sorted(entries) if key not in ambiguous])
+
+
 def validate_operation_rows(db):
     from app.models.note_history import NoteRevision
     for row in db.scalars(select(LibraryResource).where(LibraryResource.kind==KIND)):

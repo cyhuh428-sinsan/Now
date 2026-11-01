@@ -118,7 +118,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       input.onchange=()=>{change(input.value);};label.append(input);form.append(label);return input;
     };
     const target=editor.targets.find(r=>r.wiki_id===editor.target);
-    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title]),editor.target,value=>{editor.target=value;editor.to='';render();});
+    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title+(r.stale?' · 원본 변경':'')]),editor.target,value=>{editor.target=value;editor.to='';render();});
     select('wiki-relation-type','관계 유형',[['related_to','관련'],['supports','뒷받침'],['contradicts','상충'],['extends','확장'],['depends_on','의존']],editor.type,value=>editor.type=value);
     select('wiki-relation-confidence','근거 상태',[['explicit','직접 근거'],['inferred','추론'],['uncertain','불확실']],editor.confidence,value=>editor.confidence=value);
     select('wiki-relation-from','시작 절',[['','페이지 전체'],...draft.sections.map(s=>[s.id,s.title])],editor.from,value=>editor.from=value);
@@ -390,7 +390,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(!readOnly&&api.ingest?.integrate&&api.approvedCatalog&&approved&&draft.id===doc.approvals.at(-1)?.draft_id){
         detail.append(command('integrate','관계 추가',async token=>{
           const catalog=await api.approvedCatalog();requireActive(token);
-          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id&&!r.stale);
+          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id);
           if(!targets.length)throw Error('출처가 확인된 다른 승인 위키가 없습니다.');
           relationEditor={wiki_id:doc.wiki_id,draft_id:draft.id,targets,target:targets[0].wiki_id,type:'related_to',confidence:'inferred',from:'',to:'',citations:draft.citations.slice(0,1).map(c=>c.id)};
         },dirty));renderRelationEditor(detail,draft);

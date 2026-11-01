@@ -12,7 +12,7 @@ const P=box.NowNoteProtectionProtocol,instance=webcrypto.randomUUID(),sourceId='
 const ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic',enabled:true,online:true};
 const now='2026-11-01T00:00:00.000000Z',source={id:1,owner_id:ctx.owner,local_id:sourceId,device_id:ctx.device,note_type:'tree',title:'Server evidence',content:'Exact remote evidence.',source:'manual',parent_local_id:null,level:1,tags:null,deleted_at:null,created_at:now,updated_at:now,client_updated_at:now};
 const makeCurrent=(note,id,version=1)=>({status:'ok',snapshot:{schema_version:1,note:structuredClone(note)},head_revision_id:id,head_version:version,crypto_epoch:0,history_generation:version,protection_state:'legacy',identity_state:'coherent',replica_count:1,inventory_revision_ids:[id],has_replica_variants:false});
-const notes=new Map([[sourceId,makeCurrent(source,revision)]]),operations=new Map();let saved=null,history,writes=0,fail=false,posts=0,lost=false,prepareLost=false;
+const notes=new Map([[sourceId,makeCurrent(source,revision)]]),operations=new Map();let saved=null,history,writes=0,fail=false,posts=0,lost=false,prepareLost=false,withProvenance=false;
 const representations=new Map([[revision,structuredClone(notes.get(sourceId))]]);
 const createHistory=()=>box.NowNoteHistory.create({initial:saved,context:()=>ctx,write:async value=>{if(fail)throw Error('quota');saved=structuredClone(value);writes++;},request:async()=>{throw Error('unexpected legacy write');}});
 history=createHistory();await history.track(source,notes.get(sourceId));
@@ -54,7 +54,14 @@ const api={context:()=>ctx,contextKey:()=>JSON.stringify(ctx),history:()=>histor
       return row?{document:P.parseJson(row.snapshot.note.content),safety:{status:'ok',epoch:0,lineage:false,fence:false}}:null;
     }});
     const payload={artifact_local_id:'wiki:'+id,dependencies:union.dependencies,wiki_dependencies:union.wiki_dependencies,document_schema_floor:2};payload.lineage_manifest_hash=await P.hashJson(payload);
-    return {resource:{id,owner_id:ctx.owner,schema_version:2,version:current.head_version,deleted_at:null,payload},artifact:{protected:false,head_revision_id:current.head_revision_id,document},source_status:{available:true,stale:false}};
+    const entries=[];
+    if(withProvenance)for(const op of operations.values()){
+      const change=op.manifest.changes.find(c=>c.wiki_id===id&&['create_draft','append_draft'].includes(c.action));
+      if(!change||op.receipt.state!=='committed')continue;
+      const binding=op.manifest.draft_bindings.find(b=>b.wiki_id===id),page=op.receipt.pages.find(p=>p.wiki_id===id);
+      entries.push({draft_id:binding.draft_id,draft_hash:binding.draft_hash,operation_id:op.manifest.operation_id,manifest_hash:op.manifest.manifest_hash,result_revision_id:page.result_revision_id,result_document_hash:change.result_document_hash});
+    }
+    return {resource:{id,owner_id:ctx.owner,schema_version:2,version:current.head_version,deleted_at:null,payload},artifact:{protected:false,head_revision_id:current.head_revision_id,document,...(withProvenance?{generation_provenance:{schema_version:1,entries}}:{})},source_status:{available:true,stale:false}};
   }};
 api.lifecycle=box.NowWikiLifecycle.create(api);api.sources=box.NowNoteWikiSources.create(api);api.server=box.NowWikiServerAccess.create({...api,readWiki:api.readRemote});
 const notebook=box.createWikiNotebook(api);api.captureNotes=ids=>notebook.capture(ids);
@@ -112,7 +119,6 @@ assert.equal((await book.plan({fileIds:[],noteIds:['selected-comparison','beta-e
 const alphaProposal=combinedProposal.proposal.documents.find(row=>row.wiki_id!==beta.wiki_id);
 const alphaDecision=await book.approveLocal(alphaProposal.document,alphaProposal.document.drafts.at(-1).id);
 await book.prepareServer(alphaDecision.operation_id);await book.commitServer(alphaDecision.operation_id);await book.applyServer(alphaDecision.operation_id);
-const originalJournal=structuredClone(saved),originalDevice=ctx.device;
 ctx.device='peer';saved=null;history=createHistory();book=box.createWikiIngestNotebook(api);
 for(const current of notes.values())await history.track(current.snapshot.note,current);
 api.readOperations=async()=>[];
@@ -125,7 +131,23 @@ assert.equal((await box.NowNoteWikiIngest.verifyCarriedRelation(sourceBefore,sou
 const betaCurrent=P.parseJson(notes.get('wiki:'+beta.wiki_id).snapshot.note.content),betaApproval=betaCurrent.approvals.at(-1);
 const manualRelation={id:'manual-server',from_section_id:'s1',to_ref:{kind:'approved',wiki_id:beta.wiki_id,draft_id:betaApproval.draft_id,approval_id:betaApproval.id,draft_hash:betaApproval.draft_hash,section_id:'s1'},type:'supports',confidence:'inferred',citation_ids:['c1']};
 await assert.rejects(()=>book.integrate(alphaProposal.wiki_id,manualRelation),/wiki_dependency_unverified/,'missing producer history cannot be treated as complete on a fresh peer');
-saved=originalJournal;ctx.device=originalDevice;history=createHistory();book=box.createWikiIngestNotebook(api);
+withProvenance=true;
+const peerApproval=sourceBefore.approvals.at(-1),peerDraft=sourceBefore.drafts.at(-1),peerRef={id:'peer-root',kind:'wiki',origin:'server',owner_id:ctx.owner,wiki_id:sourceBefore.wiki_id,draft_id:peerDraft.id,approval_id:peerApproval.id,document_version:sourceBefore.document_version,content_hash:peerDraft.draft_hash};
+const peerWrites=writes,peerGraph=await box.NowWikiEvidence.create(api).graph([peerRef]);
+assert.equal(peerGraph.nodes.find(n=>n.wiki_id===sourceBefore.wiki_id).complete,true,'new device must verify metadata against original operation and result history');
+assert.equal(writes,peerWrites,'producer discovery does not register a fake local operation or cache');
+const goodReader=api.readRemote,goodServer=api.server,postsBeforeProof=posts;
+for(const mutate of [m=>m.entries.pop(),m=>m.entries[0].manifest_hash='f'.repeat(64),m=>m.entries[0].result_revision_id=webcrypto.randomUUID(),m=>m.entries.push(structuredClone(m.entries[0])),m=>m.extra='forbidden']){
+  api.server=box.NowWikiServerAccess.create({...api,readWiki:async id=>{const value=await goodReader(id);if(id===sourceBefore.wiki_id)mutate(value.artifact.generation_provenance);return value;}});
+  let denied=false;try{const graph=await box.NowWikiEvidence.create(api).graph([peerRef]);denied=graph.nodes.some(n=>!n.complete);}catch(error){assert.match(error.message,/wiki_provenance_invalid/);denied=true;}
+  assert.equal(denied,true,'missing, changed or ambiguous metadata never proves completeness');
+}
+api.server=goodServer;
+const firstOperation=operations.get(plan.operation_id),firstRevision=firstOperation.receipt.pages[0].result_revision_id,oldRepresentation=representations.get(firstRevision),changedRepresentation=structuredClone(oldRepresentation);
+const changedResult=P.parseJson(changedRepresentation.snapshot.note.content),changedDraft=changedResult.drafts[0];changedDraft.summary='Tampered old result';delete changedDraft.draft_hash;changedDraft.draft_hash=await P.hashJson(changedDraft);
+changedRepresentation.snapshot.note.content=P.canonicalJson(changedResult);representations.set(firstRevision,changedRepresentation);
+await assert.rejects(()=>box.NowWikiEvidence.create(api).graph([peerRef]),/wiki_provenance_invalid/,'a valid typed replacement is not the original receipt-bound result');
+representations.set(firstRevision,oldRepresentation);assert.equal(posts,postsBeforeProof,'all metadata failure checks are read only');
 const manual=await book.integrate(alphaProposal.wiki_id,manualRelation);
 assert.equal(manual.proposal.plan.calls,0);await book.stageServer(manual);
 assert.equal((await book.operations()).find(o=>o.operation_id===manual.operation_id).remote.manifest.kind,'integrate');

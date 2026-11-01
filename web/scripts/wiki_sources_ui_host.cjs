@@ -133,12 +133,13 @@ app.whenReady().then(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
       const stored=await wikiNotebook.list();let blocked='';
       const ui=mountNowWiki({contextKey:()=> 'relation-visibility',notes:()=>[],list:async()=>stored,canRead:d=>d.wiki_id!==blocked,
-        sourceStatus:async()=>({available:true,stale:false}),approvedCatalog:()=>wikiNotebook.approvedCatalog(),
+        sourceStatus:async()=>({available:true,stale:false}),approvedCatalog:async()=>{const value=await wikiNotebook.approvedCatalog();return {...value,nodes:value.nodes.map(n=>({...n,stale:true}))};},
         ingest:{operations:async()=>[],integrate:async()=>{throw Error('not selected');}}});
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn)=>{for(let n=0;n<300;n++){if(fn())return;await pause();}throw Error('relation_visibility_ready');};
       await ui.open();document.querySelector('#wikiDialog .wiki-entry button.library-item').click();
       await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=integrate]'))&&!document.querySelector('#wikiDialog [data-wiki-action=integrate]').disabled);
       document.querySelector('#wikiDialog [data-wiki-action=integrate]').click();await until(()=>Boolean(document.querySelector('#wikiDialog [name=wiki-relation-target]')));
+      if(!document.querySelector('#wikiDialog [name=wiki-relation-target]').textContent.includes('원본 변경'))throw Error('stale_relation_target_unmarked');
       blocked=document.querySelector('#wikiDialog [name=wiki-relation-target]').value;ui.check();
       if(document.querySelector('#wikiDialog').open||document.querySelector('#wikiDialog').textContent)throw Error('locked_relation_target_label_residue');
       ui.close();return {targetLockConcealed:true};

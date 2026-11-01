@@ -7220,7 +7220,8 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       const approval=document.approvals.find(v=>v.id===ref.approval_id&&v.draft_id===ref.draft_id),draft=document.drafts.find(d=>d.id===ref.draft_id&&d.draft_hash===ref.content_hash);
       if(approval&&draft&&(!chosen||row.revision_ref.id===proof.current.head_revision_id))chosen={document,draft,revisionId:row.revision_ref.id};
     }
-    check(chosen,'wiki_source_unavailable');return {...copy(chosen),currentDocument,index,history,deleted:Boolean(remote.resource.deleted_at),instance:proof.instance,safety:proof.safety};
+    check(chosen,'wiki_source_unavailable');return {...copy(chosen),currentDocument,index,history,deleted:Boolean(remote.resource.deleted_at),instance:proof.instance,safety:proof.safety,
+      ...(Object.hasOwn(remote.artifact,'generation_provenance')?{generationProvenance:copy(remote.artifact.generation_provenance)}:{})};
   }
   function verifyReceipt(value,manifest){
     exact(value,['status','wiki_operation','operation_id','manifest_hash','state','pages']);
@@ -7305,7 +7306,8 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     const active=()=>check(key===api.contextKey()&&api.context().enabled&&api.history()===h,'wiki_context_changed');
     const roots=[h.export(),...(await api.retainedRoots?.()||[])];active();const all=[],queue=[...roots],seen=new WeakSet();
     while(queue.length){const value=queue.shift();if(value==null)continue;check(typeof value==='object'&&value.contexts&&typeof value.contexts==='object');if(seen.has(value))continue;seen.add(value);all.push(value);queue.push(...(value.recovery_archives||[]));}
-    return {ctx,h,active,roots:all,account:NowNoteHistory.key(ctx),docs:new Map(),notes:new Map(),wikis:new Map(),versions:new Set(),producerInstances:new Set()};
+    return {ctx,h,active,roots:all,account:NowNoteHistory.key(ctx),docs:new Map(),notes:new Map(),wikis:new Map(),versions:new Set(),producerInstances:new Set(),
+      provenance:new Map(),producerReads:new Map(),serverHistories:new Map()};
   }
   function localItems(a,id){return a.roots.flatMap(r=>{const item=r.contexts?.[a.account]?.notes?.[id];return item?[item]:[];});}
   function bind(a,instance){if(!instance)return;check(!a.instance||a.instance===instance,'wiki_context_changed');a.instance=instance;a.onInstance?.(instance);}
@@ -7367,6 +7369,9 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     let value;
     if(ref.origin==='server'){
       check(api.server,'wiki_source_unavailable');value=await api.server.pinnedWiki(ref,{fresh,allowDeleted,policy:fresh?2:1});a.active();bind(a,value.instance);
+      check(a.serverHistories.has(ref.wiki_id)||a.serverHistories.size<2000,'wiki_dependency_limit');
+      a.serverHistories.set(ref.wiki_id,value.history);
+      if(Object.hasOwn(value,'generationProvenance'))a.provenance.set(ref.wiki_id,value.generationProvenance);
       await documents(a,ref.wiki_id,value.history);
     }else{
       const local='wiki:'+ref.wiki_id,item=a.h.view(local);check(item&&item.localOnly,'wiki_source_unavailable');plainLocal(a,local);
@@ -7382,6 +7387,56 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     check(value.currentDocument.document_version>=ref.document_version,'wiki_source_changed');
     const stale=!eq(tuple(value.currentDocument),[ref.approval_id,ref.draft_id,ref.content_hash]);check(!fresh||!stale,'wiki_source_changed');
     const result={kind:'wiki',...value,stale};a.wikis.set(key,result);return result;
+  }
+  async function remoteGeneration(a,wikiId,draft){
+    if(!a.provenance.has(wikiId))return false;
+    const metadata=a.provenance.get(wikiId),uuid=v=>typeof v==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(v),hash=v=>typeof v==='string'&&/^[0-9a-f]{64}$/.test(v);
+    const exact=(value,keys)=>value&&typeof value==='object'&&!Array.isArray(value)&&Object.keys(value).length===keys.length&&keys.every(k=>Object.hasOwn(value,k));
+    check(exact(metadata,['schema_version','entries'])&&metadata.schema_version===1&&Array.isArray(metadata.entries)&&metadata.entries.length<=1000,'wiki_provenance_invalid');
+    const keys=new Set();
+    for(const entry of metadata.entries){
+      check(exact(entry,['draft_id','draft_hash','operation_id','manifest_hash','result_revision_id','result_document_hash'])
+        &&[entry.draft_id,entry.operation_id,entry.result_revision_id].every(uuid)&&[entry.draft_hash,entry.manifest_hash,entry.result_document_hash].every(hash),'wiki_provenance_invalid');
+      const key=entry.draft_id+':'+entry.draft_hash;check(!keys.has(key),'wiki_provenance_invalid');keys.add(key);
+    }
+    const entry=metadata.entries.find(e=>e.draft_id===draft.id&&e.draft_hash===draft.draft_hash);
+    if(!entry)return false;
+    check(api.server?.readOperation&&a.instance,'wiki_source_unavailable');
+    if(!a.producerReads.has(entry.operation_id)){const value=await api.server.readOperation(entry.operation_id,a.instance);a.active();a.producerReads.set(entry.operation_id,value);}
+    const original=a.producerReads.get(entry.operation_id),manifest=original.manifest;
+    check(original.state==='committed'&&manifest.owner_id===a.ctx.owner&&['ingest','integrate'].includes(manifest.kind)
+      &&original.manifest_hash===entry.manifest_hash&&manifest.operation_id===entry.operation_id,'wiki_provenance_invalid');
+    let matched=false;
+    for(const change of manifest.changes){
+      const page=original.receipt.pages.find(p=>p.wiki_id===change.wiki_id);check(page,'wiki_provenance_invalid');
+      if(!a.serverHistories.has(change.wiki_id)){
+        check(a.serverHistories.size<2000,'wiki_dependency_limit');
+        plainLocal(a,'wiki:'+change.wiki_id);
+        const proof=await api.server.inspect('wiki:'+change.wiki_id,undefined,{policy:1});a.active();bind(a,proof.instance);
+        const history=[];for(const row of proof.history){
+          check(row.snapshot.note.source==='wiki-artifact','wiki_evidence_binding');const document=await W.validateDocument(row.snapshot.note.content,a.ctx);a.active();
+          check(document.wiki_id===change.wiki_id,'wiki_evidence_binding');const hash=await P.hashJson(document);a.active();a.versions.add(change.wiki_id+':'+hash);check(a.versions.size<=2000,'wiki_dependency_limit');
+          history.push({revision_ref:copy(row.revision_ref),document});
+        }a.serverHistories.set(change.wiki_id,history);
+      }
+      const document=a.serverHistories.get(change.wiki_id).find(r=>r.revision_ref.kind==='note_revision'&&r.revision_ref.id===page.result_revision_id)?.document;
+      check(document&&await P.hashJson(document)===change.result_document_hash,'wiki_provenance_invalid');a.active();
+      if(!['create_draft','append_draft'].includes(change.action))continue;
+      const chosen=document.drafts.at(-1),binding=manifest.draft_bindings.find(b=>b.wiki_id===change.wiki_id&&b.draft_id===chosen.id&&b.draft_hash===chosen.draft_hash);
+      check(binding,'wiki_provenance_invalid');
+      const parent=document.approvals.find(v=>v.id===chosen.base_approved_revision_id),before=document.drafts.find(d=>d.id===parent?.draft_id),own=manifest.inputs.filter(r=>r.kind==='wiki'&&r.wiki_id===change.wiki_id);
+      let expected=manifest.inputs;
+      if(parent&&own.length){
+        check(own.length===1&&own[0].approval_id===parent.id&&own[0].draft_id===before?.id&&own[0].content_hash===before.draft_hash
+          &&own[0].document_version===document.document_version-1,'wiki_provenance_invalid');expected=manifest.inputs.filter(r=>r.id!==own[0].id);
+      }else if(parent&&manifest.changes.length>1)return false;
+      check(eq(expected,W.evidenceOf(chosen)),'wiki_provenance_invalid');
+      if(change.wiki_id===wikiId){
+        check(chosen.id===draft.id&&chosen.draft_hash===draft.draft_hash&&page.result_revision_id===entry.result_revision_id
+          &&change.result_document_hash===entry.result_document_hash,'wiki_provenance_invalid');matched=true;
+      }
+    }
+    return matched;
   }
   async function knownGeneration(a,wikiId,draft,docs){
     const candidates=a.roots.flatMap(root=>Object.values(root.contexts?.[a.account]?.wiki_ingest_operations||{}));
@@ -7414,7 +7469,7 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
         if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(row.scope.serverInstance))continue;
         a.producerInstances.add(row.scope.serverInstance);
       }return true;
-    }return false;
+    }return remoteGeneration(a,wikiId,draft);
   }
   async function graph(refs,{instance,onInstance}={}){
     const a=await action(),nodes=new Map(),visiting=new Set(),leaves=new Set();a.instance=instance;a.onInstance=onInstance;
@@ -8253,7 +8308,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       input.onchange=()=>{change(input.value);};label.append(input);form.append(label);return input;
     };
     const target=editor.targets.find(r=>r.wiki_id===editor.target);
-    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title]),editor.target,value=>{editor.target=value;editor.to='';render();});
+    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title+(r.stale?' · 원본 변경':'')]),editor.target,value=>{editor.target=value;editor.to='';render();});
     select('wiki-relation-type','관계 유형',[['related_to','관련'],['supports','뒷받침'],['contradicts','상충'],['extends','확장'],['depends_on','의존']],editor.type,value=>editor.type=value);
     select('wiki-relation-confidence','근거 상태',[['explicit','직접 근거'],['inferred','추론'],['uncertain','불확실']],editor.confidence,value=>editor.confidence=value);
     select('wiki-relation-from','시작 절',[['','페이지 전체'],...draft.sections.map(s=>[s.id,s.title])],editor.from,value=>editor.from=value);
@@ -8525,7 +8580,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(!readOnly&&api.ingest?.integrate&&api.approvedCatalog&&approved&&draft.id===doc.approvals.at(-1)?.draft_id){
         detail.append(command('integrate','관계 추가',async token=>{
           const catalog=await api.approvedCatalog();requireActive(token);
-          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id&&!r.stale);
+          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id);
           if(!targets.length)throw Error('출처가 확인된 다른 승인 위키가 없습니다.');
           relationEditor={wiki_id:doc.wiki_id,draft_id:draft.id,targets,target:targets[0].wiki_id,type:'related_to',confidence:'inferred',from:'',to:'',citations:draft.citations.slice(0,1).map(c=>c.id)};
         },dirty));renderRelationEditor(detail,draft);

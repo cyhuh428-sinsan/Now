@@ -315,6 +315,9 @@ def get(db, owner, ident):
                                "head_version": head.version, "head_revision_id": head.head_revision_id,
                                "protected": head.crypto_epoch > 0,
                                "document": stored.model_dump() if stored and status["available"] else None}}
+        if stored and status["available"]:
+            from app.services.wiki_operations import generation_provenance
+            result["artifact"]["generation_provenance"] = generation_provenance(db, owner, stored)
         db.commit()
         return result
     except Exception:

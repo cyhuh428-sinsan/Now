@@ -85,7 +85,8 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       const approval=document.approvals.find(v=>v.id===ref.approval_id&&v.draft_id===ref.draft_id),draft=document.drafts.find(d=>d.id===ref.draft_id&&d.draft_hash===ref.content_hash);
       if(approval&&draft&&(!chosen||row.revision_ref.id===proof.current.head_revision_id))chosen={document,draft,revisionId:row.revision_ref.id};
     }
-    check(chosen,'wiki_source_unavailable');return {...copy(chosen),currentDocument,index,history,deleted:Boolean(remote.resource.deleted_at),instance:proof.instance,safety:proof.safety};
+    check(chosen,'wiki_source_unavailable');return {...copy(chosen),currentDocument,index,history,deleted:Boolean(remote.resource.deleted_at),instance:proof.instance,safety:proof.safety,
+      ...(Object.hasOwn(remote.artifact,'generation_provenance')?{generationProvenance:copy(remote.artifact.generation_provenance)}:{})};
   }
   function verifyReceipt(value,manifest){
     exact(value,['status','wiki_operation','operation_id','manifest_hash','state','pages']);
