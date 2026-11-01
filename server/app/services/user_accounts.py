@@ -75,6 +75,43 @@ def verify_password(password: str, password_hash: str | None) -> bool:
         return False
 
 
+def _locked_account(db: Session, owner_id: str) -> UserAccount | None:
+    from app.services.note_history import lock_note_writes
+
+    with db.no_autoflush:
+        lock_note_writes(db, [owner_id])
+        for pending in db.new:
+            if isinstance(pending, UserAccount) and pending.owner_id == owner_id:
+                return pending
+        return db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+
+
+def _owner_data_exists(db: Session, owner_id: str) -> bool:
+    from app.models import note, note_history, note_v2, note_crypto, note_related, note_mixed, protected_analysis, library
+
+    # 본문·암호문을 읽지 않고 직접 소유 열의 존재만 확인한다.
+    owners = (
+        note.Note.owner_id, note.Recording.owner_id, note.AnalysisJob.owner_id, note.SyncLog.owner_id,
+        note.UserDevice.owner_id, note.WebSession.owner_id, note.UserMailSettings.owner_id,
+        note.UserWorklogMailRecipient.owner_id, note.GroupMessage.sender_owner_id, note.GroupMessageRead.owner_id,
+        note.MessengerRoom.created_by, note.MessengerRoomMember.owner_id, note.MessengerMessage.sender_owner_id,
+        note.MessengerAttachment.owner_id, note.NoteAttachment.owner_id,
+        note_history.NoteHead.owner_id, note_history.NoteRevision.owner_id, note_history.NoteInventory.owner_id,
+        note_v2.NoteOfflineBranch.owner_id, note_v2.NoteMutation.owner_id,
+        note_crypto.NoteCryptoTransition.owner_id, note_crypto.NoteCryptoFence.owner_id, note_crypto.NoteRepresentationOrigin.owner_id,
+        note_related.LinkedText.owner_id, note_related.RelatedDrain.owner_id, note_related.AnalysisRun.owner_id,
+        note_mixed.MixedScope.owner_id, note_mixed.MixedSlot.owner_id, protected_analysis.ProtectedAnalysisClaim.owner_id,
+        library.LibraryResource.owner_id, library.LibraryMutation.owner_id,
+    )
+    with db.no_autoflush:
+        for column in owners:
+            if any(pending.__table__ is column.table and getattr(pending, column.key) == owner_id for pending in db.new):
+                return True
+            if db.scalar(select(column).where(column == owner_id).limit(1)) is not None:
+                return True
+    return False
+
+
 def touch_user_activity(
     db: Session,
     *,
@@ -82,8 +119,10 @@ def touch_user_activity(
     seen_at: datetime | None = None,
 ) -> UserAccount:
     now = seen_at or datetime.utcnow()
-    user = db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id))
+    user = _locked_account(db, owner_id)
     if user is None:
+        if _owner_data_exists(db, owner_id):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="user already exists")
         user = UserAccount(owner_id=owner_id, is_active=1, last_seen_at=now)
         db.add(user)
         return user
@@ -263,8 +302,8 @@ def create_user_account(
     cleaned_owner_id = _clean_required(owner_id, "", 80)
     if not cleaned_owner_id:
         return None
-    existing = db.scalar(select(UserAccount).where(UserAccount.owner_id == cleaned_owner_id))
-    if existing is not None:
+    existing = _locked_account(db, cleaned_owner_id)
+    if existing is not None or _owner_data_exists(db, cleaned_owner_id):
         return None
     cleaned_group_name = ensure_user_group(db, group_name).name
     user = UserAccount(

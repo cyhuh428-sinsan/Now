@@ -30,7 +30,7 @@ def main(argv=None):
     os.environ["NOW_DATABASE_URL"]="sqlite:///:memory:"
     sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
     try:
-        from sqlalchemy import CheckConstraint, create_engine, event, inspect, select
+        from sqlalchemy import CheckConstraint, create_engine, event, func, inspect, select
         from sqlalchemy.engine import make_url
         from sqlalchemy.schema import CreateSchema, DropSchema, AddConstraint, DropConstraint
         url=make_url(os.environ[URL_ENV])
@@ -90,8 +90,12 @@ def main(argv=None):
         if settings.api_token:
             headers["X-Now-Token"]=settings.api_token
         app=create_app()
+        connection_barrier=None;race_connections=[]
         def backend():
             with Session(engine,autoflush=False) as db:
+                if connection_barrier is not None:
+                    race_connections.append(db.scalar(select(func.pg_backend_pid())))
+                    connection_barrier.wait(timeout=10)
                 yield db
         app.dependency_overrides[get_db]=backend
         # Startup의 기본 DB 초기화 대신 위에서 자기 schema만 초기화한다.
@@ -234,6 +238,50 @@ def main(argv=None):
         loser=next(body for code,body in results if code==409)
         require(loser["detail"]["code"]==("operation_already_committed" if winner["state"]=="committed" else "operation_aborted"),"incorrect_terminal_conflict")
         require(status(p)["state"]==winner["state"] and status(p)["receipt"]==winner,"race_receipt_mismatch")
+        checks.append(step)
+
+        step="retired_owner_registration_guard"
+        retired=schema+"-retired";password="Synthetic!123"
+        registration=dict(owner_id=retired,password=password,email="first@example.invalid",device_id=device)
+        registered=client.post("/api/v1/auth/register",json=registration)
+        require(registered.status_code==200,"registration_failed")
+        login=client.post("/api/v1/auth/web-login",json=dict(owner_id=retired,password=password))
+        require(login.status_code==200,"normal_login_failed")
+        retired_headers={**headers,"X-Now-User-Token":registered.json()["access_token"]}
+        note=PutNote(schema_version=1,owner_id=retired,device_id=device,local_id="retired-source",mutation_id=str(uuid4()),
+            crypto_epoch=0,base_head_version=0,base_revision_id=None,expected_inventory_revision_ids=[],
+            note=dict(note_type="daily",title="Synthetic",content="I7_OWNER_REUSE_SYNTHETIC"))
+        written=client.put("/api/v2/notes/current",json=note.model_dump(),headers=retired_headers)
+        require(written.status_code==200,"retired_source_write_failed")
+        revision_id=written.json()["result_revision_id"]
+        deleted=client.post("/api/v1/auth/delete-account",json=dict(owner_id=retired,password=password))
+        require(deleted.status_code==200,"account_deletion_failed")
+        before=state()
+        denied=client.post("/api/v1/auth/register",json={**registration,"password":"Different!456","email":"second@example.invalid"})
+        require(denied.status_code==409 and denied.json()==dict(detail="user already exists"),"retired_owner_reassigned")
+        require(state()==before,"retained_owner_data_changed")
+        with Session(engine) as db:
+            require(db.scalar(select(UserAccount).where(UserAccount.owner_id==retired)) is None,"retired_account_recreated")
+            require(db.get(NoteRevision,revision_id) is not None,"retired_revision_lost")
+        denied=client.get("/api/v2/notes/revision",headers=retired_headers,params=dict(owner_id=retired,local_id="retired-source",
+            revision_kind="note_revision",revision_id=revision_id))
+        require(denied.status_code==401,"old_token_still_reads_retired_history")
+        checks.append(step)
+
+        step="same_owner_registration_race"
+        race_owner=schema+"-race";connection_barrier=Barrier(2)
+        def register(index):
+            return client.post("/api/v1/auth/register",json=dict(owner_id=race_owner,password=password,
+                email="race"+str(index)+"@example.invalid",device_id=device+str(index)))
+        try:
+            with ThreadPoolExecutor(max_workers=2) as pool:responses=list(pool.map(register,(1,2)))
+        finally:
+            connection_barrier=None
+        require(len(set(race_connections))==2,"registration_race_needs_independent_connections")
+        require(sorted(response.status_code for response in responses)==[200,409],"registration_race_not_serialized")
+        require(next(response for response in responses if response.status_code==409).json()==dict(detail="user already exists"),"unsafe_registration_conflict")
+        with Session(engine) as db:
+            require(len(db.scalars(select(UserAccount).where(UserAccount.owner_id==race_owner)).all())==1,"duplicate_registered_owner")
         checks.append(step)
     except Exception:
         failed=True
