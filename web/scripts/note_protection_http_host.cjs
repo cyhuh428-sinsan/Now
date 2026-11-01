@@ -120,9 +120,9 @@ app.whenReady().then(async()=>{
     if(clientMode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
-    if([50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
+    if([50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
-    if([40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67].includes(config.phase)){
+    if([40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase)){
       if(providerAttempts!==0)throw Error('canvas_provider_attempt');
       persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:0,closed:true}});
     }
@@ -139,4 +139,4 @@ app.whenReady().then(async()=>{
     persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();app.exit(1);
   }
 });
-setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>app.exit(1));},config.phase===66?240000:120000).unref();
+setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>app.exit(1));},[66,68,69].includes(config.phase)?240000:120000).unref();
