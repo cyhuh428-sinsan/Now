@@ -110,9 +110,9 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     check(rows.length===3&&saved?.document.approvals.length===1&&saved.document.drafts[0].evidence_manifest.length===2,'lint_cold_document');
     check((await wikiIngest.operations()).length===5,'lint_original_operations');check(modelCalls===(config.phase===60?1:0),'lint_no_model_calls');
     lintVerified=true;wikiUI.close();
-  }else if([58,59].includes(config.phase)){
+  }else if([58,59,64,65].includes(config.phase)){
     const pd=()=>document.querySelector('#noteProtectionDialog'),pb=name=>pd()?.querySelector('[data-action="'+name+'"]');
-    const password='qa-query-protection-'+config.run;
+    const password=(config.phase>=64?'qa-lint-protection-':'qa-query-protection-')+config.run;
     async function protectedWait(test,code){
       for(let n=0;n<2500;n++){
         const form=pd()?.querySelector('form.library-confirm');
