@@ -72,6 +72,57 @@ class CommitTest(unittest.TestCase):
         wrong=commit.model_copy(update={"mutation_id":uid(999)})
         with self.assertRaises(HTTPException):O.commit_operation(self.db,prepared.operation_id,wrong)
 
+    def assert_unbound_draft_rejected(self,prepared,commit,bindings):
+        value=prepared.model_dump();value["draft_bindings"]=bindings
+        value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})
+        prepared=PrepareOperation.model_validate(value)
+        commit=CommitOperation.model_validate({**commit.model_dump(),"manifest_hash":prepared.manifest_hash})
+        O.prepare_operation(self.db,prepared)
+        with self.assertRaises(HTTPException) as caught:O.commit_operation(self.db,prepared.operation_id,commit)
+        self.assertEqual(caught.exception.detail,{"code":"wiki_draft_binding_required"})
+        self.assertEqual(O.get_operation(self.db,"alice",prepared.operation_id)["state"],"prepared")
+        self.assertIsNone(self.db.get(NoteMutation,("alice",prepared.changes[0].note_mutation_id)))
+
+    def test_create_requires_new_draft_binding(self):
+        p,c=self.bundle();self.assert_unbound_draft_rejected(p,c,[])
+
+    def append_bundle(self):
+        p,c=self.bundle();O.prepare_operation(self.db,p);O.commit_operation(self.db,p.operation_id,c)
+        value=p.model_dump();doc=c.documents[0].document.model_dump()
+        newest=copy.deepcopy(doc["drafts"][0]);newest.update(id=uid(7007),generation_id=uid(7020));seal(newest)
+        doc["drafts"].append(newest);doc["document_version"]+=1
+        head=self.db.get(NoteHead,("alice","wiki:"+doc["wiki_id"]))
+        value.update(operation_id=uid(7001),mutation_id=uid(7002),commit_mutation_id=uid(7003),abort_mutation_id=uid(7004))
+        value["changes"][0].update(action="append_draft",note_mutation_id=uid(7008),base_head_revision_id=head.head_revision_id,
+            base_head_version=head.version,base_index_version=1,base_document_version=1,result_document_hash=digest(doc))
+        value["draft_bindings"]=[dict(wiki_id=doc["wiki_id"],draft_id=newest["id"],draft_hash=newest["draft_hash"])]
+        value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})
+        prepared=PrepareOperation.model_validate(value)
+        commit=CommitOperation(schema_version=1,owner_id="alice",device_id=p.device_id,mutation_id=prepared.commit_mutation_id,
+            manifest_hash=prepared.manifest_hash,documents=[dict(wiki_id=doc["wiki_id"],document=doc)])
+        return prepared,commit
+
+    def test_append_requires_new_draft_binding(self):
+        p,c=self.append_bundle();self.assert_unbound_draft_rejected(p,c,[])
+
+    def test_past_draft_binding_cannot_replace_new_append_binding(self):
+        p,c=self.append_bundle();old=c.documents[0].document.drafts[0]
+        self.assert_unbound_draft_rejected(p,c,[dict(wiki_id=p.changes[0].wiki_id,draft_id=old.id,draft_hash=old.draft_hash)])
+
+    def test_reject_existing_draft_needs_no_new_draft_binding(self):
+        p,c=self.bundle();O.prepare_operation(self.db,p);O.commit_operation(self.db,p.operation_id,c)
+        prepared,body=self.approve(p,c)
+        doc=body.documents[0].document.model_dump();doc["approvals"]=[]
+        doc["rejected_draft_ids"]=[doc["drafts"][0]["id"]]
+        value=prepared.model_dump();value["changes"][0].update(action="reject_draft",result_document_hash=digest(doc))
+        value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})
+        prepared=PrepareOperation.model_validate(value)
+        body=CommitOperation.model_validate({**body.model_dump(),"manifest_hash":prepared.manifest_hash,
+            "documents":[dict(wiki_id=doc["wiki_id"],document=doc)]})
+        self.assertEqual(prepared.draft_bindings,[])
+        O.prepare_operation(self.db,prepared)
+        self.assertEqual(O.commit_operation(self.db,prepared.operation_id,body)["state"],"committed")
+
     def test_second_page_sql_failure_rolls_back_every_publication(self):
         prepared,commit=self.bundle(2);O.prepare_operation(self.db,prepared)
         target="wiki:"+prepared.changes[1].wiki_id

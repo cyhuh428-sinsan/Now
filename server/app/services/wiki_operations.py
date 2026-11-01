@@ -348,6 +348,11 @@ def commit_operation(db,operation_id,body):
                 error("wiki_v2_approval_required")
             try:validate_append(before,doc,action)
             except ValueError:error("wiki_document_conflict")
+            if action in ("create","draft"):
+                newest=doc.drafts[-1]
+                if not any(b.wiki_id==change.wiki_id and b.draft_id==newest.id and b.draft_hash==newest.draft_hash
+                           for b in original.draft_bindings):
+                    error("wiki_draft_binding_required")
             leaves,refs=wiki_v2.validate_document(db,body.owner_id,doc,original,docs,before,visited=visited,memo=memo)
             from app.models.note_v2 import NoteOfflineBranch
             for branch in db.scalars(select(NoteOfflineBranch).where(NoteOfflineBranch.owner_id==body.owner_id,NoteOfflineBranch.local_id==local)):
