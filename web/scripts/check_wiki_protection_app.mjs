@@ -26,10 +26,13 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   const info=await box.inspect();assert.equal(info.localWiki,true);assert.equal(info.status.crypto_epoch,1);
   ctx.owner='bob';await assert.rejects(box.inspect,/계정/);
   ctx.owner='alice';let locked=false,reads=0,opened=null;
-  let record={localOnly:false,draft:{content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null}},current={status:'ok',identity_state:'coherent',snapshot:{note:{owner_id:ctx.owner,local_id:local,content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null}},head_version:1};
+  let record={localOnly:false,draft:{content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null}},current={schema_version:2,crypto_epoch:1,status:'ok',identity_state:'coherent',note:{owner_id:ctx.owner,local_id:local,content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null},current_representation:{kind:'history_envelope_v1',crypto_epoch:1},head_version:1};
   box.protectionActionGuard=()=>()=>{if(locked)throw Error('synthetic_locked');};
   box.noteHistory.view=()=>structuredClone(record);
-  box.noteHistoryRequest=async()=>{reads++;return structuredClone(current);};
+  box.noteHistoryRequest=async(context,path,method,query)=>{
+    assert.equal(path,'current');assert.equal(method,'GET');assert.equal(query.representation_schema,2,'protected current must use the existing typed reader');assert.equal(query.device_id,ctx.device);
+    reads++;return structuredClone(current);
+  };
   box.wikiNotebook={inspectProtected:async()=>({syntheticTypedDocument:true})};
   box.wikiUI={openProtected:(document,access)=>{opened={document,access};}};
   const previewStart=source.indexOf('async function openProtectedWikiPreview('),previewEnd=source.indexOf('\nfunction initializeWikiNotebook()',previewStart);
@@ -39,6 +42,12 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal(opened.access.origin,'server');assert.equal(reads,1);await opened.access.revalidate();assert.equal(reads,2);
   current.head_version++;await assert.rejects(opened.access.revalidate,/판본/);
   current.identity_state='ambiguous';await assert.rejects(()=>box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes'),/접근/);current.identity_state='coherent';
+  const coherent=structuredClone(current);
+  for(const changed of [{schema_version:1},{crypto_epoch:0},{crypto_epoch:undefined},{note:{...coherent.note,owner_id:'bob'}},
+    {note:{...coherent.note,deleted_at:'2026-11-02T00:00:00Z'}},{current_representation:{kind:'snapshot_v1',crypto_epoch:1}}]){
+    current={...structuredClone(coherent),...changed};await assert.rejects(()=>box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes'),/접근/);
+  }
+  current=coherent;
   locked=true;const beforeReads=reads;await assert.rejects(opened.access.revalidate,/synthetic_locked/);assert.equal(reads,beforeReads,'relock stops before another read');
   locked=false;record.localOnly=true;await box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes');
   assert.equal(opened.access.origin,'local');const beforeLocalReads=reads;await opened.access.revalidate();assert.equal(reads,beforeLocalReads);

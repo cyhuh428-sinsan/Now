@@ -15631,9 +15631,10 @@ async function openProtectedWikiPreview(info,value){
   const local=noteHistory.view(info.scope.local_id)?.localOnly===true||info.localWiki===true;
   const stamp=async()=>{
     guard();
-    const current=local?noteHistory.view(info.scope.local_id):await noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:info.scope.local_id});
-    guard();if(!current||local&&current.draft.deleted_at||!local&&(current.status!=="ok"||current.identity_state!=="coherent"||current.snapshot?.note?.owner_id!==ctx.owner
-      ||current.snapshot?.note?.local_id!==info.scope.local_id||current.snapshot.note.deleted_at))throw Error("보호 위키에 접근할 수 없습니다.");
+    const current=local?noteHistory.view(info.scope.local_id):await noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:info.scope.local_id,representation_schema:2,device_id:ctx.device});
+    guard();if(!current||local&&current.draft.deleted_at||!local&&(current.schema_version!==2||current.status!=="ok"||current.identity_state!=="coherent"||!Number.isInteger(current.crypto_epoch)||current.crypto_epoch<=0
+      ||current.current_representation?.kind!=="history_envelope_v1"||current.current_representation.crypto_epoch!==current.crypto_epoch
+      ||current.note?.owner_id!==ctx.owner||current.note?.local_id!==info.scope.local_id||current.note.deleted_at))throw Error("보호 위키에 접근할 수 없습니다.");
     return NowNoteProtectionProtocol.canonicalJson(current);
   };
   const before=await stamp();guard();
