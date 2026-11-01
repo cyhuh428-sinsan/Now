@@ -59,4 +59,4 @@ assert.equal(P.canonicalJson(documents),P.canonicalJson(await Promise.all(docume
 try{vm.runInContext(await fs.readFile(new URL('../vendor/wiki-graph-ui.js',import.meta.url),'utf8'),box);}catch(error){if(error.code!=='ENOENT')throw error;}
 assert.equal(typeof box.mountWikiGraph,'function','graph view must have an explicit teardown lifecycle');
 console.log('Approved Wiki graph: bound proposal cycle, reverse/path, both approvals, hidden/foreign/stale labels and immutable projection PASS');
-export {catalog,documents,operation};
+export {catalog,documents,originals,operation,requests};

@@ -101,7 +101,8 @@ const combined=await book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]}
 assert.equal(combined.plan.inputs.filter(r=>r.kind==='wiki').length,1,'validated comparison is now part of durable operation inputs');
 assert.equal(combined.plan.protection.nodes[0].complete,true,'temporary blanket gate is replaced only by complete source and cycle proof');
 const combinedOutput={pages:combined.plan.pages.map((p,i)=>({wiki_id:p.wiki_id,draft_id:p.draft_id,title:combined.plan.snapshot.sources[i].title,
-  topic:combined.plan.snapshot.sources[i].title,page_type:'concept',summary:'Synthetic comparison',aliases:[],claims:[],relations:[],
+  topic:combined.plan.snapshot.sources[i].title,page_type:'concept',summary:'Synthetic comparison',aliases:[],claims:[],
+  relations:[{id:'r1',from_section_id:'s1',to_ref:{kind:'proposal',operation_id:combined.operation_id,wiki_id:combined.plan.pages[1-i].wiki_id,draft_id:combined.plan.pages[1-i].draft_id,section_id:'s1'},type:'related_to',confidence:'inferred',citation_ids:['c1']}],
   sections:[{id:'s1',title:'Evidence',markdown:'Compared synthetic evidence.',citation_ids:['c1']}],
   citations:[{id:'c1',evidence_id:combined.plan.snapshot.sources[i].id,section_id:null,quote:combined.plan.snapshot.sources[i].content}]}))};
 const compared=await book.generate(combined,{provider:'fixture',model:'comparison',invoke:async()=>JSON.stringify(combinedOutput)});
@@ -127,4 +128,73 @@ assert.equal(typeof ordinary.approvedCatalog,'function','verified notebook must 
 const catalogWrites=writes,approvedCatalog=await ordinary.approvedCatalog();
 assert.equal(approvedCatalog.nodes.length,2);assert.equal(writes,catalogWrites,'catalog reads do not persist an index');
 assert.ok(approvedCatalog.nodes.find(n=>n.wiki_id===beta.wiki_id).stale,'catalog preserves changed comparison status');
+const carryText=combined.plan.snapshot.sources[0].content+'\nAdditional exact copy.';
+await api.sources.captureFiles([{name:combined.plan.snapshot.sources[0].title,arrayBuffer:async()=>new TextEncoder().encode(carryText).buffer}]);
+const carrySource=(await api.sources.list()).find(source=>source.content===carryText),carry=await book.plan({fileIds:[carrySource.id],noteIds:[]});
+assert.equal(carry.plan.pages.length,1);
+const previous=box.NowNoteProtectionProtocol.parseJson(history.view('wiki:'+alpha.wiki_id).draft.content),parent=previous.drafts.at(-1);
+const carryPage={wiki_id:alpha.wiki_id,draft_id:carry.plan.pages[0].draft_id,...Object.fromEntries(['title','topic','page_type','summary','aliases','sections','claims','relations','citations'].map(key=>[key,structuredClone(parent[key])]))};
+carryPage.citations=carryPage.citations.map(citation=>({...citation,evidence_id:carrySource.id}));
+const carryProposal=await book.generate(carry,{provider:'fixture',model:'carry',invoke:async()=>JSON.stringify({pages:[carryPage]})});
+const carriedResult=await book.commitLocal(carryProposal);
+assert.equal(carriedResult.documents[0].document.drafts.at(-1).relations[0].to_ref.operation_id,combined.operation_id,'actual durable adapter keeps the original relation operation');
+const carried=carriedResult.documents[0].document;await book.approveLocal(carried,carried.drafts.at(-1).id);
+assert.equal((await ordinary.approvedCatalog()).edges.length,2,'approved carried relation stays active without rewriting the old operation');
+const lateId='late-source',lateNote={...history.view(carrySource.manifest.note_ref.local_id).draft,local_id:lateId,source:'manual',content:carryText+'\nFresh note.'};
+await history.track(lateNote,null,{localOnly:true});await history.seal(lateId);api.captureNotes=ids=>ordinary.capture(ids);
+const latePlan=await book.plan({fileIds:[],noteIds:[lateId]}),lateParent=box.NowNoteProtectionProtocol.parseJson(history.view('wiki:'+alpha.wiki_id).draft.content).drafts.at(-1);
+const latePage={wiki_id:alpha.wiki_id,draft_id:latePlan.plan.pages[0].draft_id,...Object.fromEntries(['title','topic','page_type','summary','aliases','sections','claims','relations','citations'].map(key=>[key,structuredClone(lateParent[key])]))};
+latePage.citations=latePage.citations.map(citation=>({...citation,evidence_id:latePlan.plan.snapshot.sources[0].id}));
+const lateProposal=await book.generate(latePlan,{provider:'fixture',model:'late',invoke:async()=>JSON.stringify({pages:[latePage]})});
+const realEvidence=box.NowWikiEvidence.create(api);let lateChanged=false;
+const racing=box.createWikiIngestNotebook({...api,evidence:{...realEvidence,operationProof:async(...args)=>{
+  const proof=await realEvidence.operationProof(...args);
+  if(!lateChanged){lateChanged=true;await history.edit({...history.view(lateId).draft,content:lateNote.content+'\nChanged during proof.'});await history.seal(lateId);}
+  return proof;
+}}});
+const wikiBefore=history.view('wiki:'+alpha.wiki_id).draft.content;
+await assert.rejects(()=>racing.commitLocal(lateProposal),/원본|변경|판본/,'late source edit during relation lookup must not be adopted as fresh');
+assert.equal(history.view('wiki:'+alpha.wiki_id).draft.content,wikiBefore,'late source is preserved and Wiki is not overwritten');
+await book.abortLocal(latePlan.operation_id);
+assert.equal(typeof book.integrate,'function','manual relation editing must use the durable notebook');
+const manualTarget=box.NowNoteProtectionProtocol.parseJson(history.view('wiki:'+beta.wiki_id).draft.content),targetApproval=manualTarget.approvals.at(-1);
+const manualRelation={id:'manual-relation',from_section_id:'s1',to_ref:{kind:'approved',wiki_id:beta.wiki_id,draft_id:targetApproval.draft_id,approval_id:targetApproval.id,draft_hash:targetApproval.draft_hash,section_id:'s1'},type:'extends',confidence:'inferred',citation_ids:['c1']};
+const callsBeforeManual=calls,manual=await book.integrate(alpha.wiki_id,manualRelation);
+assert.equal(manual.proposal.plan.calls,0);assert.equal((await book.operations()).find(r=>r.operation_id===manual.operation_id).action,'integrate');
+assert.equal(history.view('wiki:'+alpha.wiki_id).draft.content,wikiBefore,'preview does not publish a draft');
+const manualResult=await book.commitLocal(manual),manualDoc=manualResult.documents[0].document;
+assert.equal(manualDoc.approvals.length,box.NowNoteProtectionProtocol.parseJson(wikiBefore).approvals.length);
+assert.equal((await ordinary.approvedCatalog()).edges.length,2,'unapproved manual relation stays out of the graph');
+const manualApproved=await book.approveLocal(manualDoc,manualDoc.drafts.at(-1).id);
+assert.equal((await ordinary.approvedCatalog()).edges.length,3,'explicit approval publishes the additional relation');
+assert.equal(calls,callsBeforeManual,'Integrate never invokes a model');
+history=makeHistory();book=box.createWikiIngestNotebook(api);
+assert.equal((await book.operations()).find(r=>r.operation_id===manual.operation_id).state,'committed');
+assert.equal(box.NowNoteProtectionProtocol.parseJson(history.view('wiki:'+alpha.wiki_id).draft.content).approvals.at(-1).id,manualApproved.document.approvals.at(-1).id);
+const manualDraft=manualApproved.document.drafts.at(-1),manualApproval=manualApproved.document.approvals.at(-1);
+const manualGraph=await box.NowWikiEvidence.create({...api,readOperations:()=>book.operations()}).graph([{id:'manual-root',kind:'wiki',origin:'local',owner_id:ctx.owner,wiki_id:alpha.wiki_id,draft_id:manualDraft.id,approval_id:manualApproval.id,document_version:manualApproved.document.document_version,content_hash:manualDraft.draft_hash}]);
+assert.equal(manualGraph.nodes.find(n=>n.wiki_id===alpha.wiki_id).complete,true,'Integrate is also a verified generation for protection completeness');
+const gammaId=webcrypto.randomUUID(),gammaDraft=structuredClone(manualDraft);
+Object.assign(gammaDraft,{id:webcrypto.randomUUID(),generation_id:webcrypto.randomUUID(),base_approved_revision_id:null,title:'Wiki-only Gamma',topic:'Wiki-only Gamma',relations:[],evidence_manifest:[{id:'wiki-alpha',kind:'wiki',origin:'local',owner_id:ctx.owner,wiki_id:alpha.wiki_id,draft_id:manualDraft.id,approval_id:manualApproval.id,document_version:manualApproved.document.document_version,content_hash:manualDraft.draft_hash}],citations:[{id:'c1',evidence_id:'wiki-alpha',section_id:'s1',quote:manualDraft.sections[0].markdown}]});
+delete gammaDraft.draft_hash;gammaDraft.draft_hash=await box.NowNoteProtectionProtocol.hashJson(gammaDraft);
+const gamma={schema_version:2,wiki_id:gammaId,scope:{url:'',owner:ctx.owner},document_version:2,drafts:[gammaDraft],approvals:[{schema_version:2,id:webcrypto.randomUUID(),parent_approved_revision_id:null,draft_id:gammaDraft.id,draft_hash:gammaDraft.draft_hash,evidence_manifest_hash:await box.NowNoteProtectionProtocol.hashJson(gammaDraft.evidence_manifest),approved_by:ctx.owner,approved_at:new Date().toISOString()}],rejected_draft_ids:[]};
+await box.NowNoteWiki.validateDocument(gamma,ctx);
+const gammaBefore=history.export(),gammaNext=structuredClone(gammaBefore),gammaReservation={operation_id:webcrypto.randomUUID(),mutation_id:webcrypto.randomUUID(),commit_mutation_id:webcrypto.randomUUID(),abort_mutation_id:webcrypto.randomUUID(),pages:[{wiki_id:gammaId,draft_id:gammaDraft.id,generation_id:gammaDraft.generation_id,note_mutation_id:webcrypto.randomUUID()}]};
+const gammaUnapproved={...structuredClone(gamma),document_version:1,approvals:[]},gammaNote={...history.view('wiki:'+alpha.wiki_id).draft,local_id:'wiki:'+gammaId,content:box.NowNoteProtectionProtocol.canonicalJson(gammaUnapproved)};
+const gammaStaged=await box.NowNoteHistory.prepareExternalEdit(gammaNext,ctx,gammaNote,{newNote:true,localOnly:true});gammaNext.contexts[box.NowNoteHistory.key(ctx)].notes[gammaNote.local_id]=gammaStaged.next;
+gammaNext.contexts[box.NowNoteHistory.key(ctx)].wiki_ingest_operations[gammaReservation.operation_id]={schema_version:1,operation_id:gammaReservation.operation_id,action:'ingest',scope:{url:'',owner:ctx.owner,device:ctx.device,serverInstance:'local-note-journal'},reservation:gammaReservation,selection:{fileIds:[],noteIds:[]},plan_hash:'a'.repeat(64),inputs:structuredClone(gammaDraft.evidence_manifest),fingerprints:[],state:'committed',documents:[{wiki_id:gammaId,draft_id:gammaDraft.id,draft_hash:gammaDraft.draft_hash,document_hash:await box.NowNoteProtectionProtocol.hashJson(gammaUnapproved)}]};
+await history.replaceProtectionStore(gammaBefore,gammaNext,{active:()=>true});await history.edit({...gammaNote,content:box.NowNoteProtectionProtocol.canonicalJson(gamma)});await history.seal(gammaNote.local_id);
+const wikiOnlyPreview=await book.integrate(gammaId,{...structuredClone(manualRelation),id:'wiki-only-relation'});
+assert.equal(wikiOnlyPreview.proposal.plan.snapshot.sources.length,0);
+const wikiOnlySaved=await book.commitLocal(wikiOnlyPreview),wikiOnlyDocument=wikiOnlySaved.documents[0].document;
+await book.approveLocal(wikiOnlyDocument,wikiOnlyDocument.drafts.at(-1).id);
+const thirdEntry=multiResult.documents[1],thirdApproved=await book.approveLocal(thirdEntry.document,thirdEntry.document.drafts[0].id),thirdApproval=thirdApproved.document.approvals.at(-1);
+const thirdRelation={...structuredClone(manualRelation),id:'late-target-relation',to_ref:{kind:'approved',wiki_id:thirdEntry.wiki_id,draft_id:thirdApproval.draft_id,approval_id:thirdApproval.id,draft_hash:thirdApproval.draft_hash,section_id:'s1'}};
+const targetPreview=await book.integrate(alpha.wiki_id,thirdRelation),targetEvidence=box.NowWikiEvidence.create(api);let removedTarget=false;
+const targetRace=box.createWikiIngestNotebook({...api,evidence:{...targetEvidence,graph:async(...args)=>{
+  const graph=await targetEvidence.graph(...args);if(!removedTarget){removedTarget=true;const local='wiki:'+thirdEntry.wiki_id;await history.edit({...history.view(local).draft,deleted_at:new Date().toISOString()});await history.seal(local);}return graph;
+}}});
+const sourceBeforeTargetRace=history.view('wiki:'+alpha.wiki_id).draft.content;
+await assert.rejects(()=>targetRace.commitLocal(targetPreview),/관계|대상|판본|삭제|변경/,'an approved navigation endpoint removed after review is checked again at CAS');
+assert.equal(history.view('wiki:'+alpha.wiki_id).draft.content,sourceBeforeTargetRace);
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

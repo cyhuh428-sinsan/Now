@@ -8,6 +8,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let sourceMode=false,sourceRows=[],sourceFiles=[],sourcePreview='';
   let ingestPlan=null,ingestProposal=null,ingestOps=[];
   let graphCatalog=null,graphMount=null,graphSection='';
+  let relationEditor=null;
   const ingestFiles=new Set(),ingestNotes=new Set();
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
@@ -25,7 +26,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
-    graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';
+    graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
     viewId='';beforeId='';comparing=false;readOnly=false;trashMode=false;
     sourceMode=false;sourceRows=[];sourceFiles=[];sourcePreview='';
@@ -33,10 +34,15 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
+    if(dialog.open&&api.canRead){
+      const sensitive=new Set([...(relationEditor?.targets||[]).map(r=>r.wiki_id),...(current()?.relations||[]).map(r=>r.to_ref.wiki_id)]);
+      if(rows.some(row=>sensitive.has(row.document?.wiki_id)&&!api.canRead(row.document))){close();return;}
+    }
     if(dialog.open&&graphCatalog&&graphCatalog.nodes.some(page=>!api.canRead(rows.find(row=>row.document?.wiki_id===page.wiki_id)?.document||{scope:{},drafts:[]})))close();
     if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
+    relationEditor=null;
     rows=rows.map(row=>({id:row.id||row.document?.wiki_id,unavailable:true,error:'출처·보호 상태 확인 필요'}));
     doc=null;dirty=false;readable=false;selected.clear();question='';topic='';
     viewId='';beforeId='';comparing=false;
@@ -98,6 +104,38 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     dirty=true;message='인용문을 확인한 뒤 초안을 저장하세요.';
   }
   async function refreshOperations(token){ingestOps=await api.ingest.operations();requireActive(token);}
+  function relationText(draft){
+    const names=new Map(rows.filter(r=>r.document&&!r.protected&&!r.deleted).map(r=>[r.document.wiki_id,preferred(r.document)?.title||'위키']));
+    const types={related_to:'관련',supports:'뒷받침',contradicts:'상충',extends:'확장',depends_on:'의존'},confidence={explicit:'직접 근거',inferred:'추론',uncertain:'불확실'};
+    return (draft?.relations||[]).map(r=>[r.id,types[r.type],confidence[r.confidence],names.get(r.to_ref.wiki_id)||'대상 확인 필요',r.to_ref.draft_id,r.to_ref.section_id||'전체',r.citation_ids.join(', ')].join(' · ')).join('\n');
+  }
+  function renderRelationEditor(detail,draft){
+    const editor=relationEditor;if(!editor||editor.wiki_id!==doc.wiki_id||editor.draft_id!==draft.id)return;
+    const form=node('fieldset');form.dataset.wikiIntegration='';form.append(node('legend','관계 추가'));
+    const select=(name,labelText,values,value,change)=>{
+      const label=node('label',labelText),input=node('select',undefined,'settings-select');input.name=name;input.disabled=busy;
+      for(const [id,text]of values){const option=node('option',text);option.value=id;input.append(option);}input.value=value;
+      input.onchange=()=>{change(input.value);};label.append(input);form.append(label);return input;
+    };
+    const target=editor.targets.find(r=>r.wiki_id===editor.target);
+    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title]),editor.target,value=>{editor.target=value;editor.to='';render();});
+    select('wiki-relation-type','관계 유형',[['related_to','관련'],['supports','뒷받침'],['contradicts','상충'],['extends','확장'],['depends_on','의존']],editor.type,value=>editor.type=value);
+    select('wiki-relation-confidence','근거 상태',[['explicit','직접 근거'],['inferred','추론'],['uncertain','불확실']],editor.confidence,value=>editor.confidence=value);
+    select('wiki-relation-from','시작 절',[['','페이지 전체'],...draft.sections.map(s=>[s.id,s.title])],editor.from,value=>editor.from=value);
+    select('wiki-relation-to','대상 절',[['','페이지 전체'],...(target?.draft.sections||[]).map(s=>[s.id,s.title])],editor.to,value=>editor.to=value);
+    const citations=node('fieldset');citations.append(node('legend','인용 근거'));
+    for(const c of draft.citations){const label=node('label'),input=node('input');input.type='checkbox';input.name='wiki-relation-citation';input.value=c.id;input.checked=editor.citations.includes(c.id);input.disabled=busy;
+      input.onchange=()=>{editor.citations=editor.citations.filter(id=>id!==c.id);if(input.checked)editor.citations.push(c.id);};label.append(input,document.createTextNode(c.quote));citations.append(label);}
+    form.append(citations,command('preview-integrate','관계 초안 비교',async token=>{
+      const chosen=editor.targets.find(r=>r.wiki_id===editor.target);if(!chosen)throw Error('관계 대상을 선택하세요.');
+      const relation={id:crypto.randomUUID(),from_section_id:editor.from||null,to_ref:{kind:'approved',wiki_id:chosen.wiki_id,draft_id:chosen.draft_id,approval_id:chosen.approval_id,draft_hash:chosen.draft_hash,section_id:editor.to||null},
+        type:editor.type,confidence:editor.confidence,citation_ids:structuredClone(editor.citations)};
+      const result=await api.ingest.integrate(editor.wiki_id,relation);requireActive(token);
+      ingestProposal=result;ingestPlan={operation_id:result.operation_id,selection:result.selection,plan:result.proposal.plan};
+      sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);
+      sourceMode=true;relationEditor=null;message='관계 변경을 검토한 뒤 초안을 저장하세요. · 모델 호출 없음';
+    },!target),command('cancel-integrate','취소',async()=>{relationEditor=null;}));detail.append(form);
+  }
   async function generateIngest(token){
     const operation=ingestPlan,connection=api.connection(),prompt=api.ingest.prompt(operation);
     const input=operation.plan.transmission;
@@ -262,7 +300,13 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
             const changes=Diff.diffLines(before?draftText(before):'',draftText(draft),{timeout:1500});
             if(!changes)diff.textContent='비교 시간이 초과되었습니다. 저장하지 않았습니다.';
             else for(const part of changes)diff.append(node(part.added?'ins':part.removed?'del':'span',part.value));
-            section.append(diff);detail.append(section);
+            section.append(diff);
+            const beforeRelations=relationText(before),afterRelations=relationText(draft);
+            if(beforeRelations!==afterRelations){const relations=node('pre',undefined,'history-diff wiki-diff');relations.tabIndex=0;relations.setAttribute('aria-label','관계 변경');
+              const changes=Diff.diffLines(beforeRelations,afterRelations,{timeout:1500});
+              if(changes)for(const part of changes)relations.append(node(part.added?'ins':part.removed?'del':'span',part.value));else relations.textContent='비교 시간을 초과했습니다.';
+              section.append(relations);}
+            detail.append(section);
           }
           detail.append(command('commit-ingest','초안 일괄 저장',async token=>{
             const remote=ingestProposal.proposal.plan.serverEligible;
@@ -275,7 +319,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         for(const operation of ingestOps){
           const row=node('div'),label={reserved:'미전송',attempted:'생성 시도됨 · 자동 재호출 안 함',committed:'저장 완료',aborted:'폐기됨'};
           row.dataset.wikiOperation=operation.operation_id;
-          row.append(node('p',({ingest:'적재',approve:'승인',reject:'반려'}[operation.action]||'')+' '+operation.operation_id+' · '
+          row.append(node('p',({ingest:'적재',integrate:'관계 통합',approve:'승인',reject:'반려'}[operation.action]||'')+' '+operation.operation_id+' · '
             +(operation.state==='attempted'&&operation.action!=='ingest'?'검토 작업 진행 중':label[operation.state])));
           if(operation.remote){
             const phase=operation.remote.phase,labels={staged:'서버 전송 전',prepare_uncertain:'준비 결과 확인 필요',prepare_absent:'조회 시 원작업 없음 · 같은 ID로만 재시도',prepared:'서버 준비 완료',commit_uncertain:'확정 결과 확인 필요',
@@ -343,6 +387,14 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(comparing)controls.append(selector('wiki-before','비교 기준',beforeId,doc.drafts.filter(d=>d.id!==draft.id),id=>{beforeId=id;},doc.drafts.length<3));
       detail.append(controls);
       detail.append(node('h3',draft.title),node('p',draft.topic+' · '+(approved?'승인본':rejected?'반려됨':'초안')));
+      if(!readOnly&&api.ingest?.integrate&&api.approvedCatalog&&approved&&draft.id===doc.approvals.at(-1)?.draft_id){
+        detail.append(command('integrate','관계 추가',async token=>{
+          const catalog=await api.approvedCatalog();requireActive(token);
+          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id&&!r.stale);
+          if(!targets.length)throw Error('출처가 확인된 다른 승인 위키가 없습니다.');
+          relationEditor={wiki_id:doc.wiki_id,draft_id:draft.id,targets,target:targets[0].wiki_id,type:'related_to',confidence:'inferred',from:'',to:'',citations:draft.citations.slice(0,1).map(c=>c.id)};
+        },dirty));renderRelationEditor(detail,draft);
+      }
       const toc=node('nav');toc.setAttribute('aria-label','위키 목차');
       const body=node('div',undefined,'markdown-preview wiki-body');
       draft.sections.forEach((section,index)=>{
@@ -382,6 +434,22 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }
         detail.append(diff,sourceChanges);
       }else detail.append(toc,body);
+      if(draft.relations?.length){
+        const relations=node('ul');relations.setAttribute('aria-label','위키 관계');
+        const types={related_to:'관련',supports:'뒷받침',contradicts:'상충',extends:'확장',depends_on:'의존'},confidence={explicit:'직접 근거',inferred:'추론',uncertain:'불확실'};
+        for(const relation of draft.relations){
+          const ref=relation.to_ref,row=rows.find(r=>r.document?.wiki_id===ref.wiki_id&&!r.protected&&!r.deleted),target=row?.document?.drafts.find(d=>d.id===ref.draft_id);
+          const approval=row?.document?.approvals.find(a=>a.draft_id===ref.draft_id&&(ref.kind==='proposal'||a.id===ref.approval_id&&target?.draft_hash===ref.draft_hash));
+          const item=node('li');item.append(node('span',types[relation.type]+' · '+confidence[relation.confidence]+' · '));
+          if(approval&&target&&!readOnly)item.append(command('relation-target',target.title,async token=>{
+            const state=await api.sourceStatus(target,row.document);requireActive(token);if(!state.available)throw Error('관계 대상의 출처를 확인할 수 없습니다.');
+            doc=structuredClone(row.document);choose(target.id);dirty=false;relationEditor=null;graphSection=ref.section_id||'';message='고정된 관계 판본';
+          }));else item.append(node('span','대상 확인 필요'));
+          item.append(node('small',' · '+ref.draft_id+(ref.section_id?' / '+ref.section_id:'')));
+          for(const id of relation.citation_ids){const citation=draft.citations.find(c=>c.id===id);if(citation)item.append(node('blockquote',citation.quote));}
+          relations.append(item);
+        }detail.append(relations);
+      }
       if(!readOnly){
       const actions=node('div',undefined,'library-actions');
       actions.append(command('save-draft','초안 저장',async token=>{

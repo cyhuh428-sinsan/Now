@@ -75,4 +75,13 @@ for(const mode of ['owner','hash','receipt','instance','late']){
   await assert.rejects(()=>reader.readOperation(manifest.operation_id,instance),undefined,'discovery rejects '+mode);
 }
 key='alice';
+const wikiOnlyManifest=structuredClone(manifest);wikiOnlyManifest.inputs=[{id:'w1',kind:'wiki',origin:'server',owner_id:'alice',wiki_id:wiki,draft_id:webcrypto.randomUUID(),approval_id:webcrypto.randomUUID(),document_version:1,content_hash:'a'.repeat(64)}];
+delete wikiOnlyManifest.manifest_hash;wikiOnlyManifest.manifest_hash=await box.NowNoteProtectionProtocol.hashJson(wikiOnlyManifest);
+let wikiAnchor='';const wikiReader=box.NowWikiServerAccess.create({...api,request:async(path,method,body)=>{
+  assert.equal(method,'GET');if(path==='/api/v2/notes/crypto-transitions/status'){wikiAnchor=body.local_id;return {server_instance_id:instance,preparation_only:true};}
+  return {status:'ok',operation_id:wikiOnlyManifest.operation_id,state:'prepared',manifest_hash:wikiOnlyManifest.manifest_hash,manifest:wikiOnlyManifest,receipt:{status:'ok',wiki_operation:true,operation_id:wikiOnlyManifest.operation_id,manifest_hash:wikiOnlyManifest.manifest_hash,state:'prepared',pages:[]}};
+}});
+await wikiReader.status(wikiOnlyManifest,instance);assert.equal(wikiAnchor,'wiki:'+wiki,'Wiki-only operation authenticates the same account and instance without a fabricated Note');
+const wrongWiki=structuredClone(wikiOnlyManifest);wrongWiki.inputs[0].owner_id='other';delete wrongWiki.manifest_hash;wrongWiki.manifest_hash=await box.NowNoteProtectionProtocol.hashJson(wrongWiki);
+await assert.rejects(()=>wikiReader.status(wrongWiki,instance));
 console.log('Wiki server access: fresh capabilities/instance, all revision pages, old cipher/fence/epoch, changed and late contexts PASS (synthetic HTTP only)');

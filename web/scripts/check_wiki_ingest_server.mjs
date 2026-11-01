@@ -112,12 +112,31 @@ assert.equal((await book.plan({fileIds:[],noteIds:['selected-comparison','beta-e
 const alphaProposal=combinedProposal.proposal.documents.find(row=>row.wiki_id!==beta.wiki_id);
 const alphaDecision=await book.approveLocal(alphaProposal.document,alphaProposal.document.drafts.at(-1).id);
 await book.prepareServer(alphaDecision.operation_id);await book.commitServer(alphaDecision.operation_id);await book.applyServer(alphaDecision.operation_id);
+const originalJournal=structuredClone(saved),originalDevice=ctx.device;
 ctx.device='peer';saved=null;history=createHistory();book=box.createWikiIngestNotebook(api);
 for(const current of notes.values())await history.track(current.snapshot.note,current);
 api.readOperations=async()=>[];
 const graphWrites=writes,recoveredGraph=await notebook.approvedCatalog();
 assert.equal(recoveredGraph.nodes.length,2);assert.equal(recoveredGraph.edges.length,2,'new device resolves original server operation, without a local operation journal');
 assert.equal(writes,graphWrites,'operation discovery never stores a second graph index');
+const remoteProof=await box.NowWikiEvidence.create(api).operationProof(combined.operation_id,alphaProposal.wiki_id,beta.wiki_id,{origin:'server'});
+const sourceBefore=P.parseJson(notes.get('wiki:'+alphaProposal.wiki_id).snapshot.note.content);
+assert.equal((await box.NowNoteWikiIngest.verifyCarriedRelation(sourceBefore,sourceBefore.drafts.at(-1).relations[0],remoteProof,ctx)).draft.id,beta.document.drafts[0].id,'remote resolver binds original result revisions and full receipt, not current bodies alone');
+const betaCurrent=P.parseJson(notes.get('wiki:'+beta.wiki_id).snapshot.note.content),betaApproval=betaCurrent.approvals.at(-1);
+const manualRelation={id:'manual-server',from_section_id:'s1',to_ref:{kind:'approved',wiki_id:beta.wiki_id,draft_id:betaApproval.draft_id,approval_id:betaApproval.id,draft_hash:betaApproval.draft_hash,section_id:'s1'},type:'supports',confidence:'inferred',citation_ids:['c1']};
+await assert.rejects(()=>book.integrate(alphaProposal.wiki_id,manualRelation),/wiki_dependency_unverified/,'missing producer history cannot be treated as complete on a fresh peer');
+saved=originalJournal;ctx.device=originalDevice;history=createHistory();book=box.createWikiIngestNotebook(api);
+const manual=await book.integrate(alphaProposal.wiki_id,manualRelation);
+assert.equal(manual.proposal.plan.calls,0);await book.stageServer(manual);
+assert.equal((await book.operations()).find(o=>o.operation_id===manual.operation_id).remote.manifest.kind,'integrate');
+await book.prepareServer(manual.operation_id);await book.commitServer(manual.operation_id);
+saved=structuredClone(saved);history=createHistory();book=box.createWikiIngestNotebook(api);await book.applyServer(manual.operation_id);
+const manualCurrent=P.parseJson(history.view('wiki:'+alphaProposal.wiki_id).draft.content);
+assert.equal(manualCurrent.drafts.at(-1).relations.length,2);assert.equal(manualCurrent.approvals.length,sourceBefore.approvals.length,'remote commit is not approval');
+assert.equal((await notebook.approvedCatalog()).edges.length,2,'remote manual draft is invisible to approved graph');
+const manualDecision=await book.approveLocal(manualCurrent,manualCurrent.drafts.at(-1).id);
+await book.prepareServer(manualDecision.operation_id);await book.commitServer(manualDecision.operation_id);await book.applyServer(manualDecision.operation_id);
+assert.equal((await notebook.approvedCatalog()).edges.length,3,'remote explicit approval projects the added relation');
 if(process.argv[2]){
   const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),code=`
 import json, sys

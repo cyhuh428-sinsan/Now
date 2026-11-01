@@ -5,7 +5,7 @@
   const check=(value,code='wiki_graph_invalid')=>{if(!value)throw Error(code);};
   const same=(a,b)=>P.canonicalJson(a)===P.canonicalJson(b);
   const scope=ctx=>({url:String(ctx.url||'').replace(/\/+$/,''),owner:ctx.owner});
-  async function buildApprovedWikiCatalog(rows,context,{operations=[]}={}){
+  async function buildApprovedWikiCatalog(rows,context,{operations=[],relationProof}={}){
     check(Array.isArray(rows)&&Array.isArray(operations)&&context?.owner);
     const nodes=[],edges=[],findings=[],documents=new Map();let excluded=0;
     for(const row of rows){
@@ -34,7 +34,13 @@
           if(![source,target].every(node=>manifest.draft_bindings?.some(b=>b.wiki_id===node.wiki_id&&b.draft_id===node.draft_id&&b.draft_hash===node.draft_hash)))continue;
         }else if(operation.reservation?.operation_id!==operation.operation_id||!binds(source)||!binds(target))continue;
         return true;
-      }return false;
+      }
+      if(relationProof)try{
+        const proof=await relationProof(source.wiki_id,copy(relation));
+        const inherited=await NowNoteWikiIngest.verifyCarriedRelation(documents.get(source.wiki_id),relation,proof,context);
+        return inherited.draft.id===target.draft_id&&inherited.draft.draft_hash===target.draft_hash;
+      }catch{return false;}
+      return false;
     }
     for(const source of nodes)for(const relation of source.draft.relations||[]){
       const ref=relation.to_ref,target=byId.get(ref.wiki_id),document=documents.get(ref.wiki_id);

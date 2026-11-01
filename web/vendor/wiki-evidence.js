@@ -90,7 +90,7 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
   async function knownGeneration(a,wikiId,draft,docs){
     const candidates=a.roots.flatMap(root=>Object.values(root.contexts?.[a.account]?.wiki_ingest_operations||{}));
     for(const row of candidates){
-      if(row?.action!=='ingest'||!['attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.documents)||!Array.isArray(row.inputs))continue;
+      if(!['ingest','integrate'].includes(row?.action)||!['attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.documents)||!Array.isArray(row.inputs))continue;
       if(row.scope?.owner!==a.ctx.owner||String(row.scope.url).replace(/\/+$/,'')!==String(a.ctx.url).replace(/\/+$/,''))continue;
       const bound=row.documents.find(d=>d.wiki_id===wikiId&&d.draft_id===draft.id&&d.draft_hash===draft.draft_hash),page=row.reservation?.pages?.find(p=>p.wiki_id===wikiId&&p.draft_id===draft.id&&p.generation_id===draft.generation_id);
       if(!bound||!page)continue;const document=docs.get(bound.document_hash);if(!document)continue;
@@ -157,5 +157,41 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     check([...a.producerInstances].every(id=>id===a.instance),'wiki_context_changed');
     return {nodes:[...nodes.values()].sort((a,b)=>a.wiki_id<b.wiki_id?-1:a.wiki_id>b.wiki_id?1:0)};
   }
-  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph};
+  async function operationProof(id,sourceId,targetId,{origin}={}){
+    const a=await action(),ids=[sourceId,targetId],uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    check([id,...ids].every(uuid)&&sourceId!==targetId&&['local','server'].includes(origin),'wiki_relation_operation');
+    for(const wiki of ids){plainLocal(a,'wiki:'+wiki);check(!api.lifecycle?.state('wiki:'+wiki)?.deleted_at&&!api.lifecycle?.blocked?.('wiki:'+wiki),'wiki_source_unavailable');}
+    let operation,currentTarget;const originals=[];
+    if(origin==='server'){
+      check(api.server?.readOperation&&api.readRemote,'wiki_source_unavailable');const inspected=[];
+      for(const wiki of ids){
+        check(a.h.view('wiki:'+wiki)?.localOnly!==true,'wiki_evidence_binding');
+        const value=await api.server.inspect('wiki:'+wiki,undefined,{policy:1});a.active();bind(a,value.instance);
+        const remote=await api.readRemote(wiki);a.active();
+        check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===wiki&&!remote.resource.deleted_at&&remote.artifact?.protected===false
+          &&remote.artifact.head_revision_id===value.current.head_revision_id,'wiki_source_unavailable');
+        const document=await W.validateDocument(value.current.snapshot.note.content,a.ctx);a.active();
+        check(document.wiki_id===wiki&&eq(remote.artifact.document,document),'wiki_evidence_binding');
+        inspected.push(value);if(wiki===targetId)currentTarget=document;
+      }
+      operation=await api.server.readOperation(id,a.instance);a.active();check(operation.state==='committed','wiki_relation_operation');
+      for(let n=0;n<ids.length;n++){
+        const page=operation.receipt.pages.find(p=>p.wiki_id===ids[n]);
+        const raw=inspected[n].history.find(r=>r.revision_ref.kind==='note_revision'&&r.revision_ref.id===page?.result_revision_id);
+        check(raw,'wiki_relation_binding');const document=await W.validateDocument(raw.snapshot.note.content,a.ctx);a.active();
+        check(document.wiki_id===ids[n],'wiki_relation_binding');originals.push(document);
+      }
+    }else{
+      const rows=await api.readOperations?.();a.active();operation=rows?.find(row=>row.operation_id===id);
+      check(operation?.state==='committed'&&!operation.remote,'wiki_relation_operation');
+      for(const wiki of ids){
+        const local='wiki:'+wiki,item=a.h.view(local);check(item?.localOnly&&!a.h.blocked(local),'wiki_source_unavailable');
+        const documentsByHash=await documents(a,wiki),binding=operation.documents.find(d=>d.wiki_id===wiki);a.active();
+        const document=binding&&documentsByHash.get(binding.document_hash);check(document,'wiki_relation_binding');originals.push(document);
+        if(wiki===targetId){currentTarget=await W.validateDocument(item.draft.content,a.ctx);a.active();check(currentTarget.wiki_id===wiki,'wiki_evidence_binding');}
+      }
+    }
+    a.active();return {operation:copy(operation),documents:copy(originals),currentTarget:copy(currentTarget)};
+  }
+  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph,operationProof};
 }});

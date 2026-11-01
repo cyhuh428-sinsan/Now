@@ -52,14 +52,16 @@ app.whenReady().then(async()=>{
     assert(await run('document.querySelector("#wikiDialog .wiki-source-preview").textContent.includes("<script>")&&!globalThis.WIKI_SOURCE_EXECUTED'),'exact_text_not_executed');
     assert(await run('!flattenTree(state.data.tree).some(n=>String(n.id).startsWith("wiki-source:"))'),'source_tree_projection');
     const before=await run('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);return Object.keys(noteHistory.entries()).filter(k=>k.startsWith("wiki-source:")).sort();})()');
+    if(process.env.NOWNOTE_WIKI_INTEGRATE_NARROW==='1')window.setContentSize(390,844);
     const ingest=await run(`(async()=>{
       if(typeof wikiIngest==='undefined'||!wikiIngest)throw Error('ingest_actual_adapter_missing');
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn,code)=>{for(let i=0;i<300;i++){if(fn())return;await pause();}throw Error(code);};
       const click=async action=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');if(!b||b.disabled)throw Error('ingest_button_'+action);b.click();await pause();};
       if(${phase}===2){
         const rows=await wikiNotebook.list(),ops=await wikiIngest.operations();
-        if(rows.length!==2||rows.some(r=>r.document?.schema_version!==2)||rows.filter(r=>r.document.approvals.length===1).length!==1)throw Error('ingest_cold_documents');
+        if(rows.length!==2||rows.some(r=>r.document?.schema_version!==2)||rows.filter(r=>r.document.approvals.length===1).length!==1||rows.filter(r=>r.document.approvals.length===2).length!==1)throw Error('ingest_cold_documents');
         if(ops.filter(o=>o.action==='ingest'&&o.state==='committed').length!==1)throw Error('ingest_cold_receipt');
+        if(ops.filter(o=>o.action==='integrate'&&o.state==='committed').length!==1||(await wikiNotebook.approvedCatalog()).edges.length!==1)throw Error('integrate_cold_relation');
         return {coldDocuments:rows.length,calls:0};
       }
       const original=state.settings.llm,realFetch=globalThis.fetch;let calls=0;
@@ -88,7 +90,26 @@ app.whenReady().then(async()=>{
         document.querySelector('#wikiDialog .wiki-entry button').click();await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=approve]')),'ingest_v2_read');
         await click('approve');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('승인 저장 완료'),'ingest_approve');
         if((await wikiNotebook.list()).filter(r=>r.document.approvals.length===1).length!==1||calls!==1)throw Error('ingest_approval_receipt');
-        await click('sources');return {drafts:2,explicitApprovals:1,syntheticCalls:calls,outputTokens:4096};
+        document.querySelectorAll('#wikiDialog .wiki-entry button.library-item')[1].click();
+        await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=approve]'))&&!document.querySelector('#wikiDialog [data-wiki-action=approve]').disabled,'second_draft');
+        await click('approve');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('승인 저장 완료'),'second_approve');
+        await click('integrate');await until(()=>Boolean(document.querySelector('#wikiDialog [name=wiki-relation-target]')),'integrate_form');
+        const form=document.querySelector('#wikiDialog [data-wiki-integration]');
+        if(!form||!form.querySelector('[name=wiki-relation-type]')||!form.querySelector('[name=wiki-relation-confidence]'))throw Error('integrate_controls');
+        if(form.scrollWidth>form.clientWidth+1||document.querySelector('#wikiDialog').getBoundingClientRect().right>innerWidth)throw Error('integrate_form_overflow');
+        await click('preview-integrate');await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=commit-ingest]')),'integrate_preview');
+        if(!document.querySelector('#wikiDialog [aria-label="관계 변경"]')||calls!==1)throw Error('integrate_no_relation_diff');
+        if((await wikiNotebook.approvedCatalog()).edges.length)throw Error('integrate_implicit_preview');
+        await click('commit-ingest');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('초안 1개 저장'),'integrate_save');
+        if((await wikiNotebook.approvedCatalog()).edges.length)throw Error('integrate_implicit_approval');
+        await click('sources');document.querySelectorAll('#wikiDialog .wiki-entry button.library-item')[1].click();
+        await until(()=>Boolean(document.querySelector('#wikiDialog [name=wiki-version]')),'integrate_open');
+        const versions=document.querySelector('#wikiDialog [name=wiki-version]');versions.value=versions.options[versions.options.length-1].value;versions.dispatchEvent(new Event('change'));
+        await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=approve]'))&&!document.querySelector('#wikiDialog [data-wiki-action=approve]').disabled,'integrate_review');
+        if(!document.querySelector('#wikiDialog [aria-label="위키 관계"]')?.textContent.includes('관련'))throw Error('integrate_saved_relation_hidden');
+        await click('approve');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('승인 저장 완료'),'integrate_approve');
+        if((await wikiNotebook.approvedCatalog()).edges.length!==1||calls!==1)throw Error('integrate_explicit_graph');
+        await click('sources');return {drafts:2,explicitApprovals:3,manualIntegrations:1,syntheticCalls:calls,outputTokens:4096};
       }finally{globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
     const screenshotRoot='D:/Project/Now/docs/2.4.0/qa';
@@ -108,6 +129,20 @@ app.whenReady().then(async()=>{
       assert(await run('(()=>{const d=document.querySelector("#wikiDialog");return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth;})()'),'remote_layout_'+size);
       fs.writeFileSync(path.join(screenshotRoot,'wiki-remote-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
+    const relationVisibility=await run(`(async()=>{
+      wikiUI.close();document.querySelector('#wikiDialog').remove();
+      const stored=await wikiNotebook.list();let blocked='';
+      const ui=mountNowWiki({contextKey:()=> 'relation-visibility',notes:()=>[],list:async()=>stored,canRead:d=>d.wiki_id!==blocked,
+        sourceStatus:async()=>({available:true,stale:false}),approvedCatalog:()=>wikiNotebook.approvedCatalog(),
+        ingest:{operations:async()=>[],integrate:async()=>{throw Error('not selected');}}});
+      const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn)=>{for(let n=0;n<300;n++){if(fn())return;await pause();}throw Error('relation_visibility_ready');};
+      await ui.open();document.querySelector('#wikiDialog .wiki-entry button.library-item').click();
+      await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=integrate]'))&&!document.querySelector('#wikiDialog [data-wiki-action=integrate]').disabled);
+      document.querySelector('#wikiDialog [data-wiki-action=integrate]').click();await until(()=>Boolean(document.querySelector('#wikiDialog [name=wiki-relation-target]')));
+      blocked=document.querySelector('#wikiDialog [name=wiki-relation-target]').value;ui.check();
+      if(document.querySelector('#wikiDialog').open||document.querySelector('#wikiDialog').textContent)throw Error('locked_relation_target_label_residue');
+      ui.close();return {targetLockConcealed:true};
+    })()`);
     const callbacks=await run(`(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
       let key='alice',captures=0;const ui=mountNowWiki({contextKey:()=>key,notes:()=>[],list:async()=>[],
@@ -161,7 +196,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,relationVisibility,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

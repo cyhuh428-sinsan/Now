@@ -307,7 +307,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         }
       }catch{active();}
     }
-    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations});active();return catalog;
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api),proofs=new Map();
+    const relationProof=async(source,relation)=>{
+      const row=verified.find(row=>row.document?.wiki_id===source);if(!row?.available||!evidence?.operationProof)throw Error('wiki_relation_operation');
+      const ref=relation.to_ref,key=P.canonicalJson([source,ref.operation_id,ref.wiki_id]);
+      if(!proofs.has(key))proofs.set(key,evidence.operationProof(ref.operation_id,source,ref.wiki_id,{origin:row.localOnly?'local':'server'}));
+      const proof=await proofs.get(key);active();return proof;
+    };
+    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();return catalog;
   }
   return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),

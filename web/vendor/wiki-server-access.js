@@ -113,9 +113,11 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     check([1,2].includes(manifest.schema_version)&&manifest.owner_id===a.ctx.owner&&uuid(manifest.operation_id)&&uuid(instance)
       &&(!write||manifest.device_id===a.ctx.device)&&await P.hashJson(unsigned)===manifest.manifest_hash,'고정 작업·계정·기기·해시를 확인하세요.');
     const source=manifest.inputs?.find(ref=>ref.kind==='note'&&ref.origin==='server'&&ref.note_ref.owner_id===a.ctx.owner);
-    check(source,'원작업의 서버 원본 참조가 없습니다.');
+    const wiki=manifest.inputs?.find(ref=>ref.kind==='wiki'&&ref.origin==='server'&&ref.owner_id===a.ctx.owner&&uuid(ref.wiki_id));
+    const anchor=source?.note_ref.local_id||(wiki?'wiki:'+wiki.wiki_id:null);
+    check(anchor,'원작업의 서버 원본 참조가 없습니다.');
     if(write)await capabilities(a,manifest.schema_version);
-    const identity=await a.get('/api/v2/notes/crypto-transitions/status',{local_id:source.note_ref.local_id,device_id:a.ctx.device});
+    const identity=await a.get('/api/v2/notes/crypto-transitions/status',{local_id:anchor,device_id:a.ctx.device});
     check(identity.server_instance_id===instance&&identity.preparation_only===true,'물리 서버 식별자가 변경되었습니다. 원요청은 보존했습니다.');
     return a;
   }

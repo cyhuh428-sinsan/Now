@@ -6138,8 +6138,8 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     }
     const result={scope:scope(ctx),sources};await verifySnapshot(result,ctx);return result;
   }
-  async function verifySnapshot(snapshot,current){
-    const ctx=context(current);exact(snapshot,['scope','sources']);check(same(snapshot.scope,scope(ctx)),'wiki_snapshot_scope');list(snapshot.sources,30,1);
+  async function verifySnapshot(snapshot,current,{allowEmpty=false}={}){
+    const ctx=context(current);exact(snapshot,['scope','sources']);check(same(snapshot.scope,scope(ctx)),'wiki_snapshot_scope');list(snapshot.sources,30,allowEmpty?0:1);
     unique(snapshot.sources.map(s=>s.id));unique(snapshot.sources.map(s=>P.canonicalJson(sourceIdentity(s.manifest))));let total=0;
     for(const s of snapshot.sources){
       check(['file','note'].includes(s.source_kind),'wiki_incomplete_snapshot');
@@ -6194,8 +6194,8 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
       comparison:rows.filter(r=>matchSource(s,r)||relatedWikiIds.includes(r.document.wiki_id)).map(r=>policy===2?approvalTuple(r):r)})});
     return result;
   }
-  async function sourceFingerprints(snapshot,catalog,current,relatedWikiIds=[],{policy=1}={}){
-    const ctx=context(current);await verifySnapshot(snapshot,ctx);return fingerprintsFor(snapshot,await readCatalog(catalog,ctx),relatedWikiIds,policy);
+  async function sourceFingerprints(snapshot,catalog,current,relatedWikiIds=[],{policy=1,allowEmpty=false}={}){
+    const ctx=context(current);await verifySnapshot(snapshot,ctx,{allowEmpty});return fingerprintsFor(snapshot,await readCatalog(catalog,ctx),relatedWikiIds,policy);
   }
   async function comparisonRefs(snapshot,catalog,current,processed=[],relatedWikiIds=[]){
     const ctx=context(current);await verifySnapshot(snapshot,ctx);const rows=await readCatalog(catalog,ctx),fingerprints=await fingerprintsFor(snapshot,rows,relatedWikiIds,2);
@@ -6284,11 +6284,61 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     if(policy===2&&plan.calls){checkPlanInputs(plan);checkProtectionGraph(protection,plan);}
     return {...plan,plan_hash:await P.hashJson(plan)};
   }
+  async function planIntegration(snapshot,catalog,{context:current,reservation,wikiId,relation,protection={nodes:[]}}){
+    const ctx=context(current);await verifySnapshot(snapshot,ctx,{allowEmpty:true});reservationIds(reservation);
+    const rows=await readCatalog(catalog,ctx),target=rows.find(r=>r.document.wiki_id===wikiId),parent=target&&approvedDraft(target.document);
+    check(parent,'wiki_comparison_missing');check(reservation.pages.length===1&&reservation.pages[0].wiki_id===wikiId,'wiki_missing_page_reservation');
+    const endpoint=rows.find(r=>r.document.wiki_id===relation?.to_ref?.wiki_id),ref=relation?.to_ref;
+    check(endpoint&&endpoint!==target&&ref.kind==='approved','wiki_relation_binding');
+    const chosen=approvedDraft(endpoint.document),approval=endpoint.document.approvals.at(-1);
+    check(chosen&&chosen.id===ref.draft_id&&chosen.draft_hash===ref.draft_hash&&approval.id===ref.approval_id,'wiki_relation_binding');
+    check(ref.section_id===null||chosen.sections.some(s=>s.id===ref.section_id),'wiki_relation_section');
+    check(target.origin!=='server'||endpoint.origin==='server','wiki_local_branch_required');
+    check(!(parent.relations||[]).some(r=>r.id===relation.id),'wiki_duplicate_relation');
+    const previousRefs=parent.evidence_manifest||parent.source_manifest.map(r=>({...copy(r),kind:'note'}));
+    const selected=[],related=[];
+    for(const old of previousRefs){
+      if(old.kind==='note'){
+        const source=snapshot.sources.find(s=>s.manifest.note_ref.owner_id===old.note_ref.owner_id&&s.manifest.note_ref.local_id===old.note_ref.local_id&&s.manifest.content_hash===old.content_hash);
+        check(source,'wiki_source_changed');selected.push(copy(source));
+      }else{
+        const row=rows.find(r=>r.document.wiki_id===old.wiki_id),now=row&&wikiInput(row);
+        check(now&&now.owner_id===old.owner_id&&now.draft_id===old.draft_id&&now.approval_id===old.approval_id&&now.content_hash===old.content_hash,'wiki_source_changed');
+        related.push(row);
+      }
+    }
+    unique(selected.map(s=>s.id));unique(related.map(r=>r.document.wiki_id));check(related.length+1<=5,'wiki_related_limit');
+    const fixed={scope:copy(snapshot.scope),sources:selected},inputs=[...selected.map(s=>copy(s.manifest)),...related.map(wikiInput),wikiInput(target)];
+    list(inputs,30,1);unique(inputs.map(r=>r.id));inputs.sort(order);
+    if(inputs.some(r=>r.origin==='local'))check(target.origin==='local','wiki_local_branch_required');
+    const page={...copy(reservation.pages[0]),action:'append_draft'};
+    check(!target.document.drafts.some(d=>d.id===page.draft_id||d.generation_id===page.generation_id),'wiki_existing_draft_reservation');
+    const transmission={sources:selected.map(s=>({id:s.id,title:s.title,content:s.content})),
+      related_wikis:related.map(r=>({evidence:wikiInput(r),draft:copy(approvedDraft(r.document))})),
+      comparison_targets:[{wiki_id:wikiId,evidence:wikiInput(target),draft:copy(parent)}],pages:[{wiki_id:wikiId,draft_id:page.draft_id,action:page.action}]};
+    check(size(transmission)<=524288,'wiki_source_budget');
+    const plan={schema_version:1,kind:'integrate',context:ctx,snapshot:fixed,catalog:copy(catalog),reservation:copy(reservation),fingerprints:[],candidates:[],
+      targets:[copy(target)],pages:[page],inputs,transmission,related_wiki_ids:related.map(r=>r.document.wiki_id),transmitted_bytes:0,calls:0,
+      serverEligible:Boolean(ctx.url)&&target.origin==='server'&&inputs.every(r=>r.origin==='server'),policy:2,protection:copy(protection),integration:{wiki_id:wikiId,relation:copy(relation)}};
+    checkPlanInputs(plan);checkProtectionGraph(protection,plan);return {...plan,plan_hash:await P.hashJson(plan)};
+  }
+  async function createIntegrationProposal(plan,review){
+    check(plan.kind==='integrate'&&plan.calls===0,'wiki_invalid_integration');
+    const parent=approvedDraft(plan.targets[0].document),refs=parent.evidence_manifest||parent.source_manifest.map(r=>({...copy(r),kind:'note'}));
+    const citations=parent.citations.map(c=>{
+      const old=refs.find(r=>r.id===(c.evidence_id||c.source_id)),next=plan.inputs.find(r=>r.kind===old?.kind&&(r.kind==='note'
+        ?r.note_ref.owner_id===old.note_ref.owner_id&&r.note_ref.local_id===old.note_ref.local_id:r.wiki_id===old.wiki_id));
+      check(next,'wiki_unknown_evidence');return {id:c.id,evidence_id:next.id,section_id:c.section_id??null,quote:c.quote};
+    });
+    const page={wiki_id:plan.integration.wiki_id,draft_id:plan.pages[0].draft_id,title:parent.title,topic:parent.topic,page_type:parent.page_type||'concept',summary:parent.summary||'',
+      aliases:copy(parent.aliases||[]),sections:copy(parent.sections),claims:copy(parent.claims||[]),relations:[...copy(parent.relations||[]),copy(plan.integration.relation)],citations};
+    return validateIngestProposal({pages:[page]},plan,review);
+  }
   async function fresh(plan,review){
     const unsigned=copy(plan);delete unsigned.plan_hash;
     check(await P.hashJson(unsigned)===plan.plan_hash,'wiki_plan_hash');
     check(same(context(review.context),plan.context),'wiki_context_changed');
-    await verifySnapshot(review.snapshot,review.context);await readCatalog(review.catalog,context(review.context));
+    await verifySnapshot(review.snapshot,review.context,{allowEmpty:plan.kind==='integrate'});await readCatalog(review.catalog,context(review.context));
     check(same(review.snapshot,plan.snapshot),'wiki_input_changed');
     if(plan.policy!==2){check(same(review.catalog,plan.catalog),'wiki_input_changed');return;}
     await readCatalog(plan.catalog,plan.context);checkPlanInputs(plan);
@@ -6304,7 +6354,7 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     checkProtectionGraph(review.protection||plan.protection,plan);
   }
   async function validateIngestProposal(input,plan,review){
-    await fresh(plan,review);check(plan.calls===1,'wiki_unchanged');
+    await fresh(plan,review);check(plan.calls===1||plan.kind==='integrate'&&plan.calls===0,'wiki_unchanged');
     const value=typeof input==='string'?P.parseJson(input):copy(input);exact(value,['pages']);list(value.pages,10,1);
     unique(value.pages.map(p=>p.wiki_id));const documents=[];
     if(plan.policy===2)check(value.pages.length===plan.pages.length,'wiki_incomplete_pages');
@@ -6342,12 +6392,20 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
       for(const r of draft.relations){
         const t=r.to_ref;check(t.wiki_id!==row.wiki_id,'wiki_self_relation');let chosen;
         if(t.kind==='proposal'){
-          check(t.operation_id===plan.reservation.operation_id,'wiki_relation_operation');
-          const other=documents.find(d=>d.wiki_id===t.wiki_id);chosen=other?.document.drafts.find(d=>d.id===t.draft_id);
-          check(Boolean(chosen)&&bindings.some(b=>b.wiki_id===t.wiki_id&&b.draft_id===t.draft_id&&b.draft_hash===chosen.draft_hash),'wiki_relation_binding');
+          if(t.operation_id===plan.reservation.operation_id){
+            const other=documents.find(d=>d.wiki_id===t.wiki_id);chosen=other?.document.drafts.find(d=>d.id===t.draft_id);
+            check(Boolean(chosen)&&bindings.some(b=>b.wiki_id===t.wiki_id&&b.draft_id===t.draft_id&&b.draft_hash===chosen.draft_hash),'wiki_relation_binding');
+          }else{
+            const before=plan.targets.find(target=>target.document.wiki_id===row.wiki_id)?.document;
+            check(before&&(approvedDraft(before)?.relations||[]).some(old=>same(old,r)),'wiki_relation_parent');
+            const proof=await review.relationProof?.(row.wiki_id,copy(r));check(proof,'wiki_relation_operation');
+            chosen=(await verifyCarriedRelation(before,r,proof,plan.context)).draft;
+          }
         }else{
           const other=plan.catalog.find(d=>d.document.wiki_id===t.wiki_id)?.document;chosen=other?.drafts.find(d=>d.id===t.draft_id);
           check(chosen?.draft_hash===t.draft_hash&&other.approvals.some(a=>a.id===t.approval_id&&a.draft_id===t.draft_id),'wiki_relation_binding');
+          const live=review.catalog.find(d=>d.document.wiki_id===t.wiki_id)?.document,retained=live?.drafts.find(d=>d.id===t.draft_id);
+          check(retained?.draft_hash===t.draft_hash&&live.approvals.some(a=>a.id===t.approval_id&&a.draft_id===t.draft_id),'wiki_relation_binding');
         }
         check(t.section_id===null||chosen.sections.some(s=>s.id===t.section_id),'wiki_relation_section');
       }
@@ -6391,12 +6449,55 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     const r=plan.reservation,base={schema_version:1,owner_id:plan.context.owner,device_id:review.device};
     check(typeof base.device_id==='string'&&base.device_id.length>0&&base.device_id.length<=120&&base.device_id===plan.context.device,'wiki_invalid_device');
     const prepare={...base,schema_version:plan.policy===2?2:1,operation_id:r.operation_id,mutation_id:r.mutation_id,commit_mutation_id:r.commit_mutation_id,abort_mutation_id:r.abort_mutation_id,
-      kind:'ingest',inputs:copy(plan.inputs),draft_bindings:copy(proposal.draft_bindings),changes};
+      kind:plan.kind||'ingest',inputs:copy(plan.inputs),draft_bindings:copy(proposal.draft_bindings),changes};
     prepare.manifest_hash=await P.hashJson(prepare);
     const commit={...base,mutation_id:r.commit_mutation_id,manifest_hash:prepare.manifest_hash,documents:copy(proposal.documents)};
     const abort={...base,mutation_id:r.abort_mutation_id,manifest_hash:prepare.manifest_hash};
     check(size(prepare)<=131072&&size(commit)<=20971520,'wiki_operation_capacity');
     return {prepare,commit,abort,requiresDurableReservation:true};
+  }
+  async function verifyCarriedRelation(before,relation,proof,current){
+    const ctx=scope(current);check(typeof current?.url==='string'&&typeof ctx.owner==='string'&&ctx.owner.length>0,'wiki_context_required');
+    const source=await W.validateDocument(before,ctx),ref=relation.to_ref;
+    check(ref?.kind==='proposal'&&ref.wiki_id!==source.wiki_id,'wiki_relation_binding');
+    const parent=approvedDraft(source);
+    check(parent&&(parent.relations||[]).some(r=>same(r,relation)),'wiki_relation_parent');
+    exact(proof,['operation','documents','currentTarget']);list(proof.documents,10,2);
+    const record=proof.operation,manifest=record?.manifest||record?.remote?.manifest;
+    check(record?.operation_id===ref.operation_id&&record.state==='committed','wiki_relation_operation');
+    const original=[];
+    for(const raw of proof.documents)original.push(await W.validateDocument(raw,scope(ctx)));
+    unique(original.map(d=>d.wiki_id));
+    const first=original.find(d=>d.wiki_id===source.wiki_id),other=original.find(d=>d.wiki_id===ref.wiki_id);
+    check(first&&other,'wiki_relation_binding');
+    const origin=first.drafts.at(-1),target=other.drafts.find(d=>d.id===ref.draft_id);
+    check(target&&source.approvals.some(a=>a.draft_id===origin.id&&a.draft_hash===origin.draft_hash)
+      &&(origin.relations||[]).some(r=>same(r,relation)),'wiki_relation_parent');
+    if(manifest){
+      const unsigned=copy(manifest);delete unsigned.manifest_hash;
+      check([1,2].includes(manifest.schema_version)&&['ingest','integrate'].includes(manifest.kind)&&manifest.owner_id===ctx.owner
+        &&manifest.operation_id===ref.operation_id&&await P.hashJson(unsigned)===manifest.manifest_hash,'wiki_relation_operation');
+      check(typeof globalThis.NowWikiServerAccess?.create==='function','wiki_relation_operation');
+      const receipt=NowWikiServerAccess.create({}).verifyReceipt(record.receipt||record.remote?.receipt,manifest);
+      check(receipt.state==='committed'&&(!record.manifest||record.manifest_hash===manifest.manifest_hash),'wiki_relation_operation');
+      for(const [document,draft]of [[first,origin],[other,target]]){
+        const hash=await P.hashJson(document);
+        check(manifest.draft_bindings.some(b=>b.wiki_id===document.wiki_id&&b.draft_id===draft.id&&b.draft_hash===draft.draft_hash)
+          &&manifest.changes.some(c=>c.wiki_id===document.wiki_id&&c.result_document_hash===hash),'wiki_relation_binding');
+      }
+    }else{
+      check(['ingest','integrate'].includes(record.action)&&record.scope&&same({url:record.scope.url,owner:record.scope.owner},scope(ctx))
+        &&record.reservation?.operation_id===ref.operation_id,'wiki_relation_operation');
+      for(const [document,draft]of [[first,origin],[other,target]]){
+        const hash=await P.hashJson(document);
+        check(record.documents.some(d=>d.wiki_id===document.wiki_id&&d.draft_id===draft.id&&d.draft_hash===draft.draft_hash&&d.document_hash===hash)
+          &&record.reservation.pages.some(p=>p.wiki_id===document.wiki_id&&p.draft_id===draft.id&&p.generation_id===draft.generation_id),'wiki_relation_binding');
+      }
+    }
+    const live=await W.validateDocument(proof.currentTarget,scope(ctx));
+    const chosen=live.drafts.find(d=>d.id===target.id&&d.draft_hash===target.draft_hash);
+    check(live.wiki_id===ref.wiki_id&&chosen&&(ref.section_id===null||chosen.sections.some(s=>s.id===ref.section_id)),'wiki_relation_section');
+    return {draft:copy(chosen),source_draft_id:origin.id,source_document_version:first.document_version,target_document_version:other.document_version};
   }
   async function dependencyUnion(documents,current,{resolveWiki,retainedLinks=[]}={}){
     const ctx=context(current),notes=new Map(),wikis=new Map(),visited=new Set(),done=new Set();
@@ -6430,7 +6531,7 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     return {dependencies:[...notes.values()].sort((a,b)=>compare(a.local_id,b.local_id)),
       wiki_dependencies:[...wikis.entries()].sort((a,b)=>compare(a[0],b[0])).map(([,value])=>value),requiresLiveProtectionCheck:true};
   }
-  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,dependencyUnion});
+  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,planIntegration,createIntegrationProposal,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,verifyCarriedRelation,dependencyUnion});
 })();
 
 ;
@@ -7017,7 +7118,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         }
       }catch{active();}
     }
-    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations});active();return catalog;
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api),proofs=new Map();
+    const relationProof=async(source,relation)=>{
+      const row=verified.find(row=>row.document?.wiki_id===source);if(!row?.available||!evidence?.operationProof)throw Error('wiki_relation_operation');
+      const ref=relation.to_ref,key=P.canonicalJson([source,ref.operation_id,ref.wiki_id]);
+      if(!proofs.has(key))proofs.set(key,evidence.operationProof(ref.operation_id,source,ref.wiki_id,{origin:row.localOnly?'local':'server'}));
+      const proof=await proofs.get(key);active();return proof;
+    };
+    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();return catalog;
   }
   return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
@@ -7140,9 +7248,11 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     check([1,2].includes(manifest.schema_version)&&manifest.owner_id===a.ctx.owner&&uuid(manifest.operation_id)&&uuid(instance)
       &&(!write||manifest.device_id===a.ctx.device)&&await P.hashJson(unsigned)===manifest.manifest_hash,'고정 작업·계정·기기·해시를 확인하세요.');
     const source=manifest.inputs?.find(ref=>ref.kind==='note'&&ref.origin==='server'&&ref.note_ref.owner_id===a.ctx.owner);
-    check(source,'원작업의 서버 원본 참조가 없습니다.');
+    const wiki=manifest.inputs?.find(ref=>ref.kind==='wiki'&&ref.origin==='server'&&ref.owner_id===a.ctx.owner&&uuid(ref.wiki_id));
+    const anchor=source?.note_ref.local_id||(wiki?'wiki:'+wiki.wiki_id:null);
+    check(anchor,'원작업의 서버 원본 참조가 없습니다.');
     if(write)await capabilities(a,manifest.schema_version);
-    const identity=await a.get('/api/v2/notes/crypto-transitions/status',{local_id:source.note_ref.local_id,device_id:a.ctx.device});
+    const identity=await a.get('/api/v2/notes/crypto-transitions/status',{local_id:anchor,device_id:a.ctx.device});
     check(identity.server_instance_id===instance&&identity.preparation_only===true,'물리 서버 식별자가 변경되었습니다. 원요청은 보존했습니다.');
     return a;
   }
@@ -7276,7 +7386,7 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
   async function knownGeneration(a,wikiId,draft,docs){
     const candidates=a.roots.flatMap(root=>Object.values(root.contexts?.[a.account]?.wiki_ingest_operations||{}));
     for(const row of candidates){
-      if(row?.action!=='ingest'||!['attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.documents)||!Array.isArray(row.inputs))continue;
+      if(!['ingest','integrate'].includes(row?.action)||!['attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.documents)||!Array.isArray(row.inputs))continue;
       if(row.scope?.owner!==a.ctx.owner||String(row.scope.url).replace(/\/+$/,'')!==String(a.ctx.url).replace(/\/+$/,''))continue;
       const bound=row.documents.find(d=>d.wiki_id===wikiId&&d.draft_id===draft.id&&d.draft_hash===draft.draft_hash),page=row.reservation?.pages?.find(p=>p.wiki_id===wikiId&&p.draft_id===draft.id&&p.generation_id===draft.generation_id);
       if(!bound||!page)continue;const document=docs.get(bound.document_hash);if(!document)continue;
@@ -7343,7 +7453,43 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     check([...a.producerInstances].every(id=>id===a.instance),'wiki_context_changed');
     return {nodes:[...nodes.values()].sort((a,b)=>a.wiki_id<b.wiki_id?-1:a.wiki_id>b.wiki_id?1:0)};
   }
-  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph};
+  async function operationProof(id,sourceId,targetId,{origin}={}){
+    const a=await action(),ids=[sourceId,targetId],uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+    check([id,...ids].every(uuid)&&sourceId!==targetId&&['local','server'].includes(origin),'wiki_relation_operation');
+    for(const wiki of ids){plainLocal(a,'wiki:'+wiki);check(!api.lifecycle?.state('wiki:'+wiki)?.deleted_at&&!api.lifecycle?.blocked?.('wiki:'+wiki),'wiki_source_unavailable');}
+    let operation,currentTarget;const originals=[];
+    if(origin==='server'){
+      check(api.server?.readOperation&&api.readRemote,'wiki_source_unavailable');const inspected=[];
+      for(const wiki of ids){
+        check(a.h.view('wiki:'+wiki)?.localOnly!==true,'wiki_evidence_binding');
+        const value=await api.server.inspect('wiki:'+wiki,undefined,{policy:1});a.active();bind(a,value.instance);
+        const remote=await api.readRemote(wiki);a.active();
+        check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===wiki&&!remote.resource.deleted_at&&remote.artifact?.protected===false
+          &&remote.artifact.head_revision_id===value.current.head_revision_id,'wiki_source_unavailable');
+        const document=await W.validateDocument(value.current.snapshot.note.content,a.ctx);a.active();
+        check(document.wiki_id===wiki&&eq(remote.artifact.document,document),'wiki_evidence_binding');
+        inspected.push(value);if(wiki===targetId)currentTarget=document;
+      }
+      operation=await api.server.readOperation(id,a.instance);a.active();check(operation.state==='committed','wiki_relation_operation');
+      for(let n=0;n<ids.length;n++){
+        const page=operation.receipt.pages.find(p=>p.wiki_id===ids[n]);
+        const raw=inspected[n].history.find(r=>r.revision_ref.kind==='note_revision'&&r.revision_ref.id===page?.result_revision_id);
+        check(raw,'wiki_relation_binding');const document=await W.validateDocument(raw.snapshot.note.content,a.ctx);a.active();
+        check(document.wiki_id===ids[n],'wiki_relation_binding');originals.push(document);
+      }
+    }else{
+      const rows=await api.readOperations?.();a.active();operation=rows?.find(row=>row.operation_id===id);
+      check(operation?.state==='committed'&&!operation.remote,'wiki_relation_operation');
+      for(const wiki of ids){
+        const local='wiki:'+wiki,item=a.h.view(local);check(item?.localOnly&&!a.h.blocked(local),'wiki_source_unavailable');
+        const documentsByHash=await documents(a,wiki),binding=operation.documents.find(d=>d.wiki_id===wiki);a.active();
+        const document=binding&&documentsByHash.get(binding.document_hash);check(document,'wiki_relation_binding');originals.push(document);
+        if(wiki===targetId){currentTarget=await W.validateDocument(item.draft.content,a.ctx);a.active();check(currentTarget.wiki_id===wiki,'wiki_evidence_binding');}
+      }
+    }
+    a.active();return {operation:copy(operation),documents:copy(originals),currentTarget:copy(currentTarget)};
+  }
+  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph,operationProof};
 }});
 
 ;
@@ -7351,7 +7497,7 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
 globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
   'use strict';
   const I=NowNoteWikiIngest,W=NowNoteWiki,P=NowNoteProtectionProtocol,copy=structuredClone;
-  const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+  const evidence=api.evidence||globalThis.NowWikiEvidence?.create({...api,readOperations:()=>api.readOperations?api.readOperations():Object.values(map(action()))});
   const eq=(a,b)=>P.canonicalJson(a)===P.canonicalJson(b);
   const check=(value,code='위키 작업 원장을 확인하세요.')=>{if(!value)throw Error(code);};
   const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
@@ -7367,7 +7513,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     exact(row,['schema_version','operation_id','action','scope','reservation','selection','plan_hash','inputs','fingerprints','state','documents',...(Object.hasOwn(row,'remote')?['remote']:[])]);
     check(row.schema_version===1&&uuid(row.operation_id)&&row.operation_id===row.reservation?.operation_id&&hash(row.plan_hash));
     check(['reserved','attempted','committed','aborted'].includes(row.state));
-    check(['ingest','approve','reject'].includes(row.action));
+    check(['ingest','integrate','approve','reject'].includes(row.action));
     exact(row.scope,['url','owner','device','serverInstance']);check(row.scope.owner===owner&&typeof row.scope.url==='string'&&typeof row.scope.device==='string'&&row.scope.device.length>0&&typeof row.scope.serverInstance==='string');
     const r=row.reservation;exact(r,['operation_id','mutation_id','commit_mutation_id','abort_mutation_id','pages']);
     check([r.operation_id,r.mutation_id,r.commit_mutation_id,r.abort_mutation_id].every(uuid)&&Array.isArray(r.pages)&&r.pages.length<=10&&r.pages.length>0);
@@ -7475,7 +7621,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
         sources.push({id:source.id,source_kind:'note',title:source.title,content:source.content,manifest:{...copy(source.manifest),kind:'note'},safety:copy(safety)});
       }
     }
-    const snapshot={scope:{url:a.ingestContext.url,owner:a.ctx.owner},sources};await I.verifySnapshot(snapshot,a.ingestContext);a.active();return snapshot;
+    const snapshot={scope:{url:a.ingestContext.url,owner:a.ctx.owner},sources};await I.verifySnapshot(snapshot,a.ingestContext,{allowEmpty:!selection.fileIds.length&&!selection.noteIds.length});a.active();return snapshot;
   }
   async function save(a,before,rows,next=copy(before)){
     a.active();check(Object.keys(rows).length<=2000,'위키 작업 보존 한도에 도달했습니다. 기존 원장은 보존했습니다.');
@@ -7514,8 +7660,66 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     const snapshot=await gather(a,operation.selection),currentCatalog=await catalog(a);a.active();
     check(eq(operation.plan.context,a.ingestContext),'계정·서버·화면 상태가 변경되었습니다. 원작업을 확인하세요.');
     const refs=operation.plan.inputs.filter(r=>r.kind==='wiki'),protection=refs.length?await evidence.graph(refs,{instance:a.serverBound?a.ingestContext.serverInstance:undefined,onInstance:id=>bindInstance(a,id)}):{nodes:[]};a.active();
-    const result={context:a.ingestContext,snapshot,catalog:currentCatalog,protection,connection:{provider:connection.provider,model:connection.model},generatedAt,device:a.ctx.device};
+    const proofs=new Map(),relationTargets=new Map();
+    const relationProof=async(source,relation)=>{
+      const target=currentCatalog.find(row=>row.document.wiki_id===source);check(target&&evidence?.operationProof,'원 관계 검증 연결을 확인하세요.');
+      const ref=relation.to_ref,key=P.canonicalJson([source,ref.operation_id,ref.wiki_id]);
+      if(!proofs.has(key))proofs.set(key,evidence.operationProof(ref.operation_id,source,ref.wiki_id,{origin:target.origin}));
+      const proof=await proofs.get(key);a.active();
+      if(target.origin==='local')relationTargets.set(ref.wiki_id,P.canonicalJson(proof.currentTarget));
+      return proof;
+    };
+    const assertLocalCurrent=proposal=>{
+      a.active();
+      for(const source of snapshot.sources.filter(s=>s.manifest.origin==='local')){
+        const id=source.manifest.note_ref.local_id,item=a.h.view(id),live=api.source?.(id)||(item?{owner:item.draft.owner_id,status:'ok',content:item.draft.content,title:item.draft.title}:null);
+        check(live?.owner===a.ctx.owner&&live.status==='ok'&&!live.protected&&live.content===source.content&&live.title===source.title
+          &&(!item||!a.h.blocked(id)&&!item.protectionScope&&item.base.crypto_epoch===0&&!item.draft.deleted_at),'저장 직전 원본 판본이 변경되었습니다.');
+      }
+      for(const target of operation.plan.targets.filter(row=>row.origin==='local')){
+        const local='wiki:'+target.document.wiki_id,item=a.h.view(local);plainItem(a,local,item);
+        check(item.draft.content===P.canonicalJson(target.document)&&!api.lifecycle?.blocked(local),'대상 위키 판본이 변경되었습니다.');
+      }
+      for(const [id,content]of relationTargets){
+        const local='wiki:'+id,item=a.h.view(local);plainItem(a,local,item);
+        check(!item.draft.deleted_at&&!item.conflict&&item.draft.content===content&&!api.lifecycle?.blocked(local),'관계 대상 판본이 변경되었습니다.');
+      }
+      for(const entry of proposal.documents)for(const relation of entry.document.drafts.at(-1).relations){
+        const target=currentCatalog.find(row=>row.document.wiki_id===relation.to_ref.wiki_id);
+        if(relation.to_ref.kind!=='approved'||target?.origin!=='local')continue;
+        const local='wiki:'+target.document.wiki_id,item=a.h.view(local);plainItem(a,local,item);
+        check(item.localOnly&&!item.draft.deleted_at&&!item.conflict&&!api.lifecycle?.blocked(local)
+          &&item.draft.content===P.canonicalJson(target.document),'관계 대상 판본이 변경되었습니다.');
+      }
+    };
+    const result={context:a.ingestContext,snapshot,catalog:currentCatalog,protection,connection:{provider:connection.provider,model:connection.model},generatedAt,device:a.ctx.device,relationProof,assertLocalCurrent};
     await I.verifyPlan(operation.plan,result);a.active();return result;
+  }
+  async function integrate(wikiId,relation){
+    const a=action(),targets=await catalog(a);a.active();
+    const target=targets.find(r=>r.document.wiki_id===wikiId),parent=target?.document.drafts.find(d=>d.id===target.document.approvals.at(-1)?.draft_id);
+    check(parent,'승인한 위키에서 관계를 추가하세요.');
+    const before=a.h.export(),rows=map(a,before);check(!Object.values(rows).some(r=>['reserved','attempted'].includes(r.state)),'진행 중인 원작업을 먼저 확인하거나 명시적으로 폐기하세요.');
+    const selection={fileIds:[],noteIds:[]},available=await api.sources.list();a.active();
+    for(const ref of parent.evidence_manifest||parent.source_manifest.map(r=>({...copy(r),kind:'note'}))){
+      if(ref.kind!=='note')continue;
+      const source=available.find(s=>s.manifest.note_ref.owner_id===ref.note_ref.owner_id&&s.manifest.note_ref.local_id===ref.note_ref.local_id);
+      if(source)selection.fileIds.push(source.id);else selection.noteIds.push(ref.note_ref.local_id);
+    }
+    const snapshot=await gather(a,selection),refs=[{id:'wiki-'+wikiId,kind:'wiki',origin:target.origin,owner_id:a.ctx.owner,wiki_id:wikiId,
+      draft_id:parent.id,approval_id:target.document.approvals.at(-1).id,document_version:target.document.document_version,content_hash:parent.draft_hash}];
+    const protection=await evidence.graph(refs,{instance:a.serverBound?a.ingestContext.serverInstance:undefined,onInstance:id=>bindInstance(a,id)});a.active();
+    const reservation={operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),
+      pages:[{wiki_id:wikiId,draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()}]};
+    const result=await I.planIntegration(snapshot,targets,{context:a.ingestContext,reservation,wikiId,relation,protection});a.active();
+    const operation={operation_id:reservation.operation_id,selection,plan:result},generatedAt=new Date().toISOString(),connection={provider:'manual',model:'relation-editor'};
+    const current=await review(a,operation,connection,generatedAt),proposal=await I.createIntegrationProposal(result,current);a.active();
+    check(eq(before,a.h.export()),'검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.');
+    const {viewGeneration,...scope}=a.ingestContext;
+    rows[reservation.operation_id]={schema_version:1,operation_id:reservation.operation_id,action:'integrate',scope,reservation,selection:copy(selection),plan_hash:result.plan_hash,
+      inputs:copy(result.inputs),fingerprints:[],state:'attempted',documents:[]};
+    await save(a,before,rows);
+    return {operation_id:operation.operation_id,selection:copy(selection),proposal,connection,generated_at:generatedAt};
   }
   async function generate(operation,connection){
     const a=action(),generatedAt=new Date().toISOString(),current=await review(a,operation,connection,generatedAt);a.active();
@@ -7530,6 +7734,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     const a=action(),operation={operation_id:value.operation_id,selection:value.selection,plan:value.proposal.plan};
     const current=await review(a,operation,value.connection,value.generated_at);await I.verifyProposal(value.proposal,current);a.active();
     check(!value.proposal.plan.serverEligible,'서버 작업은 내구 prepare/status/commit 경로를 사용하세요.');
+    current.assertLocalCurrent(value.proposal);
     const before=a.h.export(),rows=map(a,before),row=rows[value.operation_id];check(row?.state==='attempted'&&row.plan_hash===operation.plan.plan_hash);
     const next=copy(before);next.contexts[a.account]||={notes:{}};const refs=[];
     for(const entry of value.proposal.documents)refs.push(await stageDocument(a,next,entry));
@@ -7579,7 +7784,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     doc.document_version++;await W.validateDocument(doc,a.ingestContext);a.active();
     if(!item.localOnly)return stageDecisionServer(a,doc,draft,decision,producer,item);
     const currentCatalog=await catalog(a);a.active();const projected=currentCatalog.map(r=>r.document.wiki_id===doc.wiki_id?{...r,document:copy(doc)}:r);
-    const fingerprints=await I.sourceFingerprints(snapshot,projected,a.ingestContext,[],{policy:2});a.active();
+    const fingerprints=await I.sourceFingerprints(snapshot,projected,a.ingestContext,[],{policy:2,allowEmpty:wikiRefs.length>0});a.active();
     const before=a.h.export(),next=copy(before),currentRows=map(a,before);
     check(eq(a.h.view(local),item),'위키 판본 충돌입니다.');
     const reservation={operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),
@@ -7649,10 +7854,10 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
   }
   async function freshServerInputs(a,row){
     const snapshot=await gather(a,row.selection);a.active();
-    check(row.scope.serverInstance===a.ingestContext.serverInstance&&row.inputs.filter(ref=>ref.kind==='note').every(ref=>snapshot.sources.some(s=>eq(s.manifest,ref))),
-      '원작업의 서버·원본 판본이 변경되었습니다. 원요청은 보존했습니다.');
     const refs=row.inputs.filter(ref=>ref.kind==='wiki'),targets=[];
     for(const ref of refs){const proof=await evidence.resolve(ref,{fresh:true});a.active();if(proof.instance)bindInstance(a,proof.instance);}
+    check(row.scope.serverInstance===a.ingestContext.serverInstance&&row.inputs.filter(ref=>ref.kind==='note').every(ref=>snapshot.sources.some(s=>eq(s.manifest,ref))),
+      '원작업의 서버·원본 판본이 변경되었습니다. 원요청은 보존했습니다.');
     for(const change of row.remote.manifest.changes)if(change.action!=='create_draft'){
       const proof=await serverProof(a,'wiki:'+change.wiki_id);
       check(proof.current.head_revision_id===change.base_head_revision_id&&proof.current.head_version===change.base_head_version,'대상 위키가 변경되었습니다.');
@@ -7714,7 +7919,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(fresh){
       const replacements=targets.map(t=>({document:documents.find(d=>'wiki:'+d.wiki_id===t.local).document,origin:'server',headRevisionId:t.current.head_revision_id,
         headVersion:t.current.head_version,indexVersion:t.page.index_version,safety:{status:'ok',epoch:0,lineage:false,fence:false}}));
-      fingerprints=await I.sourceFingerprints(snapshot,await catalog(a,replacements),a.ingestContext,[],{policy:row.remote.manifest.schema_version});a.active();
+      fingerprints=await I.sourceFingerprints(snapshot,await catalog(a,replacements),a.ingestContext,[],{policy:row.remote.manifest.schema_version,allowEmpty:row.inputs.some(ref=>ref.kind==='wiki')});a.active();
     }
     const before=a.h.export(),next=copy(before),rows=map(a,before);check(eq(rows[id],row),'원작업 상태가 변경되었습니다.');
     const bucket=next.contexts[a.account];bucket.wiki_lifecycle||={};
@@ -7748,7 +7953,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+  return {plan,prompt,generate,integrate,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
     approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
 };
@@ -7780,7 +7985,7 @@ globalThis.createWikiIngestNotebook.validateRestore=function(current,incoming){
   const check=(value,code='wiki_graph_invalid')=>{if(!value)throw Error(code);};
   const same=(a,b)=>P.canonicalJson(a)===P.canonicalJson(b);
   const scope=ctx=>({url:String(ctx.url||'').replace(/\/+$/,''),owner:ctx.owner});
-  async function buildApprovedWikiCatalog(rows,context,{operations=[]}={}){
+  async function buildApprovedWikiCatalog(rows,context,{operations=[],relationProof}={}){
     check(Array.isArray(rows)&&Array.isArray(operations)&&context?.owner);
     const nodes=[],edges=[],findings=[],documents=new Map();let excluded=0;
     for(const row of rows){
@@ -7809,7 +8014,13 @@ globalThis.createWikiIngestNotebook.validateRestore=function(current,incoming){
           if(![source,target].every(node=>manifest.draft_bindings?.some(b=>b.wiki_id===node.wiki_id&&b.draft_id===node.draft_id&&b.draft_hash===node.draft_hash)))continue;
         }else if(operation.reservation?.operation_id!==operation.operation_id||!binds(source)||!binds(target))continue;
         return true;
-      }return false;
+      }
+      if(relationProof)try{
+        const proof=await relationProof(source.wiki_id,copy(relation));
+        const inherited=await NowNoteWikiIngest.verifyCarriedRelation(documents.get(source.wiki_id),relation,proof,context);
+        return inherited.draft.id===target.draft_id&&inherited.draft.draft_hash===target.draft_hash;
+      }catch{return false;}
+      return false;
     }
     for(const source of nodes)for(const relation of source.draft.relations||[]){
       const ref=relation.to_ref,target=byId.get(ref.wiki_id),document=documents.get(ref.wiki_id);
@@ -7932,6 +8143,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let sourceMode=false,sourceRows=[],sourceFiles=[],sourcePreview='';
   let ingestPlan=null,ingestProposal=null,ingestOps=[];
   let graphCatalog=null,graphMount=null,graphSection='';
+  let relationEditor=null;
   const ingestFiles=new Set(),ingestNotes=new Set();
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
@@ -7949,7 +8161,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
-    graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';
+    graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
     viewId='';beforeId='';comparing=false;readOnly=false;trashMode=false;
     sourceMode=false;sourceRows=[];sourceFiles=[];sourcePreview='';
@@ -7957,10 +8169,15 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
+    if(dialog.open&&api.canRead){
+      const sensitive=new Set([...(relationEditor?.targets||[]).map(r=>r.wiki_id),...(current()?.relations||[]).map(r=>r.to_ref.wiki_id)]);
+      if(rows.some(row=>sensitive.has(row.document?.wiki_id)&&!api.canRead(row.document))){close();return;}
+    }
     if(dialog.open&&graphCatalog&&graphCatalog.nodes.some(page=>!api.canRead(rows.find(row=>row.document?.wiki_id===page.wiki_id)?.document||{scope:{},drafts:[]})))close();
     if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
+    relationEditor=null;
     rows=rows.map(row=>({id:row.id||row.document?.wiki_id,unavailable:true,error:'출처·보호 상태 확인 필요'}));
     doc=null;dirty=false;readable=false;selected.clear();question='';topic='';
     viewId='';beforeId='';comparing=false;
@@ -8022,6 +8239,38 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     dirty=true;message='인용문을 확인한 뒤 초안을 저장하세요.';
   }
   async function refreshOperations(token){ingestOps=await api.ingest.operations();requireActive(token);}
+  function relationText(draft){
+    const names=new Map(rows.filter(r=>r.document&&!r.protected&&!r.deleted).map(r=>[r.document.wiki_id,preferred(r.document)?.title||'위키']));
+    const types={related_to:'관련',supports:'뒷받침',contradicts:'상충',extends:'확장',depends_on:'의존'},confidence={explicit:'직접 근거',inferred:'추론',uncertain:'불확실'};
+    return (draft?.relations||[]).map(r=>[r.id,types[r.type],confidence[r.confidence],names.get(r.to_ref.wiki_id)||'대상 확인 필요',r.to_ref.draft_id,r.to_ref.section_id||'전체',r.citation_ids.join(', ')].join(' · ')).join('\n');
+  }
+  function renderRelationEditor(detail,draft){
+    const editor=relationEditor;if(!editor||editor.wiki_id!==doc.wiki_id||editor.draft_id!==draft.id)return;
+    const form=node('fieldset');form.dataset.wikiIntegration='';form.append(node('legend','관계 추가'));
+    const select=(name,labelText,values,value,change)=>{
+      const label=node('label',labelText),input=node('select',undefined,'settings-select');input.name=name;input.disabled=busy;
+      for(const [id,text]of values){const option=node('option',text);option.value=id;input.append(option);}input.value=value;
+      input.onchange=()=>{change(input.value);};label.append(input);form.append(label);return input;
+    };
+    const target=editor.targets.find(r=>r.wiki_id===editor.target);
+    select('wiki-relation-target','대상 위키',editor.targets.map(r=>[r.wiki_id,r.title]),editor.target,value=>{editor.target=value;editor.to='';render();});
+    select('wiki-relation-type','관계 유형',[['related_to','관련'],['supports','뒷받침'],['contradicts','상충'],['extends','확장'],['depends_on','의존']],editor.type,value=>editor.type=value);
+    select('wiki-relation-confidence','근거 상태',[['explicit','직접 근거'],['inferred','추론'],['uncertain','불확실']],editor.confidence,value=>editor.confidence=value);
+    select('wiki-relation-from','시작 절',[['','페이지 전체'],...draft.sections.map(s=>[s.id,s.title])],editor.from,value=>editor.from=value);
+    select('wiki-relation-to','대상 절',[['','페이지 전체'],...(target?.draft.sections||[]).map(s=>[s.id,s.title])],editor.to,value=>editor.to=value);
+    const citations=node('fieldset');citations.append(node('legend','인용 근거'));
+    for(const c of draft.citations){const label=node('label'),input=node('input');input.type='checkbox';input.name='wiki-relation-citation';input.value=c.id;input.checked=editor.citations.includes(c.id);input.disabled=busy;
+      input.onchange=()=>{editor.citations=editor.citations.filter(id=>id!==c.id);if(input.checked)editor.citations.push(c.id);};label.append(input,document.createTextNode(c.quote));citations.append(label);}
+    form.append(citations,command('preview-integrate','관계 초안 비교',async token=>{
+      const chosen=editor.targets.find(r=>r.wiki_id===editor.target);if(!chosen)throw Error('관계 대상을 선택하세요.');
+      const relation={id:crypto.randomUUID(),from_section_id:editor.from||null,to_ref:{kind:'approved',wiki_id:chosen.wiki_id,draft_id:chosen.draft_id,approval_id:chosen.approval_id,draft_hash:chosen.draft_hash,section_id:editor.to||null},
+        type:editor.type,confidence:editor.confidence,citation_ids:structuredClone(editor.citations)};
+      const result=await api.ingest.integrate(editor.wiki_id,relation);requireActive(token);
+      ingestProposal=result;ingestPlan={operation_id:result.operation_id,selection:result.selection,plan:result.proposal.plan};
+      sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);
+      sourceMode=true;relationEditor=null;message='관계 변경을 검토한 뒤 초안을 저장하세요. · 모델 호출 없음';
+    },!target),command('cancel-integrate','취소',async()=>{relationEditor=null;}));detail.append(form);
+  }
   async function generateIngest(token){
     const operation=ingestPlan,connection=api.connection(),prompt=api.ingest.prompt(operation);
     const input=operation.plan.transmission;
@@ -8186,7 +8435,13 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
             const changes=Diff.diffLines(before?draftText(before):'',draftText(draft),{timeout:1500});
             if(!changes)diff.textContent='비교 시간이 초과되었습니다. 저장하지 않았습니다.';
             else for(const part of changes)diff.append(node(part.added?'ins':part.removed?'del':'span',part.value));
-            section.append(diff);detail.append(section);
+            section.append(diff);
+            const beforeRelations=relationText(before),afterRelations=relationText(draft);
+            if(beforeRelations!==afterRelations){const relations=node('pre',undefined,'history-diff wiki-diff');relations.tabIndex=0;relations.setAttribute('aria-label','관계 변경');
+              const changes=Diff.diffLines(beforeRelations,afterRelations,{timeout:1500});
+              if(changes)for(const part of changes)relations.append(node(part.added?'ins':part.removed?'del':'span',part.value));else relations.textContent='비교 시간을 초과했습니다.';
+              section.append(relations);}
+            detail.append(section);
           }
           detail.append(command('commit-ingest','초안 일괄 저장',async token=>{
             const remote=ingestProposal.proposal.plan.serverEligible;
@@ -8199,7 +8454,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         for(const operation of ingestOps){
           const row=node('div'),label={reserved:'미전송',attempted:'생성 시도됨 · 자동 재호출 안 함',committed:'저장 완료',aborted:'폐기됨'};
           row.dataset.wikiOperation=operation.operation_id;
-          row.append(node('p',({ingest:'적재',approve:'승인',reject:'반려'}[operation.action]||'')+' '+operation.operation_id+' · '
+          row.append(node('p',({ingest:'적재',integrate:'관계 통합',approve:'승인',reject:'반려'}[operation.action]||'')+' '+operation.operation_id+' · '
             +(operation.state==='attempted'&&operation.action!=='ingest'?'검토 작업 진행 중':label[operation.state])));
           if(operation.remote){
             const phase=operation.remote.phase,labels={staged:'서버 전송 전',prepare_uncertain:'준비 결과 확인 필요',prepare_absent:'조회 시 원작업 없음 · 같은 ID로만 재시도',prepared:'서버 준비 완료',commit_uncertain:'확정 결과 확인 필요',
@@ -8267,6 +8522,14 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(comparing)controls.append(selector('wiki-before','비교 기준',beforeId,doc.drafts.filter(d=>d.id!==draft.id),id=>{beforeId=id;},doc.drafts.length<3));
       detail.append(controls);
       detail.append(node('h3',draft.title),node('p',draft.topic+' · '+(approved?'승인본':rejected?'반려됨':'초안')));
+      if(!readOnly&&api.ingest?.integrate&&api.approvedCatalog&&approved&&draft.id===doc.approvals.at(-1)?.draft_id){
+        detail.append(command('integrate','관계 추가',async token=>{
+          const catalog=await api.approvedCatalog();requireActive(token);
+          const targets=catalog.nodes.filter(r=>r.wiki_id!==doc.wiki_id&&!r.stale);
+          if(!targets.length)throw Error('출처가 확인된 다른 승인 위키가 없습니다.');
+          relationEditor={wiki_id:doc.wiki_id,draft_id:draft.id,targets,target:targets[0].wiki_id,type:'related_to',confidence:'inferred',from:'',to:'',citations:draft.citations.slice(0,1).map(c=>c.id)};
+        },dirty));renderRelationEditor(detail,draft);
+      }
       const toc=node('nav');toc.setAttribute('aria-label','위키 목차');
       const body=node('div',undefined,'markdown-preview wiki-body');
       draft.sections.forEach((section,index)=>{
@@ -8306,6 +8569,22 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }
         detail.append(diff,sourceChanges);
       }else detail.append(toc,body);
+      if(draft.relations?.length){
+        const relations=node('ul');relations.setAttribute('aria-label','위키 관계');
+        const types={related_to:'관련',supports:'뒷받침',contradicts:'상충',extends:'확장',depends_on:'의존'},confidence={explicit:'직접 근거',inferred:'추론',uncertain:'불확실'};
+        for(const relation of draft.relations){
+          const ref=relation.to_ref,row=rows.find(r=>r.document?.wiki_id===ref.wiki_id&&!r.protected&&!r.deleted),target=row?.document?.drafts.find(d=>d.id===ref.draft_id);
+          const approval=row?.document?.approvals.find(a=>a.draft_id===ref.draft_id&&(ref.kind==='proposal'||a.id===ref.approval_id&&target?.draft_hash===ref.draft_hash));
+          const item=node('li');item.append(node('span',types[relation.type]+' · '+confidence[relation.confidence]+' · '));
+          if(approval&&target&&!readOnly)item.append(command('relation-target',target.title,async token=>{
+            const state=await api.sourceStatus(target,row.document);requireActive(token);if(!state.available)throw Error('관계 대상의 출처를 확인할 수 없습니다.');
+            doc=structuredClone(row.document);choose(target.id);dirty=false;relationEditor=null;graphSection=ref.section_id||'';message='고정된 관계 판본';
+          }));else item.append(node('span','대상 확인 필요'));
+          item.append(node('small',' · '+ref.draft_id+(ref.section_id?' / '+ref.section_id:'')));
+          for(const id of relation.citation_ids){const citation=draft.citations.find(c=>c.id===id);if(citation)item.append(node('blockquote',citation.quote));}
+          relations.append(item);
+        }detail.append(relations);
+      }
       if(!readOnly){
       const actions=node('div',undefined,'library-actions');
       actions.append(command('save-draft','초안 저장',async token=>{
