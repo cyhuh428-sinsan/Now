@@ -6931,7 +6931,11 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(sourceMode&&api.sources){
       detail.append(node('h3','원본 자료'));
       const label=node('label','파일 선택'),files=node('input');files.type='file';files.name='wiki-files';files.accept='.md,.txt';files.multiple=true;files.disabled=busy;
-      files.onchange=()=>{sourceFiles=Array.from(files.files||[]);message='';render();};label.append(files);detail.append(label);
+      const sourceToken=epoch,sourceContext=bound;
+      files.onchange=()=>{
+        if(!valid(sourceToken)||bound!==sourceContext||!sourceMode||!files.isConnected)return;
+        sourceFiles=Array.from(files.files||[]);message='';render();
+      };label.append(files);detail.append(label);
       if(sourceFiles.length)detail.append(node('p',sourceFiles.map(f=>f.name).join(', ')));
       detail.append(command('capture-files','원본 저장',async token=>{
         try{

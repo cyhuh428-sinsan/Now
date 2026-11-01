@@ -59,7 +59,29 @@ app.whenReady().then(async()=>{
       fs.writeFileSync(path.join(screenshotRoot,'wiki-sources-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
     assert(await run('(async()=>{const previous=state.settings.server.ownerId;state.settings.server.ownerId="qa-source-b";wikiUI.check();const hidden=!document.querySelector("#wikiDialog").open;const empty=(await wikiSources.list()).length===0;state.settings.server.ownerId=previous;return hidden&&empty;})()'),'account_b_leak');
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,blockedNetworkAttempts:network,realProviderCalls:0};
+    const callbacks=await run(`(async()=>{
+      wikiUI.close();document.querySelector('#wikiDialog').remove();
+      let key='alice',captures=0;const ui=mountNowWiki({contextKey:()=>key,notes:()=>[],list:async()=>[],
+        sources:{list:async()=>[],captureFiles:async()=>{captures++;return {created:0,unchanged:0};}}});
+      const pause=()=>new Promise(r=>setTimeout(r,0)),ready=async()=>{for(let n=0;n<100;n++){const b=document.querySelector('#wikiDialog [data-wiki-action=sources]');if(b&&!b.disabled)return;await pause();}throw Error('callback_ready');};
+      const open=async()=>{await ui.open();await ready();document.querySelector('#wikiDialog [data-wiki-action=sources]').click();for(let n=0;n<100&&!document.querySelector('#wikiDialog [name=wiki-files]');n++)await pause();};
+      const select=input=>{Object.defineProperty(input,'files',{configurable:true,value:[new File(['synthetic only'],'PRIVATE_ALICE_FILE.md')]});input.onchange();};
+      let cases=0;
+      for(const scenario of ['account','aba','reopen','server','lock','rerender']){
+        key='alice';await open();const old=document.querySelector('#wikiDialog [name=wiki-files]');
+        if(scenario==='rerender'){document.querySelector('#wikiDialog [data-wiki-action=sources]').click();await ready();document.querySelector('#wikiDialog [data-wiki-action=sources]').click();await pause();}
+        else{if(scenario!=='reopen'){key=scenario==='server'?'alice-other-server':scenario==='lock'?'alice-lock2':'bob';ui.check();}else ui.close();
+          if(scenario==='aba')key='alice';await open();}
+        select(old);const save=document.querySelector('#wikiDialog [data-wiki-action=capture-files]');
+        if(!save.disabled||document.querySelector('#wikiDialog').textContent.includes('PRIVATE_ALICE_FILE.md'))throw Error('late_file_selection_'+scenario);
+        save.click();await pause();if(captures)throw Error('late_file_capture_'+scenario);cases++;ui.close();
+      }
+      key='alice';await open();select(document.querySelector('#wikiDialog [name=wiki-files]'));
+      if(document.querySelector('#wikiDialog [data-wiki-action=capture-files]').disabled)throw Error('fresh_file_selection_blocked');
+      document.querySelector('#wikiDialog [data-wiki-action=capture-files]').click();await pause();
+      if(captures!==1)throw Error('fresh_file_capture_count');ui.close();return {staleCases:cases,freshCaptures:captures};
+    })()`);
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
