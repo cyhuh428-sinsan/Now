@@ -12326,7 +12326,7 @@ async function initializeNoteHistory() {
   });
   noteHistoryController = {
     lock() { noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
-    async resume({renderView=true}={}) {
+    async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
       if (noteHistory.suspended()) {
@@ -12335,6 +12335,7 @@ async function initializeNoteHistory() {
         noteHistory.hydrate(restored);
         expected = structuredClone(restored);
       }
+      if (!projectView) return;
       noteHistoryProjection = true;
       try {
         const drafts = Object.values(noteHistory.entries()).map(item => item.draft).sort((a, b) => a.level - b.level);
@@ -15982,7 +15983,7 @@ async function loadServerSharedNotes({ replace = false, message = t("settings.se
     }
     if (isHostedWebClient()) {
       noteHistoryAuthenticated = true;
-      await noteHistoryController?.resume();
+      await noteHistoryController?.resume({projectView:false});
       assertRequestContext();
     }
     const mergeResult = applyPulledServerNotes(payload.pulled_notes || []);

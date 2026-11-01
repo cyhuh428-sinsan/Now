@@ -110,7 +110,7 @@ app.whenReady().then(async()=>{
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
-    if([40,41,42,43,44,45,46].includes(config.phase)){
+    if([40,41,42,43,44,45,46,47,48,49].includes(config.phase)){
       if(providerAttempts!==0)throw Error('canvas_provider_attempt');
       persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:0,closed:true}});
     }

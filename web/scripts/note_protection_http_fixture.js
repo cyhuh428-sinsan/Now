@@ -36,6 +36,25 @@
   }
   async function login(account) {
     if(isHostedWebClient()) {
+      if([47,48,49].includes(config.phase)){
+        const original=loadServerSharedNotes;
+        loadServerSharedNotes=async(...args)=>{
+          try{return await original(...args);}catch(error){
+            const known=[['브라우저 이력 저장본을 확인하지 못했습니다. 원본을 보존했으며 다시 열어 확인하세요.','browser_journal_guard'],['저장 인증 상태가 변경되었습니다.','history_auth_changed'],['서버 조회 중 인증 또는 계정이 변경되었습니다.','sync_auth_changed']];
+            const frames=String(error.stack||'').split('\n').slice(1,5).map(line=>line.match(/app\.js:\d+:\d+/)?.[0]).filter(Boolean).join('.');
+            emit({stage:'library_login_sync_failure',code:(known.find(([text])=>error.message===text)?.[1]||'unknown_'+await NowNoteProtectionProtocol.sha256(error.message))+'.'+frames});
+            throw error;
+          }
+        };
+      }
+      if([48,49].includes(config.phase)&&loadWebSession()?.ownerId===account.owner){
+        for(let i=0;i<1800;i++){
+          if(elements.webLoginView.classList.contains('hidden')&&noteHistoryAuthenticated)return;
+          if(elements.webLoginStatus.classList.contains('bad'))throw Error('library_cold_session_restore_failed');
+          await wait();
+        }
+        throw Error('library_cold_session_restore_timeout');
+      }
       elements.webLoginOwnerInput.value=account.owner;elements.webLoginPasswordInput.value=account.password;
       await handleWebLoginSubmit({preventDefault(){}});
       assert(loadWebSession()?.ownerId===account.owner&&noteHistoryAuthenticated,'web_auth_failed');
@@ -59,6 +78,85 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=true;
+  if([47,48,49].includes(config.phase)){
+    if(isDesktopClient())await loadServerSharedNotes({replace:true});
+    async function libraryWait(done,label){
+      for(let i=0;i<1800;i++){if(done())return;await wait();}
+      throw Error('library_'+label+'_timeout_uncertain');
+    }
+    await libraryWait(()=>!serverSyncRunning,'initial_sync');await libraryStore.sync();await settle();
+    const templateName='HTTP-QA-TEMPLATE-'+run,queryName='HTTP-QA-QUERY-'+run,tag='qa_library_'+run;
+    const template=()=>libraryStore.list('templates').find(row=>row.payload.name===templateName);
+    const savedQuery=()=>libraryStore.list('saved-queries').find(row=>row.payload.name===queryName);
+    const dialog=()=>document.querySelector('#libraryDialog');
+    const uiReady=()=>!dialog()?.querySelector('#libraryStatus')?.textContent.includes('동기화 중');
+    const control=name=>dialog().querySelector('#libraryDetail [data-action="'+name+'"]');
+    const field=(name,value)=>{const input=dialog().querySelector('#libraryForm [name="'+name+'"]');assert(input,'library_field_missing');input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));};
+    async function openLibrary(){document.querySelector('#libraryBtn').click();await libraryWait(()=>dialog()?.open&&uiReady(),'open');}
+    async function switchKind(kind){
+      const tab=dialog().querySelector('[data-kind="'+kind+'"]');tab.click();
+      await libraryWait(()=>tab.getAttribute('aria-selected')==='true','tab');
+    }
+    async function select(kind,id){
+      await switchKind(kind);
+      await libraryWait(()=>Boolean(dialog().querySelector('#libraryList [data-id="'+id+'"]')),'row');
+      dialog().querySelector('#libraryList [data-id="'+id+'"]').click();
+      await libraryWait(()=>Boolean(control('save')),'select');
+    }
+    async function verifySaved(){
+      const t=template(),q=savedQuery();
+      assert(t&&t.version===3&&!t.pending&&!t.conflict,'library_template_not_saved');
+      assert(q&&q.version===2&&!q.pending&&!q.conflict,'library_query_not_saved');
+      const ownerQuery='?owner_id='+encodeURIComponent(a.owner);
+      const remoteT=(await request('/api/v1/templates'+ownerQuery)).items.find(row=>row.id===t.id),remoteQ=(await request('/api/v1/saved-queries'+ownerQuery)).items.find(row=>row.id===q.id);
+      assert(remoteT?.version===3&&remoteQ?.version===2,'library_server_versions_changed');
+      assert(NowNoteProtectionProtocol.canonicalJson(remoteT.payload)===NowNoteProtectionProtocol.canonicalJson(t.payload)
+        &&NowNoteProtectionProtocol.canonicalJson(remoteQ.payload)===NowNoteProtectionProtocol.canonicalJson(q.payload),'library_server_payload_changed');
+      return {templateId:t.id,queryId:q.id};
+    }
+    if(config.phase===49){
+      const original=await verifySaved();clearWebSession();await login(b);await libraryStore.sync();await openLibrary();
+      assert(libraryStore.list('templates').length===0&&libraryStore.list('saved-queries').length===0,'library_other_account_resources');
+      assert(!dialog().textContent.includes(templateName)&&!dialog().textContent.includes(queryName),'library_other_account_ui');
+      await switchKind('saved-queries');
+      assert(dialog().querySelectorAll('.library-item,.library-result').length===0,'library_other_account_query_ui');
+      dialog().querySelector('[data-action="close"]').click();clearWebSession();await login(a);await libraryStore.sync();
+      const restored=await verifySaved();assert(restored.templateId===original.templateId&&restored.queryId===original.queryId,'library_same_account_recovery');
+      return {ok:true,mode:config.mode,phase:49,accountIsolation:true,sameAccountRecovery:true,providerCalls:0,...restored};
+    }
+    await openLibrary();
+    if(config.phase===48){
+      const ids=await verifySaved();await select('saved-queries',ids.queryId);control('preview').click();
+      assert(dialog().querySelectorAll('.library-result').length===1,'library_cold_query_count');
+      const note=libraryNotes().find(n=>n.content.includes('#'+tag));assert(note&&note.content.includes('{{unknown}}')&&!note.content.includes('CHANGED-TEMPLATE'),'library_cold_applied_note_changed');
+      const remote=(await request('/api/v1/notes?owner_id='+encodeURIComponent(a.owner))).find(n=>n.local_id===note.id);
+      assert(isDesktopClient()?(!remote&&noteHistory.view(note.id)?.localOnly===true):remote?.content===note.content,'library_cold_note_storage_policy');
+      return {ok:true,mode:config.mode,phase:48,processCold:true,queryReevaluated:true,independentNotePreserved:true,localPolicyPreserved:true,providerCalls:0,...ids};
+    }
+    state.selectedTreeId=target;render();
+    control('clone').click();
+    await libraryWait(()=>Boolean(control('delete')),'clone');
+    await libraryWait(()=>libraryStore.status().outbox.length===0&&uiReady(),'clone_synced');
+    field('name',templateName);field('title','{{title}} {{date}}');field('content','# {{title}}\n{{date}} {{time}} {{unknown}}\n#'+tag);
+    control('save').click();await libraryWait(()=>template()?.version===2&&!template().pending&&uiReady(),'template_saved');
+    control('create-note').click();
+    await libraryWait(()=>getSelectedTreeNode()?.content.includes('#'+tag),'applied');
+    const note=structuredClone(getSelectedTreeNode());
+    assert(note.content.includes('{{unknown}}')&&!note.content.includes('{{date}}')&&!note.content.includes('{{time}}')&&!note.title.includes('{{title}}'),'library_template_variables');
+    field('content','CHANGED-TEMPLATE-'+run);control('save').click();
+    await libraryWait(()=>template()?.version===3&&!template().pending&&uiReady(),'template_updated');
+    assert(getSelectedTreeNode().content===note.content,'library_template_changed_created_note');
+    await switchKind('saved-queries');dialog().querySelector('[data-action="new"]').click();
+    await libraryWait(()=>Boolean(control('save')),'query_new');
+    await libraryUI.sync();
+    field('name',queryName);field('tagsAll',tag);control('save').click();
+    await libraryWait(()=>savedQuery()?.version===2&&!savedQuery().pending,'query_saved');control('preview').click();
+    assert(dialog().querySelectorAll('.library-result').length===1,'library_query_count');
+    await settle();await noteHistoryFlush();await syncWebNotesToServer(undefined,{skipFormSave:true});await settle();
+    const remote=(await request('/api/v1/notes?owner_id='+encodeURIComponent(a.owner))).find(n=>n.local_id===note.id);
+    assert(isDesktopClient()?(!remote&&noteHistory.view(note.id)?.localOnly===true):remote?.content===note.content,'library_created_note_storage_policy');
+    return {ok:true,mode:config.mode,phase:47,actualUi:true,actualHttp:true,variables:true,independentNote:true,queryApplied:true,localPolicyPreserved:true,noteId:note.id,providerCalls:0,...await verifySaved()};
+  }
   if([43,44,45,46].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function wikiWait(done,label){
