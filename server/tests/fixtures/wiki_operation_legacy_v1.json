@@ -1,0 +1,1551 @@
+{
+  "cases": [
+    {
+      "backup": {
+        "api_version": "v1",
+        "backup_schema_version": 3,
+        "content_sha256": "1b304e1c18b5988ec88c7a3856511c3bbcb870c229bd38a590399c44ecfc0f88",
+        "exported_at": "2026-11-01T11:58:20.402747",
+        "includes_deleted_notes": true,
+        "includes_recording_files": false,
+        "items": {
+          "analysis_jobs": [],
+          "devices": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "created_at": "2026-11-01T11:58:20.250939",
+              "device_id": "synthetic-device",
+              "display_name": null,
+              "first_seen_at": "2026-11-01T11:58:20.241274",
+              "id": 1,
+              "is_active": true,
+              "last_seen_at": "2026-11-01T11:58:20.262778",
+              "owner_id": "alice",
+              "updated_at": "2026-11-01T11:58:20.290169"
+            }
+          ],
+          "library_mutations": [
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000002",
+              "owner_id": "alice",
+              "request_hash": "76a86e8fcb0a7ea990f480409361b157dd9847c24cd18393d8138f2c296e4545",
+              "response_json": "{\"manifest_hash\":\"bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"pages\":[],\"state\":\"prepared\",\"status\":\"ok\",\"wiki_operation\":true}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000003",
+              "owner_id": "alice",
+              "request_hash": "8616c7ee6b32dcf1018cd0b1a745a5e365a92baf7d12d3a3a785727d77eaeece",
+              "response_json": "{\"manifest_hash\":\"bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"commit\",\"status\":\"reserved\"}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000004",
+              "owner_id": "alice",
+              "request_hash": "a93945c3de7cdfd4bad9effa3062546b47b8bb31775c234f2d8e07212247a774",
+              "response_json": "{\"manifest_hash\":\"bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"abort\",\"status\":\"reserved\"}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000008",
+              "owner_id": "alice",
+              "request_hash": "afbb8958d7e7649ac94d553514509fb23556a0c96935dfe8235b57a188a20ed2",
+              "response_json": "{\"manifest_hash\":\"bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"page\",\"status\":\"reserved\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}"
+            }
+          ],
+          "library_resources": [
+            {
+              "created_at": "2026-11-01T11:58:20.288185",
+              "deleted_at": null,
+              "id": "00000000-0000-0000-0000-000000000001",
+              "kind": "wiki-operations",
+              "owner_id": "alice",
+              "payload_json": "{\"manifest\":{\"abort_mutation_id\":\"00000000-0000-0000-0000-000000000004\",\"changes\":[{\"action\":\"create_draft\",\"base_document_version\":0,\"base_head_revision_id\":null,\"base_head_version\":0,\"base_index_version\":0,\"note_mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"result_document_hash\":\"39f34415af1e99794fb6ea9e0e008222683dfbc4d0005dc7f991024c70681e3d\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"commit_mutation_id\":\"00000000-0000-0000-0000-000000000003\",\"device_id\":\"synthetic-device\",\"draft_bindings\":[{\"draft_hash\":\"303f3eadc92997b479bad3c118090380f46f2c73d08ef47bee490fa4604e3a69\",\"draft_id\":\"00000000-0000-0000-0000-000000000007\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"inputs\":[{\"content_hash\":\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\",\"head_version\":1,\"id\":\"n\",\"kind\":\"note\",\"note_ref\":{\"local_id\":\"source\",\"owner_id\":\"alice\"},\"origin\":\"server\",\"source_revision_id\":\"0e4d8548-aa45-4a03-ab91-70af8298be9d\"}],\"kind\":\"ingest\",\"manifest_hash\":\"bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3\",\"mutation_id\":\"00000000-0000-0000-0000-000000000002\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"owner_id\":\"alice\",\"schema_version\":1},\"reserved_bytes\":131072,\"state\":\"prepared\",\"verified_inputs\":{\"n\":\"0e4d8548-aa45-4a03-ab91-70af8298be9d\"}}",
+              "schema_version": 1,
+              "updated_at": "2026-11-01T11:58:20.288185",
+              "version": 1
+            }
+          ],
+          "note_analysis_runs": [],
+          "note_crypto_chunks": [],
+          "note_crypto_entries": [],
+          "note_crypto_fences": [],
+          "note_crypto_transitions": [],
+          "note_crypto_uploads": [],
+          "note_heads": [
+            {
+              "crypto_epoch": 0,
+              "current_mode": null,
+              "head_revision_id": "0e4d8548-aa45-4a03-ab91-70af8298be9d",
+              "history_generation": 1,
+              "identity_state": "coherent",
+              "local_id": "source",
+              "owner_id": "alice",
+              "protection_state": "legacy",
+              "version": 1
+            }
+          ],
+          "note_inventory": [
+            {
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "revision_id": "0e4d8548-aa45-4a03-ab91-70af8298be9d",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.243283Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.249941Z\",\"updated_at\":\"2026-11-01T11:58:20.249941Z\"}}"
+            }
+          ],
+          "note_linked_schema": [
+            {
+              "id": 1,
+              "version": 1
+            }
+          ],
+          "note_linked_texts": [],
+          "note_mixed_schema": [
+            {
+              "id": 1,
+              "initial_scopes_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "initial_scopes_json": "[]",
+              "initialized_at": "2026-11-01T11:58:20.232000",
+              "version": 1
+            }
+          ],
+          "note_mixed_scopes": [],
+          "note_mixed_slots": [],
+          "note_mutations": [
+            {
+              "actor_device_id": "synthetic-device",
+              "conditions_json": "{\"base_head_version\":0,\"base_revision_id\":null,\"crypto_epoch\":0,\"device_id\":\"synthetic-device\",\"expected_inventory_revision_ids\":[],\"local_id\":\"source\",\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"owner_id\":\"alice\",\"replica_policy\":null,\"schema_version\":1}",
+              "crypto_epoch": 0,
+              "local_id": "source",
+              "mutation_id": "00000000-0000-0000-0000-000000000320",
+              "operation": "put",
+              "owner_id": "alice",
+              "result_json": "{\"crypto_epoch\":0,\"history_generation\":1,\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"0e4d8548-aa45-4a03-ab91-70af8298be9d\"],\"result_revision_id\":\"0e4d8548-aa45-4a03-ab91-70af8298be9d\",\"status\":\"ok\"}"
+            }
+          ],
+          "note_offline_branches": [],
+          "note_protected_analysis_claims": [],
+          "note_related_drains": [],
+          "note_representation_origins": [],
+          "note_revisions": [
+            {
+              "before_snapshot_json": null,
+              "captured_at": "2026-11-01T11:58:20.254961",
+              "id": "0e4d8548-aa45-4a03-ab91-70af8298be9d",
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "parent_revision_id": null,
+              "reason": "write",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.243283Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.249941Z\",\"updated_at\":\"2026-11-01T11:58:20.249941Z\"}}"
+            }
+          ],
+          "notes": [
+            {
+              "client_updated_at": "2026-11-01T11:58:20.243283",
+              "content": "Exact quote",
+              "created_at": "2026-11-01T11:58:20.249941",
+              "deleted_at": null,
+              "device_id": "synthetic-device",
+              "id": 1,
+              "level": 1,
+              "local_id": "source",
+              "note_type": "daily",
+              "owner_id": "alice",
+              "parent_local_id": null,
+              "source": null,
+              "tags": null,
+              "title": "Synthetic",
+              "updated_at": "2026-11-01T11:58:20.249941"
+            }
+          ],
+          "recordings": [],
+          "release_evidence_records": [],
+          "server_identity": [
+            {
+              "id": 1,
+              "instance_id": "1b467770-4064-44c5-baa3-a45b64125b1e"
+            }
+          ],
+          "sync_logs": [],
+          "users": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.166716",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 1,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "alice",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.166716"
+            },
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.166716",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 2,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "bob",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.166716"
+            }
+          ]
+        },
+        "name": "now_note_server_backup",
+        "recovery": {
+          "includes_client_journals": false,
+          "incomplete_drains": [],
+          "incomplete_executions": [],
+          "incomplete_operations": [],
+          "requires_reauthentication": true,
+          "requires_reconciliation": true
+        },
+        "section_counts": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 1,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 1,
+          "note_inventory": 1,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 1,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 1,
+          "notes": 1,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        },
+        "server": "NowNote Server",
+        "server_instance_id": "1b467770-4064-44c5-baa3-a45b64125b1e",
+        "summary": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 1,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 1,
+          "note_inventory": 1,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 1,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 1,
+          "notes": 1,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        }
+      },
+      "commit": {
+        "device_id": "synthetic-device",
+        "documents": [
+          {
+            "document": {
+              "approvals": [],
+              "document_version": 1,
+              "drafts": [
+                {
+                  "aliases": [
+                    "Alias"
+                  ],
+                  "base_approved_revision_id": null,
+                  "citations": [
+                    {
+                      "evidence_id": "n",
+                      "id": "c",
+                      "quote": "Exact quote",
+                      "section_id": null
+                    }
+                  ],
+                  "claims": [
+                    {
+                      "assessment": "supported",
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "claim",
+                      "statement": "Exact quote"
+                    }
+                  ],
+                  "draft_hash": "303f3eadc92997b479bad3c118090380f46f2c73d08ef47bee490fa4604e3a69",
+                  "evidence_manifest": [
+                    {
+                      "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+                      "head_version": 1,
+                      "id": "n",
+                      "kind": "note",
+                      "note_ref": {
+                        "local_id": "source",
+                        "owner_id": "alice"
+                      },
+                      "origin": "server",
+                      "source_revision_id": "0e4d8548-aa45-4a03-ab91-70af8298be9d"
+                    }
+                  ],
+                  "generated_at": "2026-11-01T00:00:00Z",
+                  "generation_id": "00000000-0000-0000-0000-000000000014",
+                  "id": "00000000-0000-0000-0000-000000000007",
+                  "model": "auto",
+                  "page_type": "concept",
+                  "provider": "synthetic",
+                  "relations": [],
+                  "schema_version": 2,
+                  "scope": {
+                    "owner": "alice",
+                    "url": "https://qa.invalid"
+                  },
+                  "sections": [
+                    {
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "s",
+                      "markdown": "Exact quote",
+                      "title": "Section"
+                    }
+                  ],
+                  "summary": "Summary",
+                  "title": "Synthetic",
+                  "topic": "QA",
+                  "validation_status": "citations_checked"
+                }
+              ],
+              "rejected_draft_ids": [],
+              "schema_version": 2,
+              "scope": {
+                "owner": "alice",
+                "url": "https://qa.invalid"
+              },
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            },
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "manifest_hash": "bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3",
+        "mutation_id": "00000000-0000-0000-0000-000000000003",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "prepare": {
+        "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+        "changes": [
+          {
+            "action": "create_draft",
+            "base_document_version": 0,
+            "base_head_revision_id": null,
+            "base_head_version": 0,
+            "base_index_version": 0,
+            "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+            "result_document_hash": "39f34415af1e99794fb6ea9e0e008222683dfbc4d0005dc7f991024c70681e3d",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+        "device_id": "synthetic-device",
+        "draft_bindings": [
+          {
+            "draft_hash": "303f3eadc92997b479bad3c118090380f46f2c73d08ef47bee490fa4604e3a69",
+            "draft_id": "00000000-0000-0000-0000-000000000007",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "inputs": [
+          {
+            "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+            "head_version": 1,
+            "id": "n",
+            "kind": "note",
+            "note_ref": {
+              "local_id": "source",
+              "owner_id": "alice"
+            },
+            "origin": "server",
+            "source_revision_id": "0e4d8548-aa45-4a03-ab91-70af8298be9d"
+          }
+        ],
+        "kind": "ingest",
+        "manifest_hash": "bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3",
+        "mutation_id": "00000000-0000-0000-0000-000000000002",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "state": "prepared",
+      "status": {
+        "manifest": {
+          "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+          "changes": [
+            {
+              "action": "create_draft",
+              "base_document_version": 0,
+              "base_head_revision_id": null,
+              "base_head_version": 0,
+              "base_index_version": 0,
+              "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+              "result_document_hash": "39f34415af1e99794fb6ea9e0e008222683dfbc4d0005dc7f991024c70681e3d",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+          "device_id": "synthetic-device",
+          "draft_bindings": [
+            {
+              "draft_hash": "303f3eadc92997b479bad3c118090380f46f2c73d08ef47bee490fa4604e3a69",
+              "draft_id": "00000000-0000-0000-0000-000000000007",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "inputs": [
+            {
+              "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+              "head_version": 1,
+              "id": "n",
+              "kind": "note",
+              "note_ref": {
+                "local_id": "source",
+                "owner_id": "alice"
+              },
+              "origin": "server",
+              "source_revision_id": "0e4d8548-aa45-4a03-ab91-70af8298be9d"
+            }
+          ],
+          "kind": "ingest",
+          "manifest_hash": "bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3",
+          "mutation_id": "00000000-0000-0000-0000-000000000002",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "owner_id": "alice",
+          "schema_version": 1
+        },
+        "manifest_hash": "bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "receipt": {
+          "manifest_hash": "bcfc35d58e0e41b6dc3b498e63fc505da6a5f232b586004d626610bb9e49f0c3",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "pages": [],
+          "state": "prepared",
+          "status": "ok",
+          "wiki_operation": true
+        },
+        "state": "prepared",
+        "status": "ok"
+      }
+    },
+    {
+      "backup": {
+        "api_version": "v1",
+        "backup_schema_version": 3,
+        "content_sha256": "ec00e643319457b508a9f27c387f9f081833558c9e955c0d8ca278fc8b859510",
+        "exported_at": "2026-11-01T11:58:20.846813",
+        "includes_deleted_notes": true,
+        "includes_recording_files": false,
+        "items": {
+          "analysis_jobs": [],
+          "devices": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "created_at": "2026-11-01T11:58:20.791579",
+              "device_id": "synthetic-device",
+              "display_name": null,
+              "first_seen_at": "2026-11-01T11:58:20.786037",
+              "id": 1,
+              "is_active": true,
+              "last_seen_at": "2026-11-01T11:58:20.818250",
+              "owner_id": "alice",
+              "updated_at": "2026-11-01T11:58:20.824758"
+            }
+          ],
+          "library_mutations": [
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000002",
+              "owner_id": "alice",
+              "request_hash": "3e068dcfbf80441bbf07aa931583f35c0f36e1ec2b40b924471b85689d75b271",
+              "response_json": "{\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"pages\":[],\"state\":\"prepared\",\"status\":\"ok\",\"wiki_operation\":true}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000003",
+              "owner_id": "alice",
+              "request_hash": "f073883620b8b429dac406492b5989f49ae700c0ae4dd8b1c5d2e7f917742f9b",
+              "response_json": "{\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"pages\":[{\"crypto_epoch\":0,\"document_schema_floor\":2,\"document_version\":1,\"history_generation\":1,\"index_version\":1,\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"result_document_hash\":\"6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\"],\"result_revision_id\":\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\",\"status\":\"ok\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\",\"wiki_operation\":true}],\"state\":\"committed\",\"status\":\"ok\",\"wiki_operation\":true}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000004",
+              "owner_id": "alice",
+              "request_hash": "b39c99f1506648aaa483b5450e357dffd8bfbc488e2f5cf53760c71c92f2b625",
+              "response_json": "{\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"abort\",\"status\":\"reserved\"}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000008",
+              "owner_id": "alice",
+              "request_hash": "4b194c99c735393888bc037ff9a382e9921c3222fe0baf8d0050d54225102ee4",
+              "response_json": "{\"crypto_epoch\":0,\"document_schema_floor\":2,\"document_version\":1,\"history_generation\":1,\"index_version\":1,\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"result_document_hash\":\"6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\"],\"result_revision_id\":\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\",\"status\":\"ok\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\",\"wiki_operation\":true}"
+            }
+          ],
+          "library_resources": [
+            {
+              "created_at": "2026-11-01T11:58:20.817249",
+              "deleted_at": null,
+              "id": "00000000-0000-0000-0000-000000000001",
+              "kind": "wiki-operations",
+              "owner_id": "alice",
+              "payload_json": "{\"manifest\":{\"abort_mutation_id\":\"00000000-0000-0000-0000-000000000004\",\"changes\":[{\"action\":\"create_draft\",\"base_document_version\":0,\"base_head_revision_id\":null,\"base_head_version\":0,\"base_index_version\":0,\"note_mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"result_document_hash\":\"6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"commit_mutation_id\":\"00000000-0000-0000-0000-000000000003\",\"device_id\":\"synthetic-device\",\"draft_bindings\":[{\"draft_hash\":\"2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a\",\"draft_id\":\"00000000-0000-0000-0000-000000000007\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"inputs\":[{\"content_hash\":\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\",\"head_version\":1,\"id\":\"n\",\"kind\":\"note\",\"note_ref\":{\"local_id\":\"source\",\"owner_id\":\"alice\"},\"origin\":\"server\",\"source_revision_id\":\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\"}],\"kind\":\"ingest\",\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"mutation_id\":\"00000000-0000-0000-0000-000000000002\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"owner_id\":\"alice\",\"schema_version\":1},\"reserved_bytes\":131072,\"state\":\"committed\",\"verified_inputs\":{\"n\":\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\"}}",
+              "schema_version": 1,
+              "updated_at": "2026-11-01T11:58:20.826764",
+              "version": 2
+            },
+            {
+              "created_at": "2026-11-01T11:58:20.823248",
+              "deleted_at": null,
+              "id": "00000000-0000-0000-0000-000000000006",
+              "kind": "wikis",
+              "owner_id": "alice",
+              "payload_json": "{\"artifact_local_id\":\"wiki:00000000-0000-0000-0000-000000000006\",\"dependencies\":[{\"local_id\":\"source\",\"owner_id\":\"alice\"}],\"document_schema_floor\":2,\"lineage_manifest_hash\":\"09693a9985c9d36ecfa07ffa116598470f9754eb4a056f6a49ea5c2120db0c55\",\"wiki_dependencies\":[]}",
+              "schema_version": 2,
+              "updated_at": "2026-11-01T11:58:20.823248",
+              "version": 1
+            }
+          ],
+          "note_analysis_runs": [],
+          "note_crypto_chunks": [],
+          "note_crypto_entries": [],
+          "note_crypto_fences": [],
+          "note_crypto_transitions": [],
+          "note_crypto_uploads": [],
+          "note_heads": [
+            {
+              "crypto_epoch": 0,
+              "current_mode": null,
+              "head_revision_id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208",
+              "history_generation": 1,
+              "identity_state": "coherent",
+              "local_id": "source",
+              "owner_id": "alice",
+              "protection_state": "legacy",
+              "version": 1
+            },
+            {
+              "crypto_epoch": 0,
+              "current_mode": null,
+              "head_revision_id": "7bc41f3c-bdbb-4c5a-8776-eabb09d95978",
+              "history_generation": 1,
+              "identity_state": "coherent",
+              "local_id": "wiki:00000000-0000-0000-0000-000000000006",
+              "owner_id": "alice",
+              "protection_state": "legacy",
+              "version": 1
+            }
+          ],
+          "note_inventory": [
+            {
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "revision_id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.787562Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.790599Z\",\"updated_at\":\"2026-11-01T11:58:20.790599Z\"}}"
+            },
+            {
+              "local_id": "wiki:00000000-0000-0000-0000-000000000006",
+              "note_id": 2,
+              "owner_id": "alice",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "revision_id": "7bc41f3c-bdbb-4c5a-8776-eabb09d95978",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":2,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"wiki:00000000-0000-0000-0000-000000000006\",\"note_type\":\"tree\",\"title\":\"AI Wiki 00000000-0000-0000-0000-000000000006\",\"content\":\"{\\\"approvals\\\":[],\\\"document_version\\\":1,\\\"drafts\\\":[{\\\"aliases\\\":[\\\"Alias\\\"],\\\"base_approved_revision_id\\\":null,\\\"citations\\\":[{\\\"evidence_id\\\":\\\"n\\\",\\\"id\\\":\\\"c\\\",\\\"quote\\\":\\\"Exact quote\\\",\\\"section_id\\\":null}],\\\"claims\\\":[{\\\"assessment\\\":\\\"supported\\\",\\\"citation_ids\\\":[\\\"c\\\"],\\\"id\\\":\\\"claim\\\",\\\"statement\\\":\\\"Exact quote\\\"}],\\\"draft_hash\\\":\\\"2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a\\\",\\\"evidence_manifest\\\":[{\\\"content_hash\\\":\\\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\\\",\\\"head_version\\\":1,\\\"id\\\":\\\"n\\\",\\\"kind\\\":\\\"note\\\",\\\"note_ref\\\":{\\\"local_id\\\":\\\"source\\\",\\\"owner_id\\\":\\\"alice\\\"},\\\"origin\\\":\\\"server\\\",\\\"source_revision_id\\\":\\\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\\\"}],\\\"generated_at\\\":\\\"2026-11-01T00:00:00Z\\\",\\\"generation_id\\\":\\\"00000000-0000-0000-0000-000000000014\\\",\\\"id\\\":\\\"00000000-0000-0000-0000-000000000007\\\",\\\"model\\\":\\\"auto\\\",\\\"page_type\\\":\\\"concept\\\",\\\"provider\\\":\\\"synthetic\\\",\\\"relations\\\":[],\\\"schema_version\\\":2,\\\"scope\\\":{\\\"owner\\\":\\\"alice\\\",\\\"url\\\":\\\"https://qa.invalid\\\"},\\\"sections\\\":[{\\\"citation_ids\\\":[\\\"c\\\"],\\\"id\\\":\\\"s\\\",\\\"markdown\\\":\\\"Exact quote\\\",\\\"title\\\":\\\"Section\\\"}],\\\"summary\\\":\\\"Summary\\\",\\\"title\\\":\\\"Synthetic\\\",\\\"topic\\\":\\\"QA\\\",\\\"validation_status\\\":\\\"citations_checked\\\"}],\\\"rejected_draft_ids\\\":[],\\\"schema_version\\\":2,\\\"scope\\\":{\\\"owner\\\":\\\"alice\\\",\\\"url\\\":\\\"https://qa.invalid\\\"},\\\"wiki_id\\\":\\\"00000000-0000-0000-0000-000000000006\\\"}\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":\"wiki-artifact\",\"client_updated_at\":\"2026-11-01T11:58:20.823754Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.824758Z\",\"updated_at\":\"2026-11-01T11:58:20.824758Z\"}}"
+            }
+          ],
+          "note_linked_schema": [
+            {
+              "id": 1,
+              "version": 1
+            }
+          ],
+          "note_linked_texts": [],
+          "note_mixed_schema": [
+            {
+              "id": 1,
+              "initial_scopes_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "initial_scopes_json": "[]",
+              "initialized_at": "2026-11-01T11:58:20.777000",
+              "version": 1
+            }
+          ],
+          "note_mixed_scopes": [],
+          "note_mixed_slots": [],
+          "note_mutations": [
+            {
+              "actor_device_id": "synthetic-device",
+              "conditions_json": "{\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"result_document_hash\":\"6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8\"}",
+              "crypto_epoch": 0,
+              "local_id": "wiki:00000000-0000-0000-0000-000000000006",
+              "mutation_id": "00000000-0000-0000-0000-000000000008",
+              "operation": "wiki_operation",
+              "owner_id": "alice",
+              "result_json": "{\"crypto_epoch\":0,\"document_schema_floor\":2,\"document_version\":1,\"history_generation\":1,\"index_version\":1,\"manifest_hash\":\"038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212\",\"mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"result_document_hash\":\"6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\"],\"result_revision_id\":\"7bc41f3c-bdbb-4c5a-8776-eabb09d95978\",\"status\":\"ok\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\",\"wiki_operation\":true}"
+            },
+            {
+              "actor_device_id": "synthetic-device",
+              "conditions_json": "{\"base_head_version\":0,\"base_revision_id\":null,\"crypto_epoch\":0,\"device_id\":\"synthetic-device\",\"expected_inventory_revision_ids\":[],\"local_id\":\"source\",\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"owner_id\":\"alice\",\"replica_policy\":null,\"schema_version\":1}",
+              "crypto_epoch": 0,
+              "local_id": "source",
+              "mutation_id": "00000000-0000-0000-0000-000000000320",
+              "operation": "put",
+              "owner_id": "alice",
+              "result_json": "{\"crypto_epoch\":0,\"history_generation\":1,\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\"],\"result_revision_id\":\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\",\"status\":\"ok\"}"
+            }
+          ],
+          "note_offline_branches": [],
+          "note_protected_analysis_claims": [],
+          "note_related_drains": [],
+          "note_representation_origins": [],
+          "note_revisions": [
+            {
+              "before_snapshot_json": null,
+              "captured_at": "2026-11-01T11:58:20.795083",
+              "id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208",
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "parent_revision_id": null,
+              "reason": "write",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.787562Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.790599Z\",\"updated_at\":\"2026-11-01T11:58:20.790599Z\"}}"
+            },
+            {
+              "before_snapshot_json": null,
+              "captured_at": "2026-11-01T11:58:20.825765",
+              "id": "7bc41f3c-bdbb-4c5a-8776-eabb09d95978",
+              "local_id": "wiki:00000000-0000-0000-0000-000000000006",
+              "note_id": 2,
+              "owner_id": "alice",
+              "parent_revision_id": null,
+              "reason": "write",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":2,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"wiki:00000000-0000-0000-0000-000000000006\",\"note_type\":\"tree\",\"title\":\"AI Wiki 00000000-0000-0000-0000-000000000006\",\"content\":\"{\\\"approvals\\\":[],\\\"document_version\\\":1,\\\"drafts\\\":[{\\\"aliases\\\":[\\\"Alias\\\"],\\\"base_approved_revision_id\\\":null,\\\"citations\\\":[{\\\"evidence_id\\\":\\\"n\\\",\\\"id\\\":\\\"c\\\",\\\"quote\\\":\\\"Exact quote\\\",\\\"section_id\\\":null}],\\\"claims\\\":[{\\\"assessment\\\":\\\"supported\\\",\\\"citation_ids\\\":[\\\"c\\\"],\\\"id\\\":\\\"claim\\\",\\\"statement\\\":\\\"Exact quote\\\"}],\\\"draft_hash\\\":\\\"2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a\\\",\\\"evidence_manifest\\\":[{\\\"content_hash\\\":\\\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\\\",\\\"head_version\\\":1,\\\"id\\\":\\\"n\\\",\\\"kind\\\":\\\"note\\\",\\\"note_ref\\\":{\\\"local_id\\\":\\\"source\\\",\\\"owner_id\\\":\\\"alice\\\"},\\\"origin\\\":\\\"server\\\",\\\"source_revision_id\\\":\\\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\\\"}],\\\"generated_at\\\":\\\"2026-11-01T00:00:00Z\\\",\\\"generation_id\\\":\\\"00000000-0000-0000-0000-000000000014\\\",\\\"id\\\":\\\"00000000-0000-0000-0000-000000000007\\\",\\\"model\\\":\\\"auto\\\",\\\"page_type\\\":\\\"concept\\\",\\\"provider\\\":\\\"synthetic\\\",\\\"relations\\\":[],\\\"schema_version\\\":2,\\\"scope\\\":{\\\"owner\\\":\\\"alice\\\",\\\"url\\\":\\\"https://qa.invalid\\\"},\\\"sections\\\":[{\\\"citation_ids\\\":[\\\"c\\\"],\\\"id\\\":\\\"s\\\",\\\"markdown\\\":\\\"Exact quote\\\",\\\"title\\\":\\\"Section\\\"}],\\\"summary\\\":\\\"Summary\\\",\\\"title\\\":\\\"Synthetic\\\",\\\"topic\\\":\\\"QA\\\",\\\"validation_status\\\":\\\"citations_checked\\\"}],\\\"rejected_draft_ids\\\":[],\\\"schema_version\\\":2,\\\"scope\\\":{\\\"owner\\\":\\\"alice\\\",\\\"url\\\":\\\"https://qa.invalid\\\"},\\\"wiki_id\\\":\\\"00000000-0000-0000-0000-000000000006\\\"}\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":\"wiki-artifact\",\"client_updated_at\":\"2026-11-01T11:58:20.823754Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.824758Z\",\"updated_at\":\"2026-11-01T11:58:20.824758Z\"}}"
+            }
+          ],
+          "notes": [
+            {
+              "client_updated_at": "2026-11-01T11:58:20.787562",
+              "content": "Exact quote",
+              "created_at": "2026-11-01T11:58:20.790599",
+              "deleted_at": null,
+              "device_id": "synthetic-device",
+              "id": 1,
+              "level": 1,
+              "local_id": "source",
+              "note_type": "daily",
+              "owner_id": "alice",
+              "parent_local_id": null,
+              "source": null,
+              "tags": null,
+              "title": "Synthetic",
+              "updated_at": "2026-11-01T11:58:20.790599"
+            },
+            {
+              "client_updated_at": "2026-11-01T11:58:20.823754",
+              "content": "{\"approvals\":[],\"document_version\":1,\"drafts\":[{\"aliases\":[\"Alias\"],\"base_approved_revision_id\":null,\"citations\":[{\"evidence_id\":\"n\",\"id\":\"c\",\"quote\":\"Exact quote\",\"section_id\":null}],\"claims\":[{\"assessment\":\"supported\",\"citation_ids\":[\"c\"],\"id\":\"claim\",\"statement\":\"Exact quote\"}],\"draft_hash\":\"2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a\",\"evidence_manifest\":[{\"content_hash\":\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\",\"head_version\":1,\"id\":\"n\",\"kind\":\"note\",\"note_ref\":{\"local_id\":\"source\",\"owner_id\":\"alice\"},\"origin\":\"server\",\"source_revision_id\":\"71c78dd0-4160-43b3-bf8a-1c4e000d4208\"}],\"generated_at\":\"2026-11-01T00:00:00Z\",\"generation_id\":\"00000000-0000-0000-0000-000000000014\",\"id\":\"00000000-0000-0000-0000-000000000007\",\"model\":\"auto\",\"page_type\":\"concept\",\"provider\":\"synthetic\",\"relations\":[],\"schema_version\":2,\"scope\":{\"owner\":\"alice\",\"url\":\"https://qa.invalid\"},\"sections\":[{\"citation_ids\":[\"c\"],\"id\":\"s\",\"markdown\":\"Exact quote\",\"title\":\"Section\"}],\"summary\":\"Summary\",\"title\":\"Synthetic\",\"topic\":\"QA\",\"validation_status\":\"citations_checked\"}],\"rejected_draft_ids\":[],\"schema_version\":2,\"scope\":{\"owner\":\"alice\",\"url\":\"https://qa.invalid\"},\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}",
+              "created_at": "2026-11-01T11:58:20.824758",
+              "deleted_at": null,
+              "device_id": "synthetic-device",
+              "id": 2,
+              "level": 1,
+              "local_id": "wiki:00000000-0000-0000-0000-000000000006",
+              "note_type": "tree",
+              "owner_id": "alice",
+              "parent_local_id": null,
+              "source": "wiki-artifact",
+              "tags": null,
+              "title": "AI Wiki 00000000-0000-0000-0000-000000000006",
+              "updated_at": "2026-11-01T11:58:20.824758"
+            }
+          ],
+          "recordings": [],
+          "release_evidence_records": [],
+          "server_identity": [
+            {
+              "id": 1,
+              "instance_id": "4787ce49-7014-4657-ab72-1c4c6053caef"
+            }
+          ],
+          "sync_logs": [],
+          "users": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.771080",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 1,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "alice",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.771080"
+            },
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.771080",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 2,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "bob",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.771080"
+            }
+          ]
+        },
+        "name": "now_note_server_backup",
+        "recovery": {
+          "includes_client_journals": false,
+          "incomplete_drains": [],
+          "incomplete_executions": [],
+          "incomplete_operations": [],
+          "requires_reauthentication": true,
+          "requires_reconciliation": false
+        },
+        "section_counts": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 2,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 2,
+          "note_inventory": 2,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 2,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 2,
+          "notes": 2,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        },
+        "server": "NowNote Server",
+        "server_instance_id": "4787ce49-7014-4657-ab72-1c4c6053caef",
+        "summary": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 2,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 2,
+          "note_inventory": 2,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 2,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 2,
+          "notes": 2,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        }
+      },
+      "commit": {
+        "device_id": "synthetic-device",
+        "documents": [
+          {
+            "document": {
+              "approvals": [],
+              "document_version": 1,
+              "drafts": [
+                {
+                  "aliases": [
+                    "Alias"
+                  ],
+                  "base_approved_revision_id": null,
+                  "citations": [
+                    {
+                      "evidence_id": "n",
+                      "id": "c",
+                      "quote": "Exact quote",
+                      "section_id": null
+                    }
+                  ],
+                  "claims": [
+                    {
+                      "assessment": "supported",
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "claim",
+                      "statement": "Exact quote"
+                    }
+                  ],
+                  "draft_hash": "2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a",
+                  "evidence_manifest": [
+                    {
+                      "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+                      "head_version": 1,
+                      "id": "n",
+                      "kind": "note",
+                      "note_ref": {
+                        "local_id": "source",
+                        "owner_id": "alice"
+                      },
+                      "origin": "server",
+                      "source_revision_id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208"
+                    }
+                  ],
+                  "generated_at": "2026-11-01T00:00:00Z",
+                  "generation_id": "00000000-0000-0000-0000-000000000014",
+                  "id": "00000000-0000-0000-0000-000000000007",
+                  "model": "auto",
+                  "page_type": "concept",
+                  "provider": "synthetic",
+                  "relations": [],
+                  "schema_version": 2,
+                  "scope": {
+                    "owner": "alice",
+                    "url": "https://qa.invalid"
+                  },
+                  "sections": [
+                    {
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "s",
+                      "markdown": "Exact quote",
+                      "title": "Section"
+                    }
+                  ],
+                  "summary": "Summary",
+                  "title": "Synthetic",
+                  "topic": "QA",
+                  "validation_status": "citations_checked"
+                }
+              ],
+              "rejected_draft_ids": [],
+              "schema_version": 2,
+              "scope": {
+                "owner": "alice",
+                "url": "https://qa.invalid"
+              },
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            },
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+        "mutation_id": "00000000-0000-0000-0000-000000000003",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "prepare": {
+        "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+        "changes": [
+          {
+            "action": "create_draft",
+            "base_document_version": 0,
+            "base_head_revision_id": null,
+            "base_head_version": 0,
+            "base_index_version": 0,
+            "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+            "result_document_hash": "6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+        "device_id": "synthetic-device",
+        "draft_bindings": [
+          {
+            "draft_hash": "2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a",
+            "draft_id": "00000000-0000-0000-0000-000000000007",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "inputs": [
+          {
+            "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+            "head_version": 1,
+            "id": "n",
+            "kind": "note",
+            "note_ref": {
+              "local_id": "source",
+              "owner_id": "alice"
+            },
+            "origin": "server",
+            "source_revision_id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208"
+          }
+        ],
+        "kind": "ingest",
+        "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+        "mutation_id": "00000000-0000-0000-0000-000000000002",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "state": "committed",
+      "status": {
+        "manifest": {
+          "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+          "changes": [
+            {
+              "action": "create_draft",
+              "base_document_version": 0,
+              "base_head_revision_id": null,
+              "base_head_version": 0,
+              "base_index_version": 0,
+              "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+              "result_document_hash": "6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+          "device_id": "synthetic-device",
+          "draft_bindings": [
+            {
+              "draft_hash": "2febd126b0588e5c2aea5221fb20adea9fc33319b1aea2f1617038761a92b89a",
+              "draft_id": "00000000-0000-0000-0000-000000000007",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "inputs": [
+            {
+              "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+              "head_version": 1,
+              "id": "n",
+              "kind": "note",
+              "note_ref": {
+                "local_id": "source",
+                "owner_id": "alice"
+              },
+              "origin": "server",
+              "source_revision_id": "71c78dd0-4160-43b3-bf8a-1c4e000d4208"
+            }
+          ],
+          "kind": "ingest",
+          "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+          "mutation_id": "00000000-0000-0000-0000-000000000002",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "owner_id": "alice",
+          "schema_version": 1
+        },
+        "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "receipt": {
+          "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "pages": [
+            {
+              "crypto_epoch": 0,
+              "document_schema_floor": 2,
+              "document_version": 1,
+              "history_generation": 1,
+              "index_version": 1,
+              "manifest_hash": "038881a2b4d6e0a4e0999e37368082eec0c1e1cac31d9f3041a447456127a212",
+              "mutation_id": "00000000-0000-0000-0000-000000000008",
+              "operation_id": "00000000-0000-0000-0000-000000000001",
+              "result_document_hash": "6598d0f2ed3946017fc0db2f07c4b9cfa6652bb3031d74047a4e814cf5335ea8",
+              "result_head_version": 1,
+              "result_inventory_revision_ids": [
+                "7bc41f3c-bdbb-4c5a-8776-eabb09d95978"
+              ],
+              "result_revision_id": "7bc41f3c-bdbb-4c5a-8776-eabb09d95978",
+              "status": "ok",
+              "wiki_id": "00000000-0000-0000-0000-000000000006",
+              "wiki_operation": true
+            }
+          ],
+          "state": "committed",
+          "status": "ok",
+          "wiki_operation": true
+        },
+        "state": "committed",
+        "status": "ok"
+      }
+    },
+    {
+      "backup": {
+        "api_version": "v1",
+        "backup_schema_version": 3,
+        "content_sha256": "0e7d931c25e58bb47f0cdc17aa9317f0352006b296a9f7d3330f6d1c6ce2226b",
+        "exported_at": "2026-11-01T11:58:20.993172",
+        "includes_deleted_notes": true,
+        "includes_recording_files": false,
+        "items": {
+          "analysis_jobs": [],
+          "devices": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "created_at": "2026-11-01T11:58:20.946653",
+              "device_id": "synthetic-device",
+              "display_name": null,
+              "first_seen_at": "2026-11-01T11:58:20.938127",
+              "id": 1,
+              "is_active": true,
+              "last_seen_at": "2026-11-01T11:58:20.977288",
+              "owner_id": "alice",
+              "updated_at": "2026-11-01T11:58:20.981289"
+            }
+          ],
+          "library_mutations": [
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000002",
+              "owner_id": "alice",
+              "request_hash": "222faba80f3ad0ddac514444b17b71738cd8ba63d3808778b7be6b9ef790af74",
+              "response_json": "{\"manifest_hash\":\"b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"pages\":[],\"state\":\"prepared\",\"status\":\"ok\",\"wiki_operation\":true}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000003",
+              "owner_id": "alice",
+              "request_hash": "5c989f5c60f7f9ccea26820dcc04a666c12c81ba31653b33644fd8f7004b8f24",
+              "response_json": "{\"manifest_hash\":\"b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"commit\",\"status\":\"reserved\"}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000004",
+              "owner_id": "alice",
+              "request_hash": "1143dd50bb560e1087172afac4bd9cd6e0938c838e032066cc139930bba319c2",
+              "response_json": "{\"manifest_hash\":\"b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"pages\":[],\"state\":\"aborted\",\"status\":\"ok\",\"wiki_operation\":true}"
+            },
+            {
+              "mutation_id": "00000000-0000-0000-0000-000000000008",
+              "owner_id": "alice",
+              "request_hash": "5d8aa11712fbafa8f09383a106b2476af1192909ae08565a899e6041c96e96d5",
+              "response_json": "{\"manifest_hash\":\"b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"phase\":\"page\",\"status\":\"reserved\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}"
+            }
+          ],
+          "library_resources": [
+            {
+              "created_at": "2026-11-01T11:58:20.975284",
+              "deleted_at": null,
+              "id": "00000000-0000-0000-0000-000000000001",
+              "kind": "wiki-operations",
+              "owner_id": "alice",
+              "payload_json": "{\"manifest\":{\"abort_mutation_id\":\"00000000-0000-0000-0000-000000000004\",\"changes\":[{\"action\":\"create_draft\",\"base_document_version\":0,\"base_head_revision_id\":null,\"base_head_version\":0,\"base_index_version\":0,\"note_mutation_id\":\"00000000-0000-0000-0000-000000000008\",\"result_document_hash\":\"3de590b2595bf5689640b6c335db644f9b4cf70cb67fc02cce15bfa564b5248e\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"commit_mutation_id\":\"00000000-0000-0000-0000-000000000003\",\"device_id\":\"synthetic-device\",\"draft_bindings\":[{\"draft_hash\":\"0c79e8776164e0c28c5f3b8672b391212df88f585765651986db8ca8f6860ccd\",\"draft_id\":\"00000000-0000-0000-0000-000000000007\",\"wiki_id\":\"00000000-0000-0000-0000-000000000006\"}],\"inputs\":[{\"content_hash\":\"c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897\",\"head_version\":1,\"id\":\"n\",\"kind\":\"note\",\"note_ref\":{\"local_id\":\"source\",\"owner_id\":\"alice\"},\"origin\":\"server\",\"source_revision_id\":\"f3b37532-538d-4397-8c0d-a1bd378e6169\"}],\"kind\":\"ingest\",\"manifest_hash\":\"b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f\",\"mutation_id\":\"00000000-0000-0000-0000-000000000002\",\"operation_id\":\"00000000-0000-0000-0000-000000000001\",\"owner_id\":\"alice\",\"schema_version\":1},\"reserved_bytes\":131072,\"state\":\"aborted\",\"verified_inputs\":{\"n\":\"f3b37532-538d-4397-8c0d-a1bd378e6169\"}}",
+              "schema_version": 1,
+              "updated_at": "2026-11-01T11:58:20.980288",
+              "version": 2
+            }
+          ],
+          "note_analysis_runs": [],
+          "note_crypto_chunks": [],
+          "note_crypto_entries": [],
+          "note_crypto_fences": [],
+          "note_crypto_transitions": [],
+          "note_crypto_uploads": [],
+          "note_heads": [
+            {
+              "crypto_epoch": 0,
+              "current_mode": null,
+              "head_revision_id": "f3b37532-538d-4397-8c0d-a1bd378e6169",
+              "history_generation": 1,
+              "identity_state": "coherent",
+              "local_id": "source",
+              "owner_id": "alice",
+              "protection_state": "legacy",
+              "version": 1
+            }
+          ],
+          "note_inventory": [
+            {
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "revision_id": "f3b37532-538d-4397-8c0d-a1bd378e6169",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.941142Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.945657Z\",\"updated_at\":\"2026-11-01T11:58:20.945657Z\"}}"
+            }
+          ],
+          "note_linked_schema": [
+            {
+              "id": 1,
+              "version": 1
+            }
+          ],
+          "note_linked_texts": [],
+          "note_mixed_schema": [
+            {
+              "id": 1,
+              "initial_scopes_digest": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
+              "initial_scopes_json": "[]",
+              "initialized_at": "2026-11-01T11:58:20.933000",
+              "version": 1
+            }
+          ],
+          "note_mixed_scopes": [],
+          "note_mixed_slots": [],
+          "note_mutations": [
+            {
+              "actor_device_id": "synthetic-device",
+              "conditions_json": "{\"base_head_version\":0,\"base_revision_id\":null,\"crypto_epoch\":0,\"device_id\":\"synthetic-device\",\"expected_inventory_revision_ids\":[],\"local_id\":\"source\",\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"owner_id\":\"alice\",\"replica_policy\":null,\"schema_version\":1}",
+              "crypto_epoch": 0,
+              "local_id": "source",
+              "mutation_id": "00000000-0000-0000-0000-000000000320",
+              "operation": "put",
+              "owner_id": "alice",
+              "result_json": "{\"crypto_epoch\":0,\"history_generation\":1,\"mutation_id\":\"00000000-0000-0000-0000-000000000320\",\"result_head_version\":1,\"result_inventory_revision_ids\":[\"f3b37532-538d-4397-8c0d-a1bd378e6169\"],\"result_revision_id\":\"f3b37532-538d-4397-8c0d-a1bd378e6169\",\"status\":\"ok\"}"
+            }
+          ],
+          "note_offline_branches": [],
+          "note_protected_analysis_claims": [],
+          "note_related_drains": [],
+          "note_representation_origins": [],
+          "note_revisions": [
+            {
+              "before_snapshot_json": null,
+              "captured_at": "2026-11-01T11:58:20.950686",
+              "id": "f3b37532-538d-4397-8c0d-a1bd378e6169",
+              "local_id": "source",
+              "note_id": 1,
+              "owner_id": "alice",
+              "parent_revision_id": null,
+              "reason": "write",
+              "representation_epoch": 0,
+              "representation_kind": "snapshot_v1",
+              "snapshot_json": "{\"schema_version\":1,\"note\":{\"id\":1,\"owner_id\":\"alice\",\"device_id\":\"synthetic-device\",\"local_id\":\"source\",\"note_type\":\"daily\",\"title\":\"Synthetic\",\"content\":\"Exact quote\",\"parent_local_id\":null,\"level\":1,\"tags\":null,\"source\":null,\"client_updated_at\":\"2026-11-01T11:58:20.941142Z\",\"deleted_at\":null,\"created_at\":\"2026-11-01T11:58:20.945657Z\",\"updated_at\":\"2026-11-01T11:58:20.945657Z\"}}"
+            }
+          ],
+          "notes": [
+            {
+              "client_updated_at": "2026-11-01T11:58:20.941142",
+              "content": "Exact quote",
+              "created_at": "2026-11-01T11:58:20.945657",
+              "deleted_at": null,
+              "device_id": "synthetic-device",
+              "id": 1,
+              "level": 1,
+              "local_id": "source",
+              "note_type": "daily",
+              "owner_id": "alice",
+              "parent_local_id": null,
+              "source": null,
+              "tags": null,
+              "title": "Synthetic",
+              "updated_at": "2026-11-01T11:58:20.945657"
+            }
+          ],
+          "recordings": [],
+          "release_evidence_records": [],
+          "server_identity": [
+            {
+              "id": 1,
+              "instance_id": "ac424b70-ffa4-4af0-b83c-8208119d9f9f"
+            }
+          ],
+          "sync_logs": [],
+          "users": [
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.928099",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 1,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "alice",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.928099"
+            },
+            {
+              "access_token_configured": false,
+              "access_token_issued_at": null,
+              "access_token_last_used_at": null,
+              "confirmed_at": null,
+              "created_at": "2026-11-01T11:58:20.928099",
+              "display_name": null,
+              "email": null,
+              "group_name": "사용자",
+              "id": 2,
+              "is_active": true,
+              "last_login_at": null,
+              "last_seen_at": null,
+              "owner_id": "bob",
+              "password_configured": false,
+              "password_recovery_issued_at": null,
+              "password_updated_at": null,
+              "timezone": "Asia/Seoul",
+              "two_factor_enabled": false,
+              "updated_at": "2026-11-01T11:58:20.928099"
+            }
+          ]
+        },
+        "name": "now_note_server_backup",
+        "recovery": {
+          "includes_client_journals": false,
+          "incomplete_drains": [],
+          "incomplete_executions": [],
+          "incomplete_operations": [],
+          "requires_reauthentication": true,
+          "requires_reconciliation": false
+        },
+        "section_counts": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 1,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 1,
+          "note_inventory": 1,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 1,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 1,
+          "notes": 1,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        },
+        "server": "NowNote Server",
+        "server_instance_id": "ac424b70-ffa4-4af0-b83c-8208119d9f9f",
+        "summary": {
+          "analysis_jobs": 0,
+          "devices": 1,
+          "library_mutations": 4,
+          "library_resources": 1,
+          "note_analysis_runs": 0,
+          "note_crypto_chunks": 0,
+          "note_crypto_entries": 0,
+          "note_crypto_fences": 0,
+          "note_crypto_transitions": 0,
+          "note_crypto_uploads": 0,
+          "note_heads": 1,
+          "note_inventory": 1,
+          "note_linked_schema": 1,
+          "note_linked_texts": 0,
+          "note_mixed_schema": 1,
+          "note_mixed_scopes": 0,
+          "note_mixed_slots": 0,
+          "note_mutations": 1,
+          "note_offline_branches": 0,
+          "note_protected_analysis_claims": 0,
+          "note_related_drains": 0,
+          "note_representation_origins": 0,
+          "note_revisions": 1,
+          "notes": 1,
+          "recordings": 0,
+          "release_evidence_records": 0,
+          "server_identity": 1,
+          "sync_logs": 0,
+          "users": 2
+        }
+      },
+      "commit": {
+        "device_id": "synthetic-device",
+        "documents": [
+          {
+            "document": {
+              "approvals": [],
+              "document_version": 1,
+              "drafts": [
+                {
+                  "aliases": [
+                    "Alias"
+                  ],
+                  "base_approved_revision_id": null,
+                  "citations": [
+                    {
+                      "evidence_id": "n",
+                      "id": "c",
+                      "quote": "Exact quote",
+                      "section_id": null
+                    }
+                  ],
+                  "claims": [
+                    {
+                      "assessment": "supported",
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "claim",
+                      "statement": "Exact quote"
+                    }
+                  ],
+                  "draft_hash": "0c79e8776164e0c28c5f3b8672b391212df88f585765651986db8ca8f6860ccd",
+                  "evidence_manifest": [
+                    {
+                      "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+                      "head_version": 1,
+                      "id": "n",
+                      "kind": "note",
+                      "note_ref": {
+                        "local_id": "source",
+                        "owner_id": "alice"
+                      },
+                      "origin": "server",
+                      "source_revision_id": "f3b37532-538d-4397-8c0d-a1bd378e6169"
+                    }
+                  ],
+                  "generated_at": "2026-11-01T00:00:00Z",
+                  "generation_id": "00000000-0000-0000-0000-000000000014",
+                  "id": "00000000-0000-0000-0000-000000000007",
+                  "model": "auto",
+                  "page_type": "concept",
+                  "provider": "synthetic",
+                  "relations": [],
+                  "schema_version": 2,
+                  "scope": {
+                    "owner": "alice",
+                    "url": "https://qa.invalid"
+                  },
+                  "sections": [
+                    {
+                      "citation_ids": [
+                        "c"
+                      ],
+                      "id": "s",
+                      "markdown": "Exact quote",
+                      "title": "Section"
+                    }
+                  ],
+                  "summary": "Summary",
+                  "title": "Synthetic",
+                  "topic": "QA",
+                  "validation_status": "citations_checked"
+                }
+              ],
+              "rejected_draft_ids": [],
+              "schema_version": 2,
+              "scope": {
+                "owner": "alice",
+                "url": "https://qa.invalid"
+              },
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            },
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "manifest_hash": "b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f",
+        "mutation_id": "00000000-0000-0000-0000-000000000003",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "prepare": {
+        "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+        "changes": [
+          {
+            "action": "create_draft",
+            "base_document_version": 0,
+            "base_head_revision_id": null,
+            "base_head_version": 0,
+            "base_index_version": 0,
+            "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+            "result_document_hash": "3de590b2595bf5689640b6c335db644f9b4cf70cb67fc02cce15bfa564b5248e",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+        "device_id": "synthetic-device",
+        "draft_bindings": [
+          {
+            "draft_hash": "0c79e8776164e0c28c5f3b8672b391212df88f585765651986db8ca8f6860ccd",
+            "draft_id": "00000000-0000-0000-0000-000000000007",
+            "wiki_id": "00000000-0000-0000-0000-000000000006"
+          }
+        ],
+        "inputs": [
+          {
+            "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+            "head_version": 1,
+            "id": "n",
+            "kind": "note",
+            "note_ref": {
+              "local_id": "source",
+              "owner_id": "alice"
+            },
+            "origin": "server",
+            "source_revision_id": "f3b37532-538d-4397-8c0d-a1bd378e6169"
+          }
+        ],
+        "kind": "ingest",
+        "manifest_hash": "b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f",
+        "mutation_id": "00000000-0000-0000-0000-000000000002",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "owner_id": "alice",
+        "schema_version": 1
+      },
+      "state": "aborted",
+      "status": {
+        "manifest": {
+          "abort_mutation_id": "00000000-0000-0000-0000-000000000004",
+          "changes": [
+            {
+              "action": "create_draft",
+              "base_document_version": 0,
+              "base_head_revision_id": null,
+              "base_head_version": 0,
+              "base_index_version": 0,
+              "note_mutation_id": "00000000-0000-0000-0000-000000000008",
+              "result_document_hash": "3de590b2595bf5689640b6c335db644f9b4cf70cb67fc02cce15bfa564b5248e",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "commit_mutation_id": "00000000-0000-0000-0000-000000000003",
+          "device_id": "synthetic-device",
+          "draft_bindings": [
+            {
+              "draft_hash": "0c79e8776164e0c28c5f3b8672b391212df88f585765651986db8ca8f6860ccd",
+              "draft_id": "00000000-0000-0000-0000-000000000007",
+              "wiki_id": "00000000-0000-0000-0000-000000000006"
+            }
+          ],
+          "inputs": [
+            {
+              "content_hash": "c12dcf12f770ac4ae451d115bca21750785d7b70d4a1660769abc0ecd5c6c897",
+              "head_version": 1,
+              "id": "n",
+              "kind": "note",
+              "note_ref": {
+                "local_id": "source",
+                "owner_id": "alice"
+              },
+              "origin": "server",
+              "source_revision_id": "f3b37532-538d-4397-8c0d-a1bd378e6169"
+            }
+          ],
+          "kind": "ingest",
+          "manifest_hash": "b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f",
+          "mutation_id": "00000000-0000-0000-0000-000000000002",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "owner_id": "alice",
+          "schema_version": 1
+        },
+        "manifest_hash": "b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f",
+        "operation_id": "00000000-0000-0000-0000-000000000001",
+        "receipt": {
+          "manifest_hash": "b2cc6842dc577708f53126a049177f1622059c00b35d5762a8e4989f5796235f",
+          "operation_id": "00000000-0000-0000-0000-000000000001",
+          "pages": [],
+          "state": "aborted",
+          "status": "ok",
+          "wiki_operation": true
+        },
+        "state": "aborted",
+        "status": "ok"
+      }
+    }
+  ],
+  "format": "wiki-operation-legacy-1"
+}

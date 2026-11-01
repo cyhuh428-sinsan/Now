@@ -11,16 +11,23 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError, OperationalError
 from fastapi import HTTPException
 import test_wiki_operations_standalone as foundation
-from test_wiki_operations_standalone import request, uid
+from test_wiki_operations_standalone import request as legacy_request, uid
 from test_wiki_v2_standalone import draft, artifact, seal, approval
 from app.models.note import Note
 from app.models.note_history import NoteHead
 from app.models.library import LibraryResource, LibraryMutation
 from app.models.note_v2 import NoteMutation
 from app.schemas.wiki import digest
-from app.schemas.wiki_operations import PrepareOperation, CommitOperation, AbortOperation
+from app.schemas.wiki_operations import PrepareOperationV2 as PrepareOperation, CommitOperation, AbortOperation
 from app.schemas.note_v2 import PutNote
 from app.services import note_v2, wiki_operations as O
+
+
+def request(*args,**kwargs):
+    """신규 쓰기 fixture만 명시 정책2로 생성하며 legacy request bytes는 유지한다."""
+    value=legacy_request(*args,**kwargs);value["schema_version"]=2
+    value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})
+    return value
 
 
 class CommitTest(unittest.TestCase):
@@ -378,6 +385,8 @@ class CommitTest(unittest.TestCase):
         value["changes"][0].update(action="append_draft",note_mutation_id=uid(6008),base_head_revision_id=result["result_revision_id"],
             base_head_version=result["result_head_version"],base_index_version=2,base_document_version=2,result_document_hash=digest(doc))
         value["draft_bindings"]=[dict(wiki_id=old["wiki_id"],draft_id=newest["id"],draft_hash=newest["draft_hash"])]
+        value["inputs"].append(dict(id="before",kind="wiki",origin="server",owner_id="alice",wiki_id=old["wiki_id"],
+            draft_id=d["id"],approval_id=uid(50002),document_version=2,content_hash=d["draft_hash"]))
         value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"});prepared=PrepareOperation.model_validate(value)
         body=CommitOperation(schema_version=1,owner_id="alice",device_id=p.device_id,mutation_id=prepared.commit_mutation_id,
             manifest_hash=prepared.manifest_hash,documents=[dict(wiki_id=old["wiki_id"],document=doc)])

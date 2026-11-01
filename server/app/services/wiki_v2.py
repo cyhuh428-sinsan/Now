@@ -37,14 +37,16 @@ def plain(db, owner, local):
     return head
 
 
-def pinned_wiki(db, owner, ref, *, allow_deleted=False):
+def pinned_wiki(db, owner, ref, *, allow_deleted=False, revision_id=None):
     local = "wiki:" + ref.wiki_id
     head = plain(db, owner, local)
     index = db.get(LibraryResource, (owner, "wikis", ref.wiki_id))
     if index is None or (index.deleted_at is not None and not allow_deleted):
         error("wiki_source_unavailable")
     guard.link(index)
-    for row in db.scalars(select(NoteRevision).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local)):
+    stmt=select(NoteRevision).where(NoteRevision.owner_id == owner, NoteRevision.local_id == local)
+    if revision_id is not None:stmt=stmt.where(NoteRevision.id==revision_id)
+    for row in db.scalars(stmt):
         raw = json.loads(row.snapshot_json)["note"]
         if json.loads(raw["content"]).get("document_version") != ref.document_version:
             continue
@@ -57,7 +59,8 @@ def pinned_wiki(db, owner, ref, *, allow_deleted=False):
     error("wiki_source_unavailable")
 
 
-def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None, archive=False, memo=None):
+def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None, archive=False, memo=None,
+                      policy=1, pinned=None, pins=None):
     visited = set() if visited is None else visited
     memo={} if memo is None else memo
     leaves, wiki_refs, bodies = set(), {}, {}
@@ -74,6 +77,8 @@ def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None,
                 error("wiki_input_kind")
             head = plain(db, owner, local)
             revision = db.get(NoteRevision, ref.source_revision_id)
+            if not stack and pinned is not None and pinned.get(ref.id)!=ref.source_revision_id:
+                error("wiki_source_unavailable")
             if revision is None or revision.owner_id != owner or revision.local_id != local:
                 error("wiki_source_unavailable")
             raw = json.loads(revision.snapshot_json)["note"]
@@ -82,6 +87,7 @@ def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None,
             if current and (head.identity_state!="coherent" or head.head_revision_id != ref.source_revision_id or head.version != ref.head_version):
                 error("wiki_source_changed")
             leaves.add((owner, local)); bodies[ref.id] = raw["content"]
+            if not stack and pins is not None:pins[ref.id]=revision.id
         else:
             key = (ref.wiki_id, ref.draft_id, ref.approval_id, ref.document_version, ref.content_hash)
             if key in stack:
@@ -94,15 +100,22 @@ def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None,
                 leaves.update(children);wiki_refs.update(ancestors);bodies[ref.id]=draft
                 if len(leaves)>1000 or len(wiki_refs)>1000:error("wiki_dependency_limit")
                 continue
-            doc, draft, _ = pinned_wiki(db, owner, ref, allow_deleted=archive)
+            doc, draft, revision_id = pinned_wiki(db, owner, ref, allow_deleted=archive,
+                revision_id=pinned.get(ref.id) if pinned is not None and not stack else None)
+            if not stack and pins is not None:pins[ref.id]=revision_id
             if current:
                 head = db.get(NoteHead, (owner, "wiki:"+ref.wiki_id))
                 current_note = db.get(NoteRevision, head.head_revision_id)
+                if head.identity_state!="coherent" or current_note is None:error("wiki_source_unavailable")
                 latest = parse(json.loads(current_note.snapshot_json)["note"]["content"], owner, ref.wiki_id)
-                if latest.document_version != ref.document_version or not latest.approvals or latest.approvals[-1].id != ref.approval_id:
+                approved=latest.approvals[-1] if latest.approvals else None
+                chosen=next((d for d in latest.drafts if approved is not None and d.id==approved.draft_id),None)
+                version_ok=latest.document_version>=ref.document_version if policy==2 else latest.document_version==ref.document_version
+                if (not version_ok or approved is None or approved.id!=ref.approval_id
+                        or approved.draft_id!=ref.draft_id or chosen is None or chosen.draft_hash!=ref.content_hash):
                     error("wiki_source_changed")
             children, ancestors, _ = validate_evidence(db, owner, evidence(draft), current=False,
-                                                      stack=(*stack, key), visited=visited, archive=archive,memo=memo)
+                                                      stack=(*stack, key), visited=visited, archive=archive,memo=memo,policy=policy)
             leaves.update(children);wiki_refs.update(ancestors)
             wiki_refs[key] = dict(owner_id=owner, wiki_id=ref.wiki_id, draft_id=ref.draft_id,
                 approval_id=ref.approval_id, document_version=ref.document_version, content_hash=ref.content_hash)
@@ -121,7 +134,7 @@ def validate_document(db, owner, value, operation, documents, previous=None, *, 
     old_ids={d.id for d in previous.drafts} if previous else set()
     for draft in value.drafts:
         refs = evidence(draft)
-        found, inherited, bodies = validate_evidence(db, owner, refs,visited=visited,memo=memo)
+        found, inherited, bodies = validate_evidence(db, owner, refs,visited=visited,memo=memo,policy=operation.schema_version)
         leaves.update(found);wiki_refs.update(inherited)
         for citation in draft.citations:
             target = bodies.get(getattr(citation, "evidence_id", getattr(citation, "source_id", None)))
@@ -158,6 +171,82 @@ def validate_document(db, owner, value, operation, documents, previous=None, *, 
     if len(leaves) > 1000 or len(wiki_refs) > 1000:
         error("wiki_dependency_limit")
     return leaves, wiki_refs
+
+
+def expected_inputs(db,body,change,verified):
+    if body.schema_version==1 or change.action!="append_draft":return list(body.inputs)
+    revision=db.get(NoteRevision,change.base_head_revision_id)
+    if revision is None or revision.owner_id!=body.owner_id or revision.local_id!="wiki:"+change.wiki_id:
+        error("wiki_source_unavailable")
+    own=[ref for ref in body.inputs if ref.kind=="wiki" and ref.wiki_id==change.wiki_id]
+    if revision.representation_kind=="snapshot_v1" and revision.representation_epoch==0:
+        before=parse(json.loads(revision.snapshot_json)["note"]["content"],body.owner_id,change.wiki_id)
+        if before.document_version!=change.base_document_version:error("wiki_target_changed")
+        approved=before.approvals[-1] if before.approvals else None
+        if approved is None:
+            if own:error("wiki_input_manifest_missing")
+            return list(body.inputs)
+        chosen=next(d for d in before.drafts if d.id==approved.draft_id)
+        if (len(own)!=1 or own[0].approval_id!=approved.id or own[0].draft_id!=chosen.id
+                or own[0].content_hash!=chosen.draft_hash):error("wiki_input_manifest_missing")
+    elif revision.representation_kind=="history_envelope_v1" and revision.representation_epoch>0:
+        # Archive content semantics are key-holder checks; live batches reject this lineage.
+        if not own:return list(body.inputs)
+    else:error("wiki_source_unavailable")
+    if (len(own)!=1 or own[0].document_version!=change.base_document_version
+            or verified.get(own[0].id)!=change.base_head_revision_id):error("wiki_input_manifest_missing")
+    return [ref for ref in body.inputs if ref.id!=own[0].id]
+
+
+def _unverified_legacy_outputs(db,owner):
+    from app.schemas.wiki_operations import OperationRecord
+    unknown=set();count=0
+    for row in db.scalars(select(LibraryResource).where(LibraryResource.owner_id==owner,LibraryResource.kind=="wiki-operations")):
+        count+=1
+        if count>2000:error("wiki_dependency_limit")
+        try:record=OperationRecord.model_validate_json(row.payload_json)
+        except ValueError:error("inconsistent_wiki_operation")
+        if (record.manifest.owner_id!=owner or record.manifest.operation_id!=row.id or row.schema_version!=1
+                or row.deleted_at is not None or row.version!=(1 if record.state=="prepared" else 2)):
+            error("inconsistent_wiki_operation")
+        if record.manifest.schema_version!=1 or record.state!="committed":continue
+        outputs=[c for c in record.manifest.changes if c.action in ("create_draft","append_draft")]
+        if len(outputs)<2:continue
+        for change in outputs:
+            if change.action!="append_draft":continue
+            revision=db.get(NoteRevision,change.base_head_revision_id)
+            if revision is None or revision.owner_id!=owner or revision.local_id!="wiki:"+change.wiki_id:
+                unknown.update(c.wiki_id for c in outputs);break
+            if revision.representation_kind!="snapshot_v1" or revision.representation_epoch!=0:
+                unknown.update(c.wiki_id for c in outputs);break
+            try:before=parse(json.loads(revision.snapshot_json)["note"]["content"],owner,change.wiki_id)
+            except (ValueError,TypeError,KeyError):error("wiki_dependency_unverified")
+            if before.document_version!=change.base_document_version or before.approvals:
+                unknown.update(c.wiki_id for c in outputs);break
+    return unknown
+
+
+def validate_protection_graph(db,owner,proposed):
+    colors={};unknown=None
+    def visit(wiki,depth):
+        nonlocal unknown
+        if depth>32:error("wiki_dependency_limit")
+        if colors.get(wiki)==1:error("wiki_protection_cycle")
+        if colors.get(wiki)==2:return
+        if len(colors)>=2000:error("wiki_dependency_limit")
+        colors[wiki]=1
+        row=db.get(LibraryResource,(owner,"wikis",wiki))
+        if row is None and wiki not in proposed:error("wiki_source_unavailable")
+        targets=set(proposed.get(wiki,()))
+        if row is not None:
+            if unknown is None:unknown=_unverified_legacy_outputs(db,owner)
+            if wiki in unknown:error("wiki_dependency_unverified")
+            plain(db,owner,"wiki:"+wiki)
+            value=guard.link(row)
+            targets.update(ref.wiki_id for ref in getattr(value,"wiki_dependencies",[]))
+        for target in sorted(targets):visit(target,depth+1)
+        colors[wiki]=2
+    for root in sorted(proposed):visit(root,0)
 
 
 def validate_retained_inputs(db,owner,value,index,*,visited,memo):

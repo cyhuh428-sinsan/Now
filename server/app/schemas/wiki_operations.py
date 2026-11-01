@@ -1,6 +1,6 @@
 """Strict Wiki operation envelopes shared by HTTP and transactional services."""
 from typing import Annotated, Literal
-from pydantic import BeforeValidator, Field, model_validator
+from pydantic import BeforeValidator, Discriminator, Field, Tag, TypeAdapter, model_validator
 from app.schemas.wiki import (
     Strict, Ident, Hash, LabelId, EvidenceV2, WikiArtifactV2, canonical, digest, _unique,
 )
@@ -87,6 +87,29 @@ class PrepareOperation(OperationEnvelope):
         return self
 
 
+def _schema_two(value):
+    if type(value) is not int or value != 2:
+        raise ValueError("wiki_operation_schema")
+    return value
+
+
+class PrepareOperationV2(PrepareOperation):
+    schema_version: Annotated[Literal[2], BeforeValidator(_schema_two)]
+
+
+def _prepare_version(value):
+    return str(value.get("schema_version")) if isinstance(value,dict) else str(getattr(value,"schema_version",None))
+
+
+PrepareAny = Annotated[Annotated[PrepareOperation,Tag("1")] | Annotated[PrepareOperationV2,Tag("2")],
+                       Discriminator(_prepare_version)]
+_prepare_adapter = TypeAdapter(PrepareAny)
+
+
+def parse_prepare(value):
+    return _prepare_adapter.validate_python(value.model_dump() if hasattr(value,"model_dump") else value)
+
+
 class OperationDocument(Strict):
     wiki_id: Ident
     document: WikiArtifactV2
@@ -133,6 +156,6 @@ class ReservedMutation(Strict):
 
 class OperationRecord(Strict):
     state: Literal["prepared", "committed", "aborted"]
-    manifest: PrepareOperation
+    manifest: PrepareAny
     reserved_bytes: int = Field(ge=131072, le=131072)
     verified_inputs: dict[LabelId, Ident] = Field(default_factory=dict, max_length=30)

@@ -146,7 +146,7 @@ class HttpTest(unittest.TestCase):
 
     def test_unknown_fields_numbers_local_input_and_ids_are_safe_422(self):
         p,c=self.bundle()
-        for key,value in (("extra","PRIVATE_BODY"),("schema_version",1.0),("schema_version",True),("operation_id","not-a-uuid")):
+        for key,value in (("extra","PRIVATE_BODY"),("schema_version",1.0),("schema_version",2.0),("schema_version","2"),("schema_version",True),("operation_id","not-a-uuid")):
             body=p.model_dump();body[key]=value
             with self.subTest(key=key,value=value):
                 response=self.post("/prepare",body)
@@ -231,7 +231,7 @@ class HttpTest(unittest.TestCase):
         self.assertEqual(self.ok(self.status(second))["state"],"prepared")
 
     def test_active_quota_blocks_only_new_prepare(self):
-        from app.schemas.wiki_operations import PrepareOperation
+        from app.schemas.wiki_operations import PrepareOperationV2 as PrepareOperation
         p,c=self.bundle();self.ok(self.post("/prepare",p))
         def pending(offset):
             value=p.model_dump();value.update(operation_id=uid(offset+1),mutation_id=uid(offset+2),
@@ -261,6 +261,7 @@ class HttpTest(unittest.TestCase):
         capabilities=result.json()["capabilities"]
         self.assertEqual(capabilities.get("wiki_document_schema"),2)
         self.assertIs(capabilities.get("wiki_operations_v1"),True)
+        self.assertEqual(capabilities.get("wiki_operation_manifest_schema"),2)
         from app.core import capabilities as C
         self.assertIs(C.MIXED_MUTATIONS_ENABLED,False)
         self.assertIs(capabilities["mixed_full_conversion_v1"],False)
@@ -272,3 +273,47 @@ class HttpTest(unittest.TestCase):
         self.assertIn((PREFIX+"/{operation_id}","GET"),paths)
         self.assertNotIn((PREFIX+"/{resource_id}","PUT"),paths)
         self.assertNotIn((PREFIX+"/{resource_id}","DELETE"),paths)
+
+    def test_new_prepare1_is_upgrade_conflict_not_a_legacy_write_fallback(self):
+        p,c=self.bundle();value=p.model_dump();value["schema_version"]=1
+        value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})
+        response=self.post("/prepare",value)
+        self.assertEqual(response.status_code,409,response.text)
+        self.assertEqual(response.json(),{"detail":{"code":"wiki_operation_upgrade_required"}})
+        self.assertEqual(self.status(p).status_code,404)
+
+    def test_legacy_replay_status_and_abort_use_the_original_transport(self):
+        from pathlib import Path
+        from uuid import uuid4
+        from sqlalchemy import create_engine
+        from app.db import get_db
+        from app.services.note_backup import restore_empty
+        from app.services.user_accounts import issue_user_device_access_token
+        fixture=json.loads((Path(__file__).parent/"fixtures/wiki_operation_legacy_v1.json").read_text(encoding="utf-8"))
+        for case in fixture["cases"]:
+            with self.subTest(state=case["state"]):
+                engine=create_engine("sqlite:///file:legacy-http-"+uuid4().hex+"?mode=memory&cache=shared&uri=true",
+                    connect_args={"check_same_thread":False},poolclass=QueuePool)
+                previous=self.app.dependency_overrides[get_db]
+                try:
+                    restore_empty(engine,case["backup"])
+                    with Session(engine) as db:
+                        _,token=issue_user_device_access_token(db,owner_id="alice",device_id="synthetic-device");db.commit()
+                    headers={"X-Now-User-Token":token}
+                    def backend():
+                        with Session(engine,autoflush=False) as db:yield db
+                    self.app.dependency_overrides[get_db]=backend
+                    p=case["prepare"];ident=p["operation_id"]
+                    response=self.client.get(PREFIX+"/"+ident,params={"owner_id":"alice"},headers=headers)
+                    self.assertEqual(self.ok(response),case["status"])
+                    self.assertEqual(self.ok(self.post("/prepare",p,headers=headers))["state"],"prepared")
+                    response=self.post("/"+ident+"/commit",case["commit"],headers=headers)
+                    if case["state"]=="committed":self.assertEqual(self.ok(response),case["status"]["receipt"])
+                    else:
+                        self.assertEqual(response.status_code,409)
+                        expected="wiki_operation_upgrade_required" if case["state"]=="prepared" else "operation_aborted"
+                        self.assertEqual(response.json()["detail"]["code"],expected)
+                        abort=dict(schema_version=1,owner_id="alice",device_id=p["device_id"],mutation_id=p["abort_mutation_id"],manifest_hash=p["manifest_hash"])
+                        self.assertEqual(self.ok(self.post("/"+ident+"/abort",abort,headers=headers))["state"],"aborted")
+                finally:
+                    self.app.dependency_overrides[get_db]=previous;engine.dispose()

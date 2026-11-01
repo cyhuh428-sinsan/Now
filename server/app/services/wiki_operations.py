@@ -1,6 +1,7 @@
 """Wiki transactions shared by dedicated API routes and backup validators."""
 import json
 from datetime import datetime
+from fastapi import HTTPException
 from sqlalchemy import select
 from app.models.library import LibraryResource, LibraryMutation
 from app.models.note import UserAccount, UserDevice
@@ -9,7 +10,7 @@ from app.models.note_crypto import NoteCryptoTransition
 from app.models.note_related import RelatedDrain
 from app.models.protected_analysis import ProtectedAnalysisClaim
 from app.schemas.wiki import canonical, digest
-from app.schemas.wiki_operations import PrepareOperation, CommitOperation, AbortOperation, ReservedMutation, OperationRecord
+from app.schemas.wiki_operations import parse_prepare, CommitOperation, AbortOperation, ReservedMutation, OperationRecord
 from app.services.note_history import lock_note_writes
 from app.services.note_crypto_fence import error
 from app.services.user_devices import require_active_user_device
@@ -103,7 +104,7 @@ def _budget(body, inventory_ids):
 
 def _reserve_operation(db, body, *, inventory_ids=None, validate=None):
     """Non-committing kernel; only prepare_operation supplies live validation."""
-    body = PrepareOperation.model_validate(body.model_dump())
+    body = parse_prepare(body)
     try:
         lock_note_writes(db, [body.owner_id])
         require_active_user_device(db, owner_id=body.owner_id, device_id=body.device_id)
@@ -122,6 +123,8 @@ def _reserve_operation(db, body, *, inventory_ids=None, validate=None):
             if result!=phase_receipt(body,"prepared") or row.deleted_at is not None or row.version!=(1 if stored.state=="prepared" else 2):
                 error("inconsistent_wiki_operation")
             return result
+        if validate is not None and body.schema_version == 1:
+            error("wiki_operation_upgrade_required")
         for ident, _, _ in phases(body):
             _check_collision(db, body.owner_id, ident)
         rows = list(db.scalars(select(LibraryResource).where(LibraryResource.owner_id == body.owner_id,
@@ -195,13 +198,16 @@ def _load(db, owner, operation_id):
     return row,record
 
 
-def _validate_live(db, body, *, visited=None, memo=None):
+def _validate_live(db, body, *, visited=None, memo=None, verified_inputs=None):
     from app.services import wiki_v2, note_v2 as notes
     from app.models.note_history import NoteHead
     from app.services.note_crypto_fence import require_unfenced
     visited=set() if visited is None else visited
     memo={} if memo is None else memo
-    wiki_v2.validate_evidence(db,body.owner_id,body.inputs,current=True,visited=visited,memo=memo)
+    if verified_inputs is not None and set(verified_inputs)!={ref.id for ref in body.inputs}:error("inconsistent_wiki_operation")
+    pins={}
+    wiki_v2.validate_evidence(db,body.owner_id,body.inputs,current=True,visited=visited,memo=memo,
+                             policy=body.schema_version,pinned=verified_inputs,pins=pins)
     for change in body.changes:
         local="wiki:"+change.wiki_id
         require_unfenced(db,[(body.owner_id,local)])
@@ -232,12 +238,22 @@ def _validate_live(db, body, *, visited=None, memo=None):
     existing=len(list(db.scalars(select(LibraryResource).where(LibraryResource.owner_id==body.owner_id,
         LibraryResource.kind=="wikis",LibraryResource.deleted_at.is_(None)))))
     if existing+additions>100:error("resource_limit")
-    return {ref.id:ref.source_revision_id if ref.kind=="note" else wiki_v2.pinned_wiki(db,body.owner_id,ref)[2] for ref in body.inputs}
+    if body.schema_version==2:
+        graph={}
+        for change in body.changes:
+            if change.action not in ("create_draft","append_draft"):continue
+            expected=wiki_v2.expected_inputs(db,body,change,pins)
+            _,refs,_=wiki_v2.validate_evidence(db,body.owner_id,expected,visited=visited,memo=memo,policy=2)
+            graph[change.wiki_id]={ref["wiki_id"] for ref in refs.values()}
+        for ref in body.inputs:
+            if ref.kind=="wiki":graph.setdefault(ref.wiki_id,set())
+        wiki_v2.validate_protection_graph(db,body.owner_id,graph)
+    return pins
 
 
 def prepare_operation(db,body):
     try:
-        body=PrepareOperation.model_validate(body.model_dump())
+        body=parse_prepare(body)
         result=_reserve_operation(db,body,validate=lambda:_validate_live(db,body))
         db.commit();return result
     except Exception:
@@ -333,9 +349,11 @@ def commit_operation(db,operation_id,body):
             if result!=_success(db,original,"committed"):error("inconsistent_wiki_operation")
             db.commit();return result
         if record.state=="aborted":error("operation_aborted")
+        if original.schema_version==1:error("wiki_operation_upgrade_required")
         if json.loads(receipt_row.response_json)!=_reserved(original,"commit"):error("inconsistent_wiki_operation")
         visited,memo=set(),{}
-        _validate_live(db,original,visited=visited,memo=memo)
+        pins=_validate_live(db,original,visited=visited,memo=memo,verified_inputs=record.verified_inputs)
+        if pins!=record.verified_inputs:error("wiki_source_changed")
         pages=[]
         for change in original.changes:
             doc=docs[change.wiki_id];local="wiki:"+change.wiki_id
@@ -362,11 +380,12 @@ def commit_operation(db,operation_id,body):
                 leaves.update(branch_leaves);refs.update(branch_refs)
             if action in ("create","draft"):
                 newest=doc.drafts[-1]
-                if not isinstance(newest,WikiDraftV2) or sorted(canonical(ref.model_dump()) for ref in original.inputs)!=sorted(canonical(ref.model_dump()) for ref in wiki_v2.evidence(newest)):
+                expected=wiki_v2.expected_inputs(db,original,change,record.verified_inputs)
+                if not isinstance(newest,WikiDraftV2) or sorted(canonical(ref.model_dump()) for ref in expected)!=sorted(canonical(ref.model_dump()) for ref in wiki_v2.evidence(newest)):
                     error("wiki_input_manifest_missing")
             if action=="approve":
                 chosen=next(d for d in doc.drafts if d.id==doc.approvals[-1].draft_id)
-                wiki_v2.validate_evidence(db,body.owner_id,wiki_v2.evidence(chosen),current=True,visited=visited,memo=memo)
+                wiki_v2.validate_evidence(db,body.owner_id,wiki_v2.evidence(chosen),current=True,visited=visited,memo=memo,policy=original.schema_version)
             payload=wiki_v2.index_payload(db,body.owner_id,change.wiki_id,leaves,refs,visited=visited,memo=memo)
             index=db.get(LibraryResource,(body.owner_id,"wikis",change.wiki_id))
             if index is None:
@@ -443,6 +462,10 @@ def validate_operation_rows(db):
                 previous=db.get(NoteRevision,change.base_head_revision_id)
                 if previous is None or previous.owner_id!=row.owner_id or previous.local_id!="wiki:"+change.wiki_id:
                     raise ValueError("backup_wiki_operation_base")
+            if body.schema_version==2 and change.action in ("create_draft","append_draft"):
+                from app.services.wiki_v2 import expected_inputs
+                try:expected_inputs(db,body,change,record.verified_inputs)
+                except (HTTPException,ValueError,TypeError,KeyError) as exc:raise ValueError("backup_wiki_operation_comparison") from exc
         all_receipts={ident:db.get(LibraryMutation,(row.owner_id,ident)) for ident,_,_ in phases(body)}
         if any(value is None for value in all_receipts.values()):raise ValueError("backup_wiki_operation_receipt")
         for ident,phase,wiki in phases(body):
@@ -465,6 +488,12 @@ def validate_operation_rows(db):
                 if revision.representation_kind=="snapshot_v1" and revision.representation_epoch==0:
                     content=json.loads(revision.snapshot_json)["note"]["content"]
                     if digest(json.loads(content))!=change.result_document_hash:raise ValueError("backup_wiki_operation_document")
+                    if body.schema_version==2 and change.action in ("create_draft","append_draft"):
+                        from app.services.wiki_v2 import parse,expected_inputs,evidence
+                        document=parse(content,row.owner_id,change.wiki_id)
+                        expected=expected_inputs(db,body,change,record.verified_inputs)
+                        if sorted(canonical(ref.model_dump()) for ref in evidence(document.drafts[-1]))!=sorted(canonical(ref.model_dump()) for ref in expected):
+                            raise ValueError("backup_wiki_operation_comparison")
                 else:
                     index=db.get(LibraryResource,(row.owner_id,"wikis",wiki))
                     if revision.representation_kind!="history_envelope_v1" or revision.representation_epoch<=0 or index is None or index.schema_version!=2:

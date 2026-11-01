@@ -58,7 +58,7 @@ def main(argv=None):
         from app.models.library import LibraryResource,LibraryMutation
         from app.schemas.note_v2 import PutNote
         from app.schemas.wiki import digest
-        from app.schemas.wiki_operations import PrepareOperation,CommitOperation
+        from app.schemas.wiki_operations import PrepareOperationV2 as PrepareOperation,CommitOperation
         from app.services.note_crypto import initialize_identity
         from app.services.note_mixed_metadata import initialize
         from app.services.related_text import initialize as initialize_linked
@@ -115,6 +115,7 @@ def main(argv=None):
         def abort(p):
             return dict(schema_version=1,owner_id=owner,device_id=device,mutation_id=p.abort_mutation_id,manifest_hash=p.manifest_hash)
         def fresh(value):
+            value["schema_version"]=2
             value.update(operation_id=str(uuid4()),mutation_id=str(uuid4()),commit_mutation_id=str(uuid4()),abort_mutation_id=str(uuid4()))
             for change in value["changes"]:change["note_mutation_id"]=str(uuid4())
             value["manifest_hash"]=digest({k:v for k,v in value.items() if k!="manifest_hash"})

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Query
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
@@ -6,7 +6,7 @@ from fastapi.routing import APIRoute
 from app.api.note_v2 import access
 from app.core.security import require_client_api_access
 from app.schemas.wiki import Ident
-from app.schemas.wiki_operations import PrepareOperation, CommitOperation, AbortOperation
+from app.schemas.wiki_operations import PrepareAny, CommitOperation, AbortOperation
 from app.services import wiki_operations as service
 
 
@@ -27,7 +27,7 @@ router=APIRouter(prefix="/api/v1/wiki-operations",tags=["wiki-operations"],route
 
 
 @router.post("/prepare")
-def prepare(body: PrepareOperation, auth=Depends(access)):
+def prepare(body: PrepareAny = Body(), auth=Depends(access)):
     return service.prepare_operation(auth(body.owner_id),body)
 
 

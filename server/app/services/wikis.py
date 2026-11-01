@@ -74,7 +74,7 @@ def verify_sources(db, owner, values, *, current=False):
     if any(isinstance(value,WikiArtifactV2) for value in values):
         from app.services.wiki_v2 import evidence, validate_evidence
         for value in values:
-            for draft in value.drafts:validate_evidence(db,owner,evidence(draft),current=current)
+            for draft in value.drafts:validate_evidence(db,owner,evidence(draft),current=current,policy=2)
         return
     require_plain_sources(db, owner, dependencies(values))
     cache = {}
