@@ -12,8 +12,8 @@
   const size=value=>bytes(P.canonicalJson(value));
   const compare=(a,b)=>a<b?-1:a>b?1:0;
   function context(value){
-    for(const name of ['url','owner','device','serverInstance'])check(typeof value?.[name]==='string'&&value[name].length>0,'wiki_context_required');
-    check(value.url.length<=2048&&value.owner.length<=80,'wiki_context_required');
+    for(const name of ['owner','device','serverInstance'])check(typeof value?.[name]==='string'&&value[name].length>0,'wiki_context_required');
+    check(typeof value.url==='string'&&value.url.length<=2048&&value.owner.length<=80,'wiki_context_required');
     check(Number.isSafeInteger(value.viewGeneration)&&value.viewGeneration>=0,'wiki_context_required');
     return {url:value.url.replace(/\/+$/,''),owner:value.owner,device:value.device,viewGeneration:value.viewGeneration,serverInstance:value.serverInstance};
   }
@@ -33,6 +33,7 @@
       if(row.kind==='note'){
         exact(row,['kind','id','safety','note']);
         const n=row.note;
+        check(n?.origin!=='server'||Boolean(ctx.url),'wiki_server_context_required');
         const snapshot=await W.capture([n?.localId],scope(ctx),()=>n),source=snapshot.sources[0];
         check(!n.localId.startsWith('wiki:'),'wiki_input_kind');
         ({title,content}=source);manifest={...source.manifest,id:row.id,kind:'note'};
@@ -80,7 +81,7 @@
       plain(row.safety);check(['local','server'].includes(row.origin));
       const doc=await W.validateDocument(row.document,scope(ctx));
       check(Number.isSafeInteger(row.headVersion)&&row.headVersion>=0&&Number.isSafeInteger(row.indexVersion)&&row.indexVersion>=0,'wiki_invalid_version');
-      if(row.origin==='server'){uuid(row.headRevisionId);check(row.headVersion>0&&row.indexVersion>0,'wiki_invalid_version');}
+      if(row.origin==='server'){check(Boolean(ctx.url),'wiki_server_context_required');uuid(row.headRevisionId);check(row.headVersion>0&&row.indexVersion>0,'wiki_invalid_version');}
       else check(row.headRevisionId===null,'wiki_local_revision');
       if(row.index){await W.validateLink(row.index,ctx);check(row.index.artifact_local_id==='wiki:'+doc.wiki_id,'wiki_index_identity');}
       result.push({...copy(row),document:doc});
@@ -144,7 +145,7 @@
     const transmitted=size(transmission);check(transmitted<=524288,'wiki_source_budget');
     const plan={schema_version:1,context:ctx,snapshot:copy(snapshot),catalog:copy(catalog),reservation:copy(reservation),
       fingerprints,candidates,targets,pages,inputs,transmission,related_wiki_ids:copy(relatedWikiIds),transmitted_bytes:transmitted,calls:changed.length?1:0,
-      serverEligible:inputs.every(i=>i.origin==='server')&&targets.every(t=>t.origin==='server')};
+      serverEligible:Boolean(ctx.url)&&inputs.every(i=>i.origin==='server')&&targets.every(t=>t.origin==='server')};
     return {...plan,plan_hash:await P.hashJson(plan)};
   }
   async function fresh(plan,review){

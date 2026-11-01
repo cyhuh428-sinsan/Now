@@ -5,6 +5,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   dialog.setAttribute('aria-labelledby','wikiTitle');
   let rows=[],doc=null,dirty=false,busy=false,readable=false,epoch=0,bound='',message='',topic='',question='',confirmation=null,previous=null;
   let viewId='',beforeId='',comparing=false,readOnly=false,trashMode=false;
+  let sourceMode=false,sourceRows=[],sourceFiles=[],sourcePreview='';
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
   const valid=token=>dialog.open&&token===epoch&&bound===api.contextKey();
@@ -23,6 +24,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   function close(){
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
     viewId='';beforeId='';comparing=false;readOnly=false;trashMode=false;
+    sourceMode=false;sourceRows=[];sourceFiles=[];sourcePreview='';
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
@@ -108,6 +110,10 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(dirty&&!await ask('저장하지 않은 초안을 버리고 새 위키를 만들까요?'))return;
       requireActive(token);doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;trashMode=false;
     }),command('refresh','동기화',async token=>{const next=await api.list({sync:true});requireActive(token);rows=next;message='목록을 갱신했습니다.';}));
+    if(!readOnly&&api.sources)toolbar.append(command('sources',sourceMode?'지식 탐색':'자료 적재',async token=>{
+      const next=sourceMode?[]:await api.sources.list();requireActive(token);
+      sourceRows=next;sourceMode=!sourceMode;sourcePreview='';sourceFiles=[];message='';
+    },dirty));
     if(!readOnly&&api.trash&&api.restoreWiki){
       const label=node('label','휴지통','wiki-trash-toggle'),input=node('input');input.type='checkbox';input.name='wiki-trash';input.checked=trashMode;input.disabled=busy;
       input.onchange=()=>{const value=input.checked;void execute(async token=>{
@@ -138,6 +144,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
           doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
         }
         doc=structuredClone(row.document);dirty=false;selected.clear();question='';
+        sourceMode=false;sourceFiles=[];sourceRows=[];sourcePreview='';
         choose(preferred(doc).id);comparing=false;
         message='';
       });
@@ -154,7 +161,30 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }
     if(!rows.some(row=>Boolean(row.deleted)===trashMode))nav.append(node('p',trashMode?'휴지통이 비어 있습니다.':'저장된 위키 없음'));
     const detail=node('section',undefined,'wiki-detail');detail.setAttribute('aria-label','위키 검토');
-    if(!readOnly&&!trashMode){
+    if(sourceMode&&api.sources){
+      detail.append(node('h3','원본 자료'));
+      const label=node('label','파일 선택'),files=node('input');files.type='file';files.name='wiki-files';files.accept='.md,.txt';files.multiple=true;files.disabled=busy;
+      files.onchange=()=>{sourceFiles=Array.from(files.files||[]);message='';render();};label.append(files);detail.append(label);
+      if(sourceFiles.length)detail.append(node('p',sourceFiles.map(f=>f.name).join(', ')));
+      detail.append(command('capture-files','원본 저장',async token=>{
+        try{
+          const result=await api.sources.captureFiles([...sourceFiles]);requireActive(token);
+          sourceRows=await api.sources.list();requireActive(token);
+          message='이 기기에 원본 '+result.created+'개 저장 · 변경 없음 '+result.unchanged+'개';
+        }finally{if(valid(token))sourceFiles=[];}
+      },!sourceFiles.length));
+      const list=node('ul',undefined,'wiki-source-list');list.setAttribute('aria-label','저장된 원본 자료');
+      for(const source of sourceRows){
+        const row=node('li'),button=node('button',source.protected?'보호된 원본':source.title,'ghost-btn');button.type='button';button.disabled=busy||source.protected;
+        button.dataset.wikiSourceId=source.id;button.onclick=()=>{sourcePreview=source.id;render();};
+        row.append(button);if(!source.protected)row.append(node('small','이 기기 · '+source.extraction.range.total+' bytes'));list.append(row);
+      }
+      detail.append(list);
+      const preview=sourceRows.find(s=>s.id===sourcePreview&&!s.protected);
+      if(preview){const text=node('pre',preview.content,'history-diff wiki-source-preview');text.tabIndex=0;text.setAttribute('aria-label','원본 텍스트');detail.append(text);}
+      if(!sourceRows.length)detail.append(node('p','저장된 원본 없음'));
+    }
+    if(!sourceMode&&!readOnly&&!trashMode){
     const picker=node('details');picker.open=!doc;picker.append(node('summary','자료 선택'));
     const choices=node('div',undefined,'wiki-source-list');
     for(const source of api.notes()){
@@ -171,7 +201,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     questionInput.oninput=()=>{question=questionInput.value;generateButton.textContent=question.trim()?'질문 초안 생성':doc?'갱신 초안 생성':'초안 생성';};
     questionLabel.append(questionInput);detail.append(questionLabel,generateButton);
     }
-    if(doc&&readable){
+    if(!sourceMode&&doc&&readable){
       const draft=current(),approved=doc.approvals.some(a=>a.draft_id===draft.id),rejected=doc.rejected_draft_ids.includes(draft.id);
       const controls=node('div',undefined,'wiki-review-controls');
       const selector=(name,labelText,value,choices,change,disabled=false)=>{

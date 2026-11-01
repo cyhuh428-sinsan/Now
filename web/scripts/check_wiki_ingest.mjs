@@ -160,6 +160,8 @@ await test('UTF-8 MD/TXT exact snapshot/hash/range; unsupported/partial/hash-onl
   const bytes=new TextEncoder().encode('한글\r\n<script>neverRun()</script>\nhttps://invalid.example/');
   const file={kind:'file',id:'file1',name:'sample.md',localId:'file-note',bytes,safety:clone(safety)};
   const captured=await I.captureWikiSources([file],ctx),source=captured.sources[0];
+  const offline=await I.captureWikiSources([file],{...ctx,url:''});assert.equal(offline.scope.url,'','local mode must not invent a server scope');
+  await fail(()=>I.captureWikiSources(selection,{...ctx,url:''}));
   assert.equal(source.content,new TextDecoder().decode(bytes));assert.equal(source.manifest.origin,'local');
   assert.equal(source.extraction.file_hash,await P.sha256(bytes));assert.equal(source.extraction.text_hash,await P.sha256(source.content));
   assert.equal(source.extraction.range.end,bytes.length);assert.equal(source.extraction.adapter,'utf8-text-v1');

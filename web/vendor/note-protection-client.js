@@ -30,10 +30,14 @@
     async function sealJournal(scope,value,password,operationId) {
       scope=clone(scope);value=clone(value);const ctx=clone(context());active(ctx,scope);
       if(!password || typeof operationId!=='string' || !operationId) fail('journal_key');
-      const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison','protectionScope'];
+      const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','error','completed_outbox','archived_outbox','comparison','protectionScope','wiki_source_snapshot'];
       if(!value || Object.keys(value).some(k=>!allowed.includes(k)) || !Array.isArray(value.base?.inventory_revision_ids)
         || !['revisions','outbox','receipts'].every(k=>Array.isArray(value[k]))) fail('journal_shape');
       if(value.protectionScope){P().validateScope(value.protectionScope);if(!same(value.protectionScope,scope))fail('journal_scope');}
+      if(Object.hasOwn(value,'wiki_source_snapshot')){
+        if(!globalThis.NowNoteWikiSources)fail('journal_shape');
+        await globalThis.NowNoteWikiSources.inspect(value,scope);active(ctx,scope);
+      }
       const check=note=>{
         Q().validateSnapshot({schema_version:1,note});
         if(note.owner_id!==scope.owner || note.local_id!==scope.local_id) fail('journal_scope');
