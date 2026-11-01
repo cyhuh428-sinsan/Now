@@ -10802,6 +10802,7 @@ function applyWebSession(session) {
     ownerId: normalizeOwnerId(session.ownerId),
     deviceId: session.deviceId || server.deviceId || "web-client",
   };
+  invalidateNoteProtectionSupport(server,state.settings.server);
   persistSettings();
   renderSettings();
 }
@@ -11242,8 +11243,14 @@ let protectionBootstrapScopes = [];
 let noteProtectionSupport = null;
 let noteProtectionSupportGeneration = 0;
 
+function invalidateNoteProtectionSupport(previous,next) {
+  const keys=["mode","url","ownerId","deviceId","token","userToken","webSessionToken"];
+  if(previous&&next&&!keys.some(key=>(previous[key]??"")!==(next[key]??"")))return;
+  noteProtectionSupport=null;noteProtectionSupportGeneration++;
+}
+
 function noteProtectionSupportBinding(ctx=noteHistoryContext()) {
-  return JSON.stringify([String(ctx.url||"").replace(/\/+$/,""),ctx.owner||"",ctx.device||"",ctx.auth||""]);
+  return JSON.stringify([String(ctx.url||"").replace(/\/+$/,""),ctx.owner||"",ctx.device||"",ctx.auth||"",ctx.headers?.Authorization||""]);
 }
 
 function noteProtectionMutationsEnabled() {
@@ -11317,7 +11324,7 @@ function protectionStorageAdapters() {
     { name: "memory:data", kind: "data", ephemeral: true, read: async () => structuredClone(state.data),
       async cas(expected,next) { if (JSON.stringify(state.data) !== JSON.stringify(expected)) throw new Error("화면 자료가 변경되었습니다."); state.data = structuredClone(next); } },
     { name: "memory:settings", kind: "settings", ephemeral: true, read: async () => structuredClone(state.settings),
-      async cas(expected,next) { if (JSON.stringify(state.settings) !== JSON.stringify(expected)) throw new Error("설정 자료가 변경되었습니다."); state.settings = structuredClone(next); } },
+      async cas(expected,next) { if (JSON.stringify(state.settings) !== JSON.stringify(expected)) throw new Error("설정 자료가 변경되었습니다."); invalidateNoteProtectionSupport(state.settings.server,next?.server);state.settings = structuredClone(next); } },
     storageAdapter(STORAGE_KEY,"data"), storageAdapter(SETTINGS_KEY,"settings"), storageAdapter(LIBRARY_STORAGE_KEY,"library"),
   ];
   if (isDesktopClient()) for (const key of DESKTOP_STORAGE_KEYS) {
@@ -12352,7 +12359,7 @@ async function initializeNoteHistory() {
     },
   });
   noteHistoryController = {
-    lock() { noteProtectionSupport=null;noteProtectionSupportGeneration++;noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
+    lock() { invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
@@ -15067,7 +15074,9 @@ async function resetViewSettings() {
   if (!(await confirmAction(t("settings.resetConfirm")))) {
     return;
   }
+  const previousServer=state.settings.server;
   state.settings = defaultSettings();
+  invalidateNoteProtectionSupport(previousServer,state.settings.server);
   persistSettings();
   renderSettings();
   applySettings();
@@ -15207,6 +15216,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved"), messag
       lastMessageKey: messageKey,
       lastMessageParams: messageParams,
     };
+    invalidateNoteProtectionSupport(previous,state.settings.server);
     persistSettings();
     renderServerSettings();
     return;
@@ -15241,6 +15251,7 @@ function saveServerSettingsFromForm(message = t("settings.server.saved"), messag
     lastMessageKey: messageKey,
     lastMessageParams: messageParams,
   };
+  invalidateNoteProtectionSupport(previous,state.settings.server);
   persistSettings();
   renderServerSettings();
 }
@@ -25461,7 +25472,9 @@ async function loadSettings() {
   if (!raw) return;
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
+    const previousServer=state.settings.server;
     state.settings = normalizeSettings(parsed);
+    invalidateNoteProtectionSupport(previousServer,state.settings.server);
     persistSettings();
   } catch {
     clearStorage(SETTINGS_KEY);
@@ -26267,7 +26280,9 @@ function importData(event) {
       state.data.snapshots = preservedSnapshots;
       state.data.importReports = preservedReports;
       if (imported.settings) {
+        const previousServer=state.settings.server;
         state.settings = normalizeSettings(imported.settings);
+        invalidateNoteProtectionSupport(previousServer,state.settings.server);
         persistSettings();
         renderSettings();
         applySettings();
