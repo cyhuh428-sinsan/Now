@@ -51,7 +51,9 @@ ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_local_CAS_failure'};}});
 ipcMain.handle('nownote:desktop-store-info',()=>({path:storeFile,version:1,keys:Object.keys(readStoreFile(storeFile).store.values)}));
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
-const persistEvidence=evidence=>{const m=JSON.parse(fs.readFileSync(config.manifestFile,'utf8'));m.clientEvidence ||= [];m.clientEvidence.push(evidence);fs.writeFileSync(config.manifestFile,JSON.stringify(m,null,2));};
+const evidenceRecorder=require('./http_qa_evidence.cjs').createEvidenceRecorder(config);
+const persistEvidence=evidenceRecorder.record;
+function exit(code){try{evidenceRecorder.flush();}catch{code=1;}app.exit(code);}
 let blockQaApi=false,syntheticProvider=null,providerAttempts=0;
 async function closeSyntheticProvider(){
   if(syntheticProvider){
@@ -130,13 +132,13 @@ app.whenReady().then(async()=>{
     if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
     fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
     await closeSyntheticProvider();
-    window.destroy();app.exit(0);
+    window.destroy();exit(0);
   }catch(error){
     const messages=[['잠금 또는 보호 대상 변경으로 작업이 취소되었습니다.','protection_view_changed'],['위키 보호 계정·서버가 변경되었습니다.','wiki_scope_changed'],['보호 응답의 인증 상태가 변경되었습니다.','protection_auth_changed']];
     const code=messages.find(([message])=>error.message?.includes(message))?.[1]
       || (/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error');
     const errorType=/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error';
-    persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();app.exit(1);
+    persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();exit(1);
   }
 });
-setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>app.exit(1));},[66,68,69].includes(config.phase)?240000:120000).unref();
+setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>exit(1));},[66,68,69].includes(config.phase)?240000:120000).unref();
