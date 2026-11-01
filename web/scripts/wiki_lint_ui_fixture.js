@@ -58,12 +58,17 @@ globalThis.runWikiLintUiFixture=async function(phase){
   wikiUI.close();const afterSave=P.canonicalJson(noteHistory.export());
   const snapshot=await wikiNotebook.lintSnapshot(),known=snapshot.rows.find(row=>row.source_checks?.length);check(known,'lint_source_fixture');known.source_checks[0].status='changed';
   document.querySelector('#wikiDialog').remove();
-  const ui=mountNowWiki({...wikiNotebook,contextKey:wikiViewKey,notes:()=>[],lintSnapshot:async()=>structuredClone(snapshot)});
+  const ui=mountNowWiki({...wikiNotebook,sources:wikiSources,ingest:wikiIngest,contextKey:wikiViewKey,notes:()=>[],lintSnapshot:async()=>structuredClone(snapshot)});
   await ui.open();await click('lint');await click('lint-run');await wait(()=>document.querySelector('[data-wiki-lint-report]'),'lint_changed_report');
   check(document.querySelector('[data-lint-rule=wiki_lint_source_changed]')?.textContent.includes('검토 필요'),'lint_classified_findings');
   check(button('lint-original'),'lint_finding_original_action');
   await click('lint-original');await wait(()=>document.querySelector('[data-wiki-lint-original]'),'lint_fixed_original');
   check(document.querySelector('[data-wiki-lint-original] pre').textContent.length>0,'lint_fixed_original_content');
+  check(button('lint-integrate'),'lint_finding_relation_action');await click('lint-integrate');
+  await wait(()=>document.querySelector('[name=wiki-relation-target]'),'lint_relation_review');
+  check(P.canonicalJson(noteHistory.export())===afterSave,'lint_relation_navigation_no_write');ui.close();
+  await ui.open();await click('lint');await click('lint-run');await wait(()=>button('lint-reingest'),'lint_reingest_action');await click('lint-reingest');
+  await wait(()=>button('plan-ingest'),'lint_reingest_review');
   check(P.canonicalJson(noteHistory.export())===afterSave,'lint_changed_report_write');ui.close();
   known.document={schema_version:1,scope:structuredClone(snapshot.scope),drafts:[{}],approvals:[]};
   await ui.open();await click('lint');await click('lint-run');await wait(()=>document.querySelector('[data-lint-rule=wiki_lint_document_invalid]'),'lint_damaged_document_report');

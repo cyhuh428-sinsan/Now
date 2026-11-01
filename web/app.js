@@ -9023,10 +9023,26 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
           lintOriginal={hash:ref.content_hash,revision:ref.source_revision_id||ref.draft_id||'local',
             content:proof.kind==='note'?proof.content:proof.draft.sections.map(s=>s.title+'\n'+s.markdown).join('\n\n')};
         }));
-        if(row?.document&&!row.protected&&!row.deleted&&!row.unavailable)item.append(command('lint-open','위키 검토',async token=>{
+        const openRow=async token=>{
           const value=await NowNoteWiki.validateDocument(row.document,lintSnapshot.scope);requireActive(token);
           if(!api.canRead(value))throw Error('위키 접근 상태가 변경되었습니다.');
           lintMode=false;lintSnapshot=null;lintReport=null;doc=structuredClone(value);choose(preferred(doc).id);dirty=false;message='';
+        };
+        if(row?.document&&!row.protected&&!row.deleted&&!row.unavailable){
+          item.append(command('lint-open','위키 검토',openRow));
+          if(api.ingest?.integrate&&api.approvedCatalog&&row.document.approvals?.length)item.append(command('lint-integrate','관계 검토',async token=>{
+            const value=await NowNoteWiki.validateDocument(row.document,lintSnapshot.scope),draft=preferred(value);
+            const catalog=await api.approvedCatalog();requireActive(token);
+            const source=catalog.nodes.find(n=>n.wiki_id===value.wiki_id),targets=catalog.nodes.filter(n=>n.wiki_id!==value.wiki_id);
+            if(!source||source.draft_hash!==draft.draft_hash||source.document_version!==value.document_version||!targets.length)throw Error('현재 승인 판본과 관계 대상을 다시 점검하세요.');
+            await openRow(token);
+            relationEditor={wiki_id:value.wiki_id,draft_id:draft.id,targets,target:targets[0].wiki_id,type:'related_to',confidence:'inferred',from:'',to:'',citations:draft.citations.slice(0,1).map(c=>c.id)};
+          }));
+        }
+        if(api.sources&&api.ingest)item.append(command('lint-reingest','재적재 검토',async token=>{
+          const next=await api.sources.list();requireActive(token);await refreshOperations(token);
+          lintMode=false;lintSnapshot=null;lintReport=null;lintOriginal=null;doc=null;dirty=false;sourceMode=true;trashMode=false;graphCatalog=null;relationEditor=null;
+          sourceRows=next;sourceFiles=[];sourcePreview='';ingestPlan=null;ingestProposal=null;ingestFiles.clear();ingestNotes.clear();message='';
         }));
       }
       report.append(item);
