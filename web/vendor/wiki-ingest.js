@@ -250,44 +250,11 @@
       aliases:copy(parent.aliases||[]),sections:copy(parent.sections),claims:copy(parent.claims||[]),relations:[...copy(parent.relations||[]),copy(plan.integration.relation)],citations};
     return validateIngestProposal({pages:[page]},plan,review);
   }
-  async function planDerivedWiki(query,catalog,{context:current,reservation,protection={nodes:[]}}){
-    const Q=NowWikiQuery,ctx=context(current);await Q.verifySnapshot(query);Q.assertSaveable(query);reservationIds(reservation);
-    check(same(query.scope,scope(ctx))&&reservation.pages.length===1,'wiki_query_binding');
-    const all=await readCatalog(catalog,ctx),rows=query.pages.map(page=>{
-      const row=all.find(r=>r.document.wiki_id===page.wiki_id),draft=row&&approvedDraft(row.document),approval=row?.document.approvals.at(-1);
-      check(row&&row.origin===page.origin&&row.document.document_version===page.document_version&&approval?.id===page.approval_id
-        &&draft?.id===page.draft_id&&draft.draft_hash===page.draft_hash,'wiki_query_source_changed');return row;
-    });
-    check(!all.some(r=>r.document.wiki_id===reservation.pages[0].wiki_id),'wiki_existing_draft_reservation');
-    const inputs=rows.map(wikiInput).sort(order),page={...copy(reservation.pages[0]),action:'create_draft'};
-    const transmission={sources:[],comparison_targets:[],related_wikis:rows.map(r=>({evidence:wikiInput(r),draft:copy(approvedDraft(r.document))})),
-      pages:[{wiki_id:page.wiki_id,draft_id:page.draft_id,action:page.action}]};
-    check(size(transmission)<=524288,'wiki_source_budget');
-    const plan={schema_version:1,kind:'ingest',derived:true,context:ctx,snapshot:{scope:scope(ctx),sources:[]},catalog:copy(rows),reservation:copy(reservation),
-      fingerprints:[],candidates:[],targets:[],pages:[page],inputs,transmission,related_wiki_ids:rows.map(r=>r.document.wiki_id),transmitted_bytes:0,calls:0,
-      serverEligible:Boolean(ctx.url)&&inputs.every(r=>r.origin==='server'),policy:2,protection:copy(protection)};
-    checkPlanInputs(plan);checkProtectionGraph(protection,plan);return {...plan,plan_hash:await P.hashJson(plan)};
-  }
-  async function createDerivedProposal(query,response,plan,review){
-    check(plan.derived===true&&plan.calls===0,'wiki_invalid_derived');
-    await NowWikiQuery.verifySnapshot(query);NowWikiQuery.assertSaveable(query);
-    const answer=await NowWikiQuery.validateWikiAnswer(response,query);
-    check(answer.citations.length>0,'wiki_query_uncited_claim');
-    check(plan.inputs.length===query.pages.length&&query.pages.every(page=>plan.inputs.some(ref=>ref.kind==='wiki'&&ref.wiki_id===page.wiki_id
-      &&ref.draft_id===page.draft_id&&ref.approval_id===page.approval_id&&ref.document_version===page.document_version&&ref.content_hash===page.draft_hash)),'wiki_query_binding');
-    const citations=answer.citations.map(c=>({id:c.id,evidence_id:plan.inputs.find(ref=>ref.wiki_id===c.wiki_id).id,section_id:c.section_id,quote:c.quote}));
-    const statuses={supported:'인용 근거 있음',inferred:'추론',uncertain:'불확실',unsupported:'근거 없음'};
-    const markdown=answer.claims.map(c=>'['+statuses[c.assessment]+'] '+c.statement).concat(answer.uncertainties.map(s=>'[확인 필요] '+s)).join('\n\n');
-    check([...markdown].length<=131072,'wiki_query_budget');
-    const page={wiki_id:plan.pages[0].wiki_id,draft_id:plan.pages[0].draft_id,title:answer.title,topic:query.pages[0].draft.topic,page_type:'reference',summary:'',aliases:[],
-      sections:[{id:'answer',title:answer.title,markdown,citation_ids:citations.map(c=>c.id)}],claims:copy(answer.claims),relations:[],citations};
-    return validateIngestProposal({pages:[page]},plan,review);
-  }
   async function fresh(plan,review){
     const unsigned=copy(plan);delete unsigned.plan_hash;
     check(await P.hashJson(unsigned)===plan.plan_hash,'wiki_plan_hash');
     check(same(context(review.context),plan.context),'wiki_context_changed');
-    await verifySnapshot(review.snapshot,review.context,{allowEmpty:plan.kind==='integrate'||plan.derived===true});await readCatalog(review.catalog,context(review.context));
+    await verifySnapshot(review.snapshot,review.context,{allowEmpty:plan.kind==='integrate'});await readCatalog(review.catalog,context(review.context));
     check(same(review.snapshot,plan.snapshot),'wiki_input_changed');
     if(plan.policy!==2){check(same(review.catalog,plan.catalog),'wiki_input_changed');return;}
     await readCatalog(plan.catalog,plan.context);checkPlanInputs(plan);
@@ -303,7 +270,7 @@
     checkProtectionGraph(review.protection||plan.protection,plan);
   }
   async function validateIngestProposal(input,plan,review){
-    await fresh(plan,review);check(plan.calls===1||(plan.kind==='integrate'||plan.derived===true)&&plan.calls===0,'wiki_unchanged');
+    await fresh(plan,review);check(plan.calls===1||plan.kind==='integrate'&&plan.calls===0,'wiki_unchanged');
     const value=typeof input==='string'?P.parseJson(input):copy(input);exact(value,['pages']);list(value.pages,10,1);
     unique(value.pages.map(p=>p.wiki_id));const documents=[];
     if(plan.policy===2)check(value.pages.length===plan.pages.length,'wiki_incomplete_pages');
@@ -480,5 +447,5 @@
     return {dependencies:[...notes.values()].sort((a,b)=>compare(a.local_id,b.local_id)),
       wiki_dependencies:[...wikis.entries()].sort((a,b)=>compare(a[0],b[0])).map(([,value])=>value),requiresLiveProtectionCheck:true};
   }
-  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,planIntegration,createIntegrationProposal,planDerivedWiki,createDerivedProposal,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,verifyCarriedRelation,dependencyUnion});
+  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,planIntegration,createIntegrationProposal,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,verifyCarriedRelation,dependencyUnion});
 })();

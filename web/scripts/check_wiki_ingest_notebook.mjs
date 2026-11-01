@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-query','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-evidence','wiki-ingest-notebook']){
+for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-evidence','wiki-ingest-notebook']){
   try{vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);}
   catch(e){if(e.code==='ENOENT'&&name==='wiki-ingest-notebook')continue;throw e;}
 }
@@ -127,7 +127,6 @@ api.readOperations=()=>book.operations();
 assert.equal(typeof ordinary.approvedCatalog,'function','verified notebook must expose an ephemeral approved catalog');
 const catalogWrites=writes,approvedCatalog=await ordinary.approvedCatalog();
 assert.equal(approvedCatalog.nodes.length,2);assert.equal(writes,catalogWrites,'catalog reads do not persist an index');
-assert.ok(approvedCatalog.nodes.every(n=>n.origin==='local'&&n.protected===false),'Query needs verified local/server provenance, not a guessed upload origin');
 assert.ok(approvedCatalog.nodes.find(n=>n.wiki_id===beta.wiki_id).stale,'catalog preserves changed comparison status');
 const carryText=combined.plan.snapshot.sources[0].content+'\nAdditional exact copy.';
 await api.sources.captureFiles([{name:combined.plan.snapshot.sources[0].title,arrayBuffer:async()=>new TextEncoder().encode(carryText).buffer}]);
@@ -204,20 +203,4 @@ const retainedWiki=await ordinary.readEvidence(oldWikiRef);
 assert.equal(retainedWiki.draft.id,oldWikiRef.draft_id);assert.equal(retainedWiki.draft.draft_hash,oldWikiRef.content_hash);
 assert.notEqual(retainedWiki.currentDocument.approvals.at(-1).draft_id,oldWikiRef.draft_id,'the reader does not silently follow latest approval');
 assert.equal(writes,beforeEvidenceWrites,'citation reads do not write a journal or navigation cache');
-assert.equal(typeof book.derive,'function','Query saves must use the durable existing Ingest journal');
-await book.abortLocal(targetPreview.operation_id);
-const queryCatalog=await ordinary.approvedCatalog(),usable=queryCatalog.nodes.find(n=>!n.stale);
-const querySnapshot=await box.NowWikiQuery.selectWikiContext(usable.title,queryCatalog,{wiki_ids:[usable.wiki_id],related_limit:0});
-const p=querySnapshot.pages[0],response={query_hash:querySnapshot.snapshot_hash,title:'Explicit answer',claims:[{id:'a',statement:'Derived finding',assessment:'supported',citation_ids:['c']}],
-  citations:[{id:'c',wiki_id:p.wiki_id,draft_id:p.draft_id,approval_id:p.approval_id,draft_hash:p.draft_hash,document_version:p.document_version,section_id:p.draft.sections[0].id,quote:p.draft.sections[0].markdown}],uncertainties:[]};
-assert.equal(typeof ordinary.readOriginal,'function','Query must open a fixed original revision rather than the current editor');
-const originalRef=box.NowNoteWiki.evidenceOf(p.draft)[0],originalProof=await ordinary.readOriginal(originalRef);
-assert.equal(originalProof.kind,'note');assert.equal(await box.NowNoteProtectionProtocol.sha256(originalProof.content),originalRef.content_hash);
-const beforeDerived=Object.keys(history.entries()).length,callCount=calls,derived=await book.derive(querySnapshot,response,{provider:'fixture',model:'auto'});
-assert.equal(Object.keys(history.entries()).length,beforeDerived,'explicit save planning is not an automatic draft publication');
-const derivedResult=await book.commitLocal(derived),derivedDocument=derivedResult.documents[0].document;
-assert.equal(derivedDocument.approvals.length,0);assert.equal(derivedDocument.drafts[0].evidence_manifest.length,1);assert.equal(calls,callCount);
-const derivedStored=history.view('wiki:'+derivedDocument.wiki_id);assert.ok(derivedStored.localOnly);
-history=makeHistory();book=box.createWikiIngestNotebook(api);
-assert.equal(history.view('wiki:'+derivedDocument.wiki_id).draft.content,box.NowNoteProtectionProtocol.canonicalJson(derivedDocument),'explicit derived draft survives cold restore');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

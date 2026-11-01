@@ -44,9 +44,7 @@ try {
   const libraryUi=process.argv.includes('--library-ui');
   const wikiIntegration=process.argv.includes('--wiki-integration');
   const wikiCitation=process.argv.includes('--wiki-citation-only');
-  const wikiQueryProtected=process.argv.includes('--wiki-query-protected');
-  const wikiQuery=process.argv.includes('--wiki-query')||wikiQueryProtected;
-  const wikiIngestUi=process.argv.includes('--wiki-ingest-ui')||wikiIntegration||wikiCitation||wikiQuery;
+  const wikiIngestUi=process.argv.includes('--wiki-ingest-ui')||wikiIntegration||wikiCitation;
   const publicProtectionGate=process.argv.includes('--public-protection-gate');
   const wikiTrashUi=process.argv.includes('--wiki-trash-ui');
   const wikiProtectionUi=process.argv.includes('--wiki-protection-ui')||wikiTrashUi;
@@ -103,7 +101,7 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of wikiQueryProtected?[56,57,58,59]:wikiQuery?[56,57]:wikiCitation?[54,55]:wikiIntegration?[50,51,52,53]:wikiIngestUi?[50,51]:probe?[0]:libraryUi?[47,48,49]:wikiUi?wikiProtectionUi?[43,44,45,46]:[43,44]:process.argv.includes('--canvas')?[40,41,42]:backupRestore?[10,38,39]:analysisAbsent?[37]:analysisApply?[10,34,35,36]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
+    for(const phase of wikiCitation?[54,55]:wikiIntegration?[50,51,52,53]:wikiIngestUi?[50,51]:probe?[0]:libraryUi?[47,48,49]:wikiUi?wikiProtectionUi?[43,44,45,46]:[43,44]:process.argv.includes('--canvas')?[40,41,42]:backupRestore?[10,38,39]:analysisAbsent?[37]:analysisApply?[10,34,35,36]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=[52,53].includes(phase)?path.join(own,mode+'-wiki-peer'):[5,24].includes(phase)?path.join(own,mode+(phase===24?'-peer':'-fresh')):profile;
