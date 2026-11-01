@@ -133,6 +133,16 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     check(result.status==='ok'&&result.operation_id===manifest.operation_id&&result.manifest_hash===manifest.manifest_hash&&eq(result.manifest,manifest),'상태 응답이 원작업과 다릅니다.');
     const receipt=verifyReceipt(result.receipt,manifest);check(receipt.state===result.state,'상태와 원응답이 다릅니다.');return copy(result);
   }
+  async function readOperation(id,instance){
+    check(uuid(id)&&uuid(instance),'원작업 ID·물리 서버를 확인하세요.');
+    const a=action(),result=await a.get('/api/v1/wiki-operations/'+id);
+    exact(result,['status','operation_id','state','manifest_hash','manifest','receipt']);
+    check(result.status==='ok'&&result.operation_id===id&&result.manifest?.operation_id===id
+      &&result.manifest_hash===result.manifest.manifest_hash,'상태 응답의 원작업이 다릅니다.');
+    await operationAction(result.manifest,instance);a.active();
+    const receipt=verifyReceipt(result.receipt,result.manifest);
+    check(receipt.state===result.state,'상태와 원응답이 다릅니다.');return copy(result);
+  }
   const abort=(manifest,instance)=>send(manifest,instance,'abort',{schema_version:1,owner_id:manifest.owner_id,device_id:manifest.device_id,
     mutation_id:manifest.abort_mutation_id,manifest_hash:manifest.manifest_hash});
   async function commit(manifest,body,instance){
@@ -143,5 +153,5 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       &&await P.hashJson(body.documents[i].document)===manifest.changes[i].result_document_hash,'원 commit 본문·해시가 다릅니다.');
     return send(manifest,instance,'commit',body);
   }
-  return {inspect,pinnedWiki,verifyReceipt,status,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
+  return {inspect,pinnedWiki,verifyReceipt,status,readOperation,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
 }});

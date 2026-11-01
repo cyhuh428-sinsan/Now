@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-evidence','wiki-ingest-notebook'])
+for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-evidence','wiki-ingest-notebook','wiki-graph'])
   vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);
 const P=box.NowNoteProtectionProtocol,instance=webcrypto.randomUUID(),sourceId='server-source',revision=webcrypto.randomUUID();
 const ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic',enabled:true,online:true};
@@ -97,7 +97,8 @@ for(const [id,title,content]of [['selected-comparison',source.title,'Changed exa
 const combined=await book.plan({fileIds:[],noteIds:['selected-comparison','beta-evidence']});
 assert.equal(combined.plan.inputs.filter(r=>r.kind==='wiki').length,1);
 const combinedProposal=await book.generate(combined,{provider:'fixture',model:'comparison',invoke:async()=>JSON.stringify({pages:combined.plan.pages.map((p,i)=>({
-  wiki_id:p.wiki_id,draft_id:p.draft_id,title:combined.plan.snapshot.sources[i].title,topic:combined.plan.snapshot.sources[i].title,page_type:'concept',summary:'Synthetic',aliases:[],claims:[],relations:[],
+  wiki_id:p.wiki_id,draft_id:p.draft_id,title:combined.plan.snapshot.sources[i].title,topic:combined.plan.snapshot.sources[i].title,page_type:'concept',summary:'Synthetic',aliases:[],claims:[],
+  relations:[{id:'r1',from_section_id:'s1',to_ref:{kind:'proposal',operation_id:combined.operation_id,wiki_id:combined.plan.pages[1-i].wiki_id,draft_id:combined.plan.pages[1-i].draft_id,section_id:'s1'},type:'related_to',confidence:'inferred',citation_ids:['c1']}],
   sections:[{id:'s1',title:'Evidence',markdown:'Compared exact evidence.',citation_ids:['c1']}],citations:[{id:'c1',evidence_id:combined.plan.snapshot.sources[i].id,section_id:null,quote:combined.plan.snapshot.sources[i].content}]}))})});
 await book.stageServer(combinedProposal);
 await book.prepareServer(combined.operation_id);
@@ -108,6 +109,15 @@ const beta=combinedProposal.proposal.documents.find(row=>row.wiki_id!==combined.
 const betaDecision=await book.approveLocal(beta.document,beta.document.drafts[0].id);
 await book.prepareServer(betaDecision.operation_id);await book.commitServer(betaDecision.operation_id);await book.applyServer(betaDecision.operation_id);
 assert.equal((await book.plan({fileIds:[],noteIds:['selected-comparison','beta-evidence']})).plan.calls,0,'comparison approval also preserves unchanged fingerprints');
+const alphaProposal=combinedProposal.proposal.documents.find(row=>row.wiki_id!==beta.wiki_id);
+const alphaDecision=await book.approveLocal(alphaProposal.document,alphaProposal.document.drafts.at(-1).id);
+await book.prepareServer(alphaDecision.operation_id);await book.commitServer(alphaDecision.operation_id);await book.applyServer(alphaDecision.operation_id);
+ctx.device='peer';saved=null;history=createHistory();book=box.createWikiIngestNotebook(api);
+for(const current of notes.values())await history.track(current.snapshot.note,current);
+api.readOperations=async()=>[];
+const graphWrites=writes,recoveredGraph=await notebook.approvedCatalog();
+assert.equal(recoveredGraph.nodes.length,2);assert.equal(recoveredGraph.edges.length,2,'new device resolves original server operation, without a local operation journal');
+assert.equal(writes,graphWrites,'operation discovery never stores a second graph index');
 if(process.argv[2]){
   const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),code=`
 import json, sys

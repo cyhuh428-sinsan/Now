@@ -23,17 +23,16 @@
     async function proposalBinding(relation,source,target){
       const ref=relation.to_ref;
       for(const operation of operations){
-        if(operation?.operation_id!==ref.operation_id||operation.action!=='ingest'||operation.state!=='committed'
-          ||!same(operation.scope&&{url:operation.scope.url,owner:operation.scope.owner},scope(context))
-          ||operation.reservation?.operation_id!==operation.operation_id)continue;
+        if(operation?.operation_id!==ref.operation_id||!['ingest','integrate'].includes(operation.action)||operation.state!=='committed'
+          ||!same(operation.scope&&{url:operation.scope.url,owner:operation.scope.owner},scope(context)))continue;
         const binds=node=>operation.documents?.some(d=>d.wiki_id===node.wiki_id&&d.draft_id===node.draft_id&&d.draft_hash===node.draft_hash)
           &&operation.reservation.pages?.some(p=>p.wiki_id===node.wiki_id&&p.draft_id===node.draft_id&&p.generation_id===node.draft.generation_id);
-        if(!binds(source)||!binds(target))continue;
-        if(operation.remote){
-          const manifest=operation.remote.manifest,unsigned=copy(manifest);delete unsigned.manifest_hash;
+        const manifest=operation.manifest||operation.remote?.manifest;
+        if(manifest){
+          const unsigned=copy(manifest);delete unsigned.manifest_hash;
           if(manifest.operation_id!==operation.operation_id||manifest.owner_id!==context.owner||await P.hashJson(unsigned)!==manifest.manifest_hash)continue;
           if(![source,target].every(node=>manifest.draft_bindings?.some(b=>b.wiki_id===node.wiki_id&&b.draft_id===node.draft_id&&b.draft_hash===node.draft_hash)))continue;
-        }
+        }else if(operation.reservation?.operation_id!==operation.operation_id||!binds(source)||!binds(target))continue;
         return true;
       }return false;
     }

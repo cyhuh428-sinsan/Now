@@ -7000,7 +7000,23 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       if(!draft||row.deleted||row.protected||row.unavailable||row.pending||row.lifecycle?.pending){verified.push({...row,available:false});continue;}
       const status=await sourceStatus(draft,row.document);active();verified.push({...row,...status});
     }
-    const operations=await api.readOperations?.()||[];active();
+    const operations=copy(await api.readOperations?.()||[]);active();
+    const known=new Set(operations.map(row=>row.operation_id));
+    for(const row of verified){
+      if(!row.available||!row.document)continue;
+      const document=row.document,local='wiki:'+document.wiki_id,item=a.h.view(local);
+      if(item?.localOnly!==false||!api.server?.readOperation)continue;
+      const approval=document.approvals.at(-1),draft=document.drafts.find(d=>d.id===approval?.draft_id);
+      const ids=[...new Set((draft?.relations||[]).filter(r=>r.to_ref.kind==='proposal').map(r=>r.to_ref.operation_id))].filter(id=>!known.has(id));
+      if(!ids.length)continue;
+      try{
+        const proof=await api.server.inspect(local,{content:P.canonicalJson(document),revisionId:item.base.head_revision_id,headVersion:item.base.head_version},{policy:1});active();
+        for(const id of ids){
+          known.add(id);const result=await api.server.readOperation(id,proof.instance);active();
+          if(result.state==='committed')operations.push({operation_id:id,action:result.manifest.kind,state:result.state,scope:scope(a.ctx),manifest:result.manifest});
+        }
+      }catch{active();}
+    }
     const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations});active();return catalog;
   }
   return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
@@ -7144,6 +7160,16 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     check(result.status==='ok'&&result.operation_id===manifest.operation_id&&result.manifest_hash===manifest.manifest_hash&&eq(result.manifest,manifest),'상태 응답이 원작업과 다릅니다.');
     const receipt=verifyReceipt(result.receipt,manifest);check(receipt.state===result.state,'상태와 원응답이 다릅니다.');return copy(result);
   }
+  async function readOperation(id,instance){
+    check(uuid(id)&&uuid(instance),'원작업 ID·물리 서버를 확인하세요.');
+    const a=action(),result=await a.get('/api/v1/wiki-operations/'+id);
+    exact(result,['status','operation_id','state','manifest_hash','manifest','receipt']);
+    check(result.status==='ok'&&result.operation_id===id&&result.manifest?.operation_id===id
+      &&result.manifest_hash===result.manifest.manifest_hash,'상태 응답의 원작업이 다릅니다.');
+    await operationAction(result.manifest,instance);a.active();
+    const receipt=verifyReceipt(result.receipt,result.manifest);
+    check(receipt.state===result.state,'상태와 원응답이 다릅니다.');return copy(result);
+  }
   const abort=(manifest,instance)=>send(manifest,instance,'abort',{schema_version:1,owner_id:manifest.owner_id,device_id:manifest.device_id,
     mutation_id:manifest.abort_mutation_id,manifest_hash:manifest.manifest_hash});
   async function commit(manifest,body,instance){
@@ -7154,7 +7180,7 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       &&await P.hashJson(body.documents[i].document)===manifest.changes[i].result_document_hash,'원 commit 본문·해시가 다릅니다.');
     return send(manifest,instance,'commit',body);
   }
-  return {inspect,pinnedWiki,verifyReceipt,status,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
+  return {inspect,pinnedWiki,verifyReceipt,status,readOperation,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
 }});
 
 ;
@@ -7772,17 +7798,16 @@ globalThis.createWikiIngestNotebook.validateRestore=function(current,incoming){
     async function proposalBinding(relation,source,target){
       const ref=relation.to_ref;
       for(const operation of operations){
-        if(operation?.operation_id!==ref.operation_id||operation.action!=='ingest'||operation.state!=='committed'
-          ||!same(operation.scope&&{url:operation.scope.url,owner:operation.scope.owner},scope(context))
-          ||operation.reservation?.operation_id!==operation.operation_id)continue;
+        if(operation?.operation_id!==ref.operation_id||!['ingest','integrate'].includes(operation.action)||operation.state!=='committed'
+          ||!same(operation.scope&&{url:operation.scope.url,owner:operation.scope.owner},scope(context)))continue;
         const binds=node=>operation.documents?.some(d=>d.wiki_id===node.wiki_id&&d.draft_id===node.draft_id&&d.draft_hash===node.draft_hash)
           &&operation.reservation.pages?.some(p=>p.wiki_id===node.wiki_id&&p.draft_id===node.draft_id&&p.generation_id===node.draft.generation_id);
-        if(!binds(source)||!binds(target))continue;
-        if(operation.remote){
-          const manifest=operation.remote.manifest,unsigned=copy(manifest);delete unsigned.manifest_hash;
+        const manifest=operation.manifest||operation.remote?.manifest;
+        if(manifest){
+          const unsigned=copy(manifest);delete unsigned.manifest_hash;
           if(manifest.operation_id!==operation.operation_id||manifest.owner_id!==context.owner||await P.hashJson(unsigned)!==manifest.manifest_hash)continue;
           if(![source,target].every(node=>manifest.draft_bindings?.some(b=>b.wiki_id===node.wiki_id&&b.draft_id===node.draft_id&&b.draft_hash===node.draft_hash)))continue;
-        }
+        }else if(operation.reservation?.operation_id!==operation.operation_id||!binds(source)||!binds(target))continue;
         return true;
       }return false;
     }

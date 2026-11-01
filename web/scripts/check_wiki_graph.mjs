@@ -21,6 +21,11 @@ const build=(docs=documents,operations=[operation])=>G.buildApprovedWikiCatalog(
 assert.equal((await build(originals)).nodes.length,0,'draft-only pages never become active nodes');
 assert.equal((await build([documents[0],originals[1]])).edges.length,0,'both endpoint drafts must be approved');
 const catalog=await build();assert.equal(catalog.nodes.length,2);assert.equal(catalog.edges.length,2);
+const requests=await I.buildOperationRequests(proposal,{context:ctx,snapshot,catalog:[],device:ctx.device,connection:{provider:'fixture',model:'synthetic'},generatedAt:'2026-11-01T00:00:00Z'});
+const remoteOperation={operation_id:reservation.operation_id,action:'ingest',state:'committed',scope:{url:ctx.url,owner:ctx.owner},manifest:requests.prepare};
+assert.equal((await build(documents,[remoteOperation])).edges.length,2,'verified server manifest recovers proposal bindings on a new device');
+const damagedRemote=clone(remoteOperation);damagedRemote.manifest.draft_bindings[0].draft_hash='a'.repeat(64);
+assert.equal((await build(documents,[damagedRemote])).edges.length,0,'changed remote manifest does not become a graph binding');
 assert.deepEqual(Array.from(catalog.edges,e=>e.confidence).sort(),['explicit','inferred']);
 assert.equal(G.planWikiIntegration(documents[0].wiki_id,catalog).incoming.length,1);
 const projected=G.projectWikiGraph(catalog);assert.equal(projected.length,4);
@@ -35,6 +40,21 @@ assert.equal(hidden.nodes.length,1);assert.equal(hidden.edges.length,0);assert.o
 assert.equal((await G.buildApprovedWikiCatalog(documents.map(row),{...ctx,owner:'other'},{operations:[operation]})).nodes.length,0);
 const pending=clone(documents[0]),next=clone(pending.drafts[0]);next.id=id(82);next.generation_id=id(83);next.base_approved_revision_id=pending.approvals[0].id;next.title='UNAPPROVED_LABEL';delete next.draft_hash;next.draft_hash=await P.hashJson(next);pending.drafts.push(next);pending.document_version++;
 const still=await build([pending,documents[1]]);assert.equal(still.nodes[0].title,'Alpha');assert.ok(!JSON.stringify(still).includes('UNAPPROVED_LABEL'));
+async function withApprovedRelation(section='s1',target=documents[1].wiki_id){
+  const source=clone(documents[0]),draft=source.drafts[0],approved=documents[1].approvals[0];
+  draft.relations[0].to_ref={kind:'approved',wiki_id:target,draft_id:approved.draft_id,approval_id:approved.id,draft_hash:approved.draft_hash,section_id:section};
+  delete draft.draft_hash;draft.draft_hash=await P.hashJson(draft);source.approvals[0].draft_hash=draft.draft_hash;return source;
+}
+const linked=await withApprovedRelation();assert.equal((await build([linked,documents[1]])).edges.length,1);
+const advanced=clone(documents[1]),newDraft=clone(advanced.drafts[0]);
+newDraft.id=id(84);newDraft.generation_id=id(85);newDraft.base_approved_revision_id=advanced.approvals[0].id;newDraft.title='Beta updated';newDraft.relations=[];
+delete newDraft.draft_hash;newDraft.draft_hash=await P.hashJson(newDraft);advanced.drafts.push(newDraft);advanced.document_version++;
+const advancedApproved=await approve(advanced,86),oldEdge=await build([linked,advancedApproved]);
+assert.equal(oldEdge.edges.length,1);assert.equal(oldEdge.edges[0].stale,true);
+assert.equal(oldEdge.edges[0].target_draft_id,documents[1].drafts[0].id,'approved endpoint never silently follows the newest draft');
+const missingSection=await build([await withApprovedRelation('missing'),documents[1]]);assert.equal(missingSection.edges.length,0);
+assert.equal(G.findWikiPath(missingSection,documents[0].wiki_id,documents[1].wiki_id).found,false);
+assert.equal((await build([await withApprovedRelation('s1',id(666)),documents[1]])).edges.length,0,'unknown endpoint never invents a node');
 assert.equal(P.canonicalJson(documents),P.canonicalJson(await Promise.all(documents.map(doc=>W.validateDocument(doc,scope)))),'read-only projection preserves documents');
 try{vm.runInContext(await fs.readFile(new URL('../vendor/wiki-graph-ui.js',import.meta.url),'utf8'),box);}catch(error){if(error.code!=='ENOENT')throw error;}
 assert.equal(typeof box.mountWikiGraph,'function','graph view must have an explicit teardown lifecycle');

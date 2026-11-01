@@ -56,4 +56,23 @@ const remote=box.NowWikiServerAccess.create({...api,request:async(path,method)=>
 }});key='alice';
 await assert.rejects(()=>remote.abort(manifest,instance),/response lost/);assert.equal(writes,1);assert.equal(statusReads,0,'no automatic status or repeated write');
 assert.equal((await remote.status(manifest,instance)).receipt.state,'committed');assert.equal(writes,1);assert.equal(statusReads,1,'explicit status returns original receipt even after source deletion');
+assert.equal(typeof remote.readOperation,'function','a new device must verify an existing operation without a local manifest');
+const discovered=await remote.readOperation(manifest.operation_id,instance);
+assert.equal(discovered.receipt.state,'committed');assert.equal(discovered.manifest.manifest_hash,manifest.manifest_hash);
+assert.equal(writes,1);assert.equal(statusReads,2,'operation discovery is one explicit GET, never a write');
+await assert.rejects(()=>remote.readOperation('unknown',instance));
+for(const mode of ['owner','hash','receipt','instance','late']){
+  key='alice';const reader=box.NowWikiServerAccess.create({...api,request:async(path,method)=>{
+    assert.equal(method,'GET');
+    if(path==='/api/v2/notes/crypto-transitions/status')return {server_instance_id:mode==='instance'?webcrypto.randomUUID():instance,preparation_only:true};
+    const value=structuredClone({status:'ok',operation_id:manifest.operation_id,state:'committed',manifest_hash:manifest.manifest_hash,manifest,receipt});
+    if(mode==='owner')value.manifest.owner_id='other';
+    if(mode==='hash')value.manifest.inputs[0].content_hash='f'.repeat(64);
+    if(mode==='receipt')value.receipt.pages=[];
+    if(mode==='late')key='other';
+    return value;
+  }});
+  await assert.rejects(()=>reader.readOperation(manifest.operation_id,instance),undefined,'discovery rejects '+mode);
+}
+key='alice';
 console.log('Wiki server access: fresh capabilities/instance, all revision pages, old cipher/fence/epoch, changed and late contexts PASS (synthetic HTTP only)');

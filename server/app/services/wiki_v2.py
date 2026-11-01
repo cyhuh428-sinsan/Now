@@ -126,12 +126,70 @@ def validate_evidence(db, owner, refs, *, current=False, stack=(), visited=None,
     return leaves, wiki_refs, bodies
 
 
+def _carried_relation_target(db, owner, value, draft, relation, previous, cache):
+    from app.services import wiki_operations
+    target = relation.to_ref
+    approved = previous.approvals[-1] if previous and previous.approvals else None
+    parent = next((d for d in previous.drafts if approved and d.id == approved.draft_id), None) if previous else None
+    if (parent is None or draft.base_approved_revision_id != approved.id
+            or not any(r.model_dump() == relation.model_dump() for r in getattr(parent, "relations", []))):
+        error("wiki_relation_target")
+    key = ("operation", target.operation_id)
+    if key not in cache:
+        cache[key] = wiki_operations.get_operation(db, owner, target.operation_id)
+    original = cache[key]
+    if original["state"] != "committed" or original["manifest"]["owner_id"] != owner:
+        error("wiki_relation_target")
+    manifest = original["manifest"]
+    retained = {}
+    for wiki in (value.wiki_id, target.wiki_id):
+        page = next((p for p in original["receipt"]["pages"] if p["wiki_id"] == wiki), None)
+        change = next((c for c in manifest["changes"] if c["wiki_id"] == wiki), None)
+        if page is None or change is None:
+            error("wiki_relation_target")
+        revision = db.get(NoteRevision, page["result_revision_id"])
+        if (revision is None or revision.owner_id != owner or revision.local_id != "wiki:"+wiki
+                or revision.representation_kind != "snapshot_v1" or revision.representation_epoch != 0):
+            error("wiki_relation_target")
+        try:
+            document = parse(json.loads(revision.snapshot_json)["note"]["content"], owner, wiki)
+        except (ValueError, KeyError, TypeError):
+            error("wiki_relation_target")
+        ident = target.draft_id if wiki == target.wiki_id else document.drafts[-1].id
+        binding = next((b for b in manifest["draft_bindings"] if b["wiki_id"] == wiki and b["draft_id"] == ident), None)
+        chosen = next((d for d in document.drafts if d.id == ident), None)
+        if (digest(document.model_dump()) != change["result_document_hash"] or chosen is None
+                or binding is None or chosen.draft_hash != binding["draft_hash"] or document.scope != value.scope):
+            error("wiki_relation_target")
+        retained[wiki] = chosen
+    source = retained[value.wiki_id]
+    if (not any(a.draft_id == source.id and a.draft_hash == source.draft_hash for a in previous.approvals)
+            or not any(r.model_dump() == relation.model_dump() for r in getattr(source, "relations", []))):
+        error("wiki_relation_target")
+    index = db.get(LibraryResource, (owner, "wikis", target.wiki_id))
+    if index is None or index.deleted_at:
+        error("wiki_relation_target")
+    head = plain(db, owner, "wiki:"+target.wiki_id)
+    current = db.get(NoteRevision, head.head_revision_id)
+    if current is None:
+        error("wiki_relation_target")
+    try:
+        document = parse(json.loads(current.snapshot_json)["note"]["content"], owner, target.wiki_id)
+    except (ValueError, KeyError, TypeError):
+        error("wiki_relation_target")
+    chosen = next((d for d in document.drafts if d.id == target.draft_id), None)
+    if chosen is None or chosen.draft_hash != retained[target.wiki_id].draft_hash or chosen.id != retained[target.wiki_id].id:
+        error("wiki_relation_target")
+    return chosen
+
+
 def validate_document(db, owner, value, operation, documents, previous=None, *, visited=None, memo=None):
     leaves, wiki_refs = set(), {}
     visited=set() if visited is None else visited
     memo={} if memo is None else memo
     bindings = {(b.wiki_id, b.draft_id): b.draft_hash for b in operation.draft_bindings}
     old_ids={d.id for d in previous.drafts} if previous else set()
+    relation_records = {}
     for draft in value.drafts:
         refs = evidence(draft)
         found, inherited, bodies = validate_evidence(db, owner, refs,visited=visited,memo=memo,policy=operation.schema_version)
@@ -152,10 +210,13 @@ def validate_document(db, owner, value, operation, documents, previous=None, *, 
             if target.wiki_id == value.wiki_id:
                 error("wiki_self_relation")
             if target.kind == "proposal":
-                other = documents.get(target.wiki_id)
-                chosen = next((d for d in other.drafts if d.id == target.draft_id), None) if other else None
-                if target.operation_id != operation.operation_id or chosen is None or bindings.get((target.wiki_id, target.draft_id)) != chosen.draft_hash:
-                    error("wiki_relation_target")
+                if target.operation_id != operation.operation_id:
+                    chosen = _carried_relation_target(db, owner, value, draft, relation, previous, relation_records)
+                else:
+                    other = documents.get(target.wiki_id)
+                    chosen = next((d for d in other.drafts if d.id == target.draft_id), None) if other else None
+                    if chosen is None or bindings.get((target.wiki_id, target.draft_id)) != chosen.draft_hash:
+                        error("wiki_relation_target")
             else:
                 index = db.get(LibraryResource, (owner, "wikis", target.wiki_id))
                 if index is None or index.deleted_at:

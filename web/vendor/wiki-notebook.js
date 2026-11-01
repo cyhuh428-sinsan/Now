@@ -290,7 +290,23 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       if(!draft||row.deleted||row.protected||row.unavailable||row.pending||row.lifecycle?.pending){verified.push({...row,available:false});continue;}
       const status=await sourceStatus(draft,row.document);active();verified.push({...row,...status});
     }
-    const operations=await api.readOperations?.()||[];active();
+    const operations=copy(await api.readOperations?.()||[]);active();
+    const known=new Set(operations.map(row=>row.operation_id));
+    for(const row of verified){
+      if(!row.available||!row.document)continue;
+      const document=row.document,local='wiki:'+document.wiki_id,item=a.h.view(local);
+      if(item?.localOnly!==false||!api.server?.readOperation)continue;
+      const approval=document.approvals.at(-1),draft=document.drafts.find(d=>d.id===approval?.draft_id);
+      const ids=[...new Set((draft?.relations||[]).filter(r=>r.to_ref.kind==='proposal').map(r=>r.to_ref.operation_id))].filter(id=>!known.has(id));
+      if(!ids.length)continue;
+      try{
+        const proof=await api.server.inspect(local,{content:P.canonicalJson(document),revisionId:item.base.head_revision_id,headVersion:item.base.head_version},{policy:1});active();
+        for(const id of ids){
+          known.add(id);const result=await api.server.readOperation(id,proof.instance);active();
+          if(result.state==='committed')operations.push({operation_id:id,action:result.manifest.kind,state:result.state,scope:scope(a.ctx),manifest:result.manifest});
+        }
+      }catch{active();}
+    }
     const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations});active();return catalog;
   }
   return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
