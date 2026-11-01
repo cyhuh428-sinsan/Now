@@ -506,7 +506,7 @@ async function checkBlockReferences(page) {
     await evaluate(page,'document.querySelector("#noteBlockReferenceDialog").close()');
   }
   await evaluate(page,'persist();persistSettings();(async()=>{await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()');
-  assert(await evaluate(page,'Boolean(noteHistory.view("block-destination")) && (isDesktopClient() || Boolean(JSON.parse(localStorage.getItem(NOTE_HISTORY_KEY))?.contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.["block-destination"]))'),"Block journal must be present before closing");
+  assert(await evaluate(page,'(async()=>Boolean(noteHistory.view("block-destination")) && Boolean((isDesktopClient()?await window.nownoteDesktop.storage.read(NOTE_HISTORY_KEY):JSON.parse(await readStorage(NOTE_HISTORY_KEY)))?.contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.["block-destination"]))()'),"Block journal must be committed before closing");
   console.log("Source blocks actual UI: live update, source link, raw preservation, group/lock/delete/cycle and export isolation PASS");
 }
 
@@ -629,10 +629,27 @@ async function runOnce() {
       await checkCanvasAccountUI(page);
       return;
     }
-    if(process.argv.includes("--blocks")){
-      await checkBlockReferences(page);
+    if(process.argv.includes("--blocks")||process.argv.includes("--history-storage")){
+      const historyStorage=process.argv.includes("--history-storage");
+      if(historyStorage){
+        assert(!desktop,"Browser history storage QA is Web-only");
+        const {seedBrowserHistoryBeforeMigration,verifyBrowserHistoryStorage}=await import("./browser_history_storage_fixture.mjs");
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Browser history adapter");
+        await seedBrowserHistoryBeforeMigration({evaluate:expression=>evaluate(page,expression)});
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA legacy seed normal close timeout");})]);
+        browserClient.close();
+        browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1"},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+        browser.stderr.on("data",()=>{});
+        const seeded=await waitForPageTarget(debugPort,webPort);
+        browserClient=await CdpClient.connect(seeded.webSocketDebuggerUrl);
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Preexisting browser legacy adapter");
+        await verifyBrowserHistoryStorage({evaluate:expression=>evaluate(page,expression)});
+        console.log("Browser history actual IDB: migration, stale CAS, legacy divergence, cipher/other-account preservation and transaction abort PASS");
+      }else await checkBlockReferences(page);
       const forceKill=desktop||process.argv.includes("--force-kill");
-      console.log("Block QA process restart: "+(forceKill?"forced":"normal"));
+      console.log((historyStorage?"Browser history":"Block")+" QA process restart: "+(forceKill?"forced":"normal"));
       if(!forceKill){
         const exited=new Promise(resolve=>browser.once("exit",resolve));
         await page.send("Browser.close").catch(()=>{});
@@ -643,6 +660,13 @@ async function runOnce() {
       browser.stderr.on("data",()=>{});
       const reopened=await waitForPageTarget(debugPort,webPort);
       browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      if(historyStorage){
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Cold browser history adapter");
+        const {verifyBrowserHistoryStorageCold}=await import("./browser_history_storage_fixture.mjs");
+        await verifyBrowserHistoryStorageCold({evaluate:expression=>evaluate(page,expression)});
+        console.log("Browser history actual forced cold process: committed cipher journal, retained sealed legacy and other-account copy PASS");
+        return;
+      }
       await waitForCondition(page,'typeof noteHistory!=="undefined" && Boolean(noteHistory?.view("block-destination"))',"Block reference cold journal");
       await evaluate(page,'selectTreeNode("block-destination");setDocumentMode(true)');
       assert(await evaluate(page,'getSelectedTreeNode().content.trim().startsWith("![[nownote:") && elements.markdownPreview.textContent.includes("Copyable")'),"Cold process must restore the live reference, not a copied body");

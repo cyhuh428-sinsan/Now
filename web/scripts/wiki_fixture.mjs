@@ -176,6 +176,8 @@ async function wikiProtectionRead(evaluate,capture){
 }
 
 export async function verifyWikiProtectionFlow({evaluate,capture}){
+  const {seedBrowserLegacyHistory}=await import('./browser_history_storage_fixture.mjs');
+  await seedBrowserLegacyHistory({evaluate});
   await evaluate('noteProtectionInternalEnabled=true;globalThis.wikiProtectionNetwork=0;globalThis.wikiProtectionFetch=fetch;fetch=async()=>{wikiProtectionNetwork++;throw Error("synthetic no network");};document.querySelector("#wikiDialog [data-wiki-action=protect]").click()');
   await wikiUntil(evaluate,'Boolean(document.querySelector("#noteProtectionDialog[open] [data-action=conversion]"))','Wiki protection entry');
   await wikiUntil(evaluate,'document.querySelectorAll("#noteProtectionDialog .protection-scope dt").length===4','Wiki protection identity labels');
