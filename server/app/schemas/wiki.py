@@ -6,6 +6,12 @@ from uuid import UUID
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from app.schemas.library import Mutation
+
+
+class WikiLifecycle(Mutation):
+    device_id: str = Field(min_length=1, max_length=120)
+
 
 def canonical(value):
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), allow_nan=False)

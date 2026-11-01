@@ -12,7 +12,7 @@ from app.models.note_history import NoteHead, NoteRevision
 from app.models.note_v2 import NoteMutation, NoteOfflineBranch
 from app.schemas.wiki import WikiArtifact, WikiLink, canonical
 from app.services import note_v2 as notes
-from app.services.library import resource_payload
+from app.services.library import resource_payload, error as resource_error
 from app.services.note_crypto_fence import error, require_unfenced
 from app.services.note_history import inventories, lock_note_writes
 from app.services.user_devices import require_active_user_device
@@ -220,6 +220,53 @@ def mutate(db, ident, body, operation):
         raise
 
 
+def lifecycle(db, ident, body, *, restoring):
+    """Move only the opaque index; dependency and Note protection ownership never expire."""
+    owner, local = body.owner_id, "wiki:" + ident
+    hashed = hashlib.sha256(canonical({"kind": "wiki_lifecycle", "id": ident,
+        "restoring": restoring, "body": body.model_dump()}).encode()).hexdigest()
+    try:
+        lock_note_writes(db, [owner])
+        require_active_user_device(db, owner_id=owner, device_id=body.device_id)
+        db.scalar(select(UserAccount).where(UserAccount.owner_id == owner).with_for_update())
+        previous = db.get(LibraryMutation, (owner, body.mutation_id))
+        if previous is not None:
+            if previous.request_hash != hashed:
+                error("idempotency_mismatch")
+            result = json.loads(previous.response_json)
+            db.commit()
+            return result
+        if db.get(NoteMutation, (owner, body.mutation_id)) is not None:
+            error("idempotency_mismatch")
+        row = db.get(LibraryResource, (owner, "wikis", ident))
+        if row is None:
+            error("resource_not_found", 404)
+        guard.link(row)
+        if db.get(NoteHead, (owner, local)) is None:
+            error("inconsistent_wiki_artifact")
+        require_unfenced(db, [(owner, local)])
+        if row.version != body.base_version:
+            resource_error("version_conflict", current_version=row.version)
+        if (row.deleted_at is None) == restoring:
+            error("resource_not_deleted" if restoring else "resource_deleted")
+        if restoring:
+            count = db.scalar(select(func.count()).select_from(LibraryResource).where(
+                LibraryResource.owner_id == owner, LibraryResource.kind == "wikis", LibraryResource.deleted_at.is_(None)))
+            if count >= 100:
+                error("resource_limit")
+        row.version += 1
+        row.updated_at = datetime.utcnow()
+        row.deleted_at = None if restoring else row.updated_at
+        result = {"status": "ok", "resource": resource_payload(row), "mutation_id": body.mutation_id}
+        db.add(LibraryMutation(owner_id=owner, mutation_id=body.mutation_id, request_hash=hashed,
+                               response_json=canonical(result)))
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
+
+
 def get(db, owner, ident):
     try:
         lock_note_writes(db, [owner])
@@ -227,10 +274,14 @@ def get(db, owner, ident):
         if row is None:
             error("resource_not_found", 404)
         value = guard.link(row)
-        head, rows, stored = document(db, owner, value.artifact_local_id)
+        if row.deleted_at is not None:
+            head, rows = notes.scope(db, owner, value.artifact_local_id)
+            stored = None
+        else:
+            head, rows, stored = document(db, owner, value.artifact_local_id)
         if head is None:
             error("inconsistent_wiki_artifact")
-        status = {"stale": False, "available": True}
+        status = {"stale": row.deleted_at is not None, "available": row.deleted_at is None}
         if stored:
             try:
                 verify_sources(db, owner, [stored])

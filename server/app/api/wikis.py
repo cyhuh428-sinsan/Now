@@ -7,6 +7,7 @@ from app.api.note_v2 import access
 from app.core.security import require_client_api_access
 from app.models.library import LibraryResource
 from app.schemas.note_v2 import PutNote, ImportBranches
+from app.schemas.wiki import WikiLifecycle
 from app.services.library import resource_payload
 from app.services import wikis as service
 
@@ -31,6 +32,16 @@ def get(wiki_id: UUID, owner_id: str = Query(min_length=1, max_length=80), auth=
 @router.put("/{wiki_id}/current")
 def current(wiki_id: UUID, body: PutNote, auth=Depends(access)):
     return service.mutate(auth(body.owner_id), str(wiki_id), body, "put")
+
+
+@router.post("/{wiki_id}/trash")
+def trash(wiki_id: UUID, body: WikiLifecycle, auth=Depends(access)):
+    return service.lifecycle(auth(body.owner_id), str(wiki_id), body, restoring=False)
+
+
+@router.post("/{wiki_id}/restore")
+def restore(wiki_id: UUID, body: WikiLifecycle, auth=Depends(access)):
+    return service.lifecycle(auth(body.owner_id), str(wiki_id), body, restoring=True)
 
 
 @router.post("/{wiki_id}/revisions/import")
