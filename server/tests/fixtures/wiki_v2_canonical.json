@@ -1,0 +1,18 @@
+{
+  "format": "wiki-canonical-v1",
+  "encoding": "UTF-8",
+  "cases": [
+    {
+      "name": "english-korean-newline-key-order",
+      "value": {"z": "English", "a": "\ud55c\uad6d\uc5b4\n\ub458\uc9f8 \uc904", "items": [2, 1]},
+      "canonical": "{\"a\":\"\ud55c\uad6d\uc5b4\\n\ub458\uc9f8 \uc904\",\"items\":[2,1],\"z\":\"English\"}",
+      "sha256": "c43f5bf21e1f6548804809e8a0852cadfe70dff8eaed235b6f2e16eb473aa4e2"
+    },
+    {
+      "name": "nested-owner-null-newline",
+      "value": {"scope": {"owner": "\ud569\uc131", "url": "https://qa.invalid"}, "text": "line1\nline2", "empty": null},
+      "canonical": "{\"empty\":null,\"scope\":{\"owner\":\"\ud569\uc131\",\"url\":\"https://qa.invalid\"},\"text\":\"line1\\nline2\"}",
+      "sha256": "b6b681044240203a6850ab33fdc65b8feb5e8d824fb946c92b0f69023684c6ec"
+    }
+  ]
+}
