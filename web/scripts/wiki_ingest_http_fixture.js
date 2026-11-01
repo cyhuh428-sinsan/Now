@@ -201,6 +201,8 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
         if(await test()&&pb('refresh')?.disabled===false)return;
         await delay();
       }
+      const status=pd()?.querySelector('.protection-status')?.textContent?.trim()||'';
+      console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'protected_query_wait',code:/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified',open:Boolean(pd()?.open)}));
       throw Error('wiki_ingest_protected_query_'+code);
     }
     let id;
@@ -213,6 +215,12 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     }
     const local='wiki:'+id;await openWikiProtection(id);await protectedWait(()=>pd()?.open,'open');
     if(config.phase===58){
+      const inspect=wikiNotebook.protectionDependencies;
+      wikiNotebook.protectionDependencies=async(...args)=>{
+        try{return await inspect(...args);}catch(error){
+          console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'wiki_protection_preflight',code:/^wiki_[a-z0-9_]+$/.test(error.message)?error.message:'unclassified'}));throw error;
+        }
+      };
       const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
       if(copies.length){pb('confirm').click();await protectedWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
       pb('conversion').click();
