@@ -422,10 +422,12 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     active();if(P.canonicalJson(a.h.export())!==before)throw Error('검사 중 위키 저장 상태가 변경되었습니다. 다시 확인하세요.');
     return {scope:scope(a.ctx),rows:result};
   }
-  async function protectionDependencies(roots,context,localId){
+  async function protectionDependencies(roots,context,localId,{proposalIds=[]}={}){
     const a=action(),before=P.canonicalJson(a.h.export()),documents=[],wikiEvidence=[],historyRoots=[];
     if(P.canonicalJson(scope(a.ctx))!==P.canonicalJson(scope(context)))throw Error('wiki_context_changed');
-    const dependencies=W.sourceProtectionDependencies(roots,context,localId,{documents,wikiEvidence,historyRoots});
+    const allowedProposalIds=new Set(proposalIds);
+    if(allowedProposalIds.size!==proposalIds.length||proposalIds.some(id=>!new RegExp('^wiki-proposal:[0-9a-f-]{36}:'+localId.slice(5)+'$').test(id)))throw Error('wiki_protection_scope');
+    const dependencies=W.sourceProtectionDependencies(roots,context,localId,{documents,wikiEvidence,historyRoots,allowedProposalIds});
     const unique=new Map();
     for(const value of documents){
       const document=await W.validateDocument(value,a.ctx);a.check();unique.set(P.canonicalJson(document),document);

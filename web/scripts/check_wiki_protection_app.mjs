@@ -14,6 +14,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
     raw:{owner_id:ctx.owner,local_id:local},draft:{owner_id:ctx.owner,local_id:local},protectionScope:structuredClone(scope),
   }}}}};
   box.noteProtectionLocalWikiScope=structuredClone(scope);
+  box.attachWikiProtectionGroup=async info=>info;
   box.noteHistoryContext=()=>structuredClone(ctx);box.protectionActionGuard=()=>()=>{};
   box.noteHistory={protectionOperations:()=>({})};
   box.noteProtectionClient={archives:async()=>[{store:'history',path:[local],record:{}}]};

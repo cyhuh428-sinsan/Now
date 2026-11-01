@@ -127,7 +127,7 @@
           &&/^wiki-proposal:[0-9a-f-]{36}:[0-9a-f-]{36}$/.test(value.local_id)&&value.local_id.endsWith(':'+doc.wiki_id)?value.local_id:null;
         if(![1,2].includes(doc.schema_version)||local!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
           throw Error('wiki_protection_format');
-        if(value.source==='wiki-ingest-proposal'&&'wiki:'+doc.wiki_id===localId)throw Error('wiki_proposal_protection_required');
+        if(value.source==='wiki-ingest-proposal'&&'wiki:'+doc.wiki_id===localId&&!options.allowedProposalIds?.has(value.local_id))throw Error('wiki_proposal_protection_required');
         options.documents?.push(doc);
         for(const draft of doc.drafts){
           const manifest=evidenceOf(draft);
@@ -156,7 +156,7 @@
   }
   async function localProtectionScope(context,localId){
     const ctx=scope(context);
-    if(!ctx.owner||!context.device||!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(localId))
+    if(!ctx.owner||!context.device||!/^wiki(?:-proposal:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(localId))
       throw Error('wiki_local_protection_scope');
     // This deterministic local namespace is not a server-instance assertion.
     const digest=await P.sha256('NowNote local wiki protection v1\n'+P.canonicalJson({...ctx,local_id:localId}));

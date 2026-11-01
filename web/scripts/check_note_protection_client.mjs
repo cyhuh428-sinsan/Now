@@ -24,7 +24,9 @@ const server = createServer(async(req,res)=>{
 });
 let child = null;
 try {
-  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(keyGuard?0:8750,'127.0.0.1',resolve);});
+  const requestedPort=keyGuard?0:Number(process.env.NOWNOTE_QA_PORT??8750);
+  assert.ok(Number.isInteger(requestedPort)&&requestedPort>=0&&requestedPort<=65535);
+  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(requestedPort,'127.0.0.1',resolve);});
   const port=server.address().port;
   const require = createRequire(new URL('../../desktop/package.json',import.meta.url));
   const electron = require('electron');

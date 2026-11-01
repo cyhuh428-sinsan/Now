@@ -49,7 +49,7 @@
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
-      return m.scope.local_id === id && m.scope.owner === context().owner && m.scope.url.replace(/\/+$/,'') === String(context().url || '').replace(/\/+$/,'') && m.phase !== 'complete';
+      return (m.scope.local_id === id || globalThis.NowWikiProtectionGroup?.blockedTarget(m)===id) && m.scope.owner === context().owner && m.scope.url.replace(/\/+$/,'') === String(context().url || '').replace(/\/+$/,'') && m.phase !== 'complete';
     });
     const writableNote = id => { if (blocked(id)) throw new Error('보호 전환 적용이 필요합니다. 원본을 보존했습니다.'); };
     const legacyPending = () => context().enabled ? copy(bucket(context())?.legacy_pending || null) : null;

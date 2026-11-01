@@ -7,6 +7,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     <p role="status" aria-live="polite" class="protection-status"></p>
     <label>보호 대상<select class="settings-select" name="target" aria-label="보호 대상"></select></label>
     <dl class="protection-scope"></dl>
+    <section class="protection-wiki-proposals hidden" aria-label="연결 제안 사본"></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="refresh">새로고침</button><button type="button" class="secondary-btn" data-action="lock">잠금</button></div>
     <section aria-label="저장된 표현"><select class="settings-select" name="representation" aria-label="저장된 표현"></select><button type="button" class="secondary-btn" data-action="read">열람</button><button type="button" class="secondary-btn" data-action="wiki-preview">위키 보기</button><button type="button" class="secondary-btn" data-action="edit">현재 편집</button><button type="button" class="secondary-btn" data-action="transcript-edit">전사문 편집</button></section>
     <div class="history-actions"><button type="button" class="secondary-btn" data-action="create">현재 메모 생성</button><button type="button" class="secondary-btn" data-action="restore">선택 이력 복원</button><button type="button" class="secondary-btn danger" data-action="delete">메모 삭제</button></div>
@@ -41,6 +42,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
   }
   function wipe() {
     keys.clear(); $('.protection-plain').textContent='';
+    $('.protection-wiki-proposals').replaceChildren();$('.protection-wiki-proposals').classList.add('hidden');
     resetTranscript();
     resetReplan();
     state.analysis=null;$('.protection-analysis').classList.add('hidden');$('.protection-analysis-result').textContent='';
@@ -125,6 +127,11 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     $('.protection-draft').readOnly=state.busy;
     $('.protection-title').readOnly=state.busy;
     $('[data-action="conversion"]').hidden=info.status.crypto_epoch!==0;
+    if(info.wikiGroup?.members.length){
+      $('[data-action="conversion"]').hidden||=Boolean(info.wikiGroup.pending);
+      $('[data-action="conversion"]').disabled||=!$('.protection-wiki-confirm')?.checked;
+      $('[data-action="resume"]').disabled||=!$('.protection-wiki-confirm')?.checked;
+    }
     $('[data-action="current_plain_transition"]').hidden=info.catalog?.context.current_mode!=='protected';
     $('[data-action="mixed_conversion"]').hidden=info.status.crypto_epoch<1;
     $('[data-action="resume"]').hidden=!info.pending||info.pending.phase.startsWith('analysis_');
@@ -179,6 +186,20 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     targets.value=chosen;
     const info=await api.inspect(); if (!valid(token)) return;
     state.info=info;
+    const proposals=$('.protection-wiki-proposals');proposals.replaceChildren();
+    proposals.classList.toggle('hidden',!info.wikiGroup?.members.length);
+    if(info.wikiGroup?.members.length){
+      const title=document.createElement('h3');title.textContent='연결 제안 사본';proposals.append(title);
+      const list=document.createElement('ul');list.style.maxHeight='24dvh';list.style.overflow='auto';
+      for(const member of info.wikiGroup.members){
+        const row=document.createElement('li');row.textContent=member.id+' · 사본 '+member.copies.length+'개 · '
+          +(member.copies.every(c=>c.kind==='cipher')?'암호화됨':'보호 대기');row.style.overflowWrap='anywhere';list.append(row);
+      }
+      proposals.append(list);
+      const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.className='protection-wiki-confirm';
+      input.checked=Boolean(info.wikiGroup.pending);input.disabled=Boolean(info.wikiGroup.pending);input.onchange=controls;
+      label.append(input,document.createTextNode('위 사본을 함께 보호'));proposals.append(label);
+    }
     const dl=$('.protection-scope');dl.replaceChildren();
     for(const [name,value] of [[info.localWiki?'저장 계정 주소':'서버',info.scope.url],['계정',info.scope.owner],['메모',info.scope.local_id],[info.localWiki?'이 기기 식별':'서버 식별',info.scope.instance]]) {
       const dt=document.createElement('dt'),dd=document.createElement('dd');dt.textContent=name;dd.textContent=value;dl.append(dt,dd);
@@ -352,8 +373,8 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           const password=await ask(epoch,true,token);
           if (!password || !valid(token)) return;
           status('전환 처리 중');
-          if (name==='resume') await api.resume(state.info,password,resolveKey(token));
-          else await api.convert(state.info,name,password,resolveKey(token));
+          if (name==='resume') await api.resume(state.info,password,resolveKey(token),$('.protection-wiki-confirm')?.checked?state.info.wikiGroup?.plan_hash:undefined);
+          else await api.convert(state.info,name,password,resolveKey(token),$('.protection-wiki-confirm')?.checked?state.info.wikiGroup?.plan_hash:undefined);
           if (valid(token)) await load();
         }
       }

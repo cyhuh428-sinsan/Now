@@ -38,7 +38,14 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     if(a.docs.has(wiki))return a.docs.get(wiki);plainLocal(a,'wiki:'+wiki);
     const bodies=snapshots(a,'wiki:'+wiki);
     for(const root of a.roots)for(const [local,item]of Object.entries(root.contexts?.[a.account]?.notes||{})){
-      if(!local.startsWith('wiki-proposal:')||!local.endsWith(':'+wiki))continue;plainLocal(a,local);bodies.push(...snapshots(a,local));
+      if(!local.startsWith('wiki-proposal:')||!local.endsWith(':'+wiki))continue;
+      const copies=localItems(a,local);
+      if(copies.length&&copies.every(value=>globalThis.NowNoteProtectionState?.protectedRecord(value))){
+        check(copies.every(value=>value.protection_record.scope.owner===a.ctx.owner&&value.protection_record.scope.local_id===local
+          &&value.protection_record.scope.url.replace(/\/+$/,'')===String(a.ctx.url).replace(/\/+$/,'')),'wiki_evidence_binding');
+        continue;
+      }
+      plainLocal(a,local);bodies.push(...snapshots(a,local));
     }
     const result=new Map();
     for(const input of [...bodies.map(n=>n.content),...remote.map(r=>r.document)]){

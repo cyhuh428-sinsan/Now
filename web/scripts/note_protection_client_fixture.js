@@ -1,7 +1,7 @@
 (async () => {
   const config = globalThis.__PROTECTION_QA__, assert = (v,message) => {if(!v)throw Error(message);};
   const uid = n => `00000000-0000-4000-8000-${String(n).padStart(12,'0')}`;
-  const scope = {url:config.mode === 'web' ? 'http://localhost.:8750' : 'http://127.0.0.1:8750',owner:'qa_e4b2_alice',instance:uid(1),local_id:'qa-target',device:'qa-one'};
+  const scope = {url:(config.mode === 'web' ? 'http://localhost.:' : 'http://127.0.0.1:')+(config.port||8750),owner:'qa_e4b2_alice',instance:uid(1),local_id:'qa-target',device:'qa-one'};
   const secret = 'SYNTHETIC-E4B2-ORIGINAL\r\n', password = 'synthetic-only';
   const needle = 'SYNTHETIC-E4B2-ORIGINAL';
   if(isHostedWebClient())saveWebSession({ownerId:scope.owner,deviceId:scope.device,token:'synthetic-session'});

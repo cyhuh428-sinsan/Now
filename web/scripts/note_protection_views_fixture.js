@@ -1,7 +1,7 @@
 (async()=>{
   const config=globalThis.__PROTECTION_QA__,assert=(v,m)=>{if(!v)throw Error(m);};
   const uid=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0');
-  const scope={url:config.mode==='web'?'http://localhost.:8750':'http://127.0.0.1:8750',owner:'qa_e4b3a_alice',instance:uid(1),local_id:'qa-target',device:'qa-one'};
+  const scope={url:(config.mode==='web'?'http://localhost.:':'http://127.0.0.1:')+(config.port||8750),owner:'qa_e4b3a_alice',instance:uid(1),local_id:'qa-target',device:'qa-one'};
   const password='synthetic-only',needle='SYNTHETIC-E4B3A-ORIGINAL';
   const backend=createProtectionViewBackend(scope,password,config.serverState);await backend.init();
   let identityGate=null;

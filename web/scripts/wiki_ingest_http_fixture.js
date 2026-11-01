@@ -148,6 +148,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       wikiUI.close();await openWikiProtection(target.wiki_id);await protectionWait(()=>pd()?.open,'open');
       const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
       if(copies.length){pb('confirm').click();await protectionWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
+      const linked=pd().querySelector('.protection-wiki-confirm');if(linked&&!linked.checked)linked.click();
       pb('conversion').click();await protectionWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
       const closed=new Promise(resolve=>pd().addEventListener('close',resolve,{once:true}));
       noteProtectionUI.lock();pb('close').click();await closed;
@@ -223,6 +224,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       };
       const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
       if(copies.length){pb('confirm').click();await protectedWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
+      const linked=pd().querySelector('.protection-wiki-confirm');check(linked&&!linked.checked&&pb('conversion').disabled,'protected_query_proposal_consent');linked.click();
       pb('conversion').click();
       await protectedWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
     }

@@ -89,7 +89,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   const appBox=vm.createContext({structuredClone,Set,Promise,Object,NowNoteProtectionState:P,
     noteHistoryCaptureChain:Promise.resolve(),storagePendingWrites:new Set(),
     protectionActionGuard:()=>()=>{if(invalidated)throw Error('scope_changed');},requireProtectionSettled:()=>{},
-    noteHistory:{validateImport:()=>{validated++;}},
+    noteHistory:{validateImport:()=>{validated++;}},wikiLifecycle:{validateRestore:value=>assert.equal(JSON.stringify(value),JSON.stringify(good.history))},
     protectionStorageAdapters:()=>[
       {kind:'data',read:async()=>structuredClone(current.data)},
       {kind:'history',read:async()=>structuredClone(history)}]});
@@ -112,7 +112,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   appBox.protectionStorageAdapters=()=>[{kind:'data',read:async()=>structuredClone(appBox.state.data)},
     {kind:'history',read:async()=>appBox.noteHistory.export()}];
   appBox.FileReader=class {readAsText(file){this.result=file.body;loaded=this.onload();}};
-  appBox.parseBackupData=parsed=>({data:parsed.data});appBox.backupSummary=()=>({tree:1});
+  appBox.parseBackupData=parsed=>({data:parsed.data,...(Object.hasOwn(parsed,'history')?{history:parsed.history}:{})});appBox.backupSummary=()=>({tree:1});
   appBox.confirmAction=async()=>{confirmations++;return true;};appBox.t=x=>x;
   appBox.showNotice=text=>notices.push(text);appBox.createRecoverySnapshot=()=>{recoveries++;};
   appBox.downloadCurrentBackup=()=>{downloads++;};appBox.backupDataShape=data=>structuredClone(data);
@@ -129,7 +129,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   assert.equal(recoveries+downloads+persisted,0,'account change while confirmation waits must not replace any store');
   invalidated=false;appBox.confirmAction=async()=>{confirmations++;return true;};
   appBox.importFile(event(good));await loaded;
-  assert.equal(recoveries,1);assert.equal(downloads,1);assert.equal(persisted,1);
+  assert.equal(recoveries,1,JSON.stringify(notices));assert.equal(downloads,1);assert.equal(persisted,1);
   assert.equal(appBox.noteHistory.export().contexts[H.key(scope)].notes.memo.protection_record.ciphertext,cipher);
 }
 console.log('Protected backup guard: cipher roundtrip, plaintext/missing/foreign copies, malformed journal and failed-write preservation PASS');

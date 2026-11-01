@@ -10,6 +10,7 @@
   const phases = ['drain_pending','draining','preparing','promoted','bundled','prepared','committing','server_committed','applying','complete','analysis_claiming','analysis_claimed','analysis_dispatching','analysis_running','analysis_terminal','analysis_settling','analysis_settled','analysis_write_preparing','analysis_write_prepared','analysis_write_staged','analysis_write_committing','analysis_write_committed','analysis_replan_preparing','analysis_replan_allocated','analysis_replan_stored','analysis_replan_prepared','analysis_replan_staged','analysis_replan_committing','analysis_replan_committed'];
   const fields = (v, names) => { if (!record(v) || Object.keys(v).length !== names.length || names.some(k => !Object.hasOwn(v,k))) fail('marker_fields'); };
   function scopeKey(s) { return json([s.url.replace(/\/+$/, ''), s.owner, s.instance, s.local_id]); }
+  phases.push('wiki_group_applying');
   function validateScope(s) {
     fields(s, ['url','owner','instance','local_id','device']);
     for (const f of ['url','owner','instance','local_id','device']) if (typeof s[f] !== 'string') fail('scope');
@@ -245,11 +246,13 @@
     }
     const localWikiIntent = intent => intent?.purpose === 'local_wiki_protection';
     function localWikiRecord(scope,value) {
-      if (!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.local_id)
+      const proposal=/^wiki-proposal:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}:[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(scope.local_id);
+      const source=proposal?'wiki-ingest-proposal':'wiki-artifact';
+      if (!proposal&&!/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(scope.local_id)
         || !value || value.localOnly !== true || value.base?.head_revision_id || value.base?.head_version
         || value.base?.crypto_epoch || value.base?.history_generation || value.base?.server_instance_id || value.base?.snapshot
         || value.base?.inventory_revision_ids?.length || value.base?.replica_count || value.receipts?.length
-        || value.raw?.source !== 'wiki-artifact' || value.draft?.source !== 'wiki-artifact'
+        || value.raw?.source !== source || value.draft?.source !== source
         || value.raw?.id != null || value.draft?.id != null || value.raw?.owner_id !== scope.owner
         || value.draft?.owner_id !== scope.owner || value.raw?.local_id !== scope.local_id || value.draft?.local_id !== scope.local_id
         || !Array.isArray(value.revisions) || value.revisions.some(r => r.imported || r.server_ref || r.import_request)
@@ -402,7 +405,7 @@
       invalidate() { epoch++; },
       blocked(id) {
         if (freezing && inAccount({scope:freezing}) && freezing.local_id === id) return true;
-        try { return Object.values(operations()).filter(inAccount).some(m => { validateMarker(m); return m.scope.local_id === id && m.phase !== 'complete'; }); }
+        try { return Object.values(operations()).filter(inAccount).some(m => { validateMarker(m); return (m.scope.local_id === id || globalThis.NowWikiProtectionGroup?.blockedTarget(m)===id) && m.phase !== 'complete'; }); }
         catch { return true; }
       },
       pending() {
