@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-query','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-evidence','wiki-ingest-notebook']){
+for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-query','wiki-lint','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-evidence','wiki-ingest-notebook']){
   try{vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);}
   catch(e){if(e.code==='ENOENT'&&name==='wiki-ingest-notebook')continue;throw e;}
 }
@@ -224,4 +224,12 @@ assert.equal(typeof ordinary.lintSnapshot,'function','Lint needs a read-only sna
 const beforeLint=box.NowNoteProtectionProtocol.canonicalJson(history.export()),lintWrites=writes;
 const lintSnapshot=await ordinary.lintSnapshot();assert.ok(lintSnapshot.rows.length>=3);assert.equal(lintSnapshot.scope.owner,ctx.owner);
 assert.equal(writes,lintWrites);assert.equal(box.NowNoteProtectionProtocol.canonicalJson(history.export()),beforeLint,'snapshot inspection does not observe lifecycle or track server rows');
+assert.equal(typeof book.deriveLint,'function','explicit Lint report save must use the durable existing operation journal');
+api.lintSnapshot=()=>ordinary.lintSnapshot();
+const lintSelection={wiki_ids:[p.wiki_id]},report=await box.NowWikiLint.lintWikiCatalog(lintSnapshot,lintSelection),countBeforeReport=Object.keys(history.entries()).length;
+const reportPreview=await book.deriveLint(lintSnapshot,lintSelection,report);
+assert.equal(Object.keys(history.entries()).length,countBeforeReport,'report preview does not publish a Wiki');
+const reportSaved=await book.commitLocal(reportPreview),reportDoc=reportSaved.documents[0].document;
+assert.equal(reportDoc.drafts[0].provider,'manual');assert.equal(reportDoc.drafts[0].evidence_manifest.length,1);assert.equal(reportDoc.approvals.length,0);assert.equal(calls,callCount);
+history=makeHistory();assert.equal(history.view('wiki:'+reportDoc.wiki_id).draft.content,box.NowNoteProtectionProtocol.canonicalJson(reportDoc),'explicit Lint report draft survives cold restore');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

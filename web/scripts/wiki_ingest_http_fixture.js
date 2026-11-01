@@ -44,10 +44,40 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     check((await wikiIngest.operations()).find(o=>o.operation_id===id).remote.phase==='settled','settled');
   }
   const ownerQuery='?owner_id='+encodeURIComponent(config.credentials.a.owner);
-  let peerVerified=false,citationVerified=false,queryVerified=false,protectedQueryVerified=false;
+  let peerVerified=false,citationVerified=false,queryVerified=false,protectedQueryVerified=false,lintVerified=false;
   const formClick=async action=>{await until(()=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');return b&&!b.disabled;},'form_'+action);document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]').click();};
   const capture=async stage=>{globalThis.__HTTP_CAPTURE_DONE__=false;console.log('HTTP_QA_EVENT '+JSON.stringify({stage}));await until(()=>globalThis.__HTTP_CAPTURE_DONE__||globalThis.__HTTP_CAPTURE_ERROR__,'capture');check(!globalThis.__HTTP_CAPTURE_ERROR__,'capture_failed');};
-  if([58,59].includes(config.phase)){
+  if([60,61].includes(config.phase)){
+    if(config.phase===60){
+      const seed=await generate([ids[0],ids[2]]);await publish(seed.operation.operation_id);
+      for(const row of await wikiNotebook.list()){
+        const decision=await wikiIngest.approveLocal(row.document,row.document.drafts[0].id);await publish(decision.operation_id);
+      }
+    }
+    const inspect=async()=>{
+      await wikiUI.open();await settle();const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
+      await formClick('lint');await formClick('lint-run');await until(()=>document.querySelector('#wikiDialog [data-wiki-lint-report]'),'lint_report');await settle();
+      const expected=config.phase===60?2:3;
+      check(document.querySelector('#wikiDialog [data-wiki-lint-report]').textContent.includes('검사 '+expected),'lint_checked');
+      check(NowNoteProtectionProtocol.canonicalJson(noteHistory.export())===before,'lint_default_wrote_journal');return before;
+    };
+    const before=await inspect();
+    if(config.phase===60){
+      await formClick('lint-open');await until(()=>document.querySelector('#wikiDialog [data-wiki-section=s1]'),'lint_source_navigation');await settle();
+      check(NowNoteProtectionProtocol.canonicalJson(noteHistory.export())===before,'lint_navigation_wrote_journal');
+      await inspect();await formClick('lint-save');await until(()=>document.querySelector('#wikiDialog [data-wiki-action=confirm-change]'),'lint_save_consent');await formClick('confirm-change');
+      await until(()=>document.querySelector('#wikiDialog [data-wiki-action=commit-ingest]'),'lint_save_preview');check((await wikiNotebook.list()).length===2,'lint_implicit_save');
+      await formClick('commit-ingest');await until(async()=>Boolean((await wikiIngest.operations()).find(o=>o.inputs.every(r=>r.kind==='wiki')&&o.remote?.phase==='staged')),'lint_staged');
+      const pending=(await wikiIngest.operations()).find(o=>o.inputs.every(r=>r.kind==='wiki')&&o.remote?.phase==='staged');await publish(pending.operation_id);
+      const saved=(await wikiNotebook.list()).find(row=>row.document.drafts.at(-1).title==='위키 점검 보고서');
+      check(saved.document.approvals.length===0&&saved.document.drafts[0].evidence_manifest.length===2&&saved.document.drafts[0].provider==='manual','lint_saved_dependencies');
+      const decision=await wikiIngest.approveLocal(saved.document,saved.document.drafts[0].id);await publish(decision.operation_id);
+    }
+    const rows=await wikiNotebook.list(),saved=rows.find(row=>row.document.drafts.at(-1).title==='위키 점검 보고서');
+    check(rows.length===3&&saved?.document.approvals.length===1&&saved.document.drafts[0].evidence_manifest.length===2,'lint_cold_document');
+    check((await wikiIngest.operations()).length===5,'lint_original_operations');check(modelCalls===(config.phase===60?1:0),'lint_no_model_calls');
+    lintVerified=true;wikiUI.close();
+  }else if([58,59].includes(config.phase)){
     const pd=()=>document.querySelector('#noteProtectionDialog'),pb=name=>pd()?.querySelector('[data-action="'+name+'"]');
     const password='qa-query-protection-'+config.run;
     async function protectedWait(test,code){
@@ -249,7 +279,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     await wikiUI.open();
   }
   await noteHistory.idle();await settle();
-  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true,peerVerified,citationVerified,queryVerified,protectedQueryVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
+  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true,peerVerified,citationVerified,queryVerified,protectedQueryVerified,lintVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
     operations:(await wikiIngest.operations()).map(row=>({id:row.operation_id,state:row.state,phase:row.remote.phase})),
     wikis:(await wikiNotebook.list()).map(row=>({id:row.document?.wiki_id||row.id,version:row.document?.document_version??null,approvals:row.document?.approvals.length??null,protected:row.protected===true}))};
 };

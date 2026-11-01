@@ -13,7 +13,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let queryOriginal=null;
   let protectedQueryAccess=null;
   let queryPrimary=6,queryRelated=3;
-  let lintMode=false,lintScope='all',lintSnapshot=null,lintReport=null;
+  let lintMode=false,lintScope='all',lintSnapshot=null,lintReport=null,lintSelection=null;
   const lintIds=new Set();
   const queryIds=new Set();
   const ingestFiles=new Set(),ingestNotes=new Set();
@@ -33,7 +33,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
-    lintMode=false;lintScope='all';lintSnapshot=null;lintReport=null;lintIds.clear();
+    lintMode=false;lintScope='all';lintSnapshot=null;lintReport=null;lintSelection=null;lintIds.clear();
     queryMode=false;queryText='';queryScope='all';querySnapshot=null;queryAnswer=null;queryConnection=null;queryOriginal=null;protectedQueryAccess=null;queryPrimary=6;queryRelated=3;queryIds.clear();
     graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
@@ -252,13 +252,21 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       const selection=lintScope==='selected'?{wiki_ids:[...lintIds]}:lintScope==='topic'?{topic}:{};
       const snapshot=await api.lintSnapshot();requireActive(token);
       const report=await NowWikiLint.lintWikiCatalog(snapshot,selection);requireActive(token);
-      lintSnapshot=snapshot;lintReport=report;message='';
+      lintSnapshot=snapshot;lintReport=report;lintSelection=structuredClone(selection);message='';
     }));
     if(!lintReport||busy)return;
     const report=node('section');report.dataset.wikiLintReport='';
     report.append(node('h4','점검 결과'),node('p','검사 '+lintReport.checked+' · 제외 '+lintReport.excluded+' · 범위 밖 '+lintReport.out_of_scope),
       node('p','오류 '+lintReport.errors+' · 검토 '+lintReport.warnings+' · 정보 '+lintReport.information),
       node('p','출처 확인 '+lintReport.source_checked+' · 미확인/제외 '+lintReport.source_excluded+' · 관계 확인 '+lintReport.relation_checked+' · 미확인/제외 '+lintReport.relation_excluded));
+    if(api.ingest?.deriveLint)report.append(command('lint-save','보고서를 위키 초안으로 저장',async token=>{
+      const snapshot=lintSnapshot,selection=lintSelection,resultReport=lintReport;
+      if(!await ask('점검 보고서를 새 위키 초안으로 검토할까요? 검사한 위키의 고정 판본과 보호 의존을 보존하며 승인은 별도입니다.'))return;
+      requireActive(token);const result=await api.ingest.deriveLint(snapshot,selection,resultReport);requireActive(token);
+      ingestPlan={operation_id:result.operation_id,selection:result.selection,plan:result.proposal.plan};ingestProposal=result;
+      sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);
+      lintMode=false;lintSnapshot=null;lintReport=null;lintSelection=null;sourceMode=true;message='보고서 초안과 인용·의존을 검토하세요.';
+    },lintReport.checked===0||lintReport.excluded>0||lintReport.checked>30));
     const severities={error:'오류',warning:'검토 필요',information:'정보'};
     for(const finding of lintReport.findings){
       const item=node('section');item.dataset.lintRule=finding.rule_code;

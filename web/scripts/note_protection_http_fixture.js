@@ -79,7 +79,7 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=!config.publicProtectionGate;
-  if([50,51,52,53,54,55,56,57,58,59].includes(config.phase))return runWikiIngestHttpFixture({config,request,settle,login});
+  if([50,51,52,53,54,55,56,57,58,59,60,61].includes(config.phase))return runWikiIngestHttpFixture({config,request,settle,login});
   if([47,48,49].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function libraryWait(done,label){

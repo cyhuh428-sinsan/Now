@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {fixture,ctx,clone,id} from './wiki_ingest_fixture.mjs';
 import {documents} from './check_wiki_graph.mjs';
-const {box,P}=await fixture();
+const {box,P,catalog:legacyCatalog}=await fixture();
 try{vm.runInContext(await fs.readFile(new URL('../vendor/wiki-lint.js',import.meta.url),'utf8'),box);}catch(error){if(error.code!=='ENOENT')throw error;}
 const L=box.NowWikiLint;assert.equal(typeof L?.lintWikiCatalog,'function','approved I11 needs a deterministic read-only Wiki audit');
 const scope={url:ctx.url,owner:ctx.owner};
@@ -38,5 +38,17 @@ draft.relations[0].to_ref={kind:'approved',wiki_id:target.wiki_id,draft_id:appro
 delete draft.draft_hash;draft.draft_hash=await P.hashJson(draft);source.approvals[0].draft_hash=draft.draft_hash;
 badBinding.rows[0].relation_checks=[{draft_id:draft.id,relation_id:'r1',status:'ok'}];
 assert.ok((await L.lintWikiCatalog(badBinding,{})).findings.some(f=>f.rule_code==='wiki_lint_relation_binding_invalid'),'an ok hint cannot override a mismatched approved endpoint hash');
+const citationLinks={scope:clone(scope),rows:legacyCatalog.map(row=>({id:row.document.wiki_id,document:clone(row.document),origin:'local',index_status:'local',source_checks:row.document.drafts.flatMap(d=>box.NowNoteWiki.evidenceOf(d).map(r=>({draft_id:d.id,evidence_id:r.id,status:'ok'}))),relation_checks:[]}))};
+const linking=clone(documents[0]);linking.wiki_id=id(2000);const linkDraft=linking.drafts[0];linkDraft.relations=[];linkDraft.claims=[];
+linkDraft.evidence_manifest=citationLinks.rows.map((r,n)=>{const a=r.document.approvals[0],d=r.document.drafts[0];return {id:'context-'+n,kind:'wiki',origin:'local',owner_id:ctx.owner,wiki_id:r.id,draft_id:d.id,approval_id:a.id,document_version:r.document.document_version,content_hash:d.draft_hash};});
+linkDraft.citations=[{id:'c1',evidence_id:'context-0',section_id:citationLinks.rows[0].document.drafts[0].sections[0].id,quote:citationLinks.rows[0].document.drafts[0].sections[0].markdown}];
+delete linkDraft.draft_hash;linkDraft.draft_hash=await P.hashJson(linkDraft);linking.approvals[0].draft_hash=linkDraft.draft_hash;linking.approvals[0].evidence_manifest_hash=await P.hashJson(linkDraft.evidence_manifest);
+await box.NowNoteWiki.validateDocument(linking,scope);
+citationLinks.rows.push({id:linking.wiki_id,document:linking,origin:'local',index_status:'local',source_checks:linkDraft.evidence_manifest.map(r=>({draft_id:linkDraft.id,evidence_id:r.id,status:'ok'})),relation_checks:[]});
+assert.ok(!(await L.lintWikiCatalog(citationLinks,{})).findings.some(f=>f.rule_code==='wiki_lint_orphan'),'verified compiled-Wiki evidence links count as connections, not only manual relations');
+const aliasDuplicate=clone(input),aliasDoc=aliasDuplicate.rows[1].document,aliasDraft=aliasDoc.drafts[0];aliasDraft.aliases=['ALPHA'];
+delete aliasDraft.draft_hash;aliasDraft.draft_hash=await P.hashJson(aliasDraft);aliasDoc.approvals[0].draft_hash=aliasDraft.draft_hash;
+const duplicateFindings=(await L.lintWikiCatalog(aliasDuplicate,{})).findings.filter(f=>f.rule_code==='wiki_lint_duplicate_candidate');
+assert.equal(duplicateFindings.length,2,'explicit stored aliases are duplicate candidates, never automatic merges');
 assert.equal(P.canonicalJson(input),before,'Lint does not repair, merge, remove or persist input');
 console.log('Wiki Lint: deterministic scoped classification, hidden/foreign exclusions, invalid schema/hash and no input writes PASS');

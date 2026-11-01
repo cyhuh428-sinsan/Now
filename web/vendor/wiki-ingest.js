@@ -283,6 +283,44 @@
       sections:[{id:'answer',title:answer.title,markdown,citation_ids:citations.map(c=>c.id)}],claims:copy(answer.claims),relations:[],citations};
     return validateIngestProposal({pages:[page]},plan,review);
   }
+  async function planLintReport(snapshot,selection,report,catalog,{context:current,reservation,protection={nodes:[]}}){
+    const ctx=context(current);reservationIds(reservation);
+    const verified=await NowWikiLint.lintWikiCatalog(snapshot,selection);
+    check(same(verified,report)&&same(snapshot.scope,scope(ctx)),'wiki_lint_report_changed');
+    check(report.checked>0&&report.excluded===0,'wiki_lint_report_unverified');
+    const selected=snapshot.rows.filter(row=>(!selection.wiki_ids||selection.wiki_ids.includes(row.id))
+      &&(!selection.topic||approvedDraft(row.document||{drafts:[],approvals:[]})?.topic===selection.topic));
+    list(selected,30,1);check(selected.length===report.checked&&reservation.pages.length===1,'wiki_lint_report_scope');
+    const all=await readCatalog(catalog,ctx),rows=selected.map(row=>{
+      const current=all.find(r=>r.document.wiki_id===row.id);
+      check(!row.protected&&!row.deleted&&!row.unavailable&&!row.pending&&current&&current.origin===row.origin
+        &&same(current.document,row.document)&&approvedDraft(row.document),'wiki_lint_report_unverified');return current;
+    });
+    check(!all.some(r=>r.document.wiki_id===reservation.pages[0].wiki_id),'wiki_existing_draft_reservation');
+    const inputs=rows.map(wikiInput).sort(order),page={...copy(reservation.pages[0]),action:'create_draft'};
+    const transmission={sources:[],comparison_targets:[],related_wikis:rows.map(r=>({evidence:wikiInput(r),draft:copy(approvedDraft(r.document))})),pages:[{wiki_id:page.wiki_id,draft_id:page.draft_id,action:page.action}]};
+    check(size(transmission)<=524288,'wiki_source_budget');
+    const plan={schema_version:1,kind:'ingest',derived:true,lint_report_hash:await P.hashJson({snapshot,selection,report}),context:ctx,snapshot:{scope:scope(ctx),sources:[]},catalog:copy(rows),
+      reservation:copy(reservation),fingerprints:[],candidates:[],targets:[],pages:[page],inputs,transmission,related_wiki_ids:rows.map(r=>r.document.wiki_id),transmitted_bytes:0,calls:0,
+      serverEligible:Boolean(ctx.url)&&inputs.every(r=>r.origin==='server'),policy:2,protection:copy(protection)};
+    checkPlanInputs(plan);checkProtectionGraph(protection,plan);return {...plan,plan_hash:await P.hashJson(plan)};
+  }
+  async function createLintReportProposal(snapshot,selection,report,plan,review){
+    check(plan.derived===true&&plan.calls===0&&plan.lint_report_hash===await P.hashJson({snapshot,selection,report}),'wiki_lint_report_changed');
+    check(same(await NowWikiLint.lintWikiCatalog(snapshot,selection),report),'wiki_lint_report_changed');
+    const citations=plan.inputs.map((ref,n)=>{
+      const row=plan.catalog.find(r=>r.document.wiki_id===ref.wiki_id),section=approvedDraft(row.document).sections[0];
+      return {id:'context-'+n,evidence_id:ref.id,section_id:section.id,quote:[...section.markdown].slice(0,4096).join('')};
+    });
+    const markdown=['검사 '+report.checked+' · 제외 '+report.excluded+' · 범위 밖 '+report.out_of_scope,
+      '오류 '+report.errors+' · 검토 '+report.warnings+' · 정보 '+report.information,
+      '출처 확인 '+report.source_checked+' · 미확인/제외 '+report.source_excluded+' · 관계 확인 '+report.relation_checked+' · 미확인/제외 '+report.relation_excluded,
+      ...report.findings.map(f=>'['+f.severity+'] '+f.rule_code+' · '+(f.wiki_id||'범위')+' · 판본 '+(f.document_version??'미확인')+'\n'+f.observation+'\n'+f.recommendation)].join('\n\n');
+    check([...markdown].length<=131072,'wiki_lint_report_limit');
+    const title='위키 점검 보고서',page={wiki_id:plan.pages[0].wiki_id,draft_id:plan.pages[0].draft_id,title,topic:selection.topic||title,page_type:'reference',summary:'',aliases:[],
+      sections:[{id:'report',title,markdown,citation_ids:citations.map(c=>c.id)}],claims:[],relations:[],citations};
+    return validateIngestProposal({pages:[page]},plan,review);
+  }
   async function fresh(plan,review){
     const unsigned=copy(plan);delete unsigned.plan_hash;
     check(await P.hashJson(unsigned)===plan.plan_hash,'wiki_plan_hash');
@@ -480,5 +518,5 @@
     return {dependencies:[...notes.values()].sort((a,b)=>compare(a.local_id,b.local_id)),
       wiki_dependencies:[...wikis.entries()].sort((a,b)=>compare(a[0],b[0])).map(([,value])=>value),requiresLiveProtectionCheck:true};
   }
-  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,planIntegration,createIntegrationProposal,planDerivedWiki,createDerivedProposal,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,verifyCarriedRelation,dependencyUnion});
+  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,planIntegration,createIntegrationProposal,planDerivedWiki,createDerivedProposal,planLintReport,createLintReportProposal,validateIngestProposal,verifyProposal,verifyPlan:fresh,expectedInputs,checkProtectionGraph,comparisonRefs,reserveIngest,sourceFingerprints,buildOperationRequests,verifyCarriedRelation,dependencyUnion});
 })();

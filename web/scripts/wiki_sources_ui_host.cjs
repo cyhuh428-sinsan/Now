@@ -58,12 +58,14 @@ app.whenReady().then(async()=>{
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn,code)=>{for(let i=0;i<300;i++){if(fn())return;await pause();}throw Error(code);};
       const click=async action=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');if(!b||b.disabled)throw Error('ingest_button_'+action);b.click();await pause();};
       if(${phase}===2){
-        const allRows=await wikiNotebook.list(),rows=allRows.filter(r=>r.document?.drafts.at(-1).title!=='Synthetic answer'),ops=await wikiIngest.operations();
+        const allRows=await wikiNotebook.list(),rows=allRows.filter(r=>!['Synthetic answer','위키 점검 보고서'].includes(r.document?.drafts.at(-1).title)),ops=await wikiIngest.operations();
         const derived=allRows.filter(r=>r.document?.drafts.at(-1).title==='Synthetic answer');
         if(${process.env.NOWNOTE_WIKI_QUERY==='1'}&&(derived.length!==1||derived[0].document.approvals.length))throw Error('query_cold_derived_document');
+        const reports=allRows.filter(r=>r.document?.drafts.at(-1).title==='위키 점검 보고서');
+        if(${process.env.NOWNOTE_WIKI_LINT==='1'}&&(reports.length!==1||reports[0].document.approvals.length||reports[0].document.drafts[0].evidence_manifest.length!==2))throw Error('lint_cold_report_document');
         if(rows.length!==2||rows.some(r=>r.document?.schema_version!==2)||rows.filter(r=>r.document.approvals.length===1).length!==1||rows.filter(r=>r.document.approvals.length===2).length!==1)throw Error('ingest_cold_documents');
         if(ops.filter(o=>o.action==='ingest'&&o.state==='committed'&&o.inputs.some(r=>r.kind==='note')).length!==1)throw Error('ingest_cold_receipt');
-        if(${process.env.NOWNOTE_WIKI_QUERY==='1'}&&ops.filter(o=>o.action==='ingest'&&o.state==='committed'&&o.inputs.every(r=>r.kind==='wiki')).length!==1)throw Error('query_cold_derived_receipt');
+        if(${process.env.NOWNOTE_WIKI_QUERY==='1'||process.env.NOWNOTE_WIKI_LINT==='1'}&&ops.filter(o=>o.action==='ingest'&&o.state==='committed'&&o.inputs.every(r=>r.kind==='wiki')).length!==${Number(process.env.NOWNOTE_WIKI_QUERY==='1')+Number(process.env.NOWNOTE_WIKI_LINT==='1')})throw Error('cold_derived_receipts');
         if(ops.filter(o=>o.action==='integrate'&&o.state==='committed').length!==1||(await wikiNotebook.approvedCatalog()).edges.length!==1)throw Error('integrate_cold_relation');
         return {coldDocuments:rows.length,calls:0};
       }
@@ -125,7 +127,7 @@ app.whenReady().then(async()=>{
     let lint=null;
     if(process.env.NOWNOTE_WIKI_LINT==='1'){
       await run(fs.readFileSync(path.join(root,'web/scripts/wiki_lint_ui_fixture.js'),'utf8')+'\nvoid 0;');
-      lint=await run('runWikiLintUiFixture().catch(error=>({qaError:String(error.message||error)}))');
+      lint=await run('runWikiLintUiFixture('+phase+').catch(error=>({qaError:String(error.message||error)}))');
       if(lint.qaError)throw Error(lint.qaError);
     }
     let query=null;

@@ -259,6 +259,34 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       inputs:copy(result.inputs),fingerprints:[],state:'attempted',documents:[]};
     await save(a,before,rows);return {operation_id:reservation.operation_id,selection,proposal,connection:current.connection,generated_at:generatedAt};
   }
+  async function deriveLint(snapshot,selection,report){
+    const a=action();check(api.lintSnapshot,'점검 원본의 현재 조회 연결을 확인하세요.');
+    const fresh=await api.lintSnapshot();a.active();
+    check(eq(fresh,snapshot)&&eq(await NowWikiLint.lintWikiCatalog(fresh,selection),report),'점검 범위·판본이 변경되었습니다. 다시 점검하세요.');a.active();
+    check(report.checked>0&&report.excluded===0,'읽을 수 없는 제외 자료가 있어 보고서를 평문으로 저장하지 않았습니다.');
+    const selected=fresh.rows.filter(row=>(!selection.wiki_ids||selection.wiki_ids.includes(row.id))
+      &&(!selection.topic||row.document?.drafts.find(d=>d.id===row.document.approvals.at(-1)?.draft_id)?.topic===selection.topic));
+    check(selected.length===report.checked&&selected.length<=30,'점검 보고서의 고정 입력 한도를 확인하세요.');
+    const targets=await catalog(a,[],new Set(selected.map(row=>row.id)));a.active();const before=a.h.export(),rows=map(a,before);
+    check(!Object.values(rows).some(r=>['reserved','attempted'].includes(r.state)),'진행 중인 원작업을 먼저 확인하거나 명시적으로 폐기하세요.');
+    const refs=selected.map((row,n)=>{
+      const approval=row.document?.approvals.at(-1),draft=row.document?.drafts.find(d=>d.id===approval?.draft_id);
+      check(draft&&!row.protected&&!row.deleted&&!row.unavailable&&!row.pending,'보고서 저장에는 검증된 승인 판본이 필요합니다.');
+      return {id:'lint-'+n,kind:'wiki',origin:row.origin,owner_id:a.ctx.owner,wiki_id:row.id,draft_id:draft.id,approval_id:approval.id,
+        document_version:row.document.document_version,content_hash:draft.draft_hash};
+    });
+    const protection=await evidence.graph(refs,{instance:a.serverBound?a.ingestContext.serverInstance:undefined,onInstance:id=>bindInstance(a,id)});a.active();
+    const reservation={operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),
+      pages:[{wiki_id:crypto.randomUUID(),draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()}]};
+    const plan=await I.planLintReport(snapshot,selection,report,targets,{context:a.ingestContext,reservation,protection});a.active();
+    const sourceSelection={fileIds:[],noteIds:[]},operation={operation_id:reservation.operation_id,selection:sourceSelection,plan},generatedAt=new Date().toISOString(),connection={provider:'manual',model:'wiki-lint-v1'};
+    const current=await review(a,operation,connection,generatedAt),proposal=await I.createLintReportProposal(snapshot,selection,report,plan,current);a.active();
+    current.assertLocalCurrent(proposal);check(eq(before,a.h.export()),'검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.');
+    const {viewGeneration,...scope}=a.ingestContext;
+    rows[reservation.operation_id]={schema_version:1,operation_id:reservation.operation_id,action:'ingest',scope,reservation,selection:sourceSelection,plan_hash:plan.plan_hash,
+      inputs:copy(plan.inputs),fingerprints:[],state:'attempted',documents:[]};
+    await save(a,before,rows);return {operation_id:reservation.operation_id,selection:sourceSelection,proposal,connection,generated_at:generatedAt};
+  }
   async function commitLocal(value){
     const a=action(),operation={operation_id:value.operation_id,selection:value.selection,plan:value.proposal.plan};
     const current=await review(a,operation,value.connection,value.generated_at);await I.verifyProposal(value.proposal,current);a.active();
@@ -482,7 +510,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,integrate,derive,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+  return {plan,prompt,generate,integrate,derive,deriveLint,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
     approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
 };

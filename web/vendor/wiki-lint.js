@@ -61,6 +61,10 @@
           check(['ok','changed','missing','quote_mismatch','foreign','unavailable','invalid','locked','unsupported'].includes(status));
           const excluded=['unavailable','locked','unsupported'].includes(status);
           if(excluded)report.source_excluded++;else report.source_checked++;
+          if(ref.kind==='wiki'&&['ok','changed'].includes(status)&&approved?.id===draft.id){
+            const target=valid.get(ref.wiki_id),chosen=target?.drafts.find(d=>d.id===ref.draft_id&&d.draft_hash===ref.content_hash);
+            if(chosen&&target.approvals.some(a=>a.id===ref.approval_id&&a.draft_id===ref.draft_id)){connected.add(row.id);connected.add(ref.wiki_id);}
+          }
           if(status==='ok')continue;
           const rule={changed:'source_changed',missing:'source_missing',quote_mismatch:'citation_mismatch',foreign:'foreign_reference',unavailable:'source_unavailable',invalid:'source_invalid',locked:'source_locked',unsupported:'source_unsupported'}[status];
           finding(row,'wiki_lint_'+rule,status==='changed'||excluded?'warning':'error','고정 출처 검사: '+status,
@@ -82,20 +86,26 @@
           if(!status){missing=true;report.relation_excluded++;continue;}
           check(['ok','missing_target','missing_section','binding_invalid','unapproved','unavailable','stale'].includes(status));
           if(status==='unavailable')report.relation_excluded++;else report.relation_checked++;
-          if(status==='ok'){connected.add(row.id);connected.add(relation.to_ref.wiki_id);continue;}
+          if(['ok','stale'].includes(status)&&approved?.id===draft.id){connected.add(row.id);connected.add(relation.to_ref.wiki_id);}
+          if(status==='ok')continue;
           const rule={missing_target:'relation_target_missing',missing_section:'relation_section_missing',binding_invalid:'relation_binding_invalid',unapproved:'relation_unapproved',unavailable:'relation_unavailable',stale:'relation_stale'}[status];
           finding(row,'wiki_lint_'+rule,['unavailable','stale','unapproved'].includes(status)?'warning':'error','관계 검사: '+status,
             '관계 끝점의 승인 판본과 절을 확인하세요.',{draft_id:draft.id,relation_id:relation.id});
         }
       }
       if(missing)finding(row,'wiki_lint_verification_missing','warning','일부 출처·관계의 실제 조회 검증 결과가 없습니다.','제외된 검사 수를 확인하고 연결 후 다시 검사하세요.');
-      if(approved){const key=approved.title.normalize('NFKC').toLocaleLowerCase('ko').replace(/\s+/gu,' ').trim();
-        const group=titles.get(key)||[];group.push(row);titles.set(key,group);}
+      if(approved)for(const key of new Set([approved.title,...(approved.aliases||[])].map(s=>s.normalize('NFKC').toLocaleLowerCase('ko').replace(/\s+/gu,' ').trim()).filter(Boolean))){
+        const group=titles.get(key)||[];group.push(row);titles.set(key,group);
+      }
     }
     for(const [id,doc]of valid)if(selected.has(id)&&latest(doc)&&!connected.has(id))
-      finding(rows.get(id),'wiki_lint_orphan','information','검증된 연결이 없는 승인 페이지입니다.','잘못된 지식이라는 뜻은 아닙니다. 연결 필요성을 검토하세요.');
-    for(const group of titles.values())if(group.length>1)for(const row of group)
-      finding(row,'wiki_lint_duplicate_candidate','information','정규화한 제목이 같은 다른 승인 페이지가 있습니다.','본문·출처를 비교하세요. 자동 병합하지 않습니다.',{related_wiki_ids:group.filter(r=>r.id!==row.id).map(r=>r.id)});
+      finding(rows.get(id),'wiki_lint_orphan','information','검사 범위에서 검증된 연결이 없는 승인 페이지입니다.','잘못된 지식이라는 뜻은 아닙니다. 범위와 연결 필요성을 검토하세요.');
+    const peers=new Map();
+    for(const group of titles.values())if(group.length>1)for(const row of group){
+      const related=peers.get(row.id)||new Set();for(const other of group)if(other.id!==row.id)related.add(other.id);peers.set(row.id,related);
+    }
+    for(const [id,related]of peers)finding(rows.get(id),'wiki_lint_duplicate_candidate','information','정규화한 제목·별칭이 같은 다른 승인 페이지가 있습니다.',
+      '본문·출처를 비교하세요. 자동 병합하지 않습니다.',{related_wiki_ids:[...related].sort()});
     return report;
   }
   globalThis.NowWikiLint=Object.freeze({lintWikiCatalog});

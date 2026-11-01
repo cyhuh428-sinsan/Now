@@ -26,6 +26,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   assert.equal(bookApi.server,server,file+' reader must inspect pinned server evidence');
   assert.equal(typeof bookApi.readOperations,'function',file+' graph must consume validated original operation bindings');
   assert.equal(ingestApi.source,box.wikiSourceNote,file+' ingest must resolve account-bound local evidence');
+  assert.equal(typeof ingestApi.lintSnapshot,'function',file+' report save must re-read the same account-bound Lint inputs');
   assert.equal(queryApi.book,box.wikiNotebook,file+' Query must consume the same verified notebook');
   assert.equal(queryApi.contextKey,box.wikiViewKey,file+' Query must use the live account/protection view guard');
   assert.ok(uiApi.query&&source.includes('globalThis.NowWikiQuery='),file+' must bundle and expose compiled Query');
