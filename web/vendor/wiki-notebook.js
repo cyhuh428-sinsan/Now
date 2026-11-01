@@ -422,7 +422,23 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     active();if(P.canonicalJson(a.h.export())!==before)throw Error('검사 중 위키 저장 상태가 변경되었습니다. 다시 확인하세요.');
     return {scope:scope(a.ctx),rows:result};
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,lintSnapshot,
+  async function protectionDependencies(roots,context,localId){
+    const a=action(),before=P.canonicalJson(a.h.export()),documents=[],wikiEvidence=[],historyRoots=[];
+    if(P.canonicalJson(scope(a.ctx))!==P.canonicalJson(scope(context)))throw Error('wiki_context_changed');
+    const dependencies=W.sourceProtectionDependencies(roots,context,localId,{documents,wikiEvidence,historyRoots});
+    const unique=new Map();
+    for(const value of documents){
+      const document=await W.validateDocument(value,a.ctx);a.check();unique.set(P.canonicalJson(document),document);
+    }
+    if([...unique.values()].some(doc=>doc.schema_version===2)){
+      const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+      if(!evidence?.protection)throw Error('wiki_protection_dependency_check');
+      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance});a.check();
+    }
+    if(before!==P.canonicalJson(a.h.export()))throw Error('wiki_context_changed');
+    return dependencies;
+  }
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,lintSnapshot,protectionDependencies,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };

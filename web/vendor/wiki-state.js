@@ -101,6 +101,7 @@
     while(stack.length){
       const {value,accountKnown}=stack.pop();
       if(!value||typeof value!=='object'||seen.has(value))continue;seen.add(value);
+      if(Object.hasOwn(value,'contexts'))options.historyRoots?.push(value);
       if(Object.hasOwn(value,'protection_record')){
         if(!globalThis.NowNoteProtectionState?.protectedRecord(value))throw Error('wiki_protection_copy');
       }
@@ -131,7 +132,13 @@
           const manifest=evidenceOf(draft);
           if(!Array.isArray(manifest)||!manifest.length)throw Error('wiki_protection_format');
           for(const ref of manifest){
-            if(ref.kind==='wiki')throw Error('wiki_protection_dependency_check');
+            if(ref.kind==='wiki'){
+              validateEvidence(ref,ctx.owner);
+              if(!Array.isArray(options.wikiEvidence))throw Error('wiki_protection_dependency_check');
+              options.wikiEvidence.push(ref);
+              if('wiki:'+ref.wiki_id===localId)ids.add(value.local_id);
+              continue;
+            }
             if(ref?.note_ref?.owner_id!==ctx.owner||typeof ref.note_ref.local_id!=='string')throw Error('wiki_protection_scope');
             if(ref.note_ref.local_id===localId)ids.add(value.local_id);
           }

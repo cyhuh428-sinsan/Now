@@ -5897,6 +5897,7 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
     while(stack.length){
       const {value,accountKnown}=stack.pop();
       if(!value||typeof value!=='object'||seen.has(value))continue;seen.add(value);
+      if(Object.hasOwn(value,'contexts'))options.historyRoots?.push(value);
       if(Object.hasOwn(value,'protection_record')){
         if(!globalThis.NowNoteProtectionState?.protectedRecord(value))throw Error('wiki_protection_copy');
       }
@@ -5927,7 +5928,13 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
           const manifest=evidenceOf(draft);
           if(!Array.isArray(manifest)||!manifest.length)throw Error('wiki_protection_format');
           for(const ref of manifest){
-            if(ref.kind==='wiki')throw Error('wiki_protection_dependency_check');
+            if(ref.kind==='wiki'){
+              validateEvidence(ref,ctx.owner);
+              if(!Array.isArray(options.wikiEvidence))throw Error('wiki_protection_dependency_check');
+              options.wikiEvidence.push(ref);
+              if('wiki:'+ref.wiki_id===localId)ids.add(value.local_id);
+              continue;
+            }
             if(ref?.note_ref?.owner_id!==ctx.owner||typeof ref.note_ref.local_id!=='string')throw Error('wiki_protection_scope');
             if(ref.note_ref.local_id===localId)ids.add(value.local_id);
           }
@@ -7304,7 +7311,23 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     active();if(P.canonicalJson(a.h.export())!==before)throw Error('검사 중 위키 저장 상태가 변경되었습니다. 다시 확인하세요.');
     return {scope:scope(a.ctx),rows:result};
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,lintSnapshot,
+  async function protectionDependencies(roots,context,localId){
+    const a=action(),before=P.canonicalJson(a.h.export()),documents=[],wikiEvidence=[],historyRoots=[];
+    if(P.canonicalJson(scope(a.ctx))!==P.canonicalJson(scope(context)))throw Error('wiki_context_changed');
+    const dependencies=W.sourceProtectionDependencies(roots,context,localId,{documents,wikiEvidence,historyRoots});
+    const unique=new Map();
+    for(const value of documents){
+      const document=await W.validateDocument(value,a.ctx);a.check();unique.set(P.canonicalJson(document),document);
+    }
+    if([...unique.values()].some(doc=>doc.schema_version===2)){
+      const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+      if(!evidence?.protection)throw Error('wiki_protection_dependency_check');
+      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance});a.check();
+    }
+    if(before!==P.canonicalJson(a.h.export()))throw Error('wiki_context_changed');
+    return dependencies;
+  }
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,lintSnapshot,protectionDependencies,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };
@@ -7478,10 +7501,10 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
   const P=NowNoteProtectionProtocol,W=NowNoteWiki,copy=structuredClone,eq=(a,b)=>P.canonicalJson(a)===P.canonicalJson(b);
   const check=(v,code='wiki_dependency_unverified')=>{if(!v)throw Error(code);};
   const tuple=doc=>{const a=doc.approvals.at(-1),d=doc.drafts.find(d=>d.id===a?.draft_id);return [a?.id||null,d?.id||null,d?.draft_hash||null];};
-  async function action(){
+  async function action(retained=[]){
     const ctx={...api.context()},key=api.contextKey(),h=api.history();check(ctx.enabled&&ctx.owner&&h&&h.export()?.schema_version===1&&!h.status().unsupported&&!h.suspended());
     const active=()=>check(key===api.contextKey()&&api.context().enabled&&api.history()===h,'wiki_context_changed');
-    const roots=[h.export(),...(await api.retainedRoots?.()||[])];active();const all=[],queue=[...roots],seen=new WeakSet();
+    const roots=[h.export(),...retained,...(await api.retainedRoots?.()||[])];active();const all=[],queue=[...roots],seen=new WeakSet();
     while(queue.length){const value=queue.shift();if(value==null)continue;check(typeof value==='object'&&value.contexts&&typeof value.contexts==='object');if(seen.has(value))continue;seen.add(value);all.push(value);queue.push(...(value.recovery_archives||[]));}
     return {ctx,h,active,roots:all,account:NowNoteHistory.key(ctx),docs:new Map(),notes:new Map(),wikis:new Map(),versions:new Set(),producerInstances:new Set(),
       provenance:new Map(),producerReads:new Map(),serverHistories:new Map()};
@@ -7615,9 +7638,10 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     }
     return matched;
   }
-  async function knownGeneration(a,wikiId,draft,docs){
+  async function knownGeneration(a,wikiId,draft,docs,{localCommitted=false}={}){
     const candidates=a.roots.flatMap(root=>Object.values(root.contexts?.[a.account]?.wiki_ingest_operations||{}));
     for(const row of candidates){
+      if(localCommitted&&(row?.state!=='committed'||row.remote))continue;
       if(!['ingest','integrate'].includes(row?.action)||!['attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.documents)||!Array.isArray(row.inputs))continue;
       if(row.scope?.owner!==a.ctx.owner||String(row.scope.url).replace(/\/+$/,'')!==String(a.ctx.url).replace(/\/+$/,''))continue;
       const bound=row.documents.find(d=>d.wiki_id===wikiId&&d.draft_id===draft.id&&d.draft_hash===draft.draft_hash),page=row.reservation?.pages?.find(p=>p.wiki_id===wikiId&&p.draft_id===draft.id&&p.generation_id===draft.generation_id);
@@ -7646,17 +7670,53 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
         if(!/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(row.scope.serverInstance))continue;
         a.producerInstances.add(row.scope.serverInstance);
       }return true;
-    }return remoteGeneration(a,wikiId,draft);
+    }return localCommitted?false:remoteGeneration(a,wikiId,draft);
   }
-  async function graph(refs,{instance,onInstance}={}){
-    const a=await action(),nodes=new Map(),visiting=new Set(),leaves=new Set();a.instance=instance;a.onInstance=onInstance;
+  async function protectionSeed(a,document){
+    const doc=await W.validateDocument(document,a.ctx),local='wiki:'+doc.wiki_id;a.active();plainLocal(a,local);
+    const item=a.h.view(local);let history=[],index=null;
+    if(item?.localOnly!==true){
+      check(api.server&&api.readRemote,'wiki_source_unavailable');
+      const proof=await api.server.inspect(local,undefined,{policy:1});a.active();bind(a,proof.instance);
+      const remote=await api.readRemote(doc.wiki_id);a.active();
+      check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===doc.wiki_id&&remote.artifact?.protected===false
+        &&remote.artifact.head_revision_id===proof.current.head_revision_id,'wiki_evidence_binding');
+      const current=await W.validateDocument(proof.current.snapshot.note.content,a.ctx);a.active();
+      check(proof.current.snapshot.note.source==='wiki-artifact'&&current.wiki_id===doc.wiki_id
+        &&eq(remote.artifact.document,current),'wiki_evidence_binding');
+      index=await W.validateLink(remote.resource.payload,a.ctx);a.active();
+      check(index.artifact_local_id===local&&(doc.schema_version!==2||index.document_schema_floor===2),'wiki_evidence_binding');
+      for(const row of proof.history){
+        check(row.snapshot.note.source==='wiki-artifact','wiki_evidence_binding');
+        const value=await W.validateDocument(row.snapshot.note.content,a.ctx);a.active();check(value.wiki_id===doc.wiki_id,'wiki_evidence_binding');
+        history.push({revision_ref:copy(row.revision_ref),document:value});
+      }
+      a.serverHistories.set(doc.wiki_id,history);
+      if(Object.hasOwn(remote.artifact,'generation_provenance'))a.provenance.set(doc.wiki_id,remote.artifact.generation_provenance);
+    }
+    const retained=await documents(a,doc.wiki_id,history);a.active();
+    check(retained.has(await P.hashJson(doc)),'wiki_evidence_binding');a.active();
+    return {history,index,localOnly:item?.localOnly===true};
+  }
+  async function graph(refs,{instance,onInstance,protectionDocuments=[],retainedRoots=[],requireComplete=false}={}){
+    const a=await action(retainedRoots),nodes=new Map(),visiting=new Set(),leaves=new Set();a.instance=instance;a.onInstance=onInstance;
     async function visit(ref,depth,root=false){
-      check(depth<=32,'wiki_dependency_limit');const value=await wiki(a,ref,{fresh:root,allowDeleted:!root});
-      if(visiting.has(ref.wiki_id)||nodes.has(ref.wiki_id))return;
+      check(depth<=32,'wiki_dependency_limit');
+      if(visiting.has(ref.wiki_id)){check(!requireComplete,'wiki_protection_cycle');return;}
+      if(ref.document&&nodes.has(ref.wiki_id)){
+        const document=await W.validateDocument(ref.document,a.ctx);a.active();
+        check(a.docs.get(ref.wiki_id)?.has(await P.hashJson(document)),'wiki_evidence_binding');a.active();return;
+      }
+      const value=ref.document?await protectionSeed(a,ref.document):await wiki(a,ref,{fresh:root,allowDeleted:!root});
+      if(nodes.has(ref.wiki_id))return;
       check(nodes.size+visiting.size<2000,'wiki_dependency_limit');visiting.add(ref.wiki_id);
       const docs=await documents(a,ref.wiki_id,value.history),dependencies=new Map();let complete=true;
       for(const document of docs.values())for(const draft of document.drafts){
-        if(draft.schema_version===2&&!await knownGeneration(a,ref.wiki_id,draft,docs))complete=false;
+        if(draft.schema_version===2){
+          const verified=requireComplete&&value.localOnly!==true&&a.h.view('wiki:'+ref.wiki_id)?.localOnly!==true
+            ?await remoteGeneration(a,ref.wiki_id,draft):await knownGeneration(a,ref.wiki_id,draft,docs,{localCommitted:requireComplete});
+          if(!verified)complete=false;
+        }
         const quotes=new Map();
         for(const raw of W.evidenceOf(draft)){
           const input=raw.kind?raw:{...copy(raw),kind:'note'};W.validateEvidence(input,a.ctx.owner);
@@ -7681,8 +7741,10 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
       check(dependencies.size<=1000,'wiki_dependency_limit');nodes.set(ref.wiki_id,{wiki_id:ref.wiki_id,dependencies:[...new Set([...dependencies.values()].map(r=>r.wiki_id))].sort(),complete});
       for(const input of dependencies.values())await visit(input,depth+1);visiting.delete(ref.wiki_id);
     }
+    for(const document of protectionDocuments)await visit({wiki_id:document.wiki_id,document},0);a.active();
     for(const ref of refs)await visit(ref,0,true);a.active();
     check([...a.producerInstances].every(id=>id===a.instance),'wiki_context_changed');
+    if(requireComplete)check([...nodes.values()].every(n=>n.complete),'wiki_dependency_unverified');
     return {nodes:[...nodes.values()].sort((a,b)=>a.wiki_id<b.wiki_id?-1:a.wiki_id>b.wiki_id?1:0)};
   }
   async function operationProof(id,sourceId,targetId,{origin}={}){
@@ -7721,7 +7783,8 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     }
     a.active();return {operation:copy(operation),documents:copy(originals),currentTarget:copy(currentTarget)};
   }
-  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph,operationProof};
+  return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph,operationProof,
+    protection:(documents,{roots=[],instance}={})=>graph([],{instance,protectionDocuments:documents,retainedRoots:roots,requireComplete:true})};
 }});
 
 ;
@@ -14308,11 +14371,11 @@ function initializeNoteProtection() {
       noteHistoryTimers.clear();
       window.clearTimeout(serverSyncTimer);
       if (noteHistory.failure()) throw new Error(noteHistory.failure());
-      const roots=[];
-      for(const store of protectionStorageAdapters())roots.push(await store.read());
-      const documents=[];
-      const dependencies=NowNoteWiki.sourceProtectionDependencies(roots,scope,scope.local_id,{documents});
-      for(const document of documents)await NowNoteWiki.validateDocument(document,scope);
+      const roots=[],stores=protectionStorageAdapters();
+      for(const store of stores)roots.push(await store.read());
+      const dependencies=await wikiNotebook.protectionDependencies(roots,scope,scope.local_id);
+      for(let i=0;i<stores.length;i++)if(NowNoteProtectionProtocol.canonicalJson(roots[i])!==NowNoteProtectionProtocol.canonicalJson(await stores[i].read()))
+        throw new Error("검사 중 보관 사본이 변경되었습니다. 다시 확인하세요.");
       if(dependencies.length)throw new Error("관련 위키 "+dependencies.length+"개를 먼저 전체 보호하세요. 원문은 변경하지 않았습니다.");
     },
     change: () => {
