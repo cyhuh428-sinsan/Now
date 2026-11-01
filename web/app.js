@@ -7093,6 +7093,15 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       ||doc.rejected_draft_ids.some(id=>!ids.has(id)||approvedDrafts.has(id)))throw Error('위키 검토 형식이 다릅니다.');
     a.check();return copy(doc);
   }
+  async function readEvidence(ref){
+    const a=action();W.validateEvidence(ref,a.ctx.owner);
+    if(ref.kind!=='wiki')throw Error('고정 위키 출처를 선택하세요.');
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+    if(!evidence)throw Error('고정 출처 검증 연결을 확인하세요.');
+    const proof=await evidence.resolve(copy(ref),{fresh:false});a.check();
+    if(api.history()!==a.h||!canRead(proof.currentDocument))throw Error('계정·서버·출처 상태가 변경되었습니다.');
+    return copy(proof);
+  }
   async function approvedCatalog(){
     const a=action(),active=()=>{a.check();if(api.history()!==a.h)throw Error('위키 이력 연결이 변경되었습니다.');};
     const rows=await list();active();const verified=[];
@@ -7127,7 +7136,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     };
     const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();return catalog;
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };
@@ -8595,7 +8604,14 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         for(const id of section.citation_ids){
           const citation=draft.citations.find(c=>c.id===id),source=NowNoteWiki.evidenceOf(draft).find(s=>s.id===(citation.evidence_id||citation.source_id));
           const quote=node('blockquote',citation.quote),link=command('source','원문 보기',async token=>{
-            if(source.kind==='wiki')throw Error('근거 위키의 고정 판본을 확인하세요.');
+            if(source.kind==='wiki'){
+              if(!api.readEvidence)throw Error('근거 위키의 고정 판본 읽기 연결을 확인하세요.');
+              const proof=await api.readEvidence(source);requireActive(token);
+              const section=proof.draft.sections.find(s=>s.id===citation.section_id);
+              if(!section?.markdown.includes(citation.quote))throw Error('위키 인용 판본·절이 다릅니다.');
+              doc=structuredClone(proof.currentDocument);choose(proof.draft.id);graphSection=citation.section_id;graphCatalog=null;
+              relationEditor=null;sourceMode=false;dirty=false;comparing=false;message='고정된 위키 출처 판본';return;
+            }
             if(source.note_ref.local_id.startsWith('wiki-source:')){
               sourceRows=await api.sources.list();requireActive(token);sourcePreview=source.id;sourceMode=true;sourceFiles=[];
               if(api.ingest)await refreshOperations(token);

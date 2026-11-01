@@ -197,4 +197,10 @@ const targetRace=box.createWikiIngestNotebook({...api,evidence:{...targetEvidenc
 const sourceBeforeTargetRace=history.view('wiki:'+alpha.wiki_id).draft.content;
 await assert.rejects(()=>targetRace.commitLocal(targetPreview),/관계|대상|판본|삭제|변경/,'an approved navigation endpoint removed after review is checked again at CAS');
 assert.equal(history.view('wiki:'+alpha.wiki_id).draft.content,sourceBeforeTargetRace);
+assert.equal(typeof ordinary.readEvidence,'function','Wiki citations need a verified retained revision reader');
+const oldWikiRef=beta.document.drafts[0].evidence_manifest.find(r=>r.kind==='wiki'),beforeEvidenceWrites=writes;
+const retainedWiki=await ordinary.readEvidence(oldWikiRef);
+assert.equal(retainedWiki.draft.id,oldWikiRef.draft_id);assert.equal(retainedWiki.draft.draft_hash,oldWikiRef.content_hash);
+assert.notEqual(retainedWiki.currentDocument.approvals.at(-1).draft_id,oldWikiRef.draft_id,'the reader does not silently follow latest approval');
+assert.equal(writes,beforeEvidenceWrites,'citation reads do not write a journal or navigation cache');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

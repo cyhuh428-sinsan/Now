@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import vm from 'node:vm';
+import {spawnSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
 import {fixture,ctx,scope,id,clone} from './wiki_ingest_fixture.mjs';
 const {box,I,P,W,selection,reservation,output}=await fixture();
 vm.runInContext(await fs.readFile(new URL('../vendor/cytoscape.min.js',import.meta.url),'utf8'),box);
@@ -22,10 +24,30 @@ assert.equal((await build(originals)).nodes.length,0,'draft-only pages never bec
 assert.equal((await build([documents[0],originals[1]])).edges.length,0,'both endpoint drafts must be approved');
 const catalog=await build();assert.equal(catalog.nodes.length,2);assert.equal(catalog.edges.length,2);
 const requests=await I.buildOperationRequests(proposal,{context:ctx,snapshot,catalog:[],device:ctx.device,connection:{provider:'fixture',model:'synthetic'},generatedAt:'2026-11-01T00:00:00Z'});
+const golden=JSON.parse(await fs.readFile(new URL('../../server/tests/fixtures/wiki_graph_bindings_v1.json',import.meta.url),'utf8'));
+const hashes={format:'wiki-graph-bindings-v1',operation_id:requests.prepare.operation_id,draft_bindings:requests.prepare.draft_bindings,
+  document_hashes:await Promise.all(originals.map(async d=>({wiki_id:d.wiki_id,sha256:await P.hashJson(d)}))),manifest_hash:requests.prepare.manifest_hash};
+assert.equal(P.canonicalJson(hashes),P.canonicalJson(golden),'mutual proposal draft → document → manifest hashes remain fixed');
+if(process.argv[2]){
+  const code=`import json,sys
+from app.schemas.wiki import WikiArtifactV2,digest
+from app.schemas.wiki_operations import parse_prepare
+p=json.load(sys.stdin);g=p['golden'];m=parse_prepare(p['request'])
+assert m.manifest_hash==g['manifest_hash']
+assert [b.model_dump() for b in m.draft_bindings]==g['draft_bindings']
+for value,expected in zip(p['documents'],g['document_hashes']):
+    d=WikiArtifactV2.model_validate(value)
+    assert digest(d.model_dump())==expected['sha256'] and d.wiki_id==expected['wiki_id']
+print('Mutual relation golden hashes: exact JS/Python draft/document/manifest PASS (no DB/HTTP/model)')`;
+  const result=spawnSync(process.argv[2],['-B','-c',code],{input:JSON.stringify({golden,request:requests.prepare,documents:originals}),encoding:'utf8',env:{...process.env,PYTHONPATH:fileURLToPath(new URL('../../server',import.meta.url)),PYTHONDONTWRITEBYTECODE:'1'}});
+  assert.equal(result.status,0,result.stderr);process.stdout.write(result.stdout);
+}
 const remoteOperation={operation_id:reservation.operation_id,action:'ingest',state:'committed',scope:{url:ctx.url,owner:ctx.owner},manifest:requests.prepare};
 assert.equal((await build(documents,[remoteOperation])).edges.length,2,'verified server manifest recovers proposal bindings on a new device');
 const damagedRemote=clone(remoteOperation);damagedRemote.manifest.draft_bindings[0].draft_hash='a'.repeat(64);
 assert.equal((await build(documents,[damagedRemote])).edges.length,0,'changed remote manifest does not become a graph binding');
+delete damagedRemote.manifest.manifest_hash;damagedRemote.manifest.manifest_hash=await P.hashJson(damagedRemote.manifest);
+assert.equal((await build(documents,[damagedRemote])).edges.length,0,'rehashing the manifest cannot replace either original endpoint binding');
 assert.deepEqual(Array.from(catalog.edges,e=>e.confidence).sort(),['explicit','inferred']);
 assert.equal(G.planWikiIntegration(documents[0].wiki_id,catalog).incoming.length,1);
 const projected=G.projectWikiGraph(catalog);assert.equal(projected.length,4);
@@ -37,6 +59,13 @@ const changed=clone(operation);changed.documents[1].draft_hash='a'.repeat(64);
 assert.equal((await build(documents,[changed])).edges.length,0,'both proposal endpoint hashes are bound');
 const hidden=await G.buildApprovedWikiCatalog([row(documents[0]),{...row(documents[1]),protected:true}],ctx,{operations:[operation]});
 assert.equal(hidden.nodes.length,1);assert.equal(hidden.edges.length,0);assert.ok(!JSON.stringify(hidden).includes('Beta'));
+for(const state of [{deleted:true},{unavailable:true},{available:false}]){
+  const excluded=await G.buildApprovedWikiCatalog([row(documents[0]),{...row(documents[1]),...state}],ctx,{operations:[operation]});
+  assert.equal(excluded.nodes.length,1);assert.equal(excluded.edges.length,0);assert.ok(!JSON.stringify(excluded).includes('Beta'));
+  assert.equal((await build()).edges.length,2,'restoring availability rebuilds the projection from unchanged approved records');
+}
+const unsupported=clone(documents[1]);unsupported.schema_version=99;
+assert.equal((await build([documents[0],unsupported])).nodes.length,1,'unsupported documents do not supply graph labels');
 assert.equal((await G.buildApprovedWikiCatalog(documents.map(row),{...ctx,owner:'other'},{operations:[operation]})).nodes.length,0);
 const pending=clone(documents[0]),next=clone(pending.drafts[0]);next.id=id(82);next.generation_id=id(83);next.base_approved_revision_id=pending.approvals[0].id;next.title='UNAPPROVED_LABEL';delete next.draft_hash;next.draft_hash=await P.hashJson(next);pending.drafts.push(next);pending.document_version++;
 const still=await build([pending,documents[1]]);assert.equal(still.nodes[0].title,'Alpha');assert.ok(!JSON.stringify(still).includes('UNAPPROVED_LABEL'));

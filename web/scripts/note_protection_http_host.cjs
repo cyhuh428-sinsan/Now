@@ -7,6 +7,7 @@ if(!path.resolve(config.profile).startsWith(qaRoot+path.sep))throw Error('profil
 app.setPath('userData',config.profile);app.disableHardwareAcceleration();
 const credentials=JSON.parse(fs.readFileSync(config.secrets,'utf8'));
 if(config.phase===24)credentials.a.device+='-peer';
+if([52,53].includes(config.phase))credentials.a.device+='-wiki-peer';
 const clientMode=config.phase===24?'desktop':config.mode;
 const tokenLine=fs.readFileSync(config.envFile,'utf8').split(/\r?\n/).find(v=>v.startsWith('NOW_QA_API_TOKEN='));
 let apiToken=tokenLine?.slice('NOW_QA_API_TOKEN='.length).trim();
@@ -81,11 +82,21 @@ app.whenReady().then(async()=>{
       if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
         blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
       }
-      if(event.stage==='canvas_ready')void(async()=>{
+      if(['canvas_ready','wiki_relation_ready','wiki_graph_ready'].includes(event.stage))void(async()=>{
         for(const [size,width,height]of [['desktop',1280,900],['mobile',390,844]]){
           window.setContentSize(width,height);
           await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
-          const name='canvas-'+config.run+'-'+config.mode+'-'+size+'.png';
+          if(event.stage==='wiki_relation_ready'){
+            const fits=await window.webContents.executeJavaScript('(()=>{const d=document.querySelector("#wikiDialog"),f=d?.querySelector("[data-wiki-integration]");return Boolean(f&&f.scrollWidth<=f.clientWidth+1&&d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth);})()');
+            if(!fits)throw Error('wiki_relation_layout');
+          }
+          if(event.stage==='wiki_graph_ready'){
+            await window.webContents.executeJavaScript('__HTTP_QA_WIKI_GRAPH__.instance.resize();__HTTP_QA_WIKI_GRAPH__.instance.fit(undefined,36);new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+            const frame=await window.webContents.executeJavaScript('(()=>{const cy=__HTTP_QA_WIKI_GRAPH__.instance,c=document.querySelector(".wiki-graph-canvas"),d=document.querySelector("#wikiDialog"),r=c.getBoundingClientRect();let pixels=0;for(const canvas of c.querySelectorAll("canvas")){const data=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;for(let i=3;i<data.length;i+=4)if(data[i])pixels++;}return {nodes:cy.nodes().length,edges:cy.edges().length,pixels,width:r.width,height:r.height,fits:r.right<=d.getBoundingClientRect().right+1&&d.scrollWidth<=d.clientWidth+1};})()');
+            if(frame.nodes!==2||frame.edges!==4||frame.pixels<100||frame.width<100||!frame.fits)throw Error('wiki_graph_frame');
+            persistEvidence({mode:config.mode,phase:config.phase,graphFrame:{size,...frame}});
+          }
+          const name=({canvas_ready:'canvas',wiki_relation_ready:'wiki-relation',wiki_graph_ready:'wiki-graph'}[event.stage])+'-'+config.run+'-'+config.mode+'-'+size+'.png';
           fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
           persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
         }
@@ -109,9 +120,9 @@ app.whenReady().then(async()=>{
     if(clientMode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
-    if([50,51].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
+    if([50,51,52,53,54,55].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
-    if([40,41,42,43,44,45,46,47,48,49,50,51].includes(config.phase)){
+    if([40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55].includes(config.phase)){
       if(providerAttempts!==0)throw Error('canvas_provider_attempt');
       persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:0,closed:true}});
     }

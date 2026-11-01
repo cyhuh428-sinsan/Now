@@ -31,7 +31,8 @@
     let response;
     try{response=await fetch(url+path,{method,cache:'no-store',headers:{Authorization:'Bearer '+config.apiToken,...(headers||noteHistoryContext().headers),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});}
     catch(error){emit({stage:'transport_uncertain_'+path.split('?')[0].split('/').at(-1),owner:a?.owner,local_id:target,code:/^[A-Za-z]+$/.test(error.name)?error.name:'network_error'});throw Error('transport_uncertain');}
-    if(!response.ok)throw Error('http_'+response.status+'_'+path.split('/').at(-1));
+    if(!response.ok){const value=await response.json().catch(()=>null);throw Object.assign(Error('http_'+response.status+'_'+path.split('/').at(-1)),
+      {status:response.status,deniedHasWikiData:/generation_provenance|drafts|artifact|evidence_manifest/.test(JSON.stringify(value))});}
     return response.json();
   }
   async function login(account) {
@@ -78,7 +79,7 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=!config.publicProtectionGate;
-  if([50,51].includes(config.phase))return runWikiIngestHttpFixture({config,request,settle});
+  if([50,51,52,53,54,55].includes(config.phase))return runWikiIngestHttpFixture({config,request,settle,login});
   if([47,48,49].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function libraryWait(done,label){

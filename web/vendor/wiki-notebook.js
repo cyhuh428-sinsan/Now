@@ -282,6 +282,15 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       ||doc.rejected_draft_ids.some(id=>!ids.has(id)||approvedDrafts.has(id)))throw Error('위키 검토 형식이 다릅니다.');
     a.check();return copy(doc);
   }
+  async function readEvidence(ref){
+    const a=action();W.validateEvidence(ref,a.ctx.owner);
+    if(ref.kind!=='wiki')throw Error('고정 위키 출처를 선택하세요.');
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+    if(!evidence)throw Error('고정 출처 검증 연결을 확인하세요.');
+    const proof=await evidence.resolve(copy(ref),{fresh:false});a.check();
+    if(api.history()!==a.h||!canRead(proof.currentDocument))throw Error('계정·서버·출처 상태가 변경되었습니다.');
+    return copy(proof);
+  }
   async function approvedCatalog(){
     const a=action(),active=()=>{a.check();if(api.history()!==a.h)throw Error('위키 이력 연결이 변경되었습니다.');};
     const rows=await list();active();const verified=[];
@@ -316,7 +325,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     };
     const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();return catalog;
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };

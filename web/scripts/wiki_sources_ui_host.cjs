@@ -144,6 +144,25 @@ app.whenReady().then(async()=>{
       if(document.querySelector('#wikiDialog').open||document.querySelector('#wikiDialog').textContent)throw Error('locked_relation_target_label_residue');
       ui.close();return {targetLockConcealed:true};
     })()`);
+    const citationNavigation=await run(`(async()=>{
+      document.querySelector('#wikiDialog').remove();
+      const rows=await wikiNotebook.list(),source=rows.find(r=>r.document.approvals.length===1),outer=rows.find(r=>r.document.approvals.length===2);
+      if(!source||!outer)throw Error('wiki_citation_fixture');
+      const documentValue=structuredClone(outer.document),draft=documentValue.drafts.at(-1),target=source.document.drafts.at(-1),approval=source.document.approvals.at(-1);
+      const ref={id:'compiled-source',kind:'wiki',origin:'local',owner_id:source.document.scope.owner,wiki_id:source.document.wiki_id,draft_id:target.id,approval_id:approval.id,document_version:source.document.document_version,content_hash:target.draft_hash};
+      draft.evidence_manifest=[ref];draft.citations=[{id:'c1',evidence_id:ref.id,section_id:target.sections[0].id,quote:target.sections[0].markdown}];
+      delete draft.draft_hash;draft.draft_hash=await NowNoteProtectionProtocol.hashJson(draft);
+      documentValue.approvals.at(-1).draft_hash=draft.draft_hash;documentValue.approvals.at(-1).evidence_manifest_hash=await NowNoteProtectionProtocol.hashJson(draft.evidence_manifest);
+      await NowNoteWiki.validateDocument(documentValue,documentValue.scope);
+      const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
+      const ui=mountNowWiki({...wikiNotebook,contextKey:wikiViewKey,notes:()=>[],list:async()=>[{...outer,document:documentValue},source]});
+      const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn)=>{for(let n=0;n<300;n++){if(fn())return;await pause();}throw Error('wiki_citation_navigation');};
+      await ui.open();document.querySelector('#wikiDialog .wiki-entry button.library-item').click();
+      await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=source]'))&&!document.querySelector('#wikiDialog [data-wiki-action=source]').disabled);
+      document.querySelector('#wikiDialog [data-wiki-action=source]').click();await until(()=>document.querySelector('#wikiDialog [name=wiki-version]')?.value===target.id);
+      if(document.querySelector('#wikiDialog .wiki-detail h3')?.textContent!==target.title||NowNoteProtectionProtocol.canonicalJson(noteHistory.export())!==before)throw Error('wiki_citation_target_or_write');
+      ui.close();return {wikiCitationNavigation:true,journalUnchanged:true};
+    })()`);
     const callbacks=await run(`(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
       let key='alice',captures=0;const ui=mountNowWiki({contextKey:()=>key,notes:()=>[],list:async()=>[],
@@ -197,7 +216,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,relationVisibility,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
