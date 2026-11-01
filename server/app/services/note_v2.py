@@ -324,6 +324,8 @@ def import_branches(db, body, head):
 
 def mutate(db, body, operation):
     try:
+        from app.services.wiki_operations import guard_request
+        guard_request(db, (body,), {})
         head, rows = scope(db, body.owner_id, body.local_id)
         from app.services.wiki_guards import require_review
         require_review(db, [(body.owner_id, body.local_id)])

@@ -35,6 +35,8 @@ def transactional(fn):
     @wraps(fn)
     def operation(db, *args, **kwargs):
         try:
+            from app.services.wiki_operations import guard_request
+            guard_request(db, args, kwargs)
             result = fn(db, *args, **kwargs)
             db.commit()
             return result

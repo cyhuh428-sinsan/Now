@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from secrets import compare_digest
 
 from fastapi import HTTPException
-from sqlalchemy import func, select, text
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.library import LibraryMutation, LibraryResource
@@ -84,10 +84,11 @@ def mutate(db: Session, *, owner_id, kind, resource_id, body, deleting=False):
     }).encode("utf-8")).hexdigest()
     try:
         # 사용자별 상한, CAS, 재시도 원장을 한 직렬화 경계에서 갱신한다.
-        if db.bind.dialect.name == "sqlite":
-            db.execute(text("BEGIN IMMEDIATE"))
-        else:
-            db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id).with_for_update())
+        from app.services.note_history import lock_note_writes
+        lock_note_writes(db, [owner_id])
+        db.scalar(select(UserAccount).where(UserAccount.owner_id == owner_id).with_for_update())
+        from app.services.wiki_operations import require_unreserved
+        require_unreserved(db, owner_id, body.mutation_id)
         previous = db.get(LibraryMutation, (owner_id, body.mutation_id))
         if previous:
             if previous.request_hash != request_hash:

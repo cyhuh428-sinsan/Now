@@ -37,6 +37,8 @@ def atomic(fn):
     @wraps(fn)
     def transaction(db, *args, **kwargs):
         try:
+            from app.services.wiki_operations import guard_request
+            guard_request(db, args, kwargs)
             value = fn(db, *args, **kwargs)
             db.commit()
             return value

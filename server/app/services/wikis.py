@@ -129,9 +129,11 @@ def update_index(db, owner, ident, row, values):
 
 def mutate(db, ident, body, operation):
     local = "wiki:" + ident
-    if body.local_id != local:
-        error("wiki_identity_mismatch", 422)
     try:
+        from app.services.wiki_operations import guard_request
+        guard_request(db, (body,), {})
+        if body.local_id != local:
+            error("wiki_identity_mismatch", 422)
         lock_note_writes(db, [body.owner_id])
         require_active_user_device(db, owner_id=body.owner_id, device_id=body.device_id)
         db.scalar(select(UserAccount).where(UserAccount.owner_id == body.owner_id).with_for_update())
@@ -229,6 +231,8 @@ def lifecycle(db, ident, body, *, restoring):
         lock_note_writes(db, [owner])
         require_active_user_device(db, owner_id=owner, device_id=body.device_id)
         db.scalar(select(UserAccount).where(UserAccount.owner_id == owner).with_for_update())
+        from app.services.wiki_operations import require_unreserved
+        require_unreserved(db, owner, body.mutation_id)
         previous = db.get(LibraryMutation, (owner, body.mutation_id))
         if previous is not None:
             if previous.request_hash != hashed:
