@@ -2,7 +2,7 @@
 globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}){
   const check=(value,code)=>{if(!value)throw Error('wiki_ingest_'+code);};
   const delay=()=>new Promise(resolve=>setTimeout(resolve,20));
-  async function until(test,code){const started=performance.now();for(let i=0;i<900;i++){if(await test())return;await delay();}globalThis.__WIKI_QA_WAIT_FAILURE__={code:'wiki_ingest_'+code,elapsedMs:Math.round(performance.now()-started)};throw Error('wiki_ingest_'+code);}
+  async function until(test,code){const started=performance.now();for(let i=0;i<900;i++){if(await test())return;await delay();}globalThis.__WIKI_QA_WAIT_FAILURE__={code:'wiki_ingest_'+code,elapsedMs:Math.round(performance.now()-started)};globalThis.__WIKI_QA_FAILURE_STATE__=globalThis.__HTTP_QA_CAPTURE_FAILURE__?.();throw Error('wiki_ingest_'+code);}
   await until(()=>!serverSyncRunning,'initial_sync');
   if(isDesktopClient())await loadServerSharedNotes({replace:true});
   await settle();

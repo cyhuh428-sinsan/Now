@@ -53,6 +53,21 @@ ipcMain.handle('nownote:desktop-store-info',()=>({path:storeFile,version:1,keys:
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 const evidenceRecorder=require('./http_qa_evidence.cjs').createEvidenceRecorder(config);
 const persistEvidence=evidenceRecorder.record;
+const failureStateScript=`(()=>{
+  const dialog=document.querySelector('#wikiDialog');
+  const status=dialog?.querySelector('[role=status]')?.textContent?.trim()||'';
+  const known=new Map([
+    ['검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.','journal_changed'],
+    ['계정·서버가 변경되었습니다. 원문은 보존했습니다.','context_changed'],
+    ['서버 위키의 기준·출처 판본을 다시 확인하세요.','baseline_changed'],
+    ['인용 확인 완료 · 내용의 사실성은 별도 검토가 필요합니다.','query_verified']
+  ]);
+  const wait=globalThis.__WIKI_QA_WAIT_FAILURE__;
+  return {open:Boolean(dialog?.open),busy:Boolean(dialog?.querySelector('[data-wiki-action=sources]')?.disabled),
+    status:known.get(status)||(/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified'),
+    waitCode:typeof wait?.code==='string'&&/^wiki_ingest_[a-z0-9_]+$/.test(wait.code)?wait.code:null,
+    elapsedMs:Number.isSafeInteger(wait?.elapsedMs)&&wait.elapsedMs>=0?wait.elapsedMs:null};
+})()`;
 function exit(code){try{evidenceRecorder.flush();}catch{code=1;}app.exit(code);}
 let blockQaApi=false,syntheticProvider=null,providerAttempts=0;
 async function closeSyntheticProvider(){
@@ -122,6 +137,7 @@ app.whenReady().then(async()=>{
     if(clientMode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
     for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
     await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
+    await window.webContents.executeJavaScript('globalThis.__HTTP_QA_CAPTURE_FAILURE__=()=>'+failureStateScript+';undefined;');
     if([50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
     const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
     if([40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase)){
@@ -139,21 +155,7 @@ app.whenReady().then(async()=>{
       || (/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error');
     const errorType=/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error';
     try{
-      const failureState=await window.webContents.executeJavaScript(`(()=>{
-        const dialog=document.querySelector('#wikiDialog');
-        const status=dialog?.querySelector('[role=status]')?.textContent?.trim()||'';
-        const known=new Map([
-          ['검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.','journal_changed'],
-          ['계정·서버가 변경되었습니다. 원문은 보존했습니다.','context_changed'],
-          ['서버 위키의 기준·출처 판본을 다시 확인하세요.','baseline_changed'],
-          ['인용 확인 완료 · 내용의 사실성은 별도 검토가 필요합니다.','query_verified']
-        ]);
-        const wait=globalThis.__WIKI_QA_WAIT_FAILURE__;
-        return {open:Boolean(dialog?.open),busy:Boolean(dialog?.querySelector('[data-wiki-action=sources]')?.disabled),
-          status:known.get(status)||(/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified'),
-          waitCode:typeof wait?.code==='string'&&/^wiki_ingest_[a-z0-9_]+$/.test(wait.code)?wait.code:null,
-          elapsedMs:Number.isSafeInteger(wait?.elapsedMs)&&wait.elapsedMs>=0?wait.elapsedMs:null};
-      })()`);
+      const failureState=await window.webContents.executeJavaScript('globalThis.__WIKI_QA_FAILURE_STATE__||'+failureStateScript);
       persistEvidence({mode:config.mode,phase:config.phase,failureState});
     }catch{persistEvidence({mode:config.mode,phase:config.phase,failureState:{unavailable:true}});}
     persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();exit(1);
