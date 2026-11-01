@@ -25,5 +25,23 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   raw={schema_version:1,contexts:{[account]:{notes:{}}}};
   const info=await box.inspect();assert.equal(info.localWiki,true);assert.equal(info.status.crypto_epoch,1);
   ctx.owner='bob';await assert.rejects(box.inspect,/계정/);
+  ctx.owner='alice';let locked=false,reads=0,opened=null;
+  let record={localOnly:false,draft:{content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null}},current={status:'ok',identity_state:'coherent',snapshot:{note:{owner_id:ctx.owner,local_id:local,content:'NOW_ENCRYPTED_V1:synthetic',deleted_at:null}},head_version:1};
+  box.protectionActionGuard=()=>()=>{if(locked)throw Error('synthetic_locked');};
+  box.noteHistory.view=()=>structuredClone(record);
+  box.noteHistoryRequest=async()=>{reads++;return structuredClone(current);};
+  box.wikiNotebook={inspectProtected:async()=>({syntheticTypedDocument:true})};
+  box.wikiUI={openProtected:(document,access)=>{opened={document,access};}};
+  const previewStart=source.indexOf('async function openProtectedWikiPreview('),previewEnd=source.indexOf('\nfunction initializeWikiNotebook()',previewStart);
+  assert.ok(previewStart>=0&&previewEnd>previewStart);
+  vm.runInContext(source.slice(previewStart,previewEnd)+'\nglobalThis.preview=openProtectedWikiPreview;',box);
+  await box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes');
+  assert.equal(opened.access.origin,'server');assert.equal(reads,1);await opened.access.revalidate();assert.equal(reads,2);
+  current.head_version++;await assert.rejects(opened.access.revalidate,/판본/);
+  current.identity_state='ambiguous';await assert.rejects(()=>box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes'),/접근/);current.identity_state='coherent';
+  locked=true;const beforeReads=reads;await assert.rejects(opened.access.revalidate,/synthetic_locked/);assert.equal(reads,beforeReads,'relock stops before another read');
+  locked=false;record.localOnly=true;await box.preview({scope:{...scope,url:ctx.url}},'synthetic decrypted bytes');
+  assert.equal(opened.access.origin,'local');const beforeLocalReads=reads;await opened.access.revalidate();assert.equal(reads,beforeLocalReads);
+  record.draft.deleted_at='2026-11-02T00:00:00Z';await assert.rejects(opened.access.revalidate,/접근/);
 }
-console.log('Wiki protection actual app inspection: incomplete fallback blocks completion, cipher-only archive and owner isolation PASS');
+console.log('Wiki protection actual app inspection: incomplete fallback blocks completion, cipher-only archive, Query current-read/relock/local-delete and owner isolation PASS');

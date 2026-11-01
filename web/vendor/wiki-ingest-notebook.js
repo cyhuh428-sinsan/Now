@@ -86,9 +86,10 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     check(api.server,'서버 원본 검증 연결을 확인하세요.');
     const result=await api.server.inspect(id,expected,options);a.active();bindInstance(a,result.instance);return result;
   }
-  async function catalog(a,replacements=[]){
+  async function catalog(a,replacements=[],wikiIds=null){
     const result=[],fixed=new Map(replacements.map(r=>['wiki:'+r.document.wiki_id,r]));
     for(const [id,item]of Object.entries(a.h.entries())){
+      if(wikiIds&&!wikiIds.has(id.slice(5)))continue;
       if(fixed.has(id)){result.push(copy(fixed.get(id)));fixed.delete(id);continue;}
       if(item.draft.source!=='wiki-artifact')continue;plainItem(a,id,item);check(!item.conflict&&!item.draft.deleted_at);
       if(api.lifecycle?.blocked(id))continue;
@@ -162,7 +163,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     return operation;
   }
   async function review(a,operation,connection,generatedAt){
-    const snapshot=await gather(a,operation.selection),currentCatalog=await catalog(a);a.active();
+    const snapshot=await gather(a,operation.selection),currentCatalog=await catalog(a,[],operation.plan.derived===true?new Set(operation.plan.inputs.filter(r=>r.kind==='wiki').map(r=>r.wiki_id)):null);a.active();
     check(eq(operation.plan.context,a.ingestContext),'계정·서버·화면 상태가 변경되었습니다. 원작업을 확인하세요.');
     const refs=operation.plan.inputs.filter(r=>r.kind==='wiki'),protection=refs.length?await evidence.graph(refs,{instance:a.serverBound?a.ingestContext.serverInstance:undefined,onInstance:id=>bindInstance(a,id)}):{nodes:[]};a.active();
     const proofs=new Map(),relationTargets=new Map();
@@ -184,6 +185,11 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       for(const target of operation.plan.targets.filter(row=>row.origin==='local')){
         const local='wiki:'+target.document.wiki_id,item=a.h.view(local);plainItem(a,local,item);
         check(item.draft.content===P.canonicalJson(target.document)&&!api.lifecycle?.blocked(local),'대상 위키 판본이 변경되었습니다.');
+      }
+      if(operation.plan.derived===true)for(const ref of operation.plan.inputs.filter(r=>r.kind==='wiki'&&r.origin==='local')){
+        const local='wiki:'+ref.wiki_id,item=a.h.view(local),target=operation.plan.catalog.find(row=>row.document.wiki_id===ref.wiki_id);plainItem(a,local,item);
+        check(item.localOnly&&!item.draft.deleted_at&&!item.conflict&&!api.lifecycle?.blocked(local)
+          &&item.draft.content===P.canonicalJson(target.document),'답변 근거 위키 판본이 변경되었습니다.');
       }
       for(const [id,content]of relationTargets){
         const local='wiki:'+id,item=a.h.view(local);plainItem(a,local,item);
@@ -234,6 +240,24 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     const answer=await connection.invoke(input);a.active();
     const fresh=await review(a,operation,connection,generatedAt),proposal=await I.validateIngestProposal(answer,operation.plan,fresh);a.active();
     return {operation_id:operation.operation_id,selection:copy(operation.selection),proposal,connection:current.connection,generated_at:generatedAt};
+  }
+  async function derive(query,response,connection){
+    const a=action();await NowWikiQuery.verifySnapshot(query);NowWikiQuery.assertSaveable(query);a.active();
+    const targets=await catalog(a,[],new Set(query.pages.map(p=>p.wiki_id)));a.active();const before=a.h.export(),rows=map(a,before);
+    check(!Object.values(rows).some(r=>['reserved','attempted'].includes(r.state)),'진행 중인 원작업을 먼저 확인하거나 명시적으로 폐기하세요.');
+    const refs=query.pages.map((p,n)=>({id:'query-'+n,kind:'wiki',origin:p.origin,owner_id:a.ctx.owner,wiki_id:p.wiki_id,draft_id:p.draft_id,
+      approval_id:p.approval_id,document_version:p.document_version,content_hash:p.draft_hash}));
+    const protection=await evidence.graph(refs,{instance:a.serverBound?a.ingestContext.serverInstance:undefined,onInstance:id=>bindInstance(a,id)});a.active();
+    const reservation={operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),
+      pages:[{wiki_id:crypto.randomUUID(),draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()}]};
+    const result=await I.planDerivedWiki(query,targets,{context:a.ingestContext,reservation,protection});a.active();
+    const selection={fileIds:[],noteIds:[]},operation={operation_id:reservation.operation_id,selection,plan:result},generatedAt=new Date().toISOString();
+    const current=await review(a,operation,connection,generatedAt),proposal=await I.createDerivedProposal(query,response,result,current);a.active();
+    current.assertLocalCurrent(proposal);check(eq(before,a.h.export()),'검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.');
+    const {viewGeneration,...scope}=a.ingestContext;
+    rows[reservation.operation_id]={schema_version:1,operation_id:reservation.operation_id,action:'ingest',scope,reservation,selection,plan_hash:result.plan_hash,
+      inputs:copy(result.inputs),fingerprints:[],state:'attempted',documents:[]};
+    await save(a,before,rows);return {operation_id:reservation.operation_id,selection,proposal,connection:current.connection,generated_at:generatedAt};
   }
   async function commitLocal(value){
     const a=action(),operation={operation_id:value.operation_id,selection:value.selection,plan:value.proposal.plan};
@@ -458,7 +482,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,integrate,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+  return {plan,prompt,generate,integrate,derive,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
     approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
 };

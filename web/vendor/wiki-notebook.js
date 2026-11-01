@@ -291,6 +291,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     if(api.history()!==a.h||!canRead(proof.currentDocument))throw Error('계정·서버·출처 상태가 변경되었습니다.');
     return copy(proof);
   }
+  async function readOriginal(value){
+    const a=action(),ref=value.kind?copy(value):{...copy(value),kind:'note'};W.validateEvidence(ref,a.ctx.owner);
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
+    if(!evidence)throw Error('고정 출처 검증 연결을 확인하세요.');
+    const proof=await evidence.resolve(ref,{fresh:false});a.check();
+    if(api.history()!==a.h)throw Error('계정·서버·이력 연결이 변경되었습니다.');
+    return copy(proof);
+  }
   async function approvedCatalog(){
     const a=action(),active=()=>{a.check();if(api.history()!==a.h)throw Error('위키 이력 연결이 변경되었습니다.');};
     const rows=await list();active();const verified=[];
@@ -323,9 +331,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       if(!proofs.has(key))proofs.set(key,evidence.operationProof(ref.operation_id,source,ref.wiki_id,{origin:row.localOnly?'local':'server'}));
       const proof=await proofs.get(key);active();return proof;
     };
-    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();return catalog;
+    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations,relationProof});active();
+    catalog.nodes=catalog.nodes.map(node=>{
+      const row=verified.find(row=>row.document?.wiki_id===node.wiki_id);
+      return {...node,origin:row.localOnly?'local':'server',protected:false};
+    });
+    return catalog;
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,approvedCatalog,
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };
