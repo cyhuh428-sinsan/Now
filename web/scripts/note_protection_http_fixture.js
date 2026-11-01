@@ -163,7 +163,10 @@
       for(let i=0;i<1600;i++){if(done())return;await wait();}
       const message=document.querySelector('#wikiDialog [role=status]')?.textContent||'';
       const known=[['계정·서버 또는 선택이 변경되었습니다.','view_changed'],['계정·서버가 변경되었습니다. 원문은 보존했습니다.','source_scope_changed'],['설정에서 LLM 연결을 먼저 확인하세요.','llm_not_configured']];
-      emit({stage:'wiki_ui_timeout',code:/^wiki_[a-z_]+$/.test(message)?message:known.find(([text])=>message===text)?.[1]||'unclassified_status'});
+      const view=document.querySelector('#wikiDialog'),protect=view?.querySelector('[data-wiki-action=protect]');
+      emit({stage:'wiki_ui_timeout',code:/^wiki_[a-z_]+$/.test(message)?message:known.find(([text])=>message===text)?.[1]||'unclassified_status',
+        statusHash:await NowNoteProtectionProtocol.sha256(message),open:Boolean(view?.open),protectPresent:Boolean(protect),protectDisabled:protect?.disabled??null,
+        bodyPresent:Boolean(view?.querySelector('.wiki-body')),sourceBlocked:noteProtectionBlocked(target),supportEnabled:noteProtectionMutationsEnabled()});
       throw Error('wiki_ui_'+label+'_timeout_uncertain');
     }
     await wikiWait(()=>!serverSyncRunning,'initial_sync');await settle();
