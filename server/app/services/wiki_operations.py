@@ -1,4 +1,4 @@
-"""Private Wiki transactions; public routes and capability advertisement stay unregistered."""
+"""Wiki transactions shared by dedicated API routes and backup validators."""
 import json
 from datetime import datetime
 from sqlalchemy import select

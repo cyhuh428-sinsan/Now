@@ -50,7 +50,8 @@ class OperationTest(unittest.TestCase):
         return O
 
     def setUp(self):
-        self.engine = create_engine(getattr(self,"engine_url","sqlite:///:memory:"),connect_args={"check_same_thread":False})
+        self.engine = create_engine(getattr(self,"engine_url","sqlite:///:memory:"),connect_args={"check_same_thread":False},
+                                    **getattr(self,"engine_options",{}))
         # Models are loaded by the reservation service before creating the disposable schema.
         try: self.service()
         except ImportError: pass

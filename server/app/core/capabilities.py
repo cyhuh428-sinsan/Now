@@ -130,6 +130,8 @@ SERVER_CAPABILITIES = {
     "supported_note_types": SUPPORTED_NOTE_TYPES,
     "user_templates_schema_version": 1,
     "saved_queries_schema_version": 1,
+    "wiki_document_schema": 2,
+    "wiki_operations_v1": True,
     # 문서 이동 (P7)
     # note_tree_parent_validation: parent_local_id를 바꿔 upsert하는 방식으로
     # 이동이 이미 가능하고 서버가 새 부모의 존재/레벨을 검증한다는 뜻.

@@ -1,4 +1,4 @@
-"""Strict, not-yet-routed Wiki operation envelopes."""
+"""Strict Wiki operation envelopes shared by HTTP and transactional services."""
 from typing import Annotated, Literal
 from pydantic import BeforeValidator, Field, model_validator
 from app.schemas.wiki import (
