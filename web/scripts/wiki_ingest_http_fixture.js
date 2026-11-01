@@ -68,7 +68,8 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
       if(copies.length){pb('confirm').click();await protectionWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
       pb('conversion').click();await protectionWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
-      noteProtectionUI.lock();pb('close').click();
+      const closed=new Promise(resolve=>pd().addEventListener('close',resolve,{once:true}));
+      noteProtectionUI.lock();pb('close').click();await closed;
     }
     await wikiUI.open();await settle();const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
     await formClick('lint');await formClick('lint-run');await until(()=>document.querySelector('[data-wiki-lint-report]'),'protected_lint_report');
