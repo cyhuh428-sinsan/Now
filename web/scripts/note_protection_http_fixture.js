@@ -78,6 +78,7 @@
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
   await settle();noteProtectionInternalEnabled=!config.publicProtectionGate;
+  if([50,51].includes(config.phase))return runWikiIngestHttpFixture({config,request,settle});
   if([47,48,49].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function libraryWait(done,label){

@@ -100,5 +100,25 @@ const comparisonFiles=await api.sources.list(),comparison=comparisonFiles.find(s
 const combined=await book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]});assert.equal(combined.plan.policy,2);assert.equal(combined.plan.pages.length,2);
 assert.equal(combined.plan.inputs.filter(r=>r.kind==='wiki').length,1,'validated comparison is now part of durable operation inputs');
 assert.equal(combined.plan.protection.nodes[0].complete,true,'temporary blanket gate is replaced only by complete source and cycle proof');
-await book.abortLocal(combined.operation_id);
+const combinedOutput={pages:combined.plan.pages.map((p,i)=>({wiki_id:p.wiki_id,draft_id:p.draft_id,title:combined.plan.snapshot.sources[i].title,
+  topic:combined.plan.snapshot.sources[i].title,page_type:'concept',summary:'Synthetic comparison',aliases:[],claims:[],relations:[],
+  sections:[{id:'s1',title:'Evidence',markdown:'Compared synthetic evidence.',citation_ids:['c1']}],
+  citations:[{id:'c1',evidence_id:combined.plan.snapshot.sources[i].id,section_id:null,quote:combined.plan.snapshot.sources[i].content}]}))};
+const compared=await book.generate(combined,{provider:'fixture',model:'comparison',invoke:async()=>JSON.stringify(combinedOutput)});
+const comparedResult=await book.commitLocal(compared),beta=comparedResult.documents.find(r=>r.wiki_id!==combined.plan.targets[0].document.wiki_id);
+assert.equal((await ordinary.sourceStatus(beta.document.drafts[0],beta.document)).available,true,'retained Wiki comparison must remain readable after its container advances');
+const betaApproved=await book.approveLocal(beta.document,beta.document.drafts[0].id);
+assert.equal(betaApproved.document.approvals.length,1,'a Wiki comparison is a valid approval source, not a Note-only source');
+history=makeHistory();book=box.createWikiIngestNotebook(api);
+assert.equal(box.NowNoteProtectionProtocol.parseJson(history.view('wiki:'+beta.wiki_id).draft.content).approvals.length,1,'comparison approval survives a cold journal');
+assert.equal((await book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]})).plan.calls,0,'own comparison approval does not regenerate unchanged inputs');
+const alpha=comparedResult.documents.find(r=>r.wiki_id===combined.plan.targets[0].document.wiki_id);
+await book.approveLocal(alpha.document,alpha.document.drafts.at(-1).id);
+const staleBeta=await ordinary.sourceStatus(beta.document.drafts[0],betaApproved.document);
+assert.equal(staleBeta.available,true);assert.equal(staleBeta.stale,true,'a changed approval is stale without rewriting the original Wiki reference');
+const retainedPlain=structuredClone(saved),oldProtected=structuredClone(saved);delete oldProtected.recovery_archives;
+oldProtected.contexts[box.NowNoteHistory.key(ctx)].notes['wiki:'+alpha.wiki_id].base.crypto_epoch=1;
+saved.recovery_archives.push(oldProtected);history=makeHistory();
+assert.equal((await ordinary.sourceStatus(beta.document.drafts[0],betaApproved.document)).available,false,'protected retained comparison cannot be hidden by a plain current representation');
+saved=retainedPlain;history=makeHistory();
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

@@ -60,11 +60,37 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const ctx=api.context(),h=api.history(),local='wiki:'+doc.wiki_id;
     if(!ctx.enabled||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx))||L.blocked(local)||h.blocked(local)||h.view(local)?.base.crypto_epoch>0)return false;
     return doc.drafts.flatMap(W.evidenceOf).every(ref=>{
-      if(ref.kind==='wiki')return false;
+      if(ref.kind==='wiki'){
+        const sourceLocal='wiki:'+ref.wiki_id,item=h.view(sourceLocal);
+        return ref.owner_id===ctx.owner&&!L.blocked(sourceLocal)&&!h.blocked(sourceLocal)
+          &&(item?!item.protectionScope&&item.base.crypto_epoch===0&&!item.draft.deleted_at:ref.origin==='server'&&ctx.online!==false)
+          &&(ref.origin!=='server'||ctx.online!==false);
+      }
       const note=api.source(ref.note_ref.local_id);
       return ref.note_ref.owner_id===ctx.owner&&note?.owner===ctx.owner&&note.status==='ok'&&!note.protected
         &&(ctx.online!==false||ref.origin!=='server');
     });
+  }
+  async function retainedStatus(draft,doc,a){
+    const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api),sources=[],cache=new Map();
+    if(!evidence)return {available:false,stale:true,sources:[]};
+    try{
+      for(const item of (doc?doc.drafts:[draft])){
+        const values=new Map();
+        for(const value of W.evidenceOf(item)){
+          const ref=value.kind?value:{...copy(value),kind:'note'},key=P.canonicalJson(ref);
+          if(!cache.has(key)){cache.set(key,await evidence.resolve(ref));a.check();}
+          const proof=cache.get(key);values.set(ref.id,proof);
+          if(item.id===draft.id)sources.push({id:ref.id,status:proof.stale?'changed':'ok'});
+        }
+        for(const citation of item.citations){
+          const proof=values.get(citation.evidence_id||citation.source_id),text=proof?.kind==='note'?proof.content:
+            proof?.draft.sections.find(section=>section.id===citation.section_id)?.markdown;
+          if(typeof text!=='string'||!text.includes(citation.quote))throw Error('wiki_quote_mismatch');
+        }
+      }
+      return {available:true,stale:sources.some(source=>source.status==='changed'),sources};
+    }catch{a.check();return {available:false,stale:true,sources:[]};}
   }
   async function sourceStatus(draft,doc=null){
     const a=action();
@@ -81,11 +107,14 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
           if(remote.artifact?.protected!==false||!remote.artifact.document||remote.resource?.deleted_at
             ||remote.source_status?.available!==true)return {available:false,stale:true,sources:[]};
           const approved=remote.artifact.document.approvals.at(-1)?.draft_id||remote.artifact.document.drafts.at(-1)?.id;
-          if(approved===draft.id&&P.canonicalJson(remote.artifact.document)===P.canonicalJson(doc))
+          if(approved===draft.id&&P.canonicalJson(remote.artifact.document)===P.canonicalJson(doc)){
+            if(doc.schema_version===2){const result=await retainedStatus(draft,doc,a);a.check();return {...result,stale:result.stale||remote.source_status.stale};}
             return {available:true,stale:remote.source_status.stale,sources:[]};
+          }
         }
       }
     }
+    if(doc?.schema_version===2||draft.schema_version===2)return retainedStatus(draft,doc,a);
     const values=await liveSources(draft,a,doc);
     if(!sourcesAvailable(values,a.ctx.owner))return {available:false,stale:true,sources:[]};
     const refs=W.evidenceOf(draft).map(ref=>{const {kind,...legacy}=ref;return legacy;});

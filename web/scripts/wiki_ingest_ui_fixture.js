@@ -14,7 +14,7 @@ globalThis.runWikiIngestUiFixture=async function({initial,write,backend=null,pha
   };
   const request=async(path,method,body)=>{
     if(method==='GET'){
-      if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true}};
+      if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true,wiki_operation_manifest_schema:2}};
       if(path==='/api/v2/notes/current')return currentOf(body.local_id);
       if(path.endsWith('/crypto-transitions/status')){
         const current=data.notes[body.local_id]?.current;
@@ -65,7 +65,7 @@ globalThis.runWikiIngestUiFixture=async function({initial,write,backend=null,pha
       const current=currentOf('wiki:'+id),document=P.parseJson(current.snapshot.note.content),payload={artifact_local_id:'wiki:'+id,dependencies:document.drafts[0].evidence_manifest.map(r=>r.note_ref),wiki_dependencies:[],document_schema_floor:2};payload.lineage_manifest_hash=await P.hashJson(payload);
       return {resource:{owner_id:ctx.owner,id,schema_version:2,version:current.head_version,deleted_at:null,payload},artifact:{protected:false,head_revision_id:current.head_revision_id,document},source_status:{available:true,stale:false}};
     }};
-  api.lifecycle=NowWikiLifecycle.create(api);api.sources=NowNoteWikiSources.create(api);api.server=NowWikiServerAccess.create({...api,request});
+  api.lifecycle=NowWikiLifecycle.create(api);api.sources=NowNoteWikiSources.create(api);api.server=NowWikiServerAccess.create({...api,request,readWiki:api.readRemote});
   let ingest;const notebook=createWikiNotebook({...api,approveV2:(v,id)=>ingest.approveLocal(v,id),rejectV2:(v,id)=>ingest.rejectLocal(v,id)});
   api.captureNotes=ids=>notebook.capture(ids);ingest=createWikiIngestNotebook(api);
   if(phase===1)await api.sources.captureFiles([new File(['Exact published fixture evidence.'],'published.md')]);

@@ -42,6 +42,7 @@ try {
   const transcript=process.argv.includes('--transcript');
   const backupRestore=process.argv.includes('--backup-restore');
   const libraryUi=process.argv.includes('--library-ui');
+  const wikiIngestUi=process.argv.includes('--wiki-ingest-ui');
   const publicProtectionGate=process.argv.includes('--public-protection-gate');
   const wikiTrashUi=process.argv.includes('--wiki-trash-ui');
   const wikiProtectionUi=process.argv.includes('--wiki-protection-ui')||wikiTrashUi;
@@ -61,7 +62,7 @@ try {
       stage=mode+'_register_'+suffix;manifest.accounts.push({owner,device,state:'request_pending',retention:'QA verification retained'});await save();
       const issued=await request('POST','/api/v1/auth/register',{owner_id:owner,password,email:owner+'@example.invalid',display_name:'HTTP QA',device_id:device,device_name:'Isolated HTTP QA'});
       credentials[suffix]={owner,device,password};manifest.accounts.at(-1).state='created';await save();
-      if(suffix==='a')for(const local of parentMode?['other','target']:['target','other']) {
+      if(suffix==='a')for(const local of wikiIngestUi?['target','other','beta']:parentMode?['other','target']:['target','other']) {
         const local_id='qa-http-'+run+'-'+local,mutation_id=crypto.randomUUID();
         stage=mode+'_seed_'+local;manifest.notes.push({owner,local_id,mutation_id,state:'request_pending'});await save();
         if(local==='target'&&relatedOnly){
@@ -82,7 +83,7 @@ try {
           Object.assign(manifest.notes.at(-1),{state:'branch_only_created',branch_id:branchId});await save();continue;
         }
         await request('PUT','/api/v2/notes/current',{schema_version:1,owner_id:owner,local_id,device_id:device,mutation_id,crypto_epoch:0,base_head_version:0,base_revision_id:null,expected_inventory_revision_ids:[],
-          note:{note_type:'tree',title:'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run,parent_local_id:parentMode&&local==='target'?'qa-http-'+run+'-other':null,level:parentMode&&local==='target'?2:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
+          note:{note_type:'tree',title:wikiIngestUi?(local==='beta'?'Beta':'Alpha'):'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run+'-'+local,parent_local_id:parentMode&&local==='target'?'qa-http-'+run+'-other':null,level:parentMode&&local==='target'?2:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
         manifest.notes.at(-1).state='created';await save();
         if(local==='target'&&replicas){
           const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_replica_seed.py';
@@ -98,7 +99,7 @@ try {
     }
     const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
     const profile=path.join(own,mode);await fs.mkdir(profile);
-    for(const phase of probe?[0]:libraryUi?[47,48,49]:wikiUi?wikiProtectionUi?[43,44,45,46]:[43,44]:process.argv.includes('--canvas')?[40,41,42]:backupRestore?[10,38,39]:analysisAbsent?[37]:analysisApply?[10,34,35,36]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
+    for(const phase of wikiIngestUi?[50,51]:probe?[0]:libraryUi?[47,48,49]:wikiUi?wikiProtectionUi?[43,44,45,46]:[43,44]:process.argv.includes('--canvas')?[40,41,42]:backupRestore?[10,38,39]:analysisAbsent?[37]:analysisApply?[10,34,35,36]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
       stage=mode+'_phase_'+phase;
       const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
       const activeProfile=[5,24].includes(phase)?path.join(own,mode+(phase===24?'-peer':'-fresh')):profile;
