@@ -433,7 +433,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     if([...unique.values()].some(doc=>doc.schema_version===2)){
       const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
       if(!evidence?.protection)throw Error('wiki_protection_dependency_check');
-      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance});a.check();
+      const target=typeof context.instance==='string'?{url:scope(context).url,owner:context.owner,instance:context.instance,local_id:localId,device:context.device}:undefined;
+      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance,target});a.check();
     }
     if(before!==P.canonicalJson(a.h.export()))throw Error('wiki_context_changed');
     return dependencies;

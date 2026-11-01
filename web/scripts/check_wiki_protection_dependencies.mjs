@@ -39,6 +39,17 @@ assert.deepEqual(Array.from(await book.protectionDependencies([original],context
 assert.deepEqual(Array.from(await book.protectionDependencies([original],context,'wiki:'+derived.wiki_id)),[],'an unapproved but committed derived draft can be protected first');
 assert.deepEqual(Array.from(await book.protectionDependencies([{settings:{synthetic:true}},original,{tree:[]}],context,'wiki:'+created.wiki_id)),['wiki:'+derived.wiki_id],'registered non-history stores are scanned without misclassifying their format as a journal');
 assert.equal(writes,originalWrites);assert.equal(JSON.stringify(history.export()),JSON.stringify(original));
+const targetScope={url:context.url,owner:context.owner,device:context.device,instance:id(995),local_id:'wiki:'+derived.wiki_id};
+const attributed=clone(original);attributed.contexts[accountKey()].notes[targetScope.local_id].protectionScope=clone(targetScope);
+function accountKey(){return box.NowNoteHistory.key(context);}
+history.hydrate(attributed);
+assert.deepEqual(Array.from(await book.protectionDependencies([attributed],targetScope,targetScope.local_id)),[],'an exact current-target attribution is not itself encrypted lineage');
+await assert.rejects(()=>book.protectionDependencies([attributed],{...targetScope,instance:id(996)},targetScope.local_id),/wiki_protection_unavailable/);
+await assert.rejects(()=>box.NowWikiEvidence.create(api).protection([derived],{roots:[attributed]}),/wiki_protection_unavailable/,'only a bound protection preflight may accept the target attribution');
+history.hydrate(original);
+const aliasRoot=clone(original),alias='wiki-proposal:'+id(998)+':'+derived.wiki_id,aliasNote={...clone(aliasRoot.contexts[accountKey()].notes[targetScope.local_id].draft),local_id:alias,source:'wiki-ingest-proposal'};
+aliasRoot.contexts[accountKey()].notes[alias]={raw:clone(aliasNote),draft:clone(aliasNote),base:{crypto_epoch:0},localOnly:true};
+await assert.rejects(()=>book.protectionDependencies([aliasRoot],context,targetScope.local_id),/wiki_proposal_protection_required/,'a separate plaintext proposal cannot remain outside the target inventory');
 const account=box.NowNoteHistory.key(context),unknown=clone(original);
 delete unknown.contexts[account].wiki_ingest_operations;
 history.hydrate(unknown);

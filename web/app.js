@@ -5923,6 +5923,7 @@ var Yr=function(e){if(!(this instanceof Yr))return new Yr(e);this.id="Thenable/1
           &&/^wiki-proposal:[0-9a-f-]{36}:[0-9a-f-]{36}$/.test(value.local_id)&&value.local_id.endsWith(':'+doc.wiki_id)?value.local_id:null;
         if(![1,2].includes(doc.schema_version)||local!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
           throw Error('wiki_protection_format');
+        if(value.source==='wiki-ingest-proposal'&&'wiki:'+doc.wiki_id===localId)throw Error('wiki_proposal_protection_required');
         options.documents?.push(doc);
         for(const draft of doc.drafts){
           const manifest=evidenceOf(draft);
@@ -7322,7 +7323,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     if([...unique.values()].some(doc=>doc.schema_version===2)){
       const evidence=api.evidence||globalThis.NowWikiEvidence?.create(api);
       if(!evidence?.protection)throw Error('wiki_protection_dependency_check');
-      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance});a.check();
+      const target=typeof context.instance==='string'?{url:scope(context).url,owner:context.owner,instance:context.instance,local_id:localId,device:context.device}:undefined;
+      await evidence.protection([...unique.values()],{roots:historyRoots,instance:context.instance,target});a.check();
     }
     if(before!==P.canonicalJson(a.h.export()))throw Error('wiki_context_changed');
     return dependencies;
@@ -7514,7 +7516,8 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
   function plainLocal(a,id){
     for(const root of a.roots){
       const item=root.contexts?.[a.account]?.notes?.[id];
-      check(!item||!item.protection_record&&!item.protectionScope&&item.base?.crypto_epoch===0,'wiki_protection_unavailable');
+      const target=a.protectionTarget,attributed=target&&id===target.local_id&&item?.protectionScope&&eq(item.protectionScope,target);
+      check(!item||!item.protection_record&&(!item.protectionScope||attributed)&&item.base?.crypto_epoch===0,'wiki_protection_unavailable');
       for(const marker of Object.values(root.protection_operations||{}))check(!(marker?.scope?.owner===a.ctx.owner&&marker.scope.local_id===id
         &&String(marker.scope.url).replace(/\/+$/,'')===String(a.ctx.url).replace(/\/+$/,'')),'wiki_protection_unavailable');
     }
@@ -7698,8 +7701,15 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     check(retained.has(await P.hashJson(doc)),'wiki_evidence_binding');a.active();
     return {history,index,localOnly:item?.localOnly===true};
   }
-  async function graph(refs,{instance,onInstance,protectionDocuments=[],retainedRoots=[],requireComplete=false}={}){
+  async function graph(refs,{instance,onInstance,protectionDocuments=[],retainedRoots=[],requireComplete=false,protectionTarget}={}){
     const a=await action(retainedRoots),nodes=new Map(),visiting=new Set(),leaves=new Set();a.instance=instance;a.onInstance=onInstance;
+    if(requireComplete&&protectionTarget){
+      check(protectionTarget.owner===a.ctx.owner&&String(protectionTarget.url).replace(/\/+$/,'')===String(a.ctx.url).replace(/\/+$/,''),'wiki_context_changed');
+      check(Object.keys(protectionTarget).length===5&&typeof protectionTarget.device==='string'&&Boolean(protectionTarget.device)
+        &&typeof protectionTarget.local_id==='string'&&Boolean(protectionTarget.local_id)
+        &&typeof protectionTarget.instance==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(protectionTarget.instance),'wiki_context_changed');
+      a.protectionTarget=copy(protectionTarget);
+    }
     async function visit(ref,depth,root=false){
       check(depth<=32,'wiki_dependency_limit');
       if(visiting.has(ref.wiki_id)){check(!requireComplete,'wiki_protection_cycle');return;}
@@ -7784,7 +7794,7 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
     a.active();return {operation:copy(operation),documents:copy(originals),currentTarget:copy(currentTarget)};
   }
   return {resolve:async(ref,options={})=>{const a=await action();return ref.kind==='wiki'?wiki(a,ref,options):note(a,ref,options);},graph,operationProof,
-    protection:(documents,{roots=[],instance}={})=>graph([],{instance,protectionDocuments:documents,retainedRoots:roots,requireComplete:true})};
+    protection:(documents,{roots=[],instance,target}={})=>graph([],{instance,protectionDocuments:documents,retainedRoots:roots,requireComplete:true,protectionTarget:target})};
 }});
 
 ;

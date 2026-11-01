@@ -127,6 +127,7 @@
           &&/^wiki-proposal:[0-9a-f-]{36}:[0-9a-f-]{36}$/.test(value.local_id)&&value.local_id.endsWith(':'+doc.wiki_id)?value.local_id:null;
         if(![1,2].includes(doc.schema_version)||local!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
           throw Error('wiki_protection_format');
+        if(value.source==='wiki-ingest-proposal'&&'wiki:'+doc.wiki_id===localId)throw Error('wiki_proposal_protection_required');
         options.documents?.push(doc);
         for(const draft of doc.drafts){
           const manifest=evidenceOf(draft);
