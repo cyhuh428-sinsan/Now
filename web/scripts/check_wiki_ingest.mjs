@@ -9,6 +9,23 @@ async function test(name,fn){await fn();passed++;console.log('PASS '+name);}
 const fail=(fn,pattern=/wiki_|json_|unicode|integer/)=>assert.rejects(fn,pattern);
 const rehash=async draft=>{const d=clone(draft);delete d.draft_hash;draft.draft_hash=await P.hashJson(d);return draft;};
 const read=value=>W.validateDocument(value,scope);
+await test('WikiDependency validates original exact six fields before evidence overlay',async()=>{
+  const source=catalog[1].document,d=source.drafts[0],a=source.approvals[0];
+  const dependency={owner_id:ctx.owner,wiki_id:source.wiki_id,draft_id:d.id,approval_id:a.id,document_version:source.document_version,content_hash:d.draft_hash};
+  const link={artifact_local_id:'wiki:'+id(20),dependencies:[{owner_id:ctx.owner,local_id:'note-1'}],wiki_dependencies:[dependency],document_schema_floor:2};
+  const seal=async value=>{delete value.lineage_manifest_hash;value.lineage_manifest_hash=await P.hashJson(value);return value;};
+  await W.validateLink(await seal(link),scope);
+  for(const extra of [{id:'masked'},{kind:'note'},{origin:'local'},{id:'masked',kind:'note',origin:'local'},{extra:true}]){
+    const bad=clone(link);Object.assign(bad.wiki_dependencies[0],extra);await seal(bad);await fail(()=>W.validateLink(bad,scope),/wiki_invalid_field/);
+    await fail(()=>I.dependencyUnion([],ctx,{retainedLinks:[bad],resolveWiki:()=>catalog[1]}),/wiki_invalid_field/);
+  }
+  for(const field of ['owner_id','wiki_id','draft_id','approval_id','document_version','content_hash']){
+    const missing=clone(link);delete missing.wiki_dependencies[0][field];await seal(missing);await fail(()=>W.validateLink(missing,scope));
+  }
+  const foreign=clone(link);foreign.wiki_dependencies[0].owner_id='other';await seal(foreign);await fail(()=>W.validateLink(foreign,scope),/wiki_source_owner/);
+  const hash=clone(link);hash.lineage_manifest_hash='0'.repeat(64);await fail(()=>W.validateLink(hash,scope),/wiki_lineage_hash/);
+  const union=await I.dependencyUnion([],ctx,{retainedLinks:[link],resolveWiki:()=>catalog[1]});assert.equal(union.wiki_dependencies.length,1);
+});
 await test('server canonical golden UTF-8',async()=>{
   const golden=JSON.parse(await fs.readFile(new URL('../../server/tests/fixtures/wiki_v2_canonical.json',import.meta.url)));
   for(const c of golden.cases){assert.equal(P.canonicalJson(c.value),c.canonical);assert.equal(await P.hashJson(c.value),c.sha256);}

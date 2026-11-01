@@ -11,11 +11,21 @@ const plan=await I.planIngest(snapshot,catalog,{context:ctx,reservation,relatedW
 const review={context:ctx,snapshot,catalog,device:'fixture-device',connection:{provider:'fixture',model:'Combo/auto'},generatedAt:'2026-11-01T00:00:00Z'};
 const proposal=await I.validateIngestProposal(output,plan,review);
 const request=await I.buildOperationRequests(proposal,review);
+const source=catalog[1].document,draft=source.drafts[0],approval=source.approvals[0];
+const dependency={owner_id:ctx.owner,wiki_id:source.wiki_id,draft_id:draft.id,approval_id:approval.id,document_version:source.document_version,content_hash:draft.draft_hash};
+request.dependency=dependency;
 const code=`
 import json, sys
-from app.schemas.wiki import digest, canonical
+from app.schemas.wiki import digest, canonical, WikiDependencyV2
+from pydantic import ValidationError
 from app.schemas.wiki_operations import PrepareOperation, CommitOperation, AbortOperation
 raw=json.load(sys.stdin)
+assert WikiDependencyV2.model_validate(raw['dependency']).model_dump()==raw['dependency']
+for fields in ({'id':'masked'},{'kind':'note'},{'origin':'local'},{'id':'masked','kind':'note','origin':'local'}):
+    try: WikiDependencyV2.model_validate({**raw['dependency'],**fields})
+    except ValidationError as error:
+        assert len(error.errors())==len(fields) and all(v['type']=='extra_forbidden' for v in error.errors())
+    else: raise AssertionError('forbidden dependency fields accepted')
 p=PrepareOperation.model_validate(raw['prepare'])
 c=CommitOperation.model_validate(raw['commit'])
 a=AbortOperation.model_validate(raw['abort'])

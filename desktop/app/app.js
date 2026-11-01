@@ -5988,6 +5988,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     if(v2){
       requireValue(value.document_schema_floor===2,'wiki_invalid_schema');hash(value.lineage_manifest_hash);list(value.wiki_dependencies,1000);
       for(const ref of value.wiki_dependencies){
+        exact(ref,['owner_id','wiki_id','draft_id','approval_id','document_version','content_hash']);
         validateEvidence({...ref,id:'dependency',kind:'wiki',origin:'server'},context.owner);
         requireValue(ref.wiki_id!==value.artifact_local_id.slice(5),'wiki_self_evidence');
       }
