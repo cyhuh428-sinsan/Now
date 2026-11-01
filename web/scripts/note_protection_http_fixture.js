@@ -72,6 +72,35 @@
     const query='?owner_id='+encodeURIComponent(a.owner),dialog=()=>document.querySelector('#wikiDialog');
     const artifact=()=>Object.values(noteHistory.entries()).find(item=>item.draft.source==='wiki-artifact');
     const stored=()=>artifact()?NowNoteProtectionProtocol.parseJson(artifact().draft.content):null;
+    async function lifecycle(action,wikiId){
+      const local='wiki:'+wikiId,before=await request('/api/v1/wikis/'+wikiId+query);
+      const journal=()=>noteHistory.export().contexts[NowNoteHistory.key(noteHistoryContext())]?.notes?.[local]||null;
+      const bytes=await NowNoteProtectionProtocol.sha256(JSON.stringify(journal()));
+      wikiUI.close();
+      const protection=document.querySelector('#noteProtectionDialog');
+      if(protection?.open)protection.querySelector('[data-action=close]').click();
+      document.querySelector('#wikiBtn').click();
+      await wikiWait(()=>dialog()?.querySelector('[data-wiki-action=new]')?.disabled===false,'lifecycle_list');
+      const toggle=dialog().querySelector('[name=wiki-trash]');assert(toggle,'wiki_lifecycle_toggle_absent');
+      if(action==='restore'&&!toggle.checked)toggle.click();
+      const entry=()=>dialog()?.querySelector('.wiki-entry[data-wiki-id="'+wikiId+'"]');
+      await wikiWait(()=>entry()?.querySelector('[data-wiki-action='+action+']')?.disabled===false,'lifecycle_ready');
+      entry().querySelector('[data-wiki-action='+action+']').click();
+      await wikiWait(()=>Boolean(dialog()?.querySelector('[data-wiki-action=confirm-change]')),'lifecycle_confirmation');
+      assert(!dialog().querySelector('input[type=password]'),'wiki_lifecycle_requested_key');
+      dialog().querySelector('[data-wiki-action=confirm-change]').click();
+      await wikiWait(()=>entry()?.querySelector('[data-wiki-action='+(action==='trash'?'restore':'trash')+']')?.disabled===false,'lifecycle_complete');
+      const after=await request('/api/v1/wikis/'+wikiId+query);
+      assert(after.resource.version===before.resource.version+1&&Boolean(after.resource.deleted_at)===(action==='trash'),'wiki_lifecycle_server_state');
+      assert(NowNoteProtectionProtocol.canonicalJson(after.resource.payload)===NowNoteProtectionProtocol.canonicalJson(before.resource.payload),'wiki_lifecycle_dependencies_changed');
+      assert(after.artifact.head_revision_id===before.artifact.head_revision_id&&after.artifact.head_version===before.artifact.head_version
+        &&after.artifact.protected===before.artifact.protected&&after.artifact.current_exists===before.artifact.current_exists,'wiki_lifecycle_note_head_changed');
+      assert(await NowNoteProtectionProtocol.sha256(JSON.stringify(journal()))===bytes,'wiki_lifecycle_journal_changed');
+      if(action==='trash')assert(!after.artifact.document&&!dialog().querySelector('.wiki-body,[data-wiki-action=generate]'),'wiki_lifecycle_trash_exposes_body');
+      emit({stage:'wiki_ui_'+action,owner:a.owner,local_id:local,code:after.artifact.protected?'cipher_preserved':'plain_history_preserved'});
+      wikiUI.close();
+      return after.resource.version;
+    }
     if(config.phase!==46){
       const source=await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target));
       assert(source.snapshot.note.content===plain,'wiki_ui_original_source_changed');
@@ -115,12 +144,17 @@
       assert(!findTreeNode(state.data.tree,'wiki:'+stored().wiki_id),'wiki_ui_artifact_leaked_into_note_tree');
       assert((await request('/api/v2/notes/current'+query+'&local_id='+encodeURIComponent(target))).snapshot.note.content===plain,'wiki_ui_save_changed_source');
       await noteHistory.idle();await settle();
-      return {ok:true,mode:config.mode,phase:43,wikiId:stored().wiki_id,documentVersion:stored().document_version,
+      if(config.wikiTrashUi)await lifecycle('trash',stored().wiki_id);
+      return {ok:true,mode:config.mode,phase:43,wikiId:stored().wiki_id,documentVersion:stored().document_version,wikiTrashed:Boolean(config.wikiTrashUi),
         actualMenu:true,explicitModelConfirmation:true,syntheticModelCalls:modelCalls,externalProviderCalls:0,serverDraftAndApproval:true,sourcePreserved:true};
     }
     if([45,46].includes(config.phase)){
-      const list=await request('/api/v1/wikis'+query);assert(list.items.length===1,'wiki_protection_list_changed');
+      const list=await request('/api/v1/wikis'+query+(config.wikiTrashUi?'&include_deleted=true':''));assert(list.items.length===1,'wiki_protection_list_changed');
       const wikiId=list.items[0].id,local='wiki:'+wikiId;
+      if(config.wikiTrashUi&&config.phase===46){
+        assert(Boolean(list.items[0].deleted_at),'wiki_lifecycle_cipher_cold_not_trashed');
+        await lifecycle('restore',wikiId);
+      }
       const pd=()=>document.querySelector('#noteProtectionDialog'),pb=name=>pd()?.querySelector('[data-action="'+name+'"]');
       const ps=()=>pd()?.querySelector('.protection-status')?.textContent||'';
       const completed=id=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===id&&row.phase==='complete');
@@ -177,9 +211,16 @@
       const scope={...(await inspectNoteProtection()).scope,local_id:target};
       const sourceCatalog=await noteProtectionReader.catalog(scope);
       assert(sourceCatalog.context.current_mode==='protected','wiki_protection_source_not_protected');
+      if(config.wikiTrashUi&&config.phase===45)await lifecycle('trash',wikiId);
       await noteHistory.idle();await settle();
       return {ok:true,mode:config.mode,phase:config.phase,wikiId,sourcePrerequisite:config.phase===45,wikiAndSourceProtected:true,
-        structuredReadonly:true,lockClears:true,allStorePlaintextAbsent:true,processCold:config.phase===46,externalProviderCalls:0};
+        structuredReadonly:true,lockClears:true,allStorePlaintextAbsent:true,processCold:config.phase===46,
+        protectedLifecycle:Boolean(config.wikiTrashUi),externalProviderCalls:0};
+    }
+    if(config.wikiTrashUi){
+      const trash=await request('/api/v1/wikis'+query+'&include_deleted=true');
+      assert(trash.items.length===1&&Boolean(trash.items[0].deleted_at),'wiki_lifecycle_plain_cold_not_trashed');
+      await lifecycle('restore',trash.items[0].id);
     }
     document.querySelector('#wikiBtn').click();
     await wikiWait(()=>dialog()?.querySelector('.library-item')?.disabled===false,'cold_list');
@@ -197,7 +238,8 @@
     assert(!dialog().querySelector('.library-item')&&!dialog().textContent.includes('HTTP QA Wiki '+run)
       &&!dialog().textContent.includes('HTTP-QA-ORIGINAL-'+run)&&!dialog().querySelector('.wiki-body'),'wiki_ui_foreign_body_exposed');
     clearWebSession();
-    return {ok:true,mode:config.mode,phase:44,wikiId,processCold:true,serverApprovedRead:true,citationPreserved:true,accountIsolation:true,externalProviderCalls:0};
+    return {ok:true,mode:config.mode,phase:44,wikiId,processCold:true,serverApprovedRead:true,citationPreserved:true,accountIsolation:true,
+      wikiRestored:Boolean(config.wikiTrashUi),externalProviderCalls:0};
   }
   if([40,41,42].includes(config.phase)){
     await libraryStore.sync();
