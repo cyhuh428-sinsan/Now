@@ -24,6 +24,14 @@ const findings=(await L.lintWikiCatalog(damaged,{})).findings;
 assert.ok(findings.some(f=>f.rule_code==='wiki_lint_index_missing'));
 assert.ok(findings.some(f=>f.rule_code==='wiki_lint_source_changed'&&f.severity==='warning'));
 assert.ok(findings.some(f=>f.rule_code==='wiki_lint_relation_target_missing'&&f.severity==='error'));
+for(const [status,code,severity,excluded] of [
+  ['missing','source_missing','error',false],['quote_mismatch','citation_mismatch','error',false],['foreign','foreign_reference','error',false],
+  ['invalid','source_invalid','error',false],['locked','source_locked','warning',true],['unsupported','source_unsupported','warning',true],['unavailable','source_unavailable','warning',true]
+]){
+  const sample=clone(input);sample.rows[0].source_checks=[{draft_id:sample.rows[0].document.drafts[0].id,evidence_id:'source-1',status}];
+  const report=await L.lintWikiCatalog(sample,{});assert.ok(report.findings.some(f=>f.rule_code==='wiki_lint_'+code&&f.severity===severity),status);
+  if(excluded)assert.ok(report.source_excluded>0,'unreadable sources stay outside verified coverage');
+}
 const unreadable=clone(input);unreadable.rows[0].unavailable=true;unreadable.rows[0].index_status='missing';
 const unreadableResult=await L.lintWikiCatalog(unreadable,{});assert.equal(unreadableResult.checked,1);assert.equal(unreadableResult.excluded,1);
 assert.ok(unreadableResult.findings.some(f=>f.rule_code==='wiki_lint_index_missing'),'an unavailable body does not hide an independently known missing index');
