@@ -329,7 +329,9 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     for(const name of ['',...new Set((busy?[]:rows).map(r=>preferred(r.document)?.topic).filter(Boolean))]){
       const option=node('option',name||'전체 주제');option.value=name;filter.append(option);
     }
-    filter.value=topic;filter.disabled=busy;filter.onchange=()=>{topic=filter.value;render();};nav.append(filter);
+    filter.value=topic;filter.disabled=busy;filter.onchange=()=>{
+      topic=filter.value;if(queryMode){querySnapshot=null;queryAnswer=null;queryOriginal=null;queryConnection=null;}render();
+    };nav.append(filter);
     for(const row of rows){
       if(Boolean(row.deleted)!==trashMode)continue;
       const last=preferred(row.document),pendingCheck=busy||(doc&&row.document?.wiki_id===doc.wiki_id&&!readable);

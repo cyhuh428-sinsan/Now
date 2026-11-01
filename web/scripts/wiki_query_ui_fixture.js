@@ -22,6 +22,10 @@ globalThis.runWikiQueryUiFixture=async function(phase){
     await click('query-plan');await until(()=>button('query-run'),'query_preview');check(calls===0,'query_preview_model');
     check(document.querySelector('[data-wiki-query-relations]')?.textContent.includes('추론'),'query_relation_confidence');
     check(document.querySelector('[data-wiki-query-preview]')?.textContent.includes('bytes'),'query_preview_bytes');
+    let topic=document.querySelector('#wikiDialog select[aria-label="주제"]');topic.value=topic.options[1].value;topic.dispatchEvent(new Event('change',{bubbles:true}));
+    check(!document.querySelector('[data-wiki-query-preview]')&&!button('query-run'),'query_topic_stale_sources');
+    topic=document.querySelector('#wikiDialog select[aria-label="주제"]');topic.value='';topic.dispatchEvent(new Event('change',{bubbles:true}));
+    await click('query-plan');await until(()=>button('query-run'),'query_replanned_topic');
     await click('query-run');await until(()=>button('confirm-send'),'query_confirm');await click('cancel-send');
     await until(()=>button('query-run')&&!button('query-run').disabled,'query_cancel');check(calls===0,'query_cancel_model');
     await click('query-run');await until(()=>button('confirm-send'),'query_confirm_again');await click('confirm-send');

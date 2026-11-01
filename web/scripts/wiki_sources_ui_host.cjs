@@ -126,8 +126,9 @@ app.whenReady().then(async()=>{
     if(process.env.NOWNOTE_WIKI_QUERY==='1'){
       await run(fs.readFileSync(path.join(root,'web/scripts/wiki_query_ui_fixture.js'),'utf8')+'\nvoid 0;');
       await run('globalThis.WIKI_QUERY_QA_CAPTURE=true;void 0;');
-      const pending=run('runWikiQueryUiFixture('+phase+').catch(error=>({qaError:String(error.message||error)}))');
-      await wait('Boolean(globalThis.WIKI_QUERY_QA_FRAME)','query_visual_frame');
+      const pending=run('runWikiQueryUiFixture('+phase+').catch(error=>{globalThis.WIKI_QUERY_QA_ERROR=String(error.message||error);return {qaError:globalThis.WIKI_QUERY_QA_ERROR};})');
+      await wait('Boolean(globalThis.WIKI_QUERY_QA_FRAME||globalThis.WIKI_QUERY_QA_ERROR)','query_visual_frame');
+      const early=await run('globalThis.WIKI_QUERY_QA_ERROR||null');if(early)throw Error(early);
       const frames=[];
       for(const [size,width,height]of [['desktop',1200,900],['mobile',390,844]]){
         window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
