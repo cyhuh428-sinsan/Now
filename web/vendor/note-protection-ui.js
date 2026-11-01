@@ -197,7 +197,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
     for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||replanLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
-    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'서버 지원 확인 전 · 변경 잠김');
   }
   async function action(name) {
     if (name==='close') {dialog.close();return;}
@@ -217,7 +217,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           else{$('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨');}
         }
       } else {
-        if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
+        if (!api.canMutate()) throw Error('서버 지원을 확인하지 못해 변경이 차단되었습니다.');
         if(name==='analysis-append'||name==='analysis-approve') {
           const row=state.info?.rows[Number($('[name="representation"]').value)],mode=name==='analysis-append'?'append':'approve';
           let password=await ask(name+'-bundle',true,token);if(!password||!valid(token))return;

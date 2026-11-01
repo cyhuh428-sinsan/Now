@@ -5521,7 +5521,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     const executions=$('[name="analysis-operation"]');executions.replaceChildren(new Option('새 분석',''));
     for(const row of info.analysisOperations||[])executions.append(new Option((analysisLabels[row.phase]||replanLabels[row.phase]||'분석 상태 확인')+' · '+row.id.slice(0,8),row.id));
     if(info.pending?.phase.startsWith('analysis_'))executions.value=info.pending.id;
-    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'전체 보호 검증 전 · 변경 잠김');
+    status(info.pending ? info.localWiki?'이 기기 보호 적용 필요':analysisLabels[info.pending.phase]||replanLabels[info.pending.phase]||api.phaseLabel(info.pending.phase) : state.copies.length ? '옛 사본 '+state.copies.length+'개 · 귀속 미확인' : info.localWiki&&info.status.crypto_epoch>0?'이 기기 보호 완료 · 서버 전송 없음':api.canMutate()?'전환 준비 가능':'서버 지원 확인 전 · 변경 잠김');
   }
   async function action(name) {
     if (name==='close') {dialog.close();return;}
@@ -5541,7 +5541,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
           else{$('.protection-plain').textContent=value;status('읽기 전용 · 잠금 해제됨');}
         }
       } else {
-        if (!api.canMutate()) throw Error('전체 보호 검증 전에는 변경할 수 없습니다.');
+        if (!api.canMutate()) throw Error('서버 지원을 확인하지 못해 변경이 차단되었습니다.');
         if(name==='analysis-append'||name==='analysis-approve') {
           const row=state.info?.rows[Number($('[name="representation"]').value)],mode=name==='analysis-append'?'append':'approve';
           let password=await ask(name+'-bundle',true,token);if(!password||!valid(token))return;
@@ -11239,6 +11239,40 @@ const storagePendingWrites = new Set();
 let protectionBootstrapPending = false;
 let protectionBootstrapScopes = [];
 
+let noteProtectionSupport = null;
+let noteProtectionSupportGeneration = 0;
+
+function noteProtectionSupportBinding(ctx=noteHistoryContext()) {
+  return JSON.stringify([String(ctx.url||"").replace(/\/+$/,""),ctx.owner||"",ctx.device||"",ctx.auth||""]);
+}
+
+function noteProtectionMutationsEnabled() {
+  if(noteProtectionInternalEnabled===true)return true;
+  const ctx=noteHistoryContext();
+  if(ctx.enabled!==true||noteProtectionSupport?.binding!==noteProtectionSupportBinding(ctx)){
+    noteProtectionSupport=null;return false;
+  }
+  return true;
+}
+
+async function refreshNoteProtectionSupport() {
+  if(noteProtectionInternalEnabled===true)return true;
+  const generation=++noteProtectionSupportGeneration,ctx=noteHistoryContext(),binding=noteProtectionSupportBinding(ctx);
+  noteProtectionSupport=null;
+  if(ctx.enabled!==true||ctx.online!==true)return false;
+  try {
+    const response=await requestServerJson({...state.settings.server},"/api/v1/server",{cache:"no-store"});
+    if(generation!==noteProtectionSupportGeneration||binding!==noteProtectionSupportBinding()||noteHistoryContext().enabled!==true)return false;
+    const caps=response?.capabilities,required=["mixed_representation_read_v1","mixed_current_plain_v1","mixed_full_conversion_v1",
+      "mixed_note_write_v1","mixed_offline_import_v1","mixed_analysis_source_v1","full_protection_complete"];
+    if(response?.status!=="ok"||caps?.mixed_representation_schema!==3||!required.every(key=>caps[key]===true))return false;
+    noteProtectionSupport={binding};return true;
+  } catch {
+    if(generation===noteProtectionSupportGeneration)noteProtectionSupport=null;
+    return false;
+  }
+}
+
 function noteProtectionBlocked(id) {
   if (!id) return false;
   if (noteProtection?.blocked(id) || noteHistory?.blocked(id)) return true;
@@ -11406,6 +11440,7 @@ function protectionActionGuard() {
 }
 
 async function beginNoteProtection(scope,intent,password,resolveKey,guard=protectionActionGuard()) {
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   guard();
   const before = noteHistoryContext();
   const identity = await noteHistoryRequest(before,"crypto-transitions/status","GET",{ local_id: scope.local_id, device_id: scope.device });
@@ -11417,6 +11452,7 @@ async function beginNoteProtection(scope,intent,password,resolveKey,guard=protec
 }
 
 async function resumeNoteProtection(id,password,build,resolveKey,guard=protectionActionGuard()) {
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   guard();
   const marker = noteHistory.protectionOperations()[id];
   if (!marker) throw new Error("보호 재개 자료가 없습니다.");
@@ -11448,7 +11484,7 @@ async function resumeNoteProtection(id,password,build,resolveKey,guard=protectio
 }
 
 async function prepareProtectedImport(info,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=structuredClone(info.catalog);
   guard();
   if(info.pending || !catalog || catalog.context.base.crypto_epoch<1)throw Error("note_protection:import_catalog_required");
@@ -11486,7 +11522,7 @@ async function buildProtectedImportWork(scope,prepared,intent,password,resolveKe
 }
 
 async function importProtectedBranches(info,selectedIds,password,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),selected=structuredClone(selectedIds);
   guard();
   if(!Array.isArray(selected) || !selected.length || new Set(selected).size!==selected.length)throw Error("note_protection:import_selection");
@@ -11509,7 +11545,7 @@ async function importProtectedBranches(info,selectedIds,password,resolveKey) {
 }
 
 async function compareProtectedPending(info,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;
   guard();
   if(info.pending || !catalog || catalog.context.base.identity_state!=="coherent" || !catalog.context.base.current_exists)
@@ -11574,7 +11610,7 @@ async function resolveProtectedPending(info,choice,compared,password,resolveKey)
 }
 
 async function editProtectedCurrent(info,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=info.catalog;
   guard();noteProtectionEditSession=null;
   if(info.pending || !catalog || catalog.context.base.identity_state!=="coherent" || !catalog.context.base.current_exists) throw Error("note_protection:editor_current_required");
@@ -11609,7 +11645,7 @@ async function editProtectedCurrent(info,resolveKey) {
 }
 
 async function createProtectedCurrent(info,resolveKey,initialNote=null) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),catalog=structuredClone(info.catalog);guard();
   if(info.pending || !catalog || catalog.context.base.current_exists || catalog.context.base.crypto_epoch<1
     || catalog.context.base.identity_state==="ambiguous")throw Error("note_protection:create_absent_required");
@@ -11652,7 +11688,7 @@ async function buildProtectedWriteWork(scope,prepared,intent,password,resolveKey
 }
 
 async function saveProtectedDraft(info,input) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const session=noteProtectionEditSession,guard=protectionActionGuard(),note=structuredClone(input);
   if(!session || NowNoteProtectionState.scopeKey(session.scope)!==NowNoteProtectionState.scopeKey(info.scope))throw Error("note_protection:editor_scope");
   NowNoteProtectionProtocol.validateSnapshot({schema_version:1,note});
@@ -11666,7 +11702,7 @@ async function saveProtectedDraft(info,input) {
 }
 
 async function writeProtectedCurrent(info,input,password,resolveKey,{operation="put",restore_source=null}={}) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard(),scope=structuredClone(info.scope),session=noteProtectionEditSession;
   if(!session || NowNoteProtectionState.scopeKey(session.scope)!==NowNoteProtectionState.scopeKey(scope)
     || NowNoteProtectionProtocol.canonicalJson(session.base)!==NowNoteProtectionProtocol.canonicalJson(info.catalog?.context)
@@ -11717,7 +11753,7 @@ async function writeProtectedCurrent(info,input,password,resolveKey,{operation="
 }
 
 async function mutateProtectedCurrent(info,operation,row,password,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
   if(!["delete","restore"].includes(operation))throw Error("note_protection:write_operation");
   const absent=!info.catalog?.context.base.current_exists;
@@ -11814,7 +11850,7 @@ function protectionViewKey() {
 }
 
 async function applyProtectedAnalysisResult(info,row,mode,password,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
   const d=row?.descriptor,catalog=info.catalog;
   if(!['append','approve'].includes(mode)||info.pending||!catalog||row?.kind!=="typed"||d?.key.kind!=="analysis_result"||d.is_null
@@ -11837,7 +11873,7 @@ async function applyProtectedAnalysisResult(info,row,mode,password,resolveKey) {
 }
 
 async function prepareProtectedTranscript(info,row,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
   const scope=structuredClone(info.scope),catalog=structuredClone(info.catalog),descriptor=structuredClone(row?.descriptor);
   if(info.pending || !catalog || row?.kind!=="typed" || descriptor?.key.kind!=="recording_transcript"
@@ -11848,7 +11884,7 @@ async function prepareProtectedTranscript(info,row,resolveKey) {
 }
 
 async function saveProtectedTranscript(info,edit,text,password,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("note_protection:not_enabled");
+  if(!noteProtectionMutationsEnabled())throw Error("note_protection:not_enabled");
   const guard=protectionActionGuard();guard();
   const same=(a,b)=>NowNoteProtectionProtocol.canonicalJson(a)===NowNoteProtectionProtocol.canonicalJson(b);
   if(info.pending || !edit || !same(info.scope,edit.scope) || !same(info.catalog,edit.catalog)
@@ -11905,7 +11941,7 @@ async function prepareProtectedAnalysis(info,id,resolveKey) {
 }
 
 async function beginProtectedAnalysis(plan,route,password) {
-  if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled())throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard();guard();protectedAnalysisConfig(route);
   const id=plan.operation_id||await noteProtectionAnalysis.start(plan.scope,plan.request,plan.input,route,password);guard();
   if(["analysis_claiming","analysis_claimed"].includes(noteProtectionAnalysis.status(id).phase))await noteProtectionAnalysis.resumeClaim(id,password);guard();
@@ -11914,7 +11950,7 @@ async function beginProtectedAnalysis(plan,route,password) {
 
 async function invokeProtectedAnalysis(handoff) {
   const ctx=noteHistoryContext(),scope=handoff.scope;
-  if(!noteProtectionInternalEnabled||!ctx.enabled||ctx.owner!==scope.owner||ctx.device!==scope.device||ctx.url.replace(/\/+$/,"")!==scope.url.replace(/\/+$/,"")||noteProtectionIdentity?.instance!==scope.instance)throw Error("분석 전송의 계정·서버가 변경되었습니다.");
+  if(!noteProtectionMutationsEnabled()||!ctx.enabled||ctx.owner!==scope.owner||ctx.device!==scope.device||ctx.url.replace(/\/+$/,"")!==scope.url.replace(/\/+$/,"")||noteProtectionIdentity?.instance!==scope.instance)throw Error("분석 전송의 계정·서버가 변경되었습니다.");
   const config=protectedAnalysisConfig(handoff.route);
   noteProtectionAnalysis.consumeHandoff(handoff);
   let response;
@@ -11968,7 +12004,7 @@ async function resumeProtectedAnalysis(id,password,resolveKey) {
 }
 
 async function publishProtectedAnalysis(id,password) {
-  if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled())throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard(),marker=noteProtectionAnalysis.status(id);guard();
   if(marker.scope.local_id!==protectionTargetId())throw Error("원 분석과 선택한 메모가 다릅니다.");
   if(marker.phase==="analysis_settled"){
@@ -11983,7 +12019,7 @@ async function publishProtectedAnalysis(id,password) {
 }
 
 async function prepareProtectedReplan(info,id,password) {
-  if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled())throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard(),marker=noteProtectionAnalysis.status(id);guard();
   if(marker.scope.local_id!==protectionTargetId()||marker.scope.device!==info.scope.device||NowNoteProtectionState.scopeKey(marker.scope)!==NowNoteProtectionState.scopeKey(info.scope))throw Error("원 분석과 선택한 메모가 다릅니다.");
   if(marker.phase!=="analysis_settled"&&!marker.phase.startsWith("analysis_write_")&&!marker.phase.startsWith("analysis_replan_"))throw Error("기존 결과 보관 작업을 먼저 재개하세요.");
@@ -11993,7 +12029,7 @@ async function prepareProtectedReplan(info,id,password) {
 }
 
 async function beginProtectedReplan(plan,password,confirmation,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled())throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   plan=structuredClone(plan);confirmation=structuredClone(confirmation);
   if(confirmation.confirmed_reuse_original_result!==true||confirmation.target_epoch!==plan.catalog.context.base.crypto_epoch)throw Error("원 결과 재사용과 저장 대상을 확인하세요.");
   const guard=protectionActionGuard(),marker=noteProtectionAnalysis.status(plan.operation_id);guard();
@@ -12006,7 +12042,7 @@ async function beginProtectedReplan(plan,password,confirmation,resolveKey) {
 }
 
 async function resumeProtectedReplan(id,password,resolveKey) {
-  if(!noteProtectionInternalEnabled)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled())throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard(),marker=noteProtectionAnalysis.status(id);guard();
   if(marker.scope.local_id!==protectionTargetId())throw Error("원 분석과 선택한 메모가 다릅니다.");
   if(marker.phase==="analysis_replan_preparing"){await noteProtectionAnalysis.resumeReplanPreparation(id,password);guard();}
@@ -12027,6 +12063,7 @@ async function resumeProtectedReplan(id,password,resolveKey) {
 }
 
 async function inspectNoteProtection() {
+  await refreshNoteProtectionSupport();
   if(noteProtectionLocalWikiScope)return inspectLocalWikiProtection();
   const id=protectionTargetId(), bound=protectionViewKey(), ctx=noteHistoryContext();
   if (typeof id!=="string" || !ctx.enabled || !ctx.online) throw new Error("인증된 서버와 메모를 선택하세요.");
@@ -12057,7 +12094,7 @@ async function openNoteProtection({discover=false,target=null,localWikiScope=nul
   noteProtectionDiscoveryOnly=discover;
   noteProtectionTargetId=target ?? (discover?null:getSelectedTreeNode()?.id || protectionTargets()[0] || null);
   noteProtectionUI ||= mountNoteProtection({
-    contextKey:protectionViewKey,canMutate:()=>noteProtectionInternalEnabled===true,
+    contextKey:protectionViewKey,canMutate:noteProtectionMutationsEnabled,
     targets:refreshProtectionTargets,target:protectionTargetId,targetLabel:protectionTargetLabel,selectTarget:id=>{
       if(!protectionTargets().includes(id))throw new Error("현재 계정의 보호 대상이 아닙니다.");
       noteProtectionTargetId=id;
@@ -12109,7 +12146,7 @@ async function openNoteProtection({discover=false,target=null,localWikiScope=nul
         return protectLocalWiki(info,password,resolveKey);
       }
       const guard=protectionActionGuard();
-      if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+      if (!noteProtectionMutationsEnabled()) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
       await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
       guard();
       const source_origins=[];
@@ -12130,7 +12167,7 @@ async function openNoteProtection({discover=false,target=null,localWikiScope=nul
     },
     resume:async(info,password,resolveKey)=>{
       if(info.localWiki)return protectLocalWiki(info,password,resolveKey);
-      if (!noteProtectionInternalEnabled) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+      if (!noteProtectionMutationsEnabled()) throw new Error("전체 보호 검증 전에는 변경할 수 없습니다.");
       return resumeNoteProtection(info.pending.id,password,(p,i,stores)=>NowNoteProtectionClient.buildWork(info.scope,p,i,password,noteProtectionRemote,stores,resolveKey),resolveKey);
     },
   });
@@ -12315,7 +12352,7 @@ async function initializeNoteHistory() {
     },
   });
   noteHistoryController = {
-    lock() { noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
+    lock() { noteProtectionSupport=null;noteProtectionSupportGeneration++;noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
@@ -12582,7 +12619,7 @@ async function inspectLocalWikiProtection(){
 }
 
 async function protectLocalWiki(info,password,resolveKey){
-  if(!noteProtectionInternalEnabled||!info.localWiki)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
+  if(!noteProtectionMutationsEnabled()||!info.localWiki)throw Error("전체 보호 검증 전에는 변경할 수 없습니다.");
   const guard=protectionActionGuard(),expected=await NowNoteWiki.localProtectionScope(noteHistoryContext(),info.scope.local_id);guard();
   if(NowNoteProtectionProtocol.canonicalJson(expected)!==NowNoteProtectionProtocol.canonicalJson(info.scope)
     ||NowNoteProtectionProtocol.canonicalJson(info.scope)!==NowNoteProtectionProtocol.canonicalJson(noteProtectionLocalWikiScope))

@@ -104,7 +104,8 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
     let release,reached;const entered=new Promise(r=>reached=r),gate=new Promise(r=>release=r);
     const scope={url:'https://synthetic.invalid',owner:'alice',instance:'instance',local_id:'memo',device:'one'};
     let started=0;
-    const b={noteProtectionViewGeneration:0,noteHistoryContext:()=>({auth:'session',url:scope.url,owner:scope.owner,device:scope.device}),
+    const b={noteProtectionViewGeneration:0,noteProtectionInternalEnabled:false,noteProtectionSupport:null,
+      noteHistoryContext:()=>({auth:'session',url:scope.url,owner:scope.owner,device:scope.device,enabled:true}),
       protectionViewKey:()=> 'same-target',noteProtectionIdentity:{instance:scope.instance},render:()=>{},protectionApplying:false,
       noteHistory:{protectionOperations:()=>({op:{scope}})},noteHistoryRequest:async()=>{if(operation.endsWith('identity')){reached();await gate;}return {server_instance_id:scope.instance};},
       noteProtection:{start:async()=>{started++;return 'op';},resume:async()=>{started++;return {};}}};
@@ -112,7 +113,7 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
     if(operation.endsWith('storage')){const old=b.noteHistoryRequest;b.noteHistoryRequest=async(...a)=>{const r=await old(...a);reached();return r;};}
     vm.createContext(b);
     const guard=source.includes('function protectionActionGuard(')?extract('protectionActionGuard'):'function protectionActionGuard(){return ()=>{};}';
-    vm.runInContext(guard+'\n'+extract('beginNoteProtection')+'\n'+extract('resumeNoteProtection')+'\nglobalThis.api={beginNoteProtection,resumeNoteProtection};',b);
+    vm.runInContext(extract('noteProtectionSupportBinding')+'\n'+extract('noteProtectionMutationsEnabled')+'\n'+guard+'\n'+extract('beginNoteProtection')+'\n'+extract('resumeNoteProtection')+'\nglobalThis.noteProtectionSupport={binding:noteProtectionSupportBinding()};globalThis.api={beginNoteProtection,resumeNoteProtection};',b);
     const promise=operation.startsWith('begin')?b.api.beginNoteProtection(scope,{},'synthetic'):b.api.resumeNoteProtection('op','synthetic',()=>({}));
     await entered;b.noteProtectionViewGeneration++;release();
     await assert.rejects(promise,/잠금|변경|취소/);assert.equal(started,0,'lock must not enter a new state-machine generation');

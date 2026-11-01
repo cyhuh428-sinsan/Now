@@ -680,7 +680,7 @@ def test_operation_lifecycle_strict_json_capability_and_non_cipher_stage(client,
     assert client.post(prefix + "/commit", json=body, headers=s["headers"]).status_code == 409
     r = client.get("/api/v1/server")
     caps = r.json()["capabilities"]
-    assert not any(caps[k] for k in ("mixed_current_plain_v1", "mixed_full_conversion_v1", "mixed_note_write_v1", "mixed_offline_import_v1", "mixed_analysis_source_v1", "full_protection_complete"))
+    assert all(caps[k] for k in ("mixed_current_plain_v1", "mixed_full_conversion_v1", "mixed_note_write_v1", "mixed_offline_import_v1", "mixed_analysis_source_v1", "full_protection_complete"))
 
 
 def test_frozen_native_capture_time_change_rejects_without_plain_publication(client, subject, enabled):

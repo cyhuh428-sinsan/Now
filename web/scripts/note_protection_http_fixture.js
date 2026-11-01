@@ -77,7 +77,7 @@
   }
   await login(a);
   const settle=async()=>{await noteHistoryCaptureChain;for(const t of noteHistoryTimers.values())clearTimeout(t);noteHistoryTimers.clear();clearTimeout(serverSyncTimer);await Promise.all([...storagePendingWrites]);};
-  await settle();noteProtectionInternalEnabled=true;
+  await settle();noteProtectionInternalEnabled=!config.publicProtectionGate;
   if([47,48,49].includes(config.phase)){
     if(isDesktopClient())await loadServerSharedNotes({replace:true});
     async function libraryWait(done,label){
@@ -309,6 +309,7 @@
       const scope={...(await inspectNoteProtection()).scope,local_id:target};
       const sourceCatalog=await noteProtectionReader.catalog(scope);
       assert(sourceCatalog.context.current_mode==='protected','wiki_protection_source_not_protected');
+      if(config.publicProtectionGate&&config.phase===45)assert(noteProtectionInternalEnabled===false&&noteProtectionMutationsEnabled(),'public_protection_support_not_verified');
       if(config.wikiTrashUi&&config.phase===45)await lifecycle('trash',wikiId);
       await noteHistory.idle();await settle();
       return {ok:true,mode:config.mode,phase:config.phase,wikiId,sourcePrerequisite:config.phase===45,wikiAndSourceProtected:true,
