@@ -20,6 +20,7 @@ globalThis.runWikiQueryUiFixture=async function(phase){
     await click('query');await until(()=>document.querySelector('[name=wiki-query-question]'),'query_question');
     const input=document.querySelector('[name=wiki-query-question]');input.value='Synthetic';input.dispatchEvent(new Event('input',{bubbles:true}));
     await click('query-plan');await until(()=>button('query-run'),'query_preview');check(calls===0,'query_preview_model');
+    check(document.querySelector('[data-wiki-query-relations]')?.textContent.includes('추론'),'query_relation_confidence');
     check(document.querySelector('[data-wiki-query-preview]')?.textContent.includes('bytes'),'query_preview_bytes');
     await click('query-run');await until(()=>button('confirm-send'),'query_confirm');await click('cancel-send');
     await until(()=>button('query-run')&&!button('query-run').disabled,'query_cancel');check(calls===0,'query_cancel_model');
@@ -27,6 +28,7 @@ globalThis.runWikiQueryUiFixture=async function(phase){
     await until(()=>document.querySelector('[data-wiki-query-answer]'),'query_answer');
     check(calls===1&&requestBody.max_tokens===4096&&requestBody.model==='Combo/auto'&&requestBody.reasoning_effort==='high','query_registered_request');
     check(document.querySelector('[data-wiki-query-answer]').textContent.includes('Synthetic compiled finding'),'query_claim');
+    check(document.querySelector('[data-wiki-query-answer] a')?.getAttribute('href')==='#wiki-query-citation-c1','query_claim_citation_link');
     if(globalThis.WIKI_QUERY_QA_CAPTURE)await new Promise(resolve=>{globalThis.WIKI_QUERY_QA_FRAME={release:resolve};});
     check(P.canonicalJson(noteHistory.export())===before,'query_no_journal_writes');
     await click('query-original-source');await until(()=>document.querySelector('[data-wiki-query-original]'),'query_original_revision');

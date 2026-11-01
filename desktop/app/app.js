@@ -8636,15 +8636,31 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(querySnapshot&&!busy){
       const preview=node('section',undefined,'wiki-query-preview');preview.dataset.wikiQueryPreview='';preview.append(node('h4','전송 자료'));
       for(const page of querySnapshot.pages)preview.append(node('p',page.draft.title+' · 판본 '+page.document_version+' · '+page.draft_hash.slice(0,12)));
+      if(querySnapshot.relations.length){
+        const paths=node('ul');paths.dataset.wikiQueryRelations='';
+        const confidence={explicit:'직접 근거',inferred:'추론',uncertain:'불확실'},type={related_to:'관련',supports:'지지',contradicts:'반대',extends:'확장',depends_on:'의존'};
+        for(const relation of querySnapshot.relations){
+          const from=querySnapshot.pages.find(p=>p.wiki_id===relation.source),to=querySnapshot.pages.find(p=>p.wiki_id===relation.target);
+          paths.append(node('li',from.draft.title+' -> '+to.draft.title+' · '+type[relation.type]+' · '+confidence[relation.confidence]));
+        }
+        preview.append(paths);
+      }
       preview.append(node('p',new TextEncoder().encode(NowNoteProtectionProtocol.canonicalJson(querySnapshot)).length+' bytes'));
       detail.append(preview,command('query-run','전송 범위 확인',queryRun));
     }
     if(queryAnswer&&!busy){
       const answer=node('section');answer.dataset.wikiQueryAnswer='';answer.append(node('h3',queryAnswer.title));
       const status={supported:'인용 근거 있음',inferred:'추론',uncertain:'불확실',unsupported:'근거 없음'};
-      for(const claim of queryAnswer.claims){answer.append(node('p',claim.statement),node('small',status[claim.assessment]));}
+      for(const claim of queryAnswer.claims){
+        const paragraph=node('p',claim.statement);paragraph.append(node('small',' · '+status[claim.assessment]));
+        for(const id of claim.citation_ids){
+          const link=node('a',' ['+id+']');link.href='#wiki-query-citation-'+id;
+          link.onclick=event=>{event.preventDefault();document.getElementById('wiki-query-citation-'+id)?.scrollIntoView({block:'nearest'});};paragraph.append(link);
+        }
+        answer.append(paragraph);
+      }
       for(const cite of queryAnswer.citations){
-        const quote=node('blockquote',cite.quote),page=querySnapshot.pages.find(p=>p.wiki_id===cite.wiki_id);
+        const quote=node('blockquote','['+cite.id+'] '+cite.quote),page=querySnapshot.pages.find(p=>p.wiki_id===cite.wiki_id);quote.id='wiki-query-citation-'+cite.id;
         quote.append(command('query-wiki-source',page.draft.title+' · '+cite.section_id,async token=>{
           const ref={id:'query-source',kind:'wiki',origin:page.origin,owner_id:querySnapshot.scope.owner,wiki_id:page.wiki_id,draft_id:page.draft_id,
             approval_id:page.approval_id,document_version:page.document_version,content_hash:page.draft_hash};
@@ -15256,7 +15272,7 @@ async function openProtectedWikiPreview(info,value){
   const stamp=async()=>{
     guard();
     const current=local?noteHistory.view(info.scope.local_id):await noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:info.scope.local_id});
-    guard();if(!current||local&&current.draft.deleted_at||!local&&(current.status!=="ok"||current.snapshot?.note?.owner_id!==ctx.owner
+    guard();if(!current||local&&current.draft.deleted_at||!local&&(current.status!=="ok"||current.identity_state!=="coherent"||current.snapshot?.note?.owner_id!==ctx.owner
       ||current.snapshot?.note?.local_id!==info.scope.local_id||current.snapshot.note.deleted_at))throw Error("보호 위키에 접근할 수 없습니다.");
     return NowNoteProtectionProtocol.canonicalJson(current);
   };

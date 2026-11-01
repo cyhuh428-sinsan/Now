@@ -18,6 +18,7 @@ await assert.rejects(()=>Q.selectWikiContext('',catalog));
 await assert.rejects(()=>Q.selectWikiContext('Alpha',catalog,{primary_limit:7}));
 await assert.rejects(()=>Q.selectWikiContext('Alpha',catalog,{related_limit:4}));
 await assert.rejects(()=>Q.selectWikiContext('Alpha',catalog,{wiki_ids:[id(99)]}));
+await assert.rejects(()=>Q.selectWikiContext('Alpha',{scope:clone(catalog.scope),nodes:[],edges:[],notes:[{content:'Raw notes only'}]}),/wiki_query_no_context/,'raw notes without an approved Wiki cannot replace compiled context');
 const stale=clone(catalog);stale.nodes[0].stale=true;
 await assert.rejects(()=>Q.selectWikiContext('Alpha',stale,{wiki_ids:[stale.nodes[0].wiki_id]}),'stale selection is not silently substituted');
 const foreign=clone(catalog);foreign.nodes[1].draft.scope.owner='other';foreign.nodes[1].title='FOREIGN_PRIVATE_LABEL';
@@ -25,6 +26,7 @@ assert.ok(!(await Q.buildWikiQueryPrompt(await Q.selectWikiContext('Alpha',forei
 const cite={id:'c1',wiki_id:alpha.wiki_id,draft_id:alpha.draft_id,approval_id:alpha.approval_id,draft_hash:alpha.draft_hash,document_version:alpha.document_version,section_id:'s1',quote:alpha.draft.sections[0].markdown};
 const output={query_hash:snapshot.snapshot_hash,title:'Compiled answer',claims:[{id:'a1',statement:'Synthetic answer grounded in the selected Wiki.',assessment:'supported',citation_ids:['c1']}],citations:[cite],uncertainties:[]};
 const answer=await Q.validateWikiAnswer(output,snapshot);
+for(const invalid of ['{','[]','{"query_hash":'])await assert.rejects(()=>Q.validateWikiAnswer(invalid,snapshot),'invalid/truncated JSON is rejected without an automatic model repair');
 assert.equal(answer.citations[0].originals[0].evidence.source_revision_id,alpha.draft.evidence_manifest[0].source_revision_id);
 assert.equal(answer.query_hash,snapshot.snapshot_hash);assert.equal(answer.persisted,false);
 for(const mutate of [v=>v.query_hash='a'.repeat(64),v=>v.citations[0].wiki_id=id(999),v=>v.citations[0].draft_hash='a'.repeat(64),v=>v.citations[0].approval_id=id(999),v=>v.citations[0].section_id='missing',v=>v.citations[0].quote='Invented quote',v=>v.claims[0].citation_ids=[],v=>v.answer='Uncited free-form facts',v=>v.claims[0].assessment='certain']){
