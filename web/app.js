@@ -9016,7 +9016,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       if(finding.wiki_id){
         item.append(node('small',finding.wiki_id+' · 판본 '+(finding.document_version??'미확인')));
         const row=lintSnapshot.rows.find(r=>r.id===finding.wiki_id);
-        const draft=Array.isArray(row?.document?.drafts)?row.document.drafts.find(d=>d.id===finding.draft_id):null;
+        const draft=finding.evidence_id&&Array.isArray(row?.document?.drafts)?row.document.drafts.find(d=>d?.id===finding.draft_id):null;
         const ref=draft&&NowNoteWiki.evidenceOf(draft).find(r=>r.id===finding.evidence_id);
         if(ref&&api.readOriginal&&!row.protected&&!row.deleted&&!row.unavailable)item.append(command('lint-original','원본 고정 판본',async token=>{
           const proof=await api.readOriginal(ref);requireActive(token);

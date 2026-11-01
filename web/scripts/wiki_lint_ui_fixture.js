@@ -65,7 +65,7 @@ globalThis.runWikiLintUiFixture=async function(phase){
   await click('lint-original');await wait(()=>document.querySelector('[data-wiki-lint-original]'),'lint_fixed_original');
   check(document.querySelector('[data-wiki-lint-original] pre').textContent.length>0,'lint_fixed_original_content');
   check(P.canonicalJson(noteHistory.export())===afterSave,'lint_changed_report_write');ui.close();
-  known.document={schema_version:1,scope:structuredClone(snapshot.scope)};
+  known.document={schema_version:1,scope:structuredClone(snapshot.scope),drafts:[{}],approvals:[]};
   await ui.open();await click('lint');await click('lint-run');await wait(()=>document.querySelector('[data-lint-rule=wiki_lint_document_invalid]'),'lint_damaged_document_report');
   check(P.canonicalJson(noteHistory.export())===afterSave,'lint_damaged_document_no_write');ui.close();
   return {checked:2,defaultJournalWrites:0,explicitSaved,coldDrafts,semanticCalls,externalProviderCalls:0,accountConcealed:true,defaultReportPersisted:false,changedClassification:'synthetic source status only'};

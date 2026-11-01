@@ -8,7 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from test_wiki_comparisons_standalone import ComparisonTest
+import test_wiki_comparisons_standalone as comparison
 from test_wiki_v2_standalone import draft, artifact, seal, approval
 from app.models.library import LibraryResource
 from app.models.note_history import NoteHead
@@ -16,14 +16,14 @@ from app.services import note_backup, wiki_operations as operations
 
 
 class DerivedReportBackupTest(unittest.TestCase):
-    setUp = ComparisonTest.setUp
-    tearDown = ComparisonTest.tearDown
-    service = ComparisonTest.service
-    bundle = ComparisonTest.bundle
-    build = ComparisonTest.build
-    publish = ComparisonTest.publish
-    initial = ComparisonTest.initial
-    comparison = ComparisonTest.comparison
+    setUp = comparison.ComparisonTest.setUp
+    tearDown = comparison.ComparisonTest.tearDown
+    service = comparison.ComparisonTest.service
+    bundle = comparison.ComparisonTest.bundle
+    build = comparison.ComparisonTest.build
+    publish = comparison.ComparisonTest.publish
+    initial = comparison.ComparisonTest.initial
+    comparison = comparison.ComparisonTest.comparison
 
     def proposal(self, inputs, title):
         value = draft()
