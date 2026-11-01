@@ -81,7 +81,38 @@ app.whenReady().then(async()=>{
       document.querySelector('#wikiDialog [data-wiki-action=capture-files]').click();await pause();
       if(captures!==1)throw Error('fresh_file_capture_count');ui.close();return {staleCases:cases,freshCaptures:captures};
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,blockedNetworkAttempts:network,realProviderCalls:0};
+    const budget=await run(`(async()=>{
+      document.querySelector('#wikiDialog').remove();const original=state.settings.llm,realFetch=globalThis.fetch;
+      state.settings.llm={...original,provider:'omniroute',omniUrl:'https://registered.invalid',omniModel:'Combo/auto',omniReasoning:'high',omniApiKey:'synthetic-only'};
+      let calls=0,body=null;
+      const ctx=noteHistoryContext(),note={owner:ctx.owner,localId:'budget-source',status:'ok',origin:'local',revisionId:null,headVersion:0,title:'Budget source',content:'Exact synthetic budget evidence.'};
+      globalThis.fetch=async(url,options)=>{
+        if(url!=='https://registered.invalid/v1/chat/completions')return realFetch(url,options);
+        calls++;body=JSON.parse(options.body);
+        return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({title:'Budget guide',topic:'Budget',sections:[{id:'s1',title:'Evidence',markdown:'Synthetic finding.',citation_ids:['c1']}],citations:[{id:'c1',source_id:'source-1',quote:'Exact synthetic budget evidence.'}]})}}]})};
+      };
+      const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn,code)=>{for(let i=0;i<200;i++){if(fn())return;await pause();}throw Error(code);};
+      const api={contextKey:wikiViewKey,notes:()=>[{id:note.localId,title:note.title}],list:async()=>[],connection:wikiConnection,
+        capture:ids=>NowNoteWiki.capture(ids,{url:ctx.url,owner:ctx.owner},()=>note),sourceStatus:d=>NowNoteWiki.sourceStatus(d,{url:ctx.url,owner:ctx.owner},()=>note)};
+      const ui=mountNowWiki(api);
+      const start=async()=>{await ui.open();document.querySelector('#wikiDialog [name=wiki-source]').click();document.querySelector('#wikiDialog [data-wiki-action=generate]').click();
+        await until(()=>document.querySelector('#wikiDialog [data-wiki-action=confirm-send]'),'budget_confirmation');};
+      try{
+        await start();if(calls||!document.querySelector('#wikiDialog').textContent.includes('4096 tokens')||!document.querySelector('#wikiDialog').textContent.includes('요청 1회'))throw Error('budget_consent_missing');
+        document.querySelector('#wikiDialog [data-wiki-action=cancel-send]').click();await until(()=>!document.querySelector('#wikiDialog [data-wiki-action=generate]').disabled,'budget_cancel');
+        if(calls)throw Error('budget_cancel_called_provider');
+        await start();note.content+=' changed';document.querySelector('#wikiDialog [data-wiki-action=confirm-send]').click();
+        await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('원본 판본'),'budget_source_stale');if(calls)throw Error('budget_stale_called_provider');note.content='Exact synthetic budget evidence.';
+        await start();document.querySelector('#wikiDialog [data-wiki-action=confirm-send]').click();
+        await until(()=>document.querySelector('#wikiDialog .wiki-detail h3')?.textContent==='Budget guide','budget_generate');
+        if(calls!==1||body.max_tokens!==4096||body.model!=='Combo/auto'||body.reasoning_effort!=='high')throw Error('budget_actual_request');
+        ui.close();note.content='x'.repeat(524288);await ui.open();document.querySelector('#wikiDialog [name=wiki-source]').click();document.querySelector('#wikiDialog [data-wiki-action=generate]').click();
+        await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('512KiB'),'budget_prompt_limit');
+        if(calls!==1||document.querySelector('#wikiDialog [data-wiki-action=confirm-send]'))throw Error('budget_prompt_limit_sent');
+        return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
+      }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
+    })()`);
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

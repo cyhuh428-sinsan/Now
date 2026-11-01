@@ -6838,10 +6838,16 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   async function generate(token){
     const snapshot=await api.capture([...selected]);requireActive(token);
     const connection=api.connection();
+    const prompt=NowNoteWiki.prompt(snapshot,{question}),inputBytes=new TextEncoder().encode(prompt).length;
+    if(inputBytes>524288)throw Error('전송 텍스트 합계는 512KiB를 넘을 수 없습니다. 자료를 줄여 다시 검토하세요.');
     const names=snapshot.sources.map(s=>s.title||s.manifest.note_ref.local_id).join(', ');
-    const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n자료 '+snapshot.sources.length+'개 · UTF-8 '+snapshot.bytes+' bytes\n'+names+(question.trim()?'\n질문: '+question.trim():'')+'\n선택한 원문을 전송하며 제공업체 비용이 발생할 수 있습니다.',{send:true});
+    const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n자료 '+snapshot.sources.length+'개 · 전송 UTF-8 '+inputBytes+' bytes\n'+names
+      +'\n요청 출력 상한 '+(connection.outputTokens||4096)+' tokens · 요청 1회'+(connection.reasoning?' · 추론 '+connection.reasoning:'')
+      +(question.trim()?'\n질문: '+question.trim():'')+'\n선택한 원문을 전송하며 제공업체 비용이 발생할 수 있습니다. 정확한 과금과 모델 전체 context 한도는 확인되지 않았습니다.',{send:true});
     requireActive(token);if(!accepted)return;
-    const answer=await connection.invoke(NowNoteWiki.prompt(snapshot,{question}));requireActive(token);
+    const latest=await api.capture([...selected]);requireActive(token);
+    if(NowNoteProtectionProtocol.canonicalJson(latest)!==NowNoteProtectionProtocol.canonicalJson(snapshot))throw Error('원본 판본이 변경되었습니다. 전송 범위를 다시 확인하세요.');
+    const answer=await connection.invoke(prompt);requireActive(token);
     const draft=await NowNoteWiki.validateDraft(answer,snapshot,connection,{baseApprovedRevisionId:doc?.approvals.at(-1)?.id||null});
     requireActive(token);
     if(doc){
@@ -10060,46 +10066,56 @@ function voiceAuthHeaders(apiKey) {
 // LLM provider 직접 호출. 서버를 거치지 않는다(위 주석 참고).
 // 각 provider의 요청 모양은 packages/now_core/lib/llm/cloud_llm_repositories.dart /
 // ollama_llm_repository.dart와 같은 값을 쓴다 — 제품 전체가 같은 답을 내야 한다.
-async function llmChatRequest(provider, config, prompt) {
+async function llmChatRequest(provider, config, prompt, options = null) {
+  const wiki=options!==null;
+  if(wiki&&(!options||Object.keys(options).length!==2||options.purpose!=="wiki-ingest"||options.maxOutputTokens!==4096))
+    throw new Error("위키 요청 출력 예산이 다릅니다.");
+  const requestBody=body=>{
+    if(!wiki)return body;
+    if(provider==="gemini")return {...body,generationConfig:{...body.generationConfig,maxOutputTokens:4096}};
+    if(["openai","groq"].includes(provider)){const {max_tokens,...rest}=body;return {...rest,max_completion_tokens:4096};}
+    return {...body,max_tokens:4096};
+  };
+  const post=(url,request)=>fetch(url,wiki?{...request,signal:AbortSignal.timeout(60000)}:request);
   const requesters = {
-    openai: () => fetch("https://api.openai.com/v1/chat/completions", {
+    openai: () => post("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+      body: JSON.stringify(requestBody({ model: "gpt-4o-mini", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 })),
     }),
-    groq: () => fetch("https://api.groq.com/openai/v1/chat/completions", {
+    groq: () => post("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+      body: JSON.stringify(requestBody({ model: "llama-3.3-70b-versatile", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 })),
     }),
-    omniroute: () => fetch(`${omniRouteBaseUrl(config.omniUrl)}/chat/completions`, {
+    omniroute: () => post(`${omniRouteBaseUrl(config.omniUrl)}/chat/completions`, {
       method: "POST",
       headers: { Authorization: `Bearer ${config.omniApiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: config.omniModel.trim(), messages: [{ role: "user", content: prompt }],
-        ...(config.omniReasoning ? { reasoning_effort: config.omniReasoning } : {}), stream: false }),
+      body: JSON.stringify(requestBody({ model: config.omniModel.trim(), messages: [{ role: "user", content: prompt }],
+        ...(config.omniReasoning ? { reasoning_effort: config.omniReasoning } : {}), stream: false })),
     }),
-    grok: () => fetch("https://api.x.ai/v1/chat/completions", {
+    grok: () => post("https://api.x.ai/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${config.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "grok-2-latest", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 }),
+      body: JSON.stringify(requestBody({ model: "grok-2-latest", messages: [{ role: "user", content: prompt }], temperature: 0.3, max_tokens: 2048 })),
     }),
-    gemini: () => fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
+    gemini: () => post(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${encodeURIComponent(config.apiKey)}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } }),
+      body: JSON.stringify(requestBody({ contents: [{ parts: [{ text: prompt }] }], generationConfig: { temperature: 0.3, maxOutputTokens: 2048 } })),
     }),
-    claude: () => fetch("https://api.anthropic.com/v1/messages", {
+    claude: () => post("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": config.apiKey, "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ model: "claude-3-5-haiku-20241022", max_tokens: 2048, messages: [{ role: "user", content: prompt }] }),
+      body: JSON.stringify(requestBody({ model: "claude-3-5-haiku-20241022", max_tokens: 2048, messages: [{ role: "user", content: prompt }] })),
     }),
     ollama: () => {
       let base = config.ollamaUrl.trim().replace(/\/+$/, "");
       if (!/\/v1$/.test(base)) base = `${base}/v1`;
-      return fetch(`${base}/chat/completions`, {
+      return post(`${base}/chat/completions`, {
         method: "POST",
         headers: { Authorization: "Bearer daon-local-key", "Content-Type": "application/json" },
-        body: JSON.stringify({ model: config.ollamaModel, messages: [{ role: "user", content: prompt }], temperature: 0.3, stream: false }),
+        body: JSON.stringify(requestBody({ model: config.ollamaModel, messages: [{ role: "user", content: prompt }], temperature: 0.3, stream: false })),
       });
     },
   };
@@ -13108,14 +13124,19 @@ function wikiConnection(){
       throw new Error("Ollama 서버 주소를 확인하세요.");
   }else [model,endpoint]=defaults[provider]||[];
   if(!model||!endpoint)throw new Error("지원하지 않는 LLM 연결입니다.");
-  const key=wikiViewKey();
-  return {provider,model,endpoint,invoke:async prompt=>{
+  const key=wikiViewKey();let invoked=false;
+  const unchanged=()=>JSON.stringify(state.settings.llm)===JSON.stringify(config);
+  return {provider,model,endpoint,reasoning:provider==="omniroute"?config.omniReasoning||"":"",outputTokens:4096,callLimit:1,invoke:async prompt=>{
     if(key!==wikiViewKey())throw new Error("계정·보호 상태가 변경되었습니다.");
-    const response=await llmChatRequest(provider,config,prompt);
+    if(!unchanged())throw new Error("LLM 설정·모델이 변경되었습니다. 전송 범위를 다시 확인하세요.");
+    if(invoked)throw new Error("위키 생성 요청은 작업당 한 번만 전송합니다.");invoked=true;
+    const response=await llmChatRequest(provider,config,prompt,{purpose:"wiki-ingest",maxOutputTokens:4096});
     if(key!==wikiViewKey())throw new Error("계정·보호 상태가 변경되었습니다.");
+    if(!unchanged())throw new Error("LLM 설정·모델이 변경되었습니다.");
     if(!response.ok)throw new Error("LLM 응답 실패: HTTP "+response.status);
     const data=await response.json();
     if(key!==wikiViewKey())throw new Error("계정·보호 상태가 변경되었습니다.");
+    if(!unchanged())throw new Error("LLM 설정·모델이 변경되었습니다.");
     const text=extractLlmChatText(provider,data);
     if(typeof text!=="string"||!text.trim())throw new Error("위키 초안 응답이 비어 있습니다.");
     return text.trim();

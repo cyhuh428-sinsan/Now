@@ -71,10 +71,16 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   async function generate(token){
     const snapshot=await api.capture([...selected]);requireActive(token);
     const connection=api.connection();
+    const prompt=NowNoteWiki.prompt(snapshot,{question}),inputBytes=new TextEncoder().encode(prompt).length;
+    if(inputBytes>524288)throw Error('전송 텍스트 합계는 512KiB를 넘을 수 없습니다. 자료를 줄여 다시 검토하세요.');
     const names=snapshot.sources.map(s=>s.title||s.manifest.note_ref.local_id).join(', ');
-    const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n자료 '+snapshot.sources.length+'개 · UTF-8 '+snapshot.bytes+' bytes\n'+names+(question.trim()?'\n질문: '+question.trim():'')+'\n선택한 원문을 전송하며 제공업체 비용이 발생할 수 있습니다.',{send:true});
+    const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n자료 '+snapshot.sources.length+'개 · 전송 UTF-8 '+inputBytes+' bytes\n'+names
+      +'\n요청 출력 상한 '+(connection.outputTokens||4096)+' tokens · 요청 1회'+(connection.reasoning?' · 추론 '+connection.reasoning:'')
+      +(question.trim()?'\n질문: '+question.trim():'')+'\n선택한 원문을 전송하며 제공업체 비용이 발생할 수 있습니다. 정확한 과금과 모델 전체 context 한도는 확인되지 않았습니다.',{send:true});
     requireActive(token);if(!accepted)return;
-    const answer=await connection.invoke(NowNoteWiki.prompt(snapshot,{question}));requireActive(token);
+    const latest=await api.capture([...selected]);requireActive(token);
+    if(NowNoteProtectionProtocol.canonicalJson(latest)!==NowNoteProtectionProtocol.canonicalJson(snapshot))throw Error('원본 판본이 변경되었습니다. 전송 범위를 다시 확인하세요.');
+    const answer=await connection.invoke(prompt);requireActive(token);
     const draft=await NowNoteWiki.validateDraft(answer,snapshot,connection,{baseApprovedRevisionId:doc?.approvals.at(-1)?.id||null});
     requireActive(token);
     if(doc){
