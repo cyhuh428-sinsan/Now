@@ -16,9 +16,10 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     const get=async(path,body={})=>{active();const result=await api.request(path,'GET',{owner_id:ctx.owner,...body});active();return result;};
     return {ctx,active,get};
   }
-  async function capabilities(a){
+  async function capabilities(a,policy=2){
     const info=await a.get('/api/v1/server');
-    check(info.status==='ok'&&info.capabilities?.wiki_document_schema===2&&info.capabilities.wiki_operations_v1===true,
+    check(info.status==='ok'&&info.capabilities?.wiki_document_schema===2&&info.capabilities.wiki_operations_v1===true
+      &&(policy===1||info.capabilities.wiki_operation_manifest_schema===2),
       '서버가 Wiki v2 일괄 반영을 지원하는지 확인하세요. 로컬 자료는 보존했습니다.');
   }
   function snapshot(value,a,id,current=false){
@@ -32,8 +33,8 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       check(eq(result[k],current[k]),'원본 판본·보호 상태가 변경되었습니다. 다시 검토하세요.');
     return result.server_instance_id;
   }
-  async function inspect(id,expected){
-    const a=action();check(typeof id==='string'&&id.length>0&&id.length<=120,'원본 ID를 확인하세요.');await capabilities(a);
+  async function inspect(id,expected,{policy=2}={}){
+    const a=action();check(typeof id==='string'&&id.length>0&&id.length<=120,'원본 ID를 확인하세요.');await capabilities(a,policy);
     const current=await a.get('/api/v2/notes/current',{local_id:id});
     check(plain(current),'보호 lineage·전환·대표 판본을 확인할 수 없어 일괄 적재하지 않았습니다.');snapshot(current.snapshot,a,id,true);
     if(expected){check(current.snapshot.note.content===expected.content&&current.head_revision_id===expected.revisionId&&current.head_version===expected.headVersion,
@@ -53,13 +54,38 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
     }while(cursor);
     check(refs.has('note_revision:'+current.head_revision_id)&&Array.isArray(current.inventory_revision_ids)
       &&current.inventory_revision_ids.every(ref=>refs.has('note_revision:'+ref)),'원본의 현재·과거 판본 집합을 확인하세요.');
+    const history=[];
     for(const ref of refs.values()){
       const result=await a.get('/api/v2/notes/revision',{local_id:id,revision_kind:ref.kind,revision_id:ref.id});
       check(result.status==='ok'&&result.crypto_epoch===0&&eq(result.revision_ref,ref),'과거 판본 참조가 다릅니다.');snapshot(result.snapshot,a,id);
+      history.push({revision_ref:copy(ref),snapshot:copy(result.snapshot)});
     }
     const latest=await a.get('/api/v2/notes/current',{local_id:id});check(plain(latest)&&eq(latest,current),'검증 중 원본·보호 상태가 변경되었습니다.');
     check(await identity(a,id,latest)===instance,'물리 서버 식별자가 변경되었습니다.');a.active();
-    return {instance,current:copy(current),safety:{status:'ok',epoch:0,lineage:false,fence:false}};
+    return {instance,current:copy(current),history,safety:{status:'ok',epoch:0,lineage:false,fence:false}};
+  }
+  async function pinnedWiki(ref,{fresh=true,allowDeleted=false,revisionId=null,policy=2}={}){
+    const a=action(),W=NowNoteWiki;W.validateEvidence(ref,a.ctx.owner);check(ref.kind==='wiki'&&ref.origin==='server'&&api.readWiki,'고정 위키 읽기 연결을 확인하세요.');
+    const proof=await inspect('wiki:'+ref.wiki_id,undefined,{policy}),remote=await api.readWiki(ref.wiki_id);a.active();
+    check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===ref.wiki_id&&(!remote.resource.deleted_at||allowDeleted)
+      &&remote.artifact?.protected===false&&remote.artifact.head_revision_id===proof.current.head_revision_id,'wiki_source_unavailable');
+    const index=await W.validateLink(remote.resource.payload,a.ctx);a.active();check(index.artifact_local_id==='wiki:'+ref.wiki_id,'wiki_evidence_binding');
+    const currentDocument=await W.validateDocument(proof.current.snapshot.note.content,a.ctx);a.active();
+    check(currentDocument.wiki_id===ref.wiki_id&&(!remote.artifact.document||eq(remote.artifact.document,currentDocument)),'wiki_evidence_binding');
+    if(fresh){
+      const approval=currentDocument.approvals.at(-1),draft=currentDocument.drafts.find(d=>d.id===approval?.draft_id);
+      check(currentDocument.document_version>=ref.document_version&&approval?.id===ref.approval_id&&draft?.id===ref.draft_id&&draft.draft_hash===ref.content_hash,'wiki_source_changed');
+    }
+    const history=[];let chosen=null;
+    for(const row of proof.history){
+      check(row.snapshot.note.source==='wiki-artifact','wiki_evidence_binding');
+      const document=await W.validateDocument(row.snapshot.note.content,a.ctx);a.active();check(document.wiki_id===ref.wiki_id,'wiki_evidence_binding');
+      history.push({revision_ref:copy(row.revision_ref),document});
+      if(row.revision_ref.kind!=='note_revision'||revisionId&&row.revision_ref.id!==revisionId||document.document_version!==ref.document_version)continue;
+      const approval=document.approvals.find(v=>v.id===ref.approval_id&&v.draft_id===ref.draft_id),draft=document.drafts.find(d=>d.id===ref.draft_id&&d.draft_hash===ref.content_hash);
+      if(approval&&draft&&(!chosen||row.revision_ref.id===proof.current.head_revision_id))chosen={document,draft,revisionId:row.revision_ref.id};
+    }
+    check(chosen,'wiki_source_unavailable');return {...copy(chosen),currentDocument,index,history,deleted:Boolean(remote.resource.deleted_at),instance:proof.instance,safety:proof.safety};
   }
   function verifyReceipt(value,manifest){
     exact(value,['status','wiki_operation','operation_id','manifest_hash','state','pages']);
@@ -84,16 +110,17 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
   async function operationAction(manifest,instance,write=false){
     const a=action();exact(manifest,['schema_version','owner_id','device_id','operation_id','mutation_id','commit_mutation_id','abort_mutation_id','kind','inputs','draft_bindings','changes','manifest_hash']);
     const unsigned=copy(manifest);delete unsigned.manifest_hash;
-    check(manifest.schema_version===1&&manifest.owner_id===a.ctx.owner&&uuid(manifest.operation_id)&&uuid(instance)
+    check([1,2].includes(manifest.schema_version)&&manifest.owner_id===a.ctx.owner&&uuid(manifest.operation_id)&&uuid(instance)
       &&(!write||manifest.device_id===a.ctx.device)&&await P.hashJson(unsigned)===manifest.manifest_hash,'고정 작업·계정·기기·해시를 확인하세요.');
     const source=manifest.inputs?.find(ref=>ref.kind==='note'&&ref.origin==='server'&&ref.note_ref.owner_id===a.ctx.owner);
     check(source,'원작업의 서버 원본 참조가 없습니다.');
-    if(write)await capabilities(a);
+    if(write)await capabilities(a,manifest.schema_version);
     const identity=await a.get('/api/v2/notes/crypto-transitions/status',{local_id:source.note_ref.local_id,device_id:a.ctx.device});
     check(identity.server_instance_id===instance&&identity.preparation_only===true,'물리 서버 식별자가 변경되었습니다. 원요청은 보존했습니다.');
     return a;
   }
   async function send(manifest,instance,phase,body){
+    check(phase==='abort'||manifest.schema_version===2,'wiki_operation_upgrade_required');
     const a=await operationAction(manifest,instance,true);
     const result=await api.request('/api/v1/wiki-operations/'+(phase==='prepare'?'prepare':manifest.operation_id+'/'+phase),'POST',copy(body));a.active();
     const receipt=verifyReceipt(result,manifest);check(receipt.state===({prepare:'prepared',commit:'committed',abort:'aborted'}[phase]),'원작업 단계의 응답이 다릅니다.');return receipt;
@@ -116,5 +143,5 @@ globalThis.NowWikiServerAccess=Object.freeze({create(api){
       &&await P.hashJson(body.documents[i].document)===manifest.changes[i].result_document_hash,'원 commit 본문·해시가 다릅니다.');
     return send(manifest,instance,'commit',body);
   }
-  return {inspect,verifyReceipt,status,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
+  return {inspect,pinnedWiki,verifyReceipt,status,prepare:(manifest,instance)=>send(manifest,instance,'prepare',manifest),commit,abort};
 }});

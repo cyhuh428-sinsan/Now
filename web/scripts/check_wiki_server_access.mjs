@@ -13,7 +13,7 @@ let key='alice',scenario='',reads=[],currentReads=0;
 const api={context:()=>({owner:'alice',device:'one',url:'https://synthetic.invalid',enabled:true,online:true}),contextKey:()=>key,
   request:async(path,method,body)=>{
     reads.push({path,method});assert.equal(method,'GET','proof never writes');
-    if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:scenario!=='unsupported'}};
+    if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:scenario!=='unsupported',wiki_operation_manifest_schema:scenario==='old-manifest'?1:2}};
     if(path==='/api/v2/notes/current'){
       currentReads++;const result=structuredClone(current);
       if(scenario==='fence')result.crypto_transition={transition_id:webcrypto.randomUUID(),state:'prepared',preparation_only:true};
@@ -33,9 +33,10 @@ const api={context:()=>({owner:'alice',device:'one',url:'https://synthetic.inval
 const access=box.NowWikiServerAccess.create(api);
 const proof=await access.inspect(id,{content:note.content,revisionId:revision,headVersion:1});
 assert.equal(proof.instance,instance);assert.equal(proof.safety.lineage,false);assert.equal(reads.filter(r=>r.path.endsWith('/revision')).length,2);
-for(const test of ['unsupported','fence','past-protected','old-cipher','changed','instance-changed','late']){
+for(const test of ['unsupported','old-manifest','fence','past-protected','old-cipher','changed','instance-changed','late']){
   scenario=test;key='alice';reads=[];currentReads=0;await assert.rejects(()=>access.inspect(id,{content:note.content,revisionId:revision,headVersion:1}),undefined,test);
 }
+scenario='old-manifest';key='alice';currentReads=0;await access.inspect(id,{content:note.content,revisionId:revision,headVersion:1},{policy:1});
 assert.equal(typeof access.verifyReceipt,'function','strict operation receipt verifier required');
 const wiki=webcrypto.randomUUID(),manifest={schema_version:1,owner_id:'alice',device_id:'one',operation_id:webcrypto.randomUUID(),mutation_id:webcrypto.randomUUID(),commit_mutation_id:webcrypto.randomUUID(),abort_mutation_id:webcrypto.randomUUID(),kind:'ingest',inputs:[{id:'s1',kind:'note',origin:'server',note_ref:{owner_id:'alice',local_id:id},source_revision_id:revision,head_version:1,content_hash:'a'.repeat(64)}],draft_bindings:[],changes:[{wiki_id:wiki,action:'create_draft',note_mutation_id:webcrypto.randomUUID(),base_head_revision_id:null,base_head_version:0,base_index_version:0,base_document_version:0,result_document_hash:'b'.repeat(64)}]};
 manifest.manifest_hash=await box.NowNoteProtectionProtocol.hashJson(manifest);
@@ -48,7 +49,7 @@ for(const mutate of [v=>v.pages[0].result_document_hash='c'.repeat(64),v=>v.page
 }
 let writes=0,statusReads=0;
 const remote=box.NowWikiServerAccess.create({...api,request:async(path,method)=>{
-  if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true}};
+  if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true,wiki_operation_manifest_schema:2}};
   if(path==='/api/v2/notes/crypto-transitions/status')return {server_instance_id:instance,preparation_only:true,current_exists:false};
   if(method==='POST'){writes++;throw Error('synthetic response lost');}
   statusReads++;return {status:'ok',operation_id:manifest.operation_id,state:'committed',manifest_hash:manifest.manifest_hash,manifest,receipt};

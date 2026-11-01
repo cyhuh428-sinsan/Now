@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-ingest-notebook']){
+for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-evidence','wiki-ingest-notebook']){
   try{vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);}
   catch(e){if(e.code==='ENOENT'&&name==='wiki-ingest-notebook')continue;throw e;}
 }
@@ -97,7 +97,8 @@ book=box.createWikiIngestNotebook(api);
 await api.sources.captureFiles([{name:'source.md',arrayBuffer:async()=>new TextEncoder().encode('Changed comparison evidence.').buffer},
   {name:'unrelated-new.txt',arrayBuffer:async()=>new TextEncoder().encode('New unrelated evidence.').buffer}]);
 const comparisonFiles=await api.sources.list(),comparison=comparisonFiles.find(s=>s.content==='Changed comparison evidence.'),unrelated=comparisonFiles.find(s=>s.title==='unrelated-new.txt');
-const beforeGate=JSON.stringify(saved);
-await assert.rejects(()=>book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]}),/비교.*다중 출력.*계약/);
-assert.equal(JSON.stringify(saved),beforeGate,'unapproved cross-comparison contract remains blocked before reservation/invoke');
+const combined=await book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]});assert.equal(combined.plan.policy,2);assert.equal(combined.plan.pages.length,2);
+assert.equal(combined.plan.inputs.filter(r=>r.kind==='wiki').length,1,'validated comparison is now part of durable operation inputs');
+assert.equal(combined.plan.protection.nodes[0].complete,true,'temporary blanket gate is replaced only by complete source and cycle proof');
+await book.abortLocal(combined.operation_id);
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

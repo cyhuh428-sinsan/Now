@@ -1,0 +1,28 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import {fixture,ctx,id,clone} from './wiki_ingest_fixture.mjs';
+const {box,P,W,catalog}=await fixture();vm.runInContext(await fs.readFile(new URL('../vendor/note-history-state.js',import.meta.url),'utf8'),box);
+try{vm.runInContext(await fs.readFile(new URL('../vendor/wiki-evidence.js',import.meta.url),'utf8'),box);}catch(e){if(e.code!=='ENOENT')throw e;}
+assert.equal(typeof box.NowWikiEvidence?.create,'function','retained proof adapter required');
+const currentContext={...ctx,enabled:true,online:false},document=clone(catalog[0].document),draft=document.drafts[0];
+draft.source_manifest[0]={...draft.source_manifest[0],origin:'local',source_revision_id:null,head_version:0};
+delete draft.draft_hash;draft.draft_hash=await P.hashJson(draft);document.approvals[0].draft_hash=draft.draft_hash;document.approvals[0].source_manifest_hash=await P.hashJson(draft.source_manifest);
+let saved=null,key='one';const h=box.NowNoteHistory.create({context:()=>currentContext,write:async v=>{saved=clone(v);},request:async()=>{throw Error('no HTTP');}});
+const now='2026-11-01T00:00:00.000000Z',note={id:null,owner_id:ctx.owner,local_id:'wiki:'+document.wiki_id,device_id:ctx.device,note_type:'tree',title:'Wiki',content:P.canonicalJson(document),source:'wiki-artifact',parent_local_id:null,level:1,tags:null,deleted_at:null,created_at:now,updated_at:now,client_updated_at:now};
+await h.track(note,null,{localOnly:true});await h.seal(note.local_id);
+const api={context:()=>currentContext,contextKey:()=>key,history:()=>h,source:local=>({owner:ctx.owner,localId:local,status:'ok',origin:'local',content:'Exact evidence 1.\r\n<script>neverRun()</script>',title:'Alpha'}),lifecycle:{state:()=>null}};
+const evidence=box.NowWikiEvidence.create(api),ref={id:'cmp',kind:'wiki',origin:'local',owner_id:ctx.owner,wiki_id:document.wiki_id,draft_id:draft.id,approval_id:document.approvals[0].id,document_version:document.document_version,content_hash:draft.draft_hash};
+const pinned=await evidence.resolve(ref);assert.equal(pinned.document.document_version,2);assert.equal(pinned.draft.draft_hash,draft.draft_hash);
+const graph=await evidence.graph([ref]);assert.equal(graph.nodes.length,1);assert.equal(graph.nodes[0].complete,true);assert.equal(graph.nodes[0].dependencies.length,0);
+const changed=clone(document);changed.document_version++;const n=clone(note);n.content=P.canonicalJson(changed);await h.edit(n);await h.seal(n.local_id);
+assert.equal((await evidence.resolve(ref)).document.document_version,2,'old stored source is not replaced by current container');
+assert.equal((await evidence.resolve(ref)).stale,false,'same approval tuple remains fresh');
+const foreign={...ref,owner_id:'other'};await assert.rejects(()=>evidence.resolve(foreign));
+const unknown=clone(document);unknown.schema_version=2;const modern=clone(draft);modern.schema_version=2;modern.id=id(98);modern.generation_id=id(97);modern.base_approved_revision_id=document.approvals[0].id;
+modern.page_type='concept';modern.summary='Synthetic';modern.aliases=[];modern.claims=[];modern.relations=[];modern.evidence_manifest=modern.source_manifest.map(r=>({...r,kind:'note'}));delete modern.source_manifest;modern.citations=modern.citations.map(c=>({id:c.id,evidence_id:c.source_id,section_id:null,quote:c.quote}));delete modern.draft_hash;modern.draft_hash=await P.hashJson(modern);
+unknown.document_version++;unknown.drafts.push(modern);const unknownNote={...note,content:P.canonicalJson(unknown)};await h.edit(unknownNote);await h.seal(unknownNote.local_id);
+const blocked=await evidence.graph([ref]);assert.equal(blocked.nodes[0].complete,false,'unknown retained v2 production cannot prove comparison completeness');
+const corrupt=clone(saved);corrupt.contexts[box.NowNoteHistory.key(currentContext)].notes[note.local_id].revisions[0].snapshot.note.content='{broken';h.hydrate(corrupt);
+await assert.rejects(()=>evidence.graph([ref]));
+console.log('Wiki evidence: exact retained local revision, tuple freshness, owner isolation and unknown/damaged history fail closed PASS (synthetic journal only)');

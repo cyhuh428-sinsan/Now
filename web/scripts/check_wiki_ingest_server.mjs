@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-ingest-notebook'])
+for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-evidence','wiki-ingest-notebook'])
   vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);
 const P=box.NowNoteProtectionProtocol,instance=webcrypto.randomUUID(),sourceId='server-source',revision=webcrypto.randomUUID();
 const ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic',enabled:true,online:true};
@@ -17,7 +17,7 @@ const createHistory=()=>box.NowNoteHistory.create({initial:saved,context:()=>ctx
 history=createHistory();await history.track(source,notes.get(sourceId));
 const request=async(path,method,body)=>{
   if(method==='GET'){
-    if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true}};
+    if(path==='/api/v1/server')return {status:'ok',capabilities:{wiki_document_schema:2,wiki_operations_v1:true,wiki_operation_manifest_schema:2}};
     const current=notes.get(body.local_id);
     if(path.endsWith('/crypto-transitions/status'))return {server_instance_id:instance,preparation_only:true,...Object.fromEntries(['head_revision_id','head_version','crypto_epoch','history_generation','protection_state','identity_state','inventory_revision_ids'].map(k=>[k,current[k]])),current_exists:true};
     if(path==='/api/v2/notes/current')return structuredClone(current);
@@ -49,7 +49,7 @@ const api={context:()=>ctx,contextKey:()=>JSON.stringify(ctx),history:()=>histor
     const current=notes.get('wiki:'+id),document=P.parseJson(current.snapshot.note.content),payload={artifact_local_id:'wiki:'+id,dependencies:[{owner_id:ctx.owner,local_id:sourceId}],wiki_dependencies:[],document_schema_floor:2};payload.lineage_manifest_hash=await P.hashJson(payload);
     return {resource:{id,owner_id:ctx.owner,schema_version:2,version:current.head_version,deleted_at:null,payload},artifact:{protected:false,head_revision_id:current.head_revision_id,document},source_status:{available:true,stale:false}};
   }};
-api.lifecycle=box.NowWikiLifecycle.create(api);api.sources=box.NowNoteWikiSources.create(api);api.server=box.NowWikiServerAccess.create(api);
+api.lifecycle=box.NowWikiLifecycle.create(api);api.sources=box.NowNoteWikiSources.create(api);api.server=box.NowWikiServerAccess.create({...api,readWiki:api.readRemote});
 const notebook=box.createWikiNotebook(api);api.captureNotes=ids=>notebook.capture(ids);
 let book=box.createWikiIngestNotebook(api);assert.equal(typeof book.stageServer,'function','durable remote proposal staging required');
 const plan=await book.plan({fileIds:[],noteIds:[sourceId]});assert.equal(plan.plan.context.serverInstance,instance);assert.equal(plan.plan.serverEligible,true);
@@ -86,10 +86,10 @@ assert.equal((await book.plan({fileIds:[],noteIds:[sourceId]})).plan.calls,0,'ow
 if(process.argv[2]){
   const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),code=`
 import json, sys
-from app.schemas.wiki_operations import PrepareOperation, CommitOperation
+from app.schemas.wiki_operations import parse_prepare, CommitOperation
 from app.schemas.wiki import digest
 for row in json.load(sys.stdin):
-    manifest=PrepareOperation.model_validate(row['manifest'])
+    manifest=parse_prepare(row['manifest'])
     assert manifest.model_dump()==row['manifest']
     if 'commit' in row:
         commit=CommitOperation.model_validate(row['commit'])
