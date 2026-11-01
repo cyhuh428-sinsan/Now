@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Discriminator, Field, Tag, model_validator
+from pydantic import AfterValidator, BaseModel, BeforeValidator, ConfigDict, Discriminator, Field, Tag, model_validator
 
 from app.schemas.library import Mutation
 
@@ -181,6 +181,15 @@ class WikiLink(Strict):
 
 
 # V2 is opt-in: existing service imports and v1 hash inputs remain unchanged.
+def _exact_v2(value):
+    if type(value) is not int or value != 2:
+        raise ValueError("wiki_exact_schema_version_required")
+    return value
+
+
+VersionV2 = Annotated[Literal[2], BeforeValidator(_exact_v2)]
+
+
 class WikiNoteEvidenceV2(WikiSource):
     kind: Literal["note"]
 
@@ -189,7 +198,7 @@ class WikiDependencyV2(Strict):
     owner_id: str = Field(min_length=1, max_length=80)
     wiki_id: Ident
     draft_id: Ident
-    approval_id: Ident | None
+    approval_id: Ident
     document_version: int = Field(ge=1)
     content_hash: Hash
 
@@ -198,13 +207,6 @@ class WikiEvidenceV2(WikiDependencyV2):
     id: LabelId
     kind: Literal["wiki"]
     origin: Literal["server", "local"]
-
-    @model_validator(mode="after")
-    def approved_source(self):
-        if self.origin == "server" and self.approval_id is None:
-            raise ValueError("wiki_server_approval_required")
-        return self
-
 
 EvidenceV2 = Annotated[WikiNoteEvidenceV2 | WikiEvidenceV2, Field(discriminator="kind")]
 
@@ -255,7 +257,7 @@ def _unique(values, code):
 
 
 class WikiDraftV2(Strict):
-    schema_version: Literal[2]
+    schema_version: VersionV2
     id: Ident
     generation_id: Ident
     base_approved_revision_id: Ident | None
@@ -310,7 +312,7 @@ class WikiDraftV2(Strict):
 
 
 class WikiApprovalV2(Strict):
-    schema_version: Literal[2]
+    schema_version: VersionV2
     id: Ident
     parent_approved_revision_id: Ident | None
     draft_id: Ident
@@ -334,7 +336,7 @@ ApprovalAny = Annotated[Annotated[WikiApproval, Tag("legacy")] | Annotated[WikiA
 
 
 class WikiArtifactV2(Strict):
-    schema_version: Literal[2]
+    schema_version: VersionV2
     document_version: int = Field(ge=1)
     wiki_id: Ident
     scope: WikiScope
@@ -384,7 +386,7 @@ class WikiLinkV2(Strict):
     artifact_local_id: str = Field(max_length=120)
     dependencies: list[NoteRef] = Field(min_length=1, max_length=1000)
     wiki_dependencies: list[WikiDependencyV2] = Field(max_length=1000)
-    document_schema_floor: Literal[2]
+    document_schema_floor: VersionV2
     lineage_manifest_hash: Hash
 
     @model_validator(mode="after")

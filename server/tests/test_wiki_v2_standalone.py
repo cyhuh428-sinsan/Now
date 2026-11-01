@@ -48,6 +48,34 @@ def approval(value, n=20):
 
 
 class WikiV2Test(unittest.TestCase):
+    def test_exact_v2_integer_discriminators(self):
+        for model, original, key in [(W.WikiArtifactV2, artifact(), "schema_version"),
+                                    (W.WikiDraftV2, draft(), "schema_version"),
+                                    (W.WikiApprovalV2, approval(draft()), "schema_version"),
+                                    (W.WikiLinkV2, dict(artifact_local_id="wiki:"+uid(10),
+                                        dependencies=[dict(owner_id="alice", local_id="source")],
+                                        wiki_dependencies=[], document_schema_floor=2,
+                                        lineage_manifest_hash="a"*64), "document_schema_floor")]:
+            for replacement in (2.0, True, False, "2"):
+                bad = copy.deepcopy(original); bad[key] = replacement
+                if model is W.WikiDraftV2: seal(bad)
+                with self.subTest(model=model.__name__, value=repr(replacement)), self.assertRaises(ValidationError):
+                    model.model_validate(bad)
+
+    def test_local_wiki_evidence_and_index_require_approval(self):
+        ref = dict(owner_id="alice", wiki_id=uid(40), draft_id=uid(41), approval_id=None,
+                   document_version=1, content_hash="b"*64)
+        evidence = dict(ref, id="n", kind="wiki", origin="local")
+        with self.assertRaises(ValidationError): W.WikiEvidenceV2.model_validate(evidence)
+        with self.assertRaises(ValidationError): W.WikiDependencyV2.model_validate(ref)
+        link = dict(artifact_local_id="wiki:"+uid(10), dependencies=[dict(owner_id="alice", local_id="source")],
+                    wiki_dependencies=[ref], document_schema_floor=2, lineage_manifest_hash="a"*64)
+        with self.assertRaises(ValidationError): W.WikiLinkV2.model_validate(link)
+        value = draft(); value["evidence_manifest"] = [evidence]; value["citations"][0]["section_id"] = "s"
+        with self.assertRaises(ValidationError): W.WikiDraftV2.model_validate(seal(value))
+        evidence["approval_id"] = uid(42)
+        W.WikiEvidenceV2.model_validate(evidence)
+
     def test_models_are_separate_and_strict(self):
         value = artifact()
         self.assertEqual(W.WikiArtifactV2.model_validate(value).model_dump(), value)
