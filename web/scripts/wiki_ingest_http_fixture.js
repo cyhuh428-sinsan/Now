@@ -57,20 +57,21 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       await wikiNotebook.save(old);await wikiNotebook.approve(old,legacy.id);
       check((await wikiNotebook.list()).some(row=>row.document?.schema_version===1),'journey_legacy_saved');
       const seed=await generate([ids[0],ids[2]]);await publish(seed.operation.operation_id);
-      for(const row of await wikiNotebook.list())if(row.document?.schema_version===2)await approve(row.document);
-      const upgrade=await generate([ids[1]]);await publish(upgrade.operation.operation_id);
+      await approve((await wikiNotebook.list()).find(row=>row.document?.drafts.at(-1).title==='Beta').document);
       const migrated=(await wikiNotebook.list()).find(row=>row.document?.wiki_id===old.wiki_id)?.document;
       check(migrated?.schema_version===2&&migrated.drafts.some(d=>!d.schema_version)&&migrated.drafts.some(d=>d.schema_version===2),'journey_legacy_retained');
       await approve(migrated);
+      const refreshed=await generate([ids[2]]);await publish(refreshed.operation.operation_id);
+      await approve((await wikiNotebook.list()).find(row=>row.document?.drafts.at(-1).title==='Beta').document);
       const alpha=(await wikiNotebook.list()).find(row=>row.document?.drafts.at(-1).title==='Alpha').document;
       const beta=(await wikiNotebook.list()).find(row=>row.document?.drafts.at(-1).title==='Beta').document;
-      await wikiUI.open();document.querySelector('#wikiDialog [data-wiki-id="'+alpha.wiki_id+'"] button.library-item').click();
+      await wikiUI.open();document.querySelector('#wikiDialog [data-wiki-id="'+beta.wiki_id+'"] button.library-item').click();
       await formClick('integrate');await until(()=>document.querySelector('[name=wiki-relation-target]'),'journey_relation');
-      const target=document.querySelector('[name=wiki-relation-target]');target.value=beta.wiki_id;target.dispatchEvent(new Event('change',{bubbles:true}));
+      const target=document.querySelector('[name=wiki-relation-target]');target.value=alpha.wiki_id;target.dispatchEvent(new Event('change',{bubbles:true}));
       await formClick('preview-integrate');await until(()=>document.querySelector('[data-wiki-action=commit-ingest]'),'journey_relation_preview');
       await formClick('commit-ingest');await until(async()=>(await wikiIngest.operations()).some(o=>o.action==='integrate'&&o.remote?.phase==='staged'),'journey_relation_staged');
       const relation=(await wikiIngest.operations()).find(o=>o.action==='integrate'&&o.remote?.phase==='staged');await publish(relation.operation_id);
-      await approve((await wikiNotebook.list()).find(row=>row.document?.wiki_id===alpha.wiki_id).document);
+      await approve((await wikiNotebook.list()).find(row=>row.document?.wiki_id===beta.wiki_id).document);
       const originalConfig=state.settings.llm,originalFetch=globalThis.fetch;let queryCalls=0;
       state.settings.llm={...originalConfig,provider:'omniroute',omniUrl:'https://journey-model.invalid',omniModel:'Combo/auto',omniReasoning:'medium',omniApiKey:'synthetic-only'};
       globalThis.fetch=async(url,options)=>{
@@ -380,7 +381,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     await wikiUI.open();
   }
   await noteHistory.idle();await settle();
-  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true,peerVerified,citationVerified,queryVerified,protectedQueryVerified,lintVerified,protectedLintVerified,journeyVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
+  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true||journeyVerified,peerVerified,citationVerified,queryVerified,protectedQueryVerified,lintVerified,protectedLintVerified,journeyVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
     operations:(await wikiIngest.operations()).map(row=>({id:row.operation_id,state:row.state,phase:row.remote.phase})),
     wikis:(await wikiNotebook.list()).map(row=>({id:row.document?.wiki_id||row.id,version:row.document?.document_version??null,approvals:row.document?.approvals.length??null,protected:row.protected===true}))};
 };

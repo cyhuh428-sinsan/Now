@@ -61,6 +61,7 @@ globalThis.runWikiLintUiFixture=async function(phase){
   const ui=mountNowWiki({...wikiNotebook,sources:wikiSources,ingest:wikiIngest,contextKey:wikiViewKey,notes:()=>[],lintSnapshot:async()=>structuredClone(snapshot)});
   await ui.open();await click('lint');await click('lint-run');await wait(()=>document.querySelector('[data-wiki-lint-report]'),'lint_changed_report');
   check(document.querySelector('[data-lint-rule=wiki_lint_source_changed]')?.textContent.includes('검토 필요'),'lint_classified_findings');
+  if(globalThis.WIKI_LINT_QA_CAPTURE)await new Promise(resolve=>{globalThis.WIKI_LINT_QA_FRAME={release:resolve};});
   check(button('lint-original'),'lint_finding_original_action');
   await click('lint-original');await wait(()=>document.querySelector('[data-wiki-lint-original]'),'lint_fixed_original');
   check(document.querySelector('[data-wiki-lint-original] pre').textContent.length>0,'lint_fixed_original_content');

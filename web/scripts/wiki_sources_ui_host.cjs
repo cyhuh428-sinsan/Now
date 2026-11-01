@@ -127,7 +127,18 @@ app.whenReady().then(async()=>{
     let lint=null;
     if(process.env.NOWNOTE_WIKI_LINT==='1'){
       await run(fs.readFileSync(path.join(root,'web/scripts/wiki_lint_ui_fixture.js'),'utf8')+'\nvoid 0;');
-      lint=await run('runWikiLintUiFixture('+phase+').catch(error=>({qaError:String(error.message||error)}))');
+      await run('globalThis.WIKI_LINT_QA_CAPTURE=true;void 0;');
+      const pending=run('runWikiLintUiFixture('+phase+').catch(error=>{globalThis.WIKI_LINT_QA_ERROR=String(error.message||error);return {qaError:globalThis.WIKI_LINT_QA_ERROR};})');
+      await wait('Boolean(globalThis.WIKI_LINT_QA_FRAME||globalThis.WIKI_LINT_QA_ERROR)','lint_visual_frame');
+      const early=await run('globalThis.WIKI_LINT_QA_ERROR||null');if(early)throw Error(early);
+      const frames=[];
+      for(const [size,width,height]of [['desktop',1200,900],['mobile',390,844]]){
+        window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const fits=await run('(()=>{const d=document.querySelector("#wikiDialog"),r=d.querySelector("[data-wiki-lint-report]");return Boolean(r)&&d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth&&r.scrollWidth<=r.clientWidth+1&&[...r.querySelectorAll("button")].every(b=>b.getBoundingClientRect().left>=r.getBoundingClientRect().left-1&&b.getBoundingClientRect().right<=r.getBoundingClientRect().right+1);})()');
+        assert(fits,'lint_layout_'+size);frames.push({size,width,fits});
+        fs.writeFileSync(path.join(screenshotRoot,'wiki-lint-'+mode+'-'+phase+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
+      }
+      await run('globalThis.WIKI_LINT_QA_FRAME.release();delete globalThis.WIKI_LINT_QA_FRAME;void 0;');lint=await pending;lint.frames=frames;
       if(lint.qaError)throw Error(lint.qaError);
     }
     let query=null;
