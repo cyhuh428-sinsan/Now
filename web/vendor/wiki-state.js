@@ -138,5 +138,131 @@
     const instance=digest.slice(0,8)+'-'+digest.slice(8,12)+'-5'+digest.slice(13,16)+'-8'+digest.slice(17,20)+'-'+digest.slice(20,32);
     return {...ctx,instance,local_id:localId,device:context.device};
   }
-  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies,localProtectionScope};
+  // Readers validate without repairing legacy objects or changing hash inputs.
+  const exact=(value,names)=>{
+    fields(value,names);
+    if(names.some(name=>!Object.hasOwn(value,name)))throw Error('wiki_missing_field');
+  };
+  const requireValue=(condition,code='wiki_invalid_value')=>{if(!condition)throw Error(code);};
+  const uuid=value=>requireValue(typeof value==='string'&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value),'wiki_invalid_id');
+  const nullableUuid=value=>{if(value!==null)uuid(value);};
+  const hash=value=>requireValue(typeof value==='string'&&/^[0-9a-f]{64}$/.test(value),'wiki_invalid_hash');
+  const integer=(value,min=0)=>requireValue(Number.isSafeInteger(value)&&value>=min,'wiki_invalid_version');
+  const string=(value,max,min=1)=>requireValue(typeof value==='string'&&[...value].length>=min&&[...value].length<=max,'wiki_invalid_string');
+  const label=value=>requireValue(safeId(value),'wiki_invalid_label');
+  const list=(value,max,min=0)=>requireValue(Array.isArray(value)&&value.length>=min&&value.length<=max,'wiki_invalid_list');
+  const unique=values=>requireValue(new Set(values).size===values.length,'wiki_duplicate_id');
+  const stamp=value=>{string(value,64);requireValue(/T.*(?:Z|[+-]\d\d:\d\d)$/.test(value)&&Number.isFinite(Date.parse(value)),'wiki_invalid_timestamp');};
+  function readScope(value){exact(value,['url','owner']);string(value.url,2048,0);string(value.owner,80);}
+  function readNoteRef(value){exact(value,['owner_id','local_id']);string(value.owner_id,80);string(value.local_id,120);}
+  function validateEvidence(value,owner,{legacy=false}={}){
+    if(!legacy&&value?.kind==='wiki'){
+      exact(value,['id','kind','origin','owner_id','wiki_id','draft_id','approval_id','document_version','content_hash']);
+      label(value.id);string(value.owner_id,80);uuid(value.wiki_id);uuid(value.draft_id);uuid(value.approval_id);integer(value.document_version,1);
+      requireValue(value.owner_id===owner,'wiki_source_owner');
+    }else{
+      exact(value,['id',...(!legacy?['kind']:[]),'origin','note_ref','source_revision_id','head_version','content_hash']);
+      if(!legacy)requireValue(value.kind==='note');
+      label(value.id);readNoteRef(value.note_ref);nullableUuid(value.source_revision_id);integer(value.head_version);
+      requireValue(value.note_ref.owner_id===owner,'wiki_source_owner');
+      requireValue(value.origin!=='server'||value.source_revision_id!==null,'wiki_server_source_revision');
+    }
+    requireValue(['server','local'].includes(value.origin));hash(value.content_hash);return copy(value);
+  }
+  const evidenceOf=draft=>Object.hasOwn(draft,'schema_version')?draft.evidence_manifest:draft.source_manifest;
+  const evidenceKey=ref=>P.canonicalJson((ref.kind||'note')==='note'
+    ?['note',ref.note_ref.owner_id,ref.note_ref.local_id]
+    :['wiki',ref.owner_id,ref.wiki_id,ref.draft_id,ref.approval_id,ref.document_version]);
+  async function validateDraftObject(draft){
+    const v2=Object.hasOwn(draft,'schema_version');
+    exact(draft,['id','generation_id','base_approved_revision_id','scope','title','topic','sections','citations','provider','model',
+      'generated_at','validation_status','draft_hash',...(v2?['schema_version','page_type','summary','aliases','claims','relations','evidence_manifest']:['source_manifest'])]);
+    if(v2)requireValue(draft.schema_version===2,'wiki_invalid_schema');
+    uuid(draft.id);uuid(draft.generation_id);nullableUuid(draft.base_approved_revision_id);readScope(draft.scope);
+    string(draft.title,240);string(draft.topic,240);string(draft.provider,80);string(draft.model,240);stamp(draft.generated_at);
+    requireValue(draft.validation_status==='citations_checked');hash(draft.draft_hash);
+    const refs=evidenceOf(draft);list(refs,30,1);refs.forEach(ref=>validateEvidence(ref,draft.scope.owner,{legacy:!v2}));
+    unique(refs.map(r=>r.id));unique(refs.map(evidenceKey));
+    const evidence=new Map(refs.map(r=>[r.id,r]));
+    list(draft.citations,500,1);unique(draft.citations.map(c=>c.id));
+    for(const c of draft.citations){
+      exact(c,v2?['id','evidence_id','section_id','quote']:['id','source_id','quote']);label(c.id);string(c.quote,4096);
+      const target=evidence.get(v2?c.evidence_id:c.source_id);requireValue(Boolean(target),'wiki_unknown_source');
+      if(v2){label(c.evidence_id);if(c.section_id!==null)label(c.section_id);requireValue(target.kind!=='wiki'||c.section_id!==null,'wiki_unknown_section');}
+      else label(c.source_id);
+    }
+    const cites=new Set(draft.citations.map(c=>c.id));
+    const citationRefs=(value,min=0)=>{list(value,500,min);value.forEach(label);unique(value);requireValue(value.every(id=>cites.has(id)),'wiki_unknown_citation');};
+    list(draft.sections,100,1);unique(draft.sections.map(s=>s.id));
+    for(const s of draft.sections){exact(s,['id','title','markdown','citation_ids']);label(s.id);string(s.title,240);string(s.markdown,131072);citationRefs(s.citation_ids,1);}
+    if(v2){
+      requireValue(['overview','concept','entity','procedure','reference','synthesis'].includes(draft.page_type));string(draft.summary,500,0);
+      list(draft.aliases,20);draft.aliases.forEach(a=>string(a,120));unique(draft.aliases);
+      list(draft.claims,500);unique(draft.claims.map(c=>c.id));
+      for(const c of draft.claims){exact(c,['id','statement','citation_ids','assessment']);label(c.id);string(c.statement,131072);citationRefs(c.citation_ids);
+        requireValue(['supported','inferred','uncertain','unsupported'].includes(c.assessment));requireValue(c.assessment!=='supported'||c.citation_ids.length>0,'wiki_claim_evidence_required');}
+      list(draft.relations,200);unique(draft.relations.map(r=>r.id));
+      for(const r of draft.relations){
+        exact(r,['id','from_section_id','to_ref','type','confidence','citation_ids']);label(r.id);citationRefs(r.citation_ids);
+        if(r.from_section_id!==null){label(r.from_section_id);requireValue(draft.sections.some(s=>s.id===r.from_section_id),'wiki_relation_section');}
+        requireValue(['related_to','supports','contradicts','extends','depends_on'].includes(r.type));requireValue(['explicit','inferred','uncertain'].includes(r.confidence));
+        const t=r.to_ref;requireValue(['approved','proposal'].includes(t?.kind),'wiki_relation_target');
+        exact(t,t.kind==='approved'?['kind','wiki_id','draft_id','approval_id','draft_hash','section_id']:['kind','operation_id','wiki_id','draft_id','section_id']);
+        uuid(t.wiki_id);uuid(t.draft_id);if(t.section_id!==null)label(t.section_id);
+        if(t.kind==='approved'){uuid(t.approval_id);hash(t.draft_hash);}else uuid(t.operation_id);
+      }
+    }
+    const unsigned=copy(draft);delete unsigned.draft_hash;
+    requireValue(await P.hashJson(unsigned)===draft.draft_hash,'wiki_draft_hash');return copy(draft);
+  }
+  async function validateDocument(input,context){
+    const doc=typeof input==='string'?P.parseJson(input):copy(input);
+    P.canonicalJson(doc);
+    exact(doc,['schema_version','document_version','wiki_id','scope','drafts','approvals','rejected_draft_ids']);
+    requireValue(doc.schema_version===1||doc.schema_version===2,'wiki_invalid_schema');integer(doc.document_version,1);uuid(doc.wiki_id);readScope(doc.scope);
+    requireValue(P.canonicalJson(doc.scope)===P.canonicalJson(scope(context)),'wiki_artifact_scope');
+    requireValue(size(P.canonicalJson(doc))<=2097152,'wiki_artifact_capacity');
+    list(doc.drafts,1000,1);list(doc.approvals,1000);list(doc.rejected_draft_ids,1000);
+    unique(doc.drafts.map(d=>d.id));unique(doc.drafts.map(d=>d.generation_id));unique(doc.rejected_draft_ids);doc.rejected_draft_ids.forEach(uuid);
+    for(const d of doc.drafts){
+      requireValue(doc.schema_version===2||!Object.hasOwn(d,'schema_version'),'wiki_invalid_schema');await validateDraftObject(d);
+      requireValue(P.canonicalJson(d.scope)===P.canonicalJson(doc.scope),'wiki_artifact_scope');
+      requireValue(!evidenceOf(d).some(r=>r.kind==='wiki'&&r.wiki_id===doc.wiki_id),'wiki_self_evidence');
+    }
+    const drafts=new Map(doc.drafts.map(d=>[d.id,d])),approved=new Set(),ids=new Set();let parent=null;
+    requireValue(doc.rejected_draft_ids.every(id=>drafts.has(id)),'wiki_invalid_rejection');
+    for(const a of doc.approvals){
+      const v2=Object.hasOwn(a,'schema_version');
+      exact(a,['id','parent_approved_revision_id','draft_id','draft_hash','approved_by','approved_at',...(v2?['schema_version','evidence_manifest_hash']:['source_manifest_hash'])]);
+      if(v2)requireValue(doc.schema_version===2&&a.schema_version===2,'wiki_invalid_schema');
+      uuid(a.id);uuid(a.draft_id);nullableUuid(a.parent_approved_revision_id);hash(a.draft_hash);stamp(a.approved_at);string(a.approved_by,80);
+      const d=drafts.get(a.draft_id),manifestHash=v2?a.evidence_manifest_hash:a.source_manifest_hash;hash(manifestHash);
+      requireValue(d&&Object.hasOwn(d,'schema_version')===v2&&!ids.has(a.id)&&!approved.has(a.draft_id)
+        &&!doc.rejected_draft_ids.includes(a.draft_id)&&a.parent_approved_revision_id===parent&&d.base_approved_revision_id===parent
+        &&a.approved_by===doc.scope.owner&&a.draft_hash===d.draft_hash&&manifestHash===await P.hashJson(evidenceOf(d)),'wiki_approval_binding');
+      ids.add(a.id);approved.add(a.draft_id);parent=a.id;
+    }
+    requireValue(doc.drafts.every(d=>d.base_approved_revision_id===null||ids.has(d.base_approved_revision_id)),'wiki_unknown_approval_base');
+    return doc;
+  }
+  async function validateLink(value,context){
+    const v2=Object.hasOwn(value,'document_schema_floor');
+    exact(value,['artifact_local_id','dependencies',...(v2?['wiki_dependencies','document_schema_floor','lineage_manifest_hash']:[])]);
+    requireValue(typeof value.artifact_local_id==='string'&&value.artifact_local_id.startsWith('wiki:'));uuid(value.artifact_local_id.slice(5));
+    list(value.dependencies,1000,1);value.dependencies.forEach(r=>{readNoteRef(r);requireValue(r.owner_id===context.owner,'wiki_source_owner');});
+    unique(value.dependencies.map(r=>P.canonicalJson(r)));
+    if(v2){
+      requireValue(value.document_schema_floor===2,'wiki_invalid_schema');hash(value.lineage_manifest_hash);list(value.wiki_dependencies,1000);
+      for(const ref of value.wiki_dependencies){
+        validateEvidence({...ref,id:'dependency',kind:'wiki',origin:'server'},context.owner);
+        requireValue(ref.wiki_id!==value.artifact_local_id.slice(5),'wiki_self_evidence');
+      }
+      unique(value.wiki_dependencies.map(r=>P.canonicalJson(r)));
+      const unsigned=copy(value);delete unsigned.lineage_manifest_hash;
+      requireValue(await P.hashJson(unsigned)===value.lineage_manifest_hash,'wiki_lineage_hash');
+    }
+    return copy(value);
+  }
+  globalThis.NowNoteWiki={capture,prompt,validateDraft,sourceStatus,sourceProtectionDependencies,localProtectionScope,
+    validateDocument,validateDraftObject,validateEvidence,validateLink,evidenceOf};
 })();
