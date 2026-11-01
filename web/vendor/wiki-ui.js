@@ -9,6 +9,11 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let ingestPlan=null,ingestProposal=null,ingestOps=[];
   let graphCatalog=null,graphMount=null,graphSection='';
   let relationEditor=null;
+  let queryMode=false,queryText='',queryScope='all',querySnapshot=null,queryAnswer=null,queryConnection=null;
+  let queryOriginal=null;
+  let protectedQueryAccess=null;
+  let queryPrimary=6,queryRelated=3;
+  const queryIds=new Set();
   const ingestFiles=new Set(),ingestNotes=new Set();
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
@@ -26,6 +31,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
+    queryMode=false;queryText='';queryScope='all';querySnapshot=null;queryAnswer=null;queryConnection=null;queryOriginal=null;protectedQueryAccess=null;queryPrimary=6;queryRelated=3;queryIds.clear();
     graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
     viewId='';beforeId='';comparing=false;readOnly=false;trashMode=false;
@@ -34,6 +40,8 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
+    if(dialog.open&&readOnly&&protectedQueryAccess){try{protectedQueryAccess.guard();}catch{close();return;}}
+    if(dialog.open&&querySnapshot&&!readOnly&&querySnapshot.pages.some(page=>!api.canRead(rows.find(row=>row.document?.wiki_id===page.wiki_id)?.document||{scope:{},drafts:[]}))){close();return;}
     if(dialog.open&&api.canRead){
       const sensitive=new Set([...(relationEditor?.targets||[]).map(r=>r.wiki_id),...(current()?.relations||[]).map(r=>r.to_ref.wiki_id)]);
       if(rows.some(row=>sensitive.has(row.document?.wiki_id)&&!api.canRead(row.document))){close();return;}
@@ -42,6 +50,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
+    queryMode=false;queryText='';querySnapshot=null;queryAnswer=null;queryIds.clear();
     relationEditor=null;
     rows=rows.map(row=>({id:row.id||row.document?.wiki_id,unavailable:true,error:'출처·보호 상태 확인 필요'}));
     doc=null;dirty=false;readable=false;selected.clear();question='';topic='';
@@ -50,7 +59,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   }
   function command(action,label,fn,disabled=false){
     const b=node('button',label,'secondary-btn');b.type='button';b.dataset.wikiAction=action;b.disabled=disabled||busy;
-    b.onclick=()=>{if(!readOnly)void execute(fn);};return b;
+    b.onclick=()=>{if(!readOnly||action.startsWith('query'))void execute(fn);};return b;
   }
   async function execute(fn){
     check();if(!dialog.open||busy)return;
@@ -102,6 +111,107 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }else doc={schema_version:1,document_version:1,wiki_id:crypto.randomUUID(),scope:structuredClone(draft.scope),drafts:[draft],approvals:[],rejected_draft_ids:[]};
     choose(draft.id);comparing=false;
     dirty=true;message='인용문을 확인한 뒤 초안을 저장하세요.';
+  }
+  async function queryPlan(token){
+    const selection={...(queryScope==='selected'?{wiki_ids:[...queryIds]}:queryScope==='topic'?{topic}:{}),primary_limit:queryPrimary,related_limit:queryRelated};
+    if(queryScope==='topic'&&!topic)throw Error('주제를 선택하세요.');
+    const snapshot=readOnly?await api.query.planProtected(queryText,doc,protectedQueryAccess):await api.query.plan(queryText,selection);requireActive(token);
+    querySnapshot=snapshot;queryAnswer=null;queryOriginal=null;message='';
+  }
+  async function queryRun(token){
+    const snapshot=querySnapshot,connection=api.connection();
+    const prompt=await NowWikiQuery.buildWikiQueryPrompt(snapshot);requireActive(token);
+    const bytes=new TextEncoder().encode(prompt).length;
+    const accepted=await ask(connection.provider+' · '+connection.model+'\n'+connection.endpoint+'\n승인 위키 '+snapshot.pages.length+'개 · '+bytes+' bytes\n'
+      +snapshot.pages.map(p=>p.draft.title+' · 판본 '+p.document_version).join('\n')+'\n요청 출력 상한 '+connection.outputTokens+' tokens · 요청 1회'
+      +(connection.reasoning?' · 추론 '+connection.reasoning:'')+'\n선택한 승인 위키와 질문을 전송하며 제공업체 비용이 발생할 수 있습니다. 정확한 과금은 확인되지 않았습니다.',{send:true});
+    requireActive(token);if(!accepted)return;
+    queryAnswer=null;const result=await api.query.run(snapshot,connection,{confirmed:true});requireActive(token);
+    if(querySnapshot!==snapshot)throw Error('질문 범위가 변경되었습니다.');
+    queryAnswer=result;queryConnection={provider:connection.provider,model:connection.model};message='인용 확인 완료 · 내용의 사실성은 별도 검토가 필요합니다.';
+  }
+  async function querySave(token){
+    const snapshot=querySnapshot,answer=queryAnswer;NowWikiQuery.assertSaveable(snapshot);
+    if(!answer||!await ask('답변을 새 위키 초안으로 검토할까요? 사용한 모든 위키의 고정 판본과 보호 의존을 보존하며 승인은 별도입니다.'))return;
+    requireActive(token);
+    const response={query_hash:answer.query_hash,title:answer.title,claims:structuredClone(answer.claims),uncertainties:structuredClone(answer.uncertainties),
+      citations:answer.citations.map(({originals,...cite})=>structuredClone(cite))};
+    const result=await api.ingest.derive(snapshot,response,queryConnection);requireActive(token);
+    ingestPlan={operation_id:result.operation_id,selection:result.selection,plan:result.proposal.plan};ingestProposal=result;
+    sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);
+    queryMode=false;querySnapshot=null;queryAnswer=null;queryConnection=null;sourceMode=true;message='초안의 인용과 보호 의존을 검토하세요.';
+  }
+  async function queryReadOriginal(ref,sectionId,quote,token){
+    const proof=await api.readOriginal(ref);requireActive(token);
+    const content=proof.kind==='note'?proof.content:proof.draft.sections.find(s=>s.id===sectionId)?.markdown;
+    if(typeof content!=='string'||!content.includes(quote))throw Error('원본 판본·정확 인용이 다릅니다.');
+    const links=proof.kind==='wiki'?proof.draft.citations.filter(c=>proof.draft.sections.find(s=>s.id===sectionId).citation_ids.includes(c.id))
+      .map(c=>({ref:NowNoteWiki.evidenceOf(proof.draft).find(r=>r.id===(c.evidence_id||c.source_id)),section:c.section_id??null,quote:c.quote})):[];
+    queryOriginal={content,hash:ref.content_hash,revision:ref.source_revision_id||ref.draft_id||'local',links};
+  }
+  function renderQuery(detail){
+    const invalidate=()=>{
+      querySnapshot=null;queryAnswer=null;queryOriginal=null;
+      for(const element of detail.querySelectorAll('[data-wiki-query-preview],[data-wiki-query-answer],[data-wiki-query-original],[data-wiki-action=query-run]'))element.remove();
+    };
+    detail.append(node('h3','위키에 질문'));
+    if(readOnly)detail.append(node('p','보호된 승인 판본 · 메모리에서만 사용 · 원본 최신성은 별도 확인'));
+    const label=node('label','질문'),input=node('textarea',undefined,'settings-input');
+    input.name='wiki-query-question';input.rows=3;input.maxLength=4000;input.value=queryText;input.disabled=busy;
+    input.oninput=()=>{queryText=input.value;invalidate();};label.append(input);detail.append(label);
+    const range=node('label','범위'),select=node('select',undefined,'settings-select');select.name='wiki-query-scope';select.disabled=busy||readOnly;
+    for(const [value,title]of [['all','전체 승인 위키'],['topic','선택 주제'],['selected','선택 위키']]){const option=node('option',title);option.value=value;select.append(option);}
+    select.value=queryScope;select.onchange=()=>{queryScope=select.value;querySnapshot=null;queryAnswer=null;render();};range.append(select);detail.append(range);
+    if(!readOnly)for(const [name,title,value,min,max,change]of [
+      ['wiki-query-primary','주요 위키 수',queryPrimary,1,6,v=>{queryPrimary=v;}],['wiki-query-related','관계 위키 수',queryRelated,0,3,v=>{queryRelated=v;}]
+    ]){
+      const label=node('label',title),number=node('input',undefined,'settings-input');number.type='number';number.name=name;number.min=min;number.max=max;number.step=1;number.value=value;number.disabled=busy;
+      number.oninput=()=>{change(Number(number.value));invalidate();};label.append(number);detail.append(label);
+    }
+    if(queryScope==='selected')for(const row of rows){
+      if(!row.document?.approvals.length||row.protected||row.deleted||row.unavailable)continue;
+      const label=node('label'),input=node('input');input.type='checkbox';input.name='wiki-query-page';input.value=row.document.wiki_id;
+      input.checked=queryIds.has(input.value);input.disabled=busy;
+      input.onchange=()=>{if(input.checked)queryIds.add(input.value);else queryIds.delete(input.value);invalidate();};
+      label.append(input,document.createTextNode(preferred(row.document).title));detail.append(label);
+    }
+    detail.append(command('query-plan','근거 후보 확인',queryPlan));
+    if(querySnapshot&&!busy){
+      const preview=node('section',undefined,'wiki-query-preview');preview.dataset.wikiQueryPreview='';preview.append(node('h4','전송 자료'));
+      for(const page of querySnapshot.pages)preview.append(node('p',page.draft.title+' · 판본 '+page.document_version+' · '+page.draft_hash.slice(0,12)));
+      preview.append(node('p',new TextEncoder().encode(NowNoteProtectionProtocol.canonicalJson(querySnapshot)).length+' bytes'));
+      detail.append(preview,command('query-run','전송 범위 확인',queryRun));
+    }
+    if(queryAnswer&&!busy){
+      const answer=node('section');answer.dataset.wikiQueryAnswer='';answer.append(node('h3',queryAnswer.title));
+      const status={supported:'인용 근거 있음',inferred:'추론',uncertain:'불확실',unsupported:'근거 없음'};
+      for(const claim of queryAnswer.claims){answer.append(node('p',claim.statement),node('small',status[claim.assessment]));}
+      for(const cite of queryAnswer.citations){
+        const quote=node('blockquote',cite.quote),page=querySnapshot.pages.find(p=>p.wiki_id===cite.wiki_id);
+        quote.append(command('query-wiki-source',page.draft.title+' · '+cite.section_id,async token=>{
+          const ref={id:'query-source',kind:'wiki',origin:page.origin,owner_id:querySnapshot.scope.owner,wiki_id:page.wiki_id,draft_id:page.draft_id,
+            approval_id:page.approval_id,document_version:page.document_version,content_hash:page.draft_hash};
+          let proof;
+          if(page.protected){
+            protectedQueryAccess.guard();await protectedQueryAccess.revalidate();requireActive(token);protectedQueryAccess.guard();
+            proof={currentDocument:doc,draft:doc.drafts.find(d=>d.id===page.draft_id&&d.draft_hash===page.draft_hash)};
+          }else proof=await api.readEvidence(ref);requireActive(token);
+          if(!proof.draft.sections.find(s=>s.id===cite.section_id)?.markdown.includes(cite.quote))throw Error('인용 판본·절이 다릅니다.');
+          doc=structuredClone(proof.currentDocument);choose(proof.draft.id);graphSection=cite.section_id;queryMode=false;querySnapshot=null;queryAnswer=null;dirty=false;
+        }));
+        if(api.readOriginal)for(const source of cite.originals)quote.append(command('query-original-source','원본 고정 판본',token=>queryReadOriginal(source.evidence,source.section_id,source.quote,token)));
+        answer.append(quote);
+      }
+      for(const value of queryAnswer.uncertainties)answer.append(node('p',value));
+      if(api.ingest?.derive)answer.append(command('query-save','답변을 위키 초안으로 저장',querySave,queryAnswer.memory_only||!queryAnswer.citations.length));
+      detail.append(answer);
+      if(queryOriginal){
+        const source=node('section');source.dataset.wikiQueryOriginal=queryOriginal.hash;source.append(node('h4','원본 고정 판본'),node('small',queryOriginal.revision+' · '+queryOriginal.hash));
+        source.append(node('pre',queryOriginal.content,'wiki-source-preview'));
+        for(const link of queryOriginal.links)source.append(command('query-original-source','원본 고정 판본',token=>queryReadOriginal(link.ref,link.section,link.quote,token)));
+        detail.append(source);
+      }
+    }
   }
   async function refreshOperations(token){ingestOps=await api.ingest.operations();requireActive(token);}
   function relationText(draft){
@@ -172,17 +282,21 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     const toolbar=node('div',undefined,'library-toolbar');
     if(!readOnly)toolbar.append(command('new','새 위키',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 버리고 새 위키를 만들까요?'))return;
-      requireActive(token);graphCatalog=null;doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;trashMode=false;
+      requireActive(token);queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;trashMode=false;
     }),command('refresh','동기화',async token=>{const next=await api.list({sync:true});requireActive(token);rows=next;graphCatalog=null;message='목록을 갱신했습니다.';}));
     if(!readOnly&&api.approvedCatalog)toolbar.append(command('graph','관계 탐색',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 닫고 관계를 탐색할까요?'))return;
       requireActive(token);const catalog=await api.approvedCatalog();requireActive(token);
-      graphCatalog=catalog;sourceMode=false;doc=null;dirty=false;readable=false;trashMode=false;selected.clear();
+      queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=catalog;sourceMode=false;doc=null;dirty=false;readable=false;trashMode=false;selected.clear();
       message=catalog.excluded?'표시 제외 '+catalog.excluded+'개':'';
+    }));
+    if(api.query&&(!readOnly||protectedQueryAccess))toolbar.append(command('query','위키에 질문',async token=>{
+      if(dirty&&!await ask('저장하지 않은 초안을 닫고 질문할까요?'))return;
+      requireActive(token);queryMode=true;querySnapshot=null;queryAnswer=null;graphCatalog=null;sourceMode=false;if(!readOnly)doc=null;dirty=false;trashMode=false;message='';
     }));
     if(!readOnly&&api.sources)toolbar.append(command('sources',sourceMode?'지식 탐색':'자료 적재',async token=>{
       const next=sourceMode?[]:await api.sources.list();requireActive(token);
-      graphCatalog=null;
+      queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;
       if(api.ingest)await refreshOperations(token);
       sourceRows=next;sourceMode=!sourceMode;sourcePreview='';sourceFiles=[];message='';
     },dirty));
@@ -215,7 +329,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
           if(row.protected&&api.openProtection){await api.openProtection(row.id);return;}
           doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
         }
-        graphCatalog=null;doc=structuredClone(row.document);dirty=false;selected.clear();question='';
+        queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;doc=structuredClone(row.document);dirty=false;selected.clear();question='';
         sourceMode=false;sourceFiles=[];sourceRows=[];sourcePreview='';
         choose(preferred(doc).id);comparing=false;
         message='';
@@ -233,6 +347,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }
     if(!rows.some(row=>Boolean(row.deleted)===trashMode))nav.append(node('p',trashMode?'휴지통이 비어 있습니다.':'저장된 위키 없음'));
     const detail=node('section',undefined,'wiki-detail');detail.setAttribute('aria-label','위키 검토');
+    if(queryMode)renderQuery(detail);
     if(sourceMode&&api.sources){
       detail.append(node('h3','원본 자료'));
       const label=node('label','파일 선택'),files=node('input');files.type='file';files.name='wiki-files';files.accept='.md,.txt';files.multiple=true;files.disabled=busy;
@@ -350,7 +465,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }detail.append(operations);
       }
     }
-    if(!graphCatalog&&!sourceMode&&!readOnly&&!trashMode){
+    if(!queryMode&&!graphCatalog&&!sourceMode&&!readOnly&&!trashMode){
     const picker=node('details');picker.open=!doc;picker.append(node('summary','자료 선택'));
     const choices=node('div',undefined,'wiki-source-list');
     for(const source of api.notes()){
@@ -493,9 +608,9 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   }
   dialog.addEventListener('cancel',event=>{event.preventDefault();if(confirmation)confirmation(false);else close();});
   document.body.append(dialog);
-  return {close,check,openProtected(value){
+  return {close,check,openProtected(value,queryAccess=null){
     close();previous=document.activeElement;bound=api.contextKey();epoch++;
-    doc=structuredClone(value);rows=[{document:structuredClone(value)}];readOnly=true;readable=true;
+    doc=structuredClone(value);rows=[{document:structuredClone(value)}];readOnly=true;readable=true;protectedQueryAccess=queryAccess;
     message='보호된 저장 판본 · 읽기 전용';choose(preferred(doc).id);dialog.showModal();render();
   },async open(){
     close();previous=document.activeElement;bound=api.contextKey();epoch++;const token=epoch;

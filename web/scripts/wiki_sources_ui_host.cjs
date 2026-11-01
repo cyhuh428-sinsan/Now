@@ -58,9 +58,12 @@ app.whenReady().then(async()=>{
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn,code)=>{for(let i=0;i<300;i++){if(fn())return;await pause();}throw Error(code);};
       const click=async action=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');if(!b||b.disabled)throw Error('ingest_button_'+action);b.click();await pause();};
       if(${phase}===2){
-        const rows=await wikiNotebook.list(),ops=await wikiIngest.operations();
+        const allRows=await wikiNotebook.list(),rows=allRows.filter(r=>r.document?.drafts.at(-1).title!=='Synthetic answer'),ops=await wikiIngest.operations();
+        const derived=allRows.filter(r=>r.document?.drafts.at(-1).title==='Synthetic answer');
+        if(${process.env.NOWNOTE_WIKI_QUERY==='1'}&&(derived.length!==1||derived[0].document.approvals.length))throw Error('query_cold_derived_document');
         if(rows.length!==2||rows.some(r=>r.document?.schema_version!==2)||rows.filter(r=>r.document.approvals.length===1).length!==1||rows.filter(r=>r.document.approvals.length===2).length!==1)throw Error('ingest_cold_documents');
-        if(ops.filter(o=>o.action==='ingest'&&o.state==='committed').length!==1)throw Error('ingest_cold_receipt');
+        if(ops.filter(o=>o.action==='ingest'&&o.state==='committed'&&o.inputs.some(r=>r.kind==='note')).length!==1)throw Error('ingest_cold_receipt');
+        if(${process.env.NOWNOTE_WIKI_QUERY==='1'}&&ops.filter(o=>o.action==='ingest'&&o.state==='committed'&&o.inputs.every(r=>r.kind==='wiki')).length!==1)throw Error('query_cold_derived_receipt');
         if(ops.filter(o=>o.action==='integrate'&&o.state==='committed').length!==1||(await wikiNotebook.approvedCatalog()).edges.length!==1)throw Error('integrate_cold_relation');
         return {coldDocuments:rows.length,calls:0};
       }
@@ -119,6 +122,23 @@ app.whenReady().then(async()=>{
       fs.writeFileSync(path.join(screenshotRoot,'wiki-sources-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
     assert(await run('(async()=>{const previous=state.settings.server.ownerId;state.settings.server.ownerId="qa-source-b";wikiUI.check();const hidden=!document.querySelector("#wikiDialog").open;const empty=(await wikiSources.list()).length===0;state.settings.server.ownerId=previous;return hidden&&empty;})()'),'account_b_leak');
+    let query=null;
+    if(process.env.NOWNOTE_WIKI_QUERY==='1'){
+      await run(fs.readFileSync(path.join(root,'web/scripts/wiki_query_ui_fixture.js'),'utf8')+'\nvoid 0;');
+      await run('globalThis.WIKI_QUERY_QA_CAPTURE=true;void 0;');
+      const pending=run('runWikiQueryUiFixture('+phase+').catch(error=>({qaError:String(error.message||error)}))');
+      await wait('Boolean(globalThis.WIKI_QUERY_QA_FRAME)','query_visual_frame');
+      const frames=[];
+      for(const [size,width,height]of [['desktop',1200,900],['mobile',390,844]]){
+        window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+        const fits=await run('(()=>{const d=document.querySelector("#wikiDialog"),a=d.querySelector("[data-wiki-query-answer]");return Boolean(a)&&d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth&&a.scrollWidth<=a.clientWidth+1;})()');
+        assert(fits,'query_layout_'+size);frames.push({size,width,fits});
+        fs.writeFileSync(path.join(screenshotRoot,'wiki-query-'+mode+'-'+phase+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
+      }
+      await run('globalThis.WIKI_QUERY_QA_FRAME.release();delete globalThis.WIKI_QUERY_QA_FRAME;void 0;');
+      query=await pending;query.frames=frames;
+      if(query.qaError)throw Error(query.qaError);
+    }
     await run('wikiUI.close();document.querySelector("#wikiDialog").remove()');
     await run(fs.readFileSync(path.join(root,'web/scripts/wiki_ingest_ui_fixture.js'),'utf8')+'\n;undefined;');
     const backendPath=path.join(own,mode+'-wiki-remote-fixture.json'),backend=phase===2?JSON.parse(fs.readFileSync(backendPath,'utf8')):null;
@@ -216,7 +236,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
