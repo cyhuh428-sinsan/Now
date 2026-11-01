@@ -283,6 +283,7 @@
       if (Object.values(data?.protection_operations || {}).some(m => m.phase !== 'complete')) throw new Error('보호 전환을 먼저 재개하세요. 원본은 보존했습니다.');
       requireWritable();
       if (!readable(value)) throw new Error('지원하지 않는 이력 형식입니다. 원본을 보존했습니다.');
+      globalThis.createWikiIngestNotebook?.validateRestore(data,value);
       globalThis.NowNoteProtectionState?.validateBackupImport({history:data},{history:value});
       return true;
     }

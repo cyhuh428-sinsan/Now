@@ -101,13 +101,20 @@
     const key=source.title.normalize('NFC').toLowerCase().trim();
     return [d.title,d.topic,...(d.aliases||[])].some(s=>s.normalize('NFC').toLowerCase().trim()===key);
   }
+  async function fingerprintsFor(snapshot,rows,relatedWikiIds){
+    const result=[];
+    for(const s of snapshot.sources)result.push({source_key:P.canonicalJson(sourceIdentity(s.manifest)),hash:await P.hashJson({
+      scope:snapshot.scope,title:s.title,manifest:s.manifest,extraction:s.extraction||null,
+      comparison:rows.filter(r=>matchSource(s,r)||relatedWikiIds.includes(r.document.wiki_id))})});
+    return result;
+  }
+  async function sourceFingerprints(snapshot,catalog,current,relatedWikiIds=[]){
+    const ctx=context(current);await verifySnapshot(snapshot,ctx);return fingerprintsFor(snapshot,await readCatalog(catalog,ctx),relatedWikiIds);
+  }
   async function planIngest(snapshot,catalog,{context:current,reservation,processed=[],relatedWikiIds=[]}){
     const ctx=context(current);await verifySnapshot(snapshot,ctx);reservationIds(reservation);
     const rows=await readCatalog(catalog,ctx);list(processed,10000);list(relatedWikiIds,5);unique(relatedWikiIds);relatedWikiIds.forEach(uuid);
-    const fingerprints=[];
-    for(const s of snapshot.sources)fingerprints.push({source_key:P.canonicalJson(sourceIdentity(s.manifest)),hash:await P.hashJson({
-      scope:snapshot.scope,title:s.title,manifest:s.manifest,extraction:s.extraction||null,
-      comparison:rows.filter(r=>matchSource(s,r)||relatedWikiIds.includes(r.document.wiki_id))})});
+    const fingerprints=await fingerprintsFor(snapshot,rows,relatedWikiIds);
     const candidates=snapshot.sources.map((s,i)=>{
       if(processed.some(p=>same(p,fingerprints[i])))return {source_id:s.id,action:'unchanged',wiki_id:null};
       const matched=rows.filter(r=>matchSource(s,r));check(matched.length<=1,'wiki_ambiguous_target');
@@ -206,15 +213,29 @@
     const proposal={plan:copy(plan),documents,draft_bindings:bindings},result={...proposal,proposal_hash:await P.hashJson(proposal)};
     await fresh(plan,review);return result;
   }
-  async function buildOperationRequests(proposal,review){
+  async function verifyProposal(proposal,review){
     const unsigned=copy(proposal);delete unsigned.proposal_hash;check(await P.hashJson(unsigned)===proposal.proposal_hash,'wiki_proposal_hash');
-    await fresh(proposal.plan,review);const plan=proposal.plan;check(plan.serverEligible,'wiki_server_input_required');reservationIds(plan.reservation);
+    await fresh(proposal.plan,review);const plan=proposal.plan;reservationIds(plan.reservation);
     const pages=proposal.documents.map(row=>{
       const d=row.document.drafts.at(-1);
       return {wiki_id:row.wiki_id,draft_id:d.id,...Object.fromEntries(['title','topic','page_type','summary','aliases','sections','claims','relations','citations'].map(k=>[k,d[k]]))};
     });
     const checked=await validateIngestProposal({pages},plan,review);
     check(same(checked,proposal),'wiki_proposal_binding');
+    return copy(proposal);
+  }
+  async function reserveIngest(snapshot,catalog,current){
+    const ctx=context(current);await verifySnapshot(snapshot,ctx);const rows=await readCatalog(catalog,ctx),pages=[];
+    for(const source of snapshot.sources){
+      const matches=rows.filter(row=>matchSource(source,row));check(matches.length<=1,'wiki_ambiguous_target');
+      const wiki_id=matches[0]?.document.wiki_id||crypto.randomUUID();if(pages.some(p=>p.wiki_id===wiki_id))continue;
+      pages.push({wiki_id,draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()});
+    }
+    list(pages,10,1);
+    return {operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),pages};
+  }
+  async function buildOperationRequests(proposal,review){
+    await verifyProposal(proposal,review);const plan=proposal.plan;check(plan.serverEligible,'wiki_server_input_required');
     const changes=[];
     for(const row of proposal.documents){
       await W.validateDocument(row.document,scope(plan.context));
@@ -267,5 +288,5 @@
     return {dependencies:[...notes.values()].sort((a,b)=>compare(a.local_id,b.local_id)),
       wiki_dependencies:[...wikis.entries()].sort((a,b)=>compare(a[0],b[0])).map(([,value])=>value),requiresLiveProtectionCheck:true};
   }
-  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,validateIngestProposal,buildOperationRequests,dependencyUnion});
+  globalThis.NowNoteWikiIngest=Object.freeze({captureWikiSources,verifySnapshot,planIngest,validateIngestProposal,verifyProposal,reserveIngest,sourceFingerprints,buildOperationRequests,dependencyUnion});
 })();

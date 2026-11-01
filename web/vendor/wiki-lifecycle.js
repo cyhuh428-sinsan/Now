@@ -61,17 +61,19 @@
       if(!localId(id))throw fail();const a=action();return copy(snapshot(a).map[id]||null);
     }
     const blocked=id=>{const row=state(id);return Boolean(row&&(row.deleted_at||row.pending));};
-    function remote(a,value,id){
+    async function remote(a,value,id){
       if(!object(value)||value.owner_id!==a.ctx.owner||!uuid(value.id)||'wiki:'+value.id!==(id||'wiki:'+value.id)
-        ||value.schema_version!==1||!object(value.payload)||value.payload.artifact_local_id!=='wiki:'+value.id
+        ||![1,2].includes(value.schema_version)||!object(value.payload)||value.payload.artifact_local_id!=='wiki:'+value.id
         ||!Array.isArray(value.payload.dependencies)||value.payload.dependencies.some(ref=>ref.owner_id!==a.ctx.owner||typeof ref.local_id!=='string'))throw fail();
+      if(value.schema_version===2){await NowNoteWiki.validateLink(value.payload,a.ctx);a.check();}
+      if((value.schema_version===2)!==Object.hasOwn(value.payload,'document_schema_floor'))throw fail();
       return validate({local_only:false,version:value.version,deleted_at:value.deleted_at,pending:null});
     }
     async function observe(resources){
       const a=action(),{data,map}=snapshot(a),next=copy(map);
       if(!Array.isArray(resources))throw fail();
       for(const value of resources){
-        const row=remote(a,value),id='wiki:'+value.id,old=next[id];
+        const row=await remote(a,value),id='wiki:'+value.id,old=next[id];
         if(old?.local_only)throw fail();
         if(old&&old.version>row.version)continue;
         if(old&&old.version===row.version&&old.deleted_at!==row.deleted_at)throw fail();
@@ -107,7 +109,7 @@
         throw error;
       }
       if(response?.status!=='ok'||response.mutation_id!==op.mutation_id)throw fail();
-      const row=remote(a,response.resource,id);
+      const row=await remote(a,response.resource,id);
       if(row.version!==op.base_version+1||Boolean(row.deleted_at)!==(op.action==='trash'))throw fail();
       const {data,map}=snapshot(a),current=map[id];
       if(!same(current?.pending,op))throw fail();
@@ -138,7 +140,7 @@
       const a=action(),op=snapshot(a).map[id]?.pending;
       if(!op?.rejected)throw fail();
       const response=await api.read(a.ctx,id);a.check();
-      const row=remote(a,response.resource,id),{data,map}=snapshot(a);
+      const row=await remote(a,response.resource,id),{data,map}=snapshot(a);
       if(!same(map[id]?.pending,op))throw fail();
       const next=copy(map);next[id]=acknowledge(map[id],row);await save(a,data,next);return copy(next[id]);
     }

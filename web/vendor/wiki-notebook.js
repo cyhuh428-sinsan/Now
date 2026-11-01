@@ -11,18 +11,19 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const check=()=>{if(api.contextKey()!==key||!api.context().enabled)throw Error('계정·서버가 변경되었습니다. 원문은 보존했습니다.');};
     return {ctx,check,h:api.history()};
   }
-  function parse(content,ctx,local){
+  async function parse(content,ctx,local){
     if(typeof content!=='string'||new TextEncoder().encode(content).length>2097152)throw Error('위키 용량은2MiB를 넘을 수 없습니다.');
-    const doc=JSON.parse(content);
-    if(!doc||doc.schema_version!==1||'wiki:'+doc.wiki_id!==local||!Number.isSafeInteger(doc.document_version)
-      ||doc.document_version<1||!Array.isArray(doc.drafts)||!doc.drafts.length||doc.drafts.length>1000
-      ||!Array.isArray(doc.approvals)||doc.approvals.length>1000||!Array.isArray(doc.rejected_draft_ids)||doc.rejected_draft_ids.length>1000
-      ||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx)))throw Error('위키 형식 또는 계정·서버가 다릅니다.');
+    let doc;
+    try{doc=await W.validateDocument(content,scope(ctx));}
+    catch(error){if(/hash|binding/.test(error.message))throw Error('위키 검토 해시·연결이 다릅니다.');throw error;}
+    if('wiki:'+doc.wiki_id!==local)throw Error('위키 형식 또는 계정·서버가 다릅니다.');
     return doc;
   }
   async function source(id,a,forceServer=false){
     const note=api.source(id);
     if(!note||note.owner!==a.ctx.owner||note.status!=='ok'||note.protected)return note;
+    const file=a.h.view(id);
+    if(file?.draft.source==='wiki-source-snapshot'){await NowNoteWikiSources.inspect(file,a.ctx);a.check();}
     if(note.origin!=='server'&&!forceServer)return copy(note);
     const item=a.h.view(id);
     if(a.ctx.online===false){
@@ -43,7 +44,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   }
   async function liveSources(draft,a,doc=null){
     const values=new Map(),refs=new Map();
-    for(const ref of (doc?doc.drafts.flatMap(value=>value.source_manifest):draft.source_manifest)){
+    for(const ref of (doc?doc.drafts.flatMap(W.evidenceOf):W.evidenceOf(draft))){
+      if(ref.kind==='wiki')throw Error('고정 근거 위키의 판본을 먼저 확인하세요.');
       if(ref.note_ref.owner_id!==a.ctx.owner)throw Error('원본 계정이 다릅니다.');
       const local=ref.note_ref.local_id;
       refs.set(local,ref.origin==='server'||refs.get(local)===true);
@@ -57,7 +59,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   function canRead(doc){
     const ctx=api.context(),h=api.history(),local='wiki:'+doc.wiki_id;
     if(!ctx.enabled||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx))||L.blocked(local)||h.blocked(local)||h.view(local)?.base.crypto_epoch>0)return false;
-    return doc.drafts.flatMap(draft=>draft.source_manifest).every(ref=>{
+    return doc.drafts.flatMap(W.evidenceOf).every(ref=>{
+      if(ref.kind==='wiki')return false;
       const note=api.source(ref.note_ref.local_id);
       return ref.note_ref.owner_id===ctx.owner&&note?.owner===ctx.owner&&note.status==='ok'&&!note.protected
         &&(ctx.online!==false||ref.origin!=='server');
@@ -85,7 +88,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     }
     const values=await liveSources(draft,a,doc);
     if(!sourcesAvailable(values,a.ctx.owner))return {available:false,stale:true,sources:[]};
-    const result=await W.sourceStatus(draft,scope(a.ctx),id=>values.get(id));a.check();return result;
+    const refs=W.evidenceOf(draft).map(ref=>{const {kind,...legacy}=ref;return legacy;});
+    const result=await W.sourceStatus({...draft,source_manifest:refs},scope(a.ctx),id=>values.get(id));a.check();return result;
   }
   async function list({sync=false}={}){
     if(!api.context().enabled)return [];
@@ -108,19 +112,19 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       }
       return visible;
     };
-    const collect=()=>{
+    const collect=async()=>{
       const bucket=a.h.export()?.contexts?.[NowNoteHistory.key(a.ctx)]?.notes||{};
       for(const [local,item] of Object.entries(bucket)){
         if(!idOf(local))continue;
         const id=local.slice(5),metadata=rowState(id,{localOnly:item.localOnly});
         if(metadata.deleted||metadata.lifecycle?.pending){rows.set(local,metadata);continue;}
         if(a.h.blocked(local)||!item.draft){rows.set(local,rowState(id,{protected:true}));continue;}
-        try{rows.set(local,rowState(id,{document:parse(item.draft.content,a.ctx,local),
+        try{const document=await parse(item.draft.content,a.ctx,local);a.check();rows.set(local,rowState(id,{document,
           pending:!item.localOnly&&Boolean(item.dirty||item.outbox.length),localOnly:item.localOnly,error:item.error?.code||item.conflict?.code}));}
-        catch{rows.set(local,{id:local.slice(5),protected:true,error:'위키 원본 형식 확인 필요'});}
+        catch{a.check();rows.set(local,{id:local.slice(5),protected:true,error:'위키 원본 형식 확인 필요'});}
       }
     };
-    collect();
+    await collect();a.check();
     if(a.ctx.online!==false){
       let remote;
       try{remote=await api.listRemote();a.check();}
@@ -134,10 +138,10 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         if(result.artifact.protected||!result.artifact.document){rows.set(local,rowState(item.id,{protected:true}));continue;}
         const current=await api.readCurrent(local);a.check();
         if(current.head_revision_id!==result.artifact.head_revision_id)throw Error('위키 판본이 변경되었습니다. 다시 동기화하세요.');
-        parse(current.snapshot.note.content,a.ctx,local);
+        await parse(current.snapshot.note.content,a.ctx,local);a.check();
         await a.h.track(current.snapshot.note,current,{localOnly:false});a.check();
       }
-      collect();
+      await collect();a.check();
     }
     return visibleRows();
   }
@@ -155,9 +159,10 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     if(!['1,0,0','0,1,0','0,0,1'].includes(delta.join(',')))throw Error('위키 판본 충돌입니다.');
   }
   async function save(value){
-    const a=action(),local='wiki:'+value.wiki_id,doc=parse(P.canonicalJson(value),a.ctx,local);
+    const a=action(),local='wiki:'+value.wiki_id,doc=await parse(P.canonicalJson(value),a.ctx,local);a.check();
+    if(doc.schema_version===2)throw Error('새 위키 판본은 검토한 일괄 반영 원장으로 저장하세요.');
     if(!idOf(local)||a.h.blocked(local)||L.blocked(local))throw Error('보호·휴지통 상태를 먼저 확인하세요. 일반 저장하지 않았습니다.');
-    const item=a.h.view(local),before=item?parse(item.draft.content,a.ctx,local):null;
+    const item=a.h.view(local),before=item?await parse(item.draft.content,a.ctx,local):null;a.check();
     if(item?.conflict)throw Error('위키 판본 충돌을 먼저 확인하세요.');
     append(before,doc);
     const localOnly=doc.drafts.some(d=>d.source_manifest.some(ref=>ref.origin!=='server'));
@@ -179,6 +184,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     return {document:copy(doc),localOnly,pending:!localOnly&&Boolean(stored?.outbox.length),error:stored?.conflict?.code||stored?.error?.code};
   }
   async function approve(value,draftId){
+    if(value.schema_version===2){if(!api.approveV2)throw Error('위키 일괄 승인 연결을 확인하세요.');return api.approveV2(value,draftId);}
     const a=action(),doc=copy(value),draft=doc.drafts.find(d=>d.id===draftId),base=doc.approvals.at(-1)?.id||null;
     if(!draft||draft.base_approved_revision_id!==base||doc.rejected_draft_ids.includes(draftId)
       ||doc.approvals.some(row=>row.draft_id===draftId))throw Error('위키 승인 판본 충돌입니다.');
@@ -198,13 +204,15 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     a.check();return save(doc);
   }
   async function reject(value,draftId){
+    if(value.schema_version===2){if(!api.rejectV2)throw Error('위키 일괄 검토 연결을 확인하세요.');return api.rejectV2(value,draftId);}
     const doc=copy(value);
     if(!doc.drafts.some(d=>d.id===draftId)||doc.rejected_draft_ids.includes(draftId)||doc.approvals.some(a=>a.draft_id===draftId))
       throw Error('이미 승인·반려했거나 없는 초안입니다.');
     doc.document_version++;doc.rejected_draft_ids.push(draftId);return save(doc);
   }
   async function inspectProtected(value,local){
-    const a=action(),doc=parse(value,a.ctx,local);
+    const a=action(),doc=await parse(value,a.ctx,local);a.check();
+    if(doc.schema_version===2)return copy(doc);
     if(!idOf(local))throw Error('위키 형식이 다릅니다.');
     const ids=new Set();
     for(const draft of doc.drafts){

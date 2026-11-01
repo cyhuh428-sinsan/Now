@@ -52,6 +52,45 @@ app.whenReady().then(async()=>{
     assert(await run('document.querySelector("#wikiDialog .wiki-source-preview").textContent.includes("<script>")&&!globalThis.WIKI_SOURCE_EXECUTED'),'exact_text_not_executed');
     assert(await run('!flattenTree(state.data.tree).some(n=>String(n.id).startsWith("wiki-source:"))'),'source_tree_projection');
     const before=await run('(async()=>{await noteHistory.idle();await Promise.all([...storagePendingWrites]);return Object.keys(noteHistory.entries()).filter(k=>k.startsWith("wiki-source:")).sort();})()');
+    const ingest=await run(`(async()=>{
+      if(typeof wikiIngest==='undefined'||!wikiIngest)throw Error('ingest_actual_adapter_missing');
+      const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn,code)=>{for(let i=0;i<300;i++){if(fn())return;await pause();}throw Error(code);};
+      const click=async action=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');if(!b||b.disabled)throw Error('ingest_button_'+action);b.click();await pause();};
+      if(${phase}===2){
+        const rows=await wikiNotebook.list(),ops=await wikiIngest.operations();
+        if(rows.length!==2||rows.some(r=>r.document?.schema_version!==2)||rows.filter(r=>r.document.approvals.length===1).length!==1)throw Error('ingest_cold_documents');
+        if(ops.filter(o=>o.action==='ingest'&&o.state==='committed').length!==1)throw Error('ingest_cold_receipt');
+        return {coldDocuments:rows.length,calls:0};
+      }
+      const original=state.settings.llm,realFetch=globalThis.fetch;let calls=0;
+      state.settings.llm={...original,provider:'omniroute',omniUrl:'https://registered.invalid',omniModel:'Combo/auto',omniReasoning:'high',omniApiKey:'synthetic-only'};
+      globalThis.fetch=async(url,options)=>{
+        if(url!=='https://registered.invalid/v1/chat/completions')return realFetch(url,options);
+        calls++;const body=JSON.parse(options.body),request=JSON.parse(body.messages.at(-1).content),input=request.input;
+        if(body.max_tokens!==4096)throw Error('ingest_output_limit');
+        return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({pages:input.pages.map((p,i)=>({wiki_id:p.wiki_id,draft_id:p.draft_id,
+          title:input.sources[i].title,topic:input.sources[i].title,page_type:'concept',summary:'Synthetic ingest summary',aliases:[],claims:[],relations:[],
+          sections:[{id:'s1',title:'Evidence',markdown:'Synthetic ingest finding',citation_ids:['c1']}],
+          citations:[{id:'c1',evidence_id:input.sources[i].id,section_id:null,quote:input.sources[i].content.slice(0,20)}]}))})}}]})};
+      };
+      try{
+        for(const input of document.querySelectorAll('#wikiDialog [name=wiki-ingest-file]'))input.click();
+        await click('plan-ingest');await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=generate-ingest]')),'ingest_plan');
+        if(calls)throw Error('ingest_plan_called_provider');
+        await click('generate-ingest');await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=confirm-send]')),'ingest_consent');
+        if(calls)throw Error('ingest_consent_called_provider');await click('confirm-send');
+        await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=commit-ingest]')),'ingest_proposal');
+        if(calls!==1||(await wikiNotebook.list()).length)throw Error('ingest_implicit_commit');
+        if(document.querySelectorAll('#wikiDialog [data-wiki-proposal]').length!==2)throw Error('ingest_missing_page_diff');
+        await click('commit-ingest');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('초안 2개 저장'),'ingest_commit');
+        const rows=await wikiNotebook.list();if(rows.length!==2||rows.some(r=>r.document.approvals.length))throw Error('ingest_implicit_approval');
+        await click('sources');await until(()=>Boolean(document.querySelector('#wikiDialog .wiki-entry button')),'ingest_browse');
+        document.querySelector('#wikiDialog .wiki-entry button').click();await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=approve]')),'ingest_v2_read');
+        await click('approve');await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('승인 저장 완료'),'ingest_approve');
+        if((await wikiNotebook.list()).filter(r=>r.document.approvals.length===1).length!==1||calls!==1)throw Error('ingest_approval_receipt');
+        await click('sources');return {drafts:2,explicitApprovals:1,syntheticCalls:calls,outputTokens:4096};
+      }finally{globalThis.fetch=realFetch;state.settings.llm=original;}
+    })()`);
     const screenshotRoot='D:/Project/Now/docs/2.4.0/qa';
     for(const [size,width,height] of [['desktop',1200,900],['mobile',390,844]]){
       window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
@@ -112,7 +151,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

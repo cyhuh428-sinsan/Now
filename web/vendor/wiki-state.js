@@ -95,7 +95,7 @@
     }
     return {available:sources.every(source=>source.status!=='unavailable'),stale:sources.some(source=>source.status!=='ok'),sources};
   }
-  function sourceProtectionDependencies(roots,context,localId){
+  function sourceProtectionDependencies(roots,context,localId,options={}){
     const ctx=scope(context),account=JSON.stringify([ctx.url,ctx.owner]),ids=new Set(),seen=new WeakSet();
     const stack=roots.map(value=>({value,accountKnown:false}));
     while(stack.length){
@@ -104,17 +104,32 @@
       if(Object.hasOwn(value,'protection_record')){
         if(!globalThis.NowNoteProtectionState?.protectedRecord(value))throw Error('wiki_protection_copy');
       }
+      if(accountKnown&&Object.hasOwn(value,'wiki_ingest_operations')){
+        if(!object(value.wiki_ingest_operations))throw Error('wiki_protection_format');
+        for(const row of Object.values(value.wiki_ingest_operations)){
+          if(row?.schema_version!==1||!['reserved','attempted','committed','aborted'].includes(row.state)||!Array.isArray(row.inputs))throw Error('wiki_protection_format');
+          if(!['reserved','attempted'].includes(row.state))continue;
+          for(const ref of row.inputs){
+            validateEvidence(ref,ctx.owner);
+            if(ref.kind==='wiki')throw Error('wiki_ingest_dependency_check');
+            if(ref.note_ref.local_id===localId)throw Error('wiki_ingest_pending');
+          }
+        }
+      }
       if(value.source==='wiki-artifact'&&value.owner_id===ctx.owner){
         let doc;try{doc=JSON.parse(value.content);}catch{throw Error('wiki_protection_format');}
         if(P.canonicalJson(doc.scope)!==P.canonicalJson(ctx)){
           if(accountKnown)throw Error('wiki_protection_scope');
           continue;
         }
-        if(doc.schema_version!==1||'wiki:'+doc.wiki_id!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
+        if(![1,2].includes(doc.schema_version)||'wiki:'+doc.wiki_id!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
           throw Error('wiki_protection_format');
+        options.documents?.push(doc);
         for(const draft of doc.drafts){
-          if(!Array.isArray(draft.source_manifest)||!draft.source_manifest.length)throw Error('wiki_protection_format');
-          for(const ref of draft.source_manifest){
+          const manifest=evidenceOf(draft);
+          if(!Array.isArray(manifest)||!manifest.length)throw Error('wiki_protection_format');
+          for(const ref of manifest){
+            if(ref.kind==='wiki')throw Error('wiki_protection_dependency_check');
             if(ref?.note_ref?.owner_id!==ctx.owner||typeof ref.note_ref.local_id!=='string')throw Error('wiki_protection_scope');
             if(ref.note_ref.local_id===localId)ids.add(value.local_id);
           }
