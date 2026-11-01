@@ -357,6 +357,7 @@
         }
         next.recovery_archives = [...(previous.recovery_archives || []), ...(next.recovery_archives || []),
           { restored_at: new Date().toISOString(), contexts: previous.contexts }];
+        globalThis.NowWikiLifecycle?.validateRestore(previous,next);
         for (const c of Object.values(next.contexts)) for (const item of Object.values(c.notes || {})) {
           if (item.outbox?.length && !item.conflict) item.conflict = { code: 'backup_restored', local: copy(item.draft), remote: null };
         }

@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import vm from 'node:vm';
 import {webcrypto} from 'node:crypto';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol.js','note-history-state.js','wiki-state.js']){
+for(const name of ['note-protection-protocol.js','note-history-state.js','wiki-state.js','wiki-lifecycle.js']){
   vm.runInContext(await fs.readFile(new URL('../vendor/'+name,import.meta.url),'utf8'),box);
 }
 let source='';try{source=await fs.readFile(new URL('../vendor/wiki-notebook.js',import.meta.url),'utf8');}catch{}
@@ -19,6 +19,7 @@ const api={context:()=>ctx,contextKey:()=>JSON.stringify([ctx.url,ctx.owner,ctx.
   source:sourceNote,notes:()=>[{id:'source',title:'Original'}],
   readCurrent:async()=>{calls++;throw Error('local source must not be uploaded or fetched');},
   listRemote:async()=>[],readRemote:async()=>{throw Error('unexpected');}};
+api.lifecycle=box.NowWikiLifecycle.create({...api,request:async()=>{throw Error('unexpected lifecycle request');},read:async()=>{throw Error('unexpected lifecycle read');}});
 let book=box.createWikiNotebook(api);
 const snapshot=await book.capture(['source']);
 assert.equal(snapshot.serverEligible,false);
@@ -50,7 +51,7 @@ assert.equal(Object.keys(saved.contexts).length,1,'Account switch must not erase
 ctx={...ctx,owner:'alice',auth:'synthetic'};
 original.content='Exact evidence.';
 await history.localOnly(local,false);
-api.listRemote=async()=>[{id:doc.wiki_id}];
+api.listRemote=async()=>[{id:doc.wiki_id,owner_id:ctx.owner,schema_version:1,version:1,deleted_at:null,payload:{artifact_local_id:local,dependencies:[]}}];
 let reads=0;
 api.readRemote=async()=>{reads++;return {artifact:{protected:true,document:null,current_exists:true},source_status:{available:true,stale:false}};};
 const protectedRows=await book.list();

@@ -3,6 +3,20 @@
   const target='qa-http-'+run+'-target',other='qa-http-'+run+'-other',plain='HTTP-QA-ORIGINAL-'+run+'\r\n',password='qa-protection-'+run;
   const assert=(v,code)=>{if(!v)throw Error(code);},wait=()=>new Promise(r=>setTimeout(r,15));
   const emit=event=>console.log('HTTP_QA_EVENT '+JSON.stringify(event));
+  function failBrowserHistoryOnce(matches,code){
+    const storage=browserHistoryStorage(),write=storage.write;let armed=true;
+    storage.write=async(expected,value,guard)=>{
+      if(armed&&matches(value,expected)){armed=false;throw Error(code);}
+      return write(expected,value,guard);
+    };
+    return ()=>{storage.write=write;};
+  }
+  function changedProtectedJournal(data,before){
+    return Object.entries(data.contexts||{}).some(([key,c])=>{
+      const a=before?.contexts?.[key]?.notes?.[target]?.protection_record,b=c.notes?.[target]?.protection_record;
+      return a&&b&&a.operation_id!==b.operation_id;
+    });
+  }
   const originalProtectionGuard=protectionActionGuard;
   protectionActionGuard=()=>{
     const check=originalProtectionGuard(),before=JSON.parse(protectionViewKey()),generation=noteProtectionViewGeneration;
@@ -999,9 +1013,7 @@
     boxes.forEach(e=>e.checked=true);await action('confirm',()=>!dialog().querySelector('.protection-copies input'));
     let restore;
     if(!isDesktopClient()) {
-      const originalSet=Storage.prototype.setItem;let fail=true;
-      Storage.prototype.setItem=function(k,v){if(fail&&k===NOTE_HISTORY_KEY&&Object.values(JSON.parse(v).protection_operations||{}).some(m=>m.phase==='complete')){fail=false;throw Error('qa_local_quota_failure');}return originalSet.call(this,k,v);};
-      restore=()=>Storage.prototype.setItem=originalSet;
+      restore=failBrowserHistoryOnce(data=>Object.values(data.protection_operations||{}).some(m=>m.phase==='complete'),'qa_local_quota_failure');
     }
     try{await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'));}finally{restore?.();}
     const marker=Object.values(noteHistory.protectionOperations()).find(m=>m.scope.local_id===target&&m.phase!=='complete');
@@ -1139,7 +1151,7 @@
     assert(getComputedStyle(dialog().querySelector('.protection-editor')).display==='none','editor_not_hidden_before_open');
     await action('edit',()=>!dialog().querySelector('.protection-editor').classList.contains('hidden'));
     if(config.editorRestart&&!isDesktopClient()){
-      const before=localStorage.getItem(NOTE_HISTORY_KEY),request=navigator.locks.request.bind(navigator.locks);let release,entered=false;
+      const before=await readStorage(NOTE_HISTORY_KEY),request=navigator.locks.request.bind(navigator.locks);let release,entered=false;
       const held=request(NOTE_HISTORY_KEY,()=>new Promise(resolve=>{release=resolve;}));
       for(let i=0;i<100&&!release;i++)await wait();assert(release,'web_lock_not_acquired');
       navigator.locks.request=(name,...args)=>{if(name===NOTE_HISTORY_KEY)entered=true;return request(name,...args);};
@@ -1148,7 +1160,7 @@
         const editing=noteProtectionEditSession;
         for(let i=0;i<500&&!entered;i++)await wait();assert(entered,'draft_never_waited_for_web_lock');
         button('lock').click();release();await held;await editing.queue.catch(()=>{});
-        assert(localStorage.getItem(NOTE_HISTORY_KEY)===before,'lock_changed_persisted_cipher');
+        assert(await readStorage(NOTE_HISTORY_KEY)===before,'lock_changed_persisted_cipher');
         assert(JSON.stringify(noteHistory.export())===before,'lock_retained_cancelled_memory_projection');
         assert(!dialog().querySelector('.protection-draft').value,'locked_editor_retained_plaintext');
         emit({stage:'actual_web_lock_cancelled_cipher_CAS',owner:a.owner,local_id:target});
@@ -1192,13 +1204,10 @@
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'editor_capture_failed');
     let restore;
     if(config.editorRestart&&!isDesktopClient()){
-      const set=Storage.prototype.setItem;let fail=true;
-      Storage.prototype.setItem=function(k,v){
-        if(fail&&k===NOTE_HISTORY_KEY){const data=JSON.parse(v),before=JSON.parse(localStorage.getItem(k)),markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
-          const changed=Object.entries(data.contexts||{}).some(([key,c])=>{const a=before.contexts?.[key]?.notes?.[target]?.protection_record,b=c.notes?.[target]?.protection_record;return a&&b&&a.operation_id!==b.operation_id;});
-          if(markers.length===4&&markers.some(m=>m.phase==='applying')&&changed){fail=false;throw Error('qa_MW_journal_CAS_failure');}}
-        return set.call(this,k,v);
-      };restore=()=>Storage.prototype.setItem=set;
+      restore=failBrowserHistoryOnce((data,before)=>{
+        const markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
+        return markers.length===4&&markers.some(m=>m.phase==='applying')&&changedProtectedJournal(data,before);
+      },'qa_MW_journal_CAS_failure');
     }
     try{await action('save',()=>config.editorRestart?Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'):status().includes('전환 준비 가능'));}finally{restore?.();}
     if(config.editorRestart){assert(Object.values(noteHistory.protectionOperations()).filter(m=>m.phase==='applying').length===1,'MW_not_locally_pending');button('lock').click();}
@@ -1290,15 +1299,10 @@
     assert(globalThis.__HTTP_CAPTURE_DONE__===true,'import_capture_failed');
     let restoreImport;
     if(config.importRestart&&!isDesktopClient()){
-      const set=Storage.prototype.setItem;let fail=true;
-      Storage.prototype.setItem=function(k,v){
-        if(fail&&k===NOTE_HISTORY_KEY){
-          const data=JSON.parse(v),before=JSON.parse(localStorage.getItem(k)),markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
-          const changed=Object.entries(data.contexts||{}).some(([key,c])=>{const a=before.contexts?.[key]?.notes?.[target]?.protection_record,b=c.notes?.[target]?.protection_record;return a&&b&&a.operation_id!==b.operation_id;});
-          if(markers.length===5&&markers.some(m=>m.phase==='applying')&&changed){fail=false;throw Error('qa_MI_journal_CAS_failure');}
-        }
-        return set.call(this,k,v);
-      };restoreImport=()=>Storage.prototype.setItem=set;
+      restoreImport=failBrowserHistoryOnce((data,before)=>{
+        const markers=Object.values(data.protection_operations||{}).filter(m=>m.scope.local_id===target);
+        return markers.length===5&&markers.some(m=>m.phase==='applying')&&changedProtectedJournal(data,before);
+      },'qa_MI_journal_CAS_failure');
     }
     try{await action('import-selected',()=>Object.values(noteHistory.protectionOperations()).filter(m=>m.scope.local_id===target).length===previous.size+1
       &&(config.importRestart?Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'):Object.values(noteHistory.protectionOperations()).every(m=>m.phase==='complete')));}

@@ -540,8 +540,8 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
-    if(process.argv.includes("--wiki")||process.argv.includes("--wiki-protection")){
-      const {verifyWikiFlow,verifyWikiCold,verifyWikiProtectionFlow,verifyWikiProtectionCold}=await import("./wiki_fixture.mjs");
+    if(process.argv.includes("--wiki")||process.argv.includes("--wiki-protection")||process.argv.includes("--wiki-trash")){
+      const {verifyWikiFlow,verifyWikiCold,verifyWikiProtectionFlow,verifyWikiProtectionCold,verifyWikiTrashFlow,verifyWikiTrashCold,verifyProtectedWikiLifecycle}=await import("./wiki_fixture.mjs");
       await verifyWikiFlow({evaluate:expression=>evaluate(page,expression)});
       await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki actual review");
       for(const width of [1280,390]){
@@ -581,6 +581,19 @@ async function runOnce() {
           }
         }
       }
+      let expectedWikiTrashHash;
+      if(process.argv.includes("--wiki-trash")){
+        await verifyWikiTrashFlow({evaluate:expression=>evaluate(page,expression)});
+        expectedWikiTrashHash=await evaluate(page,'wikiTrashHash');
+        for(const width of [1280,390]){
+          await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+          assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1&&[...d.querySelectorAll(".wiki-entry button")].every(b=>{const s=b.getBoundingClientRect();return s.left>=r.left&&s.right<=r.right;});})()'),"Trash controls must fit 1280/390 viewports");
+          if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+            const shot=await page.send("Page.captureScreenshot");
+            await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-trash-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+          }
+        }
+      }
       if(!desktop){
         const exited=new Promise(resolve=>browser.once("exit",resolve));
         await page.send("Browser.close").catch(()=>{});
@@ -592,9 +605,13 @@ async function runOnce() {
       const reopened=await waitForPageTarget(debugPort,webPort);
       browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
       await waitForCondition(page,'typeof wikiUI!=="undefined" && Boolean(wikiUI) && typeof noteHistory!=="undefined" && Object.keys(noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes||{}).some(id=>id.startsWith("wiki:"))',"Wiki cold journal");
-      if(process.argv.includes("--wiki-protection"))await verifyWikiProtectionCold({evaluate:expression=>evaluate(page,expression)});
+      if(process.argv.includes("--wiki-trash"))await verifyWikiTrashCold({evaluate:expression=>evaluate(page,expression),expectedHash:expectedWikiTrashHash});
+      else if(process.argv.includes("--wiki-protection")){
+        await verifyWikiProtectionCold({evaluate:expression=>evaluate(page,expression)});
+        await verifyProtectedWikiLifecycle({evaluate:expression=>evaluate(page,expression)});
+      }
       else await verifyWikiCold({evaluate:expression=>evaluate(page,expression)});
-      console.log(process.argv.includes("--wiki-protection")?"Wiki local protection: actual source guard, copy attribution, zero network, all-store cipher settlement, key read/lock and process cold restore PASS":"Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
+      console.log(process.argv.includes("--wiki-trash")?"Wiki actual trash/restore: cancel, immutable full journal hash, source-protection dependency, zero extra model calls and process cold restore PASS":process.argv.includes("--wiki-protection")?"Wiki local protection: actual source guard, copy attribution, zero network, all-store cipher settlement, key read/lock and process cold restore PASS":"Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
       return;
     }
     if(process.argv.includes("--document")){

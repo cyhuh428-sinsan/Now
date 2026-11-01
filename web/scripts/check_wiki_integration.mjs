@@ -51,5 +51,12 @@ for(const surface of ['web','desktop/app']){
   assert.equal(requested.url,ctx.url+'/api/v1/wikis/'+id.slice(5)+'/revisions/import');
   await vm.runInContext("noteHistoryRequest(ctx,'current','GET',body)",requestBox);
   assert.ok(requested.url.startsWith(ctx.url+'/api/v2/notes/current?'));
+  requestBox.wikiLifecycle={blocked:local=>local===id};requested=null;
+  for(const [route,method]of [['current','PUT'],['revisions/import','POST']]){
+    await assert.rejects(vm.runInContext(`noteHistoryRequest(ctx,'${route}','${method}',body)`,requestBox),/휴지통|미전송/);
+    assert.equal(requested,null,surface+': pending/trash must block the actual queued wire request');
+  }
+  await vm.runInContext("noteHistoryRequest(ctx,'current','GET',body)",requestBox);
+  assert.ok(requested.url.startsWith(ctx.url+'/api/v2/notes/current?'));
 }
 console.log('Wiki journal integration: no tree projection/deletion, dedicated publication/import routes PASS');

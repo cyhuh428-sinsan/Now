@@ -5537,6 +5537,11 @@ kbd {
 .wiki-layout { grid-template-columns: minmax(160px, 230px) minmax(0, 1fr); align-items: start; }
 .wiki-layout > nav, .wiki-detail, .wiki-body { min-width: 0; overflow-wrap: anywhere; }
 .wiki-layout > nav { display: grid; gap: 6px; }
+.wiki-entry { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 4px; align-items: stretch; min-width: 0; }
+.wiki-entry > .library-item { width: 100%; min-width: 0; overflow-wrap: anywhere; }
+.wiki-entry-controls { display: flex; flex-direction: column; gap: 4px; align-items: stretch; min-width: 0; }
+.wiki-entry-controls button { white-space: normal; overflow-wrap: anywhere; }
+.wiki-trash-toggle { display: flex; align-items: center; gap: 6px; }
 .wiki-detail h3 { font-size: 20px; margin: 20px 0 8px; }
 .wiki-detail h4 { font-size: 17px; margin: 24px 0 8px; scroll-margin-top: 12px; }
 .wiki-source-list { display: grid; gap: 6px; max-height: 220px; overflow: auto; padding: 8px 0; }

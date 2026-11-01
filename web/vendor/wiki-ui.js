@@ -4,7 +4,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   dialog.id='wikiDialog';dialog.className='library-dialog wiki-dialog';
   dialog.setAttribute('aria-labelledby','wikiTitle');
   let rows=[],doc=null,dirty=false,busy=false,readable=false,epoch=0,bound='',message='',topic='',question='',confirmation=null,previous=null;
-  let viewId='',beforeId='',comparing=false,readOnly=false;
+  let viewId='',beforeId='',comparing=false,readOnly=false,trashMode=false;
   const selected=new Set();
   const node=(tag,text,className)=>{const n=document.createElement(tag);if(text!==undefined)n.textContent=text;if(className)n.className=className;return n;};
   const valid=token=>dialog.open&&token===epoch&&bound===api.contextKey();
@@ -22,7 +22,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
-    viewId='';beforeId='';comparing=false;readOnly=false;
+    viewId='';beforeId='';comparing=false;readOnly=false;trashMode=false;
     if(dialog.open)dialog.close();dialog.replaceChildren();previous?.focus();
   }
   function check(){
@@ -82,6 +82,20 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     choose(draft.id);comparing=false;
     dirty=true;message='인용문을 확인한 뒤 초안을 저장하세요.';
   }
+  async function lifecycle(row,method,token){
+    const id=row.id||row.document?.wiki_id;
+    const prompt=method==='trash'?'위키를 휴지통으로 이동할까요? 원문과 저장 이력은 보존됩니다.':method==='restoreWiki'?'위키를 복원할까요?'
+      :method==='reconcileLifecycle'?'거부된 요청 대신 서버의 현재 상태를 확인해 반영할까요?':'보존된 같은 요청의 처리 결과를 다시 확인할까요?';
+    if(!await ask(prompt+(dirty&&doc?.wiki_id===id?' 저장하지 않은 초안은 닫힙니다.':'')))return;
+    requireActive(token);let issue;
+    try{await api[method](id);requireActive(token);}catch(error){requireActive(token);issue=error;}
+    const next=await api.list();requireActive(token);rows=next;
+    if(doc?.wiki_id===id){doc=null;dirty=false;readable=false;selected.clear();question='';viewId='';beforeId='';comparing=false;}
+    trashMode=Boolean(rows.find(r=>(r.id||r.document?.wiki_id)===id)?.deleted);topic='';
+    if(issue)throw issue;
+    message=rows.find(r=>(r.id||r.document?.wiki_id)===id)?.lifecycle?.pending?'요청 보존 · 처리 결과 확인 필요'
+      :method==='trash'?'휴지통으로 이동했습니다.':method==='restoreWiki'?'위키를 복원했습니다.':'현재 상태를 확인했습니다.';
+  }
   function render(){
     if(!dialog.open)return;
     check();if(!dialog.open)return;
@@ -92,8 +106,15 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     const toolbar=node('div',undefined,'library-toolbar');
     if(!readOnly)toolbar.append(command('new','새 위키',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 버리고 새 위키를 만들까요?'))return;
-      requireActive(token);doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;
+      requireActive(token);doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;trashMode=false;
     }),command('refresh','동기화',async token=>{const next=await api.list({sync:true});requireActive(token);rows=next;message='목록을 갱신했습니다.';}));
+    if(!readOnly&&api.trash&&api.restoreWiki){
+      const label=node('label','휴지통','wiki-trash-toggle'),input=node('input');input.type='checkbox';input.name='wiki-trash';input.checked=trashMode;input.disabled=busy;
+      input.onchange=()=>{const value=input.checked;void execute(async token=>{
+        if(dirty&&!await ask('저장하지 않은 초안을 닫고 목록을 바꿀까요?'))return;
+        requireActive(token);trashMode=value;doc=null;dirty=false;readable=false;selected.clear();question='';topic='';viewId='';beforeId='';comparing=false;
+      });};label.prepend(input);toolbar.append(label);
+    }
     const status=node('p',message);status.setAttribute('role','status');status.setAttribute('aria-live','polite');
     const layout=node('div',undefined,'library-layout wiki-layout'),nav=node('nav');nav.setAttribute('aria-label','주제별 위키');
     const filter=node('select',undefined,'settings-select');filter.setAttribute('aria-label','주제');
@@ -102,11 +123,12 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }
     filter.value=topic;filter.disabled=busy;filter.onchange=()=>{topic=filter.value;render();};nav.append(filter);
     for(const row of rows){
+      if(Boolean(row.deleted)!==trashMode)continue;
       const last=preferred(row.document),pendingCheck=busy||(doc&&row.document?.wiki_id===doc.wiki_id&&!readable);
       if(topic&&last?.topic!==topic)continue;
-      const item=node('button',undefined,'library-item');item.type='button';item.disabled=busy;
+      const item=node('button',undefined,'library-item');item.type='button';item.disabled=busy||Boolean(row.deleted||row.lifecycle?.pending);
       const title=node('span',pendingCheck?'위키 확인 중':last?.title||(row.protected?'보호된 위키':'위키 '+(row.id||'')));
-      const info=node('small',pendingCheck?'출처 확인 중':row.error|| (row.protected?'잠금 상태':row.pending?'전송 대기':row.localOnly?'이 기기에 보관':last?.topic||''));
+      const info=node('small',pendingCheck?'출처 확인 중':row.lifecycle?.pending?(row.lifecycle.pending.rejected?'현재 상태 확인 필요':'처리 결과 확인 필요'):row.deleted?'휴지통':row.error|| (row.protected?'잠금 상태':row.pending?'전송 대기':row.localOnly?'이 기기에 보관':last?.topic||''));
       item.append(title,info);item.setAttribute('aria-current',String(Boolean(doc&&doc.wiki_id===(row.document?.wiki_id||row.id))));
       item.onclick=()=>execute(async token=>{
         if(dirty&&!await ask('저장하지 않은 초안을 버리고 선택한 위키를 열까요?'))return;
@@ -118,11 +140,21 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         doc=structuredClone(row.document);dirty=false;selected.clear();question='';
         choose(preferred(doc).id);comparing=false;
         message='';
-      });nav.append(item);
+      });
+      const entry=node('div',undefined,'wiki-entry');entry.append(item);
+      if(!readOnly&&api.trash&&api.restoreWiki){
+        const controls=node('div',undefined,'wiki-entry-controls'),id=row.id||row.document?.wiki_id;entry.dataset.wikiId=id;
+        if(row.lifecycle?.pending){
+          const method=row.lifecycle.pending.rejected?'reconcileLifecycle':'retryLifecycle';
+          controls.append(command(method,row.lifecycle.pending.rejected?'현재 상태':'다시 확인',token=>lifecycle(row,method,token)));
+        }else controls.append(command(row.deleted?'restore':'trash',row.deleted?'복원':'휴지통',token=>lifecycle(row,row.deleted?'restoreWiki':'trash',token)));
+        entry.append(controls);
+      }
+      nav.append(entry);
     }
-    if(!rows.length)nav.append(node('p','저장된 위키 없음'));
+    if(!rows.some(row=>Boolean(row.deleted)===trashMode))nav.append(node('p',trashMode?'휴지통이 비어 있습니다.':'저장된 위키 없음'));
     const detail=node('section',undefined,'wiki-detail');detail.setAttribute('aria-label','위키 검토');
-    if(!readOnly){
+    if(!readOnly&&!trashMode){
     const picker=node('details');picker.open=!doc;picker.append(node('summary','자료 선택'));
     const choices=node('div',undefined,'wiki-source-list');
     for(const source of api.notes()){

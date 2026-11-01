@@ -140,6 +140,54 @@ export async function verifyWikiCold({evaluate}){
   assert.ok(await evaluate('document.querySelector("#wikiDialog").textContent.includes("원본 변경")'),'Cold historical view must recheck its own source version');
 }
 
+export async function verifyWikiTrashFlow({evaluate}){
+  await evaluate('(async()=>{await noteHistory.idle();const item=Object.entries(noteHistory.entries()).find(([,v])=>v.draft.source==="wiki-artifact");globalThis.wikiTrashLocal=item[0];globalThis.wikiTrashHash=await NowNoteProtectionProtocol.sha256(JSON.stringify(item[1]));globalThis.wikiTrashModelCalls=wikiActualCalls;})()');
+  assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [name=wiki-trash]"))'),'Wiki needs a real trash view');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=trash]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Wiki trash confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=cancel-send]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=trash]")?.disabled===false','Cancelled trash');
+  assert.equal(await evaluate('wikiLifecycle.blocked(wikiTrashLocal)'),false);
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=trash]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Actual wiki trash confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=restore]")?.disabled===false','Wiki trash committed');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false,'Trash view must not retain previous plaintext');
+  assert.equal(await evaluate('document.querySelectorAll("#wikiDialog .wiki-body,#wikiDialog [data-wiki-action=generate]").length'),0);
+  assert.ok(await evaluate('NowNoteWiki.sourceProtectionDependencies([noteHistory.export()],noteHistoryContext(),"wiki-ui-source").includes(wikiTrashLocal)'),'Trashed wiki must still block original protection');
+  assert.equal(await evaluate('(async()=>NowNoteProtectionProtocol.sha256(JSON.stringify(noteHistory.entries()[wikiTrashLocal])))()'),await evaluate('wikiTrashHash'));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=restore]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Wiki restore confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=trash]")?.disabled===false','Wiki restored');
+  await evaluate('document.querySelector("#wikiDialog .library-item").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))','Restored wiki source check');
+  assert.equal(await evaluate('wikiActualCalls'),await evaluate('wikiTrashModelCalls'),'Lifecycle must not invoke a model');
+  assert.equal(await evaluate('(async()=>NowNoteProtectionProtocol.sha256(JSON.stringify(noteHistory.entries()[wikiTrashLocal])))()'),await evaluate('wikiTrashHash'));
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=trash]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Cold trash confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=restore]")?.disabled===false','Cold trash stored');
+  await evaluate('noteHistory.idle()');
+}
+
+export async function verifyWikiTrashCold({evaluate,expectedHash}){
+  await evaluate('wikiUI.open()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=new]")?.disabled===false','Cold wiki list');
+  assert.equal(await evaluate('document.querySelectorAll("#wikiDialog .library-item").length'),0,'Trashed wiki must not reappear in the active list');
+  await evaluate('document.querySelector("#wikiDialog [name=wiki-trash]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=restore]")?.disabled===false','Cold wiki trash');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Exact evidence.")'),false);
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=restore]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Cold restore confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=trash]")?.disabled===false','Cold restore committed');
+  await evaluate('document.querySelector("#wikiDialog .library-item").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))','Cold restored wiki body');
+  assert.ok(await evaluate('Object.values(noteHistory.entries()).some(i=>i.draft.source==="wiki-artifact"&&i.revisions.length===4)'));
+  assert.equal(await evaluate('(async()=>{const item=Object.values(noteHistory.entries()).find(i=>i.draft.source==="wiki-artifact");return NowNoteProtectionProtocol.sha256(JSON.stringify(item));})()'),expectedHash,'Cold trash/restore must preserve the entire original journal entry');
+}
+
 async function wikiUntil(evaluate,expression,label){
   for(let n=0;n<120;n++){
     if(await evaluate(expression))return;
@@ -213,4 +261,24 @@ export async function verifyWikiProtectionCold({evaluate}){
   assert.ok(await evaluate('Boolean(document.querySelector("#wikiDialog [data-wiki-action=generate]"))'),'Normal wiki entry must not remain in protected read-only mode');
   assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
   await evaluate('document.querySelector("#wikiDialog header button").click()');
+}
+
+export async function verifyProtectedWikiLifecycle({evaluate}){
+  const before=await evaluate('(async()=>{globalThis.protectedTrashCalls=0;globalThis.protectedTrashLlm=llmChatRequest;llmChatRequest=async()=>{protectedTrashCalls++;throw Error("qa_unexpected_model");};const entry=Object.entries(noteHistory.export().contexts[NowNoteHistory.key(noteHistoryContext())].notes).find(([id,v])=>id.startsWith("wiki:")&&v.protection_record);globalThis.protectedTrashId=entry[0];return {hash:await NowNoteProtectionProtocol.sha256(JSON.stringify(entry[1]))};})()');
+  await evaluate('wikiUI.open()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=trash]")?.disabled===false','Protected wiki trash action');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=trash]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Protected trash confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=restore]")?.disabled===false','Protected wiki trashed');
+  assert.equal(await evaluate('document.querySelector("#wikiDialog").textContent.includes("Durable Guide")'),false);
+  assert.equal(await evaluate('document.querySelectorAll("#wikiDialog input[type=password]").length'),0,'Metadata lifecycle must not need a decryption key');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=restore]").click()');
+  await wikiUntil(evaluate,'Boolean(document.querySelector("#wikiDialog [data-wiki-action=confirm-change]"))','Protected restore confirmation');
+  await evaluate('document.querySelector("#wikiDialog [data-wiki-action=confirm-change]").click()');
+  await wikiUntil(evaluate,'document.querySelector("#wikiDialog [data-wiki-action=trash]")?.disabled===false','Protected wiki restored');
+  assert.equal(await evaluate('(async()=>NowNoteProtectionProtocol.sha256(JSON.stringify(noteHistory.export().contexts[NowNoteHistory.key(noteHistoryContext())].notes[protectedTrashId])))()'),before.hash);
+  assert.equal(await evaluate('protectedTrashCalls'),0);
+  await evaluate('llmChatRequest=protectedTrashLlm');
+  await evaluate('wikiUI.close()');
 }

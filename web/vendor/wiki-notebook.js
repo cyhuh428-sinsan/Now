@@ -1,6 +1,7 @@
 /* Adapter over the existing account-bound Note journal, not a second wiki store. */
 globalThis.createWikiNotebook=function createWikiNotebook(api){
-  const W=globalThis.NowNoteWiki,P=globalThis.NowNoteProtectionProtocol;
+  const W=globalThis.NowNoteWiki,P=globalThis.NowNoteProtectionProtocol,L=api.lifecycle;
+  if(!L)throw Error('위키 휴지통 저장 연결을 확인하세요.');
   const copy=value=>structuredClone(value);
   const idOf=value=>/^wiki:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(value);
   const scope=ctx=>({url:String(ctx.url||'').replace(/\/+$/,''),owner:ctx.owner});
@@ -55,7 +56,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   const sourcesAvailable=(values,owner)=>[...values.values()].every(note=>note?.owner===owner&&note.status==='ok'&&!note.protected);
   function canRead(doc){
     const ctx=api.context(),h=api.history(),local='wiki:'+doc.wiki_id;
-    if(!ctx.enabled||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx))||h.blocked(local)||h.view(local)?.base.crypto_epoch>0)return false;
+    if(!ctx.enabled||P.canonicalJson(doc.scope)!==P.canonicalJson(scope(ctx))||L.blocked(local)||h.blocked(local)||h.view(local)?.base.crypto_epoch>0)return false;
     return doc.drafts.flatMap(draft=>draft.source_manifest).every(ref=>{
       const note=api.source(ref.note_ref.local_id);
       return ref.note_ref.owner_id===ctx.owner&&note?.owner===ctx.owner&&note.status==='ok'&&!note.protected
@@ -64,6 +65,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   }
   async function sourceStatus(draft,doc=null){
     const a=action();
+    if(doc&&L.blocked('wiki:'+doc.wiki_id))return {available:false,stale:true,sources:[]};
     if(doc){
       if(!canRead(doc))return {available:false,stale:true,sources:[]};
       const item=a.h.view('wiki:'+doc.wiki_id);
@@ -88,11 +90,16 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   async function list({sync=false}={}){
     if(!api.context().enabled)return [];
     const a=action();
-    if(sync){await a.h.sync();a.check();}
+    if(sync){await L.sync();a.check();await a.h.sync();a.check();}
     const rows=new Map();
+    const rowState=(id,extra={})=>{
+      const lifecycle=L.state('wiki:'+id);
+      return {...extra,id,lifecycle,deleted:Boolean(lifecycle?.deleted_at||lifecycle?.pending?.action==='trash')};
+    };
     const visibleRows=async()=>{
       const visible=[];
       for(const row of rows.values()){
+        if(row.deleted||row.lifecycle?.pending){visible.push(rowState(row.id,{protected:row.protected,localOnly:row.localOnly,error:row.error}));continue;}
         if(!row.document){visible.push(row);continue;}
         try{
           const state=await sourceStatus(row.document.drafts.at(-1),row.document);a.check();
@@ -105,9 +112,11 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       const bucket=a.h.export()?.contexts?.[NowNoteHistory.key(a.ctx)]?.notes||{};
       for(const [local,item] of Object.entries(bucket)){
         if(!idOf(local))continue;
-        if(a.h.blocked(local)||!item.draft){rows.set(local,{id:local.slice(5),protected:true});continue;}
-        try{rows.set(local,{id:local.slice(5),document:parse(item.draft.content,a.ctx,local),
-          pending:!item.localOnly&&Boolean(item.dirty||item.outbox.length),localOnly:item.localOnly,error:item.error?.code||item.conflict?.code});}
+        const id=local.slice(5),metadata=rowState(id,{localOnly:item.localOnly});
+        if(metadata.deleted||metadata.lifecycle?.pending){rows.set(local,metadata);continue;}
+        if(a.h.blocked(local)||!item.draft){rows.set(local,rowState(id,{protected:true}));continue;}
+        try{rows.set(local,rowState(id,{document:parse(item.draft.content,a.ctx,local),
+          pending:!item.localOnly&&Boolean(item.dirty||item.outbox.length),localOnly:item.localOnly,error:item.error?.code||item.conflict?.code}));}
         catch{rows.set(local,{id:local.slice(5),protected:true,error:'위키 원본 형식 확인 필요'});}
       }
     };
@@ -116,10 +125,13 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       let remote;
       try{remote=await api.listRemote();a.check();}
       catch(error){a.check();if(!rows.size)throw error;return visibleRows();}
+      await L.observe(remote);a.check();
       for(const item of remote){
         const local='wiki:'+item.id;if(!idOf(local)||a.h.manages(local))continue;
+        const metadata=rowState(item.id);
+        if(metadata.deleted||metadata.lifecycle?.pending){rows.set(local,metadata);continue;}
         const result=await api.readRemote(item.id);a.check();
-        if(result.artifact.protected||!result.artifact.document){rows.set(local,{id:item.id,protected:true});continue;}
+        if(result.artifact.protected||!result.artifact.document){rows.set(local,rowState(item.id,{protected:true}));continue;}
         const current=await api.readCurrent(local);a.check();
         if(current.head_revision_id!==result.artifact.head_revision_id)throw Error('위키 판본이 변경되었습니다. 다시 동기화하세요.');
         parse(current.snapshot.note.content,a.ctx,local);
@@ -144,7 +156,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   }
   async function save(value){
     const a=action(),local='wiki:'+value.wiki_id,doc=parse(P.canonicalJson(value),a.ctx,local);
-    if(!idOf(local)||a.h.blocked(local))throw Error('보호된 위키는 일반 저장할 수 없습니다.');
+    if(!idOf(local)||a.h.blocked(local)||L.blocked(local))throw Error('보호·휴지통 상태를 먼저 확인하세요. 일반 저장하지 않았습니다.');
     const item=a.h.view(local),before=item?parse(item.draft.content,a.ctx,local):null;
     if(item?.conflict)throw Error('위키 판본 충돌을 먼저 확인하세요.');
     append(before,doc);
@@ -231,5 +243,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       ||doc.rejected_draft_ids.some(id=>!ids.has(id)||approvedDrafts.has(id)))throw Error('위키 검토 형식이 다릅니다.');
     a.check();return copy(doc);
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected};
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,
+    trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
+    retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };

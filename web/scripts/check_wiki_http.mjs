@@ -18,7 +18,7 @@ const own=path.resolve('D:/tmp/now-240-wiki-http-'+randomUUID());
 const storePath=path.join(own,'store.json');
 const manifest={run,owner,device,sourceId,wikiId:null,stage:'preflight',outcome:'running',requests:[],providerCalls:0,
   serverResources:'retained synthetic QA',sourceHashes:{}};
-for(const file of ['note-history-state.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','wiki-state.js','wiki-notebook.js'])
+for(const file of ['note-history-state.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','wiki-state.js','wiki-lifecycle.js','wiki-notebook.js'])
   manifest.sourceHashes[file]=createHash('sha256').update(await fs.readFile(new URL('../vendor/'+file,import.meta.url))).digest('hex');
 const save=()=>fs.writeFile(path.join(directory,'wiki-http-'+run+'.json'),JSON.stringify(manifest,null,2));
 await save();
@@ -65,7 +65,7 @@ try{
     headers:{Authorization:'Bearer '+token,'X-Now-User-Token':userToken}};
   const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa,
     URLSearchParams,AbortSignal,fetch:recordFetch});
-  for(const file of ['note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-history-state.js','wiki-state.js','wiki-notebook.js'])
+  for(const file of ['note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-history-state.js','wiki-state.js','wiki-lifecycle.js','wiki-notebook.js'])
     vm.runInContext(await fs.readFile(new URL('../vendor/'+file,import.meta.url),'utf8'),box);
   const app=localApp;
   const start=app.indexOf('async function noteHistoryRequest('),end=app.indexOf('\nfunction noteHistoryWireNotes()',start);
@@ -83,7 +83,11 @@ try{
   const originalRevision=history.view(sourceId).base.head_revision_id;assert.ok(originalRevision);
   let projection=history.view(sourceId).draft;
   const query=()=>'?owner_id='+encodeURIComponent(owner);
+  const lifecycle=box.NowWikiLifecycle.create({context:()=>ctx,contextKey:()=>JSON.stringify([base,owner,device]),history:()=>history,
+    request:(_ctx,local,operation,body)=>http('POST','/api/v1/wikis/'+local.slice(5)+'/'+operation,body),
+    read:(_ctx,local)=>http('GET','/api/v1/wikis/'+local.slice(5)+query())});
   const book=box.createWikiNotebook({context:()=>ctx,contextKey:()=>JSON.stringify([base,owner,device]),history:()=>history,
+    lifecycle,
     source:id=>id===sourceId?{owner,localId:id,status:'ok',origin:'server',title:projection.title,content:projection.content,revisionId:null,headVersion:0}:null,
     readCurrent:id=>request('current','GET',{local_id:id}),
     listRemote:async()=>(await http('GET','/api/v1/wikis'+query())).items,
