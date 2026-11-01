@@ -164,7 +164,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         if(dirty&&!await ask('저장하지 않은 초안을 버리고 선택한 위키를 열까요?'))return;
         requireActive(token);
         if(row.protected||!row.document){
-          if(api.openProtection){await api.openProtection(row.id);return;}
+          if(row.protected&&api.openProtection){await api.openProtection(row.id);return;}
           doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
         }
         doc=structuredClone(row.document);dirty=false;selected.clear();question='';
@@ -210,13 +210,19 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
           input.onchange=()=>{if(!valid(sourceToken)||!input.isConnected||!sourceMode||busy)return;if(input.checked)ingestFiles.add(source.id);else ingestFiles.delete(source.id);};
           label.append(input,button);row.append(label);
         }else row.append(button);
-        if(!source.protected)row.append(node('small','이 기기 · '+source.extraction.range.total+' bytes'));list.append(row);
+        if(!source.protected)row.append(node('small',(source.unavailable?'서버 확인 필요':source.manifest.origin==='server'?'서버 판본 '+source.manifest.head_version:'이 기기')+' · '+source.extraction.range.total+' bytes'));list.append(row);
       }
       detail.append(list);
       const preview=sourceRows.find(s=>s.id===sourcePreview&&!s.protected);
       if(preview){const text=node('pre',preview.content,'history-diff wiki-source-preview');text.tabIndex=0;text.setAttribute('aria-label','원본 텍스트');detail.append(text);}
       if(!sourceRows.length)detail.append(node('p','저장된 원본 없음'));
       if(api.ingest){
+        if(api.sources.publishFiles)detail.append(command('publish-sources','선택 텍스트 게시',async token=>{
+          const ids=[...ingestFiles],info=await api.sources.publicationInfo(ids);requireActive(token);
+          if(!await ask(info.server+'\n계정 '+info.owner+'\n'+info.names.join(', ')+'\n추출 텍스트 '+info.bytes+' bytes를 서버 메모로 게시할까요? 원본 파일 자체는 전송하지 않습니다.'))return;
+          requireActive(token);const result=await api.sources.publishFiles(ids,{confirmed:true});requireActive(token);
+          sourceRows=await api.sources.list();requireActive(token);message='서버 판본 확보 '+result.published+'개 · 확인 필요 '+result.pending+'개';
+        },Boolean(ingestPlan)));
         const notes=node('fieldset');notes.append(node('legend','NowNote 메모'));
         for(const source of api.notes()){
           const label=node('label'),input=node('input');input.type='checkbox';input.name='wiki-ingest-note';input.value=source.id;
@@ -249,16 +255,33 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
             section.append(diff);detail.append(section);
           }
           detail.append(command('commit-ingest','초안 일괄 저장',async token=>{
-            const result=await api.ingest.commitLocal(ingestProposal);requireActive(token);
+            const remote=ingestProposal.proposal.plan.serverEligible;
+            const result=remote?await api.ingest.stageServer(ingestProposal):await api.ingest.commitLocal(ingestProposal);requireActive(token);
             rows=await api.list();requireActive(token);ingestPlan=null;ingestProposal=null;await refreshOperations(token);
-            message='이 기기에 초안 '+result.documents.length+'개 저장 · 승인 전';
+            message=remote?'서버 반영 초안 보존 · 준비 요청 전':'이 기기에 초안 '+result.documents.length+'개 저장 · 승인 전';
           }));
         }
         const operations=node('section');operations.append(node('h3','보존된 작업'));
         for(const operation of ingestOps){
           const row=node('div'),label={reserved:'미전송',attempted:'생성 시도됨 · 자동 재호출 안 함',committed:'저장 완료',aborted:'폐기됨'};
-          row.append(node('p',operation.operation_id+' · '+label[operation.state]));
-          if(['reserved','attempted'].includes(operation.state)){
+          row.dataset.wikiOperation=operation.operation_id;
+          row.append(node('p',({ingest:'적재',approve:'승인',reject:'반려'}[operation.action]||'')+' '+operation.operation_id+' · '
+            +(operation.state==='attempted'&&operation.action!=='ingest'?'검토 작업 진행 중':label[operation.state])));
+          if(operation.remote){
+            const phase=operation.remote.phase,labels={staged:'서버 전송 전',prepare_uncertain:'준비 결과 확인 필요',prepare_absent:'조회 시 원작업 없음 · 같은 ID로만 재시도',prepared:'서버 준비 완료',commit_uncertain:'확정 결과 확인 필요',
+              server_committed:'서버 완료 · 로컬 적용 필요',abort_uncertain:'폐기 결과 확인 필요',aborted:'서버 작업 폐기됨',settled:'서버·로컬 반영 완료'};
+            row.append(node('p',labels[phase]));
+            const run=(method,notice)=>async token=>{try{await api.ingest[method](operation.operation_id);requireActive(token);message=notice;}
+              finally{if(valid(token))await refreshOperations(token);}};
+            if(['staged','prepare_absent'].includes(phase))row.append(command('prepare-ingest',phase==='staged'?'서버 준비':'같은 준비 요청 재전송',run('prepareServer','서버 준비 완료 · 아직 게시하지 않았습니다.')));
+            if(phase==='prepared')row.append(command('commit-server-ingest','서버 초안 확정',run('commitServer','서버 완료 · 같은 작업의 로컬 적용이 필요합니다.')),
+              command('abort-server-ingest','서버 작업 폐기',async token=>{if(!await ask('준비된 서버 작업을 폐기할까요? 원본·기존 위키·초안·원장은 보존됩니다.'))return;requireActive(token);await run('abortServer','서버 작업을 폐기했습니다.')(token);}));
+            if(phase!=='staged')row.append(command('status-ingest','원작업 상태 확인',run('statusServer','같은 ID의 원응답을 확인했습니다.')));
+            if(phase==='server_committed')row.append(command('apply-server-ingest','로컬 반영',async token=>{
+              await api.ingest.applyServer(operation.operation_id);requireActive(token);await refreshOperations(token);rows=await api.list();requireActive(token);
+              message=operation.action==='approve'?'서버·로컬 승인 반영 완료':operation.action==='reject'?'서버·로컬 반려 반영 완료':'서버·로컬 초안 반영 완료 · 승인 전';
+            }));
+          }else if(['reserved','attempted'].includes(operation.state)){
             if(operation.state==='reserved')row.append(command('resume-ingest','원작업 확인',async token=>{
               const result=await api.ingest.resumeLocal(operation.operation_id);requireActive(token);ingestPlan=result;ingestProposal=null;
               await refreshOperations(token);message='보존된 같은 ID의 계획입니다.';
@@ -359,9 +382,11 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         if(!state.available||state.stale)throw Error('원본이 바뀌었거나 사용할 수 없습니다. 갱신 후 다시 검토하세요.');
         const result=await api.approve(structuredClone(doc),draft.id);requireActive(token);doc=result.document;
         rows=await api.list();requireActive(token);message=result.error?'승인 기록 보존 · '+result.error:result.pending?'승인 기록 보존 · 서버 전송 대기':result.localOnly?'이 기기에 승인 저장 완료':'승인 저장 완료';
+        if(result.operation_id&&result.pending){doc=null;sourceMode=true;sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);message='승인 초안 보존 · 서버 준비·확정 전';}
       },dirty||approved||rejected||draft.base_approved_revision_id!==(doc.approvals.at(-1)?.id||null)),command('reject','반려',async token=>{
         const result=await api.reject(structuredClone(doc),draft.id);requireActive(token);doc=result.document;
         rows=await api.list();requireActive(token);message=result.pending?'반려 기록 보존 · 서버 전송 대기':'반려 기록 저장 완료';
+        if(result.operation_id&&result.pending){doc=null;sourceMode=true;sourceRows=await api.sources.list();requireActive(token);await refreshOperations(token);message='반려 초안 보존 · 서버 준비·확정 전';}
       },dirty||approved||rejected));
       if(api.openProtection)actions.append(command('protect','위키 보호',()=>api.openProtection(doc.wiki_id),dirty));
       detail.append(actions);

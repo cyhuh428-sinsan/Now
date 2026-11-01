@@ -1,4 +1,4 @@
-/* Actual renderer/HTML file input and own durable storage; no API or model fixtures. */
+/* Actual renderer/file input/storage; external HTTP is blocked and remote/model fixtures are synthetic. */
 const {app,BrowserWindow,ipcMain,session}=require('electron');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const root=path.resolve(__dirname,'../..'),own=path.resolve(process.argv[2]),mode=process.argv[3],phase=Number(process.argv[4]);
@@ -98,6 +98,16 @@ app.whenReady().then(async()=>{
       fs.writeFileSync(path.join(screenshotRoot,'wiki-sources-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
     assert(await run('(async()=>{const previous=state.settings.server.ownerId;state.settings.server.ownerId="qa-source-b";wikiUI.check();const hidden=!document.querySelector("#wikiDialog").open;const empty=(await wikiSources.list()).length===0;state.settings.server.ownerId=previous;return hidden&&empty;})()'),'account_b_leak');
+    await run('wikiUI.close();document.querySelector("#wikiDialog").remove()');
+    await run(fs.readFileSync(path.join(root,'web/scripts/wiki_ingest_ui_fixture.js'),'utf8')+'\n;undefined;');
+    const backendPath=path.join(own,mode+'-wiki-remote-fixture.json'),backend=phase===2?JSON.parse(fs.readFileSync(backendPath,'utf8')):null;
+    const remoteFixture=await run(`runWikiIngestUiFixture({initial:noteHistory.export(),write:value=>noteHistory.replaceProtectionStore(noteHistory.export(),value,{active:()=>true}),backend:${JSON.stringify(backend)},phase:${phase}}).catch(error=>{throw Error(error.message+' | '+error.stack);})`);
+    fs.writeFileSync(backendPath,JSON.stringify(remoteFixture.backend));
+    for(const [size,width,height] of [['desktop',1200,900],['mobile',390,844]]){
+      window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+      assert(await run('(()=>{const d=document.querySelector("#wikiDialog");return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth;})()'),'remote_layout_'+size);
+      fs.writeFileSync(path.join(screenshotRoot,'wiki-remote-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
+    }
     const callbacks=await run(`(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
       let key='alice',captures=0;const ui=mountNowWiki({contextKey:()=>key,notes:()=>[],list:async()=>[],
@@ -151,7 +161,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

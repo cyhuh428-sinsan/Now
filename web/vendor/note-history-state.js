@@ -46,7 +46,7 @@
       },error => { if (valid()) { failed = error; change(); throw error; } if (strict) throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
-    const blocked = id => protectedItem(entry(id)) || Object.values(data?.protection_operations || {}).some(m => {
+    const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
       return m.scope.local_id === id && m.scope.owner === context().owner && m.scope.url.replace(/\/+$/,'') === String(context().url || '').replace(/\/+$/,'') && m.phase !== 'complete';
@@ -68,6 +68,7 @@
       replica_count: receipt.result_inventory_revision_ids.length });
     async function track(note, current, { localOnly = false, needsBaseline = false, original = null } = {}) {
       const ctx = requireWritable();
+      if(globalThis.createWikiIngestNotebook?.blocks(data,ctx,note.local_id))throw new Error('위키 원작업의 로컬 반영을 먼저 확인하세요.');
       if (note.owner_id !== ctx.owner) throw new Error('이력 소유자가 현재 계정과 다릅니다.');
       const c = bucket(ctx, true);
       if (c.notes[note.local_id]) return;
@@ -118,13 +119,17 @@
         waiting_for: previous?.body.mutation_id || null });
       await save();
     }
-    async function sync() {
+    async function sync(options=null) {
+      const onlyIds=options?.onlyIds;
+      if(onlyIds!==undefined&&(!Array.isArray(onlyIds)||onlyIds.length>30||onlyIds.some(id=>typeof id!=='string')||new Set(onlyIds).size!==onlyIds.length))
+        throw new Error('동기화할 메모 ID를 확인하세요.');
       if (running) return running;
       if (!context().enabled || context().online === false || !readable() || failed) return;
       const ctx = { ...context() }, epoch = generation;
       if (legacyPending()) return;
       running = (async () => {
         for (const [id, item] of Object.entries(bucket(ctx)?.notes || {})) {
+          if(onlyIds&&!onlyIds.includes(id))continue;
           if (blocked(id)) continue;
           if (!active(ctx, epoch) || failed) return;
           if (item.needsBaseline) {

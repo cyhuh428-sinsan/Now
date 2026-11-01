@@ -116,13 +116,15 @@
           }
         }
       }
-      if(value.source==='wiki-artifact'&&value.owner_id===ctx.owner){
+      if(['wiki-artifact','wiki-ingest-proposal'].includes(value.source)&&value.owner_id===ctx.owner){
         let doc;try{doc=JSON.parse(value.content);}catch{throw Error('wiki_protection_format');}
         if(P.canonicalJson(doc.scope)!==P.canonicalJson(ctx)){
           if(accountKnown)throw Error('wiki_protection_scope');
           continue;
         }
-        if(![1,2].includes(doc.schema_version)||'wiki:'+doc.wiki_id!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
+        const local=value.source==='wiki-artifact'?'wiki:'+doc.wiki_id:typeof value.local_id==='string'
+          &&/^wiki-proposal:[0-9a-f-]{36}:[0-9a-f-]{36}$/.test(value.local_id)&&value.local_id.endsWith(':'+doc.wiki_id)?value.local_id:null;
+        if(![1,2].includes(doc.schema_version)||local!==value.local_id||!Array.isArray(doc.drafts)||!doc.drafts.length)
           throw Error('wiki_protection_format');
         options.documents?.push(doc);
         for(const draft of doc.drafts){

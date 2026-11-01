@@ -118,6 +118,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         if(!idOf(local))continue;
         const id=local.slice(5),metadata=rowState(id,{localOnly:item.localOnly});
         if(metadata.deleted||metadata.lifecycle?.pending){rows.set(local,metadata);continue;}
+        if(globalThis.createWikiIngestNotebook?.blocks(a.h.export(),a.ctx,local)){rows.set(local,rowState(id,{unavailable:true,error:'원작업 상태·로컬 반영 확인 필요'}));continue;}
         if(a.h.blocked(local)||!item.draft){rows.set(local,rowState(id,{protected:true}));continue;}
         try{const document=await parse(item.draft.content,a.ctx,local);a.check();rows.set(local,rowState(id,{document,
           pending:!item.localOnly&&Boolean(item.dirty||item.outbox.length),localOnly:item.localOnly,error:item.error?.code||item.conflict?.code}));}
@@ -133,6 +134,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       for(const item of remote){
         const local='wiki:'+item.id;if(!idOf(local)||a.h.manages(local))continue;
         const metadata=rowState(item.id);
+        if(a.h.blocked(local)){rows.set(local,rowState(item.id,{unavailable:true,error:'원작업 상태·로컬 반영 확인 필요'}));continue;}
         if(metadata.deleted||metadata.lifecycle?.pending){rows.set(local,metadata);continue;}
         const result=await api.readRemote(item.id);a.check();
         if(result.artifact.protected||!result.artifact.document){rows.set(local,rowState(item.id,{protected:true}));continue;}

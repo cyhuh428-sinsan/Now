@@ -8,7 +8,7 @@
   async function inspect(item,ctx){
     const meta=item?.wiki_source_snapshot;
     exact(meta,['schema_version','id','manifest','extraction']);
-    if(meta.schema_version!==1||item.localOnly!==true||item.raw?.source!==kind||item.draft?.source!==kind
+    if(meta.schema_version!==1||typeof item.localOnly!=='boolean'||item.raw?.source!==kind||item.draft?.source!==kind
       ||item.raw.owner_id!==ctx.owner||item.draft.owner_id!==ctx.owner||item.raw.local_id!==meta.manifest?.note_ref?.local_id
       ||item.draft.local_id!==item.raw.local_id||item.raw.content!==item.draft.content
       ||item.revisions.some(r=>r.snapshot?.note?.owner_id!==ctx.owner||r.snapshot.note.local_id!==item.raw.local_id||r.snapshot.note.content!==item.draft.content))throw Error('wiki_source_binding');
@@ -31,7 +31,19 @@
       for(const [local,item] of Object.entries(notes)){
         if(!local.startsWith('wiki-source:'))continue;
         if(a.h.blocked(local)||item.protectionScope||item.base?.crypto_epoch!==0){result.push({id:local,protected:true});continue;}
-        const source=await inspect(item,a.ctx);a.check();result.push(source);
+        const source=await inspect(item,a.ctx);a.check();
+        if(!item.localOnly){
+          source.safety={status:'unknown',epoch:0,lineage:false,fence:false};source.unavailable=true;
+          if(a.ctx.online&&api.readCurrent&&!item.dirty&&!item.outbox.length){
+            try{
+              const current=await api.readCurrent(local);a.check();P.validateSnapshot(current.snapshot);
+              if(current.crypto_epoch!==0||current.protection_state!=='legacy'||current.identity_state!=='coherent'||current.crypto_transition
+                ||current.snapshot.note.owner_id!==a.ctx.owner||current.snapshot.note.local_id!==local||current.snapshot.note.content!==source.content||current.snapshot.note.deleted_at
+                ||current.head_revision_id!==item.base.head_revision_id||current.head_version!==item.base.head_version)throw Error('wiki_source_publication_changed');
+              source.manifest={...source.manifest,origin:'server',source_revision_id:current.head_revision_id,head_version:current.head_version};source.unavailable=false;
+            }catch{a.check();}
+          }
+        }result.push(source);
       }
       return result;
     }
@@ -70,7 +82,33 @@
         return {created:fresh.length,unchanged:snapshot.sources.length-fresh.length};
       }finally{busy=false;}
     }
-    return {list,captureFiles};
+    async function publicationInfo(ids){
+      const a=action();if(!a.ctx.online)throw Error('서버에 연결한 뒤 텍스트 게시 범위를 확인하세요.');
+      if(!Array.isArray(ids)||!ids.length||ids.length>30||new Set(ids).size!==ids.length)throw Error('게시할 원본을 1개부터 30개까지 선택하세요.');
+      const rows=await list();a.check();const selected=ids.map(id=>rows.find(r=>r.id===id&&!r.protected));
+      if(selected.some(r=>!r))throw Error('선택한 원본·계정을 확인하세요.');
+      return {server:a.ctx.url,owner:a.ctx.owner,names:selected.map(r=>r.title),bytes:selected.reduce((n,r)=>n+new TextEncoder().encode(r.content).length,0)};
+    }
+    async function publishFiles(ids,{confirmed=false}={}){
+      if(!confirmed)throw Error('추출 텍스트의 서버 게시 범위를 먼저 확인하세요.');
+      if(busy)throw Error('원본 저장·게시를 먼저 완료하세요.');busy=true;
+      try{
+        const a=action();await publicationInfo(ids);a.check();
+        const before=a.h.export();let next=copy(before);const account=NowNoteHistory.key(a.ctx),locals=[];
+        const editor=NowNoteHistory.create({initial:next,context:()=>a.ctx,write:async value=>{next=copy(value);},request:async()=>{throw Error('게시 준비에서는 서버를 호출하지 않습니다.');}});
+        for(const id of ids){
+          const entry=Object.entries(before.contexts[account].notes).find(([,item])=>item.wiki_source_snapshot?.id===id);
+          if(!entry)throw Error('원본 ID를 확인하세요.');const [local,item]=entry;
+          await inspect(item,a.ctx);a.check();if(a.h.blocked(local)||item.protectionScope||item.base.crypto_epoch!==0)throw Error('보호된 원본은 일반 게시할 수 없습니다.');
+          locals.push(local);await editor.localOnly(local,false);await editor.seal(local,'wiki_source_publish');a.check();
+        }
+        if(P.canonicalJson(before)!==P.canonicalJson(next))await a.h.replaceProtectionStore(before,next,{active:a.check});a.check();
+        await a.h.sync({onlyIds:locals});a.check();const rows=await list();a.check();
+        const published=ids.filter(id=>rows.some(r=>r.id===id&&r.manifest?.origin==='server'&&!r.unavailable)).length;
+        return {published,pending:ids.length-published};
+      }finally{busy=false;}
+    }
+    return {list,captureFiles,publicationInfo,publishFiles};
   }
   globalThis.NowNoteWikiSources=Object.freeze({create,inspect});
 })();

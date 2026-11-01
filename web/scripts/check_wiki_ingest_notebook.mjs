@@ -93,4 +93,11 @@ protectedArchive.contexts[box.NowNoteHistory.key(ctx)].notes[second.manifest.not
 saved.recovery_archives.push(protectedArchive);history=makeHistory();book=box.createWikiIngestNotebook(api);
 await assert.rejects(()=>book.plan({fileIds:[second.id],noteIds:[]}),/보호|lineage|전환/,'archived protection lineage cannot be hidden by a plain current source');
 saved=intact;history=makeHistory();
+book=box.createWikiIngestNotebook(api);
+await api.sources.captureFiles([{name:'source.md',arrayBuffer:async()=>new TextEncoder().encode('Changed comparison evidence.').buffer},
+  {name:'unrelated-new.txt',arrayBuffer:async()=>new TextEncoder().encode('New unrelated evidence.').buffer}]);
+const comparisonFiles=await api.sources.list(),comparison=comparisonFiles.find(s=>s.content==='Changed comparison evidence.'),unrelated=comparisonFiles.find(s=>s.title==='unrelated-new.txt');
+const beforeGate=JSON.stringify(saved);
+await assert.rejects(()=>book.plan({fileIds:[comparison.id,unrelated.id],noteIds:[]}),/비교.*다중 출력.*계약/);
+assert.equal(JSON.stringify(saved),beforeGate,'unapproved cross-comparison contract remains blocked before reservation/invoke');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

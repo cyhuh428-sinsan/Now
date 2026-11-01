@@ -14,7 +14,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       serverInstance:'local-note-journal',viewGeneration:api.viewGeneration?.()||0}};
   }
   function validate(row,owner){
-    exact(row,['schema_version','operation_id','action','scope','reservation','selection','plan_hash','inputs','fingerprints','state','documents']);
+    exact(row,['schema_version','operation_id','action','scope','reservation','selection','plan_hash','inputs','fingerprints','state','documents',...(Object.hasOwn(row,'remote')?['remote']:[])]);
     check(row.schema_version===1&&uuid(row.operation_id)&&row.operation_id===row.reservation?.operation_id&&hash(row.plan_hash));
     check(['reserved','attempted','committed','aborted'].includes(row.state));
     check(['ingest','approve','reject'].includes(row.action));
@@ -29,6 +29,18 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     check(Array.isArray(row.documents)&&row.documents.length<=10&&(row.state!=='committed'||row.documents.length>0));
     for(const d of row.documents){exact(d,['wiki_id','draft_id','draft_hash','document_hash']);check(uuid(d.wiki_id)&&uuid(d.draft_id)&&hash(d.draft_hash)&&hash(d.document_hash));}
     check(row.documents.every(d=>r.pages.some(p=>p.wiki_id===d.wiki_id&&p.draft_id===d.draft_id)));
+    if(row.remote){
+      exact(row.remote,['manifest','phase','receipt']);
+      check(['staged','prepare_uncertain','prepare_absent','prepared','commit_uncertain','server_committed','abort_uncertain','aborted','settled'].includes(row.remote.phase));
+      const m=row.remote.manifest;
+      check(m?.operation_id===row.operation_id&&m.owner_id===owner&&m.device_id===row.scope.device&&m.mutation_id===r.mutation_id
+        &&m.commit_mutation_id===r.commit_mutation_id&&m.abort_mutation_id===r.abort_mutation_id&&eq(m.inputs,row.inputs)&&uuid(row.scope.serverInstance));
+      check(Array.isArray(m.changes)&&m.changes.length===row.documents.length&&m.changes.every(c=>row.documents.some(d=>c.wiki_id===d.wiki_id&&c.result_document_hash===d.document_hash)));
+      if(row.remote.receipt){check(api.server);api.server.verifyReceipt(row.remote.receipt,m);}
+      check((row.state==='committed')===(row.remote.phase==='settled')&&(row.state==='aborted')===(row.remote.phase==='aborted'));
+      const receiptState={staged:null,prepare_uncertain:null,prepare_absent:null,prepared:'prepared',commit_uncertain:'prepared',abort_uncertain:'prepared',server_committed:'committed',settled:'committed',aborted:'aborted'}[row.remote.phase];
+      check((row.remote.receipt?.state||null)===receiptState);
+    }
     check(new TextEncoder().encode(P.canonicalJson(row)).length<=131072);return row;
   }
   function map(a,data=a.h.export()){
@@ -39,8 +51,10 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       for(const [id,row]of Object.entries(rows)){
         check(id===row.operation_id);validate(row,a.ctx.owner);const old=result[id];
         if(old){
-          const binding=value=>{const {plan_hash,state,documents,...fixed}=value;return fixed;};
+          const remoteBinding=Boolean(old.remote||row.remote);
+          const binding=value=>{const {plan_hash,state,documents,remote,fingerprints,...fixed}=value;return remoteBinding?fixed:{...fixed,fingerprints};};
           check(eq(binding(old),binding(row))&&(old.plan_hash===row.plan_hash||old.state==='reserved'||row.state==='reserved'));
+          if(old.remote&&row.remote)check(eq(old.remote.manifest,row.remote.manifest));
           check(!(rank[old.state]===2&&rank[row.state]===2&&!eq(old,row)),'복구된 위키 작업 완료 기록이 충돌합니다.');}
         if(!old||rank[row.state]>rank[old.state])result[id]=copy(row);
       }
@@ -62,27 +76,54 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       roots.push(...(root.recovery_archives||[]));
     }
   };
-  async function catalog(a){
-    const result=[];
+  async function serverProof(a,id,expected){
+    check(api.server,'서버 원본 검증 연결을 확인하세요.');
+    const result=await api.server.inspect(id,expected);a.active();
+    check(uuid(result.instance),'물리 서버 식별자를 확인하세요.');
+    if(a.serverBound)check(a.ingestContext.serverInstance===result.instance,'물리 서버 식별자가 변경되었습니다.');
+    a.serverBound=true;a.ingestContext.serverInstance=result.instance;return result;
+  }
+  async function catalog(a,replacements=[]){
+    const result=[],fixed=new Map(replacements.map(r=>['wiki:'+r.document.wiki_id,r]));
     for(const [id,item]of Object.entries(a.h.entries())){
+      if(fixed.has(id)){result.push(copy(fixed.get(id)));fixed.delete(id);continue;}
       if(item.draft.source!=='wiki-artifact')continue;plainItem(a,id,item);check(!item.conflict&&!item.draft.deleted_at);
       if(api.lifecycle?.blocked(id))continue;
       const document=await W.validateDocument(item.draft.content,a.ingestContext);a.active();
       const local=item.localOnly,version=local?0:api.lifecycle?.state(id)?.version;
       check(local||Number.isSafeInteger(version)&&version>0,'서버 위키 판본을 먼저 확인하세요.');
+      if(!local){
+        const proof=await serverProof(a,id,{content:item.draft.content,revisionId:item.base.head_revision_id,headVersion:item.base.head_version});
+        const remote=await api.readRemote(document.wiki_id);a.active();
+        check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===document.wiki_id&&remote.resource.version===version&&!remote.resource.deleted_at
+          &&remote.artifact?.protected===false&&remote.artifact.head_revision_id===proof.current.head_revision_id&&eq(remote.artifact.document,document)
+          &&remote.source_status?.available===true&&!remote.source_status.stale,'서버 위키의 기준·출처 판본을 다시 확인하세요.');
+      }
       result.push({document,origin:local?'local':'server',headRevisionId:local?null:item.base.head_revision_id,
         headVersion:local?0:item.base.head_version,indexVersion:version,safety:{status:'ok',epoch:0,lineage:false,fence:false}});
     }
-    return result;
+    return [...result,...[...fixed.values()].map(value=>copy(value))];
   }
   async function gather(a,selection){
     exact(selection,['fileIds','noteIds']);const available=await api.sources.list();a.active();const sources=[];
     for(const id of selection.fileIds){const source=available.find(s=>s.id===id&&!s.protected);check(source,'선택한 파일 원본을 사용할 수 없습니다.');
-      plainItem(a,source.manifest.note_ref.local_id,a.h.view(source.manifest.note_ref.local_id));sources.push(copy(source));}
+      check(!source.unavailable,'게시 원본의 서버 판본을 먼저 확인하세요.');
+      plainItem(a,source.manifest.note_ref.local_id,a.h.view(source.manifest.note_ref.local_id));
+      const {unavailable,...captured}=copy(source);
+      if(captured.manifest.origin==='server'){
+        const proof=await serverProof(a,captured.manifest.note_ref.local_id,{content:captured.content,revisionId:captured.manifest.source_revision_id,headVersion:captured.manifest.head_version});
+        captured.safety=proof.safety;captured.source_kind='note';delete captured.extraction;
+      }sources.push(captured);}
     if(selection.noteIds.length){
       const snapshot=await api.captureNotes(selection.noteIds);a.active();
       for(const source of snapshot.sources){
-        check(typeof api.sourceSafety==='function','원본 보호 상태를 확인하세요.');const safety=await api.sourceSafety(source.manifest.note_ref.local_id,source);a.active();
+        let safety;
+        if(source.manifest.origin==='server'){
+          const proof=await serverProof(a,source.manifest.note_ref.local_id,{content:source.content,revisionId:source.manifest.source_revision_id,headVersion:source.manifest.head_version});safety=proof.safety;
+        }else{
+          check(typeof api.sourceSafety==='function','원본 보호 상태를 확인하세요.');safety=await api.sourceSafety(source.manifest.note_ref.local_id,source);a.active();
+          const item=a.h.view(source.manifest.note_ref.local_id);if(item)plainItem(a,source.manifest.note_ref.local_id,item);
+        }
         sources.push({id:source.id,source_kind:'note',title:source.title,content:source.content,manifest:{...copy(source.manifest),kind:'note'},safety:copy(safety)});
       }
     }
@@ -111,6 +152,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     const reservation=await I.reserveIngest(snapshot,targets,a.ingestContext);a.active();
     const processed=Object.values(rows).filter(r=>r.state==='committed').flatMap(r=>r.fingerprints);
     const result=await I.planIngest(snapshot,targets,{context:a.ingestContext,reservation,processed});a.active();
+    check(!(result.targets.length&&result.pages.length>1),'기존 위키 비교가 포함된 다중 출력은 의존 계약 검토 중입니다. 자료와 원장은 보존했습니다.');
     const operation={operation_id:result.calls?reservation.operation_id:null,selection:copy(selection),plan:result};
     if(result.calls){
       prompt(operation);
@@ -121,8 +163,8 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     return operation;
   }
   async function review(a,operation,connection,generatedAt){
-    check(eq(operation.plan.context,a.ingestContext),'계정·서버·화면 상태가 변경되었습니다. 원작업을 확인하세요.');
     const snapshot=await gather(a,operation.selection),currentCatalog=await catalog(a);a.active();
+    check(eq(operation.plan.context,a.ingestContext),'계정·서버·화면 상태가 변경되었습니다. 원작업을 확인하세요.');
     check(eq(snapshot,operation.plan.snapshot)&&eq(currentCatalog,operation.plan.catalog),'원본·대상 판본이 변경되었습니다. 원작업을 보존했습니다.');
     return {context:a.ingestContext,snapshot,catalog:currentCatalog,connection:{provider:connection.provider,model:connection.model},generatedAt,device:a.ctx.device};
   }
@@ -159,7 +201,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
   async function decideLocal(value,draftId,decision){
     const a=action(),doc=await W.validateDocument(value,a.ingestContext);a.active();
     const local='wiki:'+doc.wiki_id,item=a.h.view(local);plainItem(a,local,item);
-    check(item.localOnly&&eq(P.parseJson(item.draft.content),doc),'위키 판본 충돌입니다. 현재 저장본을 다시 검토하세요.');
+    check(eq(P.parseJson(item.draft.content),doc),'위키 판본 충돌입니다. 현재 저장본을 다시 검토하세요.');
     const rows=map(a),draft=doc.drafts.find(d=>d.id===draftId),producer=Object.values(rows).find(r=>r.state==='committed'&&r.documents.some(d=>d.wiki_id===doc.wiki_id&&d.draft_id===draftId));
     check(doc.schema_version===2&&draft?.schema_version===2&&producer,'위키 생성 작업·판본 기록을 확인하세요.');
     check(!doc.approvals.some(r=>r.draft_id===draftId)&&!doc.rejected_draft_ids.includes(draftId),'이미 검토한 위키 판본입니다.');
@@ -175,6 +217,7 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
         evidence_manifest_hash:await P.hashJson(draft.evidence_manifest),approved_by:a.ctx.owner,approved_at:new Date().toISOString()});
     }else doc.rejected_draft_ids.push(draft.id);
     doc.document_version++;await W.validateDocument(doc,a.ingestContext);a.active();
+    if(!item.localOnly)return stageDecisionServer(a,doc,draft,decision,producer,item);
     const currentCatalog=await catalog(a);a.active();const projected=currentCatalog.map(r=>r.document.wiki_id===doc.wiki_id?{...r,document:copy(doc)}:r);
     const fingerprints=await I.sourceFingerprints(snapshot,projected,a.ingestContext);a.active();
     const before=a.h.export(),next=copy(before),currentRows=map(a,before);
@@ -187,20 +230,162 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
       plan_hash:await P.hashJson({action:decision,reservation,document_hash:entry.document_hash}),inputs:copy(draft.evidence_manifest),fingerprints,state:'committed',documents:[entry]};
     await save(a,before,currentRows,next);return {operation_id:reservation.operation_id,document:doc,localOnly:true,pending:false};
   }
-  async function abortLocal(id){const a=action(),before=a.h.export(),rows=map(a,before);check(rows[id]&&rows[id].state!=='committed');rows[id].state='aborted';await save(a,before,rows);}
+  const proposalId=(operation,wiki)=>'wiki-proposal:'+operation+':'+wiki;
+  async function stageRemoteDocuments(a,next,operationId,documents){
+    const refs=[];
+    for(const entry of documents){
+      const local=proposalId(operationId,entry.wiki_id),now=new Date().toISOString().replace(/Z$/,'000Z');
+      const note={id:null,owner_id:a.ctx.owner,local_id:local,device_id:a.ctx.device,note_type:'tree',title:'Wiki proposal '+operationId,
+        content:P.canonicalJson(entry.document),source:'wiki-ingest-proposal',parent_local_id:null,level:1,tags:null,deleted_at:null,created_at:now,updated_at:now,client_updated_at:now};
+      check(!next.contexts[a.account].notes[local]);
+      const staged=await NowNoteHistory.prepareExternalEdit(next,a.ctx,note,{newNote:true,localOnly:true});a.active();next.contexts[a.account].notes[local]=staged.next;
+      const draft=entry.draft_id?entry.document.drafts.find(d=>d.id===entry.draft_id):entry.document.drafts.at(-1);
+      check(draft);refs.push({wiki_id:entry.wiki_id,draft_id:draft.id,draft_hash:draft.draft_hash,document_hash:await P.hashJson(entry.document)});
+    }return refs;
+  }
+  async function stageDecisionServer(a,document,draft,decision,producer,item){
+    const local='wiki:'+document.wiki_id,currentCatalog=await catalog(a);a.active();
+    const target=currentCatalog.find(r=>r.document.wiki_id===document.wiki_id);check(target?.origin==='server');
+    check(eq(a.h.view(local),item),'위키 판본이 변경되었습니다.');
+    const reservation={operation_id:crypto.randomUUID(),mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),
+      pages:[{wiki_id:document.wiki_id,draft_id:draft.id,generation_id:draft.generation_id,note_mutation_id:crypto.randomUUID()}]};
+    const manifest={schema_version:1,owner_id:a.ctx.owner,device_id:a.ctx.device,operation_id:reservation.operation_id,mutation_id:reservation.mutation_id,
+      commit_mutation_id:reservation.commit_mutation_id,abort_mutation_id:reservation.abort_mutation_id,kind:'ingest',inputs:copy(draft.evidence_manifest),
+      draft_bindings:[{wiki_id:document.wiki_id,draft_id:draft.id,draft_hash:draft.draft_hash}],changes:[{wiki_id:document.wiki_id,action:decision==='approve'?'approve_draft':'reject_draft',
+        note_mutation_id:reservation.pages[0].note_mutation_id,base_head_revision_id:target.headRevisionId,base_head_version:target.headVersion,
+        base_index_version:target.indexVersion,base_document_version:target.document.document_version,result_document_hash:await P.hashJson(document)}]};
+    manifest.manifest_hash=await P.hashJson(manifest);a.active();
+    const before=a.h.export(),next=copy(before),rows=map(a,before),documents=await stageRemoteDocuments(a,next,reservation.operation_id,[{wiki_id:document.wiki_id,document,draft_id:draft.id}]);
+    const {viewGeneration,...scope}=a.ingestContext;
+    rows[reservation.operation_id]={schema_version:1,operation_id:reservation.operation_id,action:decision,scope,reservation,selection:copy(producer.selection),
+      plan_hash:await P.hashJson({decision,reservation,manifest_hash:manifest.manifest_hash}),inputs:copy(manifest.inputs),fingerprints:copy(producer.fingerprints),
+      state:'attempted',documents,remote:{manifest,phase:'staged',receipt:null}};
+    await save(a,before,rows,next);return {operation_id:reservation.operation_id,document:copy(target.document),localOnly:false,pending:true};
+  }
+  async function stageServer(value){
+    const a=action(),operation={operation_id:value.operation_id,selection:value.selection,plan:value.proposal.plan};
+    const current=await review(a,operation,value.connection,value.generated_at),requests=await I.buildOperationRequests(value.proposal,current);a.active();
+    const before=a.h.export(),rows=map(a,before),row=rows[value.operation_id];check(row?.state==='attempted'&&!row.remote&&row.plan_hash===operation.plan.plan_hash);
+    const next=copy(before),refs=await stageRemoteDocuments(a,next,row.operation_id,value.proposal.documents);
+    row.documents=refs;row.remote={manifest:copy(requests.prepare),phase:'staged',receipt:null};await save(a,before,rows,next);return copy(row);
+  }
+  function serverRow(a,id){
+    const row=map(a)[id];check(row?.remote&&api.server&&row.scope.url===a.ingestContext.url&&row.scope.device===a.ctx.device,'원작업의 서버·기기·원장을 확인하세요.');return row;
+  }
+  async function serverDocuments(a,row){
+    const result=[];
+    for(const change of row.remote.manifest.changes){
+      const item=a.h.view(proposalId(row.operation_id,change.wiki_id));
+      check(item?.localOnly&&item.draft.source==='wiki-ingest-proposal'&&!item.protectionScope&&item.base.crypto_epoch===0,'원작업의 보존된 초안을 확인하세요.');
+      const document=await W.validateDocument(item.draft.content,a.ingestContext);a.active();
+      check(document.wiki_id===change.wiki_id&&await P.hashJson(document)===change.result_document_hash,'원작업 초안의 해시가 다릅니다.');result.push({wiki_id:change.wiki_id,document});
+    }return result;
+  }
+  async function phase(a,row,phase,receipt=row.remote.receipt){
+    const before=a.h.export(),rows=map(a,before);check(eq(rows[row.operation_id],row),'원작업 상태가 변경되었습니다.');
+    rows[row.operation_id].remote={...copy(row.remote),phase,receipt:copy(receipt)};
+    if(phase==='aborted')rows[row.operation_id].state='aborted';
+    await save(a,before,rows);return copy(rows[row.operation_id]);
+  }
+  async function freshServerInputs(a,row){
+    const snapshot=await gather(a,row.selection);a.active();
+    check(row.scope.serverInstance===a.ingestContext.serverInstance&&row.inputs.every(ref=>ref.kind==='note'&&snapshot.sources.some(s=>eq(s.manifest,ref))),
+      '원작업의 서버·원본 판본이 변경되었습니다. 원요청은 보존했습니다.');
+    for(const change of row.remote.manifest.changes)if(change.action!=='create_draft'){
+      const proof=await serverProof(a,'wiki:'+change.wiki_id);
+      check(proof.current.head_revision_id===change.base_head_revision_id&&proof.current.head_version===change.base_head_version,'대상 위키가 변경되었습니다.');
+      const remote=await api.readRemote(change.wiki_id);a.active();check(remote.resource?.version===change.base_index_version
+        &&remote.artifact?.document?.document_version===change.base_document_version&&!remote.resource.deleted_at,'대상 위키의 기준 판본이 다릅니다.');
+    }
+  }
+  async function prepareServer(id){
+    const a=action();let row=serverRow(a,id);check(['staged','prepare_absent'].includes(row.remote.phase),'결과 불명 요청은 같은 ID의 상태부터 확인하세요.');
+    await freshServerInputs(a,row);await serverDocuments(a,row);row=await phase(a,row,'prepare_uncertain');
+    const receipt=await api.server.prepare(row.remote.manifest,row.scope.serverInstance);a.active();return phase(a,row,'prepared',receipt);
+  }
+  async function commitServer(id){
+    const a=action();let row=serverRow(a,id);check(row.remote.phase==='prepared','원작업의 prepared 상태를 먼저 확인하세요.');
+    await freshServerInputs(a,row);const documents=await serverDocuments(a,row),m=row.remote.manifest;
+    row=await phase(a,row,'commit_uncertain');
+    const receipt=await api.server.commit(m,{schema_version:1,owner_id:m.owner_id,device_id:m.device_id,mutation_id:m.commit_mutation_id,manifest_hash:m.manifest_hash,documents},row.scope.serverInstance);a.active();
+    return phase(a,row,'server_committed',receipt);
+  }
+  async function statusServer(id){
+    const a=action(),row=serverRow(a,id);let status;
+    try{status=await api.server.status(row.remote.manifest,row.scope.serverInstance);a.active();}
+    catch(error){a.active();if(error.operationAbsent&&['prepare_uncertain','prepare_absent'].includes(row.remote.phase))return phase(a,row,'prepare_absent',null);throw error;}
+    if(row.remote.phase==='settled'){check(eq(row.remote.receipt,status.receipt),'원 성공 응답이 다릅니다.');return row;}
+    return phase(a,row,{prepared:'prepared',committed:'server_committed',aborted:'aborted'}[status.state],status.receipt);
+  }
+  async function abortServer(id){
+    const a=action();let row=serverRow(a,id);check(row.remote.phase==='prepared','원작업 상태 조회 후 prepared 작업만 폐기하세요.');
+    row=await phase(a,row,'abort_uncertain');const receipt=await api.server.abort(row.remote.manifest,row.scope.serverInstance);a.active();return phase(a,row,'aborted',receipt);
+  }
+  async function applyServer(id){
+    const a=action(),row=serverRow(a,id);check(row.remote.phase==='server_committed','서버 완료와 원 성공 응답을 먼저 확인하세요.');
+    const status=await api.server.status(row.remote.manifest,row.scope.serverInstance);a.active();check(eq(status.receipt,row.remote.receipt),'원 성공 응답이 다릅니다.');
+    const documents=await serverDocuments(a,row),targets=[];
+    for(const entry of documents){
+      const page=row.remote.receipt.pages.find(p=>p.wiki_id===entry.wiki_id),local='wiki:'+entry.wiki_id;
+      const proof=await serverProof(a,local,{content:P.canonicalJson(entry.document),revisionId:page.result_revision_id,headVersion:page.result_head_version});
+      check(proof.instance===row.scope.serverInstance&&proof.current.history_generation===page.history_generation
+        &&eq(proof.current.inventory_revision_ids,page.result_inventory_revision_ids),'물리 서버·원 결과 판본 집합이 변경되었습니다.');
+      const remote=await api.readRemote(entry.wiki_id);a.active();check(remote.resource?.owner_id===a.ctx.owner&&remote.resource.id===entry.wiki_id&&remote.resource.version===page.index_version
+        &&!remote.resource.deleted_at&&remote.artifact?.protected===false&&eq(remote.artifact.document,entry.document),'서버 현재 위키와 원 성공 결과가 다릅니다. 비교가 필요합니다.');
+      targets.push({local,page,current:proof.current});
+    }
+    let fingerprints=row.fingerprints,snapshot=null;
+    try{snapshot=await gather(a,row.selection);}catch{a.active();}
+    if(snapshot&&row.inputs.every(ref=>ref.kind==='note'&&snapshot.sources.some(s=>eq(s.manifest,ref)))){
+      const replacements=targets.map(t=>({document:documents.find(d=>'wiki:'+d.wiki_id===t.local).document,origin:'server',headRevisionId:t.current.head_revision_id,
+        headVersion:t.current.head_version,indexVersion:t.page.index_version,safety:{status:'ok',epoch:0,lineage:false,fence:false}}));
+      fingerprints=await I.sourceFingerprints(snapshot,await catalog(a,replacements),a.ingestContext);a.active();
+    }
+    const before=a.h.export(),next=copy(before),rows=map(a,before);check(eq(rows[id],row),'원작업 상태가 변경되었습니다.');
+    const bucket=next.contexts[a.account];bucket.wiki_lifecycle||={};
+    for(const {local,page,current}of targets){
+      const old=bucket.notes[local];check(!old||!old.localOnly&&!old.dirty&&!old.outbox.length&&!old.conflict&&!old.protectionScope,'로컬 위키가 변경되었습니다. 덮어쓰지 않았습니다.');
+      const change=row.remote.manifest.changes.find(c=>'wiki:'+c.wiki_id===local);
+      check(!old||old.base.head_version===change.base_head_version&&old.base.head_revision_id===change.base_head_revision_id,'로컬에 더 최신 위키 판본이 있습니다. 덮어쓰지 않았습니다.');
+      check(!bucket.wiki_lifecycle[local]?.pending,'위키 휴지통 요청을 먼저 확인하세요.');
+      const item=old?copy(old):{revisions:[],receipts:[]};
+      const parent=row.remote.manifest.changes.find(c=>'wiki:'+c.wiki_id===local).base_head_revision_id;
+      item.revisions.push({revision_id:page.result_revision_id,parent_ref:parent?{kind:'note_revision',id:parent}:null,snapshot:copy(current.snapshot),reason:'wiki_operation',
+        created_at:current.snapshot.note.updated_at,imported:true,server_ref:{kind:'note_revision',id:page.result_revision_id}});
+      Object.assign(item,{raw:copy(current.snapshot.note),draft:copy(current.snapshot.note),base:copy(current),outbox:[],conflict:null,dirty:false,localOnly:false,needsBaseline:false,replicaSelected:true});
+      item.receipts.push(copy(page));bucket.notes[local]=item;bucket.wiki_lifecycle[local]={local_only:false,version:page.index_version,deleted_at:null,pending:null};
+    }
+    rows[id].state='committed';rows[id].remote.phase='settled';rows[id].fingerprints=copy(fingerprints);await save(a,before,rows,next);return {operation_id:id,documents,localOnly:false};
+  }
+  async function abortLocal(id){const a=action(),before=a.h.export(),rows=map(a,before);check(rows[id]&&rows[id].state!=='committed'&&!rows[id].remote,'서버 원작업은 상태 확인 후 고정 abort 요청으로 폐기하세요.');rows[id].state='aborted';await save(a,before,rows);}
   async function resumeLocal(id){
-    const a=action(),row=map(a)[id],{viewGeneration,...scope}=a.ingestContext;check(row&&eq(row.scope,scope),'원작업의 계정·서버·기기를 확인하세요.');
+    const a=action(),row=map(a)[id];check(row&&row.scope.url===a.ingestContext.url&&row.scope.device===a.ctx.device,'원작업의 계정·서버·기기를 확인하세요.');
     if(row.state!=='reserved')return {operation_id:id,selection:copy(row.selection),state:row.state,plan:null};
     const snapshot=await gather(a,row.selection),targets=await catalog(a);a.active();
+    const {viewGeneration,...scope}=a.ingestContext;check(eq(row.scope,scope),'물리 서버가 원작업과 다릅니다.');
     const processed=Object.values(map(a)).filter(r=>r.state==='committed').flatMap(r=>r.fingerprints);
     const result=await I.planIngest(snapshot,targets,{context:a.ingestContext,reservation:row.reservation,processed});a.active();
+    check(!(result.targets.length&&result.pages.length>1),'기존 위키 비교가 포함된 다중 출력은 의존 계약 검토 중입니다. 원작업 ID는 보존했습니다.');
     check(eq(result.inputs,row.inputs)&&eq(result.fingerprints,row.fingerprints),'원작업의 원본·대상 판본이 변경되었습니다. 같은 ID는 보존했습니다.');
     const before=a.h.export(),rows=map(a,before);check(rows[id].state==='reserved');
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,commitLocal,abortLocal,resumeLocal,approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
+  return {plan,prompt,generate,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+    approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
+};
+
+globalThis.createWikiIngestNotebook.blocks=function(root,ctx,local){
+  if(local&&!/^wiki(?:-proposal)?:/.test(local))return false;
+  const account=NowNoteHistory.key(ctx),roots=[root],seen=new WeakSet(),known=new Set();
+  while(roots.length){
+    const value=roots.shift();if(!value||seen.has(value))continue;seen.add(value);
+    for(const [id,row]of Object.entries(value.contexts?.[account]?.wiki_ingest_operations||{})){
+      if(known.has(id))continue;known.add(id);
+      if(row.remote&&!['settled','aborted'].includes(row.remote.phase)&&(!local||row.remote.manifest.changes.some(c=>local==='wiki:'+c.wiki_id||local==='wiki-proposal:'+id+':'+c.wiki_id)))return true;
+    }roots.push(...(value.recovery_archives||[]));
+  }return false;
 };
 globalThis.createWikiIngestNotebook.validateRestore=function(current,incoming){
   const error=()=>{throw Error('진행 중인 위키 작업과 고정 요청 ID를 백업으로 교체할 수 없습니다.');};
