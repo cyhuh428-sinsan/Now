@@ -138,6 +138,24 @@ app.whenReady().then(async()=>{
     const code=messages.find(([message])=>error.message?.includes(message))?.[1]
       || (/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error');
     const errorType=/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error';
+    try{
+      const failureState=await window.webContents.executeJavaScript(`(()=>{
+        const dialog=document.querySelector('#wikiDialog');
+        const status=dialog?.querySelector('[role=status]')?.textContent?.trim()||'';
+        const known=new Map([
+          ['검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.','journal_changed'],
+          ['계정·서버가 변경되었습니다. 원문은 보존했습니다.','context_changed'],
+          ['서버 위키의 기준·출처 판본을 다시 확인하세요.','baseline_changed'],
+          ['인용 확인 완료 · 내용의 사실성은 별도 검토가 필요합니다.','query_verified']
+        ]);
+        const wait=globalThis.__WIKI_QA_WAIT_FAILURE__;
+        return {open:Boolean(dialog?.open),busy:Boolean(dialog?.querySelector('[data-wiki-action=sources]')?.disabled),
+          status:known.get(status)||(/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified'),
+          waitCode:typeof wait?.code==='string'&&/^wiki_ingest_[a-z0-9_]+$/.test(wait.code)?wait.code:null,
+          elapsedMs:Number.isSafeInteger(wait?.elapsedMs)&&wait.elapsedMs>=0?wait.elapsedMs:null};
+      })()`);
+      persistEvidence({mode:config.mode,phase:config.phase,failureState});
+    }catch{persistEvidence({mode:config.mode,phase:config.phase,failureState:{unavailable:true}});}
     persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();exit(1);
   }
 });

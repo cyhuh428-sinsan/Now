@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import {createRequire} from 'node:module';
+import fs from 'node:fs';
+import vm from 'node:vm';
 const {createEvidenceRecorder}=createRequire(import.meta.url)('./http_qa_evidence.cjs');
 const manifestFile='synthetic-only.json',initial=JSON.stringify({run:'synthetic',clientEvidence:[{existing:true}]}),files=new Map([[manifestFile,initial]]);
 let writes=0,fail=false;
@@ -28,3 +30,15 @@ fail=true;assert.throws(()=>recorder.record({failure:'synthetic_disk_failure'}),
 assert.equal(parsed().at(-1).failure,'synthetic_disk_failure','failed manifest merge still preserves the append-only evidence');
 fail=false;recorder.flush();assert.equal(JSON.parse(files.get(manifestFile)).clientEvidence.length,1004);
 console.log('HTTP QA evidence: 1000 exact ordered events, no per-request manifest rewrite, failure/result barriers, immutable sidecar and no duplicate flush PASS');
+const host=fs.readFileSync(new URL('./note_protection_http_host.cjs',import.meta.url),'utf8');
+assert.ok(host.includes('failureState'),'a failed wait needs secret-safe actual dialog and busy diagnostics');
+const capture=host.match(/const failureState=await window\.webContents\.executeJavaScript\(`([\s\S]*?)`\);/)[1];
+let status='synthetic secret and document body';
+const context={document:{querySelector:()=>({open:true,querySelector:selector=>selector==='[role=status]'?{textContent:status}:{disabled:true}})},__WIKI_QA_WAIT_FAILURE__:{code:'wiki_ingest_journey_answer_preview',elapsedMs:18042}};
+const diagnose=()=>JSON.parse(JSON.stringify(vm.runInNewContext(capture,context)));
+assert.deepEqual(diagnose(),{open:true,busy:true,status:'unclassified',waitCode:'wiki_ingest_journey_answer_preview',elapsedMs:18042});
+status='wiki_source_changed';assert.equal(diagnose().status,status);
+status='검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.';assert.equal(diagnose().status,'journal_changed');
+context.__WIKI_QA_WAIT_FAILURE__={code:'arbitrary private data',elapsedMs:-1};
+assert.equal(diagnose().waitCode,null);assert.equal(diagnose().elapsedMs,null);
+console.log('HTTP QA failure diagnostics: exact actual host expression, busy/wait state and private-text exclusion PASS');
