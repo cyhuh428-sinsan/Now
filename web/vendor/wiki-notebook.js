@@ -165,7 +165,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const visibility=await sourceStatus(doc.drafts.at(-1),doc);a.check();
     if(!visibility.available)throw Error('출처·보호 상태를 확인할 수 없어 위키를 저장하지 않았습니다.');
     const latest=a.h.view(local);
-    if(a.h.blocked(local)||Boolean(latest)!==Boolean(item)
+    if(a.h.blocked(local)||L.blocked(local)||Boolean(latest)!==Boolean(item)
       ||(item&&(latest.draft.content!==item.draft.content||latest.localOnly!==item.localOnly)))throw Error('위키 판본 충돌입니다.');
     const now=new Date().toISOString();
     const note={...(item?.draft||{}),id:item?.draft.id||null,owner_id:a.ctx.owner,local_id:local,device_id:a.ctx.device,

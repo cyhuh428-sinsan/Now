@@ -21,6 +21,10 @@
     return row;
   }
   const validateMap=map=>{if(!object(map))throw fail();for(const [id,row]of Object.entries(map)){if(!localId(id))throw fail();validate(row);}return map;};
+  function acknowledge(current,row){
+    if(current.version===row.version&&current.deleted_at!==row.deleted_at)throw fail();
+    return current.version>row.version?{...current,pending:null}:row;
+  }
   function validateRestore(current,incoming){
     const pending=(root,visit)=>{
       for(const [account,value]of Object.entries(root?.contexts||{}))
@@ -107,7 +111,7 @@
       if(row.version!==op.base_version+1||Boolean(row.deleted_at)!==(op.action==='trash'))throw fail();
       const {data,map}=snapshot(a),current=map[id];
       if(!same(current?.pending,op))throw fail();
-      const next=copy(map);next[id]=current.version>row.version?{...current,pending:null}:row;
+      const next=copy(map);next[id]=acknowledge(current,row);
       await save(a,data,next);return copy(next[id]);
     }
     async function move(id,operation){
@@ -136,7 +140,7 @@
       const response=await api.read(a.ctx,id);a.check();
       const row=remote(a,response.resource,id),{data,map}=snapshot(a);
       if(!same(map[id]?.pending,op))throw fail();
-      const next=copy(map);next[id]=row;await save(a,data,next);return copy(row);
+      const next=copy(map);next[id]=acknowledge(map[id],row);await save(a,data,next);return copy(next[id]);
     }
     function validateIncoming(incoming){
       const current=api.history().export();

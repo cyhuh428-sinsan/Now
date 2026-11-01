@@ -97,4 +97,22 @@ await test('recovery archives retain pending commands from every account',async(
   assert.throws(()=>box.NowWikiLifecycle.validateRestore(current,missing));
   assert.doesNotThrow(()=>box.NowWikiLifecycle.validateRestore(current,current));
 });
+await test('late reconciliation GET cannot downgrade newer observed lifecycle metadata',async()=>{
+  await assert.rejects(life.move(remoteLocal,'trash'));
+  let enter,release;const entered=new Promise(resolve=>enter=resolve),reply=new Promise(resolve=>release=resolve);
+  api.read=async()=>{enter();return reply;};
+  const operation=life.reconcile(remoteLocal);await entered;
+  resource={...resource,version:10,deleted_at:now};await life.observe([resource]);
+  release({resource:{...resource,version:9,deleted_at:null}});await operation;
+  assert.equal(life.state(remoteLocal).version,10);assert.equal(life.state(remoteLocal).deleted_at,now);assert.equal(life.state(remoteLocal).pending,null);
+});
+await test('same-version contradictory reconciliation cannot clear pending or replace observed state',async()=>{
+  await assert.rejects(life.move(remoteLocal,'restore'));
+  let enter,release;const entered=new Promise(resolve=>enter=resolve),reply=new Promise(resolve=>release=resolve);
+  api.read=async()=>{enter();return reply;};
+  const operation=life.reconcile(remoteLocal);await entered;
+  resource={...resource,version:11,deleted_at:null};await life.observe([resource]);
+  release({resource:{...resource,deleted_at:now}});await assert.rejects(operation);
+  assert.equal(life.state(remoteLocal).version,11);assert.equal(life.state(remoteLocal).deleted_at,null);assert(life.state(remoteLocal).pending);
+});
 console.log(`Wiki lifecycle: ${checks} account/journal/receipt checks PASS; real HTTP and UI are separate`);
