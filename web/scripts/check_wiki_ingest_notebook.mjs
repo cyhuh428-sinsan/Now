@@ -220,4 +220,8 @@ assert.equal(derivedDocument.approvals.length,0);assert.equal(derivedDocument.dr
 const derivedStored=history.view('wiki:'+derivedDocument.wiki_id);assert.ok(derivedStored.localOnly);
 history=makeHistory();book=box.createWikiIngestNotebook(api);
 assert.equal(history.view('wiki:'+derivedDocument.wiki_id).draft.content,box.NowNoteProtectionProtocol.canonicalJson(derivedDocument),'explicit derived draft survives cold restore');
+assert.equal(typeof ordinary.lintSnapshot,'function','Lint needs a read-only snapshot rather than list() hydration');
+const beforeLint=box.NowNoteProtectionProtocol.canonicalJson(history.export()),lintWrites=writes;
+const lintSnapshot=await ordinary.lintSnapshot();assert.ok(lintSnapshot.rows.length>=3);assert.equal(lintSnapshot.scope.owner,ctx.owner);
+assert.equal(writes,lintWrites);assert.equal(box.NowNoteProtectionProtocol.canonicalJson(history.export()),beforeLint,'snapshot inspection does not observe lifecycle or track server rows');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');

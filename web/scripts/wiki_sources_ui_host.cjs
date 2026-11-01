@@ -122,6 +122,12 @@ app.whenReady().then(async()=>{
       fs.writeFileSync(path.join(screenshotRoot,'wiki-sources-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
     assert(await run('(async()=>{const previous=state.settings.server.ownerId;state.settings.server.ownerId="qa-source-b";wikiUI.check();const hidden=!document.querySelector("#wikiDialog").open;const empty=(await wikiSources.list()).length===0;state.settings.server.ownerId=previous;return hidden&&empty;})()'),'account_b_leak');
+    let lint=null;
+    if(process.env.NOWNOTE_WIKI_LINT==='1'){
+      await run(fs.readFileSync(path.join(root,'web/scripts/wiki_lint_ui_fixture.js'),'utf8')+'\nvoid 0;');
+      lint=await run('runWikiLintUiFixture().catch(error=>({qaError:String(error.message||error)}))');
+      if(lint.qaError)throw Error(lint.qaError);
+    }
     let query=null;
     if(process.env.NOWNOTE_WIKI_QUERY==='1'){
       await run(fs.readFileSync(path.join(root,'web/scripts/wiki_query_ui_fixture.js'),'utf8')+'\nvoid 0;');
@@ -237,7 +243,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

@@ -1,0 +1,24 @@
+globalThis.runWikiLintUiFixture=async function(){
+  const P=NowNoteProtectionProtocol,check=(value,code)=>{if(!value)throw Error(code);};
+  const pause=()=>new Promise(resolve=>setTimeout(resolve,5));
+  const button=name=>document.querySelector('#wikiDialog [data-wiki-action="'+name+'"]');
+  const wait=async(fn,code)=>{for(let n=0;n<500;n++){if(fn())return;await pause();}throw Error(code);};
+  const click=async name=>{check(button(name)&&!button(name).disabled,'lint_button_'+name);button(name).click();await pause();};
+  wikiUI.close();await wikiUI.open();await noteHistory.idle();await Promise.all([...storagePendingWrites]);
+  const before=P.canonicalJson(noteHistory.export());
+  await click('lint');await wait(()=>button('lint-run'),'lint_controls');
+  await click('lint-run');await wait(()=>document.querySelector('[data-wiki-lint-report]'),'lint_report');
+  check(document.querySelector('[data-wiki-lint-report]').textContent.includes('검사 2'),'lint_checked_scope');
+  check(P.canonicalJson(noteHistory.export())===before,'lint_default_journal_write');
+  const report=document.querySelector('[data-wiki-lint-report]');check(report.textContent.includes('오류 0'),'lint_normal_findings');
+  const key=state.settings.server.ownerId;state.settings.server.ownerId='qa-lint-other';wikiUI.check();
+  check(!document.querySelector('#wikiDialog').open&&!document.querySelector('[data-wiki-lint-report]'),'lint_account_conceal');state.settings.server.ownerId=key;
+  await wikiUI.open();check(!document.querySelector('[data-wiki-lint-report]'),'lint_no_auto_restore');wikiUI.close();
+  const snapshot=await wikiNotebook.lintSnapshot(),known=snapshot.rows.find(row=>row.source_checks?.length);check(known,'lint_source_fixture');known.source_checks[0].status='changed';
+  document.querySelector('#wikiDialog').remove();
+  const ui=mountNowWiki({...wikiNotebook,contextKey:wikiViewKey,notes:()=>[],lintSnapshot:async()=>structuredClone(snapshot)});
+  await ui.open();await click('lint');await click('lint-run');await wait(()=>document.querySelector('[data-wiki-lint-report]'),'lint_changed_report');
+  check(document.querySelector('[data-lint-rule=wiki_lint_source_changed]')?.textContent.includes('검토 필요'),'lint_classified_findings');
+  check(P.canonicalJson(noteHistory.export())===before,'lint_changed_report_write');ui.close();
+  return {checked:2,journalWrites:0,accountConcealed:true,defaultReportPersisted:false,changedClassification:'synthetic source status only'};
+};

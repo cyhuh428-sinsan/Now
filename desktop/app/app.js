@@ -7182,7 +7182,87 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     });
     return catalog;
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,
+  async function lintSnapshot(){
+    const a=action(),active=()=>{a.check();if(api.history()!==a.h)throw Error('위키 이력 연결이 변경되었습니다.');};
+    const before=P.canonicalJson(a.h.export()),entries=a.h.entries(),rows=new Map();let index=null;
+    if(a.ctx.online!==false)try{index=await api.listRemote();active();}catch{active();}
+    if(index&&!index.every(row=>row.owner_id===a.ctx.owner))throw Error('위키 색인 계정이 다릅니다.');
+    const known=new Map((index||[]).map(row=>[row.id,row]));
+    for(const [local,item]of Object.entries(entries)){
+      if(!idOf(local)||item.draft?.owner_id!==a.ctx.owner)continue;
+      const id=local.slice(5),lifecycle=L.state(local);
+      rows.set(id,{id,origin:item.localOnly?'local':'server',index_status:item.localOnly?'local':index?known.has(id)?'present':'missing':'unavailable',
+        protected:a.h.blocked(local)||Boolean(item.protectionScope)||item.base.crypto_epoch>0,deleted:Boolean(item.draft.deleted_at||lifecycle?.deleted_at),
+        pending:Boolean(lifecycle?.pending||!item.localOnly&&(item.dirty||item.outbox.length)),content:item.draft.content});
+    }
+    for(const row of index||[])if(!rows.has(row.id))rows.set(row.id,{id:row.id,origin:'server',index_status:'present',deleted:Boolean(row.deleted_at)});
+    const result=[],evidence=api.evidence||globalThis.NowWikiEvidence?.create(api),cache=new Map();
+    for(const row of rows.values()){
+      const {content,...value}=row;
+      if(value.protected||value.deleted||value.pending){result.push(value);continue;}
+      let raw=content;
+      if(row.origin==='server'){
+        if(a.ctx.online===false||!index){result.push({...value,unavailable:true});continue;}
+        try{
+          const remote=await api.readRemote(row.id);active();
+          if(remote.resource?.owner_id!==a.ctx.owner||remote.resource.id!==row.id)throw Error('위키 조회 계정이 다릅니다.');
+          if(remote.resource.deleted_at||remote.artifact?.protected||!remote.artifact?.document){result.push({...value,protected:remote.artifact?.protected===true,deleted:Boolean(remote.resource.deleted_at),unavailable:true});continue;}
+          const current=await api.readCurrent('wiki:'+row.id);active();
+          if(current.crypto_epoch>0||current.identity_state!=='coherent'||current.snapshot?.note?.deleted_at||current.snapshot?.note?.owner_id!==a.ctx.owner
+            ||current.snapshot.note.local_id!=='wiki:'+row.id||current.head_revision_id!==remote.artifact.head_revision_id
+            ||current.snapshot.note.content!==P.canonicalJson(remote.artifact.document))throw Error('위키 판본이 다릅니다.');
+          raw=current.snapshot.note.content;
+        }catch{active();result.push({...value,unavailable:true});continue;}
+      }
+      let document;
+      try{document=P.parseJson(raw);}catch{result.push({...value,document:{schema_version:1,scope:scope(a.ctx)}});continue;}
+      if(document?.scope&&P.canonicalJson(document.scope)!==P.canonicalJson(scope(a.ctx))){result.push({...value,unavailable:true});continue;}
+      try{await W.validateDocument(document,scope(a.ctx));active();}catch{active();result.push({...value,document});continue;}
+      if(document.wiki_id!==row.id){result.push({...value,document});continue;}
+      const source_checks=[],relation_checks=[];
+      for(const draft of document.drafts){
+        for(const original of W.evidenceOf(draft)){
+          const ref=original.kind?original:{...copy(original),kind:'note'},key=P.canonicalJson(ref);let status='unavailable';
+          try{
+            if(!evidence)throw Error('wiki_source_unavailable');
+            if(!cache.has(key))cache.set(key,evidence.resolve(ref,{fresh:false}));
+            const proof=await cache.get(key);active();status=proof.stale?'changed':'ok';
+            for(const citation of draft.citations.filter(c=>(c.evidence_id||c.source_id)===ref.id)){
+              const text=proof.kind==='note'?proof.content:proof.draft.sections.find(s=>s.id===citation.section_id)?.markdown;
+              if(typeof text!=='string'||!text.includes(citation.quote))status='quote_mismatch';
+            }
+          }catch(error){active();status=error.status===404?'missing':/owner/.test(error.message)?'foreign':/protection|locked/.test(error.message)?'locked':/hash|binding|quote/.test(error.message)?'invalid':'unavailable';}
+          source_checks.push({draft_id:draft.id,evidence_id:ref.id,status});
+        }
+        for(const relation of draft.relations||[]){
+          let status='unavailable';
+          if(relation.to_ref.kind==='proposal'&&document.approvals.at(-1)?.draft_id===draft.id)try{
+            const proof=await evidence.operationProof(relation.to_ref.operation_id,document.wiki_id,relation.to_ref.wiki_id,{origin:row.origin});active();
+            await NowNoteWikiIngest.verifyCarriedRelation(document,relation,proof,a.ctx);active();status='ok';
+          }catch{active();}
+          relation_checks.push({draft_id:draft.id,relation_id:relation.id,status});
+        }
+      }
+      result.push({...value,document,source_checks,relation_checks});
+    }
+    for(const row of result.filter(r=>r.relation_checks))for(const draft of row.document.drafts)for(const relation of draft.relations||[]){
+      if(relation.to_ref.kind!=='approved')continue;
+      const outcome=row.relation_checks.find(c=>c.draft_id===draft.id&&c.relation_id===relation.id),target=result.find(r=>r.id===relation.to_ref.wiki_id);
+      if(!target?.source_checks)continue;
+      const ref=relation.to_ref,chosen=target.document.drafts.find(d=>d.id===ref.draft_id);
+      if(!chosen||chosen.draft_hash!==ref.draft_hash||!target.document.approvals.some(a=>a.id===ref.approval_id&&a.draft_id===ref.draft_id)){
+        outcome.status='binding_invalid';continue;
+      }
+      try{
+        const proof=await evidence.resolve({id:'lint-relation',kind:'wiki',origin:target.origin,owner_id:a.ctx.owner,wiki_id:ref.wiki_id,
+          draft_id:ref.draft_id,approval_id:ref.approval_id,document_version:target.document.document_version,content_hash:ref.draft_hash},{fresh:false});active();
+        outcome.status=proof.stale?'stale':'ok';
+      }catch{active();}
+    }
+    active();if(P.canonicalJson(a.h.export())!==before)throw Error('검사 중 위키 저장 상태가 변경되었습니다. 다시 확인하세요.');
+    return {scope:scope(a.ctx),rows:result};
+  }
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,readEvidence,readOriginal,approvedCatalog,lintSnapshot,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };
@@ -8455,6 +8535,110 @@ globalThis.createWikiQueryNotebook=function createWikiQueryNotebook(api){
 };
 
 ;
+/* Deterministic audit only: no model, repair, persistence or content projection. */
+(() => {
+  'use strict';
+  const W=NowNoteWiki,P=NowNoteProtectionProtocol;
+  const check=(value,code='wiki_lint_invalid')=>{if(!value)throw Error(code);};
+  const uuid=value=>typeof value==='string'&&/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(value);
+  const equal=(a,b)=>P.canonicalJson(a)===P.canonicalJson(b);
+  const latest=doc=>doc.drafts.find(d=>d.id===doc.approvals.at(-1)?.draft_id);
+  async function lintWikiCatalog(snapshot,selection={}){
+    check(snapshot&&snapshot.scope&&typeof snapshot.scope.owner==='string'&&snapshot.scope.owner&&typeof snapshot.scope.url==='string');
+    check(Array.isArray(snapshot.rows)&&snapshot.rows.length<=100&&new Set(snapshot.rows.map(r=>r.id)).size===snapshot.rows.length);
+    check(selection&&Object.keys(selection).every(k=>['wiki_ids','topic'].includes(k)));
+    const ids=selection.wiki_ids??[],topic=selection.topic??'';
+    check(Array.isArray(ids)&&ids.length<=100&&ids.every(uuid)&&new Set(ids).size===ids.length&&typeof topic==='string'&&topic.length<=240);
+    check(!Object.hasOwn(selection,'wiki_ids')||ids.length>0);
+    check(ids.every(id=>snapshot.rows.some(r=>r.id===id)),'wiki_lint_selection_unavailable');
+    const report={checked:0,excluded:0,out_of_scope:0,errors:0,warnings:0,information:0,
+      source_checked:0,source_excluded:0,relation_checked:0,relation_excluded:0,findings:[]};
+    const valid=new Map(),state=new Map();
+    for(const row of snapshot.rows){
+      check(uuid(row.id));
+      if(row.document?.scope&&!equal(row.document.scope,snapshot.scope)){state.set(row.id,'foreign');continue;}
+      if(row.protected||row.deleted||row.unavailable||row.pending||!row.document){state.set(row.id,'excluded');continue;}
+      if(![1,2].includes(row.document.schema_version)){state.set(row.id,'unsupported');continue;}
+      try{
+        const document=await W.validateDocument(row.document,snapshot.scope);check(document.wiki_id===row.id);
+        valid.set(row.id,document);state.set(row.id,'valid');
+      }catch{state.set(row.id,'invalid');}
+    }
+    const selected=new Set(snapshot.rows.filter(row=>(!ids.length||ids.includes(row.id))&&(!topic||latest(valid.get(row.id)||{drafts:[],approvals:[]})?.topic===topic)).map(r=>r.id));
+    const finding=(row,rule,severity,observation,recommendation,extra={})=>{
+      check(report.findings.length<5000,'wiki_lint_limit');
+      report.findings.push({rule_code:rule,wiki_id:row?.id??null,document_version:valid.get(row?.id)?.document_version??null,
+        severity,observation,recommendation,...extra});
+      report[{error:'errors',warning:'warnings',information:'information'}[severity]]++;
+    };
+    const rows=new Map(snapshot.rows.map(r=>[r.id,r])),connected=new Set(),titles=new Map();
+    for(const row of snapshot.rows){
+      if(!selected.has(row.id)){report.out_of_scope++;continue;}
+      const kind=state.get(row.id);
+      if(kind==='foreign'){report.excluded++;finding(null,'wiki_lint_scope_excluded','information','현재 계정 밖의 자료를 제외했습니다.','현재 계정의 범위를 확인하세요.');continue;}
+      if(row.origin==='server'&&row.index_status==='missing')finding(row,'wiki_lint_index_missing','error','서버 위키 색인을 확인하지 못했습니다.','현재 메모와 색인을 대조하세요.');
+      if(kind==='excluded'||kind==='unsupported'){
+        report.excluded++;finding(row,kind==='unsupported'?'wiki_lint_schema_unsupported':'wiki_lint_unreadable_excluded','information',
+          kind==='unsupported'?'지원하지 않는 문서 형식입니다.':'보호·삭제·접근·미확정 상태로 본문을 검사하지 않았습니다.','접근 상태 또는 지원 버전을 확인하세요.');continue;
+      }
+      report.checked++;
+      if(kind==='invalid'){finding(row,'wiki_lint_document_invalid','error','문서 형식·계정·판본·해시·승인 연결 검사에 실패했습니다.','원본을 보존하고 검증된 판본과 비교하세요.');continue;}
+      const document=valid.get(row.id),approved=latest(document);
+      if(document.schema_version===1)finding(row,'wiki_lint_legacy_document','information','기존 v1 문서입니다.','v1 읽기는 유지되며 확장은 명시 검토하세요.');
+      if(!approved)finding(row,'wiki_lint_unapproved','information','승인된 판본이 없습니다.','초안과 출처를 검토하세요.');
+      if(row.index_status==='unavailable')finding(row,'wiki_lint_index_unavailable','warning','색인 접근 결과를 확정할 수 없습니다.','연결·권한을 확인한 후 다시 검사하세요.');
+      const sources=row.source_checks||[],relations=row.relation_checks||[];
+      check(Array.isArray(sources)&&sources.length<=20000&&Array.isArray(relations)&&relations.length<=20000);
+      let missing=false;
+      for(const draft of document.drafts){
+        for(const ref of W.evidenceOf(draft)){
+          const outcome=sources.filter(v=>v.draft_id===draft.id&&v.evidence_id===ref.id);check(outcome.length<=1);
+          const status=outcome[0]?.status;
+          if(!status){missing=true;report.source_excluded++;continue;}
+          check(['ok','changed','missing','quote_mismatch','foreign','unavailable','invalid','locked','unsupported'].includes(status));
+          const excluded=['unavailable','locked','unsupported'].includes(status);
+          if(excluded)report.source_excluded++;else report.source_checked++;
+          if(status==='ok')continue;
+          const rule={changed:'source_changed',missing:'source_missing',quote_mismatch:'citation_mismatch',foreign:'foreign_reference',unavailable:'source_unavailable',invalid:'source_invalid',locked:'source_locked',unsupported:'source_unsupported'}[status];
+          finding(row,'wiki_lint_'+rule,status==='changed'||excluded?'warning':'error','고정 출처 검사: '+status,
+            status==='changed'?'고정 출처와 현재 판본을 비교하고 재적재를 검토하세요.':'출처의 계정·판본·인용·접근을 확인하세요.',{draft_id:draft.id,evidence_id:ref.id});
+        }
+        for(const relation of draft.relations||[]){
+          const outcomes=relations.filter(r=>r.draft_id===draft.id&&r.relation_id===relation.id);check(outcomes.length<=1);
+          let status=outcomes[0]?.status;
+          const target=valid.get(relation.to_ref.wiki_id),targetRow=rows.get(relation.to_ref.wiki_id);
+          if(!targetRow)status='missing_target';
+          else if(state.get(targetRow.id)!=='valid')status='unavailable';
+          else{
+            const chosen=target.drafts.find(d=>d.id===relation.to_ref.draft_id),approval=target.approvals.find(a=>a.draft_id===chosen?.id);
+            if(!chosen||!approval)status='unapproved';
+            else if(relation.to_ref.kind==='approved'&&(relation.to_ref.draft_hash!==chosen.draft_hash
+              ||!target.approvals.some(a=>a.id===relation.to_ref.approval_id&&a.draft_id===chosen.id)))status='binding_invalid';
+            else if(relation.to_ref.section_id!==null&&!chosen.sections.some(s=>s.id===relation.to_ref.section_id))status='missing_section';
+          }
+          if(!status){missing=true;report.relation_excluded++;continue;}
+          check(['ok','missing_target','missing_section','binding_invalid','unapproved','unavailable','stale'].includes(status));
+          if(status==='unavailable')report.relation_excluded++;else report.relation_checked++;
+          if(status==='ok'){connected.add(row.id);connected.add(relation.to_ref.wiki_id);continue;}
+          const rule={missing_target:'relation_target_missing',missing_section:'relation_section_missing',binding_invalid:'relation_binding_invalid',unapproved:'relation_unapproved',unavailable:'relation_unavailable',stale:'relation_stale'}[status];
+          finding(row,'wiki_lint_'+rule,['unavailable','stale','unapproved'].includes(status)?'warning':'error','관계 검사: '+status,
+            '관계 끝점의 승인 판본과 절을 확인하세요.',{draft_id:draft.id,relation_id:relation.id});
+        }
+      }
+      if(missing)finding(row,'wiki_lint_verification_missing','warning','일부 출처·관계의 실제 조회 검증 결과가 없습니다.','제외된 검사 수를 확인하고 연결 후 다시 검사하세요.');
+      if(approved){const key=approved.title.normalize('NFKC').toLocaleLowerCase('ko').replace(/\s+/gu,' ').trim();
+        const group=titles.get(key)||[];group.push(row);titles.set(key,group);}
+    }
+    for(const [id,doc]of valid)if(selected.has(id)&&latest(doc)&&!connected.has(id))
+      finding(rows.get(id),'wiki_lint_orphan','information','검증된 연결이 없는 승인 페이지입니다.','잘못된 지식이라는 뜻은 아닙니다. 연결 필요성을 검토하세요.');
+    for(const group of titles.values())if(group.length>1)for(const row of group)
+      finding(row,'wiki_lint_duplicate_candidate','information','정규화한 제목이 같은 다른 승인 페이지가 있습니다.','본문·출처를 비교하세요. 자동 병합하지 않습니다.',{related_wiki_ids:group.filter(r=>r.id!==row.id).map(r=>r.id)});
+    return report;
+  }
+  globalThis.NowWikiLint=Object.freeze({lintWikiCatalog});
+})();
+
+;
 /* Wiki text stays in the existing Note journal; this view holds no durable cache. */
 globalThis.mountNowWiki = function mountNowWiki(api) {
   const dialog=document.createElement('dialog');
@@ -8470,6 +8654,8 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   let queryOriginal=null;
   let protectedQueryAccess=null;
   let queryPrimary=6,queryRelated=3;
+  let lintMode=false,lintScope='all',lintSnapshot=null,lintReport=null;
+  const lintIds=new Set();
   const queryIds=new Set();
   const ingestFiles=new Set(),ingestNotes=new Set();
   const selected=new Set();
@@ -8488,6 +8674,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
+    lintMode=false;lintScope='all';lintSnapshot=null;lintReport=null;lintIds.clear();
     queryMode=false;queryText='';queryScope='all';querySnapshot=null;queryAnswer=null;queryConnection=null;queryOriginal=null;protectedQueryAccess=null;queryPrimary=6;queryRelated=3;queryIds.clear();
     graphMount?.destroy();graphMount=null;graphCatalog=null;graphSection='';relationEditor=null;
     epoch++;confirmation?.(false);confirmation=null;rows=[];doc=null;dirty=false;busy=false;readable=false;selected.clear();message='';question='';topic='';
@@ -8507,6 +8694,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     if(dialog.open&&(bound!==api.contextKey()||(!readOnly&&readable&&doc&&api.canRead&&!api.canRead(doc))))close();
   }
   function conceal(){
+    lintMode=false;lintSnapshot=null;lintReport=null;lintIds.clear();
     queryMode=false;queryText='';querySnapshot=null;queryAnswer=null;queryIds.clear();
     relationEditor=null;
     rows=rows.map(row=>({id:row.id||row.document?.wiki_id,unavailable:true,error:'출처·보호 상태 확인 필요'}));
@@ -8516,7 +8704,10 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
   }
   function command(action,label,fn,disabled=false){
     const b=node('button',label,'secondary-btn');b.type='button';b.dataset.wikiAction=action;b.disabled=disabled||busy;
-    b.onclick=()=>{if(!readOnly||action.startsWith('query'))void execute(fn);};return b;
+    b.onclick=()=>{
+      if(!action.startsWith('lint')){lintMode=false;lintSnapshot=null;lintReport=null;}
+      if(!readOnly||action.startsWith('query'))void execute(fn);
+    };return b;
   }
   async function execute(fn){
     check();if(!dialog.open||busy)return;
@@ -8686,6 +8877,46 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       }
     }
   }
+  function renderLint(detail){
+    detail.append(node('h3','위키 점검'));
+    const label=node('label','범위'),select=node('select',undefined,'settings-select');select.name='wiki-lint-scope';select.disabled=busy;
+    for(const [value,title]of [['all','전체 위키'],['topic','선택 주제'],['selected','선택 위키']]){const option=node('option',title);option.value=value;select.append(option);}
+    select.value=lintScope;select.onchange=()=>{lintScope=select.value;lintSnapshot=null;lintReport=null;render();};label.append(select);detail.append(label);
+    if(lintScope==='selected')for(const row of rows){
+      const id=row.id||row.document?.wiki_id;if(!id)continue;
+      const label=node('label'),input=node('input');input.type='checkbox';input.name='wiki-lint-page';input.value=id;input.checked=lintIds.has(id);input.disabled=busy;
+      input.onchange=()=>{if(input.checked)lintIds.add(id);else lintIds.delete(id);lintSnapshot=null;lintReport=null;render();};
+      label.append(input,document.createTextNode(preferred(row.document)?.title||'위키 '+id));detail.append(label);
+    }
+    detail.append(command('lint-run','점검',async token=>{
+      if(lintScope==='topic'&&!topic)throw Error('주제를 선택하세요.');
+      const selection=lintScope==='selected'?{wiki_ids:[...lintIds]}:lintScope==='topic'?{topic}:{};
+      const snapshot=await api.lintSnapshot();requireActive(token);
+      const report=await NowWikiLint.lintWikiCatalog(snapshot,selection);requireActive(token);
+      lintSnapshot=snapshot;lintReport=report;message='';
+    }));
+    if(!lintReport||busy)return;
+    const report=node('section');report.dataset.wikiLintReport='';
+    report.append(node('h4','점검 결과'),node('p','검사 '+lintReport.checked+' · 제외 '+lintReport.excluded+' · 범위 밖 '+lintReport.out_of_scope),
+      node('p','오류 '+lintReport.errors+' · 검토 '+lintReport.warnings+' · 정보 '+lintReport.information),
+      node('p','출처 확인 '+lintReport.source_checked+' · 미확인/제외 '+lintReport.source_excluded+' · 관계 확인 '+lintReport.relation_checked+' · 미확인/제외 '+lintReport.relation_excluded));
+    const severities={error:'오류',warning:'검토 필요',information:'정보'};
+    for(const finding of lintReport.findings){
+      const item=node('section');item.dataset.lintRule=finding.rule_code;
+      item.append(node('h4',severities[finding.severity]+' · '+finding.rule_code),node('p',finding.observation),node('p',finding.recommendation));
+      if(finding.wiki_id){
+        item.append(node('small',finding.wiki_id+' · 판본 '+(finding.document_version??'미확인')));
+        const row=lintSnapshot.rows.find(r=>r.id===finding.wiki_id);
+        if(row?.document&&!row.protected&&!row.deleted&&!row.unavailable)item.append(command('lint-open','위키 검토',async token=>{
+          const value=await NowNoteWiki.validateDocument(row.document,lintSnapshot.scope);requireActive(token);
+          if(!api.canRead(value))throw Error('위키 접근 상태가 변경되었습니다.');
+          lintMode=false;lintSnapshot=null;lintReport=null;doc=structuredClone(value);choose(preferred(doc).id);dirty=false;message='';
+        }));
+      }
+      report.append(item);
+    }
+    detail.append(report);
+  }
   async function refreshOperations(token){ingestOps=await api.ingest.operations();requireActive(token);}
   function relationText(draft){
     const names=new Map(rows.filter(r=>r.document&&!r.protected&&!r.deleted).map(r=>[r.document.wiki_id,preferred(r.document)?.title||'위키']));
@@ -8753,6 +8984,10 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     header.firstChild.id='wikiTitle';
     const exit=node('button','닫기','ghost-btn');exit.type='button';exit.onclick=close;header.append(exit);
     const toolbar=node('div',undefined,'library-toolbar');
+    if(!readOnly&&api.lintSnapshot)toolbar.append(command('lint','위키 점검',async token=>{
+      if(dirty&&!await ask('저장하지 않은 초안을 닫고 점검할까요?'))return;
+      requireActive(token);lintMode=true;lintSnapshot=null;lintReport=null;queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;sourceMode=false;doc=null;dirty=false;trashMode=false;message='';
+    }));
     if(!readOnly)toolbar.append(command('new','새 위키',async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 버리고 새 위키를 만들까요?'))return;
       requireActive(token);queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;doc=null;dirty=false;selected.clear();message='';question='';viewId='';beforeId='';comparing=false;trashMode=false;
@@ -8787,7 +9022,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
       const option=node('option',name||'전체 주제');option.value=name;filter.append(option);
     }
     filter.value=topic;filter.disabled=busy;filter.onchange=()=>{
-      topic=filter.value;if(queryMode){querySnapshot=null;queryAnswer=null;queryOriginal=null;queryConnection=null;}render();
+      topic=filter.value;if(queryMode){querySnapshot=null;queryAnswer=null;queryOriginal=null;queryConnection=null;}if(lintMode){lintSnapshot=null;lintReport=null;}render();
     };nav.append(filter);
     for(const row of rows){
       if(Boolean(row.deleted)!==trashMode)continue;
@@ -8804,7 +9039,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
           if(row.protected&&api.openProtection){await api.openProtection(row.id);return;}
           doc=null;dirty=false;selected.clear();message=row.error||'보호된 위키입니다. 전체 보호 화면에서 잠금을 해제하세요.';return;
         }
-        queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;doc=structuredClone(row.document);dirty=false;selected.clear();question='';
+        lintMode=false;lintSnapshot=null;lintReport=null;queryMode=false;querySnapshot=null;queryAnswer=null;graphCatalog=null;doc=structuredClone(row.document);dirty=false;selected.clear();question='';
         sourceMode=false;sourceFiles=[];sourceRows=[];sourcePreview='';
         choose(preferred(doc).id);comparing=false;
         message='';
@@ -8822,6 +9057,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
     }
     if(!rows.some(row=>Boolean(row.deleted)===trashMode))nav.append(node('p',trashMode?'휴지통이 비어 있습니다.':'저장된 위키 없음'));
     const detail=node('section',undefined,'wiki-detail');detail.setAttribute('aria-label','위키 검토');
+    if(lintMode)renderLint(detail);
     if(queryMode)renderQuery(detail);
     if(sourceMode&&api.sources){
       detail.append(node('h3','원본 자료'));
@@ -8940,7 +9176,7 @@ globalThis.mountNowWiki = function mountNowWiki(api) {
         }detail.append(operations);
       }
     }
-    if(!queryMode&&!graphCatalog&&!sourceMode&&!readOnly&&!trashMode){
+    if(!lintMode&&!queryMode&&!graphCatalog&&!sourceMode&&!readOnly&&!trashMode){
     const picker=node('details');picker.open=!doc;picker.append(node('summary','자료 선택'));
     const choices=node('div',undefined,'wiki-source-list');
     for(const source of api.notes()){
