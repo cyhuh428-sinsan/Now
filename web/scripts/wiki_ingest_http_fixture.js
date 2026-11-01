@@ -44,10 +44,42 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     check((await wikiIngest.operations()).find(o=>o.operation_id===id).remote.phase==='settled','settled');
   }
   const ownerQuery='?owner_id='+encodeURIComponent(config.credentials.a.owner);
-  let peerVerified=false,citationVerified=false,queryVerified=false,protectedQueryVerified=false,lintVerified=false;
+  let peerVerified=false,citationVerified=false,queryVerified=false,protectedQueryVerified=false,lintVerified=false,protectedLintVerified=false;
   const formClick=async action=>{await until(()=>{const b=document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]');return b&&!b.disabled;},'form_'+action);document.querySelector('#wikiDialog [data-wiki-action="'+action+'"]').click();};
   const capture=async stage=>{globalThis.__HTTP_CAPTURE_DONE__=false;console.log('HTTP_QA_EVENT '+JSON.stringify({stage}));await until(()=>globalThis.__HTTP_CAPTURE_DONE__||globalThis.__HTTP_CAPTURE_ERROR__,'capture');check(!globalThis.__HTTP_CAPTURE_ERROR__,'capture_failed');};
-  if([60,61].includes(config.phase)){
+  if([62,63].includes(config.phase)){
+    if(config.phase===62){
+      const seed=await generate([ids[0],ids[2]]);await publish(seed.operation.operation_id);
+      for(const row of await wikiNotebook.list()){
+        const decision=await wikiIngest.approveLocal(row.document,row.document.drafts[0].id);await publish(decision.operation_id);
+      }
+      const target=(await wikiNotebook.list())[0].document,local='wiki:'+target.wiki_id,password='qa-lint-protection-'+config.run;
+      check(target.drafts.every(d=>NowNoteWiki.evidenceOf(d).every(ref=>ref.kind==='note')),'lint_protection_independent_target');
+      const pd=()=>document.querySelector('#noteProtectionDialog'),pb=name=>pd()?.querySelector('[data-action="'+name+'"]');
+      async function protectionWait(test,code){
+        for(let n=0;n<2500;n++){
+          const form=pd()?.querySelector('form.library-confirm');
+          if(form){form.querySelector('input').value=password;form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));}
+          if(await test()&&pb('refresh')?.disabled===false)return;await delay();
+        }
+        throw Error('wiki_ingest_lint_protection_'+code);
+      }
+      wikiUI.close();await openWikiProtection(target.wiki_id);await protectionWait(()=>pd()?.open,'open');
+      const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
+      if(copies.length){pb('confirm').click();await protectionWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
+      pb('conversion').click();await protectionWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
+      noteProtectionUI.lock();pb('close').click();
+    }
+    await wikiUI.open();await settle();const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
+    await formClick('lint');await formClick('lint-run');await until(()=>document.querySelector('[data-wiki-lint-report]'),'protected_lint_report');
+    const report=document.querySelector('[data-wiki-lint-report]');check(report.textContent.includes('검사 1 · 제외 1'),'protected_lint_counts');
+    check(report.querySelector('[data-wiki-action=lint-save]')?.disabled&&report.querySelector('[data-wiki-action=lint-ai]')?.disabled,'protected_lint_scope_not_shrunk');
+    check(report.querySelector('[data-lint-rule=wiki_lint_unreadable_excluded]'),'protected_lint_exclusion');
+    check(NowNoteProtectionProtocol.canonicalJson(noteHistory.export())===before,'protected_lint_no_write');
+    check((await wikiNotebook.list()).filter(row=>row.protected).length===1,'protected_lint_cold_state');
+    check(modelCalls===(config.phase===62?1:0),'protected_lint_no_model');
+    lintVerified=true;protectedLintVerified=true;wikiUI.close();
+  }else if([60,61].includes(config.phase)){
     if(config.phase===60){
       const seed=await generate([ids[0],ids[2]]);await publish(seed.operation.operation_id);
       for(const row of await wikiNotebook.list()){
@@ -112,7 +144,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     globalThis.fetch=async(url,options)=>{
       if(url!=='https://registered.invalid/v1/chat/completions')return originalFetch(url,options);
       calls++;const body=JSON.parse(options.body),input=JSON.parse(body.messages.at(-1).content).input,p=input.pages[0];
-      check(input.pages.length===1&&p.protected===true&&p.wiki_id===id&&body.max_tokens===4096,'protected_query_input');
+      check(input.pages.length===1&&p.protected===true&&p.wiki_id===id&&body.max_tokens===2048,'protected_query_input');
       return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({query_hash:input.query_hash,title:'Protected memory answer',
         claims:[{id:'a',statement:answerMarker,assessment:'supported',citation_ids:['c']}],citations:[{id:'c',wiki_id:p.wiki_id,draft_id:p.draft_id,
           approval_id:p.approval_id,draft_hash:p.draft_hash,document_version:p.document_version,section_id:p.draft.sections[0].id,quote:p.draft.sections[0].markdown}],uncertainties:[]})}}]})};
@@ -142,7 +174,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     globalThis.fetch=async(url,options)=>{
       if(url!=='https://registered.invalid/v1/chat/completions')return originalFetch(url,options);
       queryCalls++;const body=JSON.parse(options.body),input=JSON.parse(body.messages.at(-1).content).input,p=input.pages[0];
-      check(body.model==='Combo/auto'&&body.reasoning_effort==='high'&&body.max_tokens===4096,'query_registered_connection');
+      check(body.model==='Combo/auto'&&body.reasoning_effort==='high'&&body.max_tokens===2048,'query_registered_connection');
       check(input.pages.length===2&&input.pages.every(p=>!p.protected&&p.origin==='server'),'query_compiled_inputs');
       return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({query_hash:input.query_hash,title:'HTTP Query answer',
         claims:[{id:'a1',statement:'Synthetic compiled HTTP finding.',assessment:'supported',citation_ids:['c1']}],
@@ -279,7 +311,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     await wikiUI.open();
   }
   await noteHistory.idle();await settle();
-  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true,peerVerified,citationVerified,queryVerified,protectedQueryVerified,lintVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
+  return {ok:true,mode:config.mode,phase:config.phase,actualWikiHttp:true,comparisonDependency:true,manualIntegration:config.wikiIntegration===true,peerVerified,citationVerified,queryVerified,protectedQueryVerified,lintVerified,protectedLintVerified,clientDeviceId:noteHistoryContext().device,modelCallbacks:modelCalls,externalProviderCalls:0,
     operations:(await wikiIngest.operations()).map(row=>({id:row.operation_id,state:row.state,phase:row.remote.phase})),
     wikis:(await wikiNotebook.list()).map(row=>({id:row.document?.wiki_id||row.id,version:row.document?.document_version??null,approvals:row.document?.approvals.length??null,protected:row.protected===true}))};
 };
