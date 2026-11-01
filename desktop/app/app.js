@@ -6553,8 +6553,8 @@ const WEB_AUTH_ACTIVE_KEY = "nownote.web.auth.active.v1";
 const DESKTOP_STORAGE_KEYS = new Set([STORAGE_KEY, SETTINGS_KEY, "nownote.library.v1", "nownote.history.v1"]);
 const ENCRYPTED_NOTE_PREFIX = "NOW_ENCRYPTED_V1:";
 const ENCRYPTION_ITERATIONS = 210000;
-// #region nownote-only:desktop 2.3.9 릴리스 전 설치형 버전 표기
-const APP_VERSION = "2.3.9";
+// #region nownote-only:desktop 2.4.0 후보 설치형 버전 표기
+const APP_VERSION = "2.4.0";
 // #endregion
 
 const LANGUAGES = {
@@ -16896,7 +16896,7 @@ async function checkAppUpdate() {
   setUpdateStatusMessage(t("settings.update.checking"), "idle");
   renderUpdateDownloadLinks(null);
   try {
-    const payload = await requestServerJson(server, "/api/v1/app/release");
+    const payload = await requestServerJson(server, "/api/v1/app/release?platform=" + (isDesktopClient() ? "windows" : "web"));
     const comparison = compareVersions(payload.latest_version, APP_VERSION);
     if (comparison > 0) {
       setUpdateStatusMessage(t("settings.update.newVersion", { version: payload.latest_version }), "warn");

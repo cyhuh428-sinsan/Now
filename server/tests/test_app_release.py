@@ -37,7 +37,7 @@ def test_app_release_public_even_with_api_token(client: TestClient, monkeypatch:
 
 
 def test_app_release_body_shape(client: TestClient) -> None:
-    from app.core.capabilities import GITHUB_RELEASE_REPO, LATEST_APP_VERSION
+    from app.core.capabilities import ANDROID_APP_VERSION, GITHUB_RELEASE_REPO, LATEST_APP_VERSION
 
     body = client.get("/api/v1/app/release").json()
 
@@ -53,12 +53,13 @@ def test_app_release_body_shape(client: TestClient) -> None:
 
     # NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md의 asset 이름 규칙
     assert exe_url.endswith(f"NowNote-Setup-{LATEST_APP_VERSION}-x64.exe")
-    assert apk_url.endswith(f"NowNote-{LATEST_APP_VERSION}.apk")
+    assert apk_url.endswith(f"NowNote-{ANDROID_APP_VERSION}.apk")
     download_prefix = (
         f"https://github.com/{GITHUB_RELEASE_REPO}/releases/download/v{LATEST_APP_VERSION}/"
     )
     assert exe_url == download_prefix + f"NowNote-Setup-{LATEST_APP_VERSION}-x64.exe"
-    assert apk_url == download_prefix + f"NowNote-{LATEST_APP_VERSION}.apk"
+    android_prefix = f"https://github.com/{GITHUB_RELEASE_REPO}/releases/download/v{ANDROID_APP_VERSION}/"
+    assert apk_url == android_prefix + f"NowNote-{ANDROID_APP_VERSION}.apk"
 
 
 def test_app_release_version_looks_like_semver(client: TestClient) -> None:

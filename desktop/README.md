@@ -33,7 +33,7 @@ npm run dist:win
 생성 위치:
 
 ```text
-desktop/dist/NowNote-Setup-2.3.9-x64.exe
+desktop/dist/NowNote-Setup-2.4.0-x64.exe
 ```
 
 설치형 로컬 저장소가 재시작 후에도 유지되는지는 설치 파일 생성 후 아래 명령으로 점검합니다.
@@ -43,7 +43,7 @@ cd desktop
 npm run check:storage
 ```
 
-## Obsidian Vault 수동 동기화 (2.3.9 개발 후보)
+## Obsidian Vault 수동 동기화
 
 설치형 화면 설정에서 Vault 폴더를 고른 뒤 **변경 내용 비교**를 실행합니다. 비교는 파일과 메모를 변경하지 않습니다. 목록의 기본 작업은 보류이며, 항목별 방향을 선택하고 **선택 항목 동기화**를 눌러야 반영됩니다. 주제·분류 본문은 각 폴더의 `_index.md`에 저장됩니다. Vault에만 있는 파일이나 빈 폴더는 가져올 상위 항목을 지정할 수 있습니다.
 
