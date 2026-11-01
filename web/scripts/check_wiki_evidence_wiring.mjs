@@ -23,7 +23,9 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   assert.equal(typeof serverApi.readWiki,'function',file+' must bind the existing Wiki read endpoint');
   await serverApi.readWiki('exact id');assert.deepEqual(reads,['/exact%20id']);
   assert.equal(bookApi.server,server,file+' reader must inspect pinned server evidence');
+  assert.equal(typeof bookApi.readOperations,'function',file+' graph must consume validated original operation bindings');
   assert.equal(ingestApi.source,box.wikiSourceNote,file+' ingest must resolve account-bound local evidence');
   assert.ok(source.includes('globalThis.NowWikiEvidence='),file+' must include the evidence module');
+  assert.ok(source.includes('globalThis.NowWikiGraph='),file+' must include the approved graph module');
 }
 console.log('Web/Desktop pinned evidence runtime wiring PASS');

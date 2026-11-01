@@ -282,7 +282,18 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       ||doc.rejected_draft_ids.some(id=>!ids.has(id)||approvedDrafts.has(id)))throw Error('위키 검토 형식이 다릅니다.');
     a.check();return copy(doc);
   }
-  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,
+  async function approvedCatalog(){
+    const a=action(),active=()=>{a.check();if(api.history()!==a.h)throw Error('위키 이력 연결이 변경되었습니다.');};
+    const rows=await list();active();const verified=[];
+    for(const row of rows){
+      const approval=row.document?.approvals.at(-1),draft=row.document?.drafts.find(d=>d.id===approval?.draft_id);
+      if(!draft||row.deleted||row.protected||row.unavailable||row.pending||row.lifecycle?.pending){verified.push({...row,available:false});continue;}
+      const status=await sourceStatus(draft,row.document);active();verified.push({...row,...status});
+    }
+    const operations=await api.readOperations?.()||[];active();
+    const catalog=await NowWikiGraph.buildApprovedWikiCatalog(verified,a.ctx,{operations});active();return catalog;
+  }
+  return {list,capture,sourceStatus,canRead,save,approve,reject,inspectProtected,approvedCatalog,
     trash:id=>L.move('wiki:'+id,'trash'),restoreWiki:id=>L.move('wiki:'+id,'restore'),
     retryLifecycle:id=>L.retry('wiki:'+id),reconcileLifecycle:id=>L.reconcile('wiki:'+id)};
 };

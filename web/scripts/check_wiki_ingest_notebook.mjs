@@ -121,4 +121,10 @@ oldProtected.contexts[box.NowNoteHistory.key(ctx)].notes['wiki:'+alpha.wiki_id].
 saved.recovery_archives.push(oldProtected);history=makeHistory();
 assert.equal((await ordinary.sourceStatus(beta.document.drafts[0],betaApproved.document)).available,false,'protected retained comparison cannot be hidden by a plain current representation');
 saved=retainedPlain;history=makeHistory();
+vm.runInContext(await fs.readFile(new URL('../vendor/wiki-graph.js',import.meta.url),'utf8'),box);
+api.readOperations=()=>book.operations();
+assert.equal(typeof ordinary.approvedCatalog,'function','verified notebook must expose an ephemeral approved catalog');
+const catalogWrites=writes,approvedCatalog=await ordinary.approvedCatalog();
+assert.equal(approvedCatalog.nodes.length,2);assert.equal(writes,catalogWrites,'catalog reads do not persist an index');
+assert.ok(approvedCatalog.nodes.find(n=>n.wiki_id===beta.wiki_id).stale,'catalog preserves changed comparison status');
 console.log('Wiki ingest notebook: durable IDs before invoke, one attempt, explicit draft save, single local CAS, quota rollback, cold/scope/no-op PASS (synthetic provider only)');
