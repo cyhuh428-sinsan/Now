@@ -77,7 +77,7 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       globalThis.fetch=async(url,options)=>{
         if(url!=='https://journey-model.invalid/v1/chat/completions')return originalFetch(url,options);
         queryCalls++;const requestBody=JSON.parse(options.body),input=JSON.parse(requestBody.messages.at(-1).content).input,page=input.pages[0];
-        check(requestBody.max_tokens===2048&&input.pages.length===3,'journey_query_scope');
+        check(requestBody.max_tokens===2048&&input.pages.length===2&&input.pages.every(p=>[alpha.wiki_id,beta.wiki_id].includes(p.wiki_id)),'journey_query_scope');
         return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({query_hash:input.query_hash,title:'I12 synthetic answer',claims:[{id:'a',statement:'Synthetic compiled candidate',assessment:'inferred',citation_ids:['c']}],
           citations:[{id:'c',wiki_id:page.wiki_id,draft_id:page.draft_id,approval_id:page.approval_id,draft_hash:page.draft_hash,document_version:page.document_version,section_id:page.draft.sections[0].id,quote:page.draft.sections[0].markdown}],uncertainties:[]})}}]})};
       };
@@ -96,23 +96,23 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
         modelCalls+=queryCalls;
       }finally{wikiUI.close();state.settings.llm=originalConfig;globalThis.fetch=originalFetch;}
       await wikiUI.open();await formClick('lint');await formClick('lint-run');await until(()=>document.querySelector('[data-wiki-lint-report]'),'journey_lint');
-      check(document.querySelector('[data-wiki-lint-report]').textContent.includes('검사 4'),'journey_lint_scope');
+      check(document.querySelector('[data-wiki-lint-report]').textContent.includes('검사 3'),'journey_lint_scope');
       await formClick('lint-save');await until(()=>document.querySelector('[data-wiki-action=confirm-change]'),'journey_report_consent');await formClick('confirm-change');
       await until(()=>document.querySelector('[data-wiki-action=commit-ingest]'),'journey_report_preview');await formClick('commit-ingest');
-      await until(async()=>(await wikiIngest.operations()).some(o=>o.inputs.length===4&&o.remote?.phase==='staged'),'journey_report_staged');
-      const report=(await wikiIngest.operations()).find(o=>o.inputs.length===4&&o.remote?.phase==='staged');await publish(report.operation_id);
+      await until(async()=>(await wikiIngest.operations()).some(o=>o.inputs.length===3&&o.inputs.every(r=>r.kind==='wiki')&&o.remote?.phase==='staged'),'journey_report_staged');
+      const report=(await wikiIngest.operations()).find(o=>o.inputs.length===3&&o.inputs.every(r=>r.kind==='wiki')&&o.remote?.phase==='staged');await publish(report.operation_id);
       await approve((await wikiNotebook.list()).find(row=>row.document?.drafts.at(-1).title==='위키 점검 보고서').document);
     }
     const rows=await wikiNotebook.list(),migrated=rows.find(row=>row.document?.drafts.some(d=>!d.schema_version))?.document;
-    check(rows.length===5&&migrated?.schema_version===2&&migrated.drafts.length===2,'journey_cold_documents');
+    check(rows.length===4&&migrated?.schema_version===2&&migrated.drafts.length===2,'journey_cold_documents');
     check(rows.every(row=>row.document?.approvals.at(-1)?.draft_id===row.document.drafts.at(-1).id),'journey_all_approved');
     check((await wikiIngest.operations()).length===11,'journey_operation_count');
     const answer=rows.find(row=>row.document.drafts.at(-1).title==='I12 synthetic answer').document,report=rows.find(row=>row.document.drafts.at(-1).title==='위키 점검 보고서').document;
-    check(answer.drafts.at(-1).evidence_manifest.length===3&&report.drafts.at(-1).evidence_manifest.length===4,'journey_all_inputs');
+    check(answer.drafts.at(-1).evidence_manifest.length===2&&report.drafts.at(-1).evidence_manifest.length===3,'journey_all_inputs');
     check((await wikiNotebook.approvedCatalog()).edges.length===1,'journey_relation_persisted');
     await wikiUI.open();await settle();const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
     await formClick('lint');await formClick('lint-run');await until(()=>document.querySelector('[data-wiki-lint-report]'),'journey_cold_lint');
-    check(document.querySelector('[data-wiki-lint-report]').textContent.includes('검사 5'),'journey_cold_lint_scope');
+    check(document.querySelector('[data-wiki-lint-report]').textContent.includes('검사 4'),'journey_cold_lint_scope');
     check(NowNoteProtectionProtocol.canonicalJson(noteHistory.export())===before,'journey_cold_lint_no_write');
     check(modelCalls===(config.phase===66?3:0),'journey_model_count');
     journeyVerified=true;queryVerified=true;lintVerified=true;wikiUI.close();
