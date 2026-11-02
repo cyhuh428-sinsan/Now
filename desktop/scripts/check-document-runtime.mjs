@@ -69,7 +69,12 @@ try{
   assert.equal(await c.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
   assert.equal(await c.evaluate(`(await nownoteDesktop.storage.read('nownote.web.v1')).tree.some(node=>node.title==='Restore storage QA'&&node.status==='active')`),true);
   await c.evaluate('window.close()').catch(()=>{});c.close();if(cold.exitCode===null)await once(cold,'exit');
-  console.log(JSON.stringify({runtime:'actual main/preload',packaged,sqlite:true,separateWikiWindow:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
+  const wikiPort=await port(),standalone=start(wikiPort,true);
+  const standaloneTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>row.url.includes('workspace=wiki'));},'standalone Wiki');
+  const d=await client(standaloneTarget);await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'standalone Wiki mounted');
+  assert.equal(await d.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
+  await d.evaluate('window.close()').catch(()=>{});d.close();if(standalone.exitCode===null)await once(standalone,'exit');
+  console.log(JSON.stringify({runtime:'actual main/preload',packaged,sqlite:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
 }finally{
   for(const ws of sockets)ws.close();
   for(const child of children){child.kill();if(child.exitCode===null)await Promise.race([once(child,'exit'),delay(5000)]);}
