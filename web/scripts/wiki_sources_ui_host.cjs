@@ -7,9 +7,9 @@ app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
 const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
 const snapshots=new Map();
-const historyCounts={open:0,current:0,select:0,full:0,note:0};
+const historyCounts={open:0,current:0,page:0,select:0,full:0,note:0};
 const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
-for(const method of ['open','current','select','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
+for(const method of ['open','current','page','select','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
   historyCounts[method]++;
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
@@ -57,6 +57,7 @@ app.whenReady().then(async()=>{
       const note=id=>({owner_id:ctx.owner,local_id:id,note_type:'tree',source:'manual',content:'old',title:id,level:1});
       const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true});
       const value={schema_version:1,contexts:{[account]:{notes:{'qa-save-a':entry('qa-save-a'),'qa-save-b':entry('qa-save-b')}}}};
+      value.contexts[account].notes['qa-save-a'].revisions=Array.from({length:125},(_,index)=>({revision_id:crypto.randomUUID(),created_at:'2026-11-03T00:00:00.000Z',reason:'edit',snapshot:{schema_version:1,note:{...note('qa-save-a'),content:'QA_PAGE_HISTORY_'+index}}}));
       for(const kind of ['daily','worklog']){
         const date='2026-11-03',server={...state.settings.server,ownerId:ctx.owner},note=(kind==='daily'?dailyNoteToServerNote:worklogNoteToServerNote)({date,content:'OLD_DATE_BODY',updatedAt:new Date().toISOString()},server);
         value.contexts[account].notes[note.local_id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true};
@@ -89,15 +90,31 @@ app.whenReady().then(async()=>{
     await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:startupScript.identifier});window.webContents.debugger.detach();
     if(!startupCurrent||mode==='desktop'&&(historyCounts.open!==beforeStartup.open||historyCounts.current<=beforeStartup.current))throw Error('current_startup_did_not_defer '+JSON.stringify({startup,beforeStartup,historyCounts}));
     await run(`(async()=>{globalThis.qaProductSave={...${JSON.stringify(savedSaveFixture)},backend:await historyPersistence()};
-      const q=qaProductSave,all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;
+      const q=qaProductSave,all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;let pageFloor=null;
       const dataBeforeSelected=JSON.stringify(await readStorage(STORAGE_KEY));
       IDBObjectStore.prototype.getAll=function(){throw Error('selected_first_full_scan');};
-      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');return get.call(this,key);};
+      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');
+        if(pageFloor!==null&&Array.isArray(key)&&key[1]!=='$root'){const p=JSON.parse(key[1]);if(p[3]==='qa-save-a'&&p[4]==='revisions'&&p.length>5&&Number(p[5])<pageFloor)throw Error('unselected_revision_page_read');}
+        return get.call(this,key);};
       try{
         globalThis.qaLazyBeforeBrowse=typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]');
         await wikiUI.open('browse');
         if(!noteHistory.deferred()||noteHistory.failure()||!document.querySelector('#wikiDialog [data-wiki-action=refresh]'))throw Error('wiki_browse_loaded_whole_history');
         wikiUI.close();q.browseDeferred=true;
+        pageFloor=75;await noteHistoryUI.open('qa-save-a');
+        const history=document.querySelector('#noteHistoryDialog');
+        if(!noteHistory.deferred()||history.querySelector('[name=before]').options.length!==51)throw Error('first_history_page_not_lazy '+JSON.stringify({deferred:noteHistory.deferred(),count:history.querySelector('[name=before]').options.length,status:history.querySelector('.history-status').textContent.slice(0,200)}));
+        pageFloor=25;history.querySelector('[data-action=more]').click();
+        for(let i=0;i<300&&history.querySelector('[name=before]').options.length!==101;i++)await new Promise(resolve=>setTimeout(resolve,10));
+        if(!noteHistory.deferred()||history.querySelector('[name=before]').options.length!==101)throw Error('next_history_page_not_lazy');
+        const context=noteHistoryContext,view=noteHistory.currentView;
+        try{
+          noteHistoryContext=()=>({...context(),online:true});noteHistory.currentView=id=>{const item=view(id);return item?{...item,localOnly:false}:item;};
+          history.querySelector('[data-action=more]').click();
+          for(let i=0;i<300&&!history.querySelector('.history-status').textContent.includes('연결 상태가 바뀌었습니다');i++)await new Promise(resolve=>setTimeout(resolve,10));
+          if(!history.querySelector('.history-status').textContent.includes('연결 상태가 바뀌었습니다')||noteHistory.failure())throw Error('local_cursor_crossed_network_mode');
+        }finally{noteHistoryContext=context;noteHistory.currentView=view;}
+        noteHistoryUI.close();pageFloor=null;q.localPaged=true;
         elements.treeContent.value='SELECTED_FIRST_EDIT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
         await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
         state.selectedDate='2026-11-03';elements.dailyContent.value='DAILY_SELECTED_EDIT';saveDailyFromEditor();await noteHistoryCaptureChain;
@@ -167,7 +184,7 @@ app.whenReady().then(async()=>{
           currentRead=true;
         }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       }
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupDocumentWise:q.backupDocumentWise,corruptHistoryBlocked:q.corruptHistoryBlocked};
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,localPaged:q.localPaged,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupDocumentWise:q.backupDocumentWise,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     productSave.metadataScoped=await run(`(async()=>{

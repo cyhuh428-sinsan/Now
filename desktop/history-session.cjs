@@ -7,6 +7,7 @@ function createHistorySession(filename){
   function remember(sender,snapshot){const state={...snapshot,revision:randomUUID()};sessions.set(sender,state);return state;}
   function current(sender,revision){const state=sessions.get(sender);if(!state||state.revision!==revision)throw Error('저장 기준을 다시 열어 확인하세요.');return state;}
   return {
+    page(_sender,request){return file.readKeyHistoryPage(filename(),KEY,request);},
     select(sender,{account,id,stamp}){
       const snapshot=file.readKeyNote(filename(),KEY,account,id,stamp);
       const value={schema_version:1,contexts:{[account]:{notes:{[id]:snapshot.entry}}}};

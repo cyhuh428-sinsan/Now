@@ -41,6 +41,14 @@ jobs:
       - name: Check web runtime script syntax
         run: node --check web/scripts/check_import_export.mjs
 
+      - name: Check document history read and backup regressions
+        run: >-
+          node --test web/scripts/history-page.test.cjs web/scripts/history-backup.test.cjs
+          web/scripts/deferred-history.test.cjs web/scripts/selected-history.test.cjs
+          web/scripts/document-select-idb.test.mjs web/scripts/browser-select-guard.test.mjs
+          web/scripts/wiki-summary-notebook.test.mjs web/scripts/wiki-runtime-loader.test.mjs
+          web/scripts/wiki-runtime-bundle.test.mjs
+
       - name: Run repository preflight
         working-directory: server
         run: python scripts/preflight.py --env-file .env.example --allow-example

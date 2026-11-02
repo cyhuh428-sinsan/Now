@@ -60,7 +60,7 @@ function assertTrustedStoreFrame(event){
 
 function registerDesktopStorageHandlers() {
   const history=require('./history-session.cjs').createHistorySession(desktopStorePath);
-  for(const [route,method]of [['open','open'],['current','current'],['select','select'],['full','full'],['note','note']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
+  for(const [route,method]of [['open','open'],['current','current'],['page','page'],['select','select'],['full','full'],['note','note']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey('nownote.history.v1');
     try{return {ok:true,...history[method](event.sender,payload)};}
     catch(error){return {ok:false,message:error.message,committed:error.committed===true};}

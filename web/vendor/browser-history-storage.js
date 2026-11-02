@@ -185,6 +185,7 @@
       },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
       readDirectory: (path,guard) => selective(check=>transaction.readDirectory(path,guard,check),guard),
+      readHistoryPage: (request,guard) => selective(check=>transaction.readHistoryPage(request,guard,check),guard),
       readCurrent: (account,guard) => selective(check=>transaction.readCurrent(account,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);

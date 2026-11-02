@@ -424,6 +424,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     }
     return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
   }
+  function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
+    const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');
+    if(typeof id!=='string'||!id||typeof stamp!=='string'||!stamp||!Number.isInteger(limit)||limit<1||limit>100)throw fail();
+    const current=yield* currentSteps(account);
+    if(!current.supported||!Object.hasOwn(current.notes,id))throw fail();
+    const path=['contexts',account,'notes',id,'revisions'],validated=new Map();
+    const selected=yield* selectSteps(path,true,validated),array=selected.part;
+    if(!selected.found||array?.type!=='array')throw fail();
+    const total=array.entries.length;let before=total;
+    if(cursor!==null){
+      if(typeof cursor!=='string'||cursor.length>16384)throw fail();
+      let value;try{value=JSON.parse(cursor);}catch{throw fail();}
+      if(!Array.isArray(value)||value.length!==5||value[0]!=='history_page_v1'||value[1]!==account||value[2]!==id||value[3]!==stamp
+        ||!Number.isInteger(value[4])||value[4]<0||value[4]>total)throw fail();
+      before=value[4];
+    }
+    const start=Math.max(0,before-limit),items=[];
+    for(let index=before-1;index>=start;index--){
+      const row=yield* selectSteps([...path,String(index)],false,validated),revision=row.value;
+      if(!row.found||!revision||typeof revision!=='object'||Array.isArray(revision)||!revision.snapshot?.note||typeof revision.snapshot.note!=='object'||Array.isArray(revision.snapshot.note))throw fail();
+      items.push(revision);
+    }
+    return {projection:'history_page_v1',account,id,stamp,total,items,nextCursor:start?JSON.stringify(['history_page_v1',account,id,stamp,start]):null};
+  }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
     path=[...path];
@@ -440,7 +464,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const old=new Map([...before].filter(([key])=>key===parent||key===id||key.startsWith(prefix)));
     return {changes:delta(old,after),range:{id,prefix,ids:[...old.keys()].filter(key=>key!==parent).sort()}};
   }
-  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps,currentSteps};
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps,currentSteps,historyPageSteps};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();
 
@@ -501,8 +525,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false){
-      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null){
+      const steps=page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
@@ -519,7 +543,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             try{
               active();const physical=metadata.result;
               if(physical===undefined){
-                if(patch)throw Error('Document path conflict');
+                if(patch||page)throw Error('Document path conflict');
                 checkMetadata(undefined);
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
@@ -530,6 +554,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               }
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
               if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
+              if(page&&page.stamp!==physical.stamp)throw Error('Document journal changed; reopen before paging');
               checkMetadata(physical.row);
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
@@ -571,14 +596,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                   }
                   return;
                 }
-                if(current&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
+                if((current||page)&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
                   active();const row=request.result;
                   if(row?.id!==id)throw Error('Missing document part');
                   if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
                     ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
-                  if(current)cache.set(id,row.value);
+                  if(current||page)cache.set(id,row.value);
                   step=steps.next(row.value);next();
                 }catch(e){fail(e);}};
               }
@@ -593,6 +618,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
     transaction.readDirectory=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,null,false,true);
+    transaction.readHistoryPage=(request,guard,checkMetadata=()=>{})=>pathTransaction(null,guard,checkMetadata,null,false,false,structuredClone(request));
     transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
@@ -700,7 +726,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,request=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -774,6 +800,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      page(id,cursor=null,limit=50){
+        if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
+        const generation=epoch,key=bound,account=accountKey(),active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();if(full||loading)return null;
+          const stamp=preview.stamp,result=await readPage({account,id,stamp,cursor,limit},{active});
+          if(!active()||result.projection!=='history_page_v1'||result.account!==account||result.id!==id||result.stamp!==stamp)throw stale();
+          return result;
+        });
+        selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
+      },
       archive(read){
         if(!preview||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
@@ -1914,6 +1951,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
       readDirectory: (path,guard) => selective(check=>transaction.readDirectory(path,guard,check),guard),
+      readHistoryPage: (request,guard) => selective(check=>transaction.readHistoryPage(request,guard,check),guard),
       readCurrent: (account,guard) => selective(check=>transaction.readCurrent(account,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
@@ -2376,6 +2414,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   document.body.append(dialog);
   const $ = selector => dialog.querySelector(selector);
   let id = '', rows = [], cursor = null, current = null, busy = false, run = 0, bound = '', previousFocus = null, confirmation = null;
+  let pagingOnline = null;
   const cache = new Map(), plain = new Map();
   const reasons = { baseline: '이력 기록 시작', write: '저장', edit: '편집', delete: '삭제', restore: '복원', before_restore: '복원 직전', offline_import: '오프라인 분기' };
   const status = value => { $('.history-status').textContent = value; };
@@ -2448,8 +2487,28 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     busy = true; const token = ++run;
     try {
       status('이력 조회 중…');
+      const online=api.online(id),connectionChanged=()=>Error('연결 상태가 바뀌었습니다. 새로고침한 뒤 이력을 확인하세요.');
+      if(more&&pagingOnline!==null&&pagingOnline!==online)throw connectionChanged();
+      if(!more)pagingOnline=online;
+      const localPage=!online?await api.store.page?.(id,more?cursor:null):null;
+      if(!valid(token))return;
+      if(api.online(id)!==online)throw connectionChanged();
+      if(localPage){
+        if(!more){
+          rows=[];cache.clear();plain.clear();current=null;
+          const item=api.store.currentView(id);if(!item)throw Error('현재 계정의 메모를 확인하세요.');
+          rows.push({key:'draft',label:'현재 로컬 편집본'});cache.set('draft',{schema_version:1,note:item.draft});
+        }
+        for(const revision of localPage.items){
+          const key='local:'+revision.revision_id;if(rows.some(row=>row.key===key))continue;
+          rows.push({key,ref:{kind:'offline_branch',id:revision.revision_id},local:true,label:`${revision.created_at} · ${reasons[revision.reason]||revision.reason} · 로컬`});
+          cache.set(key,revision.snapshot);
+        }
+        cursor=localPage.nextCursor;updateOptions();status(`로컬 이력 ${rows.length-1}/${localPage.total}개 · 오프라인`);await showDiff();return;
+      }
       await api.store.ensure?.(id);
       if(!valid(token))return;
+      if(api.online(id)!==online)throw connectionChanged();
       if (!more) {
         rows = []; cache.clear(); plain.clear(); cursor = null;
         const item = api.store.view(id);
@@ -2461,7 +2520,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             label: `${revision.created_at} · ${reasons[revision.reason] || revision.reason} · 로컬` });
           cache.set(key, revision.snapshot);
         }
-        if (!api.online(id)) {
+        if (!online) {
           current = null; updateOptions(); status('오프라인 · 복원은 로컬 분기로 보존됩니다.'); return;
         }
         try { current = (await api.store.compare(id)).remote; }
@@ -15590,6 +15649,7 @@ function finishNoteHistoryBootstrap(){
 
 async function historyPersistence() {
   if(!isDesktopClient())return {open:guard=>browserHistoryStorage().readSnapshot(guard),
+    page:(request,guard)=>browserHistoryStorage().readHistoryPage(request,guard),
     select:(request,guard)=>browserHistoryStorage().selectNote(request,guard),
     current:(account,guard)=>browserHistoryStorage().readCurrent(account,guard),
     full:(request,guard)=>browserHistoryStorage().writeSnapshot(request.expected,request.next,guard),
@@ -15597,8 +15657,9 @@ async function historyPersistence() {
   const storage=window.nownoteDesktop.storage,info=await storage.info();let expected;
   const unwrap=result=>{if(!result?.ok)throw Object.assign(new Error(result?.message||"이력 저장 기준을 확인하세요."),{committed:result?.committed===true});return result;};
   if(info.historySessions&&storage.history)return {open:async guard=>{if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.open());if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;},
-    ...(!info.retainedOriginal&&storage.history.select?{select:async(request,guard)=>{if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.select(request));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
-    ...(!info.retainedOriginal&&storage.history.current?{current:async(account,guard)=>{if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.current(account));if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
+    ...(storage.history.select?{select:async(request,guard)=>{if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.select(request));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
+    ...(storage.history.current?{current:async(account,guard)=>{if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.current(account));if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
+    ...(storage.history.page?{page:async(request,guard)=>{if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.page(request));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
     full:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.full({revision:request.revision,next:request.next}));},
     note:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.note(request));}};
   return {open:async()=>{expected=await readStorage(NOTE_HISTORY_KEY);return {value:expected,revision:null,scoped:false};},
@@ -15623,7 +15684,7 @@ async function initializeNoteHistory() {
     const snapshot=normalize(await backend.open(guard));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return {snapshot};
   };
   noteHistory=NowDeferredHistory.create({initial:await readInitial(),context:noteHistoryContext,contextKey,accountKey,
-    select:backend.select,saveNote:backend.note,request:noteHistoryRequest,
+    select:backend.select,saveNote:backend.note,readPage:backend.page,request:noteHistoryRequest,
     ready:finishNoteHistoryBootstrap,
     change:error=>{renderSyncStatusIndicator(state.settings.server,"bad");showNotice(error.message,"error");},
     load:async guard=>normalize(await backend.open(guard)),
@@ -15656,7 +15717,7 @@ async function initializeNoteHistory() {
   };
   noteHistoryUI = mountNoteHistory({
     store: noteHistory, contextKey: () => NowNoteHistory.key(noteHistoryContext()),
-    online: id => noteHistoryContext().online && !noteHistory.view(id)?.localOnly,
+    online: id => noteHistoryContext().online && !noteHistory.currentView(id)?.localOnly,
     request: (path, method, body) => noteHistoryRequest(noteHistoryContext(), path, method, body),
     decrypt: (content, password) => decryptPlainText(content, password),
     apply: async note => {

@@ -12,6 +12,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   document.body.append(dialog);
   const $ = selector => dialog.querySelector(selector);
   let id = '', rows = [], cursor = null, current = null, busy = false, run = 0, bound = '', previousFocus = null, confirmation = null;
+  let pagingOnline = null;
   const cache = new Map(), plain = new Map();
   const reasons = { baseline: '이력 기록 시작', write: '저장', edit: '편집', delete: '삭제', restore: '복원', before_restore: '복원 직전', offline_import: '오프라인 분기' };
   const status = value => { $('.history-status').textContent = value; };
@@ -84,8 +85,28 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     busy = true; const token = ++run;
     try {
       status('이력 조회 중…');
+      const online=api.online(id),connectionChanged=()=>Error('연결 상태가 바뀌었습니다. 새로고침한 뒤 이력을 확인하세요.');
+      if(more&&pagingOnline!==null&&pagingOnline!==online)throw connectionChanged();
+      if(!more)pagingOnline=online;
+      const localPage=!online?await api.store.page?.(id,more?cursor:null):null;
+      if(!valid(token))return;
+      if(api.online(id)!==online)throw connectionChanged();
+      if(localPage){
+        if(!more){
+          rows=[];cache.clear();plain.clear();current=null;
+          const item=api.store.currentView(id);if(!item)throw Error('현재 계정의 메모를 확인하세요.');
+          rows.push({key:'draft',label:'현재 로컬 편집본'});cache.set('draft',{schema_version:1,note:item.draft});
+        }
+        for(const revision of localPage.items){
+          const key='local:'+revision.revision_id;if(rows.some(row=>row.key===key))continue;
+          rows.push({key,ref:{kind:'offline_branch',id:revision.revision_id},local:true,label:`${revision.created_at} · ${reasons[revision.reason]||revision.reason} · 로컬`});
+          cache.set(key,revision.snapshot);
+        }
+        cursor=localPage.nextCursor;updateOptions();status(`로컬 이력 ${rows.length-1}/${localPage.total}개 · 오프라인`);await showDiff();return;
+      }
       await api.store.ensure?.(id);
       if(!valid(token))return;
+      if(api.online(id)!==online)throw connectionChanged();
       if (!more) {
         rows = []; cache.clear(); plain.clear(); cursor = null;
         const item = api.store.view(id);
@@ -97,7 +118,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
             label: `${revision.created_at} · ${reasons[revision.reason] || revision.reason} · 로컬` });
           cache.set(key, revision.snapshot);
         }
-        if (!api.online(id)) {
+        if (!online) {
           current = null; updateOptions(); status('오프라인 · 복원은 로컬 분기로 보존됩니다.'); return;
         }
         try { current = (await api.store.compare(id)).remote; }

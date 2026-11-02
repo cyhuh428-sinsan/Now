@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,request=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -76,6 +76,17 @@
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      page(id,cursor=null,limit=50){
+        if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
+        const generation=epoch,key=bound,account=accountKey(),active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();if(full||loading)return null;
+          const stamp=preview.stamp,result=await readPage({account,id,stamp,cursor,limit},{active});
+          if(!active()||result.projection!=='history_page_v1'||result.account!==account||result.id!==id||result.stamp!==stamp)throw stale();
+          return result;
+        });
+        selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
+      },
       archive(read){
         if(!preview||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();

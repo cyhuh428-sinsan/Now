@@ -10,8 +10,9 @@ function fixture({online=false}={}){
   const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:['r'],head_revision_id:'r',head_version:1},revisions:[{revision_id:'old',snapshot:{note:note(id)}}],outbox:[],receipts:[],replicaSelected:true,localOnly:!online,dirty:false});
   let root={schema_version:1,contexts:{[account]:{notes:{a:entry('a'),b:entry('b')}}}};
   const notes=Object.fromEntries(Object.entries(root.contexts[account].notes).map(([id,item])=>[id,{projection:'current_v1',raw:item.raw,draft:item.draft,base:{crypto_epoch:0,head_revision_id:'r'},localOnly:!online,pending:0,dirty:false}]));
-  const calls=[],remote={a:note('a'),b:note('b')};let version=1;
+  const calls=[],pages=[],remote={a:note('a'),b:note('b')};let version=1;
   const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
+    readPage:async request=>{pages.push(request);return {projection:'history_page_v1',account,id:request.id,stamp,total:1,items:structuredClone(root.contexts[account].notes[request.id].revisions),nextCursor:null};},
     request:async(_ctx,path,method,body)=>{
       calls.push({path,method,id:body.local_id});
       if(path==='revisions/import')return {imported_refs:body.entries.map(e=>({kind:'offline_branch',id:e.revision_id}))};
@@ -25,8 +26,16 @@ function fixture({online=false}={}){
       root.contexts[account].notes[request.id]=structuredClone(request.next);saved.push(request.id);stamp+='x';return {stamp,revision:stamp};},
     load:async()=>{fullReads++;return {value:root,stamp};},
     build:s=>NowNoteHistory.create({initial:s.value,context,write:async()=>{},request:async()=>{throw Error('network forbidden');}})});
-  return {api,note,calls,remote,fullReads:()=>fullReads,selectedReads,saved,root:()=>root,changeBinding:()=>{binding='other';},externalChange:()=>{stamp+='external';}};
+  return {api,note,calls,pages,remote,fullReads:()=>fullReads,selectedReads,saved,root:()=>root,changeBinding:()=>{binding='other';},externalChange:()=>{stamp+='external';}};
 }
+
+test('readonly pagination keeps the journal deferred without selecting or writing a full entry',async()=>{
+  const f=fixture(),page=await f.api.page('a');assert.equal(page.items[0].revision_id,'old');
+  assert.equal(f.api.deferred(),true);assert.equal(f.fullReads(),0);assert.equal(f.selectedReads.length,0);assert.equal(f.saved.length,0);
+  assert.equal(f.pages[0].stamp,'one');assert.equal(f.pages[0].account,account);
+  assert.throws(()=>f.api.view('a'));
+  const g=fixture(),late=g.api.page('a');g.changeBinding();await assert.rejects(late);assert.equal(g.pages.length,0);
+});
 test('first edit and sealing load only selected history, preserve the sibling and can later materialize the latest whole journal',async()=>{
   const f=fixture();await f.api.edit({...f.note('a'),content:'EDITED'});await f.api.seal('a');
   assert.equal(f.fullReads(),0);assert.deepEqual(f.selectedReads,['a','a']);assert.deepEqual(f.saved,['a','a']);

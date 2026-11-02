@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
     history:{
       select:request=>ipcRenderer.invoke('nownote:history-select',request),
       current:account=>ipcRenderer.invoke('nownote:history-current',account),
+      page:request=>ipcRenderer.invoke('nownote:history-page',request),
       open:()=>ipcRenderer.invoke('nownote:history-open'),
       full:request=>ipcRenderer.invoke('nownote:history-full',request),
       note:request=>ipcRenderer.invoke('nownote:history-note',request),

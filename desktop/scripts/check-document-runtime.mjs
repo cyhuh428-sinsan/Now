@@ -66,6 +66,20 @@ try{
     try{await nownoteDesktop.storage.readPath('nownote.vault.v1',[]);throw Error('Unknown path key accepted');}catch(error){if(error.message==='Unknown path key accepted')throw error;}
     try{await nownoteDesktop.storage.write('${settingsKey}',{fontSize:'bad'},{expectedValue:value});throw Error('Partial baseline accepted');}catch(error){if(error.message==='Partial baseline accepted')throw error;}
   })()`);
+  await a.evaluate(`(async()=>{
+    await noteHistoryFlush();noteHistoryController.lock();
+    const history=nownoteDesktop.storage.history,ctx=noteHistoryContext(),account=NowNoteHistory.key(ctx),before=await history.open();
+    const note={owner_id:ctx.owner,local_id:'qa-paged-history',note_type:'tree',source:'manual',content:'current'};
+    const entry={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:Array.from({length:3},(_,index)=>({revision_id:'r'+index,snapshot:{note:{...note,content:'history '+index}},unknown:index})),outbox:[],receipts:[]};
+    if(!(await history.full({revision:before.revision,next:{schema_version:1,contexts:{[account]:{notes:{[note.local_id]:entry}}}}})).ok)throw Error('Native page fixture failed');
+    const current=await history.current(account),first=await history.page({account,id:note.local_id,stamp:current.stamp,limit:2});
+    if(!first.ok||first.items.length!==2||first.items[0].unknown!==2||!first.nextCursor||Object.hasOwn(first,'revision'))throw Error('Native page IPC failed');
+    if((await history.full({revision:first.stamp,next:{}})).ok)throw Error('Page authorized a full write');
+    const next=await history.page({account,id:note.local_id,stamp:current.stamp,cursor:first.nextCursor,limit:2});
+    if(!next.ok||next.items.length!==1||next.items[0].unknown!==0||next.nextCursor!==null)throw Error('Native page cursor failed');
+    const after=await history.open();if(!(await history.full({revision:after.revision,next:before.value})).ok)throw Error('Native QA restore failed');
+    await noteHistoryController.resume({projectView:false,renderView:false});
+  })()`);
   const secondary=start(debug,true);
   const secondaryExit=once(secondary,'exit');
   const wikiTarget=await until(async()=>{const rows=await targets(debug);return rows.find(row=>row.url.includes('workspace=wiki'));},'wiki window');
@@ -86,6 +100,7 @@ try{
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.readDirectory('${settingsKey}',[]);return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.open();return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.current(JSON.stringify(['https://qa.invalid','alice']));return false;}catch{return true;}})()`),true);
+  assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.page({account:'synthetic',id:'qa',stamp:'invalid'});return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.select({account:'untrusted',id:'a',stamp:'untrusted'});return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.note({revision:'untrusted'});return false;}catch{return true;}})()`),true);
   await b.evaluate('window.close()');b.close();await a.evaluate('window.close()').catch(()=>{});a.close();
@@ -103,7 +118,7 @@ try{
   const d=await client(standaloneTarget);await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'standalone Wiki mounted');
   assert.equal(await d.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
   await d.evaluate('window.close()').catch(()=>{});d.close();if(standalone.exitCode===null)await once(standalone,'exit');
-  console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
+  console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,pagedHistory:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
 }finally{
   for(const ws of sockets)ws.close();
   for(const child of children){child.kill();if(child.exitCode===null)await Promise.race([once(child,'exit'),delay(5000)]);}

@@ -19,6 +19,12 @@ function createPartitionedStore(filename){
     return cache.get(key);
   }
   return {
+    readHistoryPage(key,request){return store.snapshot(()=>{
+      if(stamp(store.manifest(key))!==request.stamp)throw Error('Document journal changed; reopen before paging');
+      const cache=new Map(),steps=parts.historyPageSteps(request);let step=steps.next();
+      while(!step.done){const id=step.value;if(!cache.has(id))cache.set(id,store.read(key,id)?.value);step=steps.next(cache.get(id));}
+      return step.value;
+    });},
     readNote(key,account,id,expectedStamp){return store.snapshot(()=>{
       const manifest=store.manifest(key),token=stamp(manifest);
       if(token!==expectedStamp)throw Error('Document journal changed; reopen before reading');

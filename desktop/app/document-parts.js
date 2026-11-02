@@ -143,6 +143,30 @@
     }
     return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
   }
+  function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
+    const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');
+    if(typeof id!=='string'||!id||typeof stamp!=='string'||!stamp||!Number.isInteger(limit)||limit<1||limit>100)throw fail();
+    const current=yield* currentSteps(account);
+    if(!current.supported||!Object.hasOwn(current.notes,id))throw fail();
+    const path=['contexts',account,'notes',id,'revisions'],validated=new Map();
+    const selected=yield* selectSteps(path,true,validated),array=selected.part;
+    if(!selected.found||array?.type!=='array')throw fail();
+    const total=array.entries.length;let before=total;
+    if(cursor!==null){
+      if(typeof cursor!=='string'||cursor.length>16384)throw fail();
+      let value;try{value=JSON.parse(cursor);}catch{throw fail();}
+      if(!Array.isArray(value)||value.length!==5||value[0]!=='history_page_v1'||value[1]!==account||value[2]!==id||value[3]!==stamp
+        ||!Number.isInteger(value[4])||value[4]<0||value[4]>total)throw fail();
+      before=value[4];
+    }
+    const start=Math.max(0,before-limit),items=[];
+    for(let index=before-1;index>=start;index--){
+      const row=yield* selectSteps([...path,String(index)],false,validated),revision=row.value;
+      if(!row.found||!revision||typeof revision!=='object'||Array.isArray(revision)||!revision.snapshot?.note||typeof revision.snapshot.note!=='object'||Array.isArray(revision.snapshot.note))throw fail();
+      items.push(revision);
+    }
+    return {projection:'history_page_v1',account,id,stamp,total,items,nextCursor:start?JSON.stringify(['history_page_v1',account,id,stamp,start]):null};
+  }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
     path=[...path];
@@ -159,6 +183,6 @@
     const old=new Map([...before].filter(([key])=>key===parent||key===id||key.startsWith(prefix)));
     return {changes:delta(old,after),range:{id,prefix,ids:[...old.keys()].filter(key=>key!==parent).sort()}};
   }
-  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps,currentSteps};
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps,currentSteps,historyPageSteps};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();
