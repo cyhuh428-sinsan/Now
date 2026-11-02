@@ -13,4 +13,5 @@ for(const surface of ['web','desktop/app']){
 const server=await read('server/app/core/capabilities.py');
 assert.equal(server.match(/^LATEST_APP_VERSION = "([^"]+)"/m)?.[1],expected,'Windows/Web guide');
 assert.equal(server.match(/^ANDROID_APP_VERSION = "([^"]+)"/m)?.[1],'2.3.9','Android published version stays unchanged');
+assert.ok((await read('desktop/README.md')).includes('NowNote-Setup-'+expected+'-x64.exe'),'Documented installer output');
 console.log('Package, lock, Web/Desktop display/runtime and server guide '+expected+' PASS; Android 2.3.9 preserved');
