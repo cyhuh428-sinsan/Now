@@ -4,6 +4,12 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import * as bundler from './bundle_markdown.mjs';
 
+test('서버 이미지는 기존 Web shell 복사와 독립 Wiki chunk 복사를 모두 유지',async()=>{
+  const docker=await readFile(new URL('../../server/Dockerfile',import.meta.url),'utf8');
+  assert.ok(docker.includes('COPY web/index.html web/app.js web/styles.css web/help.html web/manifest.webmanifest web/sw.js /web_app/'));
+  assert.ok(docker.includes('COPY web/wiki-runtime.js /web_app/'));
+});
+
 test('UI 세 파일만 별도 chunk, 코어·loader는 main, 라이선스 보존', async () => {
   assert.equal(typeof bundler.buildRuntimeBundles, 'function');
   const { main, wiki } = await bundler.buildRuntimeBundles();
