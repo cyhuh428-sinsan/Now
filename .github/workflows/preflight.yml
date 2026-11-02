@@ -35,6 +35,9 @@ jobs:
       - name: Check deploy helper syntax
         run: sh -n server/scripts/deploy_local.sh
 
+      - name: Check native confirm detection regression
+        run: python -B -m unittest discover -s server/tests -p test_preflight_confirm.py -v
+
       - name: Check web runtime script syntax
         run: node --check web/scripts/check_import_export.mjs
 
