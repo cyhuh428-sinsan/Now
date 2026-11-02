@@ -9,6 +9,7 @@ async function fixture(){
   const localStorage={get length(){return raw===null?0:1;},key:()=>raw===null?null:'synthetic',getItem(){throw Error('Selective reads must not read retained bodies');},setItem(){throw Error('Selective reads must not write retained copies');}};
   const transaction=()=>{throw Error('Selective reads must not load the full journal');};
   transaction.readPath=async(_path,_guard,check)=>{check(metadata);after?.();return {projection:'path_v1',stamp:'one',found:true,value:{current:'only'}};};
+  transaction.readCurrent=async(account,_guard,check)=>{check(metadata);after?.();return {projection:'journal_current_v1',supported:true,account,notes:{}};};
   transaction.writePath=async(_path,_expected,_next,_guard,check)=>{check(metadata);after?.();return {projection:'path_write_v1',stamp:'two',partsWritten:1};};
   const box=vm.createContext({crypto,TextEncoder,structuredClone,NowDocumentTransactions:{create:()=>transaction}});
   vm.runInContext(await fs.readFile(new URL('../vendor/browser-history-storage.js',import.meta.url),'utf8'),box);
@@ -20,6 +21,13 @@ test('browser path guard validates retained copy binding without full loading or
   f.metadata.legacy_hash='0'.repeat(64);await assert.rejects(f.storage.readPath([]));
   f.setMetadata(undefined);f.setRaw('retained');await assert.rejects(f.storage.readPath([]));f.setRaw(null);
   assert.equal((await f.storage.readPath([])).projection,'path_v1');
+});
+test('browser current preview retains legacy and late-account gates without reading retained bodies',async()=>{
+  const f=await fixture(),account=JSON.stringify(['https://qa.invalid','alice']);
+  assert.equal((await f.storage.readCurrent(account)).projection,'journal_current_v1');
+  f.setRaw('retained');await assert.rejects(f.storage.readCurrent(account),/원본|보존/);
+  const late=await fixture();let active=true;late.after(()=>{active=false;});
+  await assert.rejects(late.storage.readCurrent(account,{active:()=>active}));
 });
 test('retained legacy presence is detected without reading its body and selective reads remain gated',async()=>{
   const f=await fixture();f.setRaw('PRIVATE_FOREIGN_HISTORY');await assert.rejects(f.storage.readPath([]),/보존|원본/);

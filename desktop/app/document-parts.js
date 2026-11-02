@@ -52,7 +52,7 @@
     return result;
   };
   // Yield exact record IDs so both SQLite and IDB can read one consistent subtree.
-  function* selectSteps(path){
+  function* selectSteps(path,shallow=false,validated=null){
     if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');
     path=[...path];
     function descriptor(value,expected){
@@ -67,18 +67,23 @@
     }
     function* visit(value,location,offset){
       if(!descriptor(value,location))return offset<path.length?{found:false}:{found:true,value:value.value};
-      const part=yield value.ref;
-      if(!part||Object.keys(part).sort().join(',')!=='entries,type'||!['array','object'].includes(part.type)||!Array.isArray(part.entries))throw Error('Missing or invalid document part');
-      const keys=new Set();
-      for(const [index,entry] of part.entries.entries()){
-        if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||keys.has(entry[0])
-          ||part.type==='array'&&entry[0]!==String(index))throw Error('Invalid document field');
-        keys.add(entry[0]);descriptor(entry[1],[...location,entry[0]]);
+      const known=validated?.get(value.ref),part=known?.part||(yield value.ref);
+      let fields=known?.fields;
+      if(!known){
+        if(!part||Object.keys(part).sort().join(',')!=='entries,type'||!['array','object'].includes(part.type)||!Array.isArray(part.entries))throw Error('Missing or invalid document part');
+        const keys=new Set();fields=validated?new Map():null;
+        for(const [index,entry] of part.entries.entries()){
+          if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||keys.has(entry[0])
+            ||part.type==='array'&&entry[0]!==String(index))throw Error('Invalid document field');
+          keys.add(entry[0]);descriptor(entry[1],[...location,entry[0]]);fields?.set(entry[0],[entry[0],entry[1]]);
+        }
+        validated?.set(value.ref,{part,fields});
       }
       if(offset<path.length){
-        const entry=part.entries.find(([key])=>key===path[offset]);
+        const entry=fields?fields.get(path[offset]):part.entries.find(([key])=>key===path[offset]);
         return entry?yield* visit(entry[1],[...location,entry[0]],offset+1):{found:false};
       }
+      if(shallow)return {found:true,part};
       const result=part.type==='array'?[]:{};
       for(const [key,item] of part.entries){
         const child=yield* visit(item,[...location,key],offset);
@@ -92,6 +97,48 @@
     const steps=selectSteps(path);let step=steps.next();
     while(!step.done)step=steps.next(read(step.value));
     return step.value;
+  }
+  // Read-only startup projection; it deliberately cannot become a write/archive baseline.
+  function* currentSteps(account){
+    let identity;
+    try{identity=JSON.parse(account);}catch{throw Error('Invalid journal account');}
+    if(!Array.isArray(identity)||identity.length!==2||identity.some(v=>typeof v!=='string')||JSON.stringify(identity)!==account)
+      throw Error('Invalid journal account');
+    const unavailable=()=>({projection:'journal_current_v1',supported:false});
+    // This cache belongs to one immutable storage snapshot, never to a later read.
+    const validated=new Map();
+    function* object(path){const row=yield* selectSteps(path,true,validated);return row.part?.type==='object'?new Map(row.part.entries):null;}
+    function* value(path){return (yield* selectSteps(path,false,validated)).value;}
+    const rootRow=yield* selectSteps([],true,validated);
+    if(rootRow.found&&rootRow.value===null)return {projection:'journal_current_v1',supported:true,account,notes:{}};
+    const root=rootRow.part?.type==='object'?new Map(rootRow.part.entries):null;
+    if(!root||[...root.keys()].sort().join(',')!=='contexts,schema_version'||(yield* value(['schema_version']))!==1)return unavailable();
+    const contexts=yield* object(['contexts']);if(!contexts)return unavailable();
+    const notes={};
+    if(!contexts.has(account))return {projection:'journal_current_v1',supported:true,account,notes};
+    const bucket=yield* object(['contexts',account]);
+    if(!bucket||[...bucket.keys()].join(',')!=='notes')return unavailable();
+    const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
+    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox']);
+    for(const id of entries.keys()){
+      const location=[...path,id],entry=yield* object(location);
+      if(!entry||[...entry.keys()].some(k=>!allowed.has(k))||['raw','draft','base','revisions','outbox','receipts'].some(k=>!entry.has(k)))return unavailable();
+      const base=yield* object([...location,'base']);
+      if(!base||(yield* value([...location,'base','crypto_epoch']))!==0)return unavailable();
+      if(/^wiki(?:[-:]|$)/.test(id))continue;
+      const draft=yield* value([...location,'draft']),raw=yield* value([...location,'raw']);
+      if([draft,raw].some(n=>!n||Array.isArray(n)||n.owner_id!==identity[1]||n.local_id!==id
+        ||!['tree','daily','worklog'].includes(n.note_type)||typeof n.content!=='string'||n.content.startsWith('NOW_ENCRYPTED_')))return unavailable();
+      if([draft,raw].some(n=>String(n.source||'').startsWith('wiki')))continue;
+      const pending=yield* selectSteps([...location,'outbox'],true,validated);
+      if(pending.part?.type!=='array')return unavailable();
+      if(entry.has('conflict')&&(yield* value([...location,'conflict']))!==null)return unavailable();
+      const head=yield* value([...location,'base','head_revision_id']);
+      Object.defineProperty(notes,id,{enumerable:true,value:{projection:'current_v1',raw,draft,base:{head_revision_id:head,crypto_epoch:0},
+        localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
+        dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
+    }
+    return {projection:'journal_current_v1',supported:true,account,notes};
   }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
@@ -109,6 +156,6 @@
     const old=new Map([...before].filter(([key])=>key===parent||key===id||key.startsWith(prefix)));
     return {changes:delta(old,after),range:{id,prefix,ids:[...old.keys()].filter(key=>key!==parent).sort()}};
   }
-  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps};
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps,currentSteps};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();

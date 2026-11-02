@@ -9,8 +9,8 @@ const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nown
 const snapshots=new Map();
 const historyCounts={full:0,note:0};
 const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
-for(const method of ['open','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
-  if(method!=='open')historyCounts[method]++;
+for(const method of ['open','current','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
+  if(method==='full'||method==='note')historyCounts[method]++;
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
@@ -64,7 +64,19 @@ app.whenReady().then(async()=>{
       const stored=(await q.backend.open()).value;
       if(stored.contexts[q.account].notes['qa-save-a'].draft.content!=='PRODUCT_EDITED'
         ||stored.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('product_note_save_lost_history');
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true};
+      let currentRead=false;
+      if(q.scoped){
+        const get=IDBObjectStore.prototype.get;
+        IDBObjectStore.prototype.getAll=function(){throw Error('current_whole_scan');};
+        IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&/revisions|receipts|snapshot/.test(key[1]))throw Error('current_history_body');return get.call(this,key);};
+        try{
+          const current=isDesktopClient()?await nownoteDesktop.storage.history.current(q.account):await browserHistoryStorage().readCurrent(q.account);
+          if(current.projection!=='journal_current_v1'||!current.supported||current.notes['qa-save-a'].draft.content!=='PRODUCT_EDITED'
+            ||JSON.stringify(current).includes('QA_UNRELATED_HISTORY')||Object.hasOwn(current,'value')||Object.hasOwn(current,'revision'))throw Error('current_product_projection');
+          currentRead=true;
+        }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      }
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});

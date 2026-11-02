@@ -54,8 +54,8 @@
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null){
-      const steps=patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false){
+      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
@@ -77,7 +77,7 @@
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
                   active();if(count.result!==0)throw Error('Document journal metadata is missing');
-                  result={projection:'path_v1',stamp:null,found:false};
+                  result=current?{projection:'journal_current_v1',stamp:null,supported:true,account:path,notes:{}}:{projection:'path_v1',stamp:null,found:false};
                 }catch(e){fail(e);}};
                 return;
               }
@@ -108,14 +108,17 @@
                   }catch(e){fail(e);}
                 };
               }
+              const cache=new Map();
               function next(){
                 if(step.done){if(patch)apply(step.value);else result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                if(current&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
                   active();const row=request.result;
                   if(row?.id!==id)throw Error('Missing document part');
                   if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
                     ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
+                  if(current)cache.set(id,row.value);
                   step=steps.next(row.value);next();
                 }catch(e){fail(e);}};
               }
@@ -129,6 +132,7 @@
       });
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
+    transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
     Object.defineProperty(transaction,'revision',{get:()=>lastRevision});

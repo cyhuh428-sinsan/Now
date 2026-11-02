@@ -19,8 +19,22 @@ async function fixture(){
     return tx;
   }};
   const read=box.NowDocumentTransactions.create({database:async()=>db,key:'history'});
-  return {read,parts,physical,ids,removeMetadata:()=>{header=undefined;},finish:()=>complete(),turn:()=>new Promise(resolve=>setImmediate(resolve))};
+  return {box,read,parts,physical,ids,removeMetadata:()=>{header=undefined;},finish:()=>complete(),turn:()=>new Promise(resolve=>setImmediate(resolve))};
 }
+
+test('IDB current preview is a single completed snapshot without historical or foreign payload reads',async()=>{
+  const f=await fixture(),account=JSON.stringify(['https://qa.invalid','alice']);
+  const note={local_id:'a',owner_id:'alice',note_type:'tree',content:'current',source:'manual'};
+  const root={schema_version:1,contexts:{[account]:{notes:{a:{raw:note,draft:note,base:{crypto_epoch:0,head_revision_id:null},revisions:[{content:'PRIVATE_HISTORY'}],outbox:[],receipts:[]}}},foreign:{notes:{}}}};
+  const encoded=vm.runInContext('NowDocumentParts.encode('+JSON.stringify(root)+')',f.box);
+  f.parts.clear();for(const [id,value]of encoded)f.parts.set(id,value);
+  let settled=false;const promise=f.read.readCurrent(account).then(value=>{settled=true;return value;});
+  await f.turn();assert.equal(settled,false);assert.ok(f.ids.every(id=>!id.includes('revisions')&&!id.includes('foreign')));
+  f.finish();const result=await promise;assert.equal(result.projection,'journal_current_v1');assert.equal(result.notes.a.draft.content,'current');assert.equal(result.stamp,'one');
+  assert.equal(Object.hasOwn(result,'value'),false);
+  const late=await fixture();let active=true;const pending=late.read.readCurrent(account,{active:()=>active});
+  await late.turn();active=false;late.finish();await assert.rejects(pending,/authentication/i);
+});
 test('IDB selective read requests exact parts and acknowledges only transaction completion',async()=>{
   const f=await fixture();let settled=false;
   const promise=f.read.readPath(['contexts','A','notes','one','draft']).then(value=>{settled=true;return value;});

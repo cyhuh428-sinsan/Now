@@ -147,6 +147,7 @@ function casOriginal(storePath,key,value,expected){
 function readKey(storePath,key){return open(storePath).read(`value:${key}`);}
 function readKeyPath(storePath,key,segments){return open(storePath).readPath(`value:${key}`,segments);}
 function readKeySnapshot(storePath,key){return open(storePath).readSnapshot(`value:${key}`);}
+function readKeyCurrent(storePath,key,account){return open(storePath).readCurrent(`value:${key}`,account);}
 function writeKeyPath(storePath,key,segments,expected,value,manifest){
   const database=open(storePath),file=database.read(META);
   if(!file.keys.includes(key))throw Error('History storage must be initialized first');
@@ -170,4 +171,4 @@ function update(storePath,transform,expectedHash){
   return snapshot(database);
 }
 function closeAll(){for(const database of databases.values())database.close();databases.clear();}
-module.exports={FORMAT,initialize,read,readKey,readKeyPath,readKeySnapshot,writeKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};
+module.exports={FORMAT,initialize,read,readKey,readKeyPath,readKeySnapshot,readKeyCurrent,writeKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};

@@ -172,6 +172,7 @@
           .then(result=>({revision:result.stamp,scoped:true}));
       },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
+      readCurrent: (account,guard) => selective(check=>transaction.readCurrent(account,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
         return selective(check=>transaction.writePath(selection,before,after,guard,check),guard);

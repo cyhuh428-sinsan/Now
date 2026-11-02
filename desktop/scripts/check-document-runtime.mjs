@@ -82,6 +82,7 @@ try{
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.original.read('nownote.web.v1');return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.open();return false;}catch{return true;}})()`),true);
+  assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.current(JSON.stringify(['https://qa.invalid','alice']));return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.note({revision:'untrusted'});return false;}catch{return true;}})()`),true);
   await b.evaluate('window.close()');b.close();await a.evaluate('window.close()').catch(()=>{});a.close();
   if(primary.exitCode===null)await once(primary,'exit');

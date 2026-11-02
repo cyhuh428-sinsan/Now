@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
   openDocumentFile: (filePath) => ipcRenderer.invoke("nownote:open-document-file", filePath),
   storage: {
     history:{
+      current:account=>ipcRenderer.invoke('nownote:history-current',account),
       open:()=>ipcRenderer.invoke('nownote:history-open'),
       full:request=>ipcRenderer.invoke('nownote:history-full',request),
       note:request=>ipcRenderer.invoke('nownote:history-note',request),
