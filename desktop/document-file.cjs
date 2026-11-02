@@ -27,6 +27,22 @@ function atomic(filename,bytes,temp=`${filename}.${randomUUID()}.tmp`){
     }
   }
 }
+function assertLegacyProtectionSettled(values){
+  const fail=()=>Error('기존 보호 전환을 먼저 완료한 뒤 저장 형식을 이전하세요. 원본과 원작업은 변경하지 않았습니다.');
+  const pending=Object.entries(values).map(([key,value])=>{
+    if(typeof value!=='string')return value;
+    try{return JSON.parse(value);}catch{if(key==='nownote.history.v1')throw fail();return null;}
+  });
+  while(pending.length){
+    const value=pending.pop();if(!value||typeof value!=='object')continue;
+    if(Object.hasOwn(value,'protection_operations')){
+      const operations=value.protection_operations;
+      if(!operations||typeof operations!=='object'||Array.isArray(operations)
+        ||Object.values(operations).some(marker=>!marker||marker.phase!=='complete'))throw fail();
+    }
+    for(const child of Object.values(value))if(child&&typeof child==='object')pending.push(child);
+  }
+}
 function initialize(storePath,{syntheticLegacy=false}={}){
   fs.mkdirSync(path.dirname(storePath),{recursive:true});
   const exists=fs.existsSync(storePath),bytes=exists?fs.readFileSync(storePath):null;
@@ -39,6 +55,8 @@ function initialize(storePath,{syntheticLegacy=false}={}){
     const resolved=fs.realpathSync.native(path.dirname(storePath));
     const relative=path.relative(qa,resolved);
     if(!syntheticLegacy||!relative||relative.startsWith('..')||path.isAbsolute(relative))throw Error('Existing profile migration is not enabled. Use a separate 2.4.1 QA profile.');
+    // Old encrypted bundles bind their exact store inventory; a retained copy cannot be appended to them.
+    assertLegacyProtectionSettled(original.values);
   }
   const filename=markerPath(storePath);
   const database=createPartitionedStore(filename);
