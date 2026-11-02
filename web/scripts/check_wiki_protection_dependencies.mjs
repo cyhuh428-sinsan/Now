@@ -33,12 +33,21 @@ const selected=await box.NowWikiQuery.selectWikiContext('Alpha',await book.appro
 const page=selected.pages[0],answer={query_hash:selected.snapshot_hash,title:'Derived',claims:[{id:'a',statement:'Synthetic',assessment:'inferred',citation_ids:['c']}],
   citations:[{id:'c',wiki_id:page.wiki_id,draft_id:page.draft_id,approval_id:page.approval_id,draft_hash:page.draft_hash,document_version:page.document_version,section_id:'s1',quote:page.draft.sections[0].markdown}],uncertainties:[]};
 const derived=(await ingest.commitLocal(await ingest.derive(selected,answer,{provider:'fixture',model:'auto'}))).documents[0].document;
-const original=clone(history.export()),originalWrites=writes;
+const original=clone(history.export());let originalWrites=writes;
 assert.throws(()=>W.sourceProtectionDependencies([original],context,'wiki:'+created.wiki_id),/wiki_protection_dependency_check/,'the raw scan still refuses unresolved Wiki evidence');
 assert.deepEqual(Array.from(await book.protectionDependencies([original],context,'wiki:'+created.wiki_id)),['wiki:'+derived.wiki_id]);
 assert.deepEqual(Array.from(await book.protectionDependencies([original],context,'wiki:'+derived.wiki_id)),[],'an unapproved but committed derived draft can be protected first');
 assert.deepEqual(Array.from(await book.protectionDependencies([{settings:{synthetic:true}},original,{tree:[]}],context,'wiki:'+created.wiki_id)),['wiki:'+derived.wiki_id],'registered non-history stores are scanned without misclassifying their format as a journal');
 assert.equal(writes,originalWrites);assert.equal(JSON.stringify(history.export()),JSON.stringify(original));
+for(const roots of [[{recovery_archives:[clone(original)]}],[{retained:{offline_branch:{snapshot:clone(original)}}}]]){
+  assert.deepEqual(Array.from(await book.protectionDependencies(roots,context,'wiki:'+created.wiki_id)),['wiki:'+derived.wiki_id],
+    'retained recovery and offline snapshots cannot lose the derived source dependency');
+}
+await ingest.rejectLocal(derived,derived.drafts[0].id);
+assert.deepEqual(Array.from(await book.protectionDependencies([history.export()],context,'wiki:'+created.wiki_id)),['wiki:'+derived.wiki_id],
+  'a rejected but retained derived draft remains a source protection dependency');
+history.hydrate(original);
+originalWrites=writes;
 const targetScope={url:context.url,owner:context.owner,device:context.device,instance:id(995),local_id:'wiki:'+derived.wiki_id};
 const attributed=clone(original);attributed.contexts[accountKey()].notes[targetScope.local_id].protectionScope=clone(targetScope);
 function accountKey(){return box.NowNoteHistory.key(context);}

@@ -50,6 +50,10 @@ assert.equal(JSON.stringify(saved),before);context.auth='synthetic-only';api.ver
 await assert.rejects(()=>groups().run(scope,password,plan.plan_hash,execute),/synthetic alias CAS/);
 assert.equal(targetCalls,0);assert.equal(history.blocked(local),true);assert.ok(groups().pending(scope));
 const progress=clone(saved),count=writes;
+const progressBackup=JSON.parse(JSON.stringify({history:progress,fallback}));
+assert.throws(()=>box.NowNoteProtectionState.validateBackupImport({history:progress},{history:progressBackup.history}),/backup_unsettled/,
+  'an interrupted group stays resumable in its journal but cannot be imported as a settled backup');
+assert.deepEqual(progressBackup.history.protection_operations,progress.protection_operations,'JSON backup keeps every pending group and alias ciphertext');
 const withoutGroup=clone(progress);delete withoutGroup.protection_operations[groups().pending(scope).id];
 assert.throws(()=>box.NowNoteProtectionState.validateBackupImport({history:progress},{history:withoutGroup}),/backup_/,'whole restore cannot discard the pending group');
 const extra='wiki-proposal:00000000-0000-4000-8000-000000000003:'+doc.wiki_id;
@@ -79,6 +83,10 @@ for(const root of [saved,fallback]){
   }
 }
 const emptyHistory=box.NowNoteHistory.create({context:()=>context,write:async()=>{throw Error('no write expected');},request:async()=>{throw Error('no network expected');}});
+const finalBackup=JSON.parse(JSON.stringify({history:saved,fallback}));
+box.NowNoteProtectionState.validateBackupImport({history:saved},{history:finalBackup.history});
+const restored=box.NowNoteHistory.create({initial:finalBackup.history,context:()=>context,write:async()=>{throw Error('read only restored backup');},request:async()=>{throw Error('no network expected');}});
+assert.equal(JSON.stringify(restored.export()),JSON.stringify(saved),'completed group and original alias archives survive JSON backup and cold hydration unchanged');
 const empty=box.NowWikiProtectionGroup.create({...api,history:()=>emptyHistory,stores:()=>[{name:'empty-history',kind:'history',read:async()=>emptyHistory.export()}],targetStamp:undefined});
 assert.equal((await empty.plan(scope)).members.length,0,'a Wiki without proposal aliases must not acquire a new status requirement');
 console.log('Wiki proposal group: explicit list, durable interrupted CAS/cold resume, wrong key/account refusal, original IDs, all copies encrypted, target once and zero network PASS');
