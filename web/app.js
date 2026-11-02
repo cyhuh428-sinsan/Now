@@ -279,6 +279,123 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 */
+/* Lossless JSON parts. Stable paths keep unrelated documents out of writes. */
+(() => {
+  'use strict';
+  const encode = value => {
+    const parts = new Map(),ancestors=new Set();
+    function visit(value, path) {
+      if(typeof value?.toJSON==='function')value=value.toJSON(path.at(-1)||'');
+      if (value === null || typeof value !== 'object') {
+        if (!['string','boolean','number'].includes(typeof value) && value !== null) throw Error('Non-JSON document value');
+        if (typeof value === 'number' && !Number.isFinite(value))value=null;
+        return {value};
+      }
+      const id=JSON.stringify(path), array=Array.isArray(value);
+      if (!array && ![Object.prototype,null].includes(Object.getPrototypeOf(value))) throw Error('Non-JSON object');
+      if(ancestors.has(value))throw Error('Cyclic document value');ancestors.add(value);
+      const keys=array?Array.from({length:value.length},(_,i)=>String(i)):Object.keys(value);
+      const omitted=item=>['undefined','function','symbol'].includes(typeof item);
+      const entries=keys.filter(key=>array||!omitted(value[key])).map(key=>[key,visit(array&&omitted(value[key])?null:value[key],[...path,key])]);
+      ancestors.delete(value);
+      parts.set(id,{type:array?'array':'object',entries});
+      return {ref:id};
+    }
+    parts.set('$root',visit(value,[]));
+    return parts;
+  };
+  const decode = parts => {
+    const seen=new Set();
+    function visit(descriptor) {
+      if (!descriptor || typeof descriptor!=='object') throw Error('Invalid document part');
+      if (Object.keys(descriptor).length===1 && Object.hasOwn(descriptor,'value')) return descriptor.value;
+      if (Object.keys(descriptor).join(',')!=='ref' || typeof descriptor.ref!=='string' || seen.has(descriptor.ref)) throw Error('Invalid document reference');
+      seen.add(descriptor.ref);
+      const part=parts.get(descriptor.ref);
+      if (!part || !['array','object'].includes(part.type) || !Array.isArray(part.entries)) throw Error('Missing document part');
+      const value=part.type==='array'?[]:{}, keys=new Set();
+      for (const entry of part.entries) {
+        if (!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||keys.has(entry[0])) throw Error('Invalid document field');
+        const [key,item]=entry;keys.add(key);
+        if(part.type==='array' && key!==String(value.length))throw Error('Invalid document array');
+        Object.defineProperty(value,key,{value:visit(item),enumerable:true,writable:true,configurable:true});
+      }
+      return value;
+    }
+    const result=visit(parts.get('$root'));
+    if(seen.size+1!==parts.size)throw Error('Orphan document parts');
+    return result;
+  };
+  const delta = (before,after) => {
+    const result=[];
+    for(const [id,value] of after)if(JSON.stringify(before.get(id))!==JSON.stringify(value))result.push({id,value});
+    for(const id of before.keys())if(!after.has(id))result.push({id,remove:true});
+    return result;
+  };
+  globalThis.NowDocumentParts={encode,decode,delta};
+  if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
+})();
+
+;
+/* Physical journal records are split; the protection protocol keeps its existing contract. */
+(() => {
+  'use strict';
+  function create({database,key}) {
+    let cached=null;
+    return async function transaction(write,transform,guard) {
+      const db=await database();
+      const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
+      active();
+      return new Promise((resolve,reject)=>{
+        let tx,error,result,nextCache;
+        try{
+          tx=db.transaction(['journals','documents'],write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
+          tx.onabort=()=>reject(error||Error('Document transaction aborted'));
+          tx.onerror=()=>{error=Error('Document transaction failed');};
+          tx.oncomplete=()=>{try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){reject(e);}};
+          if(write&&tx.durability!=='strict')throw Error('Strict document durability is required');
+          const journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
+          const fail=e=>{error=e;tx.abort();};
+          function settle(physical,before,logical) {
+            try{
+              active();result=transform(logical);
+              if(!write)return;
+              if(!result||!(result.value===null||typeof result.value==='string'))throw Error('Invalid journal value');
+              const after=NowDocumentParts.encode(result.value===null?null:JSON.parse(result.value));
+              for(const change of NowDocumentParts.delta(before,after)){
+                const id=[key,change.id];
+                if(change.remove)documents.delete(id);else documents.put({id:change.id,value:change.value},id);
+              }
+              const {value,...metadata}=result;
+              const row={format:2,stamp:crypto.randomUUID(),isNull:value===null,row:metadata};
+              journals.put(row,key);
+              nextCache={stamp:row.stamp,parts:after,value:result.value};
+            }catch(e){fail(e);}
+          }
+          const request=journals.get(key);
+          request.onsuccess=()=>{
+            try{
+              const physical=request.result;
+              if(physical===undefined||physical.schema_version===1){settle(physical,new Map(),physical);return;}
+              if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
+              const finish=parts=>{
+                const value=physical.isNull?null:JSON.stringify(NowDocumentParts.decode(parts));
+                if(physical.isNull&&NowDocumentParts.decode(parts)!==null)throw Error('Invalid null document');
+                settle(physical,parts,{...physical.row,value});
+              };
+              if(cached?.stamp===physical.stamp){finish(cached.parts);return;}
+              const read=documents.getAll(IDBKeyRange.bound([key],[key,[]]));
+              read.onsuccess=()=>{try{const parts=new Map(read.result.map(row=>[row.id,row.value]));finish(parts);}catch(e){fail(e);}};
+            }catch(e){fail(e);}
+          };
+        }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
+      });
+    };
+  }
+  globalThis.NowDocumentTransactions={create};
+})();
+
+;
 /**
  * marked v18.1.2 - a markdown parser
  * Copyright (c) 2018-2026, MarkedJS. (MIT License)
@@ -1197,9 +1314,12 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     let connection;
     const database = () => connection ||= new Promise((resolve,reject) => {
       if (!indexedDB || !lock) { reject(fail()); return; }
-      const request = indexedDB.open('nownote.journal.v1',1);
+      const request = indexedDB.open('nownote.journal.v1',2);
       let blocked=false;
-      request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('journals')) request.result.createObjectStore('journals'); };
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('journals')) request.result.createObjectStore('journals');
+        if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents');
+      };
       request.onblocked = () => { blocked=true; reject(fail()); };
       request.onerror = () => reject(fail());
       request.onsuccess = () => {
@@ -1209,27 +1329,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         resolve(db);
       };
     });
-    async function transaction(write,transform,guard) {
-      const db=await database();active(guard);
-      return new Promise((resolve,reject) => {
-        let tx,result,error;
-        try {
-          tx=db.transaction('journals',write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
-          tx.onabort=()=>reject(error||fail());
-          tx.onerror=()=>{error=fail();};
-          tx.oncomplete=()=>{try{active(guard);resolve(result);}catch(e){reject(e);}};
-          if(write && tx.durability!=='strict'){error=fail();tx.abort();return;}
-          const store=tx.objectStore('journals'), request=store.get(key);
-          request.onsuccess=()=>{
-            try {
-              active(guard);
-              result=transform(request.result);
-              if(write)store.put(result,key);
-            } catch(e){error=e;tx.abort();}
-          };
-        }catch(e){reject(fail());}
-      });
-    }
+    const transaction=globalThis.NowDocumentTransactions.create({database,key});
     // Call only inside the shared legacy-key lock. Hashing must not suspend an IDB transaction.
     async function settled(guard) {
       active(guard);
@@ -15255,6 +15355,9 @@ function initializeWikiNotebook(){
   },{host:$("#treeEditorPanel"),onActivate:()=>setView("tree")})});
   for(const button of document.querySelectorAll("#wikiActionGroup [data-wiki-view]")){
     button.addEventListener("click",()=>{
+      if(isDesktopClient()&&window.nownoteDesktop.openWorkspace&&desktopStorageInfo?.workspaces?.includes('wiki')&&new URLSearchParams(location.search).get('workspace')!=='wiki'){
+        window.nownoteDesktop.openWorkspace('wiki').catch(error=>showNotice(error.message,'error'));return;
+      }
       setView("tree");
       wikiUI.open(button.dataset.wikiView).catch(error=>showNotice(error.message,"error"));
     });
@@ -15284,10 +15387,18 @@ async function initializeApp() {
     if (!authenticated) return;
     render();
     scheduleServerSync({ force: true, delay: 1600 });
+    await openInitialWorkspace();
     return;
   }
   render();
   scheduleServerSync({ force: true, delay: 1600 });
+  await openInitialWorkspace();
+}
+
+async function openInitialWorkspace(){
+  if(new URLSearchParams(location.search).get('workspace')!=='wiki')return;
+  document.title='NowNote Wiki';
+  await wikiUI.open('browse');
 }
 
 initializeApp().catch(() => {

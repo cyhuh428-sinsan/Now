@@ -3,6 +3,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("nownoteDesktop", {
   platform: process.platform,
   desktopShell: "electron",
+  openWorkspace: workspace=>ipcRenderer.invoke('nownote:open-workspace',workspace),
   openDocumentFile: (filePath) => ipcRenderer.invoke("nownote:open-document-file", filePath),
   storage: {
     info: () => ipcRenderer.invoke("nownote:desktop-store-info"),

@@ -11,6 +11,7 @@ const files=['web/app.js','desktop/app/app.js','web/scripts/bundle_markdown.mjs'
   'web/vendor/wiki-state.js','web/vendor/wiki-ingest.js','web/vendor/wiki-sources.js','web/vendor/wiki-lifecycle.js','web/vendor/wiki-notebook.js','web/vendor/wiki-server-access.js','web/vendor/wiki-evidence.js','web/vendor/wiki-ingest-notebook.js','web/vendor/wiki-graph.js','web/vendor/wiki-graph-ui.js','web/vendor/wiki-query.js','web/vendor/wiki-query-notebook.js','web/vendor/wiki-lint.js','web/vendor/cytoscape.min.js','web/vendor/cytoscape.LICENSE','web/vendor/wiki-ui.js','web/vendor/browser-history-storage.js'];
 files.push('web/vendor/wiki-protection-group.js');
 files.push('web/vendor/wiki-runtime-loader.js','web/wiki-runtime.js','desktop/app/wiki-runtime.js');
+files.push('web/vendor/document-parts.js','web/vendor/document-idb.js','desktop/app/document-parts.js');
 function run(command,args,cwd){const result=spawnSync(command,args,{cwd,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||result.stdout);return result.stdout;}
 try{
   for(const autocrlf of ['false','true']){

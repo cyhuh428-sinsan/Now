@@ -31,10 +31,11 @@ export async function verifyBrowserHistoryStorage({evaluate}){
     if(!diverged)throw Error('browser_legacy_divergence');
     const sealed=structuredClone(changed);sealed.contexts[accountA].notes.a={protection_record:{schema_version:1,scope,operation_id:'qa-browser-protection',ciphertext:'NOW_ENCRYPTED_V1:synthetic-only'}};
     await a.write(changed,sealed);await a.casLegacy(original,sealed);
-    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('nownote.journal.v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('qa_db_open'));});
+    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('nownote.journal.v1',2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('qa_db_open'));});
     const read=()=>new Promise((resolve,reject)=>{const t=db.transaction('journals','readonly'),r=t.objectStore('journals').get(key);t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(Error('qa_db_read'));});
     const before=await read();
-    if(JSON.stringify(before).includes(own)||!JSON.stringify(before).includes(other)||before.redo.length!==1)throw Error('browser_cipher_inventory');
+    const parts=await new Promise((resolve,reject)=>{const t=db.transaction('documents','readonly'),r=t.objectStore('documents').getAll(IDBKeyRange.bound([key],[key,[]]));t.oncomplete=()=>resolve(r.result);t.onabort=()=>reject(Error('qa_part_read'));});
+    if(JSON.stringify(parts).includes(own)||!JSON.stringify(parts).includes(other)||before.row.redo.length!==1||before.format!==2)throw Error('browser_cipher_inventory');
     await new Promise((resolve,reject)=>{
       const t=db.transaction('journals','readwrite',{durability:'strict'});
       if(t.durability!=='strict'){reject(Error('qa_strict_unsupported'));return;}
@@ -68,11 +69,18 @@ export async function seedBrowserLegacyHistory({evaluate}){
     const raw=JSON.stringify(noteHistory.export());
     const hash=async value=>Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(value)))),b=>b.toString(16).padStart(2,'0')).join('');
     const from=await hash(null),to=await hash(raw);
-    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('nownote.journal.v1',1);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('qa_seed_open'));});
+    const db=await new Promise((resolve,reject)=>{const r=indexedDB.open('nownote.journal.v1',2);r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(Error('qa_seed_open'));});
     await new Promise((resolve,reject)=>{
-      const t=db.transaction('journals','readwrite',{durability:'strict'}),store=t.objectStore('journals'),r=store.get(NOTE_HISTORY_KEY);
+      const t=db.transaction(['journals','documents'],'readwrite',{durability:'strict'}),store=t.objectStore('journals'),r=store.get(NOTE_HISTORY_KEY);
       t.oncomplete=resolve;t.onabort=()=>reject(Error('qa_seed_abort'));
-      r.onsuccess=()=>{const row=r.result;if(!row||row.legacy_hash!==from||row.redo.length||row.value!==raw){t.abort();return;}store.put({...row,legacy_hash:to},NOTE_HISTORY_KEY);};
+      r.onsuccess=()=>{
+        const row=r.result;if(row?.format!==2||row.row.legacy_hash!==from||row.row.redo.length){t.abort();return;}
+        const parts=t.objectStore('documents').getAll(IDBKeyRange.bound([NOTE_HISTORY_KEY],[NOTE_HISTORY_KEY,[]]));
+        parts.onsuccess=()=>{
+          if(JSON.stringify(NowDocumentParts.decode(new Map(parts.result.map(item=>[item.id,item.value]))))!==raw){t.abort();return;}
+          store.put({...row,stamp:crypto.randomUUID(),row:{...row.row,legacy_hash:to}},NOTE_HISTORY_KEY);
+        };
+      };
     });
     db.close();localStorage.setItem(NOTE_HISTORY_KEY,raw);
     if(!raw.includes('Durable Guide'))throw Error('qa_legacy_wiki_missing');

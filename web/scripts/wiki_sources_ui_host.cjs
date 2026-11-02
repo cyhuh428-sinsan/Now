@@ -1,23 +1,27 @@
 /* Actual renderer/file input/storage; external HTTP is blocked and remote/model fixtures are synthetic. */
 const {app,BrowserWindow,ipcMain,session}=require('electron');
-const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'../..'),own=path.resolve(process.argv[2]),mode=process.argv[3],phase=Number(process.argv[4]);
 if(!own.startsWith(path.resolve('D:/tmp/now-240-wiki-sources')+path.sep)||!['web','desktop'].includes(mode)||![1,2].includes(phase))throw Error('qa_boundary');
 app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
-const {readStoreFile,updateStoreFile,compareAndSetStoreValue}=require(path.join(root,'desktop/store-file.cjs'));
-const main=fs.readFileSync(path.join(root,'desktop/main.cjs'),'utf8'),start=main.indexOf('function updateRendererStoreValue('),end=main.indexOf('function registerVaultHandlers(',start);
+const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
-const box={compareAndSetStoreValue,updateStoreFile,desktopStorePath:()=>store,assertRendererStoreKey:k=>{if(!keys.has(k))throw Error('store_key');}};
-vm.runInNewContext(main.slice(start,end)+'\nglobalThis.write=updateRendererStoreValue;',box);
-ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');return readStoreFile(store).store.values[k]??null;});
-const write=(k,v,o)=>{const r=box.write(k,v,o);return {ok:true,updatedAt:r.store.updatedAt};};
+const snapshots=new Map();
+ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
+const write=(k,v,o)=>{
+  if(!keys.has(k))throw Error('store_key');
+  const expected=o&&Object.hasOwn(o,'expectedValue')?o.expectedValue:snapshots.get(k);
+  if(expected===undefined)throw Error('qa_missing_read');
+  const r=documentFile.writeKey(store,k,v,expected);snapshots.set(k,structuredClone(v));return {ok:true,updatedAt:r.updatedAt};
+};
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_CAS'};}});
-ipcMain.handle('nownote:desktop-store-info',()=>({version:1,keys:[...keys]}));
+ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys]}));
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 let window,result={ok:false},network=0;
 app.whenReady().then(async()=>{
   try{
+    documentFile.initialize(store);
     session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_d,done)=>{network++;done({cancel:true});});
     window=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,
       ...(mode==='desktop'?{preload:path.join(root,'desktop/preload.cjs')}:{})}});
@@ -314,5 +318,5 @@ app.whenReady().then(async()=>{
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
   }
-  finally{fs.writeFileSync(path.join(own,mode+'-'+phase+'.json'),JSON.stringify(result));window?.destroy();app.exit(result.ok?0:1);}
+  finally{fs.writeFileSync(path.join(own,mode+'-'+phase+'.json'),JSON.stringify(result));window?.destroy();documentFile.closeAll();app.exit(result.ok?0:1);}
 });

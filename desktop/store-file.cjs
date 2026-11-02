@@ -15,6 +15,7 @@ function readStoreFile(storePath) {
     return { store: { version: 1, updatedAt: null, values: {} }, hash: null };
   }
   const store = JSON.parse(bytes.toString("utf8"));
+  if (store?.storage_backend === 'nownote-sqlite-parts-v1') return require('./document-file.cjs').read(storePath);
   if (!store || typeof store !== "object" || !store.values || typeof store.values !== "object" || Array.isArray(store.values)) {
     throw new Error("Invalid NowNote desktop store");
   }
@@ -36,6 +37,7 @@ function writeStoreFile(storePath, store) {
 }
 
 function updateStoreFile(storePath, update, expectedHash) {
+  if (isDocumentFile(storePath)) return require('./document-file.cjs').update(storePath, update, expectedHash);
   const { store, hash } = readStoreFile(storePath);
   if (expectedHash !== undefined && hash !== expectedHash) throw new Error("NowNote store changed since preview");
   const next = update(store);
@@ -44,6 +46,10 @@ function updateStoreFile(storePath, update, expectedHash) {
 }
 
 function compareAndSetStoreValue(storePath, key, value, expected) {
+  if (isDocumentFile(storePath)) {
+    const result=require('./document-file.cjs').writeKey(storePath,key,value,expected);
+    return {store:{updatedAt:result.updatedAt}};
+  }
   return updateStoreFile(storePath, store => {
     if (JSON.stringify(store.values[key] ?? null) !== JSON.stringify(expected)) {
       throw new Error("다른 실행에서 저장 자료를 변경했습니다. 이 창의 변경을 백업한 후 다시 열어주세요. 덮어쓰지 않았습니다.");
@@ -53,4 +59,12 @@ function compareAndSetStoreValue(storePath, key, value, expected) {
   });
 }
 
-module.exports = { readStoreFile, writeStoreFile, updateStoreFile, compareAndSetStoreValue };
+function isDocumentFile(storePath) {
+  if(!fs.existsSync(storePath))return false;
+  const fd=fs.openSync(storePath,'r');
+  try{
+    if(fs.fstatSync(fd).size>256)return false;
+    return JSON.parse(fs.readFileSync(fd,'utf8'))?.storage_backend==='nownote-sqlite-parts-v1';
+  }finally{fs.closeSync(fd);}
+}
+module.exports = { readStoreFile, writeStoreFile, updateStoreFile, compareAndSetStoreValue, isDocumentFile };

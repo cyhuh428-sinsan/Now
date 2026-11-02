@@ -17,6 +17,7 @@
   "build": {
     "appId": "kr.sinsan.nownote",
     "productName": "NowNote",
+    "afterPack": "./build/after-pack.cjs",
     "directories": {
       "output": "dist"
     },
@@ -25,6 +26,9 @@
       "preload.cjs",
       "vault-*.cjs",
       "store-file.cjs",
+      "document-store.cjs",
+      "partitioned-store.cjs",
+      "document-file.cjs",
       "document-links.cjs",
       "app/**/*"
     ],
@@ -42,6 +46,7 @@
       "artifactName": "NowNote-Setup-${version}-${arch}.${ext}"
     },
     "nsis": {
+      "include": "build/wiki-shortcuts.nsh",
       "oneClick": false,
       "perMachine": false,
       "allowToChangeInstallationDirectory": true,

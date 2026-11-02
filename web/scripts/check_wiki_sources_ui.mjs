@@ -17,7 +17,10 @@ try{
     const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
     child=spawn(process.env.NOWNOTE_ELECTRON_PATH||path.join(root,'desktop/node_modules/electron/dist/electron.exe'),[path.join(root,'web/scripts/wiki_sources_ui_host.cjs'),own,mode,String(phase)],{cwd:root,env,stdio:'ignore',windowsHide:true});
     const exit=await new Promise(resolve=>{const timer=setTimeout(()=>{child.kill();resolve('timeout');},90000);child.on('error',()=>{clearTimeout(timer);resolve('spawn_failed');});child.on('exit',code=>{clearTimeout(timer);resolve(code);});});child=null;
-    const result=JSON.parse(await fs.readFile(path.join(own,mode+'-'+phase+'.json'),'utf8'));report.phases.push({mode,phase,...result});
+    let result;
+    try{result=JSON.parse(await fs.readFile(path.join(own,mode+'-'+phase+'.json'),'utf8'));}
+    catch(error){if(error.code!=='ENOENT')throw error;result={ok:false,error:'missing_host_report_exit_'+exit};}
+    report.phases.push({mode,phase,...result});
     if(exit!==0||result.ok!==true)throw Error('wiki_sources_ui_'+mode+'_'+phase+':'+(result.error||exit));
     console.log(mode+' phase '+phase+' actual file/journal/cold and synthetic remote Wiki journey PASS');
   }

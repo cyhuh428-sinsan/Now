@@ -78,9 +78,12 @@
     let connection;
     const database = () => connection ||= new Promise((resolve,reject) => {
       if (!indexedDB || !lock) { reject(fail()); return; }
-      const request = indexedDB.open('nownote.journal.v1',1);
+      const request = indexedDB.open('nownote.journal.v1',2);
       let blocked=false;
-      request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('journals')) request.result.createObjectStore('journals'); };
+      request.onupgradeneeded = () => {
+        if (!request.result.objectStoreNames.contains('journals')) request.result.createObjectStore('journals');
+        if (!request.result.objectStoreNames.contains('documents')) request.result.createObjectStore('documents');
+      };
       request.onblocked = () => { blocked=true; reject(fail()); };
       request.onerror = () => reject(fail());
       request.onsuccess = () => {
@@ -90,27 +93,7 @@
         resolve(db);
       };
     });
-    async function transaction(write,transform,guard) {
-      const db=await database();active(guard);
-      return new Promise((resolve,reject) => {
-        let tx,result,error;
-        try {
-          tx=db.transaction('journals',write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
-          tx.onabort=()=>reject(error||fail());
-          tx.onerror=()=>{error=fail();};
-          tx.oncomplete=()=>{try{active(guard);resolve(result);}catch(e){reject(e);}};
-          if(write && tx.durability!=='strict'){error=fail();tx.abort();return;}
-          const store=tx.objectStore('journals'), request=store.get(key);
-          request.onsuccess=()=>{
-            try {
-              active(guard);
-              result=transform(request.result);
-              if(write)store.put(result,key);
-            } catch(e){error=e;tx.abort();}
-          };
-        }catch(e){reject(fail());}
-      });
-    }
+    const transaction=globalThis.NowDocumentTransactions.create({database,key});
     // Call only inside the shared legacy-key lock. Hashing must not suspend an IDB transaction.
     async function settled(guard) {
       active(guard);

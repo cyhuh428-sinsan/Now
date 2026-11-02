@@ -28,17 +28,19 @@ function createDocumentStore(filename){
     const schema=db.prepare("SELECT sql FROM sqlite_master WHERE substr(name,1,7) != 'sqlite_' AND type IN ('table','index','view','trigger') ORDER BY name").all();
     if(schema.length!==SCHEMA.length||schema.some((row,index)=>canonicalSchema(row.sql)!==canonicalSchema(SCHEMA[index])))throw Error('Unsupported document store schema');
     db.exec('COMMIT');initializing=false;
-    db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;');
+    db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL; PRAGMA secure_delete=ON;');
   }catch(error){
     if(initializing){try{db.exec('ROLLBACK');}catch{}}
     db.close();throw error;
   }
-  let insert,update,advance,read,nextSeq,revision,exists,history;
+  let insert,update,advance,read,nextSeq,revision,exists,history,scan,remove;
   try{
     insert=db.prepare('INSERT INTO documents(scope,id,payload,version) VALUES(?,?,?,1) ON CONFLICT(scope,id) DO NOTHING');
     update=db.prepare('UPDATE documents SET payload=?,version=version+1 WHERE scope=? AND id=? AND version=?');
     advance=db.prepare('UPDATE documents SET version=version+1 WHERE scope=? AND id=? AND version=?');
     read=db.prepare('SELECT payload,version FROM documents WHERE scope=? AND id=?');
+    scan=db.prepare('SELECT id,payload,version FROM documents WHERE scope=? ORDER BY id');
+    remove=db.prepare('DELETE FROM documents WHERE scope=? AND id=? AND version=?');
     nextSeq=db.prepare('SELECT COALESCE(MAX(seq),0)+1 AS seq FROM revisions WHERE scope=? AND id=?');
     revision=db.prepare('INSERT INTO revisions(scope,id,revision_id,seq,payload) VALUES(?,?,?,?,?)');
     exists=db.prepare('SELECT 1 FROM revisions WHERE scope=? AND id=? AND revision_id=?');
@@ -49,21 +51,29 @@ function createDocumentStore(filename){
       identity(scope,id);const row=read.get(scope,id);
       return row?{version:row.version,value:JSON.parse(row.payload)}:null;
     },
+    scan(scope){
+      identity(scope,'scan');
+      return scan.all(scope).map(row=>({id:row.id,version:row.version,value:JSON.parse(row.payload)}));
+    },
+    dataVersion(){return db.prepare('PRAGMA data_version').get().data_version;},
     commit(changes){
       if(!Array.isArray(changes)||changes.length===0)throw Error('A nonempty document transaction is required');
       const encoded=changes.map(change=>{
         identity(change.scope,change.id);
-        if(!['put','append'].includes(change.kind)||!Number.isSafeInteger(change.expectedVersion)||change.expectedVersion<0)throw Error('Invalid document transaction');
+        if(!['put','append','remove'].includes(change.kind)||!Number.isSafeInteger(change.expectedVersion)||change.expectedVersion<0)throw Error('Invalid document transaction');
         if(change.kind==='append'&&(typeof change.revisionId!=='string'||!change.revisionId))throw Error('Revision id is required');
-        return json(change.value);
+        return change.kind==='remove'?null:json(change.value);
       });
       db.exec('BEGIN IMMEDIATE');
+      let committed=false;
       try{
         const versions=changes.map((change,index)=>{
           const {scope,id,expectedVersion}=change;
           if(change.kind==='put'){
             const result=expectedVersion===0?insert.run(scope,id,encoded[index]):update.run(encoded[index],scope,id,expectedVersion);
             if(result.changes!==1)throw Error('Document version conflict');
+          }else if(change.kind==='remove'){
+            if(remove.run(scope,id,expectedVersion).changes!==1)throw Error('Document version conflict');
           }else{
             if(exists.get(scope,id,change.revisionId))throw Error('Revision already exists');
             if(advance.run(scope,id,expectedVersion).changes!==1)throw Error('Document version conflict');
@@ -71,8 +81,11 @@ function createDocumentStore(filename){
           }
           return expectedVersion+1;
         });
-        db.exec('COMMIT');return versions;
-      }catch(error){db.exec('ROLLBACK');throw error;}
+        db.exec('COMMIT');committed=true;
+        const checkpoint=db.prepare('PRAGMA wal_checkpoint(TRUNCATE)').get();
+        if(checkpoint.busy!==0)throw Error('Document commit persisted, but storage cleanup is pending. Reopen to verify before completing protection.');
+        return versions;
+      }catch(error){if(!committed)db.exec('ROLLBACK');else error.committed=true;throw error;}
     },
     history(scope,id,{limit=30,before=Number.MAX_SAFE_INTEGER}={}){
       identity(scope,id);
