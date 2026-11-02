@@ -54,8 +54,8 @@
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false){
-      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false){
+      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
@@ -77,7 +77,7 @@
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
                   active();if(count.result!==0)throw Error('Document journal metadata is missing');
-                  result=current?{projection:'journal_current_v1',stamp:null,supported:true,account:path,notes:{}}:{projection:'path_v1',stamp:null,found:false};
+                  result=current?{projection:'journal_current_v1',stamp:null,supported:true,account:path,notes:{}}:{projection:'path_v1',stamp:null,found:false,...(shallow&&!path.length?{partIds:[]}: {})};
                 }catch(e){fail(e);}};
                 return;
               }
@@ -110,7 +110,20 @@
               }
               const cache=new Map();
               function next(){
-                if(step.done){if(patch)apply(step.value);else result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                if(step.done){
+                  if(patch)apply(step.value);
+                  else{
+                    result={projection:'path_v1',stamp:physical.stamp,...step.value};
+                    if(shallow&&!path.length){
+                      const keys=documents.getAllKeys(IDBKeyRange.bound([key],[key,[]]));
+                      keys.onsuccess=()=>{try{active();result.partIds=keys.result.map(value=>{
+                        if(!Array.isArray(value)||value.length!==2||value[0]!==key||typeof value[1]!=='string')throw Error('Invalid document inventory');
+                        return value[1];
+                      });}catch(e){fail(e);}};
+                    }
+                  }
+                  return;
+                }
                 if(current&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
@@ -132,6 +145,7 @@
       });
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
+    transaction.readDirectory=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,null,false,true);
     transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});

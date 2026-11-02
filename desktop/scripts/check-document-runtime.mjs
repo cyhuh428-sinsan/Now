@@ -61,6 +61,8 @@ try{
   await a.evaluate(`(async()=>{
     const value=await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);
     if(value.projection!=='path_v1'||value.found!==true||value.value!=='small')throw Error('Selective IPC read failed');
+    const directory=await nownoteDesktop.storage.readDirectory('${settingsKey}',[]);
+    if(directory.stamp!==value.stamp||directory.part.type!=='object'||!Array.isArray(directory.partIds)||Object.hasOwn(directory,'value'))throw Error('Directory IPC snapshot failed');
     try{await nownoteDesktop.storage.readPath('nownote.vault.v1',[]);throw Error('Unknown path key accepted');}catch(error){if(error.message==='Unknown path key accepted')throw error;}
     try{await nownoteDesktop.storage.write('${settingsKey}',{fontSize:'bad'},{expectedValue:value});throw Error('Partial baseline accepted');}catch(error){if(error.message==='Partial baseline accepted')throw error;}
   })()`);
@@ -81,6 +83,7 @@ try{
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.info();return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.original.read('nownote.web.v1');return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);return false;}catch{return true;}})()`),true);
+  assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.readDirectory('${settingsKey}',[]);return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.open();return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.current(JSON.stringify(['https://qa.invalid','alice']));return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.history.select({account:'untrusted',id:'a',stamp:'untrusted'});return false;}catch{return true;}})()`),true);

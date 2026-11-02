@@ -498,8 +498,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false){
-      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false){
+      const steps=current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
@@ -521,7 +521,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
                   active();if(count.result!==0)throw Error('Document journal metadata is missing');
-                  result=current?{projection:'journal_current_v1',stamp:null,supported:true,account:path,notes:{}}:{projection:'path_v1',stamp:null,found:false};
+                  result=current?{projection:'journal_current_v1',stamp:null,supported:true,account:path,notes:{}}:{projection:'path_v1',stamp:null,found:false,...(shallow&&!path.length?{partIds:[]}: {})};
                 }catch(e){fail(e);}};
                 return;
               }
@@ -554,7 +554,20 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               }
               const cache=new Map();
               function next(){
-                if(step.done){if(patch)apply(step.value);else result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                if(step.done){
+                  if(patch)apply(step.value);
+                  else{
+                    result={projection:'path_v1',stamp:physical.stamp,...step.value};
+                    if(shallow&&!path.length){
+                      const keys=documents.getAllKeys(IDBKeyRange.bound([key],[key,[]]));
+                      keys.onsuccess=()=>{try{active();result.partIds=keys.result.map(value=>{
+                        if(!Array.isArray(value)||value.length!==2||value[0]!==key||typeof value[1]!=='string')throw Error('Invalid document inventory');
+                        return value[1];
+                      });}catch(e){fail(e);}};
+                    }
+                  }
+                  return;
+                }
                 if(current&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
@@ -576,6 +589,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       });
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
+    transaction.readDirectory=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,null,false,true);
     transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
@@ -757,6 +771,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       wikiIndex:()=>visible()&&preview&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      archive(read){
+        if(!preview||full||loading)return Promise.resolve(null);
+        const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();
+          if(full||loading)return null;
+          const value=await read({stamp:preview.stamp,guard:{active}});if(!active())throw stale();return value;
+        });
+        selectedTail=run.then(()=>{},()=>{});return run;
+      },
       currentView:id=>!visible()?null:full?full.currentView(id):current(id),
       currentEntries:options=>!visible()?{}:full?full.currentEntries(options):copy(preview?.notes||{}),
       entryIds:options=>!visible()?[]:full?full.entryIds(options):Object.keys(preview?.notes||{}),
@@ -804,6 +828,61 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   }
   globalThis.NowDeferredHistory={create};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDeferredHistory;
+})();
+
+;
+/* Full archives are assembled from validated documents, never from a partial journal. */
+(() => {
+  'use strict';
+  const full=()=>Object.assign(Error('전체 백업 검증 경로가 필요합니다.'),{code:'backup_full_required'});
+  const fail=()=>Error('백업 중 저장 상태가 변경되었거나 손상되었습니다. 파일을 만들지 않았습니다.');
+  function create({directory,read}){
+    async function exportHistory(stamp,guard){
+      const active=()=>{if(guard?.active&&!guard.active())throw fail();};
+      const get=async(path,shallow=false)=>{
+        active();const result=await (shallow?directory:read)(path,guard);active();
+        if(result.stamp!==stamp)throw fail();return result;
+      };
+      const keys=result=>{
+        if(!result.found||result.part?.type!=='object'||!Array.isArray(result.part.entries))throw full();
+        return result.part.entries.map(([key])=>key);
+      };
+      const root=await get([],true);
+      const inventory=(row,expected)=>{
+        if(!Array.isArray(row.partIds)||JSON.stringify([...row.partIds].sort())!==JSON.stringify([...expected].sort()))throw fail();
+      };
+      if(!root.found||root.value===null){inventory(root,root.found?['$root']:[]);return new Blob(['{"schema_version":1,"contexts":{}}'],{type:'application/json'});}
+      if(keys(root).sort().join(',')!=='contexts,schema_version')throw full();
+      if((await get(['schema_version'])).value!==1)throw full();
+      const accounts=keys(await get(['contexts'],true)),plans=[];
+      for(const account of accounts){
+        let identity;try{identity=JSON.parse(account);}catch{throw full();}
+        if(!Array.isArray(identity)||identity.length!==2||identity.some(x=>typeof x!=='string')||JSON.stringify(identity)!==account)throw full();
+        if(keys(await get(['contexts',account],true)).join(',')!=='notes')throw full();
+        plans.push({account,identity,ids:keys(await get(['contexts',account,'notes'],true))});
+      }
+      const chunks=['{"schema_version":1,"contexts":{'],expected=new Set(['$root','[]','["contexts"]']);
+      for(const [index,{account,identity,ids}]of plans.entries()){
+        expected.add(JSON.stringify(['contexts',account]));expected.add(JSON.stringify(['contexts',account,'notes']));
+        chunks.push((index?',':'')+JSON.stringify(account)+':{"notes":{');
+        for(const [offset,id]of ids.entries()){
+          const selected=await get(['contexts',account,'notes',id]);if(!selected.found)throw fail();
+          const entry=selected.value;
+          if(entry?.protection_record||entry?.protectionScope||entry?.base?.crypto_epoch!==0)throw full();
+          const validator=NowNoteHistory.create({initial:{schema_version:1,contexts:{[account]:{notes:{[id]:entry}}}},
+            context:()=>({url:identity[0],owner:identity[1],enabled:true}),request:async()=>{throw fail();},write:async()=>{throw fail();}});
+          if(validator.status().unsupported)throw fail();
+          for(const key of NowDocumentParts.encode(entry).keys())if(key!=='$root')expected.add(JSON.stringify(['contexts',account,'notes',id,...JSON.parse(key)]));
+          chunks.push(new Blob([(offset?',':'')+JSON.stringify(id)+':'+JSON.stringify(entry)]));
+        }
+        chunks.push('}}');
+      }
+      chunks.push('}}');inventory(root,expected);inventory(await get([],true),expected);active();
+      return new Blob(chunks,{type:'application/json'});
+    }
+    return {read:exportHistory};
+  }
+  globalThis.NowHistoryBackup={create};
 })();
 
 ;
@@ -1831,6 +1910,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
           .then(result=>({revision:result.stamp,stamp:result.stamp,scoped:true}));
       },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
+      readDirectory: (path,guard) => selective(check=>transaction.readDirectory(path,guard,check),guard),
       readCurrent: (account,guard) => selective(check=>transaction.readCurrent(account,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
@@ -29416,7 +29496,24 @@ function writeStorage(key, value) {
 }
 
 async function exportData() {
-  try{await noteHistory?.ensure?.();downloadCurrentBackup();}
+  try{
+    await noteHistoryCaptureChain;await noteHistory?.idle?.();
+    const history=noteHistory,key=wikiViewKey(),data=JSON.stringify(state.data),settings=JSON.stringify(state.settings),library=JSON.stringify(libraryStore?.export());
+    let archive;
+    try{archive=await history?.archive?.(({stamp,guard})=>NowHistoryBackup.create({
+      directory:path=>isDesktopClient()?nownoteDesktop.storage.readDirectory(NOTE_HISTORY_KEY,path):browserHistoryStorage().readDirectory(path,guard),
+      read:path=>isDesktopClient()?nownoteDesktop.storage.readPath(NOTE_HISTORY_KEY,path):browserHistoryStorage().readPath(path,guard),
+    }).read(stamp,guard));}catch(error){if(error.code!=='backup_full_required')throw error;}
+    if(archive){
+      requireProtectionSettled();
+      if(history!==noteHistory||key!==wikiViewKey()||data!==JSON.stringify(state.data)||settings!==JSON.stringify(state.settings)||library!==JSON.stringify(libraryStore?.export()))
+        throw Error('백업 중 자료가 변경되었습니다. 파일을 만들지 않았습니다.');
+      const prefix=JSON.stringify({app:'NowNote Web',version:3,exportedAt:new Date().toISOString()}).slice(0,-1);
+      downloadText(`nownote-${fileTimestamp(new Date())}.json`,new Blob([prefix,',"data":',data,...(library===undefined?[]:[',"library":',library]),',"history":',archive,',"settings":',settings,'}'],{type:'application/json'}),'application/json');
+      return;
+    }
+    await noteHistory?.ensure?.();downloadCurrentBackup();
+  }
   catch(error){showNotice(error.message,"error");}
 }
 

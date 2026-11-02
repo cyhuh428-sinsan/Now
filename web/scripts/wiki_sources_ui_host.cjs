@@ -14,6 +14,7 @@ for(const method of ['open','current','select','full','note'])ipcMain.handle('no
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
+ipcMain.handle('nownote:desktop-store-read-path',(_e,k,segments,shallow=false)=>{if(!keys.has(k)||typeof shallow!=='boolean')throw Error('store_key');return documentFile.readKeyPath(store,k,segments,shallow);});
 const write=(k,v,o)=>{
   if(!keys.has(k))throw Error('store_key');
   const expected=o&&Object.hasOwn(o,'expectedValue')?o.expectedValue:snapshots.get(k);
@@ -137,9 +138,9 @@ app.whenReady().then(async()=>{
       const damagedStored=await q.backend.open();await q.backend.full({expected:damagedStored.value,next:q.value,revision:damagedStored.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
       const download=downloadText;let backup;
-      try{downloadText=(_name,text)=>{backup=JSON.parse(text);};await exportData();}finally{downloadText=download;}
-      if(noteHistory.deferred()||backup?.history?.contexts?.[q.account]?.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('startup_backup_lost_history');
-      q.hydrationStaleBlocked=true;q.backupMaterialized=true;q.corruptHistoryBlocked=true;
+      try{downloadText=(_name,text)=>{backup=text;};await exportData();if(backup instanceof Blob)backup=await backup.text();backup=JSON.parse(backup);}finally{downloadText=download;}
+      if(!noteHistory.deferred()||backup?.history?.contexts?.[q.account]?.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('startup_backup_lost_history');
+      q.hydrationStaleBlocked=true;q.backupDocumentWise=true;q.corruptHistoryBlocked=true;
     })()`);
     const beforeCounts={...historyCounts};
     const productSave=await run(`(async()=>{
@@ -166,7 +167,7 @@ app.whenReady().then(async()=>{
           currentRead=true;
         }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       }
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupDocumentWise:q.backupDocumentWise,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});

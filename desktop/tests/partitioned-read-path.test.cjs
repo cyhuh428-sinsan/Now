@@ -15,7 +15,11 @@ test('cold SQLite path read does not parse unrelated corrupt payloads and cannot
     store=createPartitionedStore(file);
     const result=store.readPath('history',['contexts','A','notes','one','draft']);
     assert.equal(result.projection,'path_v1');assert.deepEqual(result.value,{content:'current'});assert.equal(result.found,true);
-    assert.deepEqual(store.readPath('absent',[]),{projection:'path_v1',found:false});
+    const {stamp,...absent}=store.readPath('absent',[]);assert.match(stamp,/^[0-9a-f]{64}$/);
+    assert.deepEqual(absent,{projection:'path_v1',found:false});
+    const directory=store.readPath('history',['contexts','A','notes'],true);
+    assert.equal(directory.stamp,result.stamp);assert.deepEqual(directory.part.entries.map(([id])=>id),['one','two']);
+    assert.equal(Object.hasOwn(directory,'value'),false);
     assert.throws(()=>store.write('history',{only:'partial'},result),/JSON|changed/);
     assert.throws(()=>store.read('history'),/JSON/,'full reads still report corruption, never a silently partial archive');
   }finally{db?.close();store.close();const resolved=fs.realpathSync(dir);assert.equal(path.dirname(resolved),root);fs.rmSync(resolved,{recursive:true,force:true});}

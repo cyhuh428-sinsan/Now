@@ -39,10 +39,15 @@ function createPartitionedStore(filename){
       const rows=store.scan(key),manifest=rows.map(row=>[row.id,row.version]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
       return {value:rows.length?parts.decode(new Map(rows.map(row=>[row.id,row.value]))):null,manifest,stamp:stamp(manifest)};
     });},
-    readPath(key,path){
+    readPath(key,path,shallow=false){
       if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');
-      return store.snapshot(()=>({projection:'path_v1',...(store.hasScope(key)
-        ?parts.select(path,id=>store.read(key,id)?.value):{found:false})}));
+      return store.snapshot(()=>{
+        const steps=parts.selectSteps(path,shallow);let step=steps.next();
+        if(!store.hasScope(key))return {projection:'path_v1',stamp:stamp([]),found:false,...(shallow&&!path.length?{partIds:[]}: {})};
+        while(!step.done)step=steps.next(store.read(key,step.value)?.value);
+        const manifest=store.manifest(key);
+        return {projection:'path_v1',stamp:stamp(manifest),...step.value,...(shallow&&!path.length?{partIds:manifest.map(([id])=>id)}:{})};
+      });
     },
     write(key,value,expected){return this.commit([{key,value,expected}]);},
     writePath(key,path,expected,value,{manifest=null,additional=[]}={}){

@@ -31,6 +31,14 @@ test('readonly Wiki index exposes only IDs and expires with the deferred account
   index.ids.push('mutated');assert.deepEqual(f.store.wikiIndex().ids,['wiki:synthetic']);
   assert.equal(f.loads(),0);f.setScope('bob');assert.equal(f.store.wikiIndex(),null);
 });
+
+test('archive uses a fixed snapshot without materializing history and invalidates late account results',async()=>{
+  const f=fixture(),blob=await f.store.archive(async({stamp,guard})=>{assert.equal(stamp,'one');assert.equal(guard.active(),true);return new Blob(['synthetic archive']);});
+  assert.equal(await blob.text(),'synthetic archive');assert.equal(f.loads(),0);assert.equal(f.store.deferred(),true);
+  const g=fixture();let release;const wait=new Promise(resolve=>{release=resolve;});
+  const pending=g.store.archive(async()=>{await wait;return new Blob(['old account']);});await new Promise(resolve=>setImmediate(resolve));
+  g.setScope('bob');release();await assert.rejects(pending);assert.equal(g.loads(),0);
+});
 test('first edit materializes once and preserves unread history before writing',async()=>{
   const f=fixture();await f.store.edit({...f.note,content:'edited'});assert.equal(f.loads(),1);assert.equal(f.writes(),1);assert.equal(f.ready(),1);
   assert.equal(f.store.deferred(),false);assert.equal(f.store.view('a').revisions[0].snapshot.note.content,'OLD_PRIVATE_BODY');

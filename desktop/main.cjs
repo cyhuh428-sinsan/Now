@@ -90,10 +90,11 @@ function registerDesktopStorageHandlers() {
     const value=documentFile.readKey(desktopStorePath(),key);
     remember(event.sender,key,value);return value;
   });
-  ipcMain.handle('nownote:desktop-store-read-path',(event,key,segments)=>{
+  ipcMain.handle('nownote:desktop-store-read-path',(event,key,segments,shallow=false)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey(key);
     // A projection is not a full-store write baseline.
-    return documentFile.readKeyPath(desktopStorePath(),key,segments);
+    if(typeof shallow!=='boolean')throw Error('Invalid document directory option');
+    return documentFile.readKeyPath(desktopStorePath(),key,segments,shallow);
   });
 
   function writeFrom(event,key,value,options){

@@ -76,6 +76,16 @@
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       wikiIndex:()=>visible()&&preview&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      archive(read){
+        if(!preview||full||loading)return Promise.resolve(null);
+        const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();
+          if(full||loading)return null;
+          const value=await read({stamp:preview.stamp,guard:{active}});if(!active())throw stale();return value;
+        });
+        selectedTail=run.then(()=>{},()=>{});return run;
+      },
       currentView:id=>!visible()?null:full?full.currentView(id):current(id),
       currentEntries:options=>!visible()?{}:full?full.currentEntries(options):copy(preview?.notes||{}),
       entryIds:options=>!visible()?[]:full?full.entryIds(options):Object.keys(preview?.notes||{}),

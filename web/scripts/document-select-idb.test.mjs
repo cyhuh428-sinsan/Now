@@ -15,7 +15,7 @@ async function fixture(){
     const tx={abort(){aborted=true;queueMicrotask(()=>tx.onabort?.());}};
     complete=()=>tx.oncomplete?.();
     const request=value=>{const r={};queueMicrotask(()=>{if(aborted)return;r.result=structuredClone(value);r.onsuccess?.();});return r;};
-    tx.objectStore=name=>name==='journals'?{get:()=>request(header)}:{count:()=>request(parts.size),get(key){assert.equal(key[0],'history');ids.push(key[1]);return request(parts.has(key[1])?{id:key[1],value:parts.get(key[1])}:undefined);},getAll(){throw Error('Whole document scan forbidden');}};
+    tx.objectStore=name=>name==='journals'?{get:()=>request(header)}:{count:()=>request(parts.size),getAllKeys:()=>request([...parts.keys()].map(id=>['history',id])),get(key){assert.equal(key[0],'history');ids.push(key[1]);return request(parts.has(key[1])?{id:key[1],value:parts.get(key[1])}:undefined);},getAll(){throw Error('Whole document scan forbidden');}};
     return tx;
   }};
   const read=box.NowDocumentTransactions.create({database:async()=>db,key:'history'});
@@ -40,6 +40,19 @@ test('IDB selective read requests exact parts and acknowledges only transaction 
   const promise=f.read.readPath(['contexts','A','notes','one','draft']).then(value=>{settled=true;return value;});
   await f.turn();assert.equal(settled,false);assert.ok(f.ids.length>0);assert.ok(f.ids.every(id=>!id.includes('revisions')&&!id.includes('two')&&!id.includes('"B"')));
   f.finish();const result=await promise;assert.equal(result.projection,'path_v1');assert.equal(result.value.content,'current');assert.equal(result.stamp,'one');
+});
+
+test('IDB directory reads expose only field descriptors and the same stamp, not document bodies',async()=>{
+  const f=await fixture(),pending=f.read.readDirectory(['contexts','A','notes']);await f.turn();
+  assert.ok(f.ids.every(id=>!id.includes('draft')&&!id.includes('revisions')));f.finish();
+  const result=await pending;assert.equal(result.stamp,'one');assert.equal(Object.hasOwn(result,'value'),false);
+  assert.deepEqual(Array.from(result.part.entries,([id])=>id),['one','two']);
+});
+
+test('IDB root directory inventory includes orphan IDs without reading their payloads',async()=>{
+  const f=await fixture();f.parts.set('["orphan"]',{private:'unread'});
+  const pending=f.read.readDirectory([]);await f.turn();f.finish();const result=await pending;
+  assert.ok(result.partIds.includes('["orphan"]'));assert.equal(f.ids.includes('["orphan"]'),false);
 });
 test('IDB selective read rejects missing parts, legacy format and late account invalidation',async()=>{
   const missing=await fixture();missing.parts.delete('["contexts","A","notes","one","draft"]');

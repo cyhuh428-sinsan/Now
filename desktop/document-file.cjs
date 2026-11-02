@@ -145,7 +145,7 @@ function casOriginal(storePath,key,value,expected){
   return {ok:true};
 }
 function readKey(storePath,key){return open(storePath).read(`value:${key}`);}
-function readKeyPath(storePath,key,segments){return open(storePath).readPath(`value:${key}`,segments);}
+function readKeyPath(storePath,key,segments,shallow=false){return open(storePath).readPath(`value:${key}`,segments,shallow);}
 function readKeySnapshot(storePath,key){return open(storePath).readSnapshot(`value:${key}`);}
 function readKeyCurrent(storePath,key,account){return open(storePath).readCurrent(`value:${key}`,account);}
 function readKeyNote(storePath,key,account,id,stamp){return open(storePath).readNote(`value:${key}`,account,id,stamp);}

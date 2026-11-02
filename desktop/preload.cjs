@@ -20,6 +20,7 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
     info: () => ipcRenderer.invoke("nownote:desktop-store-info"),
     read: (key) => ipcRenderer.invoke("nownote:desktop-store-read", key),
     readPath: (key, segments) => ipcRenderer.invoke('nownote:desktop-store-read-path', key, segments),
+    readDirectory: (key, segments) => ipcRenderer.invoke('nownote:desktop-store-read-path', key, segments, true),
     write: (key, value, options) => ipcRenderer.invoke("nownote:desktop-store-write", key, value, options),
     writeSync: (key, value, options) => ipcRenderer.sendSync("nownote:desktop-store-write-sync", key, value, options),
   },
