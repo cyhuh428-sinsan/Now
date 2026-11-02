@@ -122,33 +122,39 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   }
   const summaries=new WeakMap();
   function canReadSummary(row){
+    if(!row?.summary)return false;
     const proof=summaries.get(row),ctx=api.context(),h=api.history();
+    const index=h.wikiIndex?.();
+    if(proof?.indexStamp&&(h.deferred?.()&&!index||index&&index.stamp!==proof.indexStamp))return false;
+    const blocked=local=>proof?.indexStamp&&index
+      ?Boolean(proof.lifecycle[local]?.deleted_at||proof.lifecycle[local]?.pending):L.blocked(local);
     if(!proof||proof.key!==api.contextKey()||!ctx.enabled||ctx.online===false||h!==proof.history
-      ||P.canonicalJson(row.summary)!==proof.value||L.blocked(proof.local)||h.blocked(proof.local)
+      ||P.canonicalJson(row.summary)!==proof.value||blocked(proof.local)||h.blocked(proof.local)
       ||h.currentView(proof.local)?.base.crypto_epoch>0)return false;
-    return proof.dependencies.every(ref=>{
+    try{return proof.dependencies.every(ref=>{
       if(ref.owner_id!==ctx.owner||h.blocked(ref.local_id))return false;
       if(idOf(ref.local_id)){
         const item=h.currentView(ref.local_id);
-        return !L.blocked(ref.local_id)&&(!item||item.base.crypto_epoch===0&&!item.draft.deleted_at);
+        return !blocked(ref.local_id)&&(!item||item.base.crypto_epoch===0&&!item.draft.deleted_at);
       }
       const note=api.source(ref.local_id);
       return note?.owner===ctx.owner&&note.status==='ok'&&!note.protected;
-    });
+    });}catch{return false;}
   }
   async function listIndex({sync=false}={}){
     if(!api.context().enabled)return [];
     const a=action(),rows=new Map();
     if(sync){await L.sync();a.check();await a.h.sync();a.check();}
+    const index=a.h.wikiIndex?.(),lifecycle={};
     const metadata=(id,extra={})=>{
-      const lifecycle=L.state('wiki:'+id);
-      return {id,...extra,lifecycle,deleted:Boolean(lifecycle?.deleted_at||lifecycle?.pending?.action==='trash')};
+      const state=index?lifecycle['wiki:'+id]||null:L.state('wiki:'+id);
+      return {id,...extra,lifecycle:copy(state),deleted:Boolean(state?.deleted_at||state?.pending?.action==='trash')};
     };
     if(a.ctx.online!==false){
       let resources;
       try{resources=await api.listRemote({summary:true});a.check();}
       catch{a.check();resources=[];}
-      await L.observe(resources);a.check();
+      if(index)Object.assign(lifecycle,await L.inspect(resources));else await L.observe(resources);a.check();
       for(const resource of resources){
         const local='wiki:'+resource.id,row=metadata(resource.id,{deferred:true,unavailable:true,error:'요약·출처 상태 확인 필요'}),s=resource.summary;
         const valid=s&&Object.keys(s).sort().join(',')==='approved,protected,readable,schema_version,stale,title,topic'
@@ -158,7 +164,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         if(valid){
           row.protected=s.protected===true;
           if(s.readable&&!row.deleted&&!row.lifecycle?.pending){
-            row.summary=copy(s);summaries.set(row,{key:api.contextKey(),history:a.h,local,dependencies:copy(resource.payload.dependencies),value:P.canonicalJson(row.summary)});
+            row.summary=copy(s);summaries.set(row,{key:api.contextKey(),history:a.h,local,dependencies:copy(resource.payload.dependencies),value:P.canonicalJson(row.summary),
+              ...(index?{indexStamp:index.stamp,lifecycle}: {})});
             if(canReadSummary(row)){delete row.unavailable;delete row.error;}
             else delete row.summary;
           }
@@ -166,7 +173,8 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
         rows.set(local,row);
       }
     }
-    for(const local of a.h.entryIds({includeProtected:true}).filter(idOf)){
+    for(const local of (index?index.ids:a.h.entryIds({includeProtected:true})).filter(idOf)){
+      if(index){if(!rows.has(local))rows.set(local,metadata(local.slice(5),{deferred:true,unavailable:true,error:'문서·출처 상태 확인 필요'}));continue;}
       const item=a.h.currentView(local),id=local.slice(5);
       if(!item||a.h.blocked(local))rows.set(local,metadata(id,{protected:!item,deferred:true,unavailable:true,error:'보호·원작업 상태 확인 필요'}));
       else if(item.localOnly||item.pending||item.dirty){
@@ -185,6 +193,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
   async function list({sync=false,onlyId=null}={}){
     if(!api.context().enabled)return [];
     const a=action();
+    await a.h.ensure?.();a.check();
     if(sync){await L.sync();a.check();await a.h.sync();a.check();}
     const rows=new Map();
     const rowState=(id,extra={})=>{

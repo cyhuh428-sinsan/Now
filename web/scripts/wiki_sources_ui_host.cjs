@@ -93,6 +93,10 @@ app.whenReady().then(async()=>{
       IDBObjectStore.prototype.getAll=function(){throw Error('selected_first_full_scan');};
       IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');return get.call(this,key);};
       try{
+        globalThis.qaLazyBeforeBrowse=typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]');
+        await wikiUI.open('browse');
+        if(!noteHistory.deferred()||noteHistory.failure()||!document.querySelector('#wikiDialog [data-wiki-action=refresh]'))throw Error('wiki_browse_loaded_whole_history');
+        wikiUI.close();q.browseDeferred=true;
         elements.treeContent.value='SELECTED_FIRST_EDIT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
         await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
         state.selectedDate='2026-11-03';elements.dailyContent.value='DAILY_SELECTED_EDIT';saveDailyFromEditor();await noteHistoryCaptureChain;
@@ -162,7 +166,7 @@ app.whenReady().then(async()=>{
           currentRead=true;
         }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       }
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
@@ -199,7 +203,7 @@ app.whenReady().then(async()=>{
       return {selected:true,wholeScan:false,partialOverwrite:false,legacyMismatchBlocked:true,scopedWrite:true,staleWriteRejected:true,siblingsPreserved:true};
     })()`);
     if(process.env.NOWNOTE_LAZY_WIKI_QA==='1'){
-      if(!await run(`typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]')`))throw Error('wiki_runtime_eager_startup');
+      if(!await run(`qaLazyBeforeBrowse===true`))throw Error('wiki_runtime_eager_startup');
     }
     await run('wikiUI.open()');await wait('Boolean(document.querySelector("#wikiDialog [data-wiki-action=sources]"))','sources_button');
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){

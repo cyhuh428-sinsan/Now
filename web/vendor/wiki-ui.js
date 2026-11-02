@@ -98,10 +98,10 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
       if(!readOnly||action.startsWith('query'))void execute(fn);
     };return b;
   }
-  async function execute(fn){
+  async function execute(fn,{hydrate=true}={}){
     check();if(!dialog.open||busy)return;
     const token=epoch;busy=true;readable=false;render();
-    try{await fn(token);}catch(error){if(valid(token))message=error.message;}
+    try{if(hydrate)await api.prepare?.();requireActive(token);await fn(token);}catch(error){if(valid(token))message=error.message;}
     finally{
       if(valid(token)&&doc&&readOnly){readable=true;message='보호된 저장 판본 · 읽기 전용';}
       if(valid(token)&&doc&&!readOnly){
@@ -135,7 +135,7 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
     void execute(async token=>{
       if(dirty&&!await ask('저장하지 않은 초안을 닫을까요?'))return;
       requireActive(token);close();
-    });
+    },{hydrate:false});
   }
   function ask(text,{send=false}={}){
     return new Promise(resolve=>{

@@ -43,7 +43,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
     const token=++generation,bound=contextKey();pendingContext=bound;
     await ensureNowWikiRuntime();
     if(token!==generation||bound!==contextKey())return false;
-    await prepare();
+    await prepare(method,args);
     if(token!==generation||bound!==contextKey())return false;
     if(method==='openProtected')args[1]?.guard?.();
     view ||= mount();

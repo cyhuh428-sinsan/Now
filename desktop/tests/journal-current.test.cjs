@@ -19,6 +19,7 @@ function read(value,who=account){
 test('current preview reads active-account current DTOs, not histories, Wiki bodies or foreign accounts',()=>{
   const result=read(fixture());assert.equal(result.value.projection,'journal_current_v1');assert.equal(result.value.supported,true);
   assert.deepEqual(Object.keys(result.value.notes),['a']);assert.equal(result.value.notes.a.draft.content,'current a');
+  assert.deepEqual(result.value.wikiIds,['wiki:x']);
   assert.equal(result.value.notes.a.projection,'current_v1');assert.equal(result.value.notes.a.pending,0);
   assert.equal(JSON.stringify(result.value).includes('OLD_HISTORY_BODY'),false);assert.equal(JSON.stringify(result.value).includes('WIKI_BODY'),false);
   assert.ok(!result.ids.includes(JSON.stringify(['contexts',account,'notes','wiki:x','draft'])));

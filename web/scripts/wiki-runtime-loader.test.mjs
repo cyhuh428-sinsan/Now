@@ -82,3 +82,10 @@ test('loading 중 계정 변경 시 과거 보호 평문을 화면에 넘기지 
   ready(context);scripts[0].onload();await opening;
   assert.equal(mounts,0);assert.equal(opens,0);
 });
+
+test('prepare receives the requested Wiki mode before opening the selected workspace',async()=>{
+  const {context,scripts}=fixture();const calls=[];
+  const view=context.createLazyWikiView({contextKey:()=> 'alice',prepare:(method,args)=>calls.push([method,...args]),mount:()=>({open(){calls.push(['mounted']);}})});
+  const pending=view.open('browse');ready(context);scripts[0].onload();await pending;
+  assert.deepEqual(calls,[['open','browse'],['mounted']]);
+});

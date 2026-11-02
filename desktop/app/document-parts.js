@@ -114,7 +114,7 @@
     const root=rootRow.part?.type==='object'?new Map(rootRow.part.entries):null;
     if(!root||[...root.keys()].sort().join(',')!=='contexts,schema_version'||(yield* value(['schema_version']))!==1)return unavailable();
     const contexts=yield* object(['contexts']);if(!contexts)return unavailable();
-    const notes={};
+    const notes={},wikiIds=[];
     if(!contexts.has(account))return {projection:'journal_current_v1',supported:true,account,notes};
     const bucket=yield* object(['contexts',account]);
     if(!bucket||[...bucket.keys()].join(',')!=='notes')return unavailable();
@@ -125,7 +125,7 @@
       if(!entry||[...entry.keys()].some(k=>!allowed.has(k))||['raw','draft','base','revisions','outbox','receipts'].some(k=>!entry.has(k)))return unavailable();
       const base=yield* object([...location,'base']);
       if(!base||(yield* value([...location,'base','crypto_epoch']))!==0)return unavailable();
-      if(/^wiki(?:[-:]|$)/.test(id))continue;
+      if(/^wiki(?:[-:]|$)/.test(id)){wikiIds.push(id);continue;}
       const draft=yield* value([...location,'draft']),raw=yield* value([...location,'raw']);
       if([draft,raw].some(n=>!n||Array.isArray(n)||n.owner_id!==identity[1]||n.local_id!==id
         ||!['tree','daily','worklog'].includes(n.note_type)||typeof n.content!=='string'||n.content.startsWith('NOW_ENCRYPTED_')))return unavailable();
@@ -138,7 +138,7 @@
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds};
   }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');

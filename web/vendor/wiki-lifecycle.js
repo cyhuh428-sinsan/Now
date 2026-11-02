@@ -69,6 +69,14 @@
       if((value.schema_version===2)!==Object.hasOwn(value.payload,'document_schema_floor'))throw fail();
       return validate({local_only:false,version:value.version,deleted_at:value.deleted_at,pending:null});
     }
+    async function inspect(resources){
+      const a=action(),map={};if(!Array.isArray(resources))throw fail();
+      for(const value of resources){
+        const row=await remote(a,value);a.check();const id='wiki:'+value.id;
+        if(Object.hasOwn(map,id))throw fail();map[id]=row;
+      }
+      return map;
+    }
     async function observe(resources){
       const a=action(),{data,map}=snapshot(a),next=copy(map);
       if(!Array.isArray(resources))throw fail();
@@ -148,7 +156,7 @@
       const current=api.history().export();
       validateRestore(current,{...incoming,recovery_archives:[...(current?.recovery_archives||[]),...(incoming?.recovery_archives||[]),{contexts:current?.contexts||{}}]});
     }
-    return {state,blocked,observe,move,reconcile,validateRestore:validateIncoming,retry:id=>send(action(),id),async sync(){
+    return {state,blocked,inspect,observe,move,reconcile,validateRestore:validateIncoming,retry:id=>send(action(),id),async sync(){
       const a=action();for(const [id,row]of Object.entries(snapshot(a).map))if(row.pending&&!row.pending.rejected)await send(a,id);
     }};
   }

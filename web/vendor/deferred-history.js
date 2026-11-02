@@ -75,6 +75,7 @@
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      wikiIndex:()=>visible()&&preview&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
       currentView:id=>!visible()?null:full?full.currentView(id):current(id),
       currentEntries:options=>!visible()?{}:full?full.currentEntries(options):copy(preview?.notes||{}),
       entryIds:options=>!visible()?[]:full?full.entryIds(options):Object.keys(preview?.notes||{}),

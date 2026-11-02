@@ -24,6 +24,13 @@ test('startup projects current notes without opening full history; sync exports 
   assert.throws(()=>f.store.export(),/이력|먼저/);assert.throws(()=>f.store.view('a'),/이력|먼저/);
   await f.store.idle();assert.equal(f.loads(),0);assert.equal(f.writes(),0);
 });
+
+test('readonly Wiki index exposes only IDs and expires with the deferred account scope',()=>{
+  const f=fixture();f.store.reset({preview:{...f.preview,wikiIds:['wiki:synthetic']}});
+  const index=f.store.wikiIndex();assert.deepEqual(index.ids,['wiki:synthetic']);assert.equal(index.stamp,'one');
+  index.ids.push('mutated');assert.deepEqual(f.store.wikiIndex().ids,['wiki:synthetic']);
+  assert.equal(f.loads(),0);f.setScope('bob');assert.equal(f.store.wikiIndex(),null);
+});
 test('first edit materializes once and preserves unread history before writing',async()=>{
   const f=fixture();await f.store.edit({...f.note,content:'edited'});assert.equal(f.loads(),1);assert.equal(f.writes(),1);assert.equal(f.ready(),1);
   assert.equal(f.store.deferred(),false);assert.equal(f.store.view('a').revisions[0].snapshot.note.content,'OLD_PRIVATE_BODY');
