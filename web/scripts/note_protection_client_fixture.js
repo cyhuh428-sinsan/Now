@@ -46,12 +46,12 @@
     selectTreeNode(scope.local_id);render();assert(elements.treeContent.readOnly,'pending target editor was not actually locked');
     let restoreSet;
     if(!isDesktopClient()) {
-      const original=Storage.prototype.setItem;let fail=true;
-      Storage.prototype.setItem=function(key,value){
-        if(fail && key === NOTE_HISTORY_KEY && Object.values(JSON.parse(value).protection_operations || {}).some(m=>m.phase === 'complete')){fail=false;throw Error('synthetic quota');}
-        return original.call(this,key,value);
+      const store=browserHistoryStorage(),original=store.write;let fail=true;
+      store.write=async function(expected,value,guard){
+        if(fail&&Object.values(value.protection_operations||{}).some(m=>m.phase==='complete')){fail=false;throw Error('synthetic quota');}
+        return original.call(store,expected,value,guard);
       };
-      restoreSet=()=>Storage.prototype.setItem=original;
+      restoreSet=()=>store.write=original;
     }
     let failed=false,reason='none';try{await resumeNoteProtection(id,password,async()=>({synthetic:true}));}catch(error){failed=true;reason=error.message;}finally{restoreSet?.();}
     assert(failed && noteProtection.status(id).phase === 'applying','store failure must leave applying marker; phase='+noteProtection.status(id).phase+'; reason='+reason);

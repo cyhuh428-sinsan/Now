@@ -78,4 +78,7 @@ for(const root of [saved,fallback]){
     assert.equal(archive.value.draft.local_id,id);assert.equal(archive.value.draft.content,P.canonicalJson(doc));
   }
 }
+const emptyHistory=box.NowNoteHistory.create({context:()=>context,write:async()=>{throw Error('no write expected');},request:async()=>{throw Error('no network expected');}});
+const empty=box.NowWikiProtectionGroup.create({...api,history:()=>emptyHistory,stores:()=>[{name:'empty-history',kind:'history',read:async()=>emptyHistory.export()}],targetStamp:undefined});
+assert.equal((await empty.plan(scope)).members.length,0,'a Wiki without proposal aliases must not acquire a new status requirement');
 console.log('Wiki proposal group: explicit list, durable interrupted CAS/cold resume, wrong key/account refusal, original IDs, all copies encrypted, target once and zero network PASS');

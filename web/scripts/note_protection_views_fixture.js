@@ -68,9 +68,9 @@
     assert(state.data.tree.find(n=>n.id===scope.local_id).protectionScope.owner===scope.owner,'confirmed scope missing');
     let restore;
     if(!isDesktopClient()) {
-      const original=Storage.prototype.setItem;let fail=true;
-      Storage.prototype.setItem=function(key,value){if(fail&&key===NOTE_HISTORY_KEY&&Object.values(JSON.parse(value).protection_operations||{}).some(m=>m.phase==='complete')){fail=false;throw Error('synthetic quota');}return original.call(this,key,value);};
-      restore=()=>Storage.prototype.setItem=original;
+      const store=browserHistoryStorage(),original=store.write;let fail=true;
+      store.write=async function(expected,value,guard){if(fail&&Object.values(value.protection_operations||{}).some(m=>m.phase==='complete')){fail=false;throw Error('synthetic quota');}return original.call(store,expected,value,guard);};
+      restore=()=>store.write=original;
     }
     try{await action('conversion',()=>Object.values(noteHistory.protectionOperations()).some(m=>m.phase==='applying'));}finally{restore?.();}
     const operations=Object.values(noteHistory.protectionOperations());assert(operations.length===1&&operations[0].phase==='applying','failure did not retain applying');

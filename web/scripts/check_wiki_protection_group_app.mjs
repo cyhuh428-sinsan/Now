@@ -5,7 +5,7 @@ import {webcrypto} from 'node:crypto';
 for(const file of ['../app.js','../../desktop/app/app.js']){
   const source=await fs.readFile(new URL(file,import.meta.url),'utf8'),start=source.indexOf('function wikiProtectionGroups(){'),end=source.indexOf('\nasync function openNoteProtection(',start);
   assert.ok(start>=0&&end>start);
-  const scope={url:'https://synthetic.invalid',owner:'alice',instance:'synthetic',device:'one',local_id:'wiki:00000000-0000-4000-8000-000000000001'};
+  const scope={url:'https://synthetic.invalid',owner:'alice',instance:'00000000-0000-4000-8000-000000000002',device:'one',local_id:'wiki:00000000-0000-4000-8000-000000000001'};
   const groupMarker={id:'group',phase:'wiki_group_applying'},member={id:'synthetic-alias'},rootMarker={id:'original-target',phase:'applying'};
   let nextPending=null,plan={members:[member],plan_hash:'confirmed-plan',pending:null},factory,runs=[],targets=[],envelopes=[];
   const box=vm.createContext({structuredClone,NowWikiProtectionGroup:{create:api=>{factory=api;return {
@@ -36,6 +36,9 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   const serverReceipt=await box.convertProtectionSelection(serverInfo,'conversion','synthetic-key',resolve,'confirmed-plan');
   assert.equal(serverReceipt.crypto_epoch,1);assert.equal(envelopes.at(-1).operation_id,'known-transition-id');
   assert.equal(envelopes.at(-1).receipt.operation_id,undefined,'existing server receipts do not contain the transition ID');
+  let ordinaryResumes=0;box.beginNoteProtection=async()=>{throw Error('operation_exists');};box.resumeNoteProtection=async()=>{ordinaryResumes++;};
+  await assert.rejects(()=>box.convertProtectionSelection({...serverInfo,wikiGroup:null,pending:rootMarker},'conversion','synthetic-key',resolve),/operation_exists/);
+  assert.equal(ordinaryResumes,0,'ordinary conversion must not silently resume a pending operation');
   assert.ok(source.includes('convert:convertProtectionSelection,resume:resumeProtectionSelection'));
   assert.ok(source.includes('NowWikiProtectionGroup.relatedTarget(marker.scope.local_id)'));
   Object.assign(box,{crypto:webcrypto,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
@@ -49,10 +52,11 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   delete item.protectionScope;assert.equal((await box.wikiProtectionTargetStamp(scope)).hash,stamped.hash,'attribution does not change the pinned content');
   item.draft.content+=' changed';assert.notEqual((await box.wikiProtectionTargetStamp(scope)).hash,stamped.hash);
   box.noteProtectionLocalWikiScope=null;
-  const status={server_instance_id:scope.instance,head_revision_id:null,head_version:1,crypto_epoch:0,history_generation:1,identity_state:'coherent',protection_state:'legacy',current_exists:true,inventory_revision_ids:[],active_transition_id:null};
+  const status={preparation_only:true,server_instance_id:scope.instance,head_revision_id:null,head_version:1,crypto_epoch:0,history_generation:1,identity_state:'coherent',protection_state:'legacy',current_exists:true,inventory_revision_ids:[]};
   box.noteHistoryRequest=async()=>structuredClone(status);
   assert.equal((await box.wikiProtectionTargetStamp(scope)).head_version,1);
-  delete status.active_transition_id;await assert.rejects(()=>box.wikiProtectionTargetStamp(scope),/target_unverifiable/);status.active_transition_id=null;
+  delete status.head_version;await assert.rejects(()=>box.wikiProtectionTargetStamp(scope),/target_unverifiable/);status.head_version=1;
+  status.crypto_epoch='0';await assert.rejects(()=>box.wikiProtectionTargetStamp(scope),/target_unverifiable/);status.crypto_epoch=0;
   status.server_instance_id='other';await assert.rejects(()=>box.wikiProtectionTargetStamp(scope),/context_changed/);
 }
 console.log('Web/Desktop group wiring: explicit plan binding, original-target resume, local scope, no recursion and ordinary protection preserved PASS');
