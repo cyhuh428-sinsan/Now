@@ -12,12 +12,14 @@ test('native product session guards the whole journal revision and never replace
   try{
     fileStore.initialize(filename);fileStore.writeKey(filename,key,original,null);
     const service=createHistorySession(()=>filename),sender={},other={},opened=service.open(sender);
+    const preview=service.current(sender,account);assert.equal(typeof preview.stamp,'string');assert.equal(preview.stamp,opened.stamp);
     const next=structuredClone(original.contexts[account].notes.a);next.draft.content='edited';
     const receipt=service.note(sender,{revision:opened.revision,account,id:'a',expected:original.contexts[account].notes.a,next});
     assert.notEqual(receipt.revision,opened.revision);assert.equal(fileStore.readKey(filename,key).contexts[account].notes.a.draft.content,'edited');
     assert.throws(()=>service.note(sender,{revision:opened.revision,account,id:'a',expected:next,next}),/다시|기준/);
     const old=service.open(sender),sibling=fileStore.readKey(filename,key);sibling.contexts[account].notes.b.draft.content='other window';
     fileStore.writeKey(filename,key,sibling,fileStore.readKey(filename,key));
+    assert.notEqual(service.current(sender,account).stamp,preview.stamp);
     assert.throws(()=>service.note(sender,{revision:old.revision,account,id:'a',expected:next,next}),/changed|conflict/);
     assert.equal(fileStore.readKey(filename,key).contexts[account].notes.b.draft.content,'other window');
     const stale=service.open(other),current=fileStore.readKey(filename,key);current.protection_operations={};fileStore.writeKey(filename,key,current,fileStore.readKey(filename,key));

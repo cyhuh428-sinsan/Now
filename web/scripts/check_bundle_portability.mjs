@@ -14,6 +14,7 @@ files.push('web/vendor/wiki-runtime-loader.js','web/wiki-runtime.js','desktop/ap
 files.push('web/vendor/document-parts.js','web/vendor/document-idb.js','desktop/app/document-parts.js');
 files.push('web/vendor/history-snapshot.js');
 files.push('web/vendor/journal-writes.js','desktop/app/journal-writes.js');
+files.push('web/vendor/deferred-history.js');
 function run(command,args,cwd){const result=spawnSync(command,args,{cwd,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||result.stdout);return result.stdout;}
 try{
   for(const autocrlf of ['false','true']){

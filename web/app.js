@@ -679,6 +679,81 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 })();
 
 ;
+/* A current projection never authorizes a journal write or a complete export. */
+(() => {
+  'use strict';
+  const copy=value=>structuredClone(value);
+  function create({initial,context,contextKey,accountKey,load,build,ready=()=>{},change=()=>{}}){
+    let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false;
+    const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
+    const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
+    function reset(initial){
+      const next=initial.preview;
+      if(next&&(next.projection!=='journal_current_v1'||next.supported!==true||typeof next.stamp!=='string'||next.account!==accountKey()))throw stale();
+      full?.suspend();epoch++;bound=contextKey();loading=null;failed=null;suspended=false;
+      preview=next?copy(next):null;full=next?null:build(initial.snapshot);
+    }
+    reset(initial);
+    async function ensure(){
+      if(!visible())throw stale();
+      if(failed)throw failed;
+      if(full)return full;
+      if(loading)return loading;
+      const generation=epoch,key=bound,stamp=preview.stamp,active=()=>generation===epoch&&key===contextKey()&&!suspended;
+      const attempt=(async()=>{
+        try{
+          const snapshot=await load({active});
+          if(!active())throw stale();
+          if(snapshot.stamp!==stamp)throw stale();
+          const candidate=build(snapshot);
+          if(candidate.status().unsupported)throw Error('전체 이력을 확인하지 못했습니다. 원본과 편집본을 보존했습니다.');
+          if(!active()){candidate.suspend();throw stale();}
+          full=candidate;preview=null;ready();return full;
+        }catch(error){if(active()){failed=error;change(error);}throw error;}
+      })();
+      loading=attempt;
+      try{return await attempt;}finally{if(loading===attempt)loading=null;}
+    }
+    const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
+    const api={
+      ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),
+      currentView:id=>!visible()?null:full?full.currentView(id):current(id),
+      currentEntries:options=>!visible()?{}:full?full.currentEntries(options):copy(preview?.notes||{}),
+      entryIds:options=>!visible()?[]:full?full.entryIds(options):Object.keys(preview?.notes||{}),
+      manages:id=>visible()&&(full?full.manages(id):Boolean(preview?.notes[id])),
+      blocked:id=>!visible()||Boolean(full?.blocked(id)),
+      legacyPending:()=>visible()&&full?full.legacyPending():null,
+      protectionOperations:()=>visible()&&full?full.protectionOperations():{},
+      failure:()=>failed?.message||full?.failure()||'',
+      status(){
+        if(!visible())return {pending:0,conflicts:0,revisions:null,failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
+        if(full)return full.status();
+        const notes=visible()?Object.values(preview?.notes||{}):[];
+        return {pending:notes.filter(n=>!n.localOnly&&(n.dirty||n.pending)).length,
+          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:0,revisions:null,deferred:Boolean(preview),
+          failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
+      },
+      idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):Promise.resolve(),
+      suspend(){epoch++;suspended=true;full?.suspend();full=null;preview=null;loading=null;failed=null;},
+      suspended:()=>suspended,
+      invalidate(){epoch++;full?.invalidate();loading=null;},
+    };
+    for(const name of ['view','entries','export','validateImport'])api[name]=(...args)=>{
+      if(!full||!visible())throw Error('전체 이력을 먼저 불러와 확인하세요. 현재본만 내보내거나 변경하지 않았습니다.');
+      return full[name](...args);
+    };
+    for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
+      'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
+      if(name==='sync'&&(!context().enabled||suspended))return;
+      const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
+    };
+    return api;
+  }
+  globalThis.NowDeferredHistory={create};
+  if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDeferredHistory;
+})();
+
+;
 /**
  * marked v18.1.2 - a markdown parser
  * Copyright (c) 2018-2026, MarkedJS. (MIT License)
@@ -1682,7 +1757,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     });
     return {
       read: () => lock(async()=> (await settled()).row.value),
-      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,scoped:raw===null};}),
+      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null};}),
       writeSnapshot:fullWrite,
       replaceNote(request,guard){
         const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
@@ -2225,6 +2300,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     busy = true; const token = ++run;
     try {
       status('이력 조회 중…');
+      await api.store.ensure?.();
+      if(!valid(token))return;
       if (!more) {
         rows = []; cache.clear(); plain.clear(); cursor = null;
         const item = api.store.view(id);
@@ -7059,6 +7136,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
     }
     async function list(){
       if(!api.context().enabled)return [];
+      if(api.history()?.matches&&!api.history().matches())return [];
       const a=action(),data=a.h.export(),notes=data.contexts?.[NowNoteHistory.key(a.ctx)]?.notes||{},result=[];
       for(const [local,item] of Object.entries(notes)){
         if(!local.startsWith('wiki-source:'))continue;
@@ -9433,11 +9511,13 @@ globalThis.createWikiQueryNotebook=function createWikiQueryNotebook(api){
   };
 })();
 
-globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount}){
+globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prepare=async()=>{}}){
   let view=null,generation=0,pendingContext=null;
   async function open(method,args){
     const token=++generation,bound=contextKey();pendingContext=bound;
     await ensureNowWikiRuntime();
+    if(token!==generation||bound!==contextKey())return false;
+    await prepare();
     if(token!==generation||bound!==contextKey())return false;
     if(method==='openProtected')args[1]?.guard?.();
     view ||= mount();
@@ -14156,7 +14236,9 @@ let noteProtectionViewGeneration = 0;
 let noteProtectionInternalEnabled = false;
 let protectionApplying = false;
 const storagePendingWrites = new Set();
-let protectionBootstrapPending = false;
+let protectionBootstrapPending = true;
+let noteHistoryStartupReady = false;
+let bootstrapWritePending = null;
 let protectionBootstrapScopes = [];
 
 let noteProtectionSupport = null;
@@ -14211,7 +14293,7 @@ function noteProtectionBlocked(id) {
 
 function requireProtectionSettled() {
   if (noteProtection?.pending()) throw new Error("보호 전환을 먼저 재개하세요. 서버 완료와 로컬 적용은 별개입니다.");
-  if(globalThis.createWikiIngestNotebook?.blocks(noteHistory?.export(),noteHistoryContext()))
+  if(!noteHistory?.deferred?.()&&globalThis.createWikiIngestNotebook?.blocks(noteHistory?.export(),noteHistoryContext()))
     throw Error("위키 원작업의 결과·로컬 반영을 먼저 확인하세요. 자료는 보존했습니다.");
 }
 
@@ -14241,7 +14323,7 @@ function protectionStorageAdapters() {
     },
   });
   const result = [
-    { name: "history", kind: "history", read: async () => noteHistory.export(), cas: (expected,next,guard) => noteHistory.replaceProtectionStore(expected,next,guard) },
+    { name: "history", kind: "history", read: async () => {await noteHistory.ensure?.();return noteHistory.export();}, cas: (expected,next,guard) => noteHistory.replaceProtectionStore(expected,next,guard) },
     { name: "memory:data", kind: "data", ephemeral: true, read: async () => structuredClone(state.data),
       async cas(expected,next) { if (JSON.stringify(state.data) !== JSON.stringify(expected)) throw new Error("화면 자료가 변경되었습니다."); state.data = structuredClone(next); } },
     { name: "memory:settings", kind: "settings", ephemeral: true, read: async () => structuredClone(state.settings),
@@ -15112,6 +15194,7 @@ async function convertProtectionSelection(original,purpose,password,resolveKey,c
 }
 
 async function openNoteProtection({discover=false,target=null,localWikiScope=null}={}) {
+  await noteHistory?.ensure?.();
   if (!noteProtectionClient) {showNotice("보호 저장소를 먼저 초기화하세요.","error");return;}
   noteProtectionLocalWikiScope=localWikiScope;
   noteProtectionDiscoveryOnly=discover;
@@ -15316,6 +15399,8 @@ async function noteHistoryFlush() {
   await noteHistoryCaptureChain;
   if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
   while (serverSyncRunning) await new Promise(resolve => setTimeout(resolve, 30));
+  if(noteHistory?.deferred?.()&&!noteHistoryContext().online&&!noteHistory.status().dirty)return;
+  if(noteHistoryContext().enabled)await noteHistory?.ensure?.();
   for (const timer of noteHistoryTimers.values()) clearTimeout(timer);
   noteHistoryTimers.clear();
   for (const id of noteHistory?.entryIds() || []) await noteHistory.seal(id);
@@ -15323,13 +15408,23 @@ async function noteHistoryFlush() {
   await noteHistoryController?.resume();
 }
 
+function finishNoteHistoryBootstrap(){
+  if(!protectionBootstrapPending||noteHistory.deferred())return;
+  if(noteHistory.status().unsupported)throw new Error("지원하지 않는 이력 형식입니다. 원본을 보존했습니다.");
+  protectionBootstrapScopes=Object.values(noteHistory.protectionOperations()).filter(marker=>marker.phase!=="complete");
+  normalizeData();protectionBootstrapPending=false;protectionBootstrapScopes=[];
+  if(noteHistoryStartupReady){if(!isHostedWebClient())writeStorage(STORAGE_KEY,state.data);persistSettings();}
+}
+
 async function historyPersistence() {
-  if(!isDesktopClient())return {open:()=>browserHistoryStorage().readSnapshot(),
+  if(!isDesktopClient())return {open:guard=>browserHistoryStorage().readSnapshot(guard),
+    current:(account,guard)=>browserHistoryStorage().readCurrent(account,guard),
     full:(request,guard)=>browserHistoryStorage().writeSnapshot(request.expected,request.next,guard),
     note:(request,guard)=>browserHistoryStorage().replaceNote(request,guard)};
   const storage=window.nownoteDesktop.storage,info=await storage.info();let expected;
   const unwrap=result=>{if(!result?.ok)throw Object.assign(new Error(result?.message||"이력 저장 기준을 확인하세요."),{committed:result?.committed===true});return result;};
-  if(info.historySessions&&storage.history)return {open:async()=>unwrap(await storage.history.open()),
+  if(info.historySessions&&storage.history)return {open:async guard=>{if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.open());if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;},
+    ...(!info.retainedOriginal&&storage.history.current?{current:async(account,guard)=>{if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");const result=unwrap(await storage.history.current(account));if(guard?.active&&!guard.active())throw new Error("저장 계정이 변경되었습니다.");return result;}}:{}),
     full:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.full({revision:request.revision,next:request.next}));},
     note:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.note(request));}};
   return {open:async()=>{expected=await readStorage(NOTE_HISTORY_KEY);return {value:expected,revision:null,scoped:false};},
@@ -15342,23 +15437,38 @@ async function initializeNoteHistory() {
   noteHistoryProjectionScope = NowNoteHistory.key(noteHistoryContext());
   const backend=await historyPersistence(),contextKey=()=>{const c=noteHistoryContext();return JSON.stringify([NowNoteHistory.key(c),c.auth,c.device,c.enabled]);};
   const normalize=snapshot=>{if(!isDesktopClient()||typeof snapshot.value!=="string")return snapshot;try{return {...snapshot,value:JSON.parse(snapshot.value),scoped:false};}catch{return {...snapshot,value:{schema_version:"unreadable",raw:snapshot.value},scoped:false};}};
-  const opened=normalize(await backend.open());let writerScope=contextKey();
-  const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
-  const initial=opened.value;
-  noteHistory = NowNoteHistory.create({ initial, context: noteHistoryContext, request: noteHistoryRequest,
-    change: () => renderSyncStatusIndicator(state.settings.server, state.settings.server.lastStatus),
-    write:(value,guard)=>writer.write(value,guard),
-    writeNote:(ctx,id,value,guard)=>writer.writeNote(ctx,id,value,guard),
-  });
+  const accountKey=()=>NowNoteHistory.key(noteHistoryContext());
+  const readInitial=async()=>{
+    const bound=contextKey(),guard={active:()=>bound===contextKey()};
+    if(backend.current){
+      try{const preview=await backend.current(accountKey(),guard);
+        if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");
+        if(preview.supported&&typeof preview.stamp==="string")return {preview};
+      }catch(error){if(!guard.active())throw error;}
+    }
+    const snapshot=normalize(await backend.open(guard));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return {snapshot};
+  };
+  noteHistory=NowDeferredHistory.create({initial:await readInitial(),context:noteHistoryContext,contextKey,accountKey,
+    ready:finishNoteHistoryBootstrap,
+    change:error=>{renderSyncStatusIndicator(state.settings.server,"bad");showNotice(error.message,"error");},
+    load:async guard=>normalize(await backend.open(guard)),
+    build:opened=>{
+      const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
+      return NowNoteHistory.create({initial:opened.value,context:noteHistoryContext,request:noteHistoryRequest,
+        change:()=>renderSyncStatusIndicator(state.settings.server,state.settings.server.lastStatus),
+        write:(value,guard)=>writer.write(value,guard),writeNote:(ctx,id,value,guard)=>writer.writeNote(ctx,id,value,guard)});
+    }});
   noteHistoryController = {
-    lock() { invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
+    lock() { protectionBootstrapPending=true;invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
-      if (noteHistory.suspended()||writerScope!==contextKey()) {
-        const scope=contextKey(),restored=normalize(await backend.open());
+      if (noteHistory.suspended()||!noteHistory.matches()) {
+        protectionBootstrapPending=true;
+        const scope=contextKey(),restored=await readInitial();
         if(scope!==contextKey())throw new Error("저장 계정이 변경되었습니다.");
-        noteHistory.hydrate(restored.value);writer.reset(restored);writerScope=scope;
+        noteHistory.reset(restored);
+        finishNoteHistoryBootstrap();
       }
       if (!projectView) return;
       noteHistoryProjection = true;
@@ -15418,9 +15528,8 @@ async function initializeNoteHistory() {
       event.preventDefault(); noteHistoryFlush().catch(error => showNotice(error.message, "error"));
     }
   });
+  finishNoteHistoryBootstrap();
   initializeNoteProtection();
-  protectionBootstrapPending = false;
-  protectionBootstrapScopes = [];
   if (!isHostedWebClient()) await noteHistoryController.resume();
 }
 
@@ -15665,6 +15774,7 @@ async function protectLocalWiki(info,password,resolveKey){
 }
 
 async function openWikiProtection(id){
+  await noteHistory?.ensure?.();
   const local="wiki:"+id,ctx=noteHistoryContext(),bound=wikiViewKey();
   const expected=await NowNoteWiki.localProtectionScope(ctx,local);
   if(bound!==wikiViewKey())throw Error("위키 보호 계정이 변경되었습니다.");
@@ -15758,7 +15868,7 @@ function initializeWikiNotebook(){
       return {status:"ok",epoch:0,lineage:false,fence:false};
     },
   });
-  wikiUI=createLazyWikiView({contextKey:wikiViewKey,mount:()=>mountNowWiki({
+  wikiUI=createLazyWikiView({contextKey:wikiViewKey,prepare:()=>noteHistory.ensure(),mount:()=>mountNowWiki({
     ...book,sources:wikiSources,ingest:wikiIngest,contextKey:wikiViewKey,connection:wikiConnection,openProtection:openWikiProtection,
     query:createWikiQueryNotebook({book,context:noteHistoryContext,contextKey:wikiViewKey}),
     notes:()=>libraryNotes().filter(n=>wikiSourceNote(n.id)?.status==="ok"),
@@ -15799,15 +15909,17 @@ async function initializeApp() {
   applySettings();
   if (isHostedWebClient()) {
     const authenticated = await initializeHostedWebClient();
-    if (!authenticated) return;
+    if (!authenticated) {noteHistoryStartupReady=true;return;}
     render();
     scheduleServerSync({ force: true, delay: 1600 });
     await openInitialWorkspace();
+    noteHistoryStartupReady=true;
     return;
   }
   render();
   scheduleServerSync({ force: true, delay: 1600 });
   await openInitialWorkspace();
+  noteHistoryStartupReady=true;
 }
 
 async function openInitialWorkspace(){
@@ -17306,11 +17418,11 @@ function bindEvents() {
   elements.exportBtn.addEventListener("click", exportData);
   elements.importInput.addEventListener("change", importData);
   elements.importMarkdownInput.addEventListener("change", importMarkdownData);
-  elements.snapshotCreateBtn?.addEventListener("click", () => {
-    createRecoverySnapshot("manual");
-    persist();
-    renderRecoveryPanel();
-    showNotice(t("note.snapshotCreated"), "success");
+  elements.snapshotCreateBtn?.addEventListener("click", async () => {
+    try{
+      await noteHistory?.ensure?.();createRecoverySnapshot("manual");
+      persist();renderRecoveryPanel();showNotice(t("note.snapshotCreated"),"success");
+    }catch(error){showNotice(error.message,"error");}
   });
   elements.snapshotRestoreBtn?.addEventListener("click", restoreSelectedSnapshot);
   elements.snapshotSelect?.addEventListener("change", renderRecoveryPanel);
@@ -17500,8 +17612,9 @@ function closeSettingsPopup() {
   elements.settingsView.classList.add("hidden");
 }
 
-function toggleSettings() {
+async function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
+    await noteHistory?.ensure?.();
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
     refreshMailSettingsStatus();
@@ -17665,6 +17778,7 @@ async function prepareVaultHistorySelection(history,ctx,item,selection) {
 }
 
 async function withVaultHistoryPaused(action,{project=false}={}) {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   if ([elements.treeContent,elements.treeTitleInput,elements.dailyContent,elements.worklogContent].some(editor=>editor&&isEditorComposing(editor)))
     throw new Error("한글 입력을 마친 뒤 다시 시도하세요.");
@@ -17690,6 +17804,7 @@ async function withVaultHistoryPaused(action,{project=false}={}) {
     if(typeof history==="string")history=JSON.parse(history);
     if(project){
       await noteHistoryController.resume({renderView:false});guard();
+      await noteHistory.ensure();guard();
       writeStorage(STORAGE_KEY,state.data);await Promise.all([...storagePendingWrites]);guard();
       history=noteHistory.export();
     }
@@ -18700,7 +18815,7 @@ function handleServerAnalysisListClick(event) {
   const job = (state.settings.server.analysisJobs || []).find((item) => Number(item.id) === id);
   if (!job) return;
   if (action === "append") appendAnalysisResultToNote(job);
-  if (action === "approve") approveAnalysisResult(job);
+  if (action === "approve") approveAnalysisResult(job).catch(error=>showNotice(error.message,"error"));
   if (action === "reject") rejectAnalysisResult(job);
   if (action === "retry") retryAnalysisJob(job);
   if (action === "cancel") cancelAnalysisJob(job);
@@ -18761,7 +18876,7 @@ function appendAnalysisResultToNote(job) {
   showSaved(elements.treeSavedLabel);
 }
 
-function approveAnalysisResult(job) {
+async function approveAnalysisResult(job) {
   const protectedNode=job.note_local_id?findTreeNode(state.data.tree,job.note_local_id):null;
   if(job.locked || job.required_capability || protectedNode?.protection_record || noteProtectionBlocked(job.note_local_id)) {
     showNotice("보호된 분석 결과는 메모 보호 창에서 반영할 수 있습니다.","error");return;
@@ -18773,6 +18888,14 @@ function approveAnalysisResult(job) {
     renderServerSettings();
     return;
   }
+  const context={...noteHistoryContext()},generation=noteProtectionViewGeneration,epoch=noteHistoryCaptureEpoch,data=state.data;
+  const stamp=JSON.stringify(job),tracked=Array.isArray(state.settings.server.analysisJobs);
+  await noteHistory?.ensure?.();
+  const current=noteHistoryContext(),currentJob=state.settings.server.analysisJobs?.find(item=>Number(item.id)===Number(job.id));
+  const protectedNow=job.note_local_id?findTreeNode(state.data.tree,job.note_local_id):null;
+  if(["url","owner","auth","device","enabled"].some(key=>current[key]!==context[key])||generation!==noteProtectionViewGeneration||epoch!==noteHistoryCaptureEpoch
+    ||state.data!==data||JSON.stringify(job)!==stamp||tracked&&JSON.stringify(currentJob)!==stamp
+    ||job.locked||job.required_capability||protectedNow?.protection_record||noteProtectionBlocked(job.note_local_id))throw new Error("분석 승인 중 계정 또는 보호 대상이 변경되었습니다.");
   createRecoverySnapshot("before-analysis-approval");
   const node = job.note_local_id
     ? findTreeNode(state.data.tree, job.note_local_id)
@@ -28515,12 +28638,8 @@ function flattenTree(nodes) {
 }
 
 async function load() {
-  try {
-    const rawHistory = await readStorage(NOTE_HISTORY_KEY);
-    const history = typeof rawHistory === "string" ? JSON.parse(rawHistory) : rawHistory;
-    protectionBootstrapScopes = Object.values(history?.protection_operations || {}).filter(m=>m.phase!=="complete");
-    protectionBootstrapPending = Boolean(history?.protection_operations && Object.values(history.protection_operations).some(m => m.phase !== "complete"));
-  } catch { protectionBootstrapPending = true; }
+  // Keep normalization and writes blocked until the journal bootstrap is verified.
+  protectionBootstrapPending=true;
   if (isHostedWebClient()) {
     state.data = defaultData();
     return;
@@ -28539,8 +28658,6 @@ async function load() {
     state.data.canvases = parsed.canvases || [];
     state.data.captures = parsed.captures || [];
     state.data.tree = parsed.tree || [];
-    normalizeData();
-    persist();
   } catch {
     clearStorage(STORAGE_KEY);
   }
@@ -29159,7 +29276,13 @@ async function migrateLocalStorageToDesktopStore(key) {
 }
 
 function writeStorage(key, value) {
-  if ((protectionApplying || protectionBootstrapPending) && [STORAGE_KEY,SETTINGS_KEY].includes(key)) return false;
+  if ((protectionApplying || protectionBootstrapPending) && [STORAGE_KEY,SETTINGS_KEY].includes(key)) {
+    if(key===STORAGE_KEY&&!protectionApplying&&noteHistoryStartupReady&&noteHistory?.deferred?.()&&noteHistory.matches()&&noteHistoryContext().enabled&&!bootstrapWritePending){
+      const pending=noteHistory.ensure().catch(()=>false).finally(()=>{storagePendingWrites.delete(pending);if(bootstrapWritePending===pending)bootstrapWritePending=null;});
+      bootstrapWritePending=pending;storagePendingWrites.add(pending);
+    }
+    return false;
+  }
   if (isDesktopClient() && DESKTOP_STORAGE_KEYS.has(key)) {
     // #region nownote-only:web 기존 비동기 저장 정책 유지
     const pendingWrite = window.nownoteDesktop.storage.write(key, value)
@@ -29198,11 +29321,13 @@ function writeStorage(key, value) {
   }
 }
 
-function exportData() {
-  downloadCurrentBackup();
+async function exportData() {
+  try{await noteHistory?.ensure?.();downloadCurrentBackup();}
+  catch(error){showNotice(error.message,"error");}
 }
 
-function exportMarkdown() {
+async function exportMarkdown() {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   const restoredArchivedDailyCount = state.data.archivedDaily.filter((note) => note.restoredAt).length;
   const markdown = [
@@ -29308,6 +29433,7 @@ function downloadText(filename, content, type) {
 }
 
 async function validateProtectedBackupImport(parsed) {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   const guard=protectionActionGuard(),current=[];
   await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);guard();
@@ -29461,6 +29587,7 @@ function preferredMarkdownImportDestinationKey(options) {
 }
 
 async function importMarkdownFiles(files, { preferCurrentLevel = false } = {}) {
+  await noteHistory?.ensure?.();
   if (files.length === 0) return;
   try {
     const imports = (await Promise.all(files.map(async (file) => {
@@ -29709,6 +29836,7 @@ function createRecoverySnapshot(reason = "manual") {
 }
 
 async function restoreSelectedSnapshot() {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   const snapshotId = elements.snapshotSelect?.value || "";
   const snapshot = (state.data.snapshots || []).find((item) => item.id === snapshotId);
@@ -29933,7 +30061,8 @@ function sensitiveWarningElements(warnings) {
   });
 }
 
-function exportPublishHtml() {
+async function exportPublishHtml() {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   const content = buildPublishBundleContent(publishBundleFromInputs());
   if (!content.nodes.length) {
@@ -29943,7 +30072,8 @@ function exportPublishHtml() {
   downloadText(`${content.bundle.permalink || "nownote-public"}.html`, buildPublicHtmlDocument(content), "text/html");
 }
 
-function exportPublishSlides() {
+async function exportPublishSlides() {
+  await noteHistory?.ensure?.();
   requireProtectionSettled();
   const content = buildPublishBundleContent(publishBundleFromInputs());
   if (!content.nodes.length) {
@@ -30333,9 +30463,12 @@ function downloadCurrentBackup(prefix = "nownote") {
 function showSaved(label) {
   if (noteHistory) {
     label.textContent = "저장 중";
-    noteHistoryCaptureChain.then(() => {
+    const history=noteHistory,key=()=>{const c=noteHistoryContext();return JSON.stringify([c.url,c.owner,c.auth,c.device,c.enabled]);},bound=key();
+    noteHistoryCaptureChain.then(async() => {
+      while(storagePendingWrites.size&&history===noteHistory&&bound===key())await Promise.all([...storagePendingWrites]);
+      if(history!==noteHistory||bound!==key())return;
       label.textContent = noteHistoryLastError || noteHistory.failure() ? "저장 실패 · 편집본 보존" : t("saved");
-    });
+    }).catch(()=>{if(history===noteHistory&&bound===key())label.textContent="저장 실패 · 편집본 보존";});
     return;
   }
   label.textContent = t("saved");

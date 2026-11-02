@@ -7,10 +7,10 @@ app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
 const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
 const snapshots=new Map();
-const historyCounts={full:0,note:0};
+const historyCounts={open:0,current:0,full:0,note:0};
 const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
 for(const method of ['open','current','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
-  if(method==='full'||method==='note')historyCounts[method]++;
+  historyCounts[method]++;
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
@@ -34,11 +34,19 @@ app.whenReady().then(async()=>{
     window=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,
       ...(mode==='desktop'?{preload:path.join(root,'desktop/preload.cjs')}:{})}});
     await window.loadFile(path.join(root,mode==='desktop'?'desktop/app/index.html':'web/index.html'));
-    const run=code=>window.webContents.executeJavaScript(code),wait=async(code,label)=>{
+    let qaStep=0;
+    const run=async code=>{
+      const step=++qaStep;
+      try{
+        if(!code.trim().startsWith('(async()=>'))return await window.webContents.executeJavaScript(code);
+        const result=await window.webContents.executeJavaScript(code+'.then(value=>({qaOK:true,value}),error=>({qaOK:false,message:String(error.message),stack:String(error.stack)}))');
+        if(!result.qaOK)throw Error(result.message+' | '+result.stack);return result.value;
+      }catch(error){throw Error('renderer_step_'+step+' '+code.trim().slice(0,70)+' | '+error.message);}
+    },wait=async(code,label)=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
-    await run(`(async()=>{
+    const savedSaveFixture=await run(`(async()=>{
       await noteHistory.idle();await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
       const backend=await historyPersistence(),before=await backend.open(),ctx=noteHistoryContext(),account=NowNoteHistory.key(ctx);
       const note=id=>({owner_id:ctx.owner,local_id:id,note_type:'tree',source:'manual',content:'old',title:id,level:1});
@@ -50,6 +58,55 @@ app.whenReady().then(async()=>{
       globalThis.qaProductSave={backend,before,ctx,account,value,scoped:(await backend.open()).scoped};
       // Opening the backend rotates native tokens; explicitly resume the product binding.
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      return {before,ctx,account,value,scoped:qaProductSave.scoped};
+    })()`);
+    const beforeStartup={...historyCounts};
+    window.webContents.debugger.attach('1.3');
+    await window.webContents.debugger.sendCommand('Page.enable');
+    const startupScript=await window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
+      globalThis.qaStartupFullReads=0;const original=IDBObjectStore.prototype.getAll;
+      globalThis.qaRestoreStartupRead=()=>{IDBObjectStore.prototype.getAll=original;};
+      IDBObjectStore.prototype.getAll=function(...args){if(this.name==='documents'){qaStartupFullReads++;throw Error('startup_full_history_read');}return original.apply(this,args);};
+    })();`});
+    const reloaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await reloaded;
+    await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','current_startup_timeout');
+    await run(`(()=>{globalThis.qaReadsBeforeSelection=qaStartupFullReads;globalThis.qaStartupWriteKeys=[];const original=writeStorage;
+      globalThis.qaRestoreStartupWrite=()=>{writeStorage=original;};writeStorage=(key,value)=>{qaStartupWriteKeys.push(key);return original(key,value);};})()`);
+    await run('selectTreeNode("qa-save-a");void 0;');await run('noteHistoryCaptureChain');
+    const startup=await run(`(()=>{let exportBlocked=false;try{noteHistory.export();}catch{exportBlocked=true;}
+      return {deferred:noteHistory.deferred(),current:noteHistory.currentView('qa-save-a')?.draft.content==='old',rendered:elements.treeContent.value==='old',fullReads:qaStartupFullReads,readsBeforeSelection:qaReadsBeforeSelection,writeKeys:qaStartupWriteKeys,exportBlocked,matches:noteHistory.matches()};})()`);
+    const startupCurrent=startup.deferred&&startup.current&&startup.rendered&&startup.fullReads===0&&startup.exportBlocked;
+    await run('qaRestoreStartupRead();qaRestoreStartupWrite()');
+    await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:startupScript.identifier});window.webContents.debugger.detach();
+    if(!startupCurrent||mode==='desktop'&&(historyCounts.open!==beforeStartup.open||historyCounts.current<=beforeStartup.current))throw Error('current_startup_did_not_defer '+JSON.stringify({startup,beforeStartup,historyCounts}));
+    await run(`(async()=>{globalThis.qaProductSave={...${JSON.stringify(savedSaveFixture)},backend:await historyPersistence()};
+      const q=qaProductSave,opened=await q.backend.open(),other=structuredClone(opened.value);
+      other.contexts[q.account].notes['qa-save-b'].draft.content='OTHER_WINDOW_CURRENT';
+      await q.backend.full({expected:opened.value,next:other,revision:opened.revision},{active:()=>true});
+      let blocked=false;try{await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'STALE_MUST_NOT_SAVE'});}catch{blocked=true;}
+      const latest=await q.backend.open();
+      if(!blocked||!noteHistory.failure()||latest.value.contexts[q.account].notes['qa-save-a'].draft.content!=='old'
+        ||latest.value.contexts[q.account].notes['qa-save-b'].draft.content!=='OTHER_WINDOW_CURRENT')throw Error('startup_stale_overwrite');
+      await q.backend.full({expected:latest.value,next:q.value,revision:latest.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred())throw Error('explicit_preview_resume');
+      const clean=await q.backend.open(),damaged=structuredClone(clean.value);damaged.contexts[q.account].notes['qa-save-b'].revisions=[{broken:true}];
+      await q.backend.full({expected:clean.value,next:damaged,revision:clean.revision},{active:()=>true});
+      const dataBefore=JSON.stringify(await readStorage(STORAGE_KEY)),settingsBefore=JSON.stringify(await readStorage(SETTINGS_KEY));
+      const normalize=normalizeData;let normalized=0;normalizeData=()=>{normalized++;return normalize();};
+      try{
+        noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+        let rejected=false;try{await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'DAMAGED_MUST_NOT_SAVE'});}catch{rejected=true;}
+        writeStorage(STORAGE_KEY,state.data);await Promise.all([...storagePendingWrites]);
+        if(!rejected||!protectionBootstrapPending||normalized!==0||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBefore
+          ||JSON.stringify(await readStorage(SETTINGS_KEY))!==settingsBefore)throw Error('damaged_history_bootstrap_unlocked');
+      }finally{normalizeData=normalize;}
+      const damagedStored=await q.backend.open();await q.backend.full({expected:damagedStored.value,next:q.value,revision:damagedStored.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      const download=downloadText;let backup;
+      try{downloadText=(_name,text)=>{backup=JSON.parse(text);};await exportData();}finally{downloadText=download;}
+      if(noteHistory.deferred()||backup?.history?.contexts?.[q.account]?.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('startup_backup_lost_history');
+      q.hydrationStaleBlocked=true;q.backupMaterialized=true;q.corruptHistoryBlocked=true;
     })()`);
     const beforeCounts={...historyCounts};
     const productSave=await run(`(async()=>{
@@ -76,7 +133,7 @@ app.whenReady().then(async()=>{
           currentRead=true;
         }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       }
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead};
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});

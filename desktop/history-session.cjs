@@ -8,7 +8,7 @@ function createHistorySession(filename){
   function current(sender,revision){const state=sessions.get(sender);if(!state||state.revision!==revision)throw Error('저장 기준을 다시 열어 확인하세요.');return state;}
   return {
     current(_sender,account){return file.readKeyCurrent(filename(),KEY,account);},
-    open(sender){const snapshot=remember(sender,file.readKeySnapshot(filename(),KEY));return {value:structuredClone(snapshot.value),revision:snapshot.revision,scoped:true};},
+    open(sender){const snapshot=remember(sender,file.readKeySnapshot(filename(),KEY));return {value:structuredClone(snapshot.value),revision:snapshot.revision,stamp:snapshot.stamp,scoped:true};},
     full(sender,{revision,next}){
       const state=current(sender,revision);let committed=false;
       try{

@@ -27,6 +27,7 @@
     }
     async function list(){
       if(!api.context().enabled)return [];
+      if(api.history()?.matches&&!api.history().matches())return [];
       const a=action(),data=a.h.export(),notes=data.contexts?.[NowNoteHistory.key(a.ctx)]?.notes||{},result=[];
       for(const [local,item] of Object.entries(notes)){
         if(!local.startsWith('wiki-source:'))continue;

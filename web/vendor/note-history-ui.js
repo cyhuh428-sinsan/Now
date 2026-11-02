@@ -84,6 +84,8 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     busy = true; const token = ++run;
     try {
       status('이력 조회 중…');
+      await api.store.ensure?.();
+      if(!valid(token))return;
       if (!more) {
         rows = []; cache.clear(); plain.clear(); cursor = null;
         const item = api.store.view(id);

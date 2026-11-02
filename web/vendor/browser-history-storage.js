@@ -163,7 +163,7 @@
     });
     return {
       read: () => lock(async()=> (await settled()).row.value),
-      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,scoped:raw===null};}),
+      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null};}),
       writeSnapshot:fullWrite,
       replaceNote(request,guard){
         const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};

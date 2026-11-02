@@ -1,6 +1,8 @@
 const {createDocumentStore}=require('./document-store.cjs');
 const parts=require('./app/document-parts.js');
+const {createHash}=require('node:crypto');
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+const stamp=rows=>createHash('sha256').update(JSON.stringify(rows)).digest('hex');
 
 function createPartitionedStore(filename){
   const store=createDocumentStore(filename),cache=new Map();
@@ -20,13 +22,13 @@ function createPartitionedStore(filename){
     read(key){return structuredClone(load(key).value);},
     readCurrent(key,account){return store.snapshot(()=>{
       const steps=parts.currentSteps(account),cache=new Map();let step=steps.next();
-      if(!store.hasScope(key))return {projection:'journal_current_v1',supported:true,account,notes:{}};
+      if(!store.hasScope(key))return {projection:'journal_current_v1',supported:true,account,notes:{},stamp:stamp([])};
       while(!step.done){const id=step.value;if(!cache.has(id))cache.set(id,store.read(key,id)?.value);step=steps.next(cache.get(id));}
-      return step.value;
+      return {...step.value,stamp:stamp(store.manifest(key))};
     });},
     readSnapshot(key){return store.snapshot(()=>{
       const rows=store.scan(key),manifest=rows.map(row=>[row.id,row.version]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
-      return {value:rows.length?parts.decode(new Map(rows.map(row=>[row.id,row.value]))):null,manifest};
+      return {value:rows.length?parts.decode(new Map(rows.map(row=>[row.id,row.value]))):null,manifest,stamp:stamp(manifest)};
     });},
     readPath(key,path){
       if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');

@@ -57,6 +57,7 @@ function createDocumentStore(filename){
       identity(scope,'scan');
       return scan.all(scope).map(row=>({id:row.id,version:row.version,value:JSON.parse(row.payload)}));
     },
+    manifest(scope){identity(scope,'manifest');return manifest(scope);},
     dataVersion(){return db.prepare('PRAGMA data_version').get().data_version;},
     hasScope(scope){identity(scope,'scope');return Boolean(db.prepare('SELECT 1 FROM documents WHERE scope=? LIMIT 1').get(scope));},
     snapshot(read){

@@ -37,11 +37,13 @@
   };
 })();
 
-globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount}){
+globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prepare=async()=>{}}){
   let view=null,generation=0,pendingContext=null;
   async function open(method,args){
     const token=++generation,bound=contextKey();pendingContext=bound;
     await ensureNowWikiRuntime();
+    if(token!==generation||bound!==contextKey())return false;
+    await prepare();
     if(token!==generation||bound!==contextKey())return false;
     if(method==='openProtected')args[1]?.guard?.();
     view ||= mount();
