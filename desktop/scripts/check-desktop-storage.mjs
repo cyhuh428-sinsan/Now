@@ -311,7 +311,8 @@ async function verifyOmniRoutePanel(page) {
     && saved.llm.omniApiKey === "isolated-omni-key" && !saved.llm.apiKey,
   "Desktop OmniRoute settings were not saved separately.");
   await page.send("Page.reload", { ignoreCache: true });
-  await waitForCondition(page, `typeof state !== 'undefined' && state.settings?.llm?.provider === 'omniroute'`, "OmniRoute settings reload");
+  await waitForCondition(page, `typeof state !== 'undefined' && state.settings?.llm?.provider === 'omniroute'
+    && elements.llmProviderSelect.value === 'omniroute'`, "OmniRoute settings reload and render");
   const restored = await evaluate(page, `({ provider: elements.llmProviderSelect.value,
     url: elements.llmOmniUrlInput.value, model: elements.llmOmniModelInput.value,
     reasoning: elements.llmOmniReasoningSelect.value, key: elements.llmApiKeyInput.value })`);
