@@ -9860,11 +9860,11 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
     if([...fields].some(key=>!['notes','wiki_lifecycle','wiki_ingest_operations'].includes(key)))throw fail();
     const operationPath=[...accountPath,'wiki_ingest_operations'];
     const operations=fields.has('wiki_ingest_operations')?new Set(keys(await checked(operationPath,true))):new Set();
-    const confirm=()=>checked(accountPath,true);
+    const checkStamp=()=>checked(accountPath,true);
     const absent=projection=>({projection,account,stamp,found:false});
     async function selected(kind,id,path,known){
       active();try{
-        await confirm();if(!known.has(id))return absent(kind);
+        await checkStamp();if(!known.has(id))return absent(kind);
         const key=JSON.stringify(path);let value=cache.get(key);
         if(value===undefined){
           value=(await checked(path,false)).value;
@@ -9877,17 +9877,17 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
               request:async()=>{throw fail();},write:async()=>{throw fail();}});
             if(h.status().unsupported)throw Object.assign(fail(),{code:'wiki_readset_unsupported'});
           }
-          await confirm();active();cache.set(key,copy(value));
+          await checkStamp();active();cache.set(key,copy(value));
         }
         return {projection:kind,account,stamp,found:true,value:copy(value)};
       }catch(error){close();throw error;}
     }
     return Object.freeze({projection:'wiki_readset_v1',account,stamp,close,
-      async ids(){await confirm();return [...ids];},
-      async operationIds(){await confirm();return [...operations];},
+      async ids(){await checkStamp();return [...ids];},
+      async operationIds(){await checkStamp();return [...operations];},
       entry:id=>selected('wiki_entry_v1',id,[...notePath,id],ids),
       operation:id=>selected('wiki_operation_v1',id,[...operationPath,id],operations),
-      async lifecycle(){await confirm();return fields.has('wiki_lifecycle')?copy((await checked([...accountPath,'wiki_lifecycle'],false)).value):{};},
+      async lifecycle(){await checkStamp();return fields.has('wiki_lifecycle')?copy((await checked([...accountPath,'wiki_lifecycle'],false)).value):{};},
     });
   }
   function root(history,account){
