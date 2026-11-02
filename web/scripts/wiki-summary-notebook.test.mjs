@@ -88,3 +88,10 @@ test('readonly metadata index preserves pending trash over remote summaries with
   const rows=await f.book.listIndex();assert.equal(rows[0].deleted,true);assert.equal(rows[0].summary,undefined);assert.equal(rows[0].lifecycle.pending.mutation_id,pending.mutation_id);
   assert.equal(rows[1].summary.title,'Guide');assert.equal(f.reads.length,0);
 });
+
+test('a validated pending operation hides its target summary but preserves unrelated readable rows',async()=>{
+  const f=await fixture(),local='wiki:'+f.docs[0].wiki_id;
+  f.history.wikiIndex=()=>({projection:'wiki_index_v1',stamp:'one',ids:[],lifecycle:{},blocked:[local]});
+  f.history.deferred=()=>true;f.history.export=()=>{throw Error('whole journal forbidden');};
+  const rows=await f.book.listIndex();assert.equal(rows[0].summary,undefined);assert.equal(f.book.canReadSummary(rows[0]),false);assert.equal(rows[1].summary.title,'Guide');assert.equal(f.reads.length,0);
+});

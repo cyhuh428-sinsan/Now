@@ -81,6 +81,16 @@ assert.equal((await book.statusServer(plan.operation_id)).remote.phase,'server_c
 const before=JSON.stringify(saved);fail=true;await assert.rejects(()=>book.applyServer(plan.operation_id),/quota/);assert.equal(JSON.stringify(saved),before);fail=false;
 const beforeWrites=writes;await book.applyServer(plan.operation_id);assert.equal(writes,beforeWrites+1,'all local projection and receipt in one CAS');
 assert.equal(history.blocked('wiki:'+plan.plan.pages[0].wiki_id),false);assert.equal((await book.operations())[0].state,'committed');
+{
+  const rows=structuredClone(saved.contexts[box.NowNoteHistory.key(ctx)].wiki_ingest_operations),exporter=history.export,beforeWrites=writes,beforePosts=posts;
+  history.export=()=>{throw Error('readonly operation inspection cannot export history');};
+  try{
+    assert.deepEqual(Array.from(book.inspectOperations(rows)),[],'settled metadata is validated with its exact receipt');
+    const altered=structuredClone(rows);altered[plan.operation_id].remote.receipt.manifest_hash='0'.repeat(64);
+    assert.throws(()=>book.inspectOperations(altered),'a forged completion receipt never enables a readable index');
+    assert.equal(writes,beforeWrites);assert.equal(posts,beforePosts);
+  }finally{history.export=exporter;}
+}
 assert.equal(history.view('wiki:'+plan.plan.pages[0].wiki_id).localOnly,false);assert.equal(posts,2);
 assert.equal(box.createWikiIngestNotebook.blocks(history.export(),ctx),false);
 assert.equal(box.NowNoteWiki.sourceProtectionDependencies([history.export()],ctx,sourceId).length,2,'retained proposal and final document both remain protection dependencies');

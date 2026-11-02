@@ -208,7 +208,11 @@ app.whenReady().then(async()=>{
       const q=qaProductSave,before=await q.backend.open(),next=structuredClone(before.value),id='wiki:00000000-0000-4000-8000-000000000241';
       const note={...next.contexts[q.account].notes['qa-save-a'].draft,local_id:id,source:'wiki-artifact',content:'QA_UNREAD_WIKI_BODY'};
       next.contexts[q.account].notes[id]={raw:note,draft:note,base:{crypto_epoch:0,head_revision_id:null,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],localOnly:true};
-      next.contexts[q.account].wiki_ingest_operations={};
+      const ctx=noteHistoryContext(),op=crypto.randomUUID(),page={wiki_id:id.slice(5),draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()};
+      const operation={schema_version:1,operation_id:op,action:'ingest',scope:{url:ctx.url,owner:ctx.owner,device:ctx.device,serverInstance:'local-note-journal'},
+        reservation:{operation_id:op,mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),pages:[page]},
+        selection:{fileIds:[],noteIds:['qa-save-a']},plan_hash:'b'.repeat(64),inputs:[{id:'qa-source',kind:'note',origin:'local',note_ref:{owner_id:ctx.owner,local_id:'qa-save-a'},source_revision_id:null,head_version:0,content_hash:'a'.repeat(64)}],fingerprints:[],state:'reserved',documents:[]};
+      next.contexts[q.account].wiki_ingest_operations={[op]:operation};
       next.contexts[q.account].wiki_lifecycle={[id]:{local_only:true,version:2,deleted_at:'2026-11-03T00:00:00Z',pending:null}};
       await q.backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
@@ -222,6 +226,7 @@ app.whenReady().then(async()=>{
       const after=(await q.backend.open()).value;if(JSON.stringify(after)!==JSON.stringify(next))throw Error('metadata_browse_wrote_journal');
       return true;
     })()`);
+    productSave.operationBrowse=productSave.metadataBrowse;
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});delete globalThis.qaProductSave;})()`);
     const selectiveRead=await run(`(async()=>{

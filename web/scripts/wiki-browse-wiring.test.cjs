@@ -6,7 +6,7 @@ for(const surface of ['web','desktop/app'])test(surface+': browse prepares only 
     let full=0,reads=0;const account=JSON.stringify(['https://qa.invalid','alice']);
     const directory=async(_key,p)=>{reads++;if(mode==='stale')throw Error('stale');return {projection:'path_v1',found:true,stamp:'one',part:{type:'object',entries:p.at(-1)==='wiki_ingest_operations'&&mode==='pending'?[['op',{}]]:[]}};};
     const read=async()=>{reads++;return {projection:'path_v1',found:true,stamp:'one',value:{}};};
-    const box=vm.createContext({Set,NowWikiLifecycle:{validateMap:x=>x},NOTE_HISTORY_KEY:'history',isDesktopClient:()=>surface!=='web',
+    const box=vm.createContext({Set,NowWikiLifecycle:{validateMap:x=>x},wikiIngest:null,NOTE_HISTORY_KEY:'history',isDesktopClient:()=>surface!=='web',
       nownoteDesktop:{storage:{readDirectory:directory,readPath:read}},browserHistoryStorage:()=>({readDirectory:p=>directory('history',p),readPath:read}),
       noteHistory:{prepareWikiIndex:fn=>fn({stamp:'one',account,metadata:['wiki_lifecycle','wiki_ingest_operations'],guard:{active:()=>true}}).then(Boolean),ensure:async()=>{full++;}}});
     vm.runInContext(fs.readFileSync(path.resolve(__dirname,'../vendor/wiki-index-reader.js'),'utf8'),box);vm.runInContext(tail.slice(0,end),box);

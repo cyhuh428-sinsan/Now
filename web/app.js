@@ -803,7 +803,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
-        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle)}:{})}:null,
+        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle),blocked:copy(browseIndex.blocked)}:{})}:null,
       prepareWikiIndex(read){
         if(api.wikiIndex())return Promise.resolve(true);
         if(!visible()||!preview||full||loading||!Array.isArray(preview.wikiIndexMetadata)||!preview.wikiIndexMetadata.length)return Promise.resolve(false);
@@ -814,7 +814,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           if(!active()||preview.stamp!==stamp)throw stale();
           if(result===null)return false;
           if(!result?.lifecycle||typeof result.lifecycle!=='object'||Array.isArray(result.lifecycle))throw stale();
-          browseIndex={stamp,lifecycle:copy(result.lifecycle)};return true;
+          if(result.blocked!==undefined&&(!Array.isArray(result.blocked)||result.blocked.some(id=>typeof id!=='string')))throw stale();
+          browseIndex={stamp,lifecycle:copy(result.lifecycle),blocked:copy(result.blocked||[])};return true;
         });
         selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
       },
@@ -7748,7 +7749,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const index=h.wikiIndex?.();
     if(proof?.indexStamp&&(h.deferred?.()&&!index||index&&index.stamp!==proof.indexStamp))return false;
     const blocked=local=>proof?.indexStamp&&index
-      ?Boolean(proof.lifecycle[local]?.deleted_at||proof.lifecycle[local]?.pending):L.blocked(local);
+      ?Boolean(proof.blocked?.includes(local)||proof.lifecycle[local]?.deleted_at||proof.lifecycle[local]?.pending):L.blocked(local);
     if(!proof||proof.key!==api.contextKey()||!ctx.enabled||ctx.online===false||h!==proof.history
       ||P.canonicalJson(row.summary)!==proof.value||blocked(proof.local)||h.blocked(proof.local)
       ||h.currentView(proof.local)?.base.crypto_epoch>0)return false;
@@ -7787,7 +7788,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
           row.protected=s.protected===true;
           if(s.readable&&!row.deleted&&!row.lifecycle?.pending){
             row.summary=copy(s);summaries.set(row,{key:api.contextKey(),history:a.h,local,dependencies:copy(resource.payload.dependencies),value:P.canonicalJson(row.summary),
-              ...(index?{indexStamp:index.stamp,lifecycle}: {})});
+              ...(index?{indexStamp:index.stamp,lifecycle,blocked:copy(index.blocked||[])}: {})});
             if(canReadSummary(row)){delete row.unavailable;delete row.error;}
             else delete row.summary;
           }
@@ -9303,7 +9304,18 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,integrate,derive,deriveLint,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+  function inspectOperations(rows){
+    const a=action(),blocked=new Set();check(rows&&typeof rows==='object'&&!Array.isArray(rows));
+    for(const [id,row]of Object.entries(rows)){
+      check(id===row?.operation_id);validate(row,a.ctx.owner);
+      check(row.scope.url.replace(/\/+$/,'')===String(a.ctx.url||'').replace(/\/+$/,''));
+      if(row.remote&&!['settled','aborted'].includes(row.remote.phase))for(const change of row.remote.manifest.changes){
+        blocked.add('wiki:'+change.wiki_id);blocked.add('wiki-proposal:'+id+':'+change.wiki_id);
+      }
+    }
+    a.active();return [...blocked];
+  }
+  return {plan,prompt,generate,integrate,derive,deriveLint,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,inspectOperations,
     approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
 };
@@ -9782,7 +9794,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
 /* Explicit browse metadata, never a journal write or source/body proof. */
 (() => {
   'use strict';
-  async function read({stamp,account,metadata,directory,read,guard}){
+  async function read({stamp,account,metadata,directory,read,guard,inspectOperations}){
     const fail=()=>Error('위키 목록의 저장 상태가 변경되었습니다. 원본을 보존했으며 다시 확인하세요.');
     const active=()=>{if(guard?.active&&!guard.active())throw fail();};
     if(typeof stamp!=='string'||typeof account!=='string'||!Array.isArray(metadata)||metadata.length>2||new Set(metadata).size!==metadata.length
@@ -9793,13 +9805,19 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
       if(shallow&&(result.part?.type!=='object'||!Array.isArray(result.part.entries)))throw fail();
       return result;
     };
+    const blocked=new Set();
     if(metadata.includes('wiki_ingest_operations')){
       const operations=await checked(['contexts',account,'wiki_ingest_operations'],true);
-      if(operations.part.entries.length)return null;
+      if(operations.part.entries.length&&typeof inspectOperations!=='function')return null;
+      for(const [id]of operations.part.entries){
+        const row=await checked(['contexts',account,'wiki_ingest_operations',id],false),ids=inspectOperations({[id]:row.value});active();
+        if(!Array.isArray(ids)||ids.some(value=>typeof value!=='string'))throw fail();
+        for(const value of ids)blocked.add(value);
+      }
     }
     const lifecycle=metadata.includes('wiki_lifecycle')
       ?NowWikiLifecycle.validateMap((await checked(['contexts',account,'wiki_lifecycle'],false)).value):{};
-    await checked(['contexts',account],true);active();return {lifecycle};
+    await checked(['contexts',account],true);active();return {lifecycle,...(blocked.size?{blocked:[...blocked]}:{})};
   }
   globalThis.NowWikiIndex={read};
 })();
@@ -16099,6 +16117,7 @@ async function openProtectedWikiPreview(info,value){
 
 async function prepareWikiBrowse(){
   const prepared=await noteHistory.prepareWikiIndex?.(({stamp,account,metadata,guard})=>NowWikiIndex.read({stamp,account,metadata,guard,
+    inspectOperations:typeof wikiIngest?.inspectOperations==='function'?rows=>wikiIngest.inspectOperations(rows):undefined,
     directory:path=>isDesktopClient()?nownoteDesktop.storage.readDirectory(NOTE_HISTORY_KEY,path):browserHistoryStorage().readDirectory(path,guard),
     read:path=>isDesktopClient()?nownoteDesktop.storage.readPath(NOTE_HISTORY_KEY,path):browserHistoryStorage().readPath(path,guard),
   }));

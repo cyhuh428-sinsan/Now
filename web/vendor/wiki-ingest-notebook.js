@@ -510,7 +510,18 @@ globalThis.createWikiIngestNotebook=function createWikiIngestNotebook(api){
     if(rows[id].plan_hash!==result.plan_hash){rows[id].plan_hash=result.plan_hash;await save(a,before,rows);}
     return {operation_id:id,selection:copy(row.selection),state:'reserved',plan:result};
   }
-  return {plan,prompt,generate,integrate,derive,deriveLint,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,
+  function inspectOperations(rows){
+    const a=action(),blocked=new Set();check(rows&&typeof rows==='object'&&!Array.isArray(rows));
+    for(const [id,row]of Object.entries(rows)){
+      check(id===row?.operation_id);validate(row,a.ctx.owner);
+      check(row.scope.url.replace(/\/+$/,'')===String(a.ctx.url||'').replace(/\/+$/,''));
+      if(row.remote&&!['settled','aborted'].includes(row.remote.phase))for(const change of row.remote.manifest.changes){
+        blocked.add('wiki:'+change.wiki_id);blocked.add('wiki-proposal:'+id+':'+change.wiki_id);
+      }
+    }
+    a.active();return [...blocked];
+  }
+  return {plan,prompt,generate,integrate,derive,deriveLint,commitLocal,abortLocal,resumeLocal,stageServer,prepareServer,commitServer,statusServer,abortServer,applyServer,inspectOperations,
     approveLocal:(value,id)=>decideLocal(value,id,'approve'),rejectLocal:(value,id)=>decideLocal(value,id,'reject'),
     operations:async()=>{if(!api.context().enabled)return [];const a=action();return copy(Object.values(map(a)));}};
 };

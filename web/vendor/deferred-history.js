@@ -77,7 +77,7 @@
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
-        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle)}:{})}:null,
+        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle),blocked:copy(browseIndex.blocked)}:{})}:null,
       prepareWikiIndex(read){
         if(api.wikiIndex())return Promise.resolve(true);
         if(!visible()||!preview||full||loading||!Array.isArray(preview.wikiIndexMetadata)||!preview.wikiIndexMetadata.length)return Promise.resolve(false);
@@ -88,7 +88,8 @@
           if(!active()||preview.stamp!==stamp)throw stale();
           if(result===null)return false;
           if(!result?.lifecycle||typeof result.lifecycle!=='object'||Array.isArray(result.lifecycle))throw stale();
-          browseIndex={stamp,lifecycle:copy(result.lifecycle)};return true;
+          if(result.blocked!==undefined&&(!Array.isArray(result.blocked)||result.blocked.some(id=>typeof id!=='string')))throw stale();
+          browseIndex={stamp,lifecycle:copy(result.lifecycle),blocked:copy(result.blocked||[])};return true;
         });
         selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
       },

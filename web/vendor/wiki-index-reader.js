@@ -1,7 +1,7 @@
 /* Explicit browse metadata, never a journal write or source/body proof. */
 (() => {
   'use strict';
-  async function read({stamp,account,metadata,directory,read,guard}){
+  async function read({stamp,account,metadata,directory,read,guard,inspectOperations}){
     const fail=()=>Error('위키 목록의 저장 상태가 변경되었습니다. 원본을 보존했으며 다시 확인하세요.');
     const active=()=>{if(guard?.active&&!guard.active())throw fail();};
     if(typeof stamp!=='string'||typeof account!=='string'||!Array.isArray(metadata)||metadata.length>2||new Set(metadata).size!==metadata.length
@@ -12,13 +12,19 @@
       if(shallow&&(result.part?.type!=='object'||!Array.isArray(result.part.entries)))throw fail();
       return result;
     };
+    const blocked=new Set();
     if(metadata.includes('wiki_ingest_operations')){
       const operations=await checked(['contexts',account,'wiki_ingest_operations'],true);
-      if(operations.part.entries.length)return null;
+      if(operations.part.entries.length&&typeof inspectOperations!=='function')return null;
+      for(const [id]of operations.part.entries){
+        const row=await checked(['contexts',account,'wiki_ingest_operations',id],false),ids=inspectOperations({[id]:row.value});active();
+        if(!Array.isArray(ids)||ids.some(value=>typeof value!=='string'))throw fail();
+        for(const value of ids)blocked.add(value);
+      }
     }
     const lifecycle=metadata.includes('wiki_lifecycle')
       ?NowWikiLifecycle.validateMap((await checked(['contexts',account,'wiki_lifecycle'],false)).value):{};
-    await checked(['contexts',account],true);active();return {lifecycle};
+    await checked(['contexts',account],true);active();return {lifecycle,...(blocked.size?{blocked:[...blocked]}:{})};
   }
   globalThis.NowWikiIndex={read};
 })();

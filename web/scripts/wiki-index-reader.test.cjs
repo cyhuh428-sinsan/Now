@@ -16,6 +16,14 @@ test('browse reads lifecycle metadata only and checks the same account snapshot 
 test('nonempty operation registry requests the established full validation without reading its bodies',async()=>{
   const f=fixture();f.pending();assert.equal(await f.run(),null);assert.ok(f.reads.every(row=>row.kind==='directory'));
 });
+test('validated operation rows are read individually and only blocking IDs remain in the index',async()=>{
+  assert.ok(fs.existsSync(file));require(file);const reads=[],account='account';
+  const result=await NowWikiIndex.read({stamp:'one',account,metadata:['wiki_ingest_operations'],guard:{active:()=>true},
+    directory:async p=>({projection:'path_v1',found:true,stamp:'one',part:{type:'object',entries:p.at(-1)==='wiki_ingest_operations'?[['op',{}]]:[]}}),
+    read:async p=>{reads.push(p);return {projection:'path_v1',found:true,stamp:'one',value:{operation_id:'op',exact:'validated metadata'}};},
+    inspectOperations:rows=>{assert.equal(rows.op.exact,'validated metadata');return ['wiki:pending'];}});
+  assert.deepEqual(result,{lifecycle:{},blocked:['wiki:pending']});assert.deepEqual(reads,[['contexts',account,'wiki_ingest_operations','op']]);
+});
 test('stale, late account and malformed lifecycle never produce a partial index',async()=>{
   for(const action of ['change','lock','malformed']){const f=fixture();f[action]();await assert.rejects(f.run());}
 });

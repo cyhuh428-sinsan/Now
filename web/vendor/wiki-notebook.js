@@ -127,7 +127,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const index=h.wikiIndex?.();
     if(proof?.indexStamp&&(h.deferred?.()&&!index||index&&index.stamp!==proof.indexStamp))return false;
     const blocked=local=>proof?.indexStamp&&index
-      ?Boolean(proof.lifecycle[local]?.deleted_at||proof.lifecycle[local]?.pending):L.blocked(local);
+      ?Boolean(proof.blocked?.includes(local)||proof.lifecycle[local]?.deleted_at||proof.lifecycle[local]?.pending):L.blocked(local);
     if(!proof||proof.key!==api.contextKey()||!ctx.enabled||ctx.online===false||h!==proof.history
       ||P.canonicalJson(row.summary)!==proof.value||blocked(proof.local)||h.blocked(proof.local)
       ||h.currentView(proof.local)?.base.crypto_epoch>0)return false;
@@ -166,7 +166,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
           row.protected=s.protected===true;
           if(s.readable&&!row.deleted&&!row.lifecycle?.pending){
             row.summary=copy(s);summaries.set(row,{key:api.contextKey(),history:a.h,local,dependencies:copy(resource.payload.dependencies),value:P.canonicalJson(row.summary),
-              ...(index?{indexStamp:index.stamp,lifecycle}: {})});
+              ...(index?{indexStamp:index.stamp,lifecycle,blocked:copy(index.blocked||[])}: {})});
             if(canReadSummary(row)){delete row.unavailable;delete row.error;}
             else delete row.summary;
           }
