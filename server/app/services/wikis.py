@@ -283,7 +283,30 @@ def lifecycle(db, ident, body, *, restoring):
         raise
 
 
-def get(db, owner, ident):
+def summarize(db, owner, resource):
+    """Opt-in read projection; use the same artifact and source checks as detail reads."""
+    empty = {"schema_version": 1, "readable": False, "protected": None, "approved": False,
+             "title": None, "topic": None, "stale": True}
+    try:
+        result = get(db, owner, resource["id"], read_only=True)
+        artifact, status = result["artifact"], result["source_status"]
+        if type(artifact.get("protected")) is not bool or type(status.get("available")) is not bool or type(status.get("stale")) is not bool:
+            raise ValueError("Invalid wiki read state")
+        value = {**empty, "protected": artifact["protected"], "stale": status["stale"]}
+        document = artifact.get("document")
+        if status["available"] and not artifact["protected"] and document:
+            approvals, drafts = document["approvals"], document["drafts"]
+            draft = next((row for row in drafts if approvals and row["id"] == approvals[-1]["draft_id"]), drafts[-1])
+            if not isinstance(draft["title"], str) or not isinstance(draft["topic"], str):
+                raise ValueError("Invalid wiki summary")
+            value.update(readable=True, approved=bool(approvals), title=draft["title"], topic=draft["topic"])
+        return {**result["resource"], "summary": value}
+    except Exception:
+        db.rollback()
+        return {**resource, "summary": empty}
+
+
+def get(db, owner, ident, *, read_only=False):
     try:
         lock_note_writes(db, [owner])
         row = db.get(LibraryResource, (owner, "wikis", ident))
@@ -318,7 +341,11 @@ def get(db, owner, ident):
         if stored and status["available"]:
             from app.services.wiki_operations import generation_provenance
             result["artifact"]["generation_provenance"] = generation_provenance(db, owner, stored)
-        db.commit()
+        # Summary reads must not persist expiry cleanup performed by shared guards.
+        if read_only:
+            db.rollback()
+        else:
+            db.commit()
         return result
     except Exception:
         db.rollback()

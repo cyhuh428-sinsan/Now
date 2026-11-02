@@ -16,12 +16,15 @@ router = APIRouter(prefix="/api/v1/wikis", tags=["wikis"],
 
 
 @router.get("")
-def listing(owner_id: str = Query(min_length=1, max_length=80), include_deleted: bool = False, auth=Depends(access)):
+def listing(owner_id: str = Query(min_length=1, max_length=80), include_deleted: bool = False, summary: bool = False, auth=Depends(access)):
     db = auth(owner_id)
     stmt = select(LibraryResource).where(LibraryResource.owner_id == owner_id, LibraryResource.kind == "wikis")
     if not include_deleted:
         stmt = stmt.where(LibraryResource.deleted_at.is_(None))
-    return {"status": "ok", "items": [resource_payload(row) for row in db.scalars(stmt.order_by(LibraryResource.id))]}
+    items = [resource_payload(row) for row in db.scalars(stmt.order_by(LibraryResource.id))]
+    if summary:
+        items = [service.summarize(db, owner_id, item) for item in items]
+    return {"status": "ok", "items": items}
 
 
 @router.get("/{wiki_id}")

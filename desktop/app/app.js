@@ -1480,6 +1480,9 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       },error => { if (valid()) { failed = error; change(); throw error; } if (strict) throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
+    // A UI projection is deliberately not a complete journal/archive record.
+    const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
+      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,pending:item.outbox.length}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
@@ -1773,6 +1776,14 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         await save();
       },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
+      currentView: id => context().enabled&&readable()?currentEntry(entry(id)):null,
+      currentEntries({excludeWiki=false}={}){
+        if(!context().enabled||!readable())return {};
+        return Object.fromEntries(Object.entries(bucket(context())?.notes||{}).filter(([id,item])=>!protectedItem(item)
+          &&(!excludeWiki||!/^wiki(?:-source|-proposal)?:/.test(id)&&!['wiki-artifact','wiki-source-snapshot','wiki-ingest-proposal'].includes(item.draft.source)))
+          .map(([id,item])=>[id,currentEntry(item)]));
+      },
+      entryIds: () => context().enabled&&readable()?Object.keys(bucket(context())?.notes||{}).filter(id=>!protectedItem(entry(id))):[],
       view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),
@@ -14860,7 +14871,7 @@ function noteHistoryWireNotes() {
 function noteHistoryProject(note) {
   if (!note || note.owner_id !== noteHistoryContext().owner) return;
   if (["wiki-artifact","wiki-source-snapshot","wiki-ingest-proposal"].includes(note.source)) return;
-  const managed = noteHistory?.view(note.local_id);
+  const managed = noteHistory?.currentView(note.local_id);
   if (note.note_type === "tree") {
     const parent = note.parent_local_id ? findTreeNode(state.data.tree, note.parent_local_id) : null;
     if (note.parent_local_id && !parent) throw new Error("상위 메모를 먼저 불러와야 합니다. 원문은 이력에 보존했습니다.");
@@ -14884,7 +14895,7 @@ function noteHistoryProject(note) {
     Object.assign(node, { title: note.title, content: note.content, parentId: note.parent_local_id, level: note.level,
       updatedAt: note.client_updated_at || note.updated_at, tags: tagsFromServerNote(note), status: "active",
       serverShared: !managed?.localOnly && Boolean(managed?.base.head_revision_id),
-      syncState: managed?.localOnly ? "local" : managed?.outbox.length ? "pending" : "synced" });
+      syncState: managed?.localOnly ? "local" : managed?.pending ? "pending" : "synced" });
     state.data.deletedTree = state.data.deletedTree.filter(item => item.id !== node.id);
   } else if (note.note_type === "daily" || note.note_type === "worklog") {
     const date = note.note_type === "worklog" ? worklogDateFromServerNote(note) : dailyDateFromServerNote(note);
@@ -14914,14 +14925,14 @@ function noteHistoryCaptureDrafts(options = {}) {
   }
   const notes = noteHistoryWireNotes();
   const seen = new Set(notes.map(note => note.local_id));
-  for (const [id, item] of Object.entries(noteHistory.entries())) {
+  for (const [id, item] of Object.entries(noteHistory.currentEntries({excludeWiki:true}))) {
     if (noteProtectionBlocked(id)) continue;
     if (["wiki-artifact","wiki-source-snapshot","wiki-ingest-proposal"].includes(item.draft.source)) continue;
     if (!seen.has(id) && !item.draft.deleted_at) notes.push({ ...item.draft, content: "", deleted_at: new Date().toISOString() });
   }
   for (const note of notes) {
     if (noteProtectionBlocked(note.local_id)) continue;
-    const old = noteHistory.view(note.local_id);
+    const old = noteHistory.currentView(note.local_id);
     const treeNode = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
     const sharingChanged = treeNode && old && old.localOnly !== (!isTreeNodeSharedForServer(treeNode) && !treeNode.serverShared);
     if (!old && findLocalNoteForServerNote(note)?.syncState !== "pending" && !note.deleted_at) continue;
@@ -14929,7 +14940,7 @@ function noteHistoryCaptureDrafts(options = {}) {
     noteHistoryEnrolling.add(note.local_id);
     noteHistoryCaptureChain = noteHistoryCaptureChain.catch(() => {}).then(async () => {
       if (epoch !== noteHistoryCaptureEpoch || ctx.auth !== noteHistoryContext().auth || scope !== NowNoteHistory.key(noteHistoryContext()) || !noteHistoryContext().enabled) return;
-      let item = noteHistory.view(note.local_id);
+      let item = noteHistory.currentView(note.local_id);
       if (!item) {
         const tree = note.note_type === "tree" ? findTreeNode(state.data.tree, note.local_id) : null;
         const localOnly = Boolean(tree && !isTreeNodeSharedForServer(tree) && !tree.serverShared);
@@ -14939,7 +14950,7 @@ function noteHistoryCaptureDrafts(options = {}) {
           content: note.content, parent_local_id: note.parent_local_id, level: note.level, note_type: note.note_type, deleted_at: note.deleted_at,
           tags: JSON.stringify(tagsFromServerNote(original)) === JSON.stringify(tagsFromServerNote(note)) ? original.tags : note.tags } : note;
         await noteHistory.track(initialDraft, null, { localOnly, needsBaseline: ctx.online && !localOnly, original });
-        item = noteHistory.view(note.local_id);
+        item = noteHistory.currentView(note.local_id);
       }
       // Only edits to UI-owned semantic fields replace the preserved raw DTO.
       const draft = { ...item.draft, ...NowNoteHistory.meaning(note), source: item.draft.source, client_updated_at: note.client_updated_at };
@@ -14965,7 +14976,7 @@ async function noteHistoryFlush() {
   while (serverSyncRunning) await new Promise(resolve => setTimeout(resolve, 30));
   for (const timer of noteHistoryTimers.values()) clearTimeout(timer);
   noteHistoryTimers.clear();
-  for (const id of Object.keys(noteHistory?.entries() || {})) await noteHistory.seal(id);
+  for (const id of noteHistory?.entryIds() || []) await noteHistory.seal(id);
   await noteHistory?.sync();
   await noteHistoryController?.resume();
 }
@@ -15006,7 +15017,7 @@ async function initializeNoteHistory() {
       if (!projectView) return;
       noteHistoryProjection = true;
       try {
-        const drafts = Object.values(noteHistory.entries()).map(item => item.draft).sort((a, b) => a.level - b.level);
+        const drafts = Object.values(noteHistory.currentEntries({excludeWiki:true})).map(item => item.draft).sort((a, b) => a.level - b.level);
         drafts.forEach(noteHistoryProject);
         if(renderView)render();
       } finally { noteHistoryProjection = false; }
