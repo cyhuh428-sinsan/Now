@@ -49,7 +49,7 @@
     const entry = id => bucket(context())?.notes[id] || null;
     // A UI projection is deliberately not a complete journal/archive record.
     const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
-      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,pending:item.outbox.length}):null;
+      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
@@ -350,7 +350,7 @@
           &&(!excludeWiki||!/^wiki(?:-source|-proposal)?:/.test(id)&&!['wiki-artifact','wiki-source-snapshot','wiki-ingest-proposal'].includes(item.draft.source)))
           .map(([id,item])=>[id,currentEntry(item)]));
       },
-      entryIds: () => context().enabled&&readable()?Object.keys(bucket(context())?.notes||{}).filter(id=>!protectedItem(entry(id))):[],
+      entryIds: ({includeProtected=false}={}) => context().enabled&&readable()?Object.keys(bucket(context())?.notes||{}).filter(id=>includeProtected||!protectedItem(entry(id))):[],
       view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),

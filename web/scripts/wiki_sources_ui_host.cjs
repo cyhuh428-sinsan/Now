@@ -251,13 +251,32 @@ app.whenReady().then(async()=>{
       documentValue.approvals.at(-1).draft_hash=draft.draft_hash;documentValue.approvals.at(-1).evidence_manifest_hash=await NowNoteProtectionProtocol.hashJson(draft.evidence_manifest);
       await NowNoteWiki.validateDocument(documentValue,documentValue.scope);
       const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
-      const ui=mountNowWiki({...wikiNotebook,contextKey:wikiViewKey,notes:()=>[],list:async()=>[{...outer,document:documentValue},source]});
+      const ui=mountNowWiki({...wikiNotebook,listIndex:undefined,contextKey:wikiViewKey,notes:()=>[],list:async()=>[{...outer,document:documentValue},source]});
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn)=>{for(let n=0;n<300;n++){if(fn())return;await pause();}throw Error('wiki_citation_navigation');};
       await ui.open();document.querySelector('#wikiDialog .wiki-entry button.library-item').click();
       await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=source]'))&&!document.querySelector('#wikiDialog [data-wiki-action=source]').disabled);
       document.querySelector('#wikiDialog [data-wiki-action=source]').click();await until(()=>document.querySelector('#wikiDialog [name=wiki-version]')?.value===target.id);
       if(document.querySelector('#wikiDialog .wiki-detail h3')?.textContent!==target.title||NowNoteProtectionProtocol.canonicalJson(noteHistory.export())!==before)throw Error('wiki_citation_target_or_write');
-      ui.close();return {wikiCitationNavigation:true,journalUnchanged:true};
+      ui.close();document.querySelector('#wikiDialog').remove();
+      let summaryAllowed=true,selectedReads=0,release;
+      const summaryRow={id:documentValue.wiki_id,deferred:true,summary:{schema_version:1,readable:true,protected:false,approved:true,
+        title:'SUMMARY_ONLY_TITLE',topic:'Summary topic',stale:false}};
+      const lazy=mountNowWiki({contextKey:wikiViewKey,notes:()=>[],list:async()=>{throw Error('summary_eager_full_list');},
+        listIndex:async()=>[summaryRow],canReadSummary:()=>summaryAllowed,canRead:()=>true,
+        readPage:async id=>{if(id!==documentValue.wiki_id)throw Error('summary_wrong_selected_id');selectedReads++;return new Promise(resolve=>{release=()=>resolve({id,document:documentValue});});},
+        sourceStatus:async()=>({available:true,stale:false,sources:[]})});
+      await lazy.open('browse');
+      if(!document.querySelector('#wikiDialog').textContent.includes('SUMMARY_ONLY_TITLE')||selectedReads)throw Error('summary_catalog_without_body');
+      document.querySelector('#wikiDialog .library-item').click();await until(()=>typeof release==='function');
+      if(document.querySelector('#wikiDialog .wiki-body'))throw Error('summary_body_before_selection_finished');
+      release();await until(()=>Boolean(document.querySelector('#wikiDialog .wiki-body')));
+      if(selectedReads!==1)throw Error('summary_selected_read_count');
+      lazy.close();await lazy.open('browse');summaryAllowed=false;lazy.check();
+      if(document.querySelector('#wikiDialog').open||document.querySelector('#wikiDialog').textContent.includes('SUMMARY_ONLY_TITLE'))throw Error('summary_revoked_title');
+      summaryAllowed=true;await lazy.open('browse');release=null;document.querySelector('#wikiDialog .library-item').click();
+      await until(()=>typeof release==='function');lazy.close();release();await pause();
+      if(document.querySelector('#wikiDialog .wiki-body'))throw Error('summary_late_closed_body');
+      return {wikiCitationNavigation:true,journalUnchanged:true,summaryCatalog:true,selectedOnly:true,summaryRevocation:true,closedLateRead:true};
     })()`);
     const callbacks=await run(`(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
