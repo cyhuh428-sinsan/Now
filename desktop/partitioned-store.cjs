@@ -18,13 +18,17 @@ function createPartitionedStore(filename){
   }
   return {
     read(key){return structuredClone(load(key).value);},
+    readSnapshot(key){return store.snapshot(()=>{
+      const rows=store.scan(key),manifest=rows.map(row=>[row.id,row.version]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
+      return {value:rows.length?parts.decode(new Map(rows.map(row=>[row.id,row.value]))):null,manifest};
+    });},
     readPath(key,path){
       if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');
       return store.snapshot(()=>({projection:'path_v1',...(store.hasScope(key)
         ?parts.select(path,id=>store.read(key,id)?.value):{found:false})}));
     },
     write(key,value,expected){return this.commit([{key,value,expected}]);},
-    writePath(key,path,expected,value){
+    writePath(key,path,expected,value,{manifest=null,additional=[]}={}){
       const plan=store.snapshot(()=>{
         const checks=[],steps=parts.replaceSteps(path,expected,value);let step=steps.next();
         while(!step.done){
@@ -32,13 +36,25 @@ function createPartitionedStore(filename){
           if(!row)throw Error('Missing document part');
           checks.push({scope:key,id,...row});step=steps.next(row.value);
         }
-        return {...step.value,checks};
+        const extras=[];
+        for(const update of additional){
+          if(update.key===key)throw Error('Duplicate document scope');
+          const rows=store.scan(update.key),before=new Map(rows.map(row=>[row.id,row.value]));
+          if(!same(rows.length?parts.decode(before):null,update.expected))throw Error('Document metadata changed');
+          checks.push(...rows.map(row=>({scope:update.key,...row})));
+          extras.push(...parts.delta(before,parts.encode(update.value)).map(change=>({scope:update.key,id:change.id,kind:change.remove?'remove':'put',value:change.value,
+            expectedVersion:rows.find(row=>row.id===change.id)?.version||0})));
+        }
+        return {...step.value,checks,extras};
       });
       const actions=plan.changes.map(change=>({scope:key,id:change.id,kind:change.remove?'remove':'put',value:change.value,
-        expectedVersion:plan.checks.find(row=>row.id===change.id)?.version||0}));
+        expectedVersion:plan.checks.find(row=>row.scope===key&&row.id===change.id)?.version||0})).concat(plan.extras);
       try{
-        store.commit(actions,{checks:plan.checks,ranges:[{scope:key,...plan.range}]});
-        return {projection:'path_write_v1',partsWritten:actions.length,bytesWritten:Buffer.byteLength(JSON.stringify(actions))};
+        const versions=store.commit(actions,{checks:plan.checks,ranges:[{scope:key,...plan.range}],manifests:manifest?[{scope:key,rows:manifest}]:[]});
+        const nextManifest=manifest?new Map(manifest):null;
+        actions.forEach((action,i)=>{if(nextManifest&&action.scope===key)action.kind==='remove'?nextManifest.delete(action.id):nextManifest.set(action.id,versions[i]);});
+        return {projection:'path_write_v1',partsWritten:actions.length,bytesWritten:Buffer.byteLength(JSON.stringify(actions)),
+          ...(nextManifest?{manifest:[...nextManifest].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0)}:{})};
       }finally{cache.clear();}
     },
     commit(updates){

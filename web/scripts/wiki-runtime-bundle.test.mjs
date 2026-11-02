@@ -4,6 +4,14 @@ import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
 import * as bundler from './bundle_markdown.mjs';
 
+test('설치형 원장 세션과 공통 저장 정책이 패키지에 포함되고 renderer 정책과 일치',async()=>{
+  const metadata=JSON.parse(await readFile(new URL('../../desktop/package.json',import.meta.url),'utf8'));
+  assert.ok(metadata.build.files.includes('history-session.cjs'));assert.ok(metadata.build.files.includes('app/**/*'));
+  const web=(await readFile(new URL('../vendor/journal-writes.js',import.meta.url),'utf8')).replace(/\r\n/g,'\n');
+  const desktop=(await readFile(new URL('../../desktop/app/journal-writes.js',import.meta.url),'utf8')).replace(/\r\n/g,'\n');
+  assert.equal(web,desktop);
+});
+
 test('서버 이미지는 기존 Web shell 복사와 독립 Wiki chunk 복사를 모두 유지',async()=>{
   const docker=await readFile(new URL('../../server/Dockerfile',import.meta.url),'utf8');
   assert.ok(docker.includes('COPY web/index.html web/app.js web/styles.css web/help.html web/manifest.webmanifest web/sw.js /web_app/'));

@@ -2,23 +2,24 @@
 (() => {
   'use strict';
   function create({database,key}) {
-    let cached=null;
+    let cached=null,lastRevision=null;
     async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
-        let tx,error,result,nextCache;
+        let tx,error,result,nextCache,revision=null;
         try{
           tx=db.transaction(['journals','documents'],write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document transaction aborted'));
           tx.onerror=()=>{error=Error('Document transaction failed');};
-          tx.oncomplete=()=>{try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){reject(e);}};
+          tx.oncomplete=()=>{lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const fail=e=>{error=e;tx.abort();};
           function settle(physical,before,logical) {
             try{
+              revision=physical?.format===2?physical.stamp:null;
               active();result=transform(logical);
               if(!write)return;
               if(!result||!(result.value===null||typeof result.value==='string'))throw Error('Invalid journal value');
@@ -29,6 +30,7 @@
               }
               const {value,...metadata}=result;
               const row={format:2,stamp:crypto.randomUUID(),isNull:value===null,row:metadata};
+              revision=row.stamp;
               journals.put(row,key);
               nextCache={stamp:row.stamp,parts:after,value:result.value};
             }catch(e){fail(e);}
@@ -80,6 +82,7 @@
                 return;
               }
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
+              if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
               checkMetadata(physical.row);
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
@@ -126,8 +129,9 @@
       });
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
-    transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,
-      {expected:structuredClone(expected),next:structuredClone(next)});
+    transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
+      {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
+    Object.defineProperty(transaction,'revision',{get:()=>lastRevision});
     return transaction;
   }
   globalThis.NowDocumentTransactions={create};

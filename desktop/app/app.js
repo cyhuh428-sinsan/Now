@@ -399,23 +399,24 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (() => {
   'use strict';
   function create({database,key}) {
-    let cached=null;
+    let cached=null,lastRevision=null;
     async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
-        let tx,error,result,nextCache;
+        let tx,error,result,nextCache,revision=null;
         try{
           tx=db.transaction(['journals','documents'],write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document transaction aborted'));
           tx.onerror=()=>{error=Error('Document transaction failed');};
-          tx.oncomplete=()=>{try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){reject(e);}};
+          tx.oncomplete=()=>{lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const fail=e=>{error=e;tx.abort();};
           function settle(physical,before,logical) {
             try{
+              revision=physical?.format===2?physical.stamp:null;
               active();result=transform(logical);
               if(!write)return;
               if(!result||!(result.value===null||typeof result.value==='string'))throw Error('Invalid journal value');
@@ -426,6 +427,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               }
               const {value,...metadata}=result;
               const row={format:2,stamp:crypto.randomUUID(),isNull:value===null,row:metadata};
+              revision=row.stamp;
               journals.put(row,key);
               nextCache={stamp:row.stamp,parts:after,value:result.value};
             }catch(e){fail(e);}
@@ -477,6 +479,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                 return;
               }
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
+              if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
               checkMetadata(physical.row);
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
@@ -523,8 +526,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       });
     }
     transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
-    transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,
-      {expected:structuredClone(expected),next:structuredClone(next)});
+    transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
+      {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
+    Object.defineProperty(transaction,'revision',{get:()=>lastRevision});
     return transaction;
   }
   globalThis.NowDocumentTransactions={create};
@@ -563,6 +567,64 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     };
   }
   globalThis.NowHistorySnapshots={create};
+})();
+
+;
+/* A revision-bound bridge; scoped saves never merge an unseen journal revision. */
+(() => {
+  'use strict';
+  const copy=value=>structuredClone(value),object=value=>value&&typeof value==='object'&&!Array.isArray(value);
+  function owned(value,owner,id){
+    return object(value)&&!value.protection_record&&!value.protectionScope&&value.base?.crypto_epoch===0
+      &&Array.isArray(value.revisions)&&Array.isArray(value.outbox)&&Array.isArray(value.receipts)
+      &&[value.raw,value.draft].every(note=>object(note)&&note.owner_id===owner&&note.local_id===id
+        &&['tree','daily','worklog'].includes(note.note_type)&&!String(note.source||'').startsWith('wiki')
+        &&typeof note.content==='string'&&!note.content.startsWith('NOW_ENCRYPTED_'));
+  }
+  function eligible(root,account,id,next){
+    try{
+      const scope=JSON.parse(account),bucket=root?.contexts?.[account],before=bucket?.notes?.[id];
+      return Array.isArray(scope)&&scope.length===2&&scope.every(value=>typeof value==='string')&&JSON.stringify(scope)===account
+        &&root.schema_version===1&&Object.keys(root).sort().join(',')==='contexts,schema_version'
+        &&object(bucket)&&Object.keys(bucket).join(',')==='notes'&&owned(before,scope[1],id)&&owned(next,scope[1],id);
+    }catch{return false;}
+  }
+  function create({initial,revision=null,scoped=false,contextKey,full,note}){
+    let base=initial,token=revision,allowed=scoped,bound=contextKey(),epoch=0,failed=false,tail=Promise.resolve();
+    const error=()=>Error('저장 상태를 다시 열어 확인하세요. 자동으로 재전송하지 않았습니다.');
+    function enqueue(guard,action){
+      const generation=epoch,key=bound;
+      const active=()=>generation===epoch&&key===contextKey()&&(!guard?.active||guard.active());
+      const run=tail.catch(()=>{}).then(async()=>{
+        if(failed||!active())throw error();
+        try{await action(active);}catch(e){if(generation===epoch)failed=true;throw e;}
+      });
+      tail=run;return run;
+    }
+    async function persist(value,active,request){
+      const result=await request({active});
+      if(!active())throw Object.assign(error(),{committed:true});
+      if(!result||!(result.revision===null||typeof result.revision==='string'))throw Object.assign(error(),{committed:true});
+      base=value;token=result.revision;allowed=result.scoped===true;
+    }
+    return {
+      reset(snapshot){epoch++;base=snapshot.value;token=snapshot.revision;allowed=snapshot.scoped===true;bound=contextKey();failed=false;},
+      write(value,guard){const snapshot=copy(value);return enqueue(guard,active=>persist(snapshot,active,g=>full({expected:base,next:snapshot,revision:token},g)));},
+      writeNote(ctx,id,value,guard){
+        const account=JSON.stringify([String(ctx.url||'').replace(/\/+$/,''),String(ctx.owner||'')]),snapshot=copy(value);
+        return enqueue(guard,async active=>{
+          const bucket=base?.contexts?.[account],before=bucket?.notes?.[id];
+          if(!before||snapshot?.draft?.owner_id!==ctx.owner||snapshot?.draft?.local_id!==id)throw error();
+          const next={...base,contexts:{...base.contexts,[account]:{...bucket,notes:{...bucket.notes,[id]:snapshot}}}};
+          if(allowed&&typeof token==='string'&&eligible(base,account,id,snapshot))
+            await persist(next,active,g=>note({account,id,expected:before,next:snapshot,revision:token},g));
+          else await persist(next,active,g=>full({expected:base,next,revision:token},g));
+        });
+      },
+    };
+  }
+  globalThis.NowJournalWrites={create,eligible};
+  if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowJournalWrites;
 })();
 
 ;
@@ -1557,22 +1619,32 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         return result;
       });
     }
+    const fullWrite=(expected,next,guard)=>lock(async()=>{
+      const {row,raw}=await settled(guard);
+      if(!same(parse(row.value),expected))throw fail();
+      const value=JSON.stringify(next);parse(value);
+      await transaction(true,current=>{
+        active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
+        return {...current,value};
+      },guard);
+      return {revision:transaction.revision,scoped:raw===null};
+    });
     return {
       read: () => lock(async()=> (await settled()).row.value),
+      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,scoped:raw===null};}),
+      writeSnapshot:fullWrite,
+      replaceNote(request,guard){
+        const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
+        if(typeof revision!=='string'||!NowJournalWrites.eligible(root,account,id,next))return Promise.reject(fail());
+        return selective(check=>transaction.writePath(['contexts',account,'notes',id],expected,next,guard,check,{revision}),guard)
+          .then(result=>({revision:result.stamp,scoped:true}));
+      },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
         return selective(check=>transaction.writePath(selection,before,after,guard,check),guard);
       },
-      write: (expected,next,guard) => lock(async()=>{
-        const {row,raw}=await settled(guard);
-        if(!same(parse(row.value),expected))throw fail();
-        const value=JSON.stringify(next);parse(value);
-        await transaction(true,current=>{
-          active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
-          return {...current,value};
-        },guard);
-      }),
+      write: async(expected,next,guard)=>{await fullWrite(expected,next,guard);},
       casLegacy: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(raw),expected))throw fail();
@@ -1607,7 +1679,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   const emptyBase = () => ({ head_version: 0, head_revision_id: null, inventory_revision_ids: [], crypto_epoch: 0, replica_count: 0 });
   const record = value => value && typeof value === 'object' && !Array.isArray(value);
   const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
-  function create({ initial, context, request, write, change = () => {} }) {
+  function create({ initial, context, request, write, writeNote = null, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     const writeSnapshots=globalThis.NowHistorySnapshots?.create();
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
@@ -1631,12 +1703,13 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       if (createBucket) data.contexts[key(ctx)] ||= { notes: {} };
       return data.contexts[key(ctx)] || null;
     };
-    const save = (strict = false, guard = null) => {
-      const snapshot = writeSnapshots?writeSnapshots.capture(data):copy(data), source = data, ctx = { ...context() }, epoch = generation;
+    const save = (strict = false, guard = null, noteId = null) => {
+      const selected=typeof writeNote==='function'&&noteId!==null;
+      const snapshot = selected?copy(entry(noteId)):writeSnapshots?writeSnapshots.capture(data):copy(data), source = data, ctx = { ...context() }, epoch = generation;
       const valid = () => data === source && active(ctx,epoch) && (!guard?.active || guard.active());
       writes = writes.catch(() => {}).then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
-        return write(snapshot,{ active:valid });
+        return selected?writeNote(ctx,noteId,snapshot,{active:valid}):write(snapshot,{ active:valid });
       });
       return writes.then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
@@ -1701,7 +1774,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       if (!same(item.draft, note)) item.edit_generation = (item.edit_generation || 0) + 1;
       item.draft = copy(note);
       item.dirty = !same(item.raw, note) || item.outbox.length > 0 || (!item.revisions.length && !item.base.head_revision_id);
-      await save();
+      await save(false,null,note.local_id);
     }
     async function seal(id, reason = 'edit') {
       writableNote(id);
@@ -1718,7 +1791,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       item.outbox.push({ id: uuid(), revision_id: revision.revision_id, sent: false, operation: 'put',
         body: { ...common(ctx, id, item.base), ...baseFields(item.base), note: meaning(item.draft) },
         waiting_for: previous?.body.mutation_id || null });
-      await save();
+      await save(false,null,id);
     }
     async function sync(options=null) {
       const onlyIds=options?.onlyIds;
@@ -15208,38 +15281,42 @@ async function noteHistoryFlush() {
   await noteHistoryController?.resume();
 }
 
+async function historyPersistence() {
+  if(!isDesktopClient())return {open:()=>browserHistoryStorage().readSnapshot(),
+    full:(request,guard)=>browserHistoryStorage().writeSnapshot(request.expected,request.next,guard),
+    note:(request,guard)=>browserHistoryStorage().replaceNote(request,guard)};
+  const storage=window.nownoteDesktop.storage,info=await storage.info();let expected;
+  const unwrap=result=>{if(!result?.ok)throw Object.assign(new Error(result?.message||"이력 저장 기준을 확인하세요."),{committed:result?.committed===true});return result;};
+  if(info.historySessions&&storage.history)return {open:async()=>unwrap(await storage.history.open()),
+    full:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.full({revision:request.revision,next:request.next}));},
+    note:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");return unwrap(await storage.history.note(request));}};
+  return {open:async()=>{expected=await readStorage(NOTE_HISTORY_KEY);return {value:expected,revision:null,scoped:false};},
+    full:async(request,guard)=>{if(!guard.active())throw new Error("저장 인증 상태가 변경되었습니다.");
+      const result=await storage.write(NOTE_HISTORY_KEY,request.next,{expectedValue:expected});
+      if(!result?.ok||JSON.stringify(await storage.read(NOTE_HISTORY_KEY))!==JSON.stringify(request.next))throw new Error("이력 저장 재조회 실패");
+      expected=request.next;return {revision:null,scoped:false};}};
+}
 async function initializeNoteHistory() {
   noteHistoryProjectionScope = NowNoteHistory.key(noteHistoryContext());
-  let initial = await readStorage(NOTE_HISTORY_KEY), expected = initial;
-  if (typeof initial === "string") { try { initial = JSON.parse(initial); } catch { initial = { schema_version: "unreadable", raw: initial }; } }
-  if (!isDesktopClient()) expected = structuredClone(initial);
+  const backend=await historyPersistence(),contextKey=()=>{const c=noteHistoryContext();return JSON.stringify([NowNoteHistory.key(c),c.auth,c.device,c.enabled]);};
+  const normalize=snapshot=>{if(!isDesktopClient()||typeof snapshot.value!=="string")return snapshot;try{return {...snapshot,value:JSON.parse(snapshot.value),scoped:false};}catch{return {...snapshot,value:{schema_version:"unreadable",raw:snapshot.value},scoped:false};}};
+  const opened=normalize(await backend.open());let writerScope=contextKey();
+  const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
+  const initial=opened.value;
   noteHistory = NowNoteHistory.create({ initial, context: noteHistoryContext, request: noteHistoryRequest,
     change: () => renderSyncStatusIndicator(state.settings.server, state.settings.server.lastStatus),
-    write: async (value,guard) => {
-      const active = guard?.active || (() => true);
-      if (!active()) throw new Error("저장 인증 상태가 변경되었습니다.");
-      if (isDesktopClient()) {
-        const result = await window.nownoteDesktop.storage.write(NOTE_HISTORY_KEY, value, { expectedValue: expected });
-        if (!result?.ok) throw new Error(result?.error || "이력 저장 실패");
-        if (JSON.stringify(await window.nownoteDesktop.storage.read(NOTE_HISTORY_KEY)) !== JSON.stringify(value)) throw new Error("이력 저장 재조회 실패");
-        if (!active()) throw new Error("저장 인증 상태가 변경되었습니다.");
-        expected = structuredClone(value);
-      } else {
-        await browserHistoryStorage().write(expected,value,guard);
-        expected = structuredClone(value);
-      }
-    },
+    write:(value,guard)=>writer.write(value,guard),
+    writeNote:(ctx,id,value,guard)=>writer.writeNote(ctx,id,value,guard),
   });
   noteHistoryController = {
     lock() { invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
-      if (noteHistory.suspended()) {
-        let restored = await readStorage(NOTE_HISTORY_KEY);
-        if (typeof restored === "string") { try { restored = JSON.parse(restored); } catch { restored = { schema_version: "unreadable", raw: restored }; } }
-        noteHistory.hydrate(restored);
-        expected = structuredClone(restored);
+      if (noteHistory.suspended()||writerScope!==contextKey()) {
+        const scope=contextKey(),restored=normalize(await backend.open());
+        if(scope!==contextKey())throw new Error("저장 계정이 변경되었습니다.");
+        noteHistory.hydrate(restored.value);writer.reset(restored);writerScope=scope;
       }
       if (!projectView) return;
       noteHistoryProjection = true;

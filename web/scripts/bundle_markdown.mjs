@@ -10,7 +10,7 @@ const mainFiles = ['web/app.js','desktop/app/app.js'];
 const wikiFiles = ['web/wiki-runtime.js','desktop/app/wiki-runtime.js'];
 const mainLibraries = ['marked.umd.js','purify.min.js','note-blocks.js','document-renderer.js','library-state.js','library-ui.js','diff.js','browser-history-storage.js','note-history-state.js','note-history-ui.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-protection-analysis.js','note-protection-ui.js','wiki-state.js','wiki-ingest.js','wiki-sources.js','wiki-lifecycle.js','wiki-notebook.js','wiki-server-access.js','wiki-evidence.js','wiki-protection-group.js','wiki-ingest-notebook.js','wiki-graph.js','wiki-query.js','wiki-query-notebook.js','wiki-lint.js','wiki-runtime-loader.js'];
 const wikiLibraries = ['cytoscape.min.js','wiki-graph-ui.js','wiki-ui.js'];
-mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js');
+mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js','journal-writes.js');
 
 export async function buildRuntimeBundles() {
   const read = async names => Promise.all(names.map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
@@ -48,6 +48,7 @@ async function run() {
   }
   for (const relative of wikiFiles) await fs.writeFile(path.join(root,relative), bundles.wiki);
   await fs.copyFile(path.join(vendor,'document-parts.js'),path.join(root,'desktop/app/document-parts.js'));
+  await fs.copyFile(path.join(vendor,'journal-writes.js'),path.join(root,'desktop/app/journal-writes.js'));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await run();

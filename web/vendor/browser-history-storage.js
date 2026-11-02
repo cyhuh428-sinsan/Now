@@ -151,22 +151,32 @@
         return result;
       });
     }
+    const fullWrite=(expected,next,guard)=>lock(async()=>{
+      const {row,raw}=await settled(guard);
+      if(!same(parse(row.value),expected))throw fail();
+      const value=JSON.stringify(next);parse(value);
+      await transaction(true,current=>{
+        active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
+        return {...current,value};
+      },guard);
+      return {revision:transaction.revision,scoped:raw===null};
+    });
     return {
       read: () => lock(async()=> (await settled()).row.value),
+      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,scoped:raw===null};}),
+      writeSnapshot:fullWrite,
+      replaceNote(request,guard){
+        const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
+        if(typeof revision!=='string'||!NowJournalWrites.eligible(root,account,id,next))return Promise.reject(fail());
+        return selective(check=>transaction.writePath(['contexts',account,'notes',id],expected,next,guard,check,{revision}),guard)
+          .then(result=>({revision:result.stamp,scoped:true}));
+      },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
       writePath(path,expected,next,guard){
         const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
         return selective(check=>transaction.writePath(selection,before,after,guard,check),guard);
       },
-      write: (expected,next,guard) => lock(async()=>{
-        const {row,raw}=await settled(guard);
-        if(!same(parse(row.value),expected))throw fail();
-        const value=JSON.stringify(next);parse(value);
-        await transaction(true,current=>{
-          active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
-          return {...current,value};
-        },guard);
-      }),
+      write: async(expected,next,guard)=>{await fullWrite(expected,next,guard);},
       casLegacy: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(raw),expected))throw fail();

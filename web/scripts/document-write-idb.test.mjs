@@ -48,3 +48,7 @@ test('relaxed durability is rejected without hanging; late account invalidation 
   const outcome=assert.rejects(f.read.writePath(['notes','a'],f.original.notes.a,{content:'committed'},{active:()=>active}),error=>error.committed===true);
   await f.turn();active=false;f.finish();await outcome;assert.equal(f.value().notes.a.content,'committed');
 });
+test('product revision guard rejects a stale whole journal even when its selected entry still matches',async()=>{
+  const f=await fixture();await assert.rejects(f.read.writePath(['notes','a'],f.original.notes.a,{content:'new'},undefined,()=>{},{revision:'older'}),/journal changed/i);
+  assert.deepEqual(f.value(),f.original);
+});

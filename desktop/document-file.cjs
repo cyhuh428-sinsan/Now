@@ -146,6 +146,13 @@ function casOriginal(storePath,key,value,expected){
 }
 function readKey(storePath,key){return open(storePath).read(`value:${key}`);}
 function readKeyPath(storePath,key,segments){return open(storePath).readPath(`value:${key}`,segments);}
+function readKeySnapshot(storePath,key){return open(storePath).readSnapshot(`value:${key}`);}
+function writeKeyPath(storePath,key,segments,expected,value,manifest){
+  const database=open(storePath),file=database.read(META);
+  if(!file.keys.includes(key))throw Error('History storage must be initialized first');
+  const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()}};
+  return database.writePath(`value:${key}`,segments,expected,value,{manifest,additional:[{key:META,expected:file,value:next}]});
+}
 function writeKey(storePath,key,value,expected){
   const database=open(storePath),file=database.read(META);
   const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()},keys:file.keys.includes(key)?file.keys:[...file.keys,key]};
@@ -163,4 +170,4 @@ function update(storePath,transform,expectedHash){
   return snapshot(database);
 }
 function closeAll(){for(const database of databases.values())database.close();databases.clear();}
-module.exports={FORMAT,initialize,read,readKey,readKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};
+module.exports={FORMAT,initialize,read,readKey,readKeyPath,readKeySnapshot,writeKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};

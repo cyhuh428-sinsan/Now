@@ -29,6 +29,7 @@
       "document-store.cjs",
       "partitioned-store.cjs",
       "document-file.cjs",
+      "history-session.cjs",
       "document-links.cjs",
       "app/**/*"
     ],

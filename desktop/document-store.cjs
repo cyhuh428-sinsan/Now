@@ -17,6 +17,7 @@ function createDocumentStore(filename){
   const db=new DatabaseSync(filename);
   let closed=false,initializing=false;
   const rangeIds=(scope,id,prefix)=>db.prepare('SELECT id FROM documents WHERE scope=? AND (id=? OR instr(id,?)=1)').all(scope,id,prefix).map(row=>row.id).sort();
+  const manifest=scope=>db.prepare('SELECT id,version FROM documents WHERE scope=?').all(scope).map(row=>[row.id,row.version]).sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0);
   try{
     db.exec('PRAGMA busy_timeout=2000; PRAGMA foreign_keys=ON;');
     db.exec('BEGIN IMMEDIATE');initializing=true;
@@ -66,10 +67,12 @@ function createDocumentStore(filename){
         return result;
       }finally{db.exec('ROLLBACK');}
     },
-    commit(changes,{checks=[],ranges=[]}={}){
+    commit(changes,{checks=[],ranges=[],manifests=[]}={}){
       if(!Array.isArray(changes)||!Array.isArray(checks)||!Array.isArray(ranges)||!changes.length&&!checks.length)throw Error('A nonempty document transaction is required');
       for(const check of checks){identity(check.scope,check.id);if(!Number.isSafeInteger(check.version)||check.version<1)throw Error('Invalid document check');}
       for(const range of ranges){identity(range.scope,range.id);if(typeof range.prefix!=='string'||!range.prefix||!Array.isArray(range.ids))throw Error('Invalid document range');}
+      if(!Array.isArray(manifests))throw Error('Invalid document manifest');
+      for(const item of manifests){identity(item.scope,'manifest');if(!Array.isArray(item.rows))throw Error('Invalid document manifest');}
       const encoded=changes.map(change=>{
         identity(change.scope,change.id);
         if(!['put','append','remove'].includes(change.kind)||!Number.isSafeInteger(change.expectedVersion)||change.expectedVersion<0)throw Error('Invalid document transaction');
@@ -79,6 +82,7 @@ function createDocumentStore(filename){
       db.exec('BEGIN IMMEDIATE');
       let committed=false;
       try{
+        for(const item of manifests)if(JSON.stringify(manifest(item.scope))!==JSON.stringify(item.rows))throw Error('Document journal changed; reopen before saving');
         for(const check of checks){
           const row=read.get(check.scope,check.id);
           if(!row||row.version!==check.version||row.payload!==json(check.value))throw Error('Document version conflict');

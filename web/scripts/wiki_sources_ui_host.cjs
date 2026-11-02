@@ -7,6 +7,12 @@ app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
 const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
 const snapshots=new Map();
+const historyCounts={full:0,note:0};
+const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
+for(const method of ['open','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
+  if(method!=='open')historyCounts[method]++;
+  try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
+});
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
 const write=(k,v,o)=>{
   if(!keys.has(k))throw Error('store_key');
@@ -16,7 +22,7 @@ const write=(k,v,o)=>{
 };
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_CAS'};}});
-ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys]}));
+ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys],historySessions:true}));
 ipcMain.handle('nownote:desktop-original-read',(_event,key)=>{if(!keys.has(key))throw Error('store_key');return documentFile.readOriginal(store,key);});
 ipcMain.handle('nownote:desktop-original-write',(_event,key,value,expected)=>{if(!keys.has(key))throw Error('store_key');return documentFile.casOriginal(store,key,value,expected);});
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
@@ -32,6 +38,37 @@ app.whenReady().then(async()=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
+    await run(`(async()=>{
+      await noteHistory.idle();await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
+      const backend=await historyPersistence(),before=await backend.open(),ctx=noteHistoryContext(),account=NowNoteHistory.key(ctx);
+      const note=id=>({owner_id:ctx.owner,local_id:id,note_type:'tree',source:'manual',content:'old',title:id,level:1});
+      const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true});
+      const value={schema_version:1,contexts:{[account]:{notes:{'qa-save-a':entry('qa-save-a'),'qa-save-b':entry('qa-save-b')}}}};
+      value.contexts[account].notes['qa-save-b'].revisions=[{snapshot:{note:{content:'QA_UNRELATED_HISTORY'}}}];
+      await backend.full({expected:before.value,next:value,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      globalThis.qaProductSave={backend,before,ctx,account,value,scoped:(await backend.open()).scoped};
+      // Opening the backend rotates native tokens; explicitly resume the product binding.
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+    })()`);
+    const beforeCounts={...historyCounts};
+    const productSave=await run(`(async()=>{
+      const q=qaProductSave,clone=globalThis.structuredClone,all=IDBObjectStore.prototype.getAll;
+      if(q.scoped){
+        globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_UNRELATED_HISTORY'))throw Error('product_full_history_clone');return clone(value);};
+        IDBObjectStore.prototype.getAll=function(){throw Error('product_full_history_scan');};
+      }
+      try{
+        await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'PRODUCT_EDITED'});await noteHistory.seal('qa-save-a');await noteHistory.idle();
+      }finally{globalThis.structuredClone=clone;IDBObjectStore.prototype.getAll=all;}
+      const stored=(await q.backend.open()).value;
+      if(stored.contexts[q.account].notes['qa-save-a'].draft.content!=='PRODUCT_EDITED'
+        ||stored.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('product_note_save_lost_history');
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true};
+    })()`);
+    if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
+    await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});delete globalThis.qaProductSave;})()`);
     const selectiveRead=await run(`(async()=>{
       const key='qa.document.path.'+${phase},value={schema_version:1,contexts:{A:{notes:{one:{draft:{content:'SELECTED_CURRENT'},revisions:[{body:'UNREAD_HISTORY'}]},two:{body:'OTHER_BODY'}}},B:{body:'FOREIGN_BODY'}}};
       const raw=JSON.stringify(value),legacyKey=key+'.legacy';localStorage.setItem(legacyKey,raw);
@@ -365,7 +402,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,productSave,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
