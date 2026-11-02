@@ -26,6 +26,9 @@ app.whenReady().then(async()=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
+    if(process.env.NOWNOTE_LAZY_WIKI_QA==='1'){
+      if(!await run(`typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]')`))throw Error('wiki_runtime_eager_startup');
+    }
     await run('wikiUI.open()');await wait('Boolean(document.querySelector("#wikiDialog [data-wiki-action=sources]"))','sources_button');
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
       const check=(value,name)=>{if(!value)throw Error('workspace_'+name);};
@@ -160,7 +163,7 @@ app.whenReady().then(async()=>{
         return {embedded:true,independentMenus:6,approvedRead:true,reviewRelation:true,tabsPreserveState:true,keyboardTabs:true,navigationWrites:0};
       })()`);
     }
-    const screenshotRoot='D:/Project/Now/docs/2.4.0/qa';
+    const screenshotRoot=process.env.NOWNOTE_QA_REPORT_DIR||'D:/Project/Now/docs/2.4.0/qa';
     for(const [size,width,height] of [['desktop',1200,900],['mobile',390,844]]){
       window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
       assert(await run('(()=>{const d=document.querySelector("#wikiDialog");return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth;})()'),'source_layout_'+size);

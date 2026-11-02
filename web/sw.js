@@ -1,4 +1,4 @@
-const CACHE_NAME = "nownote-web-v16";
+const CACHE_NAME = "nownote-web-v17";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -29,7 +29,8 @@ self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
   const isAppShell = APP_SHELL.some((path) => new URL(path, self.registration.scope).href === requestUrl.href);
-  if (isAppShell) {
+  const isWikiRuntime = requestUrl.origin === self.location.origin && requestUrl.pathname.endsWith('/wiki-runtime.js');
+  if (isAppShell || isWikiRuntime) {
     event.respondWith(
       fetch(event.request)
         .then((response) => {

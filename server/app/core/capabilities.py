@@ -8,7 +8,7 @@ SUPPORTED_NOTE_TYPES = ["daily", "tree", "record", "worklog"]
 # Web·Windows 후보는 같은 판본을 사용하고 Android는 앱 담당의 게시 판본을 유지한다.
 # GitHub Release API 등 외부 서비스를 요청마다 부르지 않기 위해 코드 상수로 둔다.
 # Web·Windows 릴리스마다 Desktop package/lock과 양 app의 APP_VERSION을 맞춘다.
-LATEST_APP_VERSION = "2.4.0"
+LATEST_APP_VERSION = "2.4.1"
 ANDROID_APP_VERSION = "2.3.9"
 GITHUB_RELEASE_REPO = "cyhuh428-sinsan/Now"
 
