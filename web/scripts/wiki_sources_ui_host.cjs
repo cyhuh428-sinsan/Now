@@ -27,10 +27,14 @@ ipcMain.handle('nownote:desktop-original-read',(_event,key)=>{if(!keys.has(key))
 ipcMain.handle('nownote:desktop-original-write',(_event,key,value,expected)=>{if(!keys.has(key))throw Error('store_key');return documentFile.casOriginal(store,key,value,expected);});
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 let window,result={ok:false},network=0;
+const selectedHttp=process.env.NOWNOTE_SELECTED_HTTP_QA_URL;
+if(selectedHttp){const url=new URL(selectedHttp);if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.pathname!=='/')throw Error('selected_http_origin');}
 app.whenReady().then(async()=>{
   try{
     documentFile.initialize(store);
-    session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_d,done)=>{network++;done({cancel:true});});
+    session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(request,done)=>{
+      if(selectedHttp&&new URL(request.url).origin===new URL(selectedHttp).origin){done({cancel:false});return;}network++;done({cancel:true});
+    });
     window=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,
       ...(mode==='desktop'?{preload:path.join(root,'desktop/preload.cjs')}:{})}});
     await window.loadFile(path.join(root,mode==='desktop'?'desktop/app/index.html':'web/index.html'));
@@ -52,6 +56,10 @@ app.whenReady().then(async()=>{
       const note=id=>({owner_id:ctx.owner,local_id:id,note_type:'tree',source:'manual',content:'old',title:id,level:1});
       const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true});
       const value={schema_version:1,contexts:{[account]:{notes:{'qa-save-a':entry('qa-save-a'),'qa-save-b':entry('qa-save-b')}}}};
+      for(const kind of ['daily','worklog']){
+        const date='2026-11-03',server={...state.settings.server,ownerId:ctx.owner},note=(kind==='daily'?dailyNoteToServerNote:worklogNoteToServerNote)({date,content:'OLD_DATE_BODY',updatedAt:new Date().toISOString()},server);
+        value.contexts[account].notes[note.local_id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true};
+      }
       value.contexts[account].notes['qa-save-b'].revisions=[{snapshot:{note:{content:'QA_UNRELATED_HISTORY'}}}];
       await backend.full({expected:before.value,next:value,revision:before.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
@@ -87,12 +95,17 @@ app.whenReady().then(async()=>{
       try{
         elements.treeContent.value='SELECTED_FIRST_EDIT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
         await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
+        state.selectedDate='2026-11-03';elements.dailyContent.value='DAILY_SELECTED_EDIT';saveDailyFromEditor();await noteHistoryCaptureChain;
+        state.selectedWorklogDate='2026-11-03';elements.worklogContent.value='WORKLOG_SELECTED_EDIT';saveWorklogFromEditor();await noteHistoryCaptureChain;
+        await noteHistoryFlush();await noteHistory.idle();
         if(!noteHistory.deferred()||noteHistory.currentView('qa-save-a').draft.content!=='SELECTED_FIRST_EDIT'||!protectionBootstrapPending
+          ||noteHistory.currentView('daily:2026-11-03').draft.content!=='DAILY_SELECTED_EDIT'||noteHistory.currentView('worklog:2026-11-03').draft.content!=='WORKLOG_SELECTED_EDIT'
           ||noteHistory.failure()||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBeforeSelected)throw Error('selected_first_edit_not_scoped');
         q.firstEditSelected=true;
       }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       const afterFirst=await q.backend.open();
       if(afterFirst.value.contexts[q.account].notes['qa-save-a'].draft.content!=='SELECTED_FIRST_EDIT'
+        ||afterFirst.value.contexts[q.account].notes['daily:2026-11-03'].draft.content!=='DAILY_SELECTED_EDIT'||afterFirst.value.contexts[q.account].notes['worklog:2026-11-03'].draft.content!=='WORKLOG_SELECTED_EDIT'
         ||afterFirst.value.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('selected_first_edit_not_durable');
       await q.backend.full({expected:afterFirst.value,next:q.value,revision:afterFirst.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
@@ -487,7 +500,13 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,productSave,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    let selectedOnline=null;
+    if(selectedHttp){
+      const credentials=JSON.parse(fs.readFileSync(path.join(process.env.NOWNOTE_HISTORY_QA_DIR,'synthetic-accounts.json'),'utf8'));
+      await run(fs.readFileSync(path.join(root,'web/scripts/selected_history_http_fixture.js'),'utf8')+'\nvoid 0;');
+      selectedOnline=await run('runSelectedHistoryHttp('+JSON.stringify({url:selectedHttp.replace(/\/$/,''),token:credentials.qa_history_alice.token})+')');
+    }
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,productSave,selectedOnline,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

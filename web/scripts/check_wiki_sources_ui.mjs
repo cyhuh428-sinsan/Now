@@ -7,7 +7,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..'),ba
 const reportRoot=process.env.NOWNOTE_QA_REPORT_DIR||'D:/Project/Now/docs/2.4.0/qa';
 await fs.mkdir(reportRoot,{recursive:true});
 await fs.mkdir(base,{recursive:true});const own=await fs.mkdtemp(path.join(base,'client-'));
-const run=randomUUID(),report={run,kind:'actual renderer/local cold; remote API and Provider are synthetic',phases:[],
+const run=randomUUID(),report={run,kind:process.env.NOWNOTE_SELECTED_HTTP_QA_URL?'actual renderer/local cold and selected-history loopback API/SQLite; Wiki remote API and Provider synthetic':'actual renderer/local cold; remote API and Provider are synthetic',phases:[],
   lazyRuntimeExpected:process.env.NOWNOTE_LAZY_WIKI_QA==='1',
   sourceHashes:Object.fromEntries(await Promise.all(['web/app.js','desktop/app/app.js'].map(async file=>[file,createHash('sha256').update(await fs.readFile(path.join(root,file))).digest('hex')])))};let child;
 try{
@@ -30,5 +30,5 @@ try{
   await fs.rm(own,{recursive:true,force:true});report.ownProfileRemoved=true;
   const target=reportRoot;await fs.mkdir(target,{recursive:true});
   await fs.writeFile(path.join(target,'wiki-sources-'+run+'.json'),JSON.stringify(report,null,2));
-  console.log('own profiles removed; real HTTP/DB/Provider not exercised');
+  console.log(process.env.NOWNOTE_SELECTED_HTTP_QA_URL?'own profiles removed; selected-history loopback API/SQLite exercised; Wiki remote API/Provider synthetic':'own profiles removed; real HTTP/DB/Provider not exercised');
 }

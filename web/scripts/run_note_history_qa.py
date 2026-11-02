@@ -39,4 +39,7 @@ with SessionLocal() as db:
     db.commit()
 (BASE / 'synthetic-accounts.json').write_text(json.dumps(accounts), encoding='utf-8')
 import uvicorn
-uvicorn.run('app.main:app', host='127.0.0.1', port=8750, log_level='warning')
+port = int(os.environ.get('NOWNOTE_HISTORY_QA_PORT', '8750'))
+if not 1024 <= port <= 65535:
+    raise ValueError('Invalid QA loopback port')
+uvicorn.run('app.main:app', host='127.0.0.1', port=port, log_level='warning')

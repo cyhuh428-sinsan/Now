@@ -683,7 +683,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -694,7 +694,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       preview=next?copy(next):null;full=next?null:build(initial.snapshot);
     }
     reset(initial);
-    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
+    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id)&&!preview.notes[id].conflicted);
     function selected(id,action){
       const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
       const run=selectedTail.catch(()=>{}).then(async()=>{
@@ -718,11 +718,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
             if(typeof receipt?.stamp!=='string'||typeof receipt.revision!=='string')throw Object.assign(stale(),{committed:true});
             baseline=copy(next);revision=receipt.revision;preview.stamp=receipt.stamp;
           };
-          const store=NowNoteHistory.create({initial,context,request:async()=>{throw Error('전체 동기화 전에 원장을 확인하세요.');},write:persist});
+          const store=NowNoteHistory.create({initial,context,request:async(...args)=>{
+            if(!request||!active())throw stale();const result=await request(...args);if(!active())throw stale();return result;
+          },write:persist});
           if(store.status().unsupported)throw stale();
           const result=await action(store);await store.idle();
           if(!active())throw stale();
-          preview.notes[id]=store.currentView(id);selectedView={id,store};return result;
+          preview.notes[id]={...store.currentView(id),conflicted:store.status().conflicts>0};selectedView={id,store};return result;
         }catch(error){if(active()){failed=error;change(error);}throw error;}
       });
       selectedTail=run;return run;
@@ -767,7 +769,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         if(full)return full.status();
         const notes=visible()?Object.values(preview?.notes||{}):[];
         return {pending:notes.filter(n=>!n.localOnly&&(n.dirty||n.pending)).length,
-          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:0,revisions:null,deferred:Boolean(preview),
+          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:notes.filter(n=>n.conflicted).length,revisions:null,deferred:Boolean(preview),
           failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
       },
       idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):selectedTail.then(()=>{}),
@@ -783,6 +785,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
+      if(name==='sync'&&!full&&preview&&request&&!loading&&args[0]?.onlyIds!==undefined){
+        const ids=args[0]?.onlyIds;
+        if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');
+        const targets=ids?[...ids]:Object.keys(preview.notes).filter(id=>!preview.notes[id].localOnly&&(preview.notes[id].dirty||preview.notes[id].pending));
+        if(targets.every(canSelect)){
+          const generation=epoch,key=bound;
+          for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
+          return;
+        }
+      }
       const id=name==='edit'?args[0]?.local_id:args[0];
       if(['edit','seal','localOnly'].includes(name)&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
       const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
@@ -15451,9 +15463,11 @@ async function noteHistoryFlush() {
   await noteHistoryCaptureChain;
   if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
   while (serverSyncRunning) await new Promise(resolve => setTimeout(resolve, 30));
-  if(noteHistory?.deferred?.()&&!noteHistoryContext().online&&noteHistory.selectable){
+  if(noteHistory?.deferred?.()&&noteHistory.selectable){
     for(const timer of noteHistoryTimers.values())clearTimeout(timer);noteHistoryTimers.clear();
-    for(const id of noteHistory.entryIds()){const item=noteHistory.currentView(id);if(item?.dirty||item?.pending)await noteHistory.seal(id);}
+    const pending=noteHistory.entryIds().filter(id=>{const item=noteHistory.currentView(id);return item?.dirty||item?.pending;});
+    for(const id of pending)await noteHistory.seal(id);
+    if(noteHistoryContext().online){for(let start=0;start<pending.length;start+=30)await noteHistory.sync({onlyIds:pending.slice(start,start+30)});await noteHistoryController?.resume();}
     return;
   }
   if(noteHistory?.deferred?.()&&!noteHistoryContext().online&&!noteHistory.status().dirty)return;
@@ -15508,7 +15522,7 @@ async function initializeNoteHistory() {
     const snapshot=normalize(await backend.open(guard));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return {snapshot};
   };
   noteHistory=NowDeferredHistory.create({initial:await readInitial(),context:noteHistoryContext,contextKey,accountKey,
-    select:backend.select,saveNote:backend.note,
+    select:backend.select,saveNote:backend.note,request:noteHistoryRequest,
     ready:finishNoteHistoryBootstrap,
     change:error=>{renderSyncStatusIndicator(state.settings.server,"bad");showNotice(error.message,"error");},
     load:async guard=>normalize(await backend.open(guard)),
@@ -26165,7 +26179,7 @@ function saveDailyFromEditor() {
       updatedAt: new Date().toISOString(),
     };
   }
-  persist();
+  persist({journalId:content.trim()?"daily:"+state.selectedDate:null});
   renderCalendar();
   renderTodayMemoState();
   showSaved(elements.dailySavedLabel);
@@ -26226,7 +26240,7 @@ function saveWorklogFromEditor() {
       updatedAt: new Date().toISOString(),
     };
   }
-  persist();
+  persist({journalId:content.trim()?"worklog:"+state.selectedWorklogDate:null});
   renderWorklogCalendar();
   renderWorklogRange();
   renderWorklogMailButtons();
@@ -29282,7 +29296,7 @@ function mergeOverflowTreeChildren(content, children) {
 
 function persist({journalId=null}={}) {
   noteHistoryCaptureDrafts();
-  if(journalId!==null&&noteHistory?.deferred?.()&&noteHistory.selectable?.(journalId)&&!noteHistoryContext().online)return;
+  if(journalId!==null&&noteHistory?.deferred?.()&&noteHistory.selectable?.(journalId)){scheduleServerSync();return;}
   if (!isHostedWebClient()) {
     writeStorage(STORAGE_KEY, state.data);
   }

@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -13,7 +13,7 @@
       preview=next?copy(next):null;full=next?null:build(initial.snapshot);
     }
     reset(initial);
-    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
+    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id)&&!preview.notes[id].conflicted);
     function selected(id,action){
       const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
       const run=selectedTail.catch(()=>{}).then(async()=>{
@@ -37,11 +37,13 @@
             if(typeof receipt?.stamp!=='string'||typeof receipt.revision!=='string')throw Object.assign(stale(),{committed:true});
             baseline=copy(next);revision=receipt.revision;preview.stamp=receipt.stamp;
           };
-          const store=NowNoteHistory.create({initial,context,request:async()=>{throw Error('전체 동기화 전에 원장을 확인하세요.');},write:persist});
+          const store=NowNoteHistory.create({initial,context,request:async(...args)=>{
+            if(!request||!active())throw stale();const result=await request(...args);if(!active())throw stale();return result;
+          },write:persist});
           if(store.status().unsupported)throw stale();
           const result=await action(store);await store.idle();
           if(!active())throw stale();
-          preview.notes[id]=store.currentView(id);selectedView={id,store};return result;
+          preview.notes[id]={...store.currentView(id),conflicted:store.status().conflicts>0};selectedView={id,store};return result;
         }catch(error){if(active()){failed=error;change(error);}throw error;}
       });
       selectedTail=run;return run;
@@ -86,7 +88,7 @@
         if(full)return full.status();
         const notes=visible()?Object.values(preview?.notes||{}):[];
         return {pending:notes.filter(n=>!n.localOnly&&(n.dirty||n.pending)).length,
-          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:0,revisions:null,deferred:Boolean(preview),
+          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:notes.filter(n=>n.conflicted).length,revisions:null,deferred:Boolean(preview),
           failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
       },
       idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):selectedTail.then(()=>{}),
@@ -102,6 +104,16 @@
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
+      if(name==='sync'&&!full&&preview&&request&&!loading&&args[0]?.onlyIds!==undefined){
+        const ids=args[0]?.onlyIds;
+        if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');
+        const targets=ids?[...ids]:Object.keys(preview.notes).filter(id=>!preview.notes[id].localOnly&&(preview.notes[id].dirty||preview.notes[id].pending));
+        if(targets.every(canSelect)){
+          const generation=epoch,key=bound;
+          for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
+          return;
+        }
+      }
       const id=name==='edit'?args[0]?.local_id:args[0];
       if(['edit','seal','localOnly'].includes(name)&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
       const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
