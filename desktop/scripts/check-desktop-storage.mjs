@@ -202,6 +202,7 @@ async function launchApp(userDataDir, extraArgs = []) {
   await page.send("Runtime.enable");
   await waitForCondition(page, "document.readyState === 'complete'", "desktop app load");
   await waitForCondition(page, "Boolean(window.nownoteDesktop?.storage && document.querySelector('#addRootBtn'))", "desktop bridge");
+  await waitForCondition(page, "Boolean(document.querySelector('#wikiBtn') && typeof noteHistory !== 'undefined' && noteHistory && !protectionBootstrapPending)", "desktop application initialization");
   return { app, client, page };
 }
 

@@ -5549,7 +5549,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       const list=document.createElement('ul');list.style.maxHeight='24dvh';list.style.overflow='auto';
       for(const member of info.wikiGroup.members){
         const row=document.createElement('li');row.textContent=member.id+' · 사본 '+member.copies.length+'개 · '
-          +(member.copies.every(c=>c.kind==='cipher')?'암호화됨':'보호 대기');row.style.overflowWrap='anywhere';list.append(row);
+          +(member.copies.every(c=>c.kind==='cipher')?'암호화됨':'보호 대기');row.style.overflowWrap='anywhere';
+        for(const copy of member.copies){
+          const details=document.createElement('div');details.className='muted';
+          for(const text of ['저장소: '+copy.store,'경로: '+copy.path.join(' / '),'SHA-256: '+copy.hash]){
+            const line=document.createElement('div');line.textContent=text;details.append(line);
+          }
+          row.append(details);
+        }
+        list.append(row);
       }
       proposals.append(list);
       const label=document.createElement('label'),input=document.createElement('input');input.type='checkbox';input.className='protection-wiki-confirm';
