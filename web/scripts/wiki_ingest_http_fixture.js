@@ -203,7 +203,8 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
         await delay();
       }
       const status=pd()?.querySelector('.protection-status')?.textContent?.trim()||'';
-      console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'protected_query_wait',code:/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified',open:Boolean(pd()?.open)}));
+      console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'protected_query_wait',code:/^(?:wiki_[a-z0-9_]+|note_protection(?:_client)?(?::[a-z0-9_]+)+)$/.test(status)?status:'unclassified',open:Boolean(pd()?.open),protectDisabled:Boolean(pb('refresh')?.disabled)}));
+      for(const row of Object.values(noteHistory.protectionOperations()).filter(row=>row.scope.owner===noteHistoryContext().owner&&row.scope.url===noteHistoryContext().url))console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'wiki_protection_progress',operation_id:row.id,local_id:row.scope.local_id,phase:row.phase}));
       throw Error('wiki_ingest_protected_query_'+code);
     }
     let id;
@@ -216,6 +217,14 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
     }
     const local='wiki:'+id;await openWikiProtection(id);await protectedWait(()=>pd()?.open,'open');
     if(config.phase===58){
+      const group=NowWikiProtectionGroup;
+      globalThis.NowWikiProtectionGroup={...group,create:api=>{
+        const controller=group.create(api);return {...controller,run:async(...args)=>{
+          console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'wiki_group_run_start'}));
+          try{const result=await controller.run(...args);console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'wiki_group_run_complete'}));return result;}
+          catch(error){console.log('HTTP_QA_EVENT '+JSON.stringify({stage:'wiki_group_run_error',code:/^(?:wiki_[a-z0-9_]+|note_protection(?:_client)?(?::[a-z0-9_]+)+)$/.test(error.message)?error.message:'client_'+(/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error')}));throw error;}
+        }};
+      }};
       const inspect=wikiNotebook.protectionDependencies;
       wikiNotebook.protectionDependencies=async(...args)=>{
         try{return await inspect(...args);}catch(error){

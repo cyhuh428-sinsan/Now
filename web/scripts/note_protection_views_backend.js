@@ -100,6 +100,11 @@ globalThis.createProtectionViewBackend = function(scope,password,saved) {
     export() {return {base,mode,live,op:{...op,inputs:[],uploads:{}},drain,serial,note};},
     note:()=>cp(note),
     async request(_scope,path,method,b) {
+      if(path==='/api/v2/notes/protection-targets'&&method==='GET'){
+        if(Number(b.schema_version)!==3||b.device_id!==scope.device||Number(b.limit)!==100||b.cursor)throw Error('synthetic target query mismatch');
+        return {schema_version:3,server_instance_id:scope.instance,items:[{local_id:scope.local_id,identity_state:base.identity_state,
+          protection_state:base.protection_state,crypto_epoch:base.crypto_epoch,current_mode:mode,current_exists:base.current_exists}],next_cursor:null};
+      }
       if(path==='/api/v2/notes/crypto-transitions/status'&&!b.transition_id)return {server_instance_id:scope.instance,...base};
       if(path==='/api/v2/notes/related-drains'&&method==='POST') {drain={drain_id:nonce(),drain_version:1,state:'ready',accepted_runs:[],accepted_claims:[],pending_count:0,ready_base:cp(base)};return cp(drain);}
       if(path.endsWith('/related-drains/status'))return cp(drain);
