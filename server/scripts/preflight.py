@@ -1131,7 +1131,7 @@ def main() -> None:
             failures,
         )
         check(
-            "confirm(" not in web_surface_check,
+            not has_native_browser_confirm(web_surface_check),
             "Web surface check blocks native confirm",
             "native confirm guard",
             failures,
