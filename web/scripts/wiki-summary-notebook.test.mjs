@@ -80,3 +80,11 @@ test('a source requiring unread history conceals only its row, never aborts or m
   const rows=await f.book.listIndex();assert.equal(rows.length,2);assert.equal(rows[0].summary,undefined);
   assert.equal(f.book.canReadSummary(rows[0]),false);assert.equal(rows[1].summary.title,'Guide');assert.equal(f.reads.length,0);
 });
+
+test('readonly metadata index preserves pending trash over remote summaries without full journal reads',async()=>{
+  const f=await fixture(),local='wiki:'+f.docs[0].wiki_id,pending={action:'trash',base_version:1,mutation_id:crypto.randomUUID(),device_id:'one',rejected:null};
+  f.history.wikiIndex=()=>({projection:'wiki_index_v1',stamp:'one',ids:[],lifecycle:{[local]:{local_only:false,version:1,deleted_at:null,pending}}});
+  f.history.deferred=()=>true;f.history.export=()=>{throw Error('whole journal forbidden');};
+  const rows=await f.book.listIndex();assert.equal(rows[0].deleted,true);assert.equal(rows[0].summary,undefined);assert.equal(rows[0].lifecycle.pending.mutation_id,pending.mutation_id);
+  assert.equal(rows[1].summary.title,'Guide');assert.equal(f.reads.length,0);
+});

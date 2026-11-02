@@ -69,11 +69,15 @@
       if((value.schema_version===2)!==Object.hasOwn(value.payload,'document_schema_floor'))throw fail();
       return validate({local_only:false,version:value.version,deleted_at:value.deleted_at,pending:null});
     }
-    async function inspect(resources){
-      const a=action(),map={};if(!Array.isArray(resources))throw fail();
+    async function inspect(resources,stored={}){
+      const a=action(),map=copy(validateMap(stored)),seen=new Set();if(!Array.isArray(resources))throw fail();
       for(const value of resources){
         const row=await remote(a,value);a.check();const id='wiki:'+value.id;
-        if(Object.hasOwn(map,id))throw fail();map[id]=row;
+        if(seen.has(id))throw fail();seen.add(id);
+        const old=map[id];if(old?.local_only)throw fail();
+        if(old&&old.version>row.version)continue;
+        if(old&&old.version===row.version&&old.deleted_at!==row.deleted_at)throw fail();
+        map[id]={...row,pending:copy(old?.pending||null)};
       }
       return map;
     }
@@ -160,5 +164,5 @@
       const a=action();for(const [id,row]of Object.entries(snapshot(a).map))if(row.pending&&!row.pending.rejected)await send(a,id);
     }};
   }
-  globalThis.NowWikiLifecycle={create,validateRestore};
+  globalThis.NowWikiLifecycle={create,validateRestore,validateMap};
 })();

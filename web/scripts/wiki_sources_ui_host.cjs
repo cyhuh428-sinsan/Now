@@ -204,6 +204,24 @@ app.whenReady().then(async()=>{
         ||actual.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('metadata_edit_lost_data');
       return true;
     })()`);
+    productSave.metadataBrowse=await run(`(async()=>{
+      const q=qaProductSave,before=await q.backend.open(),next=structuredClone(before.value),id='wiki:00000000-0000-4000-8000-000000000241';
+      const note={...next.contexts[q.account].notes['qa-save-a'].draft,local_id:id,source:'wiki-artifact',content:'QA_UNREAD_WIKI_BODY'};
+      next.contexts[q.account].notes[id]={raw:note,draft:note,base:{crypto_epoch:0,head_revision_id:null,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],localOnly:true};
+      next.contexts[q.account].wiki_ingest_operations={};
+      next.contexts[q.account].wiki_lifecycle={[id]:{local_only:true,version:2,deleted_at:'2026-11-03T00:00:00Z',pending:null}};
+      await q.backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred()||noteHistory.wikiIndex()!==null)throw Error('metadata_browse_startup_gate');
+      const all=IDBObjectStore.prototype.getAll,clone=structuredClone;
+      IDBObjectStore.prototype.getAll=function(){throw Error('metadata_browse_whole_scan');};
+      globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_UNREAD_WIKI_BODY'))throw Error('metadata_browse_wiki_body_clone');return clone(value);};
+      try{await wikiUI.open('browse');
+        if(!noteHistory.deferred()||noteHistory.failure()||noteHistory.wikiIndex()?.lifecycle?.[id]?.version!==2||document.body.innerText.includes('QA_UNREAD_WIKI_BODY'))throw Error('metadata_browse_did_not_defer');
+      }finally{wikiUI.close();IDBObjectStore.prototype.getAll=all;globalThis.structuredClone=clone;}
+      const after=(await q.backend.open()).value;if(JSON.stringify(after)!==JSON.stringify(next))throw Error('metadata_browse_wrote_journal');
+      return true;
+    })()`);
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});delete globalThis.qaProductSave;})()`);
     const selectiveRead=await run(`(async()=>{

@@ -423,7 +423,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,
+      wikiIndexMetadata:wikiMetadata.filter(key=>bucket.has(key)),syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
   }
   function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
     const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');
@@ -728,13 +729,13 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   'use strict';
   const copy=value=>structuredClone(value);
   function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
-    let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
+    let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null,browseIndex=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
     function reset(initial){
       const next=initial.preview;
       if(next&&(next.projection!=='journal_current_v1'||next.supported!==true||typeof next.stamp!=='string'||next.account!==accountKey()))throw stale();
-      full?.suspend();epoch++;bound=contextKey();loading=null;failed=null;suspended=false;selectedView=null;selectedTail=Promise.resolve();
+      full?.suspend();epoch++;bound=contextKey();loading=null;failed=null;suspended=false;selectedView=null;browseIndex=null;selectedTail=Promise.resolve();
       preview=next?copy(next):null;full=next?null:build(initial.snapshot);
     }
     reset(initial);
@@ -801,7 +802,22 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
-      wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
+        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle)}:{})}:null,
+      prepareWikiIndex(read){
+        if(api.wikiIndex())return Promise.resolve(true);
+        if(!visible()||!preview||full||loading||!Array.isArray(preview.wikiIndexMetadata)||!preview.wikiIndexMetadata.length)return Promise.resolve(false);
+        const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();if(full||loading)return false;
+          const stamp=preview.stamp,result=await read({stamp,account:accountKey(),metadata:copy(preview.wikiIndexMetadata),guard:{active}});
+          if(!active()||preview.stamp!==stamp)throw stale();
+          if(result===null)return false;
+          if(!result?.lifecycle||typeof result.lifecycle!=='object'||Array.isArray(result.lifecycle))throw stale();
+          browseIndex={stamp,lifecycle:copy(result.lifecycle)};return true;
+        });
+        selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
+      },
       page(id,cursor=null,limit=50){
         if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,account=accountKey(),active=()=>generation===epoch&&key===contextKey()&&visible();
@@ -840,7 +856,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
       },
       idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):selectedTail.then(()=>{}),
-      suspend(){epoch++;suspended=true;full?.suspend();full=null;preview=null;selectedView=null;loading=null;failed=null;selectedTail=Promise.resolve();},
+      suspend(){epoch++;suspended=true;full?.suspend();full=null;preview=null;selectedView=null;browseIndex=null;loading=null;failed=null;selectedTail=Promise.resolve();},
       suspended:()=>suspended,
       invalidate(){epoch++;full?.invalidate();loading=null;},
     };
@@ -7504,11 +7520,15 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       if((value.schema_version===2)!==Object.hasOwn(value.payload,'document_schema_floor'))throw fail();
       return validate({local_only:false,version:value.version,deleted_at:value.deleted_at,pending:null});
     }
-    async function inspect(resources){
-      const a=action(),map={};if(!Array.isArray(resources))throw fail();
+    async function inspect(resources,stored={}){
+      const a=action(),map=copy(validateMap(stored)),seen=new Set();if(!Array.isArray(resources))throw fail();
       for(const value of resources){
         const row=await remote(a,value);a.check();const id='wiki:'+value.id;
-        if(Object.hasOwn(map,id))throw fail();map[id]=row;
+        if(seen.has(id))throw fail();seen.add(id);
+        const old=map[id];if(old?.local_only)throw fail();
+        if(old&&old.version>row.version)continue;
+        if(old&&old.version===row.version&&old.deleted_at!==row.deleted_at)throw fail();
+        map[id]={...row,pending:copy(old?.pending||null)};
       }
       return map;
     }
@@ -7595,7 +7615,7 @@ globalThis.mountNoteProtection = function mountNoteProtection(api) {
       const a=action();for(const [id,row]of Object.entries(snapshot(a).map))if(row.pending&&!row.pending.rejected)await send(a,id);
     }};
   }
-  globalThis.NowWikiLifecycle={create,validateRestore};
+  globalThis.NowWikiLifecycle={create,validateRestore,validateMap};
 })();
 
 ;
@@ -7747,6 +7767,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const a=action(),rows=new Map();
     if(sync){await L.sync();a.check();await a.h.sync();a.check();}
     const index=a.h.wikiIndex?.(),lifecycle={};
+    if(index)Object.assign(lifecycle,await L.inspect([],index.lifecycle||{}));a.check();
     const metadata=(id,extra={})=>{
       const state=index?lifecycle['wiki:'+id]||null:L.state('wiki:'+id);
       return {id,...extra,lifecycle:copy(state),deleted:Boolean(state?.deleted_at||state?.pending?.action==='trash')};
@@ -7755,7 +7776,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       let resources;
       try{resources=await api.listRemote({summary:true});a.check();}
       catch{a.check();resources=[];}
-      if(index)Object.assign(lifecycle,await L.inspect(resources));else await L.observe(resources);a.check();
+      if(index)Object.assign(lifecycle,await L.inspect(resources,lifecycle));else await L.observe(resources);a.check();
       for(const resource of resources){
         const local='wiki:'+resource.id,row=metadata(resource.id,{deferred:true,unavailable:true,error:'요약·출처 상태 확인 필요'}),s=resource.summary;
         const valid=s&&Object.keys(s).sort().join(',')==='approved,protected,readable,schema_version,stale,title,topic'
@@ -9756,6 +9777,32 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
     check(){if(pendingContext!==null&&pendingContext!==contextKey()){generation++;pendingContext=null;view?.close();}else view?.check();},
   };
 };
+
+;
+/* Explicit browse metadata, never a journal write or source/body proof. */
+(() => {
+  'use strict';
+  async function read({stamp,account,metadata,directory,read,guard}){
+    const fail=()=>Error('위키 목록의 저장 상태가 변경되었습니다. 원본을 보존했으며 다시 확인하세요.');
+    const active=()=>{if(guard?.active&&!guard.active())throw fail();};
+    if(typeof stamp!=='string'||typeof account!=='string'||!Array.isArray(metadata)||metadata.length>2||new Set(metadata).size!==metadata.length
+      ||metadata.some(key=>!['wiki_lifecycle','wiki_ingest_operations'].includes(key)))throw fail();
+    const checked=async(path,shallow)=>{
+      active();const result=await (shallow?directory:read)(path);active();
+      if(result?.projection!=='path_v1'||result.stamp!==stamp||result.found!==true)throw fail();
+      if(shallow&&(result.part?.type!=='object'||!Array.isArray(result.part.entries)))throw fail();
+      return result;
+    };
+    if(metadata.includes('wiki_ingest_operations')){
+      const operations=await checked(['contexts',account,'wiki_ingest_operations'],true);
+      if(operations.part.entries.length)return null;
+    }
+    const lifecycle=metadata.includes('wiki_lifecycle')
+      ?NowWikiLifecycle.validateMap((await checked(['contexts',account,'wiki_lifecycle'],false)).value):{};
+    await checked(['contexts',account],true);active();return {lifecycle};
+  }
+  globalThis.NowWikiIndex={read};
+})();
 
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
@@ -16050,6 +16097,13 @@ async function openProtectedWikiPreview(info,value){
   }});
 }
 
+async function prepareWikiBrowse(){
+  const prepared=await noteHistory.prepareWikiIndex?.(({stamp,account,metadata,guard})=>NowWikiIndex.read({stamp,account,metadata,guard,
+    directory:path=>isDesktopClient()?nownoteDesktop.storage.readDirectory(NOTE_HISTORY_KEY,path):browserHistoryStorage().readDirectory(path,guard),
+    read:path=>isDesktopClient()?nownoteDesktop.storage.readPath(NOTE_HISTORY_KEY,path):browserHistoryStorage().readPath(path,guard),
+  }));
+  if(!prepared)await noteHistory.ensure();
+}
 function initializeWikiNotebook(){
   const wikiServer=NowWikiServerAccess.create({context:noteHistoryContext,contextKey:wikiViewKey,request:wikiServerRequest,
     readWiki:id=>wikiRead("/"+encodeURIComponent(id))});
@@ -16106,7 +16160,7 @@ function initializeWikiNotebook(){
       return {status:"ok",epoch:0,lineage:false,fence:false};
     },
   });
-  wikiUI=createLazyWikiView({contextKey:wikiViewKey,prepare:(method,args)=>method==='open'&&args[0]==='browse'&&noteHistory.wikiIndex?.()?undefined:noteHistory.ensure(),mount:()=>mountNowWiki({
+  wikiUI=createLazyWikiView({contextKey:wikiViewKey,prepare:(method,args)=>method==='open'&&args[0]==='browse'?prepareWikiBrowse():noteHistory.ensure(),mount:()=>mountNowWiki({
     prepare:()=>noteHistory.ensure(),
     ...book,sources:wikiSources,ingest:wikiIngest,contextKey:wikiViewKey,connection:wikiConnection,openProtection:openWikiProtection,
     query:createWikiQueryNotebook({book,context:noteHistoryContext,contextKey:wikiViewKey}),

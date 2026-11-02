@@ -142,7 +142,8 @@
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,
+      wikiIndexMetadata:wikiMetadata.filter(key=>bucket.has(key)),syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
   }
   function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
     const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');

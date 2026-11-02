@@ -146,6 +146,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
     const a=action(),rows=new Map();
     if(sync){await L.sync();a.check();await a.h.sync();a.check();}
     const index=a.h.wikiIndex?.(),lifecycle={};
+    if(index)Object.assign(lifecycle,await L.inspect([],index.lifecycle||{}));a.check();
     const metadata=(id,extra={})=>{
       const state=index?lifecycle['wiki:'+id]||null:L.state('wiki:'+id);
       return {id,...extra,lifecycle:copy(state),deleted:Boolean(state?.deleted_at||state?.pending?.action==='trash')};
@@ -154,7 +155,7 @@ globalThis.createWikiNotebook=function createWikiNotebook(api){
       let resources;
       try{resources=await api.listRemote({summary:true});a.check();}
       catch{a.check();resources=[];}
-      if(index)Object.assign(lifecycle,await L.inspect(resources));else await L.observe(resources);a.check();
+      if(index)Object.assign(lifecycle,await L.inspect(resources,lifecycle));else await L.observe(resources);a.check();
       for(const resource of resources){
         const local='wiki:'+resource.id,row=metadata(resource.id,{deferred:true,unavailable:true,error:'요약·출처 상태 확인 필요'}),s=resource.summary;
         const valid=s&&Object.keys(s).sort().join(',')==='approved,protected,readable,schema_version,stale,title,topic'

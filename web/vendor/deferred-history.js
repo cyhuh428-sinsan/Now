@@ -3,13 +3,13 @@
   'use strict';
   const copy=value=>structuredClone(value);
   function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
-    let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null;
+    let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null,browseIndex=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
     function reset(initial){
       const next=initial.preview;
       if(next&&(next.projection!=='journal_current_v1'||next.supported!==true||typeof next.stamp!=='string'||next.account!==accountKey()))throw stale();
-      full?.suspend();epoch++;bound=contextKey();loading=null;failed=null;suspended=false;selectedView=null;selectedTail=Promise.resolve();
+      full?.suspend();epoch++;bound=contextKey();loading=null;failed=null;suspended=false;selectedView=null;browseIndex=null;selectedTail=Promise.resolve();
       preview=next?copy(next):null;full=next?null:build(initial.snapshot);
     }
     reset(initial);
@@ -76,7 +76,22 @@
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
-      wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
+        ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle)}:{})}:null,
+      prepareWikiIndex(read){
+        if(api.wikiIndex())return Promise.resolve(true);
+        if(!visible()||!preview||full||loading||!Array.isArray(preview.wikiIndexMetadata)||!preview.wikiIndexMetadata.length)return Promise.resolve(false);
+        const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
+        const run=selectedTail.catch(()=>{}).then(async()=>{
+          if(!active()||failed)throw failed||stale();if(full||loading)return false;
+          const stamp=preview.stamp,result=await read({stamp,account:accountKey(),metadata:copy(preview.wikiIndexMetadata),guard:{active}});
+          if(!active()||preview.stamp!==stamp)throw stale();
+          if(result===null)return false;
+          if(!result?.lifecycle||typeof result.lifecycle!=='object'||Array.isArray(result.lifecycle))throw stale();
+          browseIndex={stamp,lifecycle:copy(result.lifecycle)};return true;
+        });
+        selectedTail=run.then(()=>{},error=>{if(active()){failed=error;change(error);}});return run;
+      },
       page(id,cursor=null,limit=50){
         if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,account=accountKey(),active=()=>generation===epoch&&key===contextKey()&&visible();
@@ -115,7 +130,7 @@
           failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
       },
       idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):selectedTail.then(()=>{}),
-      suspend(){epoch++;suspended=true;full?.suspend();full=null;preview=null;selectedView=null;loading=null;failed=null;selectedTail=Promise.resolve();},
+      suspend(){epoch++;suspended=true;full?.suspend();full=null;preview=null;selectedView=null;browseIndex=null;loading=null;failed=null;selectedTail=Promise.resolve();},
       suspended:()=>suspended,
       invalidate(){epoch++;full?.invalidate();loading=null;},
     };

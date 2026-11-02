@@ -40,6 +40,17 @@ test('archive uses a fixed snapshot without materializing history and invalidate
   const pending=g.store.archive(async()=>{await wait;return new Blob(['old account']);});await new Promise(resolve=>setImmediate(resolve));
   g.setScope('bob');release();await assert.rejects(pending);assert.equal(g.loads(),0);
 });
+
+test('explicit Wiki metadata preparation is read-only, stamp-bound and invalidated by account changes',async()=>{
+  const f=fixture();f.store.reset({preview:{...f.preview,wikiIndexSupported:false,wikiIndexMetadata:['wiki_lifecycle'],wikiIds:['wiki:test']}});
+  assert.equal(typeof f.store.prepareWikiIndex,'function');
+  assert.equal(await f.store.prepareWikiIndex(async({stamp,account:bound,metadata,guard})=>{assert.equal(stamp,'one');assert.equal(bound,account);assert.deepEqual(metadata,['wiki_lifecycle']);assert.equal(guard.active(),true);return {lifecycle:{'wiki:test':{pending:null}}};}),true);
+  assert.equal(f.loads(),0);assert.equal(f.writes(),0);assert.deepEqual(f.store.wikiIndex().lifecycle,{'wiki:test':{pending:null}});
+  const g=fixture();g.store.reset({preview:{...g.preview,wikiIndexSupported:false,wikiIndexMetadata:['wiki_ingest_operations']}});
+  assert.equal(await g.store.prepareWikiIndex(async()=>null),false);assert.equal(g.store.wikiIndex(),null);assert.equal(g.loads(),0);
+  let release;const gate=new Promise(r=>{release=r;}),h=fixture();h.store.reset({preview:{...h.preview,wikiIndexSupported:false,wikiIndexMetadata:['wiki_lifecycle']}});
+  const pending=h.store.prepareWikiIndex(async()=>{await gate;return {lifecycle:{}};});await new Promise(r=>setImmediate(r));h.setScope('bob');release();await assert.rejects(pending);assert.equal(h.store.wikiIndex(),null);assert.equal(h.loads(),0);
+});
 test('first edit materializes once and preserves unread history before writing',async()=>{
   const f=fixture();await f.store.edit({...f.note,content:'edited'});assert.equal(f.loads(),1);assert.equal(f.writes(),1);assert.equal(f.ready(),1);
   assert.equal(f.store.deferred(),false);assert.equal(f.store.view('a').revisions[0].snapshot.note.content,'OLD_PRIVATE_BODY');

@@ -7,7 +7,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const start=source.indexOf('function initializeWikiNotebook(){');
   const end=source.indexOf('\nasync function initializeApp()',start);
   assert.ok(start>=0&&end>start);
-  let serverApi,bookApi,ingestApi,queryApi,uiApi;
+  let serverApi,bookApi,ingestApi,queryApi,uiApi,runtimeLoads=0;
   const server={},reads=[];
   const box=vm.createContext({
     NowWikiServerAccess:{create:api=>{serverApi=api;return server;}},
@@ -15,12 +15,17 @@ for(const file of ['web/app.js','desktop/app/app.js']){
     createWikiNotebook:api=>{bookApi=api;return {};},
     createWikiIngestNotebook:api=>{ingestApi=api;return {};},
     createWikiQueryNotebook:api=>{queryApi=api;return {};},
-    mountNowWiki:api=>{uiApi=api;return {};},noteHistoryContext:()=>({}),wikiViewKey:()=>'',
-    wikiServerRequest:()=>{},noteHistory:{},wikiSourceNote:()=>{},wikiConnection:()=>{},openWikiProtection:()=>{},
+    mountNowWiki:api=>{uiApi=api;return {open:()=>{}};},noteHistoryContext:()=>({}),wikiViewKey:()=>'',
+    ensureNowWikiRuntime:async()=>{runtimeLoads++;},
+    wikiServerRequest:()=>{},noteHistory:{ensure:async()=>{}},wikiSourceNote:()=>{},wikiConnection:()=>{},openWikiProtection:()=>{},
     wikiRead:value=>{reads.push(value);return value;},
-    document:{createElement:()=>({addEventListener:()=>{}})},$:()=>null,
+    document:{createElement:()=>({addEventListener:()=>{}}),querySelectorAll:()=>[]},$:()=>null,
   });
+  const lazy=await fs.readFile(new URL('../vendor/wiki-runtime-loader.js',import.meta.url),'utf8');
+  vm.runInContext(lazy.slice(lazy.indexOf('globalThis.createLazyWikiView=')),box);
   vm.runInContext(source.slice(start,end)+'\ninitializeWikiNotebook();',box);
+  assert.equal(uiApi,undefined,file+' startup must not mount Wiki UI');assert.equal(runtimeLoads,0);
+  await box.wikiUI.open();assert.equal(runtimeLoads,1,file+' explicit entry loads Wiki UI once');
   assert.equal(typeof serverApi.readWiki,'function',file+' must bind the existing Wiki read endpoint');
   await serverApi.readWiki('exact id');assert.deepEqual(reads,['/exact%20id']);
   assert.equal(bookApi.server,server,file+' reader must inspect pinned server evidence');
