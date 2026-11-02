@@ -3,7 +3,7 @@
   'use strict';
   function create({database,key}) {
     let cached=null;
-    return async function transaction(write,transform,guard) {
+    async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
@@ -51,7 +51,55 @@
           };
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
+    }
+    transaction.readPath=async function(path,guard,checkMetadata=()=>{}){
+      const steps=NowDocumentParts.selectSteps(path);let step=steps.next();
+      const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
+      active();
+      return new Promise((resolve,reject)=>{
+        let tx,error,result;
+        try{
+          tx=db.transaction(['journals','documents'],'readonly');
+          tx.onabort=()=>reject(error||Error('Document read aborted'));
+          tx.onerror=()=>{error=Error('Document read failed');};
+          tx.oncomplete=()=>{try{active();resolve(result);}catch(e){reject(e);}};
+          const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
+          const metadata=journals.get(key);
+          metadata.onsuccess=()=>{
+            try{
+              active();const physical=metadata.result;
+              if(physical===undefined){
+                checkMetadata(undefined);
+                const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
+                count.onsuccess=()=>{try{
+                  active();if(count.result!==0)throw Error('Document journal metadata is missing');
+                  result={projection:'path_v1',stamp:null,found:false};
+                }catch(e){fail(e);}};
+                return;
+              }
+              if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
+              checkMetadata(physical.row);
+              function next(){
+                if(step.done){result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                const id=step.value,request=documents.get([key,id]);
+                request.onsuccess=()=>{try{
+                  active();const row=request.result;
+                  if(row?.id!==id)throw Error('Missing document part');
+                  if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
+                    ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
+                  step=steps.next(row.value);next();
+                }catch(e){fail(e);}};
+              }
+              if(physical.isNull){
+                const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
+                count.onsuccess=()=>{try{active();if(count.result!==1)throw Error('Invalid null document parts');next();}catch(e){fail(e);}};
+              }else next();
+            }catch(e){fail(e);}
+          };
+        }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
+      });
     };
+    return transaction;
   }
   globalThis.NowDocumentTransactions={create};
 })();

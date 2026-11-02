@@ -32,6 +32,26 @@ app.whenReady().then(async()=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
+    const selectiveRead=await run(`(async()=>{
+      const key='qa.document.path.'+${phase},value={schema_version:1,contexts:{A:{notes:{one:{draft:{content:'SELECTED_CURRENT'},revisions:[{body:'UNREAD_HISTORY'}]},two:{body:'OTHER_BODY'}}},B:{body:'FOREIGN_BODY'}}};
+      const raw=JSON.stringify(value),legacyKey=key+'.legacy';localStorage.setItem(legacyKey,raw);
+      const make=()=>NowBrowserHistoryStorage.create({indexedDB,localStorage,key,lock:fn=>navigator.locks.request(key,fn)}),store=make();
+      const legacy=NowBrowserHistoryStorage.create({indexedDB,localStorage,key:legacyKey,lock:fn=>navigator.locks.request(legacyKey,fn)});
+      let before=false;try{await legacy.readPath(['contexts','A']);}catch{before=true;}
+      if(!before)throw Error('path_unmigrated_legacy_hidden');
+      await store.read();await store.write(null,value);
+      const all=IDBObjectStore.prototype.getAll;let projection;
+      IDBObjectStore.prototype.getAll=function(){throw Error('path_full_scan');};
+      try{projection=await make().readPath(['contexts','A','notes','one','draft']);}finally{IDBObjectStore.prototype.getAll=all;}
+      if(projection.projection!=='path_v1'||!projection.found||projection.value.content!=='SELECTED_CURRENT'
+        ||JSON.stringify(projection).includes('UNREAD_HISTORY')||JSON.stringify(projection).includes('FOREIGN_BODY'))throw Error('path_projection');
+      let partial=false;try{await store.write(projection,{lost:true});}catch{partial=true;}
+      if(!partial||await store.read()!==raw)throw Error('path_partial_overwrite');
+      localStorage.setItem(key,raw+' ');let divergent=false;
+      try{await store.readPath(['contexts','A']);}catch{divergent=true;}finally{localStorage.removeItem(key);}
+      if(!divergent)throw Error('path_legacy_divergence');
+      return {selected:true,wholeScan:false,partialOverwrite:false,legacyMismatchBlocked:true};
+    })()`);
     if(process.env.NOWNOTE_LAZY_WIKI_QA==='1'){
       if(!await run(`typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]')`))throw Error('wiki_runtime_eager_startup');
     }
@@ -334,7 +354,7 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

@@ -129,6 +129,27 @@
     }
     return {
       read: () => lock(async()=> (await settled()).row.value),
+      readPath: (path,guard) => lock(async()=>{
+        active(guard);
+        // Retained legacy cannot be integrity-checked without loading its whole body.
+        // Keep that profile on the established full-read path until migration is verified.
+        const unchanged=()=>{
+          active(guard);
+          const count=localStorage.length;
+          if(!Number.isSafeInteger(count)||count<0||typeof localStorage.key!=='function')throw fail();
+          for(let i=0;i<count;i++)if(localStorage.key(i)===key)throw fail();
+        };
+        unchanged();const legacyHash=await hash(null);
+        unchanged();
+        const result=await transaction.readPath(path,guard,metadata=>{
+          unchanged();
+          if(metadata===undefined)return;
+          if(!metadata||Object.keys(metadata).sort().join(',')!=='legacy_hash,redo,schema_version')throw fail();
+          const row=validate({...metadata,value:null});
+          if(row.legacy_hash!==legacyHash)throw fail();
+        });
+        unchanged();return result;
+      }),
       write: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(row.value),expected))throw fail();

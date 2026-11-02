@@ -3,6 +3,25 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const path=require('node:path');
 const {createDocumentStore}=require('../document-store.cjs');
+
+test('read snapshot is consistent across external WAL writes and always releases its transaction',()=>{
+  const {DatabaseSync}=require('node:sqlite'),root=path.resolve('D:/tmp/nownote-241-select');fs.mkdirSync(root,{recursive:true});
+  const dir=fs.mkdtempSync(path.join(root,'snapshot-')),file=path.join(dir,'store.sqlite'),store=createDocumentStore(file);let writer;
+  try{
+    store.commit([{kind:'put',scope:'A',id:'one',value:{v:'old'},expectedVersion:0},{kind:'put',scope:'A',id:'two',value:{v:'old'},expectedVersion:0}]);
+    writer=new DatabaseSync(file);
+    store.snapshot(()=>{
+      assert.equal(store.read('A','one').value.v,'old');
+      writer.prepare('UPDATE documents SET payload=?,version=version+1 WHERE scope=?').run('{"v":"new"}','A');
+      assert.equal(store.read('A','two').value.v,'old');
+    });
+    assert.equal(store.read('A','two').value.v,'new');
+    assert.throws(()=>store.snapshot(()=>{throw Error('synthetic read error');}),/synthetic read/);
+    assert.throws(()=>store.snapshot(()=>Promise.resolve()),/synchronous/);
+    store.commit([{kind:'put',scope:'A',id:'one',value:{v:'after'},expectedVersion:2}]);
+    assert.equal(store.read('A','one').value.v,'after');
+  }finally{writer?.close();store.close();const resolved=fs.realpathSync(dir);assert.equal(path.dirname(resolved),root);fs.rmSync(resolved,{recursive:true,force:true});}
+});
 test('document reads and compare-and-set writes preserve independent accounts and notes',()=>{
   const store=createDocumentStore(':memory:');
   try{

@@ -18,6 +18,11 @@ function createPartitionedStore(filename){
   }
   return {
     read(key){return structuredClone(load(key).value);},
+    readPath(key,path){
+      if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');
+      return store.snapshot(()=>({projection:'path_v1',...(store.hasScope(key)
+        ?parts.select(path,id=>store.read(key,id)?.value):{found:false})}));
+    },
     write(key,value,expected){return this.commit([{key,value,expected}]);},
     commit(updates){
       if(!Array.isArray(updates)||new Set(updates.map(item=>item.key)).size!==updates.length)throw Error('Invalid storage transaction');

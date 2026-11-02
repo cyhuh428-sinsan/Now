@@ -145,6 +145,7 @@ function casOriginal(storePath,key,value,expected){
   return {ok:true};
 }
 function readKey(storePath,key){return open(storePath).read(`value:${key}`);}
+function readKeyPath(storePath,key,segments){return open(storePath).readPath(`value:${key}`,segments);}
 function writeKey(storePath,key,value,expected){
   const database=open(storePath),file=database.read(META);
   const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()},keys:file.keys.includes(key)?file.keys:[...file.keys,key]};
@@ -162,4 +163,4 @@ function update(storePath,transform,expectedHash){
   return snapshot(database);
 }
 function closeAll(){for(const database of databases.values())database.close();databases.clear();}
-module.exports={FORMAT,initialize,read,readKey,writeKey,readOriginal,casOriginal,info,update,closeAll};
+module.exports={FORMAT,initialize,read,readKey,readKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};

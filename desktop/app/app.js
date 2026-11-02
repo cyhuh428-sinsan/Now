@@ -332,7 +332,49 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     for(const id of before.keys())if(!after.has(id))result.push({id,remove:true});
     return result;
   };
-  globalThis.NowDocumentParts={encode,decode,delta};
+  // Yield exact record IDs so both SQLite and IDB can read one consistent subtree.
+  function* selectSteps(path){
+    if(!Array.isArray(path)||path.some(key=>typeof key!=='string'))throw Error('Invalid document path');
+    path=[...path];
+    function descriptor(value,expected){
+      if(!value||typeof value!=='object'||Array.isArray(value)||Object.keys(value).length!==1)throw Error('Invalid document descriptor');
+      if(Object.hasOwn(value,'value')){
+        const item=value.value;
+        if(item!==null&&!['string','boolean','number'].includes(typeof item)||typeof item==='number'&&!Number.isFinite(item))throw Error('Invalid document value');
+        return false;
+      }
+      if(Object.keys(value)[0]!=='ref'||value.ref!==JSON.stringify(expected))throw Error('Invalid document reference');
+      return true;
+    }
+    function* visit(value,location,offset){
+      if(!descriptor(value,location))return offset<path.length?{found:false}:{found:true,value:value.value};
+      const part=yield value.ref;
+      if(!part||Object.keys(part).sort().join(',')!=='entries,type'||!['array','object'].includes(part.type)||!Array.isArray(part.entries))throw Error('Missing or invalid document part');
+      const keys=new Set();
+      for(const [index,entry] of part.entries.entries()){
+        if(!Array.isArray(entry)||entry.length!==2||typeof entry[0]!=='string'||keys.has(entry[0])
+          ||part.type==='array'&&entry[0]!==String(index))throw Error('Invalid document field');
+        keys.add(entry[0]);descriptor(entry[1],[...location,entry[0]]);
+      }
+      if(offset<path.length){
+        const entry=part.entries.find(([key])=>key===path[offset]);
+        return entry?yield* visit(entry[1],[...location,entry[0]],offset+1):{found:false};
+      }
+      const result=part.type==='array'?[]:{};
+      for(const [key,item] of part.entries){
+        const child=yield* visit(item,[...location,key],offset);
+        Object.defineProperty(result,key,{value:child.value,enumerable:true,writable:true,configurable:true});
+      }
+      return {found:true,value:result};
+    }
+    return yield* visit(yield '$root',[],0);
+  }
+  function select(path,read){
+    const steps=selectSteps(path);let step=steps.next();
+    while(!step.done)step=steps.next(read(step.value));
+    return step.value;
+  }
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();
 
@@ -342,7 +384,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   'use strict';
   function create({database,key}) {
     let cached=null;
-    return async function transaction(write,transform,guard) {
+    async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
@@ -390,7 +432,55 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           };
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
+    }
+    transaction.readPath=async function(path,guard,checkMetadata=()=>{}){
+      const steps=NowDocumentParts.selectSteps(path);let step=steps.next();
+      const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
+      active();
+      return new Promise((resolve,reject)=>{
+        let tx,error,result;
+        try{
+          tx=db.transaction(['journals','documents'],'readonly');
+          tx.onabort=()=>reject(error||Error('Document read aborted'));
+          tx.onerror=()=>{error=Error('Document read failed');};
+          tx.oncomplete=()=>{try{active();resolve(result);}catch(e){reject(e);}};
+          const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
+          const metadata=journals.get(key);
+          metadata.onsuccess=()=>{
+            try{
+              active();const physical=metadata.result;
+              if(physical===undefined){
+                checkMetadata(undefined);
+                const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
+                count.onsuccess=()=>{try{
+                  active();if(count.result!==0)throw Error('Document journal metadata is missing');
+                  result={projection:'path_v1',stamp:null,found:false};
+                }catch(e){fail(e);}};
+                return;
+              }
+              if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
+              checkMetadata(physical.row);
+              function next(){
+                if(step.done){result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                const id=step.value,request=documents.get([key,id]);
+                request.onsuccess=()=>{try{
+                  active();const row=request.result;
+                  if(row?.id!==id)throw Error('Missing document part');
+                  if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
+                    ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
+                  step=steps.next(row.value);next();
+                }catch(e){fail(e);}};
+              }
+              if(physical.isNull){
+                const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
+                count.onsuccess=()=>{try{active();if(count.result!==1)throw Error('Invalid null document parts');next();}catch(e){fail(e);}};
+              }else next();
+            }catch(e){fail(e);}
+          };
+        }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
+      });
     };
+    return transaction;
   }
   globalThis.NowDocumentTransactions={create};
 })();
@@ -1400,6 +1490,27 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     }
     return {
       read: () => lock(async()=> (await settled()).row.value),
+      readPath: (path,guard) => lock(async()=>{
+        active(guard);
+        // Retained legacy cannot be integrity-checked without loading its whole body.
+        // Keep that profile on the established full-read path until migration is verified.
+        const unchanged=()=>{
+          active(guard);
+          const count=localStorage.length;
+          if(!Number.isSafeInteger(count)||count<0||typeof localStorage.key!=='function')throw fail();
+          for(let i=0;i<count;i++)if(localStorage.key(i)===key)throw fail();
+        };
+        unchanged();const legacyHash=await hash(null);
+        unchanged();
+        const result=await transaction.readPath(path,guard,metadata=>{
+          unchanged();
+          if(metadata===undefined)return;
+          if(!metadata||Object.keys(metadata).sort().join(',')!=='legacy_hash,redo,schema_version')throw fail();
+          const row=validate({...metadata,value:null});
+          if(row.legacy_hash!==legacyHash)throw fail();
+        });
+        unchanged();return result;
+      }),
       write: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(row.value),expected))throw fail();

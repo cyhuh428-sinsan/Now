@@ -83,6 +83,11 @@ function registerDesktopStorageHandlers() {
     const value=documentFile.readKey(desktopStorePath(),key);
     remember(event.sender,key,value);return value;
   });
+  ipcMain.handle('nownote:desktop-store-read-path',(event,key,segments)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    // A projection is not a full-store write baseline.
+    return documentFile.readKeyPath(desktopStorePath(),key,segments);
+  });
 
   function writeFrom(event,key,value,options){
     assertTrustedStoreFrame(event);

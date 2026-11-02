@@ -58,6 +58,12 @@ try{
   })()`);
   const settingsKey='nownote.web.settings.v1';
   await a.evaluate(`(async()=>{const value=await nownoteDesktop.storage.read('${settingsKey}');state.settings.fontSize='small';await nownoteDesktop.storage.write('${settingsKey}',{...(value||{}),fontSize:'small'},{expectedValue:value});})()`);
+  await a.evaluate(`(async()=>{
+    const value=await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);
+    if(value.projection!=='path_v1'||value.found!==true||value.value!=='small')throw Error('Selective IPC read failed');
+    try{await nownoteDesktop.storage.readPath('nownote.vault.v1',[]);throw Error('Unknown path key accepted');}catch(error){if(error.message==='Unknown path key accepted')throw error;}
+    try{await nownoteDesktop.storage.write('${settingsKey}',{fontSize:'bad'},{expectedValue:value});throw Error('Partial baseline accepted');}catch(error){if(error.message==='Partial baseline accepted')throw error;}
+  })()`);
   const secondary=start(debug,true);
   const secondaryExit=once(secondary,'exit');
   const wikiTarget=await until(async()=>{const rows=await targets(debug);return rows.find(row=>row.url.includes('workspace=wiki'));},'wiki window');
@@ -74,6 +80,7 @@ try{
   await until(()=>b.evaluate(`location.href==='about:blank'&&!!window.nownoteDesktop`),'untrusted navigation');
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.info();return false;}catch{return true;}})()`),true);
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.original.read('nownote.web.v1');return false;}catch{return true;}})()`),true);
+  assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);return false;}catch{return true;}})()`),true);
   await b.evaluate('window.close()');b.close();await a.evaluate('window.close()').catch(()=>{});a.close();
   if(primary.exitCode===null)await once(primary,'exit');
   const marker=JSON.parse(await fs.readFile(path.join(profile,'nownote-desktop-store.json'),'utf8'));assert.equal(marker.values,undefined);

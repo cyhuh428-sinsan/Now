@@ -56,6 +56,15 @@ function createDocumentStore(filename){
       return scan.all(scope).map(row=>({id:row.id,version:row.version,value:JSON.parse(row.payload)}));
     },
     dataVersion(){return db.prepare('PRAGMA data_version').get().data_version;},
+    hasScope(scope){identity(scope,'scope');return Boolean(db.prepare('SELECT 1 FROM documents WHERE scope=? LIMIT 1').get(scope));},
+    snapshot(read){
+      db.exec('BEGIN');
+      try{
+        const result=read();
+        if(result&&typeof result.then==='function')throw Error('A synchronous document read is required');
+        return result;
+      }finally{db.exec('ROLLBACK');}
+    },
     commit(changes){
       if(!Array.isArray(changes)||changes.length===0)throw Error('A nonempty document transaction is required');
       const encoded=changes.map(change=>{
