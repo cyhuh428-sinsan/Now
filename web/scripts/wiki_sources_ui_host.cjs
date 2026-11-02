@@ -372,6 +372,29 @@ app.whenReady().then(async()=>{
         await click('sources');return {drafts:2,explicitApprovals:3,manualIntegrations:1,syntheticCalls:calls,outputTokens:4096};
       }finally{globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
+    productSave.localSelectedDetail=await run(`(async()=>{
+      wikiUI.close();await noteHistory.idle();await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
+      const rows=await wikiNotebook.list(),target=rows.find(row=>row.document?.approvals.length&&row.localOnly);if(!target)throw Error('selected_detail_fixture_target');
+      const backend=await historyPersistence(),before=await backend.open(),next=structuredClone(before.value),account=NowNoteHistory.key(noteHistoryContext()),id='qa-detail-unrelated';
+      const note={owner_id:noteHistoryContext().owner,local_id:id,note_type:'tree',source:'manual',title:'Unrelated',content:'current',level:1};
+      next.contexts[account].notes[id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[{snapshot:{note:{...note,content:'QA_DETAIL_UNRELATED_HISTORY'}}}],outbox:[],receipts:[],localOnly:true};
+      await backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});if(!noteHistory.deferred())throw Error('selected_detail_not_deferred');
+      const all=IDBObjectStore.prototype.getAll,clone=structuredClone;
+      IDBObjectStore.prototype.getAll=function(){throw Error('selected_detail_whole_scan');};
+      globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_DETAIL_UNRELATED_HISTORY'))throw Error('selected_detail_whole_clone');return clone(value);};
+      try{
+        await wikiUI.open('browse');
+        const button=document.querySelector('#wikiDialog .wiki-entry[data-wiki-id="'+target.id+'"] .library-item');if(!button)throw Error('selected_detail_button');button.click();
+        let ready=false;for(let i=0;i<400;i++){
+          const edit=document.querySelector('#wikiDialog [data-wiki-action=edit-wiki]');if(edit&&!edit.disabled){ready=true;break;}await new Promise(r=>setTimeout(r,10));
+        }
+        if(!ready||!noteHistory.deferred()||noteHistory.failure()||!document.querySelector('#wikiDialog .wiki-detail h3')?.textContent||document.body.innerText.includes('QA_DETAIL_UNRELATED_HISTORY'))throw Error('selected_detail_ui_failed: '+document.querySelector('#wikiDialog [role=status]')?.textContent);
+      }finally{wikiUI.close();IDBObjectStore.prototype.getAll=all;globalThis.structuredClone=clone;}
+      const after=await backend.open();if(JSON.stringify(after.value)!==JSON.stringify(next))throw Error('selected_detail_wrote_history');
+      await backend.full({expected:after.value,next:before.value,revision:after.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});await noteHistory.ensure();return true;
+    })()`);
     let workspace=null;
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
       workspace=await run(`(async()=>{

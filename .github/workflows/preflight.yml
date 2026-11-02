@@ -47,6 +47,7 @@ jobs:
           web/scripts/deferred-history.test.cjs web/scripts/selected-history.test.cjs
           web/scripts/default-history-sync.test.cjs web/scripts/current-source-projection.test.cjs
           web/scripts/wiki-index-reader.test.cjs web/scripts/wiki-browse-wiring.test.cjs
+          web/scripts/wiki-read-set.test.cjs web/scripts/wiki-selected-page.test.mjs
           web/scripts/document-select-idb.test.mjs web/scripts/browser-select-guard.test.mjs
           web/scripts/wiki-summary-notebook.test.mjs web/scripts/wiki-runtime-loader.test.mjs
           web/scripts/wiki-runtime-bundle.test.mjs

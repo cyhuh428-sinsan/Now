@@ -29,7 +29,7 @@ async function fixture(){
     readCurrent:async local=>{const d=docs.find(d=>'wiki:'+d.wiki_id===local);return {head_revision_id:'head-'+d.wiki_id,crypto_epoch:0,
       snapshot:{note:{owner_id:ctx.owner,local_id:local,content:JSON.stringify(d),source:'wiki-artifact'}}};}};
   api.lifecycle=box.NowWikiLifecycle.create({...api,request:async()=>{throw Error('unexpected lifecycle write');}});
-  return {book:box.createWikiNotebook(api),history,ctx,resources,docs,reads,options,lock:()=>{locked=true;},failSource:id=>{sourceFailure=id;}};
+  return {book:box.createWikiNotebook(api),api,history,ctx,resources,docs,reads,options,lock:()=>{locked=true;},failSource:id=>{sourceFailure=id;}};
 }
 test('catalog uses verified summaries without fetching or tracking bodies; selected page reads only its ID',async()=>{
   const f=await fixture(),rows=await f.book.listIndex();
@@ -94,4 +94,14 @@ test('a validated pending operation hides its target summary but preserves unrel
   f.history.wikiIndex=()=>({projection:'wiki_index_v1',stamp:'one',ids:[],lifecycle:{},blocked:[local]});
   f.history.deferred=()=>true;f.history.export=()=>{throw Error('whole journal forbidden');};
   const rows=await f.book.listIndex();assert.equal(rows[0].summary,undefined);assert.equal(f.book.canReadSummary(rows[0]),false);assert.equal(rows[1].summary.title,'Guide');assert.equal(f.reads.length,0);
+});
+
+test('explicit selected page and source proofs bypass full hydration, but unsupported pages retain the full gate',async()=>{
+  const f=await fixture();let full=0;f.history.ensure=async()=>{full++;throw Error('explicit full fallback');};
+  f.history.export=()=>{throw Error('whole journal forbidden');};
+  f.api.selected={read:async id=>({id,document:f.docs[0],localOnly:true}),canRead:()=>true,sourceStatus:async()=>({available:true,stale:false,sources:[]})};
+  assert.equal((await f.book.readPage(f.docs[0].wiki_id)).document.wiki_id,f.docs[0].wiki_id);assert.equal(f.book.canRead(f.docs[0]),true);
+  assert.equal((await f.book.sourceStatus(f.docs[0].drafts[0],f.docs[0])).available,true);assert.equal(full,0);
+  f.api.selected.read=async()=>{throw Error('stale selection');};await assert.rejects(f.book.readPage(f.docs[0].wiki_id),/stale/);assert.equal(full,0);
+  f.api.selected.read=async()=>null;await assert.rejects(f.book.readPage(f.docs[0].wiki_id),/explicit full/);assert.equal(full,1);
 });

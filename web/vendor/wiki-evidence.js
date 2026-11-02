@@ -5,9 +5,10 @@ globalThis.NowWikiEvidence=Object.freeze({create(api){
   const check=(v,code='wiki_dependency_unverified')=>{if(!v)throw Error(code);};
   const tuple=doc=>{const a=doc.approvals.at(-1),d=doc.drafts.find(d=>d.id===a?.draft_id);return [a?.id||null,d?.id||null,d?.draft_hash||null];};
   async function action(retained=[]){
-    const ctx={...api.context()},key=api.contextKey(),h=api.history();check(ctx.enabled&&ctx.owner&&h&&h.export()?.schema_version===1&&!h.status().unsupported&&!h.suspended());
+    const ctx={...api.context()},key=api.contextKey(),h=api.history();check(ctx.enabled&&ctx.owner&&h&&!h.status().unsupported&&!h.suspended());
+    const root=api.readOnly===true?NowWikiReadSet.root(h,NowNoteHistory.key(ctx)):h.export();check(root?.schema_version===1);
     const active=()=>check(key===api.contextKey()&&api.context().enabled&&api.history()===h,'wiki_context_changed');
-    const roots=[h.export(),...retained,...(await api.retainedRoots?.()||[])];active();const all=[],queue=[...roots],seen=new WeakSet();
+    const roots=[root,...retained,...(await api.retainedRoots?.()||[])];active();const all=[],queue=[...roots],seen=new WeakSet();
     while(queue.length){const value=queue.shift();if(value==null)continue;check(typeof value==='object'&&value.contexts&&typeof value.contexts==='object');if(seen.has(value))continue;seen.add(value);all.push(value);queue.push(...(value.recovery_archives||[]));}
     return {ctx,h,active,roots:all,account:NowNoteHistory.key(ctx),docs:new Map(),notes:new Map(),wikis:new Map(),versions:new Set(),producerInstances:new Set(),
       provenance:new Map(),producerReads:new Map(),serverHistories:new Map()};

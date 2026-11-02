@@ -12,6 +12,7 @@ const mainLibraries = ['marked.umd.js','purify.min.js','note-blocks.js','documen
 const wikiLibraries = ['cytoscape.min.js','wiki-graph-ui.js','wiki-ui.js'];
 mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js','journal-writes.js','deferred-history.js','history-backup.js');
 mainLibraries.push('wiki-index-reader.js');
+mainLibraries.push('wiki-read-set.js','wiki-selected-page.js');
 
 export async function buildRuntimeBundles() {
   const read = async names => Promise.all(names.map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));

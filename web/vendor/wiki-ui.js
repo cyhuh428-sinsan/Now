@@ -57,6 +57,7 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
   const draftText=draft=>[draft.title,draft.topic,...draft.sections.map(s=>s.title+'\n'+s.markdown),
     ...draft.citations.map(c=>'> '+c.quote)].join('\n\n');
   function close(){
+    api.releaseReadPage?.();
     lintOriginal=null;
     semanticReview=false;
     lintMode=false;lintScope='all';lintSnapshot=null;lintReport=null;lintSelection=null;lintIds.clear();
@@ -528,7 +529,7 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
         if(!['build','browse'].includes(workspaceView))workspaceView='browse';
         choose(workspaceView==='build'?doc.drafts.at(-1).id:preferred(doc).id);comparing=false;
         message='';
-      });
+      },{hydrate:!row.deferred||!api.readPage});
       const entry=node('div',undefined,'wiki-entry');entry.append(item);
       if(!readOnly&&api.trash&&api.restoreWiki){
         const controls=node('div',undefined,'wiki-entry-controls'),id=row.id||row.document?.wiki_id;entry.dataset.wikiId=id;

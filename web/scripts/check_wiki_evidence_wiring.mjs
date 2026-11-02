@@ -11,6 +11,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const server={},reads=[];
   const box=vm.createContext({
     NowWikiServerAccess:{create:api=>{serverApi=api;return server;}},
+    NowWikiSelectedPage:{create:()=>({})},openWikiReadSet:()=>{},
     NowNoteWikiSources:{create:()=>({})},NowWikiLifecycle:{create:()=>({})},
     createWikiNotebook:api=>{bookApi=api;return {};},
     createWikiIngestNotebook:api=>{ingestApi=api;return {};},

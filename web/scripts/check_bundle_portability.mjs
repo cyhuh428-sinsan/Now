@@ -17,6 +17,7 @@ files.push('web/vendor/journal-writes.js','desktop/app/journal-writes.js');
 files.push('web/vendor/deferred-history.js');
 files.push('web/vendor/history-backup.js');
 files.push('web/vendor/wiki-index-reader.js');
+files.push('web/vendor/wiki-read-set.js','web/vendor/wiki-selected-page.js');
 function run(command,args,cwd){const result=spawnSync(command,args,{cwd,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||result.stdout);return result.stdout;}
 try{
   for(const autocrlf of ['false','true']){
