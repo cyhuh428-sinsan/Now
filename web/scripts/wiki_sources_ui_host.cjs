@@ -170,6 +170,23 @@ app.whenReady().then(async()=>{
       return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupDocumentWise:q.backupDocumentWise,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
+    productSave.metadataScoped=await run(`(async()=>{
+      const q=qaProductSave,before=await q.backend.open(),next=structuredClone(before.value);
+      const metadata={one:{state:'committed',body:'QA_UNREAD_OPERATION'}};next.contexts[q.account].wiki_ingest_operations=metadata;
+      await q.backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred()||noteHistory.wikiIndex()!==null)throw Error('metadata_preview_wiki_gate');
+      const all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;
+      IDBObjectStore.prototype.getAll=function(){throw Error('metadata_edit_full_scan');};
+      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('wiki_ingest_operations')&&key[1]?.includes('"one"'))throw Error('metadata_operation_body_read');return get.call(this,key);};
+      try{await noteHistory.edit({...next.contexts[q.account].notes['qa-save-a'].draft,content:'METADATA_SCOPED_EDIT'});await noteHistory.seal('qa-save-a');await noteHistory.idle();}
+      finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      if(!noteHistory.deferred()||noteHistory.failure())throw Error('metadata_edit_whole_materialized');
+      const actual=(await q.backend.open()).value.contexts[q.account];
+      if(JSON.stringify(actual.wiki_ingest_operations)!==JSON.stringify(metadata)||actual.notes['qa-save-a'].draft.content!=='METADATA_SCOPED_EDIT'
+        ||actual.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('metadata_edit_lost_data');
+      return true;
+    })()`);
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});delete globalThis.qaProductSave;})()`);
     const selectiveRead=await run(`(async()=>{

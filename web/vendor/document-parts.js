@@ -117,7 +117,10 @@
     const notes={},wikiIds=[];
     if(!contexts.has(account))return {projection:'journal_current_v1',supported:true,account,notes};
     const bucket=yield* object(['contexts',account]);
-    if(!bucket||[...bucket.keys()].join(',')!=='notes')return unavailable();
+    const wikiMetadata=['wiki_lifecycle','wiki_ingest_operations'];
+    if(!bucket||!bucket.has('notes')||[...bucket.keys()].some(key=>key!=='notes'&&!wikiMetadata.includes(key)))return unavailable();
+    for(const key of wikiMetadata)if(bucket.has(key)&&!(yield* object(['contexts',account,key])))return unavailable();
+    const wikiIndexSupported=bucket.size===1;
     const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
     const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox']);
     for(const id of entries.keys()){
@@ -138,7 +141,7 @@
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
   }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');

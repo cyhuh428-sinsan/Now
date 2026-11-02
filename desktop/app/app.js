@@ -398,7 +398,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const notes={},wikiIds=[];
     if(!contexts.has(account))return {projection:'journal_current_v1',supported:true,account,notes};
     const bucket=yield* object(['contexts',account]);
-    if(!bucket||[...bucket.keys()].join(',')!=='notes')return unavailable();
+    const wikiMetadata=['wiki_lifecycle','wiki_ingest_operations'];
+    if(!bucket||!bucket.has('notes')||[...bucket.keys()].some(key=>key!=='notes'&&!wikiMetadata.includes(key)))return unavailable();
+    for(const key of wikiMetadata)if(bucket.has(key)&&!(yield* object(['contexts',account,key])))return unavailable();
+    const wikiIndexSupported=bucket.size===1;
     const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
     const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox']);
     for(const id of entries.keys()){
@@ -419,7 +422,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
   }
   function* replaceSteps(path,expected,next){
     if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
@@ -770,7 +773,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
-      wikiIndex:()=>visible()&&preview&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
       archive(read){
         if(!preview||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();

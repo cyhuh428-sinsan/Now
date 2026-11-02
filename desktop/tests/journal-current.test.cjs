@@ -34,6 +34,16 @@ test('current preview is explicitly unavailable for protection, unknown metadata
   assert.equal(read({schema_version:1,contexts:{}},JSON.stringify(['',''])).value.supported,true);
   assert.equal(read(null).value.supported,true);
 });
+
+test('known Wiki metadata does not force normal-note histories into memory or authorize a lightweight Wiki view',()=>{
+  const root=fixture();
+  root.contexts[account].wiki_lifecycle={one:{pending:null,version:1,deleted_at:null,local_only:true}};
+  root.contexts[account].wiki_ingest_operations={one:{state:'committed',body:'UNREAD_WIKI_OPERATION_BODY'}};
+  const result=read(root);assert.equal(result.value.supported,true);assert.equal(result.value.notes.a.draft.content,'current a');
+  assert.equal(result.value.wikiIndexSupported,false);assert.equal(JSON.stringify(result.value).includes('UNREAD_WIKI_OPERATION_BODY'),false);
+  assert.ok(result.ids.every(id=>!id.includes('"wiki_lifecycle","one"')&&!id.includes('"wiki_ingest_operations","one"')));
+  root.contexts[account].future_metadata={unknown:true};assert.equal(read(root).value.supported,false);
+});
 test('current preview rejects broken selected structure and preserves absent-account distinction',()=>{
   const root=fixture();root.contexts[account].notes.a.draft.owner_id='bob';assert.equal(read(root).value.supported,false);
   assert.deepEqual(read({schema_version:1,contexts:{}}).value.notes,{});

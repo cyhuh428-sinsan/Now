@@ -30,6 +30,7 @@ test('readonly Wiki index exposes only IDs and expires with the deferred account
   const index=f.store.wikiIndex();assert.deepEqual(index.ids,['wiki:synthetic']);assert.equal(index.stamp,'one');
   index.ids.push('mutated');assert.deepEqual(f.store.wikiIndex().ids,['wiki:synthetic']);
   assert.equal(f.loads(),0);f.setScope('bob');assert.equal(f.store.wikiIndex(),null);
+  const g=fixture();g.store.reset({preview:{...g.preview,wikiIndexSupported:false}});assert.equal(g.store.wikiIndex(),null);
 });
 
 test('archive uses a fixed snapshot without materializing history and invalidates late account results',async()=>{

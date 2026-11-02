@@ -75,7 +75,7 @@
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
-      wikiIndex:()=>visible()&&preview&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
+      wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
       archive(read){
         if(!preview||full||loading)return Promise.resolve(null);
         const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&visible();
