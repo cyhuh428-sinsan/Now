@@ -7,11 +7,11 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const start=source.indexOf('function initializeWikiNotebook(){');
   const end=source.indexOf('\nasync function initializeApp()',start);
   assert.ok(start>=0&&end>start);
-  let serverApi,bookApi,ingestApi,queryApi,uiApi,runtimeLoads=0;
+  let serverApi,bookApi,ingestApi,queryApi,uiApi,selectedApi,runtimeLoads=0;
   const server={},reads=[];
   const box=vm.createContext({
     NowWikiServerAccess:{create:api=>{serverApi=api;return server;}},
-    NowWikiSelectedPage:{create:()=>({})},openWikiReadSet:()=>{},
+    NowWikiSelectedPage:{create:api=>{selectedApi=api;return {};}},openWikiReadSet:()=>{},
     NowNoteWikiSources:{create:()=>({})},NowWikiLifecycle:{create:()=>({})},
     createWikiNotebook:api=>{bookApi=api;return {};},
     createWikiIngestNotebook:api=>{ingestApi=api;return {};},
@@ -30,6 +30,10 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   assert.equal(typeof serverApi.readWiki,'function',file+' must bind the existing Wiki read endpoint');
   await serverApi.readWiki('exact id');assert.deepEqual(reads,['/exact%20id']);
   assert.equal(bookApi.server,server,file+' reader must inspect pinned server evidence');
+  assert.equal(selectedApi.server,server,file+' selected reader must use the same server evidence verifier');
+  assert.equal(typeof selectedApi.readCurrent,'function',file+' selected reader must bind current document lookup');
+  assert.equal(typeof selectedApi.inspectLifecycle,'function',file+' selected reader must inspect lifecycle without persistence');
+  await selectedApi.readRemote('selected id');assert.equal(reads.at(-1),'/selected%20id');
   assert.equal(typeof bookApi.readOperations,'function',file+' graph must consume validated original operation bindings');
   assert.equal(ingestApi.source,box.wikiSourceNote,file+' ingest must resolve account-bound local evidence');
   assert.equal(typeof ingestApi.lintSnapshot,'function',file+' report save must re-read the same account-bound Lint inputs');

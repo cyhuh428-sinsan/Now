@@ -9901,7 +9901,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
 })();
 
 ;
-/* Local-only detail proofs retain a selected graph, never a writable partial journal. */
+/* Detail proofs retain a selected graph, never a writable partial journal. */
 (() => {
   'use strict';
   const copy=value=>structuredClone(value),wiki=id=>/^wiki:[0-9a-f-]{36}$/.test(id);
@@ -9927,7 +9927,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
       try{
         if(!wiki('wiki:'+id))throw unsupported();
         set=await api.openSet({active});check();if(!set)return null;
-        const account=NowNoteHistory.key(ctx),ids=new Set(await set.ids()),notes={},operations={},blocked=new Set();check();
+        const account=NowNoteHistory.key(ctx),ids=new Set(await set.ids()),notes={},operations={},blocked=new Set(),remote=new Map();let remoteUsed=false;check();
         for(const operationId of await set.operationIds()){
           const value=await set.operation(operationId);check();
           if(!value.found||!api.inspectOperations)throw unsupported();
@@ -9935,21 +9935,54 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
           Object.defineProperty(operations,operationId,{value:value.value,enumerable:true});
         }
         const lifecycle=NowWikiLifecycle.validateMap(await set.lifecycle());check();
+        const observe=async resources=>{
+          if(!api.inspectLifecycle)throw unsupported();const next=await api.inspectLifecycle(resources,lifecycle);check();
+          Object.assign(lifecycle,next);
+        };
+        const readRemote=async wikiId=>{
+          if(remote.has(wikiId))return remote.get(wikiId);
+          if(!ctx.online||!api.readRemote)throw unsupported();remoteUsed=true;
+          const value=await api.readRemote(wikiId);check();await observe([value.resource]);
+          if(value.artifact?.protected!==false||!value.artifact.document)throw unsupported();
+          remote.set(wikiId,value);return value;
+        };
+        const serverEntry=async local=>{
+          if(!ctx.online||!api.readCurrent)throw unsupported();remoteUsed=true;
+          const resource=wiki(local)?await readRemote(local.slice(5)):null,current=await api.readCurrent(local);check();P.validateSnapshot(current?.snapshot);
+          const note=current.snapshot.note;
+          if(note.owner_id!==ctx.owner||note.local_id!==local)throw Error('위키 원본의 계정·문서 연결이 다릅니다.');
+          if(current.crypto_epoch!==0||current.protection_state!=='legacy'||current.identity_state!=='coherent'||current.crypto_transition
+            ||current.replica_count!==1||note.content.startsWith('NOW_ENCRYPTED_'))throw unsupported();
+          if(resource&&(resource.artifact.head_revision_id!==current.head_revision_id||note.source!=='wiki-artifact'
+            ||P.canonicalJson(resource.artifact.document)!==P.canonicalJson(await W.validateDocument(note.content,ctx))))throw Error('위키 판본이 변경되었습니다. 다시 확인하세요.');
+          check();return {raw:copy(note),draft:copy(note),base:copy(current),revisions:[],outbox:[],receipts:[],localOnly:false,replicaSelected:true,dirty:false};
+        };
         if(blocked.has('wiki:'+id)||lifecycle['wiki:'+id]?.deleted_at||lifecycle['wiki:'+id]?.pending)throw unsupported();
-        const queue=[],queued=new Set(),parsed=new Set();
+        const queue=[],queued=new Set(),parsed=new Set(),origins=new Map();
         const add=local=>{if(!queued.has(local)){queued.add(local);queue.push(local);}};
         const addWiki=wikiId=>{
           add('wiki:'+wikiId);
           for(const local of ids)if(local.startsWith('wiki-proposal:')&&local.endsWith(':'+wikiId))add(local);
         };
-        const addRef=ref=>{if(ref.origin!=='local')throw unsupported();if(ref.kind==='wiki')addWiki(ref.wiki_id);else add(ref.note_ref.local_id);};
+        const addRef=ref=>{const local=ref.kind==='wiki'?'wiki:'+ref.wiki_id:ref.note_ref.local_id;
+          if(ref.origin==='server'){if(!ctx.online||!api.server)throw unsupported();remoteUsed=true;origins.set(local,'server');}
+          if(ref.kind==='wiki')addWiki(ref.wiki_id);else add(local);};
         addWiki(id);
         while(queue.length){
           const local=queue.shift();
-          if(!wiki(local)&&!local.startsWith('wiki-proposal:')&&!local.startsWith('wiki-source:')&&api.source(local)?.origin==='server')throw unsupported();
-          if(!ids.has(local)){if(wiki(local)||local.startsWith('wiki-source:')||local.startsWith('wiki-proposal:'))throw unsupported();continue;}
-          const selected=await set.entry(local);check();if(!selected.found||selected.value.localOnly!==true)throw unsupported();
-          const entry=selected.value;Object.defineProperty(notes,local,{value:entry,enumerable:true});
+          let entry;
+          if(!ids.has(local)){
+            if((local==='wiki:'+id||origins.get(local)==='server')&&!local.startsWith('wiki-proposal:'))entry=await serverEntry(local);
+            else{if(wiki(local)||local.startsWith('wiki-source:')||local.startsWith('wiki-proposal:'))throw unsupported();continue;}
+          }else{const selected=await set.entry(local);check();if(!selected.found)throw unsupported();entry=selected.value;}
+          if(entry.localOnly!==true){
+            if(!ctx.online||!api.server||entry.dirty||entry.outbox.length||entry.conflict||entry.needsBaseline||entry.replicaSelected===false)throw unsupported();
+            remoteUsed=true;if(wiki(local))await readRemote(local.slice(5));
+          }else if(wiki(local)&&origins.get(local)==='server')await readRemote(local.slice(5));
+          if(!wiki(local)&&!local.startsWith('wiki-proposal:')&&!local.startsWith('wiki-source:')){
+            const value=api.source(local);if(value&&value.content!==entry.draft.content)throw unsupported();
+          }
+          check();Object.defineProperty(notes,local,{value:entry,enumerable:true});
           if(!wiki(local)&&!local.startsWith('wiki-proposal:'))continue;
           const expected=wiki(local)?local.slice(5):local.slice(-36);
           for(const input of [entry.draft,entry.raw,...entry.revisions.map(row=>row.snapshot.note)]){
@@ -9959,9 +9992,8 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
             for(const draft of document.drafts)for(const ref of W.evidenceOf(draft))addRef(ref.kind?ref:{...ref,kind:'note'});
           }
           for(const operation of Object.values(operations))if(operation.documents.some(value=>value.wiki_id===expected)){
-            if(operation.remote)throw unsupported();
             for(const ref of operation.inputs)addRef(ref);
-            for(const output of operation.documents)addWiki(output.wiki_id);
+            for(const output of operation.documents)if(!operation.remote||ids.has('wiki:'+output.wiki_id))addWiki(output.wiki_id);
           }
         }
         check();const root={schema_version:1,contexts:{[account]:{notes,wiki_lifecycle:lifecycle,wiki_ingest_operations:operations}}};
@@ -9970,14 +10002,15 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
           status:()=>({unsupported:false}),suspended:()=>!active(),view,
           manages:local=>Boolean(get(local)),blocked:local=>blocked.has(local),
           currentView:local=>{const item=get(local);return item?copy({projection:'current_v1',raw:item.raw,draft:item.draft,base:{crypto_epoch:item.base.crypto_epoch,head_revision_id:item.base.head_revision_id},localOnly:item.localOnly,pending:item.outbox.length,dirty:item.dirty}):null;}};
-        const localContext=()=>({...ctx,online:false});
+        const selectedContext=()=>({...ctx,online:remoteUsed?ctx.online:false});
         const source=local=>{
           const item=get(local);
-          if(local.startsWith('wiki-source:'))return item?{owner:ctx.owner,localId:local,status:'ok',origin:'local',title:item.draft.title,content:item.draft.content,protected:false,revisionId:null,headVersion:0}:null;
-          const value=api.source(local);return value?.origin==='local'&&(!item||item.draft.content===value.content)?value:null;
+          if(local.startsWith('wiki-source:'))return item?{owner:ctx.owner,localId:local,status:'ok',origin:item.localOnly?'local':'server',title:item.draft.title,content:item.draft.content,protected:false,revisionId:null,headVersion:0}:null;
+          const value=api.source(local);return !item||item.draft.content===value?.content?value:null;
         };
-        const selectedApi={...api,selected:undefined,readOnly:true,selectedWikiId:id,context:localContext,history:()=>history,source,
-          lifecycle:{state:local=>copy(lifecycle[local]||null),blocked:local=>Boolean(lifecycle[local]?.deleted_at||lifecycle[local]?.pending)},
+        const selectedApi={...api,selected:undefined,readOnly:true,selectedWikiId:id,context:selectedContext,history:()=>history,source,
+          lifecycle:{state:local=>copy(lifecycle[local]||null),blocked:local=>Boolean(lifecycle[local]?.deleted_at||lifecycle[local]?.pending),observe},
+          listRemote:async()=>{check();return remote.has(id)?[remote.get(id).resource]:[];},
           readOperations:async()=>copy(Object.values(operations)),retainedRoots:undefined};
         const book=createWikiNotebook(selectedApi),row=await book.readPage(id);check();
         if(!row.document)return row;
@@ -16347,7 +16380,9 @@ function initializeWikiNotebook(){
     },
   });
   const selected=NowWikiSelectedPage.create({context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,source:wikiSourceNote,
-    openSet:openWikiReadSet,inspectOperations:rows=>wikiIngest.inspectOperations(rows)});
+    openSet:openWikiReadSet,inspectOperations:rows=>wikiIngest.inspectOperations(rows),server:wikiServer,
+    readCurrent:id=>noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:id}),
+    readRemote:id=>wikiRead("/"+encodeURIComponent(id)),inspectLifecycle:(resources,stored)=>wikiLifecycle.inspect(resources,stored)});
   const book=createWikiNotebook({selected,
     context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,lifecycle:wikiLifecycle,server:wikiServer,
     source:wikiSourceNote,notes:()=>libraryNotes().filter(n=>wikiSourceNote(n.id)?.status==="ok"),

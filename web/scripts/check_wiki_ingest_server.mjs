@@ -6,7 +6,7 @@ import {spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 const box=vm.createContext({crypto:webcrypto,structuredClone,TextEncoder,TextDecoder,Uint8Array,atob,btoa});
-for(const name of ['note-protection-protocol','note-history-state','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-evidence','wiki-ingest-notebook','wiki-graph'])
+for(const name of ['note-protection-protocol','note-history-state','document-parts','wiki-state','wiki-ingest','wiki-sources','wiki-lifecycle','wiki-notebook','wiki-server-access','wiki-evidence','wiki-ingest-notebook','wiki-graph','wiki-read-set','wiki-selected-page'])
   vm.runInContext(await fs.readFile(new URL('../vendor/'+name+'.js',import.meta.url),'utf8'),box);
 const P=box.NowNoteProtectionProtocol,instance=webcrypto.randomUUID(),sourceId='server-source',revision=webcrypto.randomUUID();
 const ctx={url:'https://synthetic.invalid',owner:'alice',device:'one',auth:'synthetic',enabled:true,online:true};
@@ -90,6 +90,30 @@ assert.equal(history.blocked('wiki:'+plan.plan.pages[0].wiki_id),false);assert.e
     assert.throws(()=>book.inspectOperations(altered),'a forged completion receipt never enables a readable index');
     assert.equal(writes,beforeWrites);assert.equal(posts,beforePosts);
   }finally{history.export=exporter;}
+}
+{
+  const original=history,beforeWrites=writes,beforePosts=posts,originalBytes=JSON.stringify(saved),account=box.NowNoteHistory.key(ctx),target=plan.plan.pages[0].wiki_id;
+  for(const mode of ['cached','absent','foreign-index','foreign-current','dirty']){
+    const value=structuredClone(saved);if(['absent','foreign-current'].includes(mode))delete value.contexts[account].notes['wiki:'+target];
+    if(mode==='dirty')value.contexts[account].notes['wiki:'+target].dirty=true;
+    const physical=vm.runInContext('NowDocumentParts.encode('+JSON.stringify(value)+')',box),stamp='selected-'+mode;
+    const drive=steps=>{let step=steps.next();while(!step.done)step=steps.next(physical.get(step.value));return step.value;};
+    history={deferred:()=>true,wikiIndex:()=>({stamp}),status:()=>({unsupported:false})};
+    const selected=box.NowWikiSelectedPage.create({...api,inspectOperations:rows=>book.inspectOperations(rows),inspectLifecycle:(resources,stored)=>api.lifecycle.inspect(resources,stored),
+      readRemote:async id=>{const row=await api.readRemote(id);if(mode==='foreign-index')row.resource.owner_id='bob';return row;},
+      readCurrent:async id=>{const row=await api.readCurrent(id);if(mode==='foreign-current')row.snapshot.note.owner_id='bob';return row;},
+      openSet:guard=>box.NowWikiReadSet.open({stamp,account,guard,current:async()=>({...drive(box.NowDocumentParts.currentSteps(account)),stamp}),
+        directory:async path=>({...drive(box.NowDocumentParts.selectSteps(path,true)),projection:'path_v1',stamp}),read:async path=>({...drive(box.NowDocumentParts.selectSteps(path)),projection:'path_v1',stamp})})});
+    try{
+      if(mode.startsWith('foreign-')){await assert.rejects(()=>selected.read(target),'foreign provenance must fail without retrying a full read');continue;}
+      const row=await selected.read(target);
+      if(mode==='dirty'){assert.equal(row,null,'unsent edits retain the original full validation gate');continue;}
+      assert.ok(row?.document,'server detail must use only its selected documents, not full materialization');
+      assert.equal(row.document.wiki_id,target);assert.equal(row.localOnly,false);assert.equal(selected.canRead(row.document),true);
+      assert.equal((await selected.sourceStatus(row.document.drafts[0],row.document)).available,true);
+      assert.equal(writes,beforeWrites);assert.equal(posts,beforePosts);assert.equal(JSON.stringify(saved),originalBytes);
+    }finally{selected.release();history=original;assert.equal(writes,beforeWrites);assert.equal(posts,beforePosts);assert.equal(JSON.stringify(saved),originalBytes);}
+  }
 }
 assert.equal(history.view('wiki:'+plan.plan.pages[0].wiki_id).localOnly,false);assert.equal(posts,2);
 assert.equal(box.createWikiIngestNotebook.blocks(history.export(),ctx),false);
