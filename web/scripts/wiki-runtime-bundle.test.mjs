@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import vm from 'node:vm';
+import {webcrypto} from 'node:crypto';
 import * as bundler from './bundle_markdown.mjs';
 
 test('설치형 원장 세션과 공통 저장 정책이 패키지에 포함되고 renderer 정책과 일치',async()=>{
@@ -45,6 +46,8 @@ test('--check 검증은 양쪽 main/chunk의 누락·오래된 내용 거부, CR
     ['desktop/app/app.js', bundles.main + 'desktop();'],
     ['web/wiki-runtime.js', bundles.wiki],
     ['desktop/app/wiki-runtime.js', bundles.wiki],
+    ['web/wiki-core.js',bundles.core],
+    ['desktop/app/wiki-core.js',bundles.core],
   ]);
   const reader = async name => { if (!files.has(name)) throw Error('missing'); return files.get(name); };
   await bundler.checkRuntimeBundles(bundles, reader);
@@ -64,4 +67,13 @@ test('생성된 양쪽 Wiki chunk는 공식 builder 출력과 동일', async () 
     const source = await readFile(new URL(relative, import.meta.url), 'utf8');
     assert.equal(source.replace(/\r\n/g, '\n'), wiki);
   }
+});
+test('독립 Wiki core는 메모 앱 bootstrap 없이 기존 저장·검증·Wiki host를 제공한다',async()=>{
+  const {core}=await bundler.buildRuntimeBundles();assert.equal(typeof core,'string');
+  assert.ok(!core.includes('async function initializeApp()'));
+  const document={currentScript:{src:'https://qa.invalid/wiki-core.js'},createElement(){throw Error('unexpected eager DOM creation');},head:{appendChild(){throw Error('unexpected eager script load');}}};
+  const box=vm.createContext({TextEncoder,TextDecoder,Uint8Array,structuredClone,crypto:webcrypto,atob,btoa,URL,location:{href:'https://qa.invalid/wiki/'},document});
+  vm.runInContext('globalThis.window=globalThis;',box);vm.runInContext(core,box);
+  for(const name of ['NowHistoryClient','NowWikiWorkspace','NowWikiReadSet','NowWikiSelectedPage'])assert.equal(typeof box[name]?.create==='function'||typeof box[name]?.open==='function',true,name);
+  for(const relative of ['../wiki-core.js','../../desktop/app/wiki-core.js'])assert.equal((await readFile(new URL(relative,import.meta.url),'utf8')).replace(/\r\n/g,'\n'),core);
 });

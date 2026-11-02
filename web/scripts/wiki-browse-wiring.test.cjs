@@ -13,5 +13,7 @@ for(const surface of ['web','desktop/app'])test(surface+': browse prepares only 
     if(mode==='stale')await assert.rejects(vm.runInContext('prepareWikiBrowse()',box),/stale/);else await vm.runInContext('prepareWikiBrowse()',box);
     assert.equal(full,mode==='pending'?1:0);assert.ok(reads>0);
   }
-  assert.ok(source.includes("args[0]==='browse'?prepareWikiBrowse():noteHistory.ensure()"));
+  assert.ok(source.includes('prepareBrowse:prepareWikiBrowse'),'product must pass its guarded browse preparation to the shared host');
+  const workspace=fs.readFileSync(path.resolve(__dirname,'../vendor/wiki-workspace.js'),'utf8');
+  assert.ok(workspace.includes("method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure()"),'shared host must preserve browse-only preparation');
 });

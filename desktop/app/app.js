@@ -10048,6 +10048,92 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
   globalThis.NowWikiSelectedPage={create};
 })();
 
+;
+/* Shared history initialization; workspace UI and authentication remain with the host. */
+(() => {
+  'use strict';
+  async function create({backend,context,request,ready,change,storeChange,legacyStrings=false}){
+    const contextKey=()=>{const ctx=context();return JSON.stringify([NowNoteHistory.key(ctx),ctx.auth,ctx.device,ctx.enabled]);};
+    const accountKey=()=>NowNoteHistory.key(context());
+    const normalize=snapshot=>{
+      if(!legacyStrings||typeof snapshot.value!=='string')return snapshot;
+      try{return {...snapshot,value:JSON.parse(snapshot.value),scoped:false};}
+      catch{return {...snapshot,value:{schema_version:'unreadable',raw:snapshot.value},scoped:false};}
+    };
+    const readInitial=async()=>{
+      const bound=contextKey(),guard={active:()=>bound===contextKey()};
+      if(backend.current){
+        try{
+          const preview=await backend.current(accountKey(),guard);
+          if(!guard.active())throw Error('저장 계정이 변경되었습니다.');
+          if(preview.supported&&typeof preview.stamp==='string')return {preview};
+        }catch(error){if(!guard.active())throw error;}
+      }
+      const snapshot=normalize(await backend.open(guard));
+      if(!guard.active())throw Error('저장 계정이 변경되었습니다.');return {snapshot};
+    };
+    const history=NowDeferredHistory.create({initial:await readInitial(),context,contextKey,accountKey,
+      select:backend.select,saveNote:backend.note,readPage:backend.page,request,ready,change,
+      load:async guard=>normalize(await backend.open(guard)),
+      build:opened=>{
+        const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
+        return NowNoteHistory.create({initial:opened.value,context,request,change:storeChange,
+          write:(value,guard)=>writer.write(value,guard),writeNote:(ctx,id,value,guard)=>writer.writeNote(ctx,id,value,guard)});
+      }});
+    return {history,contextKey,accountKey,readInitial,normalize};
+  }
+  globalThis.NowHistoryClient={create};
+})();
+
+;
+/* Workspace assembly shared by memo integration and the independent Wiki entry. */
+(() => {
+  'use strict';
+  function create(api){
+    const {context,contextKey,history,source,notes,readCurrent,readRemote}=api;
+    const server=NowWikiServerAccess.create({context,contextKey,request:api.request,readWiki:readRemote});
+    const sources=NowNoteWikiSources.create({context,contextKey,history,readCurrent});
+    const lifecycle=NowWikiLifecycle.create({context,contextKey,history,
+      read:(_ctx,local)=>readRemote(local.slice(5)),request:api.lifecycleRequest});
+    let ingest;
+    const selected=NowWikiSelectedPage.create({context,contextKey,history,source,server,
+      openSet:api.openSet,inspectOperations:rows=>ingest.inspectOperations(rows),readCurrent,readRemote,
+      inspectLifecycle:(resources,stored)=>lifecycle.inspect(resources,stored)});
+    const book=createWikiNotebook({selected,context,contextKey,history,lifecycle,server,source,notes,readCurrent,
+      listRemote:api.listRemote,readRemote,approveV2:(value,id)=>ingest.approveLocal(value,id),rejectV2:(value,id)=>ingest.rejectLocal(value,id),
+      readOperations:()=>ingest.operations()});
+    ingest=createWikiIngestNotebook({context,contextKey,history,lifecycle,source,viewGeneration:api.viewGeneration,
+      sources,captureNotes:ids=>book.capture(ids),server,lintSnapshot:()=>book.lintSnapshot(),readRemote,
+      sourceSafety:async id=>{
+        const value=source(id),ctx=context();
+        if(!value||value.status!=='ok'||value.protected||value.origin!=='local')
+          throw Error('서버 원본의 lineage·전환 상태를 먼저 확인해야 합니다. 원본은 보존했습니다.');
+        const roots=[history().export()],seen=new WeakSet();
+        while(roots.length){
+          const root=roots.shift();if(seen.has(root))continue;seen.add(root);
+          const item=root.contexts?.[NowNoteHistory.key(ctx)]?.notes?.[id];
+          if(item&&(item.protectionScope||item.base.crypto_epoch!==0||item.raw?.content?.startsWith('NOW_ENCRYPTED_V1:')
+            ||item.draft?.content?.startsWith('NOW_ENCRYPTED_V1:')||item.revisions.some(row=>row.snapshot?.note?.content?.startsWith('NOW_ENCRYPTED_V1:')))
+            ||Object.values(root.protection_operations||{}).some(marker=>marker.scope.owner===ctx.owner&&marker.scope.local_id===id
+              &&marker.scope.url.replace(/\/+$/,'')===ctx.url.replace(/\/+$/,'')))
+            throw Error('보호 이력이 있는 원본은 일괄 적재할 수 없습니다.');
+          roots.push(...(root.recovery_archives||[]));
+        }
+        return {status:'ok',epoch:0,lineage:false,fence:false};
+      }});
+    const view=createLazyWikiView({contextKey,
+      prepare:(method,args)=>method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure(),
+      mount:()=>mountNowWiki({prepare:()=>history().ensure(),...book,sources,ingest,contextKey,
+        connection:api.connection,openProtection:api.openProtection,query:createWikiQueryNotebook({book,context,contextKey}),notes,
+        openSource:ref=>{
+          if(ref.owner_id!==context().owner||!source(ref.local_id))throw Error('현재 계정에서 원문을 사용할 수 없습니다.');
+          view.close();api.openSource(ref);
+        }},api.mountOptions)});
+    return {server,sources,lifecycle,book,ingest,view};
+  }
+  globalThis.NowWikiWorkspace={create};
+})();
+
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
@@ -15973,30 +16059,12 @@ async function historyPersistence() {
 }
 async function initializeNoteHistory() {
   noteHistoryProjectionScope = NowNoteHistory.key(noteHistoryContext());
-  const backend=await historyPersistence(),contextKey=()=>{const c=noteHistoryContext();return JSON.stringify([NowNoteHistory.key(c),c.auth,c.device,c.enabled]);};
-  const normalize=snapshot=>{if(!isDesktopClient()||typeof snapshot.value!=="string")return snapshot;try{return {...snapshot,value:JSON.parse(snapshot.value),scoped:false};}catch{return {...snapshot,value:{schema_version:"unreadable",raw:snapshot.value},scoped:false};}};
-  const accountKey=()=>NowNoteHistory.key(noteHistoryContext());
-  const readInitial=async()=>{
-    const bound=contextKey(),guard={active:()=>bound===contextKey()};
-    if(backend.current){
-      try{const preview=await backend.current(accountKey(),guard);
-        if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");
-        if(preview.supported&&typeof preview.stamp==="string")return {preview};
-      }catch(error){if(!guard.active())throw error;}
-    }
-    const snapshot=normalize(await backend.open(guard));if(!guard.active())throw new Error("저장 계정이 변경되었습니다.");return {snapshot};
-  };
-  noteHistory=NowDeferredHistory.create({initial:await readInitial(),context:noteHistoryContext,contextKey,accountKey,
-    select:backend.select,saveNote:backend.note,readPage:backend.page,request:noteHistoryRequest,
-    ready:finishNoteHistoryBootstrap,
+  const backend=await historyPersistence();
+  const runtime=await NowHistoryClient.create({backend,context:noteHistoryContext,request:noteHistoryRequest,
+    legacyStrings:isDesktopClient(),ready:finishNoteHistoryBootstrap,
     change:error=>{renderSyncStatusIndicator(state.settings.server,"bad");showNotice(error.message,"error");},
-    load:async guard=>normalize(await backend.open(guard)),
-    build:opened=>{
-      const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
-      return NowNoteHistory.create({initial:opened.value,context:noteHistoryContext,request:noteHistoryRequest,
-        change:()=>renderSyncStatusIndicator(state.settings.server,state.settings.server.lastStatus),
-        write:(value,guard)=>writer.write(value,guard),writeNote:(ctx,id,value,guard)=>writer.writeNote(ctx,id,value,guard)});
-    }});
+    storeChange:()=>renderSyncStatusIndicator(state.settings.server,state.settings.server.lastStatus)});
+  const {contextKey,readInitial}=runtime;noteHistory=runtime.history;
   noteHistoryController = {
     lock() { protectionBootstrapPending=true;invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
@@ -16375,14 +16443,15 @@ async function prepareWikiBrowse(){
   if(!prepared)await noteHistory.ensure();
 }
 function initializeWikiNotebook(){
-  const wikiServer=NowWikiServerAccess.create({context:noteHistoryContext,contextKey:wikiViewKey,request:wikiServerRequest,
-    readWiki:id=>wikiRead("/"+encodeURIComponent(id))});
-  wikiSources=NowNoteWikiSources.create({context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,
-    readCurrent:id=>noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:id})});
-  wikiLifecycle=NowWikiLifecycle.create({
-    context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,
-    read:(_ctx,local)=>wikiRead("/"+encodeURIComponent(local.slice(5))),
-    request:async(ctx,local,operation,body)=>{
+  const workspace=NowWikiWorkspace.create({
+    context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,source:wikiSourceNote,
+    notes:()=>libraryNotes().filter(note=>wikiSourceNote(note.id)?.status==="ok"),
+    request:wikiServerRequest,readCurrent:id=>noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:id}),
+    readRemote:id=>wikiRead("/"+encodeURIComponent(id)),listRemote:async options=>(await wikiRead("",options)).items,
+    openSet:openWikiReadSet,prepareBrowse:prepareWikiBrowse,viewGeneration:()=>noteProtectionViewGeneration,
+    connection:wikiConnection,openProtection:openWikiProtection,openSource:ref=>selectTreeNode(ref.local_id),
+    mountOptions:{host:$("#treeEditorPanel"),onActivate:()=>setView("tree")},
+    lifecycleRequest:async(ctx,local,operation,body)=>{
       const key=wikiViewKey();
       if(!ctx.enabled||!ctx.online||!["trash","restore"].includes(operation))throw Error("서버 연결과 위키 상태를 확인하세요.");
       const response=await fetch(ctx.url+"/api/v1/wikis/"+encodeURIComponent(local.slice(5))+"/"+operation,{
@@ -16396,55 +16465,7 @@ function initializeWikiNotebook(){
       return result;
     },
   });
-  const selected=NowWikiSelectedPage.create({context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,source:wikiSourceNote,
-    openSet:openWikiReadSet,inspectOperations:rows=>wikiIngest.inspectOperations(rows),server:wikiServer,
-    readCurrent:id=>noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:id}),
-    readRemote:id=>wikiRead("/"+encodeURIComponent(id)),inspectLifecycle:(resources,stored)=>wikiLifecycle.inspect(resources,stored)});
-  const book=createWikiNotebook({selected,
-    context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,lifecycle:wikiLifecycle,server:wikiServer,
-    source:wikiSourceNote,notes:()=>libraryNotes().filter(n=>wikiSourceNote(n.id)?.status==="ok"),
-    readCurrent:id=>noteHistoryRequest(noteHistoryContext(),"current","GET",{local_id:id}),
-    listRemote:async options=>{const result=await wikiRead("",options);return result.items;},
-    readRemote:id=>wikiRead("/"+encodeURIComponent(id)),
-    approveV2:(value,id)=>wikiIngest.approveLocal(value,id),
-    rejectV2:(value,id)=>wikiIngest.rejectLocal(value,id),
-    readOperations:()=>wikiIngest.operations(),
-  });
-  wikiNotebook=book;
-  wikiIngest=createWikiIngestNotebook({
-    context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,lifecycle:wikiLifecycle,source:wikiSourceNote,
-    viewGeneration:()=>noteProtectionViewGeneration,sources:wikiSources,captureNotes:ids=>book.capture(ids),server:wikiServer,
-    lintSnapshot:()=>book.lintSnapshot(),
-    readRemote:id=>wikiRead("/"+encodeURIComponent(id)),
-    sourceSafety:async id=>{
-      const source=wikiSourceNote(id),ctx=noteHistoryContext();
-      if(!source||source.status!=="ok"||source.protected||source.origin!=="local")
-        throw Error("서버 원본의 lineage·전환 상태를 먼저 확인해야 합니다. 원본은 보존했습니다.");
-      const roots=[noteHistory.export()],seen=new WeakSet();
-      while(roots.length){
-        const root=roots.shift();if(seen.has(root))continue;seen.add(root);
-        const item=root.contexts?.[NowNoteHistory.key(ctx)]?.notes?.[id];
-        if(item&&(item.protectionScope||item.base.crypto_epoch!==0||item.raw?.content?.startsWith("NOW_ENCRYPTED_V1:")
-          ||item.draft?.content?.startsWith("NOW_ENCRYPTED_V1:")||item.revisions.some(r=>r.snapshot?.note?.content?.startsWith("NOW_ENCRYPTED_V1:")))
-          ||Object.values(root.protection_operations||{}).some(m=>m.scope.owner===ctx.owner&&m.scope.local_id===id
-            &&m.scope.url.replace(/\/+$/,"")===ctx.url.replace(/\/+$/,"")))
-          throw Error("보호 이력이 있는 원본은 일괄 적재할 수 없습니다.");
-        roots.push(...(root.recovery_archives||[]));
-      }
-      return {status:"ok",epoch:0,lineage:false,fence:false};
-    },
-  });
-  wikiUI=createLazyWikiView({contextKey:wikiViewKey,prepare:(method,args)=>method==='open'&&args[0]==='browse'?prepareWikiBrowse():noteHistory.ensure(),mount:()=>mountNowWiki({
-    prepare:()=>noteHistory.ensure(),
-    ...book,sources:wikiSources,ingest:wikiIngest,contextKey:wikiViewKey,connection:wikiConnection,openProtection:openWikiProtection,
-    query:createWikiQueryNotebook({book,context:noteHistoryContext,contextKey:wikiViewKey}),
-    notes:()=>libraryNotes().filter(n=>wikiSourceNote(n.id)?.status==="ok"),
-    openSource:ref=>{
-      if(ref.owner_id!==noteHistoryContext().owner||!wikiSourceNote(ref.local_id))
-        throw new Error("현재 계정에서 원문을 사용할 수 없습니다.");
-      wikiUI.close();selectTreeNode(ref.local_id);
-    },
-  },{host:$("#treeEditorPanel"),onActivate:()=>setView("tree")})});
+  wikiSources=workspace.sources;wikiLifecycle=workspace.lifecycle;wikiNotebook=workspace.book;wikiIngest=workspace.ingest;wikiUI=workspace.view;
   for(const button of document.querySelectorAll("#wikiActionGroup [data-wiki-view]")){
     button.addEventListener("click",()=>{
       if(isDesktopClient()&&window.nownoteDesktop.openWorkspace&&desktopStorageInfo?.workspaces?.includes('wiki')&&new URLSearchParams(location.search).get('workspace')!=='wiki'){
