@@ -122,6 +122,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
     protectionStorageAdapters:()=>[{read:async()=>clone(value)}],wikiNotebook:{protectionDependencies:async()=>{proofCalls++;if(mutate)value.synthetic++;return [];}}});
   vm.runInContext('globalThis.preflight='+sourceText.slice(start+'preflight: '.length,end)+'};',sandbox);
   await sandbox.preflight({local_id:'synthetic'});assert.equal(proofCalls,1);
+  value.optional=undefined;await sandbox.preflight({local_id:'synthetic'});
   mutate=true;await assert.rejects(()=>sandbox.preflight({local_id:'synthetic'}),/보관 사본/);
 }
 console.log('Wiki protection preflight: actual local Ingest/Query journals, unapproved derived draft, full dependency order, missing provenance/pending/damaged/foreign fail closed and zero writes PASS');

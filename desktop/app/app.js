@@ -14588,7 +14588,7 @@ function initializeNoteProtection() {
       const roots=[],stores=protectionStorageAdapters();
       for(const store of stores)roots.push(await store.read());
       const dependencies=await wikiNotebook.protectionDependencies(roots,scope,scope.local_id);
-      for(let i=0;i<stores.length;i++)if(NowNoteProtectionProtocol.canonicalJson(roots[i])!==NowNoteProtectionProtocol.canonicalJson(await stores[i].read()))
+      for(let i=0;i<stores.length;i++)if(JSON.stringify(roots[i])!==JSON.stringify(await stores[i].read()))
         throw new Error("검사 중 보관 사본이 변경되었습니다. 다시 확인하세요.");
       if(dependencies.length)throw new Error("관련 위키 "+dependencies.length+"개를 먼저 전체 보호하세요. 원문은 변경하지 않았습니다.");
     },
