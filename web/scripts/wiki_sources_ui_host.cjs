@@ -47,10 +47,21 @@ app.whenReady().then(async()=>{
         ||JSON.stringify(projection).includes('UNREAD_HISTORY')||JSON.stringify(projection).includes('FOREIGN_BODY'))throw Error('path_projection');
       let partial=false;try{await store.write(projection,{lost:true});}catch{partial=true;}
       if(!partial||await store.read()!==raw)throw Error('path_partial_overwrite');
+      const a=make(),b=make(),one=(await a.readPath(['contexts','A','notes','one'])).value,two=(await b.readPath(['contexts','A','notes','two'])).value;
+      IDBObjectStore.prototype.getAll=function(){throw Error('path_write_full_scan');};
+      try{
+        await a.writePath(['contexts','A','notes','one'],one,{...one,draft:{content:'SELECTED_EDIT'}});
+        await b.writePath(['contexts','A','notes','two'],two,{body:'OTHER_EDIT'});
+        let stale=false;try{await b.writePath(['contexts','A','notes','one'],one,{draft:{content:'STALE'}});}catch{stale=true;}
+        if(!stale)throw Error('path_write_stale');
+      }finally{IDBObjectStore.prototype.getAll=all;}
+      const updated=JSON.parse(await store.read());
+      if(updated.contexts.A.notes.one.draft.content!=='SELECTED_EDIT'||updated.contexts.A.notes.two.body!=='OTHER_EDIT'
+        ||updated.contexts.A.notes.one.revisions[0].body!=='UNREAD_HISTORY'||updated.contexts.B.body!=='FOREIGN_BODY')throw Error('path_write_lost_sibling_history');
       localStorage.setItem(key,raw+' ');let divergent=false;
       try{await store.readPath(['contexts','A']);}catch{divergent=true;}finally{localStorage.removeItem(key);}
       if(!divergent)throw Error('path_legacy_divergence');
-      return {selected:true,wholeScan:false,partialOverwrite:false,legacyMismatchBlocked:true};
+      return {selected:true,wholeScan:false,partialOverwrite:false,legacyMismatchBlocked:true,scopedWrite:true,staleWriteRejected:true,siblingsPreserved:true};
     })()`);
     if(process.env.NOWNOTE_LAZY_WIKI_QA==='1'){
       if(!await run(`typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]')`))throw Error('wiki_runtime_eager_startup');

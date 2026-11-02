@@ -374,7 +374,23 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     while(!step.done)step=steps.next(read(step.value));
     return step.value;
   }
-  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select};
+  function* replaceSteps(path,expected,next){
+    if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
+    path=[...path];
+    const before=new Map(),reader=selectSteps(path);let step=reader.next();
+    while(!step.done){const id=step.value,value=yield id;before.set(id,value);step=reader.next(value);}
+    if(!step.value.found||JSON.stringify(step.value.value)!==JSON.stringify(expected))throw Error('Document path conflict');
+    const id=JSON.stringify(path),prefix=id.slice(0,-1)+',',parent=JSON.stringify(path.slice(0,-1));
+    const rebase=descriptor=>Object.hasOwn(descriptor,'value')?{value:descriptor.value}:{ref:JSON.stringify([...path,...JSON.parse(descriptor.ref)])};
+    const encoded=encode(next),after=new Map();
+    for(const [key,part]of encoded)if(key!=='$root')after.set(JSON.stringify([...path,...JSON.parse(key)]),
+      {type:part.type,entries:part.entries.map(([field,value])=>[field,rebase(value)])});
+    const container=before.get(parent);
+    after.set(parent,{type:container.type,entries:container.entries.map(([field,value])=>[field,field===path.at(-1)?rebase(encoded.get('$root')):value])});
+    const old=new Map([...before].filter(([key])=>key===parent||key===id||key.startsWith(prefix)));
+    return {changes:delta(old,after),range:{id,prefix,ids:[...old.keys()].filter(key=>key!==parent).sort()}};
+  }
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();
 
@@ -433,23 +449,25 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    transaction.readPath=async function(path,guard,checkMetadata=()=>{}){
-      const steps=NowDocumentParts.selectSteps(path);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null){
+      const steps=patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
         let tx,error,result;
         try{
-          tx=db.transaction(['journals','documents'],'readonly');
+          tx=db.transaction(['journals','documents'],patch?'readwrite':'readonly',patch?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document read aborted'));
           tx.onerror=()=>{error=Error('Document read failed');};
-          tx.oncomplete=()=>{try{active();resolve(result);}catch(e){reject(e);}};
+          tx.oncomplete=()=>{if(patch)cached=null;try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
+          if(patch&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const metadata=journals.get(key);
           metadata.onsuccess=()=>{
             try{
               active();const physical=metadata.result;
               if(physical===undefined){
+                if(patch)throw Error('Document path conflict');
                 checkMetadata(undefined);
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
@@ -460,8 +478,32 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               }
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
               checkMetadata(physical.row);
+              function apply(plan){
+                const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
+                keys.onsuccess=()=>{
+                  try{
+                    active();
+                    const exact=documents.getKey([key,range.id]);
+                    exact.onsuccess=()=>{try{
+                      active();const ids=keys.result.map(value=>{
+                        if(!Array.isArray(value)||value.length!==2||value[0]!==key||typeof value[1]!=='string'||!value[1].startsWith(range.prefix))throw Error('Invalid document range');
+                        return value[1];
+                      });
+                      if(exact.result!==undefined)ids.push(range.id);
+                      if(JSON.stringify(ids.sort())!==JSON.stringify(range.ids))throw Error('Document parts conflict');
+                      checkMetadata(physical.row);
+                      for(const change of plan.changes){
+                        if(change.remove)documents.delete([key,change.id]);else documents.put({id:change.id,value:change.value},[key,change.id]);
+                      }
+                      const stamp=plan.changes.length?crypto.randomUUID():physical.stamp;
+                      if(plan.changes.length)journals.put({...physical,stamp},key);
+                      result={projection:'path_write_v1',stamp,partsWritten:plan.changes.length};
+                    }catch(e){fail(e);}};
+                  }catch(e){fail(e);}
+                };
+              }
               function next(){
-                if(step.done){result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
+                if(step.done){if(patch)apply(step.value);else result={projection:'path_v1',stamp:physical.stamp,...step.value};return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
                   active();const row=request.result;
@@ -479,7 +521,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           };
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
-    };
+    }
+    transaction.readPath=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata);
+    transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,
+      {expected:structuredClone(expected),next:structuredClone(next)});
     return transaction;
   }
   globalThis.NowDocumentTransactions={create};
@@ -1488,9 +1533,8 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       }
       unchanged();return {row,raw};
     }
-    return {
-      read: () => lock(async()=> (await settled()).row.value),
-      readPath: (path,guard) => lock(async()=>{
+    function selective(action,guard){
+      return lock(async()=>{
         active(guard);
         // Retained legacy cannot be integrity-checked without loading its whole body.
         // Keep that profile on the established full-read path until migration is verified.
@@ -1502,15 +1546,24 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         };
         unchanged();const legacyHash=await hash(null);
         unchanged();
-        const result=await transaction.readPath(path,guard,metadata=>{
+        const result=await action(metadata=>{
           unchanged();
           if(metadata===undefined)return;
           if(!metadata||Object.keys(metadata).sort().join(',')!=='legacy_hash,redo,schema_version')throw fail();
           const row=validate({...metadata,value:null});
           if(row.legacy_hash!==legacyHash)throw fail();
         });
-        unchanged();return result;
-      }),
+        try{unchanged();}catch(error){if(result?.projection==='path_write_v1'&&result.partsWritten>0)error.committed=true;throw error;}
+        return result;
+      });
+    }
+    return {
+      read: () => lock(async()=> (await settled()).row.value),
+      readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
+      writePath(path,expected,next,guard){
+        const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
+        return selective(check=>transaction.writePath(selection,before,after,guard,check),guard);
+      },
       write: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(row.value),expected))throw fail();

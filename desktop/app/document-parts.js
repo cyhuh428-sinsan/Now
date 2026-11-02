@@ -93,6 +93,22 @@
     while(!step.done)step=steps.next(read(step.value));
     return step.value;
   }
-  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select};
+  function* replaceSteps(path,expected,next){
+    if(!Array.isArray(path)||!path.length||path.some(key=>typeof key!=='string'))throw Error('A nonempty document path is required');
+    path=[...path];
+    const before=new Map(),reader=selectSteps(path);let step=reader.next();
+    while(!step.done){const id=step.value,value=yield id;before.set(id,value);step=reader.next(value);}
+    if(!step.value.found||JSON.stringify(step.value.value)!==JSON.stringify(expected))throw Error('Document path conflict');
+    const id=JSON.stringify(path),prefix=id.slice(0,-1)+',',parent=JSON.stringify(path.slice(0,-1));
+    const rebase=descriptor=>Object.hasOwn(descriptor,'value')?{value:descriptor.value}:{ref:JSON.stringify([...path,...JSON.parse(descriptor.ref)])};
+    const encoded=encode(next),after=new Map();
+    for(const [key,part]of encoded)if(key!=='$root')after.set(JSON.stringify([...path,...JSON.parse(key)]),
+      {type:part.type,entries:part.entries.map(([field,value])=>[field,rebase(value)])});
+    const container=before.get(parent);
+    after.set(parent,{type:container.type,entries:container.entries.map(([field,value])=>[field,field===path.at(-1)?rebase(encoded.get('$root')):value])});
+    const old=new Map([...before].filter(([key])=>key===parent||key===id||key.startsWith(prefix)));
+    return {changes:delta(old,after),range:{id,prefix,ids:[...old.keys()].filter(key=>key!==parent).sort()}};
+  }
+  globalThis.NowDocumentParts={encode,decode,delta,selectSteps,select,replaceSteps};
   if(typeof module!=='undefined'&&module.exports)module.exports=globalThis.NowDocumentParts;
 })();

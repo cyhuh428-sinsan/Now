@@ -24,6 +24,23 @@ function createPartitionedStore(filename){
         ?parts.select(path,id=>store.read(key,id)?.value):{found:false})}));
     },
     write(key,value,expected){return this.commit([{key,value,expected}]);},
+    writePath(key,path,expected,value){
+      const plan=store.snapshot(()=>{
+        const checks=[],steps=parts.replaceSteps(path,expected,value);let step=steps.next();
+        while(!step.done){
+          const id=step.value,row=store.read(key,id);
+          if(!row)throw Error('Missing document part');
+          checks.push({scope:key,id,...row});step=steps.next(row.value);
+        }
+        return {...step.value,checks};
+      });
+      const actions=plan.changes.map(change=>({scope:key,id:change.id,kind:change.remove?'remove':'put',value:change.value,
+        expectedVersion:plan.checks.find(row=>row.id===change.id)?.version||0}));
+      try{
+        store.commit(actions,{checks:plan.checks,ranges:[{scope:key,...plan.range}]});
+        return {projection:'path_write_v1',partsWritten:actions.length,bytesWritten:Buffer.byteLength(JSON.stringify(actions))};
+      }finally{cache.clear();}
+    },
     commit(updates){
       if(!Array.isArray(updates)||new Set(updates.map(item=>item.key)).size!==updates.length)throw Error('Invalid storage transaction');
       const pending=[],actions=[];

@@ -127,9 +127,8 @@
       }
       unchanged();return {row,raw};
     }
-    return {
-      read: () => lock(async()=> (await settled()).row.value),
-      readPath: (path,guard) => lock(async()=>{
+    function selective(action,guard){
+      return lock(async()=>{
         active(guard);
         // Retained legacy cannot be integrity-checked without loading its whole body.
         // Keep that profile on the established full-read path until migration is verified.
@@ -141,15 +140,24 @@
         };
         unchanged();const legacyHash=await hash(null);
         unchanged();
-        const result=await transaction.readPath(path,guard,metadata=>{
+        const result=await action(metadata=>{
           unchanged();
           if(metadata===undefined)return;
           if(!metadata||Object.keys(metadata).sort().join(',')!=='legacy_hash,redo,schema_version')throw fail();
           const row=validate({...metadata,value:null});
           if(row.legacy_hash!==legacyHash)throw fail();
         });
-        unchanged();return result;
-      }),
+        try{unchanged();}catch(error){if(result?.projection==='path_write_v1'&&result.partsWritten>0)error.committed=true;throw error;}
+        return result;
+      });
+    }
+    return {
+      read: () => lock(async()=> (await settled()).row.value),
+      readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
+      writePath(path,expected,next,guard){
+        const selection=Array.isArray(path)?[...path]:path,before=structuredClone(expected),after=structuredClone(next);
+        return selective(check=>transaction.writePath(selection,before,after,guard,check),guard);
+      },
       write: (expected,next,guard) => lock(async()=>{
         const {row,raw}=await settled(guard);
         if(!same(parse(row.value),expected))throw fail();

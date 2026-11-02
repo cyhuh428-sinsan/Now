@@ -4,6 +4,17 @@ const fs=require('node:fs');
 const path=require('node:path');
 const {createDocumentStore}=require('../document-store.cjs');
 
+test('atomic extra read conditions cannot be bypassed by an otherwise valid document write',()=>{
+  const store=createDocumentStore(':memory:');
+  try{
+    store.commit([{kind:'put',scope:'A',id:'document',value:{v:1},expectedVersion:0},{kind:'put',scope:'A',id:'guard',value:{v:1},expectedVersion:0}]);
+    const before=store.read('A','guard');store.commit([{kind:'put',scope:'A',id:'guard',value:{v:2},expectedVersion:1}]);
+    assert.throws(()=>store.commit([{kind:'put',scope:'A',id:'document',value:{v:'blocked'},expectedVersion:1}],
+      {checks:[{scope:'A',id:'guard',...before}]}),/conflict/);
+    assert.deepEqual(store.read('A','document').value,{v:1});
+  }finally{store.close();}
+});
+
 test('read snapshot is consistent across external WAL writes and always releases its transaction',()=>{
   const {DatabaseSync}=require('node:sqlite'),root=path.resolve('D:/tmp/nownote-241-select');fs.mkdirSync(root,{recursive:true});
   const dir=fs.mkdtempSync(path.join(root,'snapshot-')),file=path.join(dir,'store.sqlite'),store=createDocumentStore(file);let writer;
