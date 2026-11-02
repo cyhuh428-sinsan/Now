@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
 const views = process.argv.includes('--e4b3a');
 const keyGuard = process.argv.includes('--keyguard');
+const groupUi = process.argv.includes('--wiki-group-ui');
 const qa = path.resolve(views ? 'D:/tmp/now-240-e4b3a' : 'D:/tmp/now-240-e4b2');
 await fs.mkdir(qa,{recursive:true});
 const own = await fs.mkdtemp(path.join(qa,'client-'));
@@ -24,7 +25,7 @@ const server = createServer(async(req,res)=>{
 });
 let child = null;
 try {
-  const requestedPort=keyGuard?0:Number(process.env.NOWNOTE_QA_PORT??8750);
+  const requestedPort=keyGuard||groupUi?0:Number(process.env.NOWNOTE_QA_PORT??8750);
   assert.ok(Number.isInteger(requestedPort)&&requestedPort>=0&&requestedPort<=65535);
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(requestedPort,'127.0.0.1',resolve);});
   const port=server.address().port;
@@ -33,10 +34,10 @@ try {
   for(const mode of ['desktop','web'].filter(mode=>!process.argv.some(a=>a.startsWith('--mode=')) || process.argv.includes('--mode='+mode))) {
     const profile = path.join(own,mode); await fs.mkdir(profile);
     let serverState = null;
-    for(const phase of keyGuard ? [1] : [1,2]) {
+    for(const phase of keyGuard||groupUi ? [1] : [1,2]) {
       const result = path.join(own,mode+'-'+phase+'.json'), config = path.join(own,mode+'-'+phase+'-config.json');
-      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result,port,suite:views?'e4b3a':'e4b2',serverState,keyGuard,
-        screenshot:views&&phase===2?process.env.NOWNOTE_PROTECTION_SCREENSHOT_DIR:null}));
+      await fs.writeFile(config,JSON.stringify({root,profile,mode,phase,result,port,suite:groupUi?'wiki-group':views?'e4b3a':'e4b2',serverState,keyGuard,
+        screenshot:groupUi||views&&phase===2?process.env.NOWNOTE_PROTECTION_SCREENSHOT_DIR:null}));
       const env = {...process.env}; delete env.ELECTRON_RUN_AS_NODE;
       child = spawn(electron,[path.join(root,'web/scripts/note_protection_client_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
       let output = '';

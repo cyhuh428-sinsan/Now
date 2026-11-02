@@ -149,7 +149,8 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       const copies=[...pd().querySelectorAll('.protection-copies input')];copies.forEach(input=>input.checked=true);
       if(copies.length){pb('confirm').click();await protectionWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
       const linked=pd().querySelector('.protection-wiki-confirm');if(linked&&!linked.checked)linked.click();
-      pb('conversion').click();await protectionWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
+      pb('conversion').click();await protectionWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete')
+        &&!Object.values(noteHistory.protectionOperations()).some(row=>NowWikiProtectionGroup.targetOf(row)===local),'conversion');
       const closed=new Promise(resolve=>pd().addEventListener('close',resolve,{once:true}));
       noteProtectionUI.lock();pb('close').click();await closed;
     }
@@ -235,7 +236,8 @@ globalThis.runWikiIngestHttpFixture=async function({config,request,settle,login}
       if(copies.length){pb('confirm').click();await protectedWait(()=>!pd().querySelector('.protection-copies input'),'copies');}
       const linked=pd().querySelector('.protection-wiki-confirm');check(linked&&!linked.checked&&pb('conversion').disabled,'protected_query_proposal_consent');linked.click();
       pb('conversion').click();
-      await protectedWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete'),'conversion');
+      await protectedWait(()=>Object.values(noteHistory.protectionOperations()).some(row=>row.scope.local_id===local&&row.phase==='complete')
+        &&!Object.values(noteHistory.protectionOperations()).some(row=>NowWikiProtectionGroup.targetOf(row)===local),'conversion');
     }
     const remote=await request('/api/v1/wikis/'+id+ownerQuery);check(remote.artifact.protected===true&&!remote.artifact.document,'protected_query_server_plain');
     const select=pd().querySelector('[name=representation]'),body=[...select.options].find(option=>option.textContent.startsWith('note_body ·'));check(body,'protected_query_body');select.value=body.value;

@@ -26,7 +26,8 @@ const stores=()=>[
     fallback=clone(after);
   }}
 ];
-const api={context:()=>context,contextKey:()=>JSON.stringify(context),history:()=>history,stores,
+let targetStamp={head:1};
+const api={context:()=>context,contextKey:()=>JSON.stringify(context),history:()=>history,stores,targetStamp:async()=>clone(targetStamp),
   verify:async(roots,target,id,options)=>{
     const documents=[];W.sourceProtectionDependencies(roots,target,id,{documents,wikiEvidence:[],allowedProposalIds:new Set(options?.proposalIds||[])});
     for(const value of documents)await W.validateDocument(value,target);
@@ -39,7 +40,7 @@ const execute=async pending=>{
   let id=pending?.id;if(!id){targetStarts++;id=await controller.startLocalWiki(scope,password);}
   const receipt=await controller.resume(id,password);
   if(responseLoss){responseLoss=false;throw Error('synthetic target response lost');}
-  return receipt;
+  return {operation_id:id,receipt};
 };
 const plan=await groups().plan(scope);assert.equal(plan.members.length,2);
 const before=JSON.stringify(saved);await assert.rejects(()=>groups().run(scope,password,'wrong',execute),/confirmation_required/);assert.equal(JSON.stringify(saved),before);
@@ -58,10 +59,15 @@ fallback.contexts[account].notes[extra].revisions=[];
 await assert.rejects(()=>groups().run(scope,password,null,execute),/members_changed/);fallback=previousFallback;
 await assert.rejects(()=>groups().run(scope,'wrong password',null,execute));assert.equal(writes,count);
 context.owner='other';await assert.rejects(()=>groups().run(scope,password,null,execute),/context_changed/);context.owner=ctx.owner;
-saved=progress;history=make();fail=false;
+fail=false;targetStamp={head:2};
+await assert.rejects(()=>groups().run(scope,password,null,execute),/target_changed/);assert.equal(targetCalls,0,'a changed target must not be silently adopted after restarting the group');
+targetStamp={head:1};saved=clone(saved);history=make();
 await assert.rejects(()=>groups().run(scope,password,null,execute),/target response lost/);
 assert.ok(groups().pending(scope));saved=clone(saved);history=make();
-const receipt=await groups().run(scope,password,null,execute);assert.ok(receipt.operation_id);assert.equal(targetCalls,2);assert.equal(targetStarts,1);assert.equal(groups().pending(scope),null);
+await assert.rejects(()=>groups().run(scope,password,null,async pending=>{
+  const result=await execute(pending);return {...result,receipt:{...result.receipt,changed:true}};
+}),/target_receipt/);assert.ok(groups().pending(scope));
+const receipt=await groups().run(scope,password,null,execute);assert.ok(receipt.operation_id);assert.ok(receipt.receipt);assert.equal(targetCalls,3);assert.equal(targetStarts,1);assert.equal(groups().pending(scope),null);
 for(const root of [saved,fallback]){
   assert.equal(JSON.stringify(root).includes('Exact evidence'),false,'no plaintext Wiki body remains in any registered copy');
   assert.equal(JSON.stringify(root).includes(password),false);

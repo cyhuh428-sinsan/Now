@@ -75,7 +75,9 @@
     }
     async function plan(scope){
       const a=action(scope),current=await snapshot(a);a.active();
-      const value={schema_version:1,target_scope:copy(scope),members:current.members};
+      check(typeof api.targetStamp==='function','wiki_group_target_status_required');
+      const target_stamp=await api.targetStamp(scope);a.active();
+      const value={schema_version:1,target_scope:copy(scope),members:current.members,target_stamp};
       return {...value,plan_hash:await P().hashJson(value),pending:pending(scope)};
     }
     const at=(root,path)=>path.reduce((value,key)=>value?.[key],root);
@@ -120,9 +122,10 @@
         check(eq(current.members,value.members),'wiki_group_copy_changed');
         await api.verify(current.roots,scope,scope.local_id,{proposalIds:value.members.map(m=>m.id)});a.active();
         const repeated=await snapshot(a);a.active();check(eq(repeated.members,value.members),'wiki_group_copy_changed');
+        check(eq(await api.targetStamp(scope),value.target_stamp),'wiki_group_target_changed');a.active();
         marker={schema_version:1,id:crypto.randomUUID(),scope:groupScope(scope),phase:'wiki_group_applying',cipher_bundle:''};
         bundle={schema_version:1,purpose:'wiki_proposal_group',operation_id:marker.id,scope:copy(marker.scope),stores:[],
-          plan:{schema_version:1,target_scope:copy(scope),members:copy(value.members)},
+          plan:{schema_version:1,target_scope:copy(scope),members:copy(value.members),target_stamp:copy(value.target_stamp)},
           excluded_target_ids:Object.values(a.h.protectionOperations()).filter(m=>S().scopeKey(m.scope)===S().scopeKey(scope)&&m.phase==='complete').map(m=>m.id),target_operation_id:null};
         await persist();
       }
@@ -146,10 +149,17 @@
       await validateCopies(a,bundle.plan,password,resolveKey,true);a.active();
       const candidates=Object.values(a.h.protectionOperations()).filter(m=>S().scopeKey(m.scope)===S().scopeKey(scope)&&!bundle.excluded_target_ids.includes(m.id));
       check(candidates.length<=1,'wiki_group_target_ambiguous');
+      if(!candidates.length){
+        check(bundle.plan.target_stamp!==undefined,'wiki_group_target_unverifiable');
+        check(eq(await api.targetStamp(scope),bundle.plan.target_stamp),'wiki_group_target_changed');a.active();
+      }
       const result=await executeTarget(candidates[0]?copy(candidates[0]):null);a.active();
       const completed=a.h.protectionOperations()[result?.operation_id];
       check(completed?.phase==='complete'&&S().scopeKey(completed.scope)===S().scopeKey(scope)
         &&!bundle.excluded_target_ids.includes(completed.id),'wiki_group_target_unconfirmed');
+      const targetBundle=P().parseJson(await P().decryptContent(completed.cipher_bundle,password));a.active();
+      check(targetBundle.schema_version===1&&targetBundle.operation_id===completed.id&&eq(targetBundle.scope,scope)
+        &&['conversion','local_wiki_protection'].includes(targetBundle.intent?.purpose)&&eq(targetBundle.receipt,result.receipt),'wiki_group_target_receipt');
       await validateCopies(a,bundle.plan,password,resolveKey,true);a.active();
       bundle.target_operation_id=completed.id;marker.phase='complete';await persist();return copy(result);
     }
