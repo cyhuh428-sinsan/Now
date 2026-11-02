@@ -12,6 +12,7 @@
   const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    const writeSnapshots=globalThis.NowHistorySnapshots?.create();
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
     const readable = (value=data) => value?.schema_version === 1 && record(value.contexts)
       && (!Object.hasOwn(value,'protection_operations') || record(value.protection_operations))
@@ -34,7 +35,7 @@
       return data.contexts[key(ctx)] || null;
     };
     const save = (strict = false, guard = null) => {
-      const snapshot = copy(data), source = data, ctx = { ...context() }, epoch = generation;
+      const snapshot = writeSnapshots?writeSnapshots.capture(data):copy(data), source = data, ctx = { ...context() }, epoch = generation;
       const valid = () => data === source && active(ctx,epoch) && (!guard?.active || guard.active());
       writes = writes.catch(() => {}).then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }

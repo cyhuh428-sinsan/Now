@@ -17,6 +17,8 @@ const write=(k,v,o)=>{
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_CAS'};}});
 ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys]}));
+ipcMain.handle('nownote:desktop-original-read',(_event,key)=>{if(!keys.has(key))throw Error('store_key');return documentFile.readOriginal(store,key);});
+ipcMain.handle('nownote:desktop-original-write',(_event,key,value,expected)=>{if(!keys.has(key))throw Error('store_key');return documentFile.casOriginal(store,key,value,expected);});
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 let window,result={ok:false},network=0;
 app.whenReady().then(async()=>{

@@ -6,6 +6,10 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
   openWorkspace: workspace=>ipcRenderer.invoke('nownote:open-workspace',workspace),
   openDocumentFile: (filePath) => ipcRenderer.invoke("nownote:open-document-file", filePath),
   storage: {
+    original:{
+      read:key=>ipcRenderer.invoke('nownote:desktop-original-read',key),
+      cas:(key,value,expected)=>ipcRenderer.invoke('nownote:desktop-original-write',key,value,expected),
+    },
     info: () => ipcRenderer.invoke("nownote:desktop-store-info"),
     read: (key) => ipcRenderer.invoke("nownote:desktop-store-read", key),
     write: (key, value, options) => ipcRenderer.invoke("nownote:desktop-store-write", key, value, options),

@@ -20,3 +20,19 @@ test('synthetic migration preserves original bytes, blocks old reader, reconnect
     assert.throws(()=>doc.writeKey(file,'settings',{font:15},{font:12}),/changed/);
   }finally{doc.closeAll();fs.rmSync(dir,{recursive:true,force:true});}
 });
+test('migration resumes after marker publication fails and preserves all legacy extension/history records',()=>{
+  const root='D:/tmp/nownote-241-migration';fs.mkdirSync(root,{recursive:true});
+  const dir=fs.mkdtempSync(path.join(root,'resume-')),file=path.join(dir,'store.json');
+  const note={raw:{owner_id:'A',local_id:'x',content:'plain'},draft:{content:'pending'},base:{inventory_revision_ids:['r1']},revisions:[{snapshot:{note:{content:'old'}}}],outbox:[{sent:true,body:{mutation_id:'keep'}}],receipts:[{result:'keep'}],comparison:{extra:true},unknown:{future:[null,1]}};
+  const original={version:1,values:{'nownote.history.v1':{schema_version:1,contexts:{A:{notes:{x:note},wiki_operations:{op:{state:'committed',receipt:{hash:'keep'}}}},B:{notes:{x:{protection_record:{ciphertext:'NOW_ENCRYPTED_V1:opaque'}}}}},protection_operations:{id:{phase:'applying',cipher_bundle:'NOW_ENCRYPTED_V1:bundle'}},recovery_archives:[{contexts:{A:{notes:{x:note}}}}]},future:{unknown:[1,false]}},updatedAt:null,extension:{keep:true}};
+  const raw=JSON.stringify(original,null,3);fs.writeFileSync(file,raw);
+  const rename=fs.renameSync;
+  try{
+    fs.renameSync=(from,to)=>{if(to===file)throw Error('synthetic_marker_interruption');return rename(from,to);};
+    assert.throws(()=>doc.initialize(file,{syntheticLegacy:true}),/synthetic_marker_interruption/);
+    assert.equal(fs.readFileSync(file,'utf8'),raw);assert.equal(fs.readFileSync(file+'.original-v1.json','utf8'),raw);
+    fs.renameSync=rename;doc.initialize(file,{syntheticLegacy:true});
+    assert.deepEqual(doc.read(file).store,original);assert.equal(doc.info(file).retainedOriginal,true);
+    assert.deepEqual(doc.readOriginal(file,'nownote.history.v1'),original.values['nownote.history.v1']);
+  }finally{fs.renameSync=rename;doc.closeAll();fs.rmSync(dir,{recursive:true,force:true});}
+});

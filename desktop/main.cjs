@@ -71,6 +71,7 @@ function registerDesktopStorageHandlers() {
       path: desktopStorePath()+'.sqlite',
       version: 2,
       workspaces:['note','wiki'],
+      retainedOriginal:store.retainedOriginal,
       updatedAt: store.updatedAt,
       keys: store.keys,
     };
@@ -93,6 +94,14 @@ function registerDesktopStorageHandlers() {
   }
 
   ipcMain.handle("nownote:desktop-store-write", writeFrom);
+  ipcMain.handle('nownote:desktop-original-read',(event,key)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    return documentFile.readOriginal(desktopStorePath(),key);
+  });
+  ipcMain.handle('nownote:desktop-original-write',(event,key,value,expected)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    return documentFile.casOriginal(desktopStorePath(),key,value,expected);
+  });
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value, options) => {
     try {

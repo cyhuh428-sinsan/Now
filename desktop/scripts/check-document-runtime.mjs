@@ -7,15 +7,17 @@ import {once} from 'node:events';
 import {setTimeout as delay} from 'node:timers/promises';
 import {fileURLToPath} from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const qaRoot='D:/tmp/nownote-241-runtime';await fs.mkdir(qaRoot,{recursive:true});
+const retainedQA=process.env.NOWNOTE_QA_RETAINED_ORIGINAL==='1';
+const qaRoot=retainedQA?'D:/tmp/nownote-241-migration':'D:/tmp/nownote-241-runtime';await fs.mkdir(qaRoot,{recursive:true});
 const profile=await fs.mkdtemp(path.join(qaRoot,'run-')),children=new Set(),sockets=new Set();
 const executable=process.env.NOWNOTE_DESKTOP_EXE_PATH||process.env.NOWNOTE_ELECTRON_PATH||path.join(root,'node_modules/electron/dist/electron.exe');
 const packaged=Boolean(process.env.NOWNOTE_DESKTOP_EXE_PATH);
+if(retainedQA)await fs.writeFile(path.join(profile,'nownote-desktop-store.json'),JSON.stringify({version:1,updatedAt:null,values:{'nownote.web.v1':{tree:[],qaRetained:'original'}}}));
 async function port(){const server=net.createServer();server.listen(0,'127.0.0.1');await once(server,'listening');const p=server.address().port;await new Promise(resolve=>server.close(resolve));return p;}
 function start(debugPort,wiki=false){
   const exe=wiki&&packaged?path.join(path.dirname(executable),'NowNoteWiki.exe'):executable;
   const args=[...(packaged?[]:[path.join(root,'main.cjs')]),`--remote-debugging-port=${debugPort}`,'--disable-gpu',...(wiki&&!packaged?['--wiki']:[])];
-  const env={...process.env,NOWNOTE_DESKTOP_USER_DATA_DIR:profile};delete env.ELECTRON_RUN_AS_NODE;
+  const env={...process.env,NOWNOTE_DESKTOP_USER_DATA_DIR:profile,...(retainedQA?{NOWNOTE_SYNTHETIC_MIGRATION:'1'}:{})};delete env.ELECTRON_RUN_AS_NODE;
   const child=spawn(exe,args,{env,windowsHide:true,stdio:['ignore','pipe','pipe']});children.add(child);
   child.on('exit',()=>children.delete(child));child.on('error',error=>{console.error(error.message);});
   return child;
@@ -35,6 +37,17 @@ try{
   await until(()=>a.evaluate(`document.querySelector('#treeEditorPanel')&&typeof window.nownoteDesktop?.storage?.read==='function'&&typeof wikiUI!=='undefined'&&wikiUI!==null`),'note ready');
   await a.evaluate(`(async()=>{await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);})()`);
   assert.equal(await a.evaluate(`typeof cytoscape`),'undefined');
+  if(retainedQA){
+    assert.equal(await a.evaluate(`(await nownoteDesktop.storage.info()).retainedOriginal`),true);
+    assert.equal(await a.evaluate(`protectionStorageAdapters().filter(item=>item.name.startsWith('original:')).length`),4);
+    await a.evaluate(`(async()=>{
+      const key='nownote.web.v1',original=await nownoteDesktop.storage.original.read(key);
+      if(original.qaRetained!=='original')throw Error('Original IPC read failed');
+      await nownoteDesktop.storage.original.cas(key,{...original,qaRetained:'confirmed'},original);
+      try{await nownoteDesktop.storage.original.cas(key,original,original);throw Error('Stale original accepted');}catch(error){if(error.message==='Stale original accepted')throw error;}
+      try{await nownoteDesktop.storage.original.read('nownote.vault.v1');throw Error('Unknown original key accepted');}catch(error){if(error.message==='Unknown original key accepted')throw error;}
+    })()`);
+  }
   await a.evaluate(`(async()=>{
     document.querySelector('#addRootBtn').click();const id=state.selectedTreeId;
     findTreeNode(state.data.tree,id).title='Restore storage QA';archiveDeletedTreeNode(id);persist();
@@ -60,21 +73,23 @@ try{
   await b.evaluate(`location.href='about:blank'`);
   await until(()=>b.evaluate(`location.href==='about:blank'&&!!window.nownoteDesktop`),'untrusted navigation');
   assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.info();return false;}catch{return true;}})()`),true);
+  assert.equal(await b.evaluate(`(async()=>{try{await nownoteDesktop.storage.original.read('nownote.web.v1');return false;}catch{return true;}})()`),true);
   await b.evaluate('window.close()');b.close();await a.evaluate('window.close()').catch(()=>{});a.close();
   if(primary.exitCode===null)await once(primary,'exit');
   const marker=JSON.parse(await fs.readFile(path.join(profile,'nownote-desktop-store.json'),'utf8'));assert.equal(marker.values,undefined);
   const coldPort=await port(),cold=start(coldPort);
   const coldTarget=await until(async()=>{const rows=await targets(coldPort);return rows[0];},'cold window');
-  const c=await client(coldTarget);await until(()=>c.evaluate(`typeof window.nownoteDesktop?.storage?.read==='function'`),'cold bridge');
+  const c=await client(coldTarget);await until(()=>c.evaluate(`typeof window.nownoteDesktop?.storage?.read==='function'&&location.protocol==='file:'&&location.pathname.endsWith('/index.html')&&typeof wikiUI!=='undefined'&&wikiUI!==null`),'cold application ready');
   assert.equal(await c.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
   assert.equal(await c.evaluate(`(await nownoteDesktop.storage.read('nownote.web.v1')).tree.some(node=>node.title==='Restore storage QA'&&node.status==='active')`),true);
+  if(retainedQA)assert.equal(await c.evaluate(`(await nownoteDesktop.storage.original.read('nownote.web.v1')).qaRetained`),'confirmed');
   await c.evaluate('window.close()').catch(()=>{});c.close();if(cold.exitCode===null)await once(cold,'exit');
   const wikiPort=await port(),standalone=start(wikiPort,true);
   const standaloneTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>row.url.includes('workspace=wiki'));},'standalone Wiki');
   const d=await client(standaloneTarget);await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'standalone Wiki mounted');
   assert.equal(await d.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
   await d.evaluate('window.close()').catch(()=>{});d.close();if(standalone.exitCode===null)await once(standalone,'exit');
-  console.log(JSON.stringify({runtime:'actual main/preload',packaged,sqlite:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
+  console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
 }finally{
   for(const ws of sockets)ws.close();
   for(const child of children){child.kill();if(child.exitCode===null)await Promise.race([once(child,'exit'),delay(5000)]);}

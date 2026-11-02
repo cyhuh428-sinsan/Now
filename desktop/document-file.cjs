@@ -13,12 +13,19 @@ function open(storePath){
   if(!databases.has(filename))databases.set(filename,createPartitionedStore(filename));
   return databases.get(filename);
 }
-function atomic(filename,bytes){
-  const temp=`${filename}.${randomUUID()}.tmp`;
+function atomic(filename,bytes,temp=`${filename}.${randomUUID()}.tmp`){
+  let owned=null;
   try{
-    const fd=fs.openSync(temp,'wx');try{fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
+    const fd=fs.openSync(temp,'wx');try{owned=fs.fstatSync(fd,{bigint:true});fs.writeFileSync(fd,bytes);fs.fsyncSync(fd);}finally{fs.closeSync(fd);}
     fs.renameSync(temp,filename);
-  }finally{if(fs.existsSync(temp))fs.unlinkSync(temp);}
+  }finally{
+    if(owned){
+      try{
+        const current=fs.lstatSync(temp,{bigint:true});
+        if(!current.isSymbolicLink()&&current.dev===owned.dev&&current.ino===owned.ino)fs.unlinkSync(temp);
+      }catch(error){if(error.code!=='ENOENT')throw error;}
+    }
+  }
 }
 function initialize(storePath,{syntheticLegacy=false}={}){
   fs.mkdirSync(path.dirname(storePath),{recursive:true});
@@ -42,7 +49,8 @@ function initialize(storePath,{syntheticLegacy=false}={}){
     else{
       const {values,...metadata}=original;
       const updates=Object.entries(values).map(([key,value])=>({key:`value:${key}`,value,expected:null}));
-      updates.push({key:META,value:{metadata,keys:Object.keys(values),importHash:digest},expected:null});
+      updates.push({key:META,value:{metadata,keys:Object.keys(values),importHash:digest,
+        original:{required:Boolean(bytes),hash:bytes?digest:null,pending:null}},expected:null});
       database.commit(updates);
     }
     const reconstructed=snapshot(database).store;
@@ -65,7 +73,77 @@ function snapshot(database){
   return {store,hash:hash(JSON.stringify(store))};
 }
 function read(storePath){return snapshot(open(storePath));}
-function info(storePath){const row=open(storePath).read(META);if(!row)throw Error('Missing document file metadata');return {...row.metadata,keys:row.keys};}
+function originalState(file){
+  const state=file.original||{required:file.importHash!==hash(Buffer.from('new profile')),hash:file.importHash,pending:null};
+  const digest=value=>typeof value==='string'&&/^[0-9a-f]{64}$/.test(value);
+  if(typeof state.required!=='boolean'||state.required&&!digest(state.hash)||!state.required&&state.pending
+    ||state.pending&&(!digest(state.pending.before)||!digest(state.pending.after)||state.pending.before!==state.hash))
+    throw Error('Invalid retained original state; original preserved.');
+  return state;
+}
+function info(storePath){
+  const row=open(storePath).read(META);if(!row)throw Error('Missing document file metadata');
+  return {...row.metadata,keys:row.keys,retainedOriginal:originalState(row).required||fs.existsSync(storePath+'.original-v1.json')};
+}
+function retained(storePath){
+  const database=open(storePath),file=database.read(META),state=originalState(file),filename=storePath+'.original-v1.json';
+  const prefix=path.basename(filename)+'.',temporary=state.pending?.temporary;
+  if(temporary!==undefined&&(typeof temporary!=='string'||!temporary.startsWith(prefix)
+    ||!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\.tmp$/.test(temporary.slice(prefix.length))))
+    throw Error('Invalid original temporary receipt; copies preserved.');
+  const fold=name=>name.toLowerCase();
+  const candidates=fs.readdirSync(path.dirname(filename)).filter(name=>fold(name).startsWith(fold(prefix))&&fold(name).endsWith('.tmp'));
+  if(candidates.some(name=>!temporary||fold(name)!==fold(temporary)))throw Error('Untracked original temporary copy; inspection required.');
+  if(!state.required){if(fs.existsSync(filename))throw Error('Unexpected retained original; inspection required.');return null;}
+  let bytes;
+  try{
+    if(fs.lstatSync(filename).isSymbolicLink())throw Error('Original cannot be a link');
+    bytes=fs.readFileSync(filename);
+  }catch{throw Error('Retained original is missing or unreadable; protection cannot complete.');}
+  const digest=hash(bytes);
+  if(state.pending){
+    if(digest!==state.pending.before&&digest!==state.pending.after)throw Error('Retained original changed during protection; original preserved.');
+    const actual=temporary&&candidates.find(name=>fold(name)===fold(temporary));
+    if(actual){
+      const candidate=path.join(path.dirname(filename),actual);
+      if(fs.lstatSync(candidate).isSymbolicLink()||hash(fs.readFileSync(candidate))!==state.pending.after
+        ||hash(fs.readFileSync(filename))!==digest)throw Error('Original temporary copy changed; all copies preserved.');
+      fs.unlinkSync(candidate);
+    }
+    database.write(META,{...file,original:{required:true,hash:digest,pending:null}},file);
+  }else if(digest!==state.hash)throw Error('Retained original changed; original preserved.');
+  let value;
+  try{value=JSON.parse(bytes.toString('utf8'));}catch{throw Error('Retained original is invalid; original preserved.');}
+  if(!value||typeof value!=='object'||!value.values||typeof value.values!=='object'||Array.isArray(value.values))throw Error('Retained original is invalid; original preserved.');
+  return {database,filename,bytes,digest,value};
+}
+function originalValue(value){
+  if(value==null)return null;
+  if(typeof value==='string'){
+    try{value=JSON.parse(value);}catch{throw Error('Unsupported original JSON encoding; original preserved.');}
+  }
+  if(!value||Object.prototype.toString.call(value)!=='[object Object]')throw Error('Unsupported original JSON root; original preserved.');
+  return value;
+}
+function readOriginal(storePath,key){
+  const copy=retained(storePath);return copy?originalValue(copy.value.values[key]):null;
+}
+function casOriginal(storePath,key,value,expected){
+  if(expected===undefined)throw Error('Original comparison is required');
+  if(!value||Object.prototype.toString.call(value)!=='[object Object]'||typeof value.toJSON==='function')throw Error('Original replacement must be a JSON object');
+  const copy=retained(storePath);if(!copy)throw Error('No retained original exists');
+  if(JSON.stringify(originalValue(copy.value.values[key]))!==JSON.stringify(expected))throw Error('Retained original changed; no data was overwritten.');
+  const replacement=typeof copy.value.values[key]==='string'?JSON.stringify(value):value;
+  const next={...copy.value,values:{...copy.value.values,[key]:replacement}},bytes=Buffer.from(JSON.stringify(next,null,2)+'\n'),after=hash(bytes);
+  if(after===copy.digest)return {ok:true};
+  const temporary=path.basename(copy.filename)+'.'+randomUUID()+'.tmp';
+  const file=copy.database.read(META),pending={...file,original:{required:true,hash:copy.digest,pending:{before:copy.digest,after,temporary}}};
+  copy.database.write(META,pending,file);
+  if(hash(fs.readFileSync(copy.filename))!==copy.digest)throw Error('Retained original changed; no data was overwritten.');
+  atomic(copy.filename,bytes,path.join(path.dirname(copy.filename),temporary));
+  copy.database.write(META,{...pending,original:{required:true,hash:after,pending:null}},pending);
+  return {ok:true};
+}
 function readKey(storePath,key){return open(storePath).read(`value:${key}`);}
 function writeKey(storePath,key,value,expected){
   const database=open(storePath),file=database.read(META);
@@ -84,4 +162,4 @@ function update(storePath,transform,expectedHash){
   return snapshot(database);
 }
 function closeAll(){for(const database of databases.values())database.close();databases.clear();}
-module.exports={FORMAT,initialize,read,readKey,writeKey,info,update,closeAll};
+module.exports={FORMAT,initialize,read,readKey,writeKey,readOriginal,casOriginal,info,update,closeAll};

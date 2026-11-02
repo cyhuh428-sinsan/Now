@@ -396,6 +396,41 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 })();
 
 ;
+/* Immutable write snapshots share unchanged JSON containers, never mutable journal objects. */
+(() => {
+  'use strict';
+  function create(){
+    const cache=new WeakMap();let metrics={created:0,reused:0};
+    return {
+      capture(root){
+        const ancestors=new Set();metrics={created:0,reused:0};
+        function visit(value){
+          if(typeof value==='function'||typeof value==='symbol')return structuredClone(value);
+          if(value===null||typeof value!=='object')return value;
+          if(!Array.isArray(value)&&Object.prototype.toString.call(value)!=='[object Object]')return structuredClone(value);
+          if(ancestors.has(value))throw Error('Cyclic history snapshot');
+          ancestors.add(value);
+          const keys=Object.keys(value),values=keys.map(key=>visit(value[key])),previous=cache.get(value);
+          ancestors.delete(value);
+          const length=Array.isArray(value)?value.length:null;
+          if(previous&&previous.length===length&&previous.keys.length===keys.length
+            &&keys.every((key,i)=>previous.keys[i]===key&&Object.is(previous.values[i],values[i]))){
+            metrics.reused++;return previous.snapshot;
+          }
+          const snapshot=Array.isArray(value)?[]:{};
+          keys.forEach((key,i)=>Object.defineProperty(snapshot,key,{value:values[i],enumerable:true,writable:true,configurable:true}));
+          if(length!==null)snapshot.length=length;
+          Object.freeze(snapshot);cache.set(value,{keys,values,length,snapshot});metrics.created++;return snapshot;
+        }
+        return visit(root);
+      },
+      stats(){return {...metrics};},
+    };
+  }
+  globalThis.NowHistorySnapshots={create};
+})();
+
+;
 /**
  * marked v18.1.2 - a markdown parser
  * Copyright (c) 2018-2026, MarkedJS. (MIT License)
@@ -1410,6 +1445,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
   function create({ initial, context, request, write, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    const writeSnapshots=globalThis.NowHistorySnapshots?.create();
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
     const readable = (value=data) => value?.schema_version === 1 && record(value.contexts)
       && (!Object.hasOwn(value,'protection_operations') || record(value.protection_operations))
@@ -1432,7 +1468,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       return data.contexts[key(ctx)] || null;
     };
     const save = (strict = false, guard = null) => {
-      const snapshot = copy(data), source = data, ctx = { ...context() }, epoch = generation;
+      const snapshot = writeSnapshots?writeSnapshots.capture(data):copy(data), source = data, ctx = { ...context() }, epoch = generation;
       const valid = () => data === source && active(ctx,epoch) && (!guard?.active || guard.active());
       writes = writes.catch(() => {}).then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
@@ -13861,6 +13897,17 @@ function protectionStorageAdapters() {
   ];
   if (isDesktopClient()) for (const key of DESKTOP_STORAGE_KEYS) {
     result.push(storageAdapter(key,key === NOTE_HISTORY_KEY ? "history" : key === SETTINGS_KEY ? "settings" : key === STORAGE_KEY ? "data" : "library",true));
+    const original=window.nownoteDesktop.storage.original;
+    if(original)result.push({
+      name:'original:'+key,kind:key===NOTE_HISTORY_KEY?'history':key===SETTINGS_KEY?'settings':key===STORAGE_KEY?'data':'library',
+      read:()=>original.read(key),
+      async cas(expected,next,guard){
+        if(guard?.active&&!guard.active())throw Error('저장 인증 상태가 변경되었습니다.');
+        const saved=await original.cas(key,next,expected);
+        if(!saved?.ok)throw Error('보관 원본 보호 저장을 확인하지 못했습니다.');
+        if(guard?.active&&!guard.active())throw Error('저장 인증 상태가 변경되었습니다.');
+      },
+    });
   }
   else result.push(storageAdapter(NOTE_HISTORY_KEY,"history",true));
   return result;
