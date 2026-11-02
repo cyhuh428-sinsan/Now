@@ -27657,7 +27657,7 @@ function initializeBlockReferences() {
       input.value="";status.textContent="";dialog.showModal();input.focus();
     }]
   ]){
-    const button=document.createElement("button");button.type="button";button.id=id;button.textContent=label;
+    const button=document.createElement("button");button.type="button";button.className="secondary-btn";button.id=id;button.textContent=label;
     button.addEventListener("mousedown",event=>event.preventDefault());
     button.addEventListener("click",()=>action().catch(error=>showNotice(error.message,"error")));
     elements.noteActionMenu?.append(button);

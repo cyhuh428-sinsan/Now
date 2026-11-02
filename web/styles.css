@@ -41,6 +41,9 @@
   margin: 4px 0 8px;
 }
 .document-mode button {
+  min-height: 28px;
+  font-size: 12px;
+  font-weight: 700;
   border: 1px solid var(--line);
   border-radius: 0;
   padding: 6px 12px;
