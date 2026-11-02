@@ -12,10 +12,23 @@ async function fixture(){
   transaction.readCurrent=async(account,_guard,check)=>{check(metadata);after?.();return {projection:'journal_current_v1',supported:true,account,notes:{}};};
   transaction.writePath=async(_path,_expected,_next,_guard,check)=>{check(metadata);after?.();return {projection:'path_write_v1',stamp:'two',partsWritten:1};};
   const box=vm.createContext({crypto,TextEncoder,structuredClone,NowDocumentTransactions:{create:()=>transaction}});
+  vm.runInContext(await fs.readFile(new URL('../vendor/journal-writes.js',import.meta.url),'utf8'),box);
   vm.runInContext(await fs.readFile(new URL('../vendor/browser-history-storage.js',import.meta.url),'utf8'),box);
   const storage=box.NowBrowserHistoryStorage.create({indexedDB:{},localStorage,lock:fn=>fn(),key:'synthetic'});
-  return {storage,metadata,setRaw:value=>{raw=value;},setMetadata:value=>{metadata=value;},after:fn=>{after=fn;}};
+  return {transaction,storage,metadata,setRaw:value=>{raw=value;},setMetadata:value=>{metadata=value;},after:fn=>{after=fn;}};
 }
+test('browser selected history combines current proof with exact path and rejects a different stamp',async()=>{
+  let pathCalls=0;
+  const account=JSON.stringify(['https://qa.invalid','alice']),note={local_id:'a',owner_id:'alice',note_type:'tree',source:'manual',content:'current'};
+  const entry={raw:note,draft:note,base:{crypto_epoch:0},revisions:[],outbox:[],receipts:[]};
+  const f=await fixture();
+  f.transaction.readCurrent=async()=>({supported:true,stamp:'one',account,notes:{a:{draft:note}}});
+  f.transaction.readPath=async()=>{pathCalls++;return {found:true,stamp:'one',value:entry};};
+  await assert.rejects(f.storage.selectNote({account,id:'a',stamp:'mismatch'}));
+  assert.equal(pathCalls,0);
+  const selected=await f.storage.selectNote({account,id:'a',stamp:'one'});assert.equal(selected.entry.draft.content,'current');assert.equal(Object.hasOwn(selected,'value'),false);
+  f.transaction.readPath=async()=>({found:true,stamp:'different',value:entry});await assert.rejects(f.storage.selectNote({account,id:'a',stamp:'one'}));
+});
 test('browser path guard validates retained copy binding without full loading or writes',async()=>{
   const f=await fixture();assert.equal((await f.storage.readPath(['contexts'])).value.current,'only');
   f.metadata.legacy_hash='0'.repeat(64);await assert.rejects(f.storage.readPath([]));

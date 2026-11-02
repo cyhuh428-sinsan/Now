@@ -7,9 +7,9 @@ app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
 const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
 const snapshots=new Map();
-const historyCounts={open:0,current:0,full:0,note:0};
+const historyCounts={open:0,current:0,select:0,full:0,note:0};
 const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
-for(const method of ['open','current','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
+for(const method of ['open','current','select','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
   historyCounts[method]++;
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
@@ -80,7 +80,23 @@ app.whenReady().then(async()=>{
     await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:startupScript.identifier});window.webContents.debugger.detach();
     if(!startupCurrent||mode==='desktop'&&(historyCounts.open!==beforeStartup.open||historyCounts.current<=beforeStartup.current))throw Error('current_startup_did_not_defer '+JSON.stringify({startup,beforeStartup,historyCounts}));
     await run(`(async()=>{globalThis.qaProductSave={...${JSON.stringify(savedSaveFixture)},backend:await historyPersistence()};
-      const q=qaProductSave,opened=await q.backend.open(),other=structuredClone(opened.value);
+      const q=qaProductSave,all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;
+      const dataBeforeSelected=JSON.stringify(await readStorage(STORAGE_KEY));
+      IDBObjectStore.prototype.getAll=function(){throw Error('selected_first_full_scan');};
+      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');return get.call(this,key);};
+      try{
+        elements.treeContent.value='SELECTED_FIRST_EDIT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
+        await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
+        if(!noteHistory.deferred()||noteHistory.currentView('qa-save-a').draft.content!=='SELECTED_FIRST_EDIT'||!protectionBootstrapPending
+          ||noteHistory.failure()||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBeforeSelected)throw Error('selected_first_edit_not_scoped');
+        q.firstEditSelected=true;
+      }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      const afterFirst=await q.backend.open();
+      if(afterFirst.value.contexts[q.account].notes['qa-save-a'].draft.content!=='SELECTED_FIRST_EDIT'
+        ||afterFirst.value.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('selected_first_edit_not_durable');
+      await q.backend.full({expected:afterFirst.value,next:q.value,revision:afterFirst.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      const opened=await q.backend.open(),other=structuredClone(opened.value);
       other.contexts[q.account].notes['qa-save-b'].draft.content='OTHER_WINDOW_CURRENT';
       await q.backend.full({expected:opened.value,next:other,revision:opened.revision},{active:()=>true});
       let blocked=false;try{await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'STALE_MUST_NOT_SAVE'});}catch{blocked=true;}
@@ -90,7 +106,7 @@ app.whenReady().then(async()=>{
       await q.backend.full({expected:latest.value,next:q.value,revision:latest.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
       if(!noteHistory.deferred())throw Error('explicit_preview_resume');
-      const clean=await q.backend.open(),damaged=structuredClone(clean.value);damaged.contexts[q.account].notes['qa-save-b'].revisions=[{broken:true}];
+      const clean=await q.backend.open(),damaged=structuredClone(clean.value);damaged.contexts[q.account].notes['qa-save-a'].revisions=[{broken:true}];
       await q.backend.full({expected:clean.value,next:damaged,revision:clean.revision},{active:()=>true});
       const dataBefore=JSON.stringify(await readStorage(STORAGE_KEY)),settingsBefore=JSON.stringify(await readStorage(SETTINGS_KEY));
       const normalize=normalizeData;let normalized=0;normalizeData=()=>{normalized++;return normalize();};
@@ -133,7 +149,7 @@ app.whenReady().then(async()=>{
           currentRead=true;
         }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
       }
-      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupMaterialized:q.backupMaterialized,corruptHistoryBlocked:q.corruptHistoryBlocked};
     })()`);
     if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
     await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});

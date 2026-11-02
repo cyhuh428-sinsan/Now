@@ -162,6 +162,18 @@
       return {revision:transaction.revision,scoped:raw===null};
     });
     return {
+      selectNote(request,guard){
+        const {account,id,stamp}=structuredClone(request);
+        return selective(async check=>{
+          if(typeof stamp!=='string'||typeof id!=='string')throw fail();
+          const current=await transaction.readCurrent(account,guard,check);
+          if(!current.supported||current.stamp!==stamp||!Object.hasOwn(current.notes,id))throw fail();
+          const selected=await transaction.readPath(['contexts',account,'notes',id],guard,check);
+          const root={schema_version:1,contexts:{[account]:{notes:{[id]:selected.value}}}};
+          if(!selected.found||selected.stamp!==stamp||!NowJournalWrites.eligible(root,account,id,selected.value))throw fail();
+          return {entry:selected.value,stamp,revision:stamp,scoped:true};
+        },guard);
+      },
       read: () => lock(async()=> (await settled()).row.value),
       readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null};}),
       writeSnapshot:fullWrite,
@@ -169,7 +181,7 @@
         const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
         if(typeof revision!=='string'||!NowJournalWrites.eligible(root,account,id,next))return Promise.reject(fail());
         return selective(check=>transaction.writePath(['contexts',account,'notes',id],expected,next,guard,check,{revision}),guard)
-          .then(result=>({revision:result.stamp,scoped:true}));
+          .then(result=>({revision:result.stamp,stamp:result.stamp,scoped:true}));
       },
       readPath: (path,guard) => selective(check=>transaction.readPath(path,guard,check),guard),
       readCurrent: (account,guard) => selective(check=>transaction.readCurrent(account,guard,check),guard),

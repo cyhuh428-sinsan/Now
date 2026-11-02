@@ -19,6 +19,15 @@ function createPartitionedStore(filename){
     return cache.get(key);
   }
   return {
+    readNote(key,account,id,expectedStamp){return store.snapshot(()=>{
+      const manifest=store.manifest(key),token=stamp(manifest);
+      if(token!==expectedStamp)throw Error('Document journal changed; reopen before reading');
+      const cache=new Map(),read=id=>{if(!cache.has(id))cache.set(id,store.read(key,id)?.value);return cache.get(id);};
+      const steps=parts.currentSteps(account);let step=steps.next();while(!step.done)step=steps.next(read(step.value));
+      if(!step.value.supported||!Object.hasOwn(step.value.notes,id))throw Error('선택 메모의 전체 상태를 먼저 확인하세요.');
+      const selected=parts.select(['contexts',account,'notes',id],read);if(!selected.found)throw Error('Missing selected note');
+      return {entry:selected.value,manifest,stamp:token};
+    });},
     read(key){return structuredClone(load(key).value);},
     readCurrent(key,account){return store.snapshot(()=>{
       const steps=parts.currentSteps(account),cache=new Map();let step=steps.next();
@@ -62,7 +71,7 @@ function createPartitionedStore(filename){
         const nextManifest=manifest?new Map(manifest):null;
         actions.forEach((action,i)=>{if(nextManifest&&action.scope===key)action.kind==='remove'?nextManifest.delete(action.id):nextManifest.set(action.id,versions[i]);});
         return {projection:'path_write_v1',partsWritten:actions.length,bytesWritten:Buffer.byteLength(JSON.stringify(actions)),
-          ...(nextManifest?{manifest:[...nextManifest].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0)}:{})};
+          ...(nextManifest?{manifest:[...nextManifest].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0),stamp:stamp([...nextManifest].sort((a,b)=>a[0]<b[0]?-1:a[0]>b[0]?1:0))}:{})};
       }finally{cache.clear();}
     },
     commit(updates){
