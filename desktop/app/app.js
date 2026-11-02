@@ -403,10 +403,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     for(const key of wikiMetadata)if(bucket.has(key)&&!(yield* object(['contexts',account,key])))return unavailable();
     const wikiIndexSupported=bucket.size===1;
     const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
-    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox']);
+    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox','wiki_source_snapshot']);
     for(const id of entries.keys()){
       const location=[...path,id],entry=yield* object(location);
       if(!entry||[...entry.keys()].some(k=>!allowed.has(k))||['raw','draft','base','revisions','outbox','receipts'].some(k=>!entry.has(k)))return unavailable();
+      if(entry.has('wiki_source_snapshot')&&(!id.startsWith('wiki-source:')||!(yield* object([...location,'wiki_source_snapshot']))))return unavailable();
       const base=yield* object([...location,'base']);
       if(!base||(yield* value([...location,'base','crypto_epoch']))!==0)return unavailable();
       if(/^wiki(?:[-:]|$)/.test(id)){wikiIds.push(id);continue;}
@@ -422,7 +423,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
   }
   function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
     const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');
@@ -799,6 +800,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
       page(id,cursor=null,limit=50){
         if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
@@ -850,10 +852,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
-      if(name==='sync'&&!full&&preview&&request&&!loading&&args[0]?.onlyIds!==undefined){
+      if(name==='sync'&&!full&&preview&&request&&!loading&&(args[0]?.onlyIds!==undefined||preview.syncSupported===true)){
         const ids=args[0]?.onlyIds;
         if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');
-        const targets=ids?[...ids]:Object.keys(preview.notes).filter(id=>!preview.notes[id].localOnly&&(preview.notes[id].dirty||preview.notes[id].pending));
+        const targets=ids?[...ids]:Object.keys(preview.notes);
         if(targets.every(canSelect)){
           const generation=epoch,key=bound;
           for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
@@ -19845,7 +19847,8 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       owner_id: normalizeOwnerId(server.ownerId), device_id: server.deviceId,
       updated_after: server.lastSyncedAt, include_deleted: true, notes,
     };
-    const legacy = noteHistory ? await noteHistory.beginLegacy(body) : null;
+    const readOnlyLegacyPull = !pending && notes.length === 0 && noteHistory?.deferred?.() && noteHistory.syncSupported?.();
+    const legacy = noteHistory && !readOnlyLegacyPull ? await noteHistory.beginLegacy(body) : null;
     if (!isCurrent()) return;
     renderServerStatus("testing", message);
     const response = await fetch(`${server.url}/api/v1/sync`, {
@@ -19879,7 +19882,8 @@ async function syncWebNotesToServer(message = t("settings.server.syncing"), opti
       const syncSummary = t("note.syncMessage", { sent: pushedCount, received: mergeResult.applied });
       setServerRawMessage(server, "ok", `${t("settings.server.syncOk")}: ${syncSummary}${mergeResult.skipped ? `, ${t("settings.server.mergeSkippedCount", { count: mergeResult.skipped })}` : ""}`);
     }
-    persist();
+    if (readOnlyLegacyPull && noteHistory.deferred() && mergeResult.applied === 0) noteHistoryCaptureDrafts();
+    else persist();
     render();
     renderServerMeta();
   } catch (error) {

@@ -11,7 +11,7 @@ function fixture({online=false}={}){
   let root={schema_version:1,contexts:{[account]:{notes:{a:entry('a'),b:entry('b')}}}};
   const notes=Object.fromEntries(Object.entries(root.contexts[account].notes).map(([id,item])=>[id,{projection:'current_v1',raw:item.raw,draft:item.draft,base:{crypto_epoch:0,head_revision_id:'r'},localOnly:!online,pending:0,dirty:false}]));
   const calls=[],pages=[],remote={a:note('a'),b:note('b')};let version=1;
-  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
+  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,syncSupported:true,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
     readPage:async request=>{pages.push(request);return {projection:'history_page_v1',account,id:request.id,stamp,total:1,items:structuredClone(root.contexts[account].notes[request.id].revisions),nextCursor:null};},
     request:async(_ctx,path,method,body)=>{
       calls.push({path,method,id:body.local_id});
@@ -52,6 +52,16 @@ test('online selected synchronization imports and publishes the same durable mut
 test('selected synchronization freezes the requested ID list before awaiting a network response',async()=>{
   const f=fixture({online:true}),ids=['a'],pending=f.api.sync({onlyIds:ids});ids.push('b');await pending;
   assert.ok(f.calls.every(call=>call.id==='a'),'a later caller mutation must not add another synchronization target');
+});
+
+test('default synchronization refreshes all normal documents without a whole journal read',async()=>{
+  const f=fixture({online:true});f.remote.b.content='PEER_REFRESH';
+  await f.api.edit({...f.note('a'),content:'DEFAULT_SELECTED'});await f.api.seal('a');
+  await f.api.sync();
+  assert.equal(f.fullReads(),0);assert.equal(f.api.deferred(),true);
+  assert.equal(f.remote.a.content,'DEFAULT_SELECTED');assert.equal(f.api.currentView('b').draft.content,'PEER_REFRESH');
+  assert.ok(f.calls.some(call=>call.id==='b'&&call.method==='GET'));
+  assert.equal(f.api.syncSupported(),true);
 });
 test('stale selected reads latch failure without a fallback whole read or automatic retry',async()=>{
   const f=fixture();f.externalChange();await assert.rejects(f.api.edit({...f.note('a'),content:'stale'}));

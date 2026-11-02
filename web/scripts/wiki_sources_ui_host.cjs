@@ -46,7 +46,7 @@ app.whenReady().then(async()=>{
         if(!code.trim().startsWith('(async()=>'))return await window.webContents.executeJavaScript(code);
         const result=await window.webContents.executeJavaScript(code+'.then(value=>({qaOK:true,value}),error=>({qaOK:false,message:String(error.message),stack:String(error.stack)}))');
         if(!result.qaOK)throw Error(result.message+' | '+result.stack);return result.value;
-      }catch(error){throw Error('renderer_step_'+step+' '+code.trim().slice(0,70)+' | '+error.message);}
+      }catch(error){const label=code.trim().startsWith('runSelectedHistoryHttp(')?'runSelectedHistoryHttp(<synthetic configuration>)':code.trim().slice(0,70);throw Error('renderer_step_'+step+' '+label+' | '+error.message);}
     },wait=async(code,label)=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };

@@ -122,10 +122,11 @@
     for(const key of wikiMetadata)if(bucket.has(key)&&!(yield* object(['contexts',account,key])))return unavailable();
     const wikiIndexSupported=bucket.size===1;
     const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
-    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox']);
+    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox','wiki_source_snapshot']);
     for(const id of entries.keys()){
       const location=[...path,id],entry=yield* object(location);
       if(!entry||[...entry.keys()].some(k=>!allowed.has(k))||['raw','draft','base','revisions','outbox','receipts'].some(k=>!entry.has(k)))return unavailable();
+      if(entry.has('wiki_source_snapshot')&&(!id.startsWith('wiki-source:')||!(yield* object([...location,'wiki_source_snapshot']))))return unavailable();
       const base=yield* object([...location,'base']);
       if(!base||(yield* value([...location,'base','crypto_epoch']))!==0)return unavailable();
       if(/^wiki(?:[-:]|$)/.test(id)){wikiIds.push(id);continue;}
@@ -141,7 +142,7 @@
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
     }
-    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported};
+    return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};
   }
   function* historyPageSteps({account,id,stamp,cursor=null,limit=50}){
     const fail=()=>Error('이력 페이지의 저장 기준이 다릅니다. 다시 열어 확인하세요.');

@@ -12,17 +12,21 @@ globalThis.runSelectedHistoryHttp=async function({url,token}){
     await noteHistoryRequest(ctx,'current','PUT',{schema_version:1,owner_id:ctx.owner,local_id:id,device_id:ctx.device,mutation_id:crypto.randomUUID(),crypto_epoch:0,
       base_head_version:0,base_revision_id:null,expected_inventory_revision_ids:[],note:NowNoteHistory.meaning(seed)});
     const current=await noteHistoryRequest(ctx,'current','GET',{local_id:id}),note=current.snapshot.note,account=NowNoteHistory.key(ctx);
+    if(typeof note.updated_at!=='string')throw Error('selected_http_missing_sync_cursor');
+    state.settings.server.lastSyncedAt=note.updated_at;
     const root={schema_version:1,contexts:{[account]:{notes:{[id]:{raw:note,draft:note,base:current,revisions:[],outbox:[],receipts:[],replicaSelected:true,localOnly:false,dirty:false}}}}};
     await backend.full({expected:before.value,next:root,revision:before.revision},{active:()=>true});
     state.data=defaultData();await noteHistoryController.resume();state.selectedTreeId=id;render();
     if(!noteHistory.deferred())throw Error('selected_http_not_deferred');
-    IDBObjectStore.prototype.getAll=function(){throw Error('selected_http_whole_history_scan');};
+    IDBObjectStore.prototype.getAll=function(){const frames=new Error().stack.split('\n').slice(1,7).map(line=>line.replace(/\(.*$/,'').trim()).join(' > ');throw Error('selected_http_whole_history_scan: '+frames);};
     elements.treeContent.value='AFTER_SELECTED_HTTP';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
     await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
     const stored=await noteHistoryRequest(ctx,'current','GET',{local_id:id}),entry=noteHistory.view(id);
     if(!noteHistory.deferred()||noteHistory.failure()||stored.snapshot.note.content!=='AFTER_SELECTED_HTTP'||entry.outbox.length!==0
       ||entry.receipts.length!==1||entry.base.head_version!==2||!entry.revisions.every(r=>r.imported))throw Error('selected_http_did_not_settle');
-    result={realHTTP:true,scoped:true,receipt:true,headVersion:entry.base.head_version,providerCalls:0};
+    await syncWebNotesToServer(undefined,{skipFormSave:true});await noteHistoryCaptureChain;await noteHistory.idle();
+    if(!noteHistory.deferred()||noteHistory.failure()||state.settings.server.lastStatus!=='ok')throw Error('default_http_materialized_history');
+    result={realHTTP:true,scoped:true,receipt:true,headVersion:entry.base.head_version,defaultDeferred:true,providerCalls:0};
   }finally{
     IDBObjectStore.prototype.getAll=clone;clearTimeout(serverSyncTimer);for(const timer of noteHistoryTimers.values())clearTimeout(timer);noteHistoryTimers.clear();
     await noteHistoryCaptureChain.catch(()=>{});await noteHistory.idle().catch(()=>{});

@@ -75,6 +75,7 @@
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&preview.wikiIndexSupported!==false&&!failed?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[])}:null,
       page(id,cursor=null,limit=50){
         if(!readPage||!canSelect(id)||full||loading)return Promise.resolve(null);
@@ -126,10 +127,10 @@
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
-      if(name==='sync'&&!full&&preview&&request&&!loading&&args[0]?.onlyIds!==undefined){
+      if(name==='sync'&&!full&&preview&&request&&!loading&&(args[0]?.onlyIds!==undefined||preview.syncSupported===true)){
         const ids=args[0]?.onlyIds;
         if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');
-        const targets=ids?[...ids]:Object.keys(preview.notes).filter(id=>!preview.notes[id].localOnly&&(preview.notes[id].dirty||preview.notes[id].pending));
+        const targets=ids?[...ids]:Object.keys(preview.notes);
         if(targets.every(canSelect)){
           const generation=epoch,key=bound;
           for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
