@@ -43,4 +43,14 @@ function updateStoreFile(storePath, update, expectedHash) {
   return { store: next, hash: writeStoreFile(storePath, next) };
 }
 
-module.exports = { readStoreFile, writeStoreFile, updateStoreFile };
+function compareAndSetStoreValue(storePath, key, value, expected) {
+  return updateStoreFile(storePath, store => {
+    if (JSON.stringify(store.values[key] ?? null) !== JSON.stringify(expected)) {
+      throw new Error("다른 실행에서 저장 자료를 변경했습니다. 이 창의 변경을 백업한 후 다시 열어주세요. 덮어쓰지 않았습니다.");
+    }
+    store.values[key] = value;
+    return store;
+  });
+}
+
+module.exports = { readStoreFile, writeStoreFile, updateStoreFile, compareAndSetStoreValue };

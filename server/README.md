@@ -1,5 +1,53 @@
 # NowNote Server
 
+## 사용자 템플릿·저장 조건 API
+
+사용자 자원은 메모와 별도로 저장합니다. capability의
+`user_templates_schema_version`, `saved_queries_schema_version`은 현재 `1`입니다.
+기본 양식은 제품 읽기 전용이며 사용자 복제 시 새 UUID를 사용합니다.
+
+- `GET /api/v1/templates?owner_id=...&include_deleted=true`
+- `GET /api/v1/saved-queries?owner_id=...&include_deleted=true`
+- `PUT /api/v1/templates/{uuid}`, `PUT /api/v1/saved-queries/{uuid}`
+- `DELETE /api/v1/templates/{uuid}`, `DELETE /api/v1/saved-queries/{uuid}`
+
+목록 응답은 `{status:"ok",items:[...]}`, 기본값은 삭제 제외입니다.
+Web 세션 `X-Now-Web-Session` 또는 사용자 접속 토큰 `X-Now-User-Token`이 필요하며,
+기존 개인 서버 API 토큰 정책도 유지합니다.
+
+PUT 요청 예:
+
+```json
+{
+  "owner_id": "사용자ID",
+  "schema_version": 1,
+  "base_version": 0,
+  "mutation_id": "0c1db70b-517d-4ae0-931d-7bd70188ebec",
+  "payload": {"name": "회의", "content_template": "# {{title}}"}
+}
+```
+
+생성은 base_version=0, 수정·삭제는 목록에서 받은 version을 사용합니다.
+DELETE는 같은 본문에서 payload를 제외합니다. 성공 응답은
+`{status:"ok",resource:{id,owner_id,schema_version,version,payload,created_at,updated_at,deleted_at},mutation_id}`입니다.
+삭제는 version을 올리고 payload=null인 tombstone을 남깁니다. 삭제 ID는 재사용할 수 없습니다.
+같은 mutation_id와 동일 요청은 최초 응답을 재현하며 현재 DB 상태를 되돌리지 않습니다.
+응답 유실 재시도는 같은 mutation_id를 사용하고, 완료 후 목록을 다시 조회합니다.
+
+템플릿 payload는 name/content_template와 선택 title_template/description/properties(문자열 사전)/
+variables(date,time,title)를 받습니다. 암호화 본문 envelope는 거절합니다.
+클라이언트도 잠금 해제 평문 원본을 파생하지 않도록 확인해야 합니다.
+조건 payload는 name/order/filter/sort를 받습니다. filter는 text/tags(all,any)/
+scope(topic_id,category_id)/favorite/updated(from,to), sort는 field(updated_at,title)/
+direction(asc,desc)만 허용합니다. 기간에는 timezone을 포함합니다.
+조건은 클라이언트의 가용 메모에서 평가하며 서버 검색은 실행하지 않습니다.
+
+한도는 종류별 활성 자원 100개, canonical UTF-8 JSON payload 기준 템플릿 1MiB/조건 16KiB입니다.
+초과는 409 resource_limit / 413 payload_too_large이며 자르지 않습니다.
+버전 경합·삭제 ID 재사용·mutation 불일치는 409, 미지원 schema/중첩 필드는 422입니다.
+인증 없음은 401, 비활성 사용자/기기는 403입니다. 타인 목록/내용은 노출하지 않습니다.
+이 자원과 재시도 원장은 서버 JSON 백업 v2에 포함되며 v1 검증도 지원합니다.
+
 NowNote 1차 서버는 개인 Docker 서버에서 메모와 녹음 파일을 동기화하기 위한 기본 API입니다.
 공용 운영 서버에도 같은 프로그램을 사용할 예정입니다. 사용자별 토큰 확인 화면/API와 2단계 코드 검증 절차는 준비되어 있으며, 공용 오픈 전에는 HTTPS/reverse proxy 구성을 별도로 완성해야 합니다.
 

@@ -1,15 +1,15 @@
 API_VERSION = "v1"
+MIXED_MUTATIONS_ENABLED = False
 TWO_FACTOR_AUTH_STATUS = "token_code"
 MAX_TREE_NOTE_LEVEL = 3
 SUPPORTED_NOTE_TYPES = ["daily", "tree", "record", "worklog"]
 
 # 앱/설치형 버전 안내 (P10)에서 쓰는 "최신 버전" 값.
-# NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md의 버전 기준에 따라 서버·Web·설치형·앱은
-# 같은 릴리즈 번호를 쓴다. 이 상수가 그 기준의 서버 쪽 선언이다.
+# Web·Windows 후보는 같은 판본을 사용하고 Android는 앱 담당의 게시 판본을 유지한다.
 # GitHub Release API 등 외부 서비스를 요청마다 부르지 않기 위해 코드 상수로 둔다.
-# 릴리즈마다 여기와 now_app/pubspec.yaml의 version, desktop/package.json의 version,
-# desktop/app/app.js의 APP_VERSION을 같은 값으로 맞춰 올린다.
-LATEST_APP_VERSION = "2.3.9"
+# Web·Windows 릴리스마다 Desktop package/lock과 양 app의 APP_VERSION을 맞춘다.
+LATEST_APP_VERSION = "2.4.0"
+ANDROID_APP_VERSION = "2.3.9"
 GITHUB_RELEASE_REPO = "cyhuh428-sinsan/Now"
 
 # 사설 네트워크 연결 판정에 쓸 수 있는 무인증 엔드포인트 목록.
@@ -128,6 +128,11 @@ SERVER_CAPABILITIES = {
     "mail_secret_encryption": True,
     "max_tree_note_level": MAX_TREE_NOTE_LEVEL,
     "supported_note_types": SUPPORTED_NOTE_TYPES,
+    "user_templates_schema_version": 1,
+    "saved_queries_schema_version": 1,
+    "wiki_document_schema": 2,
+    "wiki_operations_v1": True,
+    "wiki_operation_manifest_schema": 2,
     # 문서 이동 (P7)
     # note_tree_parent_validation: parent_local_id를 바꿔 upsert하는 방식으로
     # 이동이 이미 가능하고 서버가 새 부모의 존재/레벨을 검증한다는 뜻.
@@ -153,23 +158,24 @@ SERVER_CAPABILITIES = {
 }
 
 
-def app_release_info() -> dict:
+def app_release_info(platform: str = "windows") -> dict:
     """최신 버전, 플랫폼별 다운로드 링크, GitHub Release 페이지 안내.
 
-    자동 업데이트가 아니라 안내용 정보만 준다. 설치형(.exe)·앱(.apk) asset 이름은
-    NOW_2_3_RELEASE_GOVERNANCE_CHECKLIST.md의 규칙(`NowNote-Setup-2.3.x-x64.exe`,
-    `NowNote-2.3.x.apk`)을 따른다.
+    기존 호출은 Windows 안내이며 Android 조회·다운로드는 독립 판본을 사용한다.
+    파일명은 NowNote-Setup-{version}-x64.exe와 NowNote-{version}.apk를 유지한다.
     """
-    version = LATEST_APP_VERSION
+    if platform not in {"windows", "web", "android"}:
+        raise ValueError("Unsupported release platform")
+    version = ANDROID_APP_VERSION if platform == "android" else LATEST_APP_VERSION
     tag = f"v{version}"
-    download_base = f"https://github.com/{GITHUB_RELEASE_REPO}/releases/download/{tag}"
+    download_base = f"https://github.com/{GITHUB_RELEASE_REPO}/releases/download"
     return {
         "latest_version": version,
         "release_tag": tag,
         "release_url": f"https://github.com/{GITHUB_RELEASE_REPO}/releases/tag/{tag}",
         "downloads": {
-            "windows_installer": f"{download_base}/NowNote-Setup-{version}-x64.exe",
-            "android_apk": f"{download_base}/NowNote-{version}.apk",
+            "windows_installer": f"{download_base}/v{LATEST_APP_VERSION}/NowNote-Setup-{LATEST_APP_VERSION}-x64.exe",
+            "android_apk": f"{download_base}/v{ANDROID_APP_VERSION}/NowNote-{ANDROID_APP_VERSION}.apk",
         },
     }
 
@@ -189,6 +195,10 @@ def messenger_attachment_capabilities() -> dict:
 
 def server_capabilities() -> dict:
     capabilities = dict(SERVER_CAPABILITIES)
+    enabled = MIXED_MUTATIONS_ENABLED is True
+    capabilities.update(mixed_representation_read_v1=True, mixed_representation_schema=3,
+        mixed_current_plain_v1=enabled, mixed_full_conversion_v1=enabled, mixed_note_write_v1=enabled,
+        mixed_offline_import_v1=enabled, mixed_analysis_source_v1=enabled, full_protection_complete=enabled)
     capabilities["supported_note_types"] = list(SERVER_CAPABILITIES["supported_note_types"])
     capabilities["connection_probe_endpoints"] = list(CONNECTION_PROBE_ENDPOINTS)
     capabilities.update(messenger_attachment_capabilities())

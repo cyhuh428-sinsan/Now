@@ -1,0 +1,164 @@
+/* Real HTTP QA host. No static server, response replacement, synthetic API, or production profile. */
+const {app,BrowserWindow,ipcMain,session}=require('electron');
+const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const config=JSON.parse(fs.readFileSync(process.argv[2],'utf8'));
+const qaRoot=path.resolve('D:/tmp/now-240-e4b3a-http');
+if(!path.resolve(config.profile).startsWith(qaRoot+path.sep))throw Error('profile_boundary');
+app.setPath('userData',config.profile);app.disableHardwareAcceleration();
+const credentials=JSON.parse(fs.readFileSync(config.secrets,'utf8'));
+if(config.phase===24)credentials.a.device+='-peer';
+if([52,53].includes(config.phase))credentials.a.device+='-wiki-peer';
+const clientMode=config.phase===24?'desktop':config.mode;
+const tokenLine=fs.readFileSync(config.envFile,'utf8').split(/\r?\n/).find(v=>v.startsWith('NOW_QA_API_TOKEN='));
+let apiToken=tokenLine?.slice('NOW_QA_API_TOKEN='.length).trim();
+if(apiToken?.startsWith('"')&&apiToken.endsWith('"'))apiToken=apiToken.slice(1,-1);
+if(!apiToken)throw Error('qa_api_token_missing');
+const storeFile=path.join(config.profile,'nownote-desktop-store.json');
+const {readStoreFile,updateStoreFile,compareAndSetStoreValue}=require(path.join(config.root,'desktop/store-file.cjs'));
+const source=fs.readFileSync(path.join(config.root,'desktop/main.cjs'),'utf8');
+const from=source.indexOf('function updateRendererStoreValue('),to=source.indexOf('function registerVaultHandlers(',from);
+const keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
+const box={compareAndSetStoreValue,updateStoreFile,desktopStorePath:()=>storeFile,assertRendererStoreKey:k=>{if(!keys.has(k))throw Error('store_key');}};
+vm.runInNewContext(source.slice(from,to)+'\nglobalThis.write=updateRendererStoreValue;',box);
+let failData=config.phase===1;
+let failEditor=config.editorRestart&&config.phase===2;
+let failImport=config.importRestart&&config.phase===2;
+function hasProtectedTarget(tree,owner,local){
+  const pending=Array.isArray(tree)?[...tree]:[];
+  while(pending.length){
+    const node=pending.pop(),scope=node?.protection_record?.scope;
+    if(scope?.owner===owner&&scope.local_id===local)return true;
+    if(Array.isArray(node?.children))pending.push(...node.children);
+  }
+  return false;
+}
+function write(key,value,options){
+  if(failData&&key==='nownote.web.v1'&&options&&Object.hasOwn(options,'expectedValue')&&hasProtectedTarget(value.tree,credentials.a.owner,'qa-http-'+config.run+'-target')){failData=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_data_CAS_once'});throw Error('qa_local_CAS_failure');}
+  if(failEditor&&key==='nownote.history.v1'&&options?.expectedValue){
+    const target='qa-http-'+config.run+'-target',markers=Object.values(value.protection_operations||{}).filter(m=>m.scope.local_id===target);
+    const changed=Object.entries(value.contexts||{}).some(([k,c])=>{const before=options.expectedValue.contexts?.[k]?.notes?.[target]?.protection_record,after=c.notes?.[target]?.protection_record;return before&&after&&before.operation_id!==after.operation_id;});
+    if(markers.length===4&&markers.some(m=>m.phase==='applying')&&changed){failEditor=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_MW_journal_CAS_once'});throw Error('qa_MW_journal_CAS_failure');}
+  }
+  if(failImport&&key==='nownote.history.v1'&&options?.expectedValue){
+    const target='qa-http-'+config.run+'-target',markers=Object.values(value.protection_operations||{}).filter(m=>m.scope.local_id===target);
+    const changed=Object.entries(value.contexts||{}).some(([k,c])=>{const before=options.expectedValue.contexts?.[k]?.notes?.[target]?.protection_record,after=c.notes?.[target]?.protection_record;return before&&after&&before.operation_id!==after.operation_id;});
+    if(markers.length===5&&markers.some(m=>m.phase==='applying')&&changed){failImport=false;persistEvidence({mode:config.mode,phase:config.phase,localFailure:'own_MI_journal_CAS_once'});throw Error('qa_MI_journal_CAS_failure');}
+  }
+  const r=box.write(key,value,options);return {ok:true,updatedAt:r.store.updatedAt};
+}
+ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');return readStoreFile(storeFile).store.values[k]??null;});
+ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
+ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_local_CAS_failure'};}});
+ipcMain.handle('nownote:desktop-store-info',()=>({path:storeFile,version:1,keys:Object.keys(readStoreFile(storeFile).store.values)}));
+ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
+const evidenceRecorder=require('./http_qa_evidence.cjs').createEvidenceRecorder(config);
+const persistEvidence=evidenceRecorder.record;
+const failureStateScript=`(()=>{
+  const dialog=document.querySelector('#wikiDialog');
+  const status=dialog?.querySelector('[role=status]')?.textContent?.trim()||'';
+  const known=new Map([
+    ['검토 중 저장 상태가 변경되었습니다. 다시 확인하세요.','journal_changed'],
+    ['계정·서버가 변경되었습니다. 원문은 보존했습니다.','context_changed'],
+    ['서버 위키의 기준·출처 판본을 다시 확인하세요.','baseline_changed'],
+    ['인용 확인 완료 · 내용의 사실성은 별도 검토가 필요합니다.','query_verified']
+  ]);
+  const wait=globalThis.__WIKI_QA_WAIT_FAILURE__;
+  return {open:Boolean(dialog?.open),busy:Boolean(dialog?.querySelector('[data-wiki-action=sources]')?.disabled),
+    status:known.get(status)||(/^wiki_[a-z0-9_]+$/.test(status)?status:'unclassified'),
+    waitCode:typeof wait?.code==='string'&&/^wiki_ingest_[a-z0-9_]+$/.test(wait.code)?wait.code:null,
+    elapsedMs:Number.isSafeInteger(wait?.elapsedMs)&&wait.elapsedMs>=0?wait.elapsedMs:null};
+})()`;
+function exit(code){try{evidenceRecorder.flush();}catch{code=1;}app.exit(code);}
+let blockQaApi=false,syntheticProvider=null,providerAttempts=0;
+async function closeSyntheticProvider(){
+  if(syntheticProvider){
+    const provider=syntheticProvider;await provider.close();
+    persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{port:provider.port,...provider.stats(),attempts:providerAttempts,closed:!provider.isListening()}});syntheticProvider=null;
+  }else if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase))persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:providerAttempts,closed:true}});
+}
+app.whenReady().then(async()=>{
+  if([14,16,18,26,29].includes(config.phase)){
+    syntheticProvider=await require('./note_protection_http_provider.cjs').startSyntheticProvider({run:config.run,mode:config.mode,purpose:config.phase===18?'ui':'core'});
+    persistEvidence({mode:config.mode,phase:config.phase,syntheticProviderStarted:{port:syntheticProvider.port,loopbackOnly:true,externalCalls:0}});
+  }
+  const proxy=await session.defaultSession.resolveProxy('http://127.0.0.1:8750');
+  persistEvidence({mode:config.mode,phase:config.phase,proxyDirect:proxy==='DIRECT'});
+  session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(d,done)=>{
+    const u=new URL(d.url),api=['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750';
+    if(d.method==='POST'&&u.pathname==='/v1/chat/completions')providerAttempts++;
+    const provider=syntheticProvider&&u.origin===syntheticProvider.origin&&u.pathname==='/v1/chat/completions'&&!u.search&&['POST','OPTIONS'].includes(d.method);
+    done({cancel:blockQaApi||!api&&!provider});
+  });
+  session.defaultSession.webRequest.onCompleted({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(u.pathname.startsWith('/api/'))persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,status:d.statusCode});});
+  session.defaultSession.webRequest.onErrorOccurred({urls:['http://*/*','https://*/*']},d=>{const u=new URL(d.url);if(['localhost.','127.0.0.1'].includes(u.hostname)&&u.port==='8750')persistEvidence({mode:config.mode,phase:config.phase,method:d.method,path:u.pathname,error:/^net::ERR_[A-Z_]+$/.test(d.error)?d.error:'network_error'});});
+  const window=new BrowserWindow({show:false,width:1280,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,...(clientMode==='desktop'?{preload:path.join(config.root,'desktop/preload.cjs')}:{})}});
+  window.webContents.on('console-message',(...args)=>{
+    const message=args.find(v=>typeof v==='string'&&v.startsWith('HTTP_QA_EVENT ')) || args[1]?.message;
+    if(typeof message!=='string'||!message.startsWith('HTTP_QA_EVENT '))return;
+    try{const event=JSON.parse(message.slice(14));const allowed=['stage','owner','local_id','operation_id','local_operation_id','phase','server_instance_id','device_id','code','statusHash','open','protectPresent','protectDisabled','bodyPresent','sourceBlocked','supportEnabled'];if(Object.keys(event).some(k=>!allowed.includes(k)))return;persistEvidence({mode:config.mode,phase:config.phase,event});
+      if(config.offlineDraft&&config.phase===8&&event.stage==='offline_draft_start'&&event.owner===credentials.a.owner&&event.local_id==='qa-http-'+config.run+'-target'){
+        blockQaApi=true;void window.webContents.executeJavaScript('globalThis.__HTTP_QA_OFFLINE_ACK__=true');
+      }
+      if(['canvas_ready','wiki_relation_ready','wiki_graph_ready'].includes(event.stage))void(async()=>{
+        for(const [size,width,height]of [['desktop',1280,900],['mobile',390,844]]){
+          window.setContentSize(width,height);
+          await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          if(event.stage==='wiki_relation_ready'){
+            const fits=await window.webContents.executeJavaScript('(()=>{const d=document.querySelector("#wikiDialog"),f=d?.querySelector("[data-wiki-integration]");return Boolean(f&&f.scrollWidth<=f.clientWidth+1&&d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth);})()');
+            if(!fits)throw Error('wiki_relation_layout');
+          }
+          if(event.stage==='wiki_graph_ready'){
+            await window.webContents.executeJavaScript('__HTTP_QA_WIKI_GRAPH__.instance.resize();__HTTP_QA_WIKI_GRAPH__.instance.fit(undefined,36);new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+            const frame=await window.webContents.executeJavaScript('(()=>{const cy=__HTTP_QA_WIKI_GRAPH__.instance,c=document.querySelector(".wiki-graph-canvas"),d=document.querySelector("#wikiDialog"),r=c.getBoundingClientRect();let pixels=0;for(const canvas of c.querySelectorAll("canvas")){const data=canvas.getContext("2d").getImageData(0,0,canvas.width,canvas.height).data;for(let i=3;i<data.length;i+=4)if(data[i])pixels++;}return {nodes:cy.nodes().length,edges:cy.edges().length,pixels,width:r.width,height:r.height,fits:r.right<=d.getBoundingClientRect().right+1&&d.scrollWidth<=d.clientWidth+1};})()');
+            if(frame.nodes!==2||frame.edges!==4||frame.pixels<100||frame.width<100||!frame.fits)throw Error('wiki_graph_frame');
+            persistEvidence({mode:config.mode,phase:config.phase,graphFrame:{size,...frame}});
+          }
+          const name=({canvas_ready:'canvas',wiki_relation_ready:'wiki-relation',wiki_graph_ready:'wiki-graph'}[event.stage])+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
+          persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
+        }
+        window.setContentSize(1280,900);await window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=true');
+      })().catch(()=>{persistEvidence({mode:config.mode,phase:config.phase,captureFailure:'canvas_capture_failed'});void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_ERROR__="capture_failed"');});
+      if(['backup_restore_ready','analysis_ui_result_ready','analysis_publication_ready','analysis_replan_ready','transcript_ready','analysis_apply_ready'].includes(event.stage)||event.stage==='related_create_ready'&&config.relatedOnly || ['editor_ready','editor_view_ready'].includes(event.stage)&&config.editorWrite || ['import_ready','comparison_ready'].includes(event.stage)&&config.importWrite)void(async()=>{
+        for(const [size,width,height] of [['desktop',1280,900],['mobile',390,844]]){
+          persistEvidence({mode:config.mode,phase:config.phase,captureStage:size+'_start'});
+          window.setContentSize(width,height);
+          await window.webContents.executeJavaScript('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
+          const name=(event.stage==='backup_restore_ready'?'backup-restore':event.stage==='analysis_apply_ready'?'analysis-apply':event.stage==='transcript_ready'?'transcript':event.stage==='analysis_replan_ready'?'analysis-replanned':event.stage==='analysis_publication_ready'?'analysis-published':event.stage==='analysis_ui_result_ready'?'analysis':event.stage==='editor_view_ready'?'editor-view':event.stage==='related_create_ready'?'related-create':event.stage==='comparison_ready'?'comparison':event.stage==='import_ready'?'import':'editor')+'-'+config.run+'-'+config.mode+'-'+size+'.png';
+          fs.writeFileSync(path.join(path.dirname(config.manifestFile),name),(await window.webContents.capturePage(undefined,{stayHidden:true})).toPNG());
+          persistEvidence({mode:config.mode,phase:config.phase,screenshot:name});
+        }
+        window.setContentSize(1280,900);await window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_DONE__=true');
+      })().catch(()=>{persistEvidence({mode:config.mode,phase:config.phase,captureFailure:'capture_failed'});void window.webContents.executeJavaScript('globalThis.__HTTP_CAPTURE_ERROR__="capture_failed"');});
+    }catch{}
+  });
+  try {
+    if(syntheticProvider&&await session.defaultSession.resolveProxy(syntheticProvider.origin)!=='DIRECT')throw Error('synthetic_provider_proxy_not_direct');
+    if(clientMode==='web')await window.loadURL('http://localhost.:8750/');else await window.loadFile(path.join(config.root,'desktop/app/index.html'));
+    for(let i=0;i<240;i++){if(await window.webContents.executeJavaScript('typeof noteHistory!=="undefined"&&Boolean(noteHistory&&noteProtection)'))break;await new Promise(r=>setTimeout(r,50));if(i===239)throw Error('app_init_timeout');}
+    await window.webContents.executeJavaScript('globalThis.__HTTP_QA__='+JSON.stringify({...config,credentials,apiToken,syntheticProviderUrl:syntheticProvider?.baseUrl||null}));
+    await window.webContents.executeJavaScript('globalThis.__HTTP_QA_CAPTURE_FAILURE__=()=>'+failureStateScript+';undefined;');
+    if([50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase))await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/wiki_ingest_http_fixture.js'),'utf8')+'\n;undefined;');
+    const result=await window.webContents.executeJavaScript(fs.readFileSync(path.join(config.root,'web/scripts/note_protection_http_fixture.js'),'utf8'));
+    if([40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69].includes(config.phase)){
+      if(providerAttempts!==0)throw Error('canvas_provider_attempt');
+      persistEvidence({mode:config.mode,phase:config.phase,syntheticProvider:{calls:0,matched:0,attempts:0,closed:true}});
+    }
+    if(syntheticProvider&&(syntheticProvider.stats().calls!==1||syntheticProvider.stats().matched!==1||providerAttempts!==1))throw Error('synthetic_provider_call_count');
+    if([15,17,19,20,21,22,23,24,25,27,28,30,31,32,33,34,35,36,37,38,39].includes(config.phase)&&providerAttempts!==0)throw Error('synthetic_provider_repeated_after_restart');
+    fs.writeFileSync(config.result,JSON.stringify(result));persistEvidence({mode:config.mode,phase:config.phase,result});
+    await closeSyntheticProvider();
+    window.destroy();exit(0);
+  }catch(error){
+    const messages=[['잠금 또는 보호 대상 변경으로 작업이 취소되었습니다.','protection_view_changed'],['위키 보호 계정·서버가 변경되었습니다.','wiki_scope_changed'],['보호 응답의 인증 상태가 변경되었습니다.','protection_auth_changed']];
+    const code=messages.find(([message])=>error.message?.includes(message))?.[1]
+      || (/^[a-zA-Z0-9_:.-]+$/.test(error.message)?error.message:'client_error');
+    const errorType=/^[A-Za-z]{1,40}$/.test(error.name)?error.name:'Error';
+    try{
+      const failureState=await window.webContents.executeJavaScript('globalThis.__WIKI_QA_FAILURE_STATE__||'+failureStateScript);
+      persistEvidence({mode:config.mode,phase:config.phase,failureState});
+    }catch{persistEvidence({mode:config.mode,phase:config.phase,failureState:{unavailable:true}});}
+    persistEvidence({mode:config.mode,phase:config.phase,failure:code,errorType});await closeSyntheticProvider();window.destroy();exit(1);
+  }
+});
+setTimeout(()=>{persistEvidence({mode:config.mode,phase:config.phase,failure:'client_timeout_uncertain'});void closeSyntheticProvider().finally(()=>exit(1));},[66,68,69].includes(config.phase)?240000:120000).unref();

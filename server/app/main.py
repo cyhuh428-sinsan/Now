@@ -2,7 +2,7 @@ from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app.api.admin import router as admin_router
@@ -12,10 +12,22 @@ from app.api.auth import api_router as auth_api_router
 from app.api.auth import page_router as auth_page_router
 from app.api.health import router as health_router
 from app.api.mail import router as mail_router
+from app.api.library import router as library_router
+from app.api.wikis import router as wikis_router
+from app.api.wiki_operations import router as wiki_operations_router
 from app.api.group_messages import router as group_messages_router
 from app.api.messenger import router as messenger_router
 from app.api.monitor import router as monitor_router
 from app.api.notes import router as notes_router
+from app.api.note_v2 import router as note_v2_router
+from app.api.note_crypto import router as note_crypto_router
+from app.api.note_mixed import router as note_mixed_router, operations_router as mixed_operations_router
+from app.api.note_protected_write import router as note_protected_write_router
+from app.api.note_protected_import import router as note_protected_import_router
+from app.api.related_text import router as related_text_router
+from app.api.protected_analysis import router as protected_analysis_router, transcript_router as protected_transcript_router
+from app.api.mixed_analysis import router as mixed_analysis_router
+from app.api.mixed_related import router as mixed_related_router, transcript_router as mixed_transcript_router
 from app.api.public_pages import router as public_pages_router
 from app.api.recordings import router as recordings_router
 from app.api.server import router as server_router
@@ -40,6 +52,18 @@ def _web_app_dir() -> Path | None:
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.server_name)
+    @app.middleware("http")
+    async def note_history_no_store(request, call_next):
+        try:
+            response = await call_next(request)
+        except Exception:
+            if request.url.path.startswith(("/api/v2/notes", "/api/v1/wikis", "/api/v1/wiki-operations")):
+                return JSONResponse({"detail": {"code": "internal_error"}}, status_code=500,
+                                    headers={"Cache-Control": "no-store"})
+            raise
+        if request.url.path.startswith(("/api/v2/notes", "/api/v1/wikis", "/api/v1/wiki-operations")):
+            response.headers["Cache-Control"] = "no-store"
+        return response
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -63,6 +87,18 @@ def create_app() -> FastAPI:
     app.include_router(app_release_router)
     app.include_router(auth_api_router)
     app.include_router(notes_router)
+    app.include_router(note_v2_router)
+    app.include_router(note_crypto_router)
+    app.include_router(note_mixed_router)
+    app.include_router(mixed_operations_router)
+    app.include_router(note_protected_write_router)
+    app.include_router(note_protected_import_router)
+    app.include_router(related_text_router)
+    app.include_router(protected_analysis_router)
+    app.include_router(mixed_analysis_router)
+    app.include_router(mixed_related_router)
+    app.include_router(mixed_transcript_router)
+    app.include_router(protected_transcript_router)
     app.include_router(recordings_router)
     app.include_router(sync_router)
     app.include_router(users_router)
@@ -71,6 +107,9 @@ def create_app() -> FastAPI:
     app.include_router(messenger_router)
     app.include_router(analysis_router)
     app.include_router(admin_router)
+    app.include_router(library_router)
+    app.include_router(wikis_router)
+    app.include_router(wiki_operations_router)
     if web_app_dir is not None:
         @app.get("/app", include_in_schema=False)
         def web_app_compat_index() -> FileResponse:

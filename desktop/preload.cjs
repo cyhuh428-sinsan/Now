@@ -3,11 +3,12 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("nownoteDesktop", {
   platform: process.platform,
   desktopShell: "electron",
+  openDocumentFile: (filePath) => ipcRenderer.invoke("nownote:open-document-file", filePath),
   storage: {
     info: () => ipcRenderer.invoke("nownote:desktop-store-info"),
     read: (key) => ipcRenderer.invoke("nownote:desktop-store-read", key),
-    write: (key, value) => ipcRenderer.invoke("nownote:desktop-store-write", key, value),
-    writeSync: (key, value) => ipcRenderer.sendSync("nownote:desktop-store-write-sync", key, value),
+    write: (key, value, options) => ipcRenderer.invoke("nownote:desktop-store-write", key, value, options),
+    writeSync: (key, value, options) => ipcRenderer.sendSync("nownote:desktop-store-write-sync", key, value, options),
   },
   vault: {
     choose: () => ipcRenderer.invoke("nownote:vault-choose"),

@@ -1,0 +1,15 @@
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const source=await fs.readFile(new URL('./note_protection_http_host.cjs',import.meta.url),'utf8');
+const start=source.indexOf('function hasProtectedTarget(');
+assert.ok(start>=0,'fault injection must find the exact QA target below any parent');
+const tail=source.slice(start),end=/\nfunction [A-Za-z]/.exec(tail),box=vm.createContext({});
+vm.runInContext(tail.slice(0,end.index)+'\nglobalThis.check=hasProtectedTarget;',box);
+const own={protection_record:{scope:{owner:'qa-own',local_id:'qa-target'}}};
+assert.equal(box.check([own],'qa-own','qa-target'),true);
+assert.equal(box.check([{children:[{children:[own]}]}],'qa-own','qa-target'),true);
+assert.equal(box.check([own],'another-owner','qa-target'),false);
+assert.equal(box.check([own],'qa-own','another-target'),false);
+assert.equal(box.check([],'qa-own','qa-target'),false);
+console.log('QA fault target: 5 PASS (root/nested exact own scope; no server or profile mutation)');

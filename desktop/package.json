@@ -1,6 +1,6 @@
 {
   "name": "nownote-desktop",
-  "version": "2.3.9",
+  "version": "2.4.0",
   "private": true,
   "description": "NowNote Windows desktop client with the Web-equivalent surface.",
   "author": "Sinsan",
@@ -25,6 +25,7 @@
       "preload.cjs",
       "vault-*.cjs",
       "store-file.cjs",
+      "document-links.cjs",
       "app/**/*"
     ],
     "asar": true,

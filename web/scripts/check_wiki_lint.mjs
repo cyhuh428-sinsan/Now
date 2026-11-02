@@ -1,0 +1,69 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+import {fixture,ctx,clone,id} from './wiki_ingest_fixture.mjs';
+import {documents} from './check_wiki_graph.mjs';
+const {box,P,catalog:legacyCatalog}=await fixture();
+try{vm.runInContext(await fs.readFile(new URL('../vendor/wiki-lint.js',import.meta.url),'utf8'),box);}catch(error){if(error.code!=='ENOENT')throw error;}
+const L=box.NowWikiLint;assert.equal(typeof L?.lintWikiCatalog,'function','approved I11 needs a deterministic read-only Wiki audit');
+const scope={url:ctx.url,owner:ctx.owner};
+const rows=documents.map(document=>({id:document.wiki_id,document:clone(document),origin:'server',index_status:'present',source_checks:[],relation_checks:[]}));
+const input={scope,rows},before=P.canonicalJson(input);
+const result=await L.lintWikiCatalog(input,{});
+assert.equal(result.checked,2);assert.equal(result.excluded,0);assert.equal(result.errors,0);assert.equal(result.writes,undefined);
+assert.ok(result.findings.some(f=>f.rule_code==='wiki_lint_verification_missing'),'missing live checks are not a PASS');
+const wrong=clone(input);wrong.rows[0].document.drafts[0].sections[0].markdown+=' changed';
+assert.ok((await L.lintWikiCatalog(wrong,{})).findings.some(f=>f.rule_code==='wiki_lint_document_invalid'&&f.severity==='error'));
+const hidden=clone(input);hidden.rows[0].protected=true;hidden.rows[0].document.drafts[0].title='PROTECTED_PRIVATE_LABEL';
+const hiddenResult=await L.lintWikiCatalog(hidden,{});assert.equal(hiddenResult.checked,1);assert.equal(hiddenResult.excluded,1);assert.ok(!JSON.stringify(hiddenResult).includes('PROTECTED_PRIVATE_LABEL'));
+const foreign=clone(input);foreign.rows[0].document.scope.owner='other';foreign.rows[0].document.drafts[0].title='FOREIGN_PRIVATE_LABEL';
+const foreignResult=await L.lintWikiCatalog(foreign,{});assert.equal(foreignResult.excluded,1);assert.ok(!JSON.stringify(foreignResult).includes(foreign.rows[0].id));
+const damaged=clone(input);damaged.rows[0].index_status='missing';damaged.rows[0].source_checks=[{draft_id:damaged.rows[0].document.drafts[0].id,evidence_id:'source-1',status:'changed'}];
+damaged.rows[0].relation_checks=[{draft_id:damaged.rows[0].document.drafts[0].id,relation_id:'r1',status:'missing_target'}];
+const findings=(await L.lintWikiCatalog(damaged,{})).findings;
+assert.ok(findings.some(f=>f.rule_code==='wiki_lint_index_missing'));
+assert.ok(findings.some(f=>f.rule_code==='wiki_lint_source_changed'&&f.severity==='warning'));
+assert.ok(findings.some(f=>f.rule_code==='wiki_lint_relation_target_missing'&&f.severity==='error'));
+for(const [status,code,severity,excluded] of [
+  ['missing','source_missing','error',false],['quote_mismatch','citation_mismatch','error',false],['foreign','foreign_reference','error',false],
+  ['invalid','source_invalid','error',false],['locked','source_locked','warning',true],['unsupported','source_unsupported','warning',true],['unavailable','source_unavailable','warning',true]
+]){
+  const sample=clone(input);sample.rows[0].source_checks=[{draft_id:sample.rows[0].document.drafts[0].id,evidence_id:'source-1',status}];
+  const report=await L.lintWikiCatalog(sample,{});assert.ok(report.findings.some(f=>f.rule_code==='wiki_lint_'+code&&f.severity===severity),status);
+  if(excluded)assert.ok(report.source_excluded>0,'unreadable sources stay outside verified coverage');
+}
+const unreadable=clone(input);unreadable.rows[0].unavailable=true;unreadable.rows[0].index_status='missing';
+const unreadableResult=await L.lintWikiCatalog(unreadable,{});assert.equal(unreadableResult.checked,1);assert.equal(unreadableResult.excluded,1);
+assert.ok(unreadableResult.findings.some(f=>f.rule_code==='wiki_lint_index_missing'),'an unavailable body does not hide an independently known missing index');
+const selected=await L.lintWikiCatalog(input,{wiki_ids:[rows[0].id]});assert.equal(selected.checked,1);assert.equal(selected.out_of_scope,1);
+await assert.rejects(()=>L.lintWikiCatalog(input,{wiki_ids:[id(999)]}));
+const orphan={scope,rows:[{...clone(rows[0]),relation_checks:[{draft_id:rows[0].document.drafts[0].id,relation_id:'r1',status:'missing_target'}]}]};
+assert.ok((await L.lintWikiCatalog(orphan,{})).findings.some(f=>f.rule_code==='wiki_lint_orphan'&&f.severity==='information'));
+const legacy=clone(input);legacy.rows[0].document.schema_version=3;
+assert.equal((await L.lintWikiCatalog(legacy,{})).excluded,1);
+const missingSchema=clone(input);delete missingSchema.rows[0].document.schema_version;
+assert.ok((await L.lintWikiCatalog(missingSchema,{})).findings.some(f=>f.rule_code==='wiki_lint_document_invalid'),'a missing required schema is damaged, not a supported future-format exclusion');
+const hiddenTopic=clone(input);hiddenTopic.rows[0].protected=true;delete hiddenTopic.rows[0].document;
+const topicResult=await L.lintWikiCatalog(hiddenTopic,{topic:hiddenTopic.rows[1].document.drafts[0].topic});
+assert.equal(topicResult.excluded,1,'a hidden topic cannot be certified outside the requested scope');
+const stateChanged=clone(input);stateChanged.rows[0].state_issue='trash_state_changed';stateChanged.rows[0].unavailable=true;
+assert.ok((await L.lintWikiCatalog(stateChanged,{})).findings.some(f=>f.rule_code==='wiki_lint_trash_state_changed'&&f.severity==='warning'));
+const badBinding=clone(input),source=badBinding.rows[0].document,target=badBinding.rows[1].document,draft=source.drafts[0],approval=target.approvals[0];
+draft.relations[0].to_ref={kind:'approved',wiki_id:target.wiki_id,draft_id:approval.draft_id,approval_id:approval.id,draft_hash:'f'.repeat(64),section_id:'s1'};
+delete draft.draft_hash;draft.draft_hash=await P.hashJson(draft);source.approvals[0].draft_hash=draft.draft_hash;
+badBinding.rows[0].relation_checks=[{draft_id:draft.id,relation_id:'r1',status:'ok'}];
+assert.ok((await L.lintWikiCatalog(badBinding,{})).findings.some(f=>f.rule_code==='wiki_lint_relation_binding_invalid'),'an ok hint cannot override a mismatched approved endpoint hash');
+const citationLinks={scope:clone(scope),rows:legacyCatalog.map(row=>({id:row.document.wiki_id,document:clone(row.document),origin:'local',index_status:'local',source_checks:row.document.drafts.flatMap(d=>box.NowNoteWiki.evidenceOf(d).map(r=>({draft_id:d.id,evidence_id:r.id,status:'ok'}))),relation_checks:[]}))};
+const linking=clone(documents[0]);linking.wiki_id=id(2000);const linkDraft=linking.drafts[0];linkDraft.relations=[];linkDraft.claims=[];
+linkDraft.evidence_manifest=citationLinks.rows.map((r,n)=>{const a=r.document.approvals[0],d=r.document.drafts[0];return {id:'context-'+n,kind:'wiki',origin:'local',owner_id:ctx.owner,wiki_id:r.id,draft_id:d.id,approval_id:a.id,document_version:r.document.document_version,content_hash:d.draft_hash};});
+linkDraft.citations=[{id:'c1',evidence_id:'context-0',section_id:citationLinks.rows[0].document.drafts[0].sections[0].id,quote:citationLinks.rows[0].document.drafts[0].sections[0].markdown}];
+delete linkDraft.draft_hash;linkDraft.draft_hash=await P.hashJson(linkDraft);linking.approvals[0].draft_hash=linkDraft.draft_hash;linking.approvals[0].evidence_manifest_hash=await P.hashJson(linkDraft.evidence_manifest);
+await box.NowNoteWiki.validateDocument(linking,scope);
+citationLinks.rows.push({id:linking.wiki_id,document:linking,origin:'local',index_status:'local',source_checks:linkDraft.evidence_manifest.map(r=>({draft_id:linkDraft.id,evidence_id:r.id,status:'ok'})),relation_checks:[]});
+assert.ok(!(await L.lintWikiCatalog(citationLinks,{})).findings.some(f=>f.rule_code==='wiki_lint_orphan'),'verified compiled-Wiki evidence links count as connections, not only manual relations');
+const aliasDuplicate=clone(input),aliasDoc=aliasDuplicate.rows[1].document,aliasDraft=aliasDoc.drafts[0];aliasDraft.aliases=['ALPHA'];
+delete aliasDraft.draft_hash;aliasDraft.draft_hash=await P.hashJson(aliasDraft);aliasDoc.approvals[0].draft_hash=aliasDraft.draft_hash;
+const duplicateFindings=(await L.lintWikiCatalog(aliasDuplicate,{})).findings.filter(f=>f.rule_code==='wiki_lint_duplicate_candidate');
+assert.equal(duplicateFindings.length,2,'explicit stored aliases are duplicate candidates, never automatic merges');
+assert.equal(P.canonicalJson(input),before,'Lint does not repair, merge, remove or persist input');
+console.log('Wiki Lint: deterministic scoped classification, hidden/foreign exclusions, invalid schema/hash and no input writes PASS');

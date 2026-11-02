@@ -185,9 +185,9 @@ function stopProcess(proc) {
   }
 }
 
-async function launchApp(userDataDir) {
+async function launchApp(userDataDir, extraArgs = []) {
   const debugPort = await freePort();
-  const app = spawn(EXE_PATH, [`--remote-debugging-port=${debugPort}`], {
+  const app = spawn(EXE_PATH, [`--remote-debugging-port=${debugPort}`, ...extraArgs], {
     env: {
       ...process.env,
       NOWNOTE_DESKTOP_USER_DATA_DIR: userDataDir,
@@ -202,6 +202,7 @@ async function launchApp(userDataDir) {
   await page.send("Runtime.enable");
   await waitForCondition(page, "document.readyState === 'complete'", "desktop app load");
   await waitForCondition(page, "Boolean(window.nownoteDesktop?.storage && document.querySelector('#addRootBtn'))", "desktop bridge");
+  await waitForCondition(page, "Boolean(document.querySelector('#wikiBtn') && typeof noteHistory !== 'undefined' && noteHistory && !protectionBootstrapPending)", "desktop application initialization");
   return { app, client, page };
 }
 
@@ -310,7 +311,8 @@ async function verifyOmniRoutePanel(page) {
     && saved.llm.omniApiKey === "isolated-omni-key" && !saved.llm.apiKey,
   "Desktop OmniRoute settings were not saved separately.");
   await page.send("Page.reload", { ignoreCache: true });
-  await waitForCondition(page, `typeof state !== 'undefined' && state.settings?.llm?.provider === 'omniroute'`, "OmniRoute settings reload");
+  await waitForCondition(page, `typeof state !== 'undefined' && state.settings?.llm?.provider === 'omniroute'
+    && elements.llmProviderSelect.value === 'omniroute'`, "OmniRoute settings reload and render");
   const restored = await evaluate(page, `({ provider: elements.llmProviderSelect.value,
     url: elements.llmOmniUrlInput.value, model: elements.llmOmniModelInput.value,
     reasoning: elements.llmOmniReasoningSelect.value, key: elements.llmApiKeyInput.value })`);
@@ -604,7 +606,9 @@ async function main() {
   }
 }
 
-main().catch((error) => {
+export { launchApp, evaluate, stopProcess, CdpClient, freePort };
+
+if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) main().catch((error) => {
   console.error(`NowNote desktop storage check failed: ${error.message}`);
   process.exit(1);
 });

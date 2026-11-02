@@ -27,6 +27,16 @@ def get_db() -> Generator[Session, None, None]:
 
 
 def create_tables() -> None:
+    from app.models.note_mixed import MixedSchema, MixedScope, MixedSlot  # noqa: F401
+    from app.services.note_mixed_metadata import initialize as initialize_mixed
+    from app.models.protected_analysis import ProtectedAnalysisClaim  # noqa: F401
+    from app.models.note_related import LinkedSchema, LinkedText, RelatedDrain, AnalysisRun  # noqa: F401
+    from app.services.related_text import initialize as initialize_related
+    from app.models.note_crypto import ServerIdentity, NoteCryptoTransition, NoteCryptoEntry, NoteCryptoFence, NoteCryptoUpload, NoteCryptoChunk, NoteRepresentationOrigin  # noqa: F401
+    from app.services.note_crypto import initialize_identity
+    from app.models.note_v2 import NoteOfflineBranch, NoteMutation  # noqa: F401
+    from app.models.note_history import NoteHead, NoteRevision, NoteInventory  # noqa: F401
+    from app.models.library import LibraryResource, LibraryMutation  # noqa: F401
     from app.models.note import (  # noqa: F401
         AnalysisJob,
         GroupMessage,
@@ -53,10 +63,19 @@ def create_tables() -> None:
             conn.execute(text("SELECT pg_advisory_xact_lock(:lock_id)"), {"lock_id": SCHEMA_MIGRATION_LOCK_ID})
             Base.metadata.create_all(bind=conn)
             migrate_schema(conn)
+            initialize_identity(conn)
+            initialize_related(conn)
+            initialize_mixed(conn)
         return
 
-    Base.metadata.create_all(bind=engine)
-    migrate_schema()
+    with engine.begin() as conn:
+        if not conn.connection.driver_connection.in_transaction:
+            conn.exec_driver_sql("BEGIN IMMEDIATE")
+        Base.metadata.create_all(bind=conn)
+        migrate_schema(conn)
+        initialize_identity(conn)
+        initialize_related(conn)
+        initialize_mixed(conn)
 
 
 def migrate_schema(conn: Connection | None = None) -> None:
@@ -64,6 +83,25 @@ def migrate_schema(conn: Connection | None = None) -> None:
     inspector = inspect(bind)
     table_names = inspector.get_table_names()
     migrations = []
+    legacy_origin_upgrade = "note_crypto_transitions" in table_names and "purpose" not in {
+        column["name"] for column in inspector.get_columns("note_crypto_transitions")}
+    history_columns = {
+        "note_heads": {"current_mode": "VARCHAR(16) NULL",
+                       "protection_state": "VARCHAR(20) NOT NULL DEFAULT 'legacy'",
+                       "crypto_epoch": "INTEGER NOT NULL DEFAULT 0",
+                       "history_generation": "INTEGER NOT NULL DEFAULT 0"},
+        "note_revisions": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
+                           "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
+        "note_inventory": {"representation_epoch": "INTEGER NOT NULL DEFAULT 0",
+                           "representation_kind": "VARCHAR(32) NOT NULL DEFAULT 'snapshot_v1'"},
+        "note_crypto_transitions": {"commit_conditions_json": "TEXT", "receipt_json": "TEXT",
+                                    "purpose": "VARCHAR(32) NOT NULL DEFAULT 'conversion'"},
+        "note_crypto_entries": {"binding_json": "TEXT"},
+    }
+    for table, definitions in history_columns.items():
+        if table in table_names:
+            present = {column["name"] for column in inspector.get_columns(table)}
+            migrations.extend((table, name, definition) for name, definition in definitions.items() if name not in present)
     if "user_accounts" in table_names:
         account_columns = {column["name"] for column in inspector.get_columns("user_accounts")}
         account_migrations = {
@@ -120,7 +158,13 @@ def migrate_schema(conn: Connection | None = None) -> None:
     if conn is not None:
         for table, name, definition in migrations:
             conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+        if legacy_origin_upgrade:
+            from app.services.note_operation_origin import classify_legacy
+            classify_legacy(conn)
         return
     with engine.begin() as fallback_conn:
         for table, name, definition in migrations:
             fallback_conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {name} {definition}"))
+        if legacy_origin_upgrade:
+            from app.services.note_operation_origin import classify_legacy
+            classify_legacy(fallback_conn)

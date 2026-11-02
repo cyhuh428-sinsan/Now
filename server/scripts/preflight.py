@@ -1,4 +1,5 @@
 import argparse
+import re
 from pathlib import Path
 
 
@@ -54,6 +55,21 @@ def check_text_not_contains(
 
 def check_summary() -> str:
     return f"{CHECK_PASSED}/{CHECK_TOTAL} checks"
+
+
+def has_native_browser_confirm(source: str) -> bool:
+    browser = r"\b(?:window|globalThis|self)\s*"
+    member = r"(?:(?:\?\.|\.)\s*confirm|(?:\?\.)?\s*\[\s*['\"]confirm['\"]\s*\])\s*\("
+    if re.search(browser + member, source):
+        return True
+    for match in re.finditer(r"\bconfirm\s*\(", source):
+        # Internal object calls and method declarations are not browser dialogs.
+        if source[:match.start()].rstrip().endswith("."):
+            continue
+        if re.match(r"[^()\r\n]*\)[ \t]*\{", source[match.end():]):
+            continue
+        return True
+    return False
 
 
 def main() -> None:
@@ -1115,7 +1131,7 @@ def main() -> None:
             failures,
         )
         check(
-            "confirm(" not in web_surface_check,
+            not has_native_browser_confirm(web_surface_check),
             "Web surface check blocks native confirm",
             "native confirm guard",
             failures,
@@ -1167,7 +1183,7 @@ def main() -> None:
         web_app = web_app_path.read_text(encoding="utf-8")
         web_styles = (repo_root / "web" / "styles.css").read_text(encoding="utf-8")
         check(
-            "confirm(" not in web_app,
+            not has_native_browser_confirm(web_app),
             "Web app avoids native browser confirm",
             "internal confirm dialog only",
             failures,

@@ -9,6 +9,7 @@ const { scanVault, writeVaultEntry, moveVaultEntry, removeVaultEntry, removeCrea
 const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
 const { createVaultJournal } = require("./vault-journal.cjs");
 const { recoveryStatus: inspectRecovery, confirmRecovery: clearRecovery } = require("./vault-transaction.cjs");
+const {assertVaultHistorySource,validateHistoryPatch,applyVaultHistoryPatch}=require("./vault-history.cjs");
 
 const VAULT_KEY = "nownote.vault.v1";
 const DATA_KEY = "nownote.web.v1";
@@ -205,6 +206,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
         if (item.local && (!local || contentHash(local) !== contentHash(item.local) || local.relativePath !== item.local.relativePath)) {
           throw new Error("NowNote note changed since preview");
         }
+        if (local) assertVaultHistorySource(current.store,local.id,local);
         if (item.classification === "skipped" || item.classification === "depthExceeded" && selection.action !== "toNowNote" || item.reason === "duplicateIdentityOrPath" || item.reason === "targetPathOccupied" || item.reason === "kindMismatch") {
           throw new Error("Vault item is blocked by a conflict or exclusion");
         }
@@ -244,6 +246,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
             node.content = source.body;
             node.tags = source.tags;
             node.updatedAt = new Date().toISOString();
+            validateHistoryPatch(current.store,entryId,node,selection.historyPatch);
           } else {
             const isIndex = source.relativePath.endsWith("/_index.md");
             const segments = source.relativePath.split("/");
@@ -254,7 +257,8 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
               throw new Error(level === 2 ? "A target topic is required for this Vault category" : "A target category is required for this Vault note");
             }
             if (level === 1 && parent) throw new Error("Vault topic cannot have a parent");
-            entryId = source.id || randomUUID();
+            entryId = source.id || selection.importId || randomUUID();
+            if (!source.id && selection.importId && !/^[a-f0-9-]{36}$/i.test(selection.importId)) throw new Error("Invalid Vault import ID");
             const title = source.title || (isIndex ? segments.at(-2) : path.basename(source.relativePath, ".md"));
             const created = { id: entryId, title, content: source.body, tags: source.tags, parentId: parent?.id || null, level, children: [], status: "active", syncState: "pending", createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             if (parent) {
@@ -263,6 +267,7 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
             } else {
               nextTree.push(created);
             }
+            validateHistoryPatch(current.store,entryId,created,selection.historyPatch);
             if (!source.managed) {
               const kind = ["topic", "category", "note"][level - 1];
               const markdown = renderManagedMarkdown({ id: entryId, kind, title, body: source.body, tags: source.tags, extraFrontmatter: source.extraFrontmatter });
@@ -272,6 +277,12 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
               vaultWrite = await writeVaultEntry(pending.vaultPath, source.relativePath, markdown, source.fileHash, { backupDir });
               undoVault.push(() => restoreVaultWrite(pending.vaultPath, source.relativePath, vaultWrite, backupDir));
             }
+          }
+          if (!journalOperationId) {
+            // 읽기 원본이 그대로여도 store-only 가져오기의 복구 기준점으로 기록한다.
+            journalOperationId=beginVaultWrite(pending.vaultPath,itemId,pending.storeHash,[
+              {operation:"write",relativePath:source.relativePath,preHash:source.fileHash,postHash:source.fileHash},
+            ]);
           }
         } else if (selection.action === "unlink") {
           if (!item.id || !vaultState(current.store).baselines?.[item.id]) throw new Error("Vault link does not exist");
@@ -296,7 +307,10 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
           if (selection.action === "unlink") {
             delete state.baselines[entryId];
           } else {
-            if (nextTree) store.values[DATA_KEY].tree = nextTree;
+            if (nextTree) {
+              applyVaultHistoryPatch(store,entryId,findNode(nextTree,entryId),selection.historyPatch);
+              store.values[DATA_KEY].tree = nextTree;
+            }
             const currentLocal = mapNowTree(store.values[DATA_KEY].tree).find((entry) => entry.id === entryId);
             state.baselines[entryId] = {
               relativePath, localPath: currentLocal.relativePath, vaultPath: relativePath,
@@ -311,6 +325,10 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
         if (journalOperationId) {
           journal.advance(journalOperationId, { phase: "storeCommitted", postStoreHash: saved.hash });
           if (typeof afterStoreCommit === "function") await afterStoreCommit(itemId);
+          if (selection.action==="toNowNote") {
+            const checked=await scanVault(pending.vaultPath),expected=journal.read().steps.at(-1);
+            if (checked.find(entry=>entry.relativePath===relativePath)?.fileHash!==expected.postHash) throw new Error("Vault source changed after store commit");
+          }
           journal.clear(journalOperationId);
         }
         pending.storeHash = saved.hash;

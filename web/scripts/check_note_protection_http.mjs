@@ -1,0 +1,134 @@
+import fs from 'node:fs/promises';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import {createRequire} from 'node:module';
+import {spawn,execFileSync} from 'node:child_process';
+import {fileURLToPath} from 'node:url';
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../..');
+const source=execFileSync('git',['rev-parse','HEAD'],{cwd:root,encoding:'utf8'}).trim();
+const envFile=process.env.NOWNOTE_QA_ENV_FILE;
+if(!envFile)throw Error('qa_env_path_required');
+const line=(await fs.readFile(envFile,'utf8')).split(/\r?\n/).find(v=>v.startsWith('NOW_QA_API_TOKEN='));
+let token=line?.slice('NOW_QA_API_TOKEN='.length).trim();
+if(token?.startsWith('"')&&token.endsWith('"'))token=token.slice(1,-1);
+if(!token)throw Error('qa_api_token_missing');
+const qa=path.resolve('D:/tmp/now-240-e4b3a-http');await fs.mkdir(qa,{recursive:true});
+const own=await fs.mkdtemp(path.join(qa,'client-')),run=crypto.randomBytes(6).toString('hex');
+const manifestDir=path.resolve(process.env.NOWNOTE_QA_MANIFEST_DIR||path.join(root,'docs/2.4.0/qa'));
+await fs.mkdir(manifestDir,{recursive:true});
+const manifestFile=path.join(manifestDir,'http-'+run+'.json');
+const manifest={run,source,created_at:new Date().toISOString(),server:'http://127.0.0.1:8750',accounts:[],notes:[],phases:[],requests:[],cleanup:'pending',serverResources:'retained'};
+const save=()=>fs.writeFile(manifestFile,JSON.stringify(manifest,null,2));
+await save();
+let stage='probe',child=null;
+async function request(method,url,body,userToken) {
+  let response;
+  try{response=await fetch('http://127.0.0.1:8750'+url,{method,headers:{Authorization:'Bearer '+token,...(userToken?{'X-Now-User-Token':userToken}:{}),...(body?{'Content-Type':'application/json'}:{})},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(20000)});}
+  catch{manifest.requests.push({stage,method,path:url,state:'transport_uncertain'});await save();throw Error('transport_uncertain');}
+  manifest.requests.push({stage,method,path:url,status:response.status});await save();
+  if(!response.ok)throw Error('http_'+response.status);
+  return response.json();
+}
+try {
+  const ready=await request('GET','/health/ready');
+  if(ready.status!=='ready')throw Error('not_ready');
+  const served=await fetch('http://127.0.0.1:8750/app.js');
+  if(!served.ok||crypto.createHash('sha256').update(Buffer.from(await served.arrayBuffer())).digest('hex')!==crypto.createHash('sha256').update(await fs.readFile(path.join(root,'web/app.js'))).digest('hex'))throw Error('served_source_mismatch');
+  manifest.servedSourceMatches=true;await save();
+  const require=createRequire(new URL('../../desktop/package.json',import.meta.url)),electron=require('electron');
+  const modes=['desktop','web'].filter(m=>!process.argv.some(a=>a.startsWith('--mode='))||process.argv.includes('--mode='+m));
+  const parentMode=process.argv.includes('--parent-mixed')?'mixed':process.argv.includes('--parent-plain')?'plain':null;
+  const replicas=process.argv.includes('--physical-replicas');
+  const transcript=process.argv.includes('--transcript');
+  const backupRestore=process.argv.includes('--backup-restore');
+  const libraryUi=process.argv.includes('--library-ui');
+  const wikiIntegration=process.argv.includes('--wiki-integration');
+  const wikiCitation=process.argv.includes('--wiki-citation-only');
+  const wikiQueryProtected=process.argv.includes('--wiki-query-protected');
+  const wikiQuery=process.argv.includes('--wiki-query')||wikiQueryProtected;
+  const wikiProtectedRead=process.argv.includes('--wiki-protected-readonly');
+  const wikiJourney=process.argv.includes('--wiki-journey');
+  const wikiLintProtected=process.argv.includes('--wiki-lint-protected')||wikiProtectedRead;
+  const wikiLint=process.argv.includes('--wiki-lint')||wikiLintProtected;
+  const wikiIngestUi=process.argv.includes('--wiki-ingest-ui')||wikiIntegration||wikiCitation||wikiQuery||wikiLint||wikiJourney;
+  const publicProtectionGate=process.argv.includes('--public-protection-gate');
+  const wikiTrashUi=process.argv.includes('--wiki-trash-ui');
+  const wikiProtectionUi=process.argv.includes('--wiki-protection-ui')||wikiTrashUi;
+  const wikiUi=process.argv.includes('--wiki-ui')||wikiProtectionUi;
+  const analysisApply=process.argv.includes('--analysis-apply'),analysisAbsent=process.argv.includes('--analysis-approve-absent');
+  const relatedOnly=process.argv.includes('--related-only')||process.argv.includes('--late-analysis')||transcript||analysisApply||analysisAbsent||backupRestore;
+  const lateAnalysis=process.argv.includes('--late-analysis');
+  for(const mode of modes) {
+    const run=crypto.randomBytes(6).toString('hex');
+    manifest.clientRuns ||= {};
+    if(Object.values(manifest.clientRuns).includes(run))throw Error('qa_case_run_collision');
+    manifest.clientRuns[mode]=run;await save();
+    const credentials={};let branchId=null,replicaIds=null;
+    const probe=process.argv.includes('--probe');
+    for(const suffix of probe?[]:['a','b']) {
+      const owner='qa_http_'+run+'_'+mode+'_'+suffix,device=mode==='web'?'web-client':'qa-http-'+run,password='Qa-'+crypto.randomBytes(18).toString('hex');
+      stage=mode+'_register_'+suffix;manifest.accounts.push({owner,device,state:'request_pending',retention:'QA verification retained'});await save();
+      const issued=await request('POST','/api/v1/auth/register',{owner_id:owner,password,email:owner+'@example.invalid',display_name:'HTTP QA',device_id:device,device_name:'Isolated HTTP QA'});
+      credentials[suffix]={owner,device,password};manifest.accounts.at(-1).state='created';await save();
+      if(suffix==='a')for(const local of wikiIngestUi?['target','other','beta']:parentMode?['other','target']:['target','other']) {
+        const local_id='qa-http-'+run+'-'+local,mutation_id=crypto.randomUUID();
+        stage=mode+'_seed_'+local;manifest.notes.push({owner,local_id,mutation_id,state:'request_pending'});await save();
+        if(local==='target'&&relatedOnly){
+          const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_related_seed.py';
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch(error){
+            const diagnostic={exit_status:Number.isInteger(error.status)?error.status:null};
+            try{const r=JSON.parse(String(error.stdout||''));if(r.ok===false&&r.code==='qa_related_seed_failed'&&/^[a-z_]{1,30}$/.test(r.phase)&&/^[A-Za-z0-9_]{1,80}$/.test(r.error_type))diagnostic.helper={phase:r.phase,error_type:r.error_type};}catch{}
+            manifest.notes.at(-1).seed_diagnostic=diagnostic;await save();throw Error('qa_related_outcome_unconfirmed');
+          }
+          if(!seeded.ok||seeded.owner!==owner||seeded.local_id!==local_id||seeded.identity_state!=='related_only'||!Number.isSafeInteger(seeded.job_id)||!Number.isSafeInteger(seeded.recording_id))throw Error('qa_related_seed_failed');
+          Object.assign(manifest.notes.at(-1),{state:'related_only_created',job_id:seeded.job_id,recording_id:seeded.recording_id});await save();continue;
+        }
+        if(local==='target'&&['--create-current','--restore-absent'].some(f=>process.argv.includes(f))){
+          branchId=crypto.randomUUID();
+          const command='docker exec -i now-api python - '+[run,mode,owner,local_id,branchId].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_seed.py';
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch{throw Error('qa_seed_outcome_unconfirmed');}
+          if(!seeded.ok||seeded.branch_id!==branchId)throw Error('qa_seed_failed');
+          Object.assign(manifest.notes.at(-1),{state:'branch_only_created',branch_id:branchId});await save();continue;
+        }
+        await request('PUT','/api/v2/notes/current',{schema_version:1,owner_id:owner,local_id,device_id:device,mutation_id,crypto_epoch:0,base_head_version:0,base_revision_id:null,expected_inventory_revision_ids:[],
+          note:{note_type:'tree',title:wikiIngestUi?(local==='beta'?'Beta':'Alpha'):'HTTP QA '+local,content:local==='target'?'HTTP-QA-ORIGINAL-'+run+'\r\n':'HTTP-QA-PRESERVE-'+run+'-'+local,parent_local_id:parentMode&&local==='target'?'qa-http-'+run+'-other':null,level:parentMode&&local==='target'?2:1,tags:'[]',source:'web-tree',deleted_at:null}},issued.access_token);
+        manifest.notes.at(-1).state='created';await save();
+        if(local==='target'&&replicas){
+          const command='docker exec -i now-api python - '+[run,mode,owner,local_id].join(' ')+' < /home/daon/deploy/Now/web/scripts/note_protection_http_replica_seed.py';
+          let seeded;try{seeded=JSON.parse(execFileSync('ssh',['WSL-server',command],{encoding:'utf8',timeout:20000,stdio:['ignore','pipe','pipe']}));}catch(error){
+            const diagnostic={process_code:['ETIMEDOUT','ENOENT','EPERM','EACCES'].includes(error.code)?error.code:null,exit_status:Number.isInteger(error.status)?error.status:null,signal:typeof error.signal==='string'?error.signal:null};
+            try{const r=JSON.parse(String(error.stdout||''));if(r.ok===false&&r.code==='qa_replica_seed_failed'&&/^[a-z_]{1,30}$/.test(r.phase)&&/^[A-Za-z0-9_]{1,80}$/.test(r.error_type))diagnostic.helper={phase:r.phase,error_type:r.error_type};}catch{}
+            manifest.notes.at(-1).seed_diagnostic=diagnostic;await save();throw Error('qa_replica_outcome_unconfirmed');
+          }
+          if(!seeded.ok||seeded.owner!==owner||seeded.local_id!==local_id||seeded.physical_ids?.length!==2)throw Error('qa_replica_seed_failed');
+          replicaIds=seeded.physical_ids;Object.assign(manifest.notes.at(-1),{state:'two_physical_created',physical_ids:replicaIds});await save();
+        }
+      }
+    }
+    const secrets=path.join(own,mode+'-credentials.json');await fs.writeFile(secrets,JSON.stringify(credentials),{mode:0o600});
+    const profile=path.join(own,mode);await fs.mkdir(profile);
+    for(const phase of wikiJourney?[66,68,69,67]:wikiProtectedRead?[62,63,64,65]:wikiLintProtected?[62,63]:wikiLint?[60,61]:wikiQueryProtected?[56,57,58,59]:wikiQuery?[56,57]:wikiCitation?[54,55]:wikiIntegration?[50,51,52,53]:wikiIngestUi?[50,51]:probe?[0]:libraryUi?[47,48,49]:wikiUi?wikiProtectionUi?[43,44,45,46]:[43,44]:process.argv.includes('--canvas')?[40,41,42]:backupRestore?[10,38,39]:analysisAbsent?[37]:analysisApply?[10,34,35,36]:transcript?[10,31,32,33]:relatedOnly?[10]:process.argv.includes('--analysis-legacy-stored')?[1,29,30]:process.argv.includes('--analysis-legacy')?[1,26,27,28]:process.argv.includes('--analysis-repeat')?[1,2,18,25,24,22,23]:process.argv.includes('--analysis-replan')?[1,2,18,24,22,23]:process.argv.includes('--analysis-publish')?[1,2,18,20,21]:process.argv.includes('--analysis-ui')?[1,2,18,19]:process.argv.includes('--analysis-terminal')?[1,2,14,15]:process.argv.includes('--analysis-unavailable')?[1,2,16,17]:process.argv.includes('--analysis-claim-restart')?[1,2,12,13]:process.argv.includes('--analysis-metadata')?[1,2,11]:['--create-current','--restore-absent'].some(f=>process.argv.includes(f))?[6]:process.argv.includes('--offline-draft')?[1,2,8,9]:process.argv.includes('--import-restart')?[1,2,7]:process.argv.includes('--fresh-editor')?[1,2,5]:process.argv.includes('--editor-restart')?[1,2,3,4]:[1,2]) {
+      stage=mode+'_phase_'+phase;
+      const result=path.join(own,mode+'-'+phase+'-result.json'),config=path.join(own,mode+'-'+phase+'-config.json');
+      const activeProfile=[52,53].includes(phase)?path.join(own,mode+'-wiki-peer'):[5,24].includes(phase)?path.join(own,mode+(phase===24?'-peer':'-fresh')):profile;
+      if([5,24,52].includes(phase))await fs.mkdir(activeProfile);
+      if(phase===24){manifest.peerDevices ||= [];manifest.peerDevices.push({owner:credentials.a.owner,mode,profile:'own isolated peer',state:'login_pending'});await save();}
+await fs.writeFile(config,JSON.stringify({root,source,profile:activeProfile,mode,phase,result,secrets,envFile,run,manifestFile,probe,branchId,parentMode,replicaIds,relatedOnly,lateAnalysis,wikiIntegration,wikiTrashUi,publicProtectionGate,editorView:process.argv.includes('--editor-view'),mixedWrite:process.argv.includes('--mixed-write'),editorWrite:Boolean(parentMode)||replicas||['--editor-view','--editor-write','--editor-restart','--fresh-editor','--mutation-write','--create-current','--restore-absent','--import-write','--import-restart','--resolve-pending','--offline-draft','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),editorRestart:process.argv.includes('--editor-restart'),mutationWrite:process.argv.includes('--mutation-write'),restoreAbsent:process.argv.includes('--restore-absent'),importWrite:['--import-write','--import-restart','--resolve-pending','--import-multiple','--import-existing','--import-plain'].some(f=>process.argv.includes(f)),importRestart:process.argv.includes('--import-restart'),resolvePending:process.argv.includes('--resolve-pending'),offlineDraft:process.argv.includes('--offline-draft'),importMultiple:process.argv.includes('--import-multiple'),importExisting:process.argv.includes('--import-existing'),importPlain:process.argv.includes('--import-plain')}));
+      const env={...process.env};delete env.ELECTRON_RUN_AS_NODE;
+      child=spawn(electron,[path.join(root,'web/scripts/note_protection_http_host.cjs'),config],{env,windowsHide:true,stdio:['ignore','pipe','pipe']});
+      let output='';child.stdout.on('data',b=>output=(output+b).slice(-3000));child.stderr.on('data',b=>output=(output+b).slice(-3000));
+      const code=await new Promise((resolve,reject)=>{child.once('error',reject);child.once('exit',resolve);});child=null;
+      manifest.clientEvidence=JSON.parse(await fs.readFile(manifestFile,'utf8')).clientEvidence || [];
+      if(code!==0)throw Error('client_phase_failed_'+stage);
+      const evidence=JSON.parse(await fs.readFile(result,'utf8'));manifest.phases.push(evidence);if(phase===24)Object.assign(manifest.peerDevices.at(-1),{state:'verified',device_id:evidence.peerDeviceId});await save();console.log(JSON.stringify(evidence));
+    }
+  }
+  manifest.result='passed';
+}catch(error){manifest.clientEvidence=JSON.parse(await fs.readFile(manifestFile,'utf8')).clientEvidence || [];manifest.result='failed';manifest.failure={stage,code:/^[a-z0-9_]+$/.test(error.message)?error.message:'qa_error'};process.exitCode=1;console.log(JSON.stringify({ok:false,...manifest.failure}));}
+finally {
+  if(child&&child.exitCode===null){child.kill();await new Promise(r=>child.once('exit',r));}
+  if(await fs.realpath(own)!==own||!own.startsWith(qa+path.sep))throw Error('cleanup_boundary');
+  await fs.rm(own,{recursive:true,force:true,maxRetries:6,retryDelay:500});
+  manifest.cleanup='own profiles/children removed; QA accounts/notes/operations and server retained';await save();
+  console.log(JSON.stringify({manifest:path.basename(manifestFile),result:manifest.result,profilesRemoved:true,accountsRetained:manifest.accounts.map(a=>a.owner)}));
+}

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import fs from 'node:fs/promises';
+import vm from 'node:vm';
+
+const source=await fs.readFile(new URL('../vendor/note-protection-ui.js',import.meta.url),'utf8');
+const start=source.indexOf('  function valid(token) {'),end=source.indexOf('\n  function ',start+1);
+assert.ok(start>=0&&end>start,'Actual UI token guard must exist');
+let wiped=0,context='new-account';
+const box=vm.createContext({state:{run:2,bound:context},dialog:{open:true},api:{contextKey:()=>context},wipe:()=>{wiped++;}});
+vm.runInContext(source.slice(start,end)+'\nglobalThis.check=valid;',box);
+assert.equal(box.check(1),false);
+assert.equal(wiped,0,'An obsolete callback must not wipe or lock the newer protection view');
+assert.equal(box.check(2),true);
+box.dialog.open=false;
+assert.equal(box.check(2),false);
+assert.equal(wiped,0,'A closed protection view was already cleared by its lifecycle');
+box.dialog.open=true;context='changed-account';
+assert.equal(box.check(2),false);
+assert.equal(wiped,1,'The current callback must still clear a view whose account changed');
+console.log('Protection UI token guard: stale/closed callbacks are inert; current account change clears PASS');

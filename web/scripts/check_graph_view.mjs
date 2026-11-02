@@ -6,6 +6,9 @@ import net from "node:net";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
+import vm from "node:vm";
+import {webcrypto,randomUUID} from "node:crypto";
 import { setTimeout as delay } from "node:timers/promises";
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
@@ -211,6 +214,205 @@ async function waitForCondition(page, expression, label, timeoutMs = DEFAULT_TIM
   throw new Error(`${label} 확인 시간이 초과되었습니다.`);
 }
 
+async function seedVaultHistoryFixture(profile) {
+  const box={crypto:webcrypto,structuredClone};
+  vm.runInNewContext(await fs.readFile(path.join(ROOT,"vendor/note-history-state.js"),"utf8"),box);
+  const now=new Date().toISOString(),revision=randomUUID();
+  const note={id:1,owner_id:"vault-fixture",device_id:"fixture-device",local_id:"t",note_type:"tree",title:"Topic",content:"before",
+    parent_local_id:null,level:1,tags:"",source:"web-tree",created_at:now,updated_at:now,client_updated_at:now,deleted_at:null};
+  const ctx={url:"",owner:"vault-fixture",device:"fixture-device",enabled:true,auth:""};
+  const history=box.NowNoteHistory.create({context:()=>ctx,request:async()=>{throw Error("network_forbidden");},write:async()=>{}});
+  await history.track(note,{head_version:1,head_revision_id:revision,inventory_revision_ids:[revision],crypto_epoch:0,replica_count:1,snapshot:{schema_version:1,note}},{localOnly:true});
+  const vault=path.join(profile,"vault");
+  await fs.mkdir(path.join(vault,"Topic"),{recursive:true});
+  const {renderManagedMarkdown}=createRequire(import.meta.url)(path.resolve(ROOT,"../desktop/vault-markdown.cjs"));
+  await fs.writeFile(path.join(vault,"Topic/_index.md"),renderManagedMarkdown({id:"t",kind:"topic",title:"Topic",body:"Vault에서 변경한 합성 본문",tags:[]}));
+  await fs.writeFile(path.join(profile,"nownote-desktop-store.json"),JSON.stringify({version:1,updatedAt:null,values:{
+    "nownote.web.v1":{tree:[{id:"t",title:"Topic",content:"before",level:1,parentId:null,tags:[],children:[],status:"active",shared:false,serverShared:false,createdAt:now,updatedAt:now}],daily:{},archivedDaily:[],deletedTree:[]},
+    "nownote.web.settings.v1":{server:{mode:"local",url:"",ownerId:"vault-fixture",deviceId:"fixture-device",autoSync:false}},
+    "nownote.history.v1":history.export(),"nownote.vault.v1":{path:vault,baselines:{},lastSuccessAt:null}
+  }}));
+}
+
+async function checkVaultHistoryUI(page,profile,cold=false) {
+  const imported="Vault에서 변경한 합성 본문";
+  if(!cold){
+    await evaluate(page,'elements.settingsBtn.click()');
+    await evaluate(page,'refreshVaultStatus()');
+    await evaluate(page,'elements.vaultDirectionSelect.value="both";elements.vaultPreviewBtn.click()');
+    await waitForCondition(page,'Boolean(vaultPreview?.items.some(item=>item.itemId==="t")) && !vaultBusy',"Vault actual preview");
+    const diagnose=process.argv.includes("--vault-diagnose");
+    const snapshot=()=>fs.readFile(path.join(profile,"nownote-desktop-store.json"),"utf8").then(JSON.parse);
+    const before=diagnose?await snapshot():null;
+    await evaluate(page,`(() => {
+      const row=[...elements.vaultItems.querySelectorAll(".vault-item")].find(row=>row.querySelector("strong")?.textContent==="Topic");
+      const select=row.querySelector("select");select.value="toNowNote";select.dispatchEvent(new Event("change"));
+      ${process.argv.includes("--vault-diagnose")?"":"elements.vaultApplyBtn.click();"}
+    })()`);
+    if(diagnose){
+      const selected=await snapshot();
+      await evaluate(page,'globalThis.vaultQaWrites=[];globalThis.vaultQaWriteStorage=writeStorage;writeStorage=(key,value)=>{vaultQaWrites.push({key,stack:new Error().stack.split("\\n").slice(1,6)});return vaultQaWriteStorage(key,value);};');
+      await evaluate(page,'withVaultHistoryPaused(async(history,ctx)=>{const item=vaultPreview.items.find(row=>row.itemId==="t");await prepareVaultHistorySelection(history,ctx,item,{itemId:"t",action:"toNowNote"});})');
+      const prepared=await snapshot();
+      const differences=(a,b,p="")=>{
+        if(JSON.stringify(a)===JSON.stringify(b))return [];
+        if(a&&b&&typeof a==="object"&&typeof b==="object")
+          return [...new Set([...Object.keys(a),...Object.keys(b)])].flatMap(key=>differences(a[key],b[key],p+"/"+key));
+        return [p];
+      };
+      console.log(JSON.stringify({diagnosticOnly:true,selection:differences(before,selected),preparation:differences(selected,prepared),writes:await evaluate(page,'vaultQaWrites')}));
+      assert(JSON.stringify(before)===JSON.stringify(prepared),"Vault preparation must not change the previewed store");
+      return;
+    }
+  }
+  try {
+    await waitForCondition(page,`Boolean(noteHistory?.view("t")?.draft.content===${JSON.stringify(imported)}) && !vaultBusy`,"Vault canonical import");
+  } catch(error) {
+    const diagnostic=await evaluate(page,'({busy:vaultBusy,blocked:vaultHistoryApplying,result:vaultResultText,history:noteHistory.status(),suspended:noteHistory.suspended(),choices:[...vaultChoices.values()].map(choice=>choice.action)})');
+    throw Error(error.message+" "+JSON.stringify(diagnostic));
+  }
+  const state=await evaluate(page,`(() => {
+    const item=noteHistory.view("t"),node=findTreeNode(state.data.tree,"t");
+    return {body:node.content,raw:item.raw.content,revisions:item.revisions.map(r=>r.reason),outbox:item.outbox.length,
+      blocked:vaultHistoryApplying,status:vaultResultText};
+  })()`);
+  assert(state.body===imported&&state.raw==="before"&&state.revisions.at(-1)==="external_import"&&state.outbox===1&&!state.blocked,"Vault UI/history mismatch");
+  const disk=JSON.parse(await fs.readFile(path.join(profile,"nownote-desktop-store.json"),"utf8"));
+  assert(disk.values["nownote.web.v1"].tree[0].content===imported,"Vault projection missing on disk");
+  assert(disk.values["nownote.history.v1"].contexts[JSON.stringify(["","vault-fixture"])].notes.t.outbox.length===1,"Vault queued revision missing on disk");
+  const original=await fs.readFile(path.join(profile,"vault/Topic/_index.md"),"utf8");
+  assert(original.endsWith(imported),"Vault source was rewritten");
+  console.log(cold?"Vault actual source Electron cold process: imported body, raw baseline and one pending revision preserved PASS":"Vault actual source Electron UI/IPC: preview, explicit import and atomic body/history storage PASS");
+}
+
+async function checkCanvasAccountUI(page) {
+  await page.send("Emulation.setDeviceMetricsOverride",{width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(page,`(async()=> {
+    globalThis.canvasQaContext={url:"https://synthetic.invalid",owner:"canvas-a",enabled:true,auth:"synthetic"};
+    globalThis.canvasQaRows={};
+    libraryContext=()=>canvasQaContext;
+    requestLibrary=async(ctx,kind,id,method,body)=>{
+      const key=ctx.owner+"/"+kind+"/"+id;
+      if(method==="GET")return {items:Object.values(canvasQaRows).filter(row=>row.owner_id===ctx.owner&&row.kind===kind).map(({kind,...row})=>row)};
+      const old=canvasQaRows[key];
+      if((old?.version||0)!==body.base_version)throw Object.assign(Error("conflict"),{status:409,code:"version_conflict"});
+      const row={id,owner_id:ctx.owner,kind,schema_version:1,version:(old?.version||0)+1,payload:body.payload,created_at:"2026-10-31T00:00:00Z",updated_at:"2026-10-31T00:00:00Z",deleted_at:null};
+      canvasQaRows[key]=row;const {kind:ignored,...resource}=row;return {resource,mutation_id:body.mutation_id};
+    };
+    await initializeLibrary();canvasResourceEditor=null;openCanvasView();
+    elements.canvasAddTextBtn.click();elements.canvasTitleInput.value="Local map";elements.canvasTitleInput.dispatchEvent(new Event("input"));
+    elements.canvasSaveBtn.click();
+  })()`);
+  await waitForCondition(page,'libraryStore.list("canvases").some(row=>!row.pending&&row.version===1)',"Canvas actual save");
+  assert(await evaluate(page,'canvasResourceEditor.version===1 && !canvasResourceEditor.dirty'),"Canvas save receipt not applied");
+  await evaluate(page,`(() => {
+    const row=Object.values(canvasQaRows).find(row=>row.kind==="canvases");
+    row.version++;row.payload={...row.payload,title:"Remote map"};
+    elements.canvasTitleInput.value="Local changed";elements.canvasTitleInput.dispatchEvent(new Event("input"));
+    elements.canvasSaveBtn.click();
+  })()`);
+  await waitForCondition(page,'!elements.canvasConflict.hidden && !canvasResourceBusy',"Canvas conflict");
+  assert(await evaluate(page,'elements.canvasLocalCompare.textContent.includes("Local changed") && elements.canvasRemoteCompare.textContent.includes("Remote map")'),"Canvas conflict comparison missing");
+  assert(await evaluate(page,'elements.canvasTitleInput.disabled && elements.canvasBoard.inert && elements.canvasAddTextBtn.disabled'),"Canvas conflict must freeze edits until explicit resolution");
+  for(const width of [1280,390]){
+    await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:false});
+    await evaluate(page,'elements.canvasConflict.open=true');
+    if(process.env.NOWNOTE_CANVAS_QA_DIR){
+      const shot=await page.send("Page.captureScreenshot",{format:"png"});
+      await fs.writeFile(path.join(process.env.NOWNOTE_CANVAS_QA_DIR,`canvas-conflict-${process.argv.includes("--desktop")?"electron":"web"}-${width}.png`),Buffer.from(shot.data,"base64"));
+    }
+  }
+  await evaluate(page,'elements.canvasChooseRemoteBtn.click()');
+  await waitForCondition(page,'canvasResourceEditor.canvas.title==="Remote map" && elements.canvasConflict.hidden',"Canvas remote choice");
+  await evaluate(page,`(() => {
+    canvasQaContext={...canvasQaContext,owner:"canvas-b",auth:"other-synthetic"};
+    openCanvasView();
+  })()`);
+  assert(await evaluate(page,'!elements.canvasResourceSelect.textContent.includes("Remote map") && libraryStore.list("canvases").length===0'),"Canvas account switch exposed old map");
+  console.log("Canvas account UI: durable save receipt, conflict comparison, explicit remote choice, two widths and account isolation PASS (synthetic RPC)");
+}
+
+async function checkCanvasInteractions(page) {
+  await page.send("Emulation.setDeviceMetricsOverride", {width:1280,height:900,deviceScaleFactor:1,mobile:false});
+  await evaluate(page, `(() => {
+    state.data = defaultData(); state.settings.server = defaultServerSettings();
+    state.data.tree = [{id:"canvas-source",title:"Canvas source",content:"Original stays",children:[],level:1}];
+    state.data.canvases = [];
+    state.selectedTreeId = "canvas-source";
+    openCanvasView(); elements.canvasAddNoteBtn.click(); elements.canvasAddTextBtn.click();
+    state.selectedCanvasCardIds = activeCanvas().cards.map(card=>card.id);
+    elements.canvasConnectBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().cards.length===2 && activeCanvas().edges.length===1'), "Canvas add/connect failed");
+  for (const zoom of [0.6,1,1.8]) {
+    const start = await evaluate(page, `(() => {
+      const c=activeCanvas(); c.zoom=${zoom}; c.cards[0].x=80;c.cards[0].y=80;
+      renderCanvas(); elements.canvasBoard.scrollLeft=0;elements.canvasBoard.scrollTop=0;
+      const r=elements.canvasBoard.querySelector("[data-canvas-drag]").getBoundingClientRect();
+      return {x:r.left+8,y:r.top+8,id:c.cards[0].id};
+    })()`);
+    await page.send("Input.dispatchMouseEvent", {type:"mousePressed",x:start.x,y:start.y,button:"left",clickCount:1});
+    await page.send("Input.dispatchMouseEvent", {type:"mouseMoved",x:start.x+60*zoom,y:start.y+30*zoom,button:"left",buttons:1});
+    await page.send("Input.dispatchMouseEvent", {type:"mouseReleased",x:start.x+60*zoom,y:start.y+30*zoom,button:"left",clickCount:1});
+    const card = await evaluate(page, 'activeCanvas().cards[0]');
+    assert(Math.abs(card.x-140)<2 && Math.abs(card.y-110)<2, "Canvas pointer zoom coordinates wrong: "+zoom);
+  }
+  await evaluate(page, `(() => {
+    const c=activeCanvas();state.selectedCanvasCardIds=c.cards.map(card=>card.id);
+    elements.canvasDisconnectBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().edges.length===0 && activeCanvas().cards.length===2'), "Canvas disconnect deletes cards");
+  const references=await evaluate(page,`(() => {
+    const source=structuredClone(state.data.tree[0]);
+    state.data.tree=[{id:"moved-parent",title:"Parent",content:"",children:[{...source,title:"Moved source",parentId:"moved-parent",level:2}],level:1}];
+    renderCanvas();
+    const moved=elements.canvasBoard.textContent.includes("Moved source");
+    state.data.tree=[];renderCanvas();
+    const missing=elements.canvasBoard.textContent.includes("원본 메모 없음")&&activeCanvas().cards.length===2;
+    state.data.tree=[source];state.selectedTreeId=null;renderCanvas();
+    elements.canvasBoard.querySelector("[data-action='open-note']").click();
+    return {moved,missing};
+  })()`);
+  assert(references.moved&&references.missing,"Canvas moved/missing original reference changed");
+  await waitForCondition(page,'state.selectedTreeId==="canvas-source" && elements.canvasView.classList.contains("hidden")',"Canvas source open");
+  await evaluate(page,'elements.canvasBtn.click()');
+  await evaluate(page, `(() => {
+    state.selectedCanvasCardIds=[activeCanvas().cards[0].id];elements.canvasRemoveBtn.click();
+  })()`);
+  assert(await evaluate(page, 'activeCanvas().cards.length===1 && state.data.tree[0].content==="Original stays"'), "Canvas card removal changed original");
+  const touch = await evaluate(page, `(() => {
+    const c=activeCanvas();c.zoom=1;c.cards[0].x=80;c.cards[0].y=80;renderCanvas();
+    elements.canvasBoard.scrollLeft=0;elements.canvasBoard.scrollTop=0;
+    const r=elements.canvasBoard.querySelector("[data-canvas-drag]").getBoundingClientRect();
+    return {x:r.left+8,y:r.top+8};
+  })()`);
+  await page.send("Emulation.setTouchEmulationEnabled", {enabled:true,maxTouchPoints:1});
+  await page.send("Input.dispatchTouchEvent", {type:"touchStart",touchPoints:[{x:touch.x,y:touch.y}]});
+  await page.send("Input.dispatchTouchEvent", {type:"touchMove",touchPoints:[{x:touch.x+50,y:touch.y+20}]});
+  await page.send("Input.dispatchTouchEvent", {type:"touchEnd",touchPoints:[]});
+  assert(await evaluate(page, 'Math.abs(activeCanvas().cards[0].x-130)<2'), "Canvas touch drag wrong");
+  await page.send("Emulation.setTouchEmulationEnabled", {enabled:false});
+  await evaluate(page, 'elements.canvasBoard.querySelector("[data-canvas-card-id]").focus()');
+  await page.send("Input.dispatchKeyEvent", {type:"keyDown",key:"ArrowRight",code:"ArrowRight"});
+  await page.send("Input.dispatchKeyEvent", {type:"keyUp",key:"ArrowRight",code:"ArrowRight"});
+  assert(await evaluate(page, 'Math.abs(activeCanvas().cards[0].x-170)<2'), "Canvas keyboard movement wrong");
+  if (process.argv.includes("--desktop")) {
+    await evaluate(page, 'Promise.all([...storagePendingWrites])');
+    const saved=await evaluate(page, 'JSON.stringify(activeCanvas())');
+    await page.send("Page.reload");
+    await waitForCondition(page, 'typeof state!=="undefined" && state.data?.canvases?.length===1', "Canvas desktop reload");
+    assert(await evaluate(page, 'JSON.stringify(activeCanvas())')===saved, "Canvas desktop persisted value changed");
+    await evaluate(page, 'openCanvasView()');
+  }
+  await page.send("Emulation.setDeviceMetricsOverride", {width:390,height:844,deviceScaleFactor:1,mobile:false});
+  await evaluate(page, 'renderCanvas()');
+  assert(await evaluate(page, `(() => {
+    const view=elements.canvasView.querySelector(".canvas-card").getBoundingClientRect();
+    return view.left>=0 && view.right<=innerWidth+1;
+  })()`), "Canvas narrow dialog overflow");
+  console.log("Canvas actual DOM: add/connect, mouse drag at 3 zooms, touch/keyboard, moved/missing/source open, disconnect, source-preserving remove and narrow layout PASS");
+}
+
 function browserArgs(debugPort, userDataDir, appUrl) {
   return [
     "--headless=new",
@@ -237,16 +439,94 @@ function stopBrowserProcess(browser) {
   browser.kill("SIGKILL");
 }
 
+async function checkBlockReferences(page) {
+  await evaluate(page, String.raw`(() => {
+    const id="11111111-1111-4111-8111-111111111111",owner=noteHistoryContext().owner;
+    const source=createNode("Block source","**Live source** ^"+id,null,1);
+    source.id="block-source";source.shared=false;
+    const target=createNode("Block destination",NowNoteBlocks.reference(owner,source.id,id),null,1);
+    target.id="block-destination";target.shared=false;
+    state.data=defaultData();state.data.tree=[source,target];state.selectedTreeId=target.id;
+    globalThis.blockQa={id,owner,ref:target.content};
+    setView("tree");render();setDocumentMode(true);
+  })()`);
+  const inspect=()=>evaluate(page,'({body:elements.markdownPreview.textContent,links:elements.markdownPreview.querySelectorAll("[data-note-reference]").length,raw:getSelectedTreeNode().content})');
+  let value=await inspect();
+  assert(value.body.includes("Live source")&&value.links===1,"Block reference must resolve with source navigation");
+  assert(value.raw.startsWith("![[nownote:"),"Live reference must not replace raw source with a copy");
+  await evaluate(page,'render()');
+  assert(await evaluate(page,'!elements.markdownPreview.classList.contains("hidden")'),"A same-note refresh must preserve formatted mode");
+  assert(await evaluate(page,'uniqueWikiLinks(getSelectedTreeNode().content).length===0'),"Stable block references are not missing title links");
+  assert(await evaluate(page,'!elements.markdownPreview.textContent.includes("^"+blockQa.id)'),"Formatted view must hide the anchor");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").content="**Updated source** ^"+blockQa.id;renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).body.includes("Updated source"),"Source updates must be visible without a saved copy");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").groupSharedReadOnly=true;renderMarkdownPreview(getSelectedTreeNode().content)');
+  value=await inspect();assert(!value.body.includes("Updated source")&&value.links===0,"Group or foreign source must not leak");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").groupSharedReadOnly=false;findTreeNode(state.data.tree,"block-source").content="NOW_ENCRYPTED_V1:fixture";renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert(!(await inspect()).body.includes("Updated source"),"Locked source must not use cached plaintext");
+  await evaluate(page,'findTreeNode(state.data.tree,"block-source").content=blockQa.ref+" ^"+blockQa.id;renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).body.includes("순환"),"Recursive references must stop");
+  const outside=await evaluate(page,'markdownToHtml(blockQa.ref)');
+  assert(!outside.includes("data-note-reference"),"Export/publish must not silently expand live sources");
+  await evaluate(page,'state.data.tree=state.data.tree.filter(node=>node.id!=="block-source");renderMarkdownPreview(getSelectedTreeNode().content)');
+  assert((await inspect()).links===0,"Deleted source cannot stay available");
+  await evaluate(page,String.raw`(() => {
+    const source=createNode("Copy source","Copyable **block**",null,1);source.id="block-copy-source";source.shared=false;
+    state.data.tree.push(source);state.selectedTreeId=source.id;render();setDocumentMode(false);
+    copyText=async()=>{globalThis.blockQaCopyAttempt=true;return false;};
+    elements.treeContent.focus();elements.treeContent.setSelectionRange(2,6);
+    document.querySelector("#noteBlockCopyBtn").click();
+  })()`);
+  await waitForCondition(page,'Boolean(globalThis.blockQaCopyAttempt)',"Block copy failure boundary");
+  assert(await evaluate(page,'elements.toastRegion.textContent.includes("참조를 복사하지 못했습니다")'),"Clipboard failure must not be shown as success");
+  await evaluate(page,'copyText=async text=>{globalThis.blockQaClipboard=text;return true;};elements.treeContent.focus();elements.treeContent.setSelectionRange(2,6);document.querySelector("#noteBlockCopyBtn").click()');
+  await waitForCondition(page,'Boolean(globalThis.blockQaClipboard)',"Block copy command");
+  assert(await evaluate(page,'NowNoteBlocks.parse(blockQaClipboard)?.localId==="block-copy-source" && NowNoteBlocks.index(getSelectedTreeNode().content).some(row=>row.id)'),"Copy must preserve a stable source anchor");
+  await evaluate(page,'undoTreeEditor()');
+  assert(await evaluate(page,'getSelectedTreeNode().content==="Copyable **block**"'),"Anchor command must support Undo");
+  await evaluate(page,'redoTreeEditor();selectTreeNode("block-destination");setDocumentMode(false);elements.treeContent.focus();elements.treeContent.setSelectionRange(0,elements.treeContent.value.length);document.querySelector("#noteBlockInsertBtn").click()');
+  await evaluate(page,'document.querySelector("#noteBlockReferenceInput").value=blockQaClipboard;document.querySelector("#noteBlockReferenceApply").click()');
+  assert(await evaluate(page,'getSelectedTreeNode().content.trim()===blockQaClipboard'),"Insert must store the reference, not a copied body");
+  await evaluate(page,'setDocumentMode(true)');
+  assert((await inspect()).body.includes("Copyable"),"Inserted reference must render");
+  await evaluate(page,'globalThis.blockQaBeforeCopy=getSelectedTreeNode().content;elements.toastRegion.replaceChildren();document.querySelector("#noteBlockCopyBtn").click()');
+  await waitForCondition(page,'elements.toastRegion.childElementCount>0',"Formatted copy guard");
+  assert(await evaluate(page,'getSelectedTreeNode().content===blockQaBeforeCopy && !elements.markdownPreview.classList.contains("hidden")'),"Formatted copy must not silently anchor a different source cursor");
+  await evaluate(page,'elements.markdownPreview.querySelector("[data-note-reference]").click()');
+  assert(await evaluate(page,'state.selectedTreeId==="block-copy-source" && elements.treeContent.selectionStart===0'),"Reference must navigate to the original block");
+  for(const width of [1280,390]){
+    await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+    await evaluate(page,'selectTreeNode("block-destination");setDocumentMode(true)');
+    if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+      const shot=await page.send("Page.captureScreenshot");
+      await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"blocks-"+(process.argv.includes("--desktop")?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+    }
+    await evaluate(page,'document.querySelector("#noteBlockInsertBtn").click()');
+    assert(await evaluate(page,'(()=>{const d=document.querySelector("#noteBlockReferenceDialog").getBoundingClientRect(),i=document.querySelector("#noteBlockReferenceInput").getBoundingClientRect();return d.left>=0&&d.right<=innerWidth&&i.left>=d.left&&i.right<=d.right;})()'),"Reference dialog must fit the viewport");
+    await evaluate(page,'document.querySelector("#noteBlockReferenceDialog").close()');
+  }
+  await evaluate(page,'persist();persistSettings();(async()=>{await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()');
+  assert(await evaluate(page,'(async()=>Boolean(noteHistory.view("block-destination")) && Boolean((isDesktopClient()?await window.nownoteDesktop.storage.read(NOTE_HISTORY_KEY):JSON.parse(await readStorage(NOTE_HISTORY_KEY)))?.contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes?.["block-destination"]))()'),"Block journal must be committed before closing");
+  console.log("Source blocks actual UI: live update, source link, raw preservation, group/lock/delete/cycle and export isolation PASS");
+}
+
 async function runOnce() {
   assert(typeof WebSocket === "function", "현재 Node.js 런타임이 WebSocket을 지원하지 않습니다.");
 
-  const browserPath = await findBrowser();
+  const desktop = process.argv.includes("--desktop");
+  const browserPath = desktop ? createRequire(new URL("../../desktop/package.json",import.meta.url))("electron") : await findBrowser();
   const { server, port: webPort } = await startStaticServer();
   const debugPort = await freePort();
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nownote-graph-check-"));
+  if(process.argv.includes("--vault-history")){
+    assert(desktop,"Vault UI QA requires isolated source Electron");
+    await seedVaultHistoryFixture(tempDir);
+  }
   const appUrl = `http://127.0.0.1:${webPort}/index.html`;
-  const browser = spawn(browserPath, browserArgs(debugPort, tempDir, appUrl), {
-    env: { ...process.env, NOWNOTE_HEADLESS_CHECK: "1" },
+  const args=desktop ? [path.resolve(ROOT,"../desktop"),...browserArgs(debugPort,tempDir,appUrl).slice(0,-1)] : browserArgs(debugPort,tempDir,appUrl);
+  let browser = spawn(browserPath, args, {
+    env: { ...process.env, NOWNOTE_HEADLESS_CHECK: "1", ...(desktop ? {NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir} : {}) },
+    windowsHide: true,
     stdio: ["ignore", "ignore", "pipe"],
   });
 
@@ -260,6 +540,160 @@ async function runOnce() {
     await page.send("Runtime.enable");
     await waitForCondition(page, "document.readyState === 'complete'", "NowNote Web 로드");
     await waitForCondition(page, "Boolean(document.querySelector('#graphCanvas') && typeof graphModel === 'function')", "그래프 함수 로드");
+    if(process.argv.includes("--wiki")||process.argv.includes("--wiki-protection")||process.argv.includes("--wiki-trash")){
+      const {verifyWikiFlow,verifyWikiCold,verifyWikiProtectionFlow,verifyWikiProtectionCold,verifyWikiTrashFlow,verifyWikiTrashCold,verifyProtectedWikiLifecycle}=await import("./wiki_fixture.mjs");
+      await verifyWikiFlow({evaluate:expression=>evaluate(page,expression)});
+      await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki actual review");
+      for(const width of [1280,390]){
+        await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+        assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Wiki dialog must fit the viewport");
+        if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+          const shot=await page.send("Page.captureScreenshot");
+          await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+        }
+        await evaluate(page,'document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+        await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-diff"))',"Wiki comparison");
+        assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect(),p=d.querySelector(".wiki-diff");return r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1&&p.textContent.includes("Supported")&&p.textContent.includes("Revised");})()'),"Wiki comparison must fit and retain both drafts");
+        if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+          const shot=await page.send("Page.captureScreenshot");
+          await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-compare-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+        }
+        await evaluate(page,'document.querySelector("#wikiDialog [name=wiki-compare]").click()');
+        await waitForCondition(page,'Boolean(document.querySelector("#wikiDialog .wiki-body strong"))',"Wiki reading");
+      }
+      if(process.argv.includes("--wiki-protection")){
+        await verifyWikiProtectionFlow({evaluate:expression=>evaluate(page,expression),capture:async()=>{
+          for(const width of [1280,390]){
+            await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+            assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Protected wiki reading must fit the viewport");
+            if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+              const shot=await page.send("Page.captureScreenshot");
+              await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-protected-reading-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+            }
+          }
+        }});
+        for(const width of [1280,390]){
+          await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+          assert(await evaluate(page,'(()=>{const d=document.querySelector("#noteProtectionDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1;})()'),"Wiki protection dialog must fit the viewport");
+          if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+            const shot=await page.send("Page.captureScreenshot");
+            await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-protection-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+          }
+        }
+      }
+      let expectedWikiTrashHash;
+      if(process.argv.includes("--wiki-trash")){
+        await verifyWikiTrashFlow({evaluate:expression=>evaluate(page,expression)});
+        expectedWikiTrashHash=await evaluate(page,'wikiTrashHash');
+        for(const width of [1280,390]){
+          await page.send("Emulation.setDeviceMetricsOverride",{width,height:900,deviceScaleFactor:1,mobile:width<600});
+          assert(await evaluate(page,'(()=>{const d=document.querySelector("#wikiDialog"),r=d.getBoundingClientRect();return d.open&&r.left>=0&&r.right<=innerWidth&&d.scrollWidth<=d.clientWidth+1&&[...d.querySelectorAll(".wiki-entry button")].every(b=>{const s=b.getBoundingClientRect();return s.left>=r.left&&s.right<=r.right;});})()'),"Trash controls must fit 1280/390 viewports");
+          if(process.env.NOWNOTE_QA_SCREENSHOT_DIR){
+            const shot=await page.send("Page.captureScreenshot");
+            await fs.writeFile(path.join(process.env.NOWNOTE_QA_SCREENSHOT_DIR,"wiki-trash-"+(desktop?"desktop":"web")+"-"+width+".png"),Buffer.from(shot.data,"base64"));
+          }
+        }
+      }
+      if(!desktop){
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA browser normal close timeout");})]);
+      }else stopBrowserProcess(browser);
+      browserClient.close();await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",...(desktop?{NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir}:{})},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      await waitForCondition(page,'typeof wikiUI!=="undefined" && Boolean(wikiUI) && typeof noteHistory!=="undefined" && Object.keys(noteHistory.export().contexts?.[NowNoteHistory.key(noteHistoryContext())]?.notes||{}).some(id=>id.startsWith("wiki:"))',"Wiki cold journal");
+      if(process.argv.includes("--wiki-trash"))await verifyWikiTrashCold({evaluate:expression=>evaluate(page,expression),expectedHash:expectedWikiTrashHash});
+      else if(process.argv.includes("--wiki-protection")){
+        await verifyWikiProtectionCold({evaluate:expression=>evaluate(page,expression)});
+        await verifyProtectedWikiLifecycle({evaluate:expression=>evaluate(page,expression)});
+      }
+      else await verifyWikiCold({evaluate:expression=>evaluate(page,expression)});
+      console.log(process.argv.includes("--wiki-trash")?"Wiki actual trash/restore: cancel, immutable full journal hash, source-protection dependency, zero extra model calls and process cold restore PASS":process.argv.includes("--wiki-protection")?"Wiki local protection: actual source guard, copy attribution, zero network, all-store cipher settlement, key read/lock and process cold restore PASS":"Wiki product menu: synthetic LLM confirmation, real journal draft/approval, source preservation, lock clearing, 1280/390 and process cold restore PASS");
+      return;
+    }
+    if(process.argv.includes("--document")){
+      const {verifyDocumentFlow}=await import("./document_fixture.mjs");
+      const click=async selector=>{
+        const point=await evaluate(page,'(()=>{const e=document.querySelector('+JSON.stringify(selector)+');e.scrollIntoView({block:"nearest"});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};})()');
+        await page.send("Input.dispatchMouseEvent",{type:"mousePressed",...point,button:"left",clickCount:1});
+        await page.send("Input.dispatchMouseEvent",{type:"mouseReleased",...point,button:"left",clickCount:1});
+      };
+      const fill=async(selector,text)=>{
+        await evaluate(page,'(()=>{const e=document.querySelector('+JSON.stringify(selector)+');e.focus();e.setSelectionRange(0,e.value.length);})()');
+        await page.send("Input.insertText",{text});
+      };
+      const result=await verifyDocumentFlow({evaluate:expression=>evaluate(page,expression),click,fill});
+      console.log("Existing document fixture: sanitizer, details, headings, raw roundtrip, IME, Undo and print PASS; headings="+result.headings.length);
+      return;
+    }
+
+    if(process.argv.includes("--vault-history")){
+      await checkVaultHistoryUI(page,tempDir);
+      if(process.argv.includes("--vault-diagnose"))return;
+      browserClient.close();stopBrowserProcess(browser);await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      await waitForCondition(page,'typeof noteHistory!=="undefined" && Boolean(noteHistory?.view("t"))',"Vault cold journal");
+      await checkVaultHistoryUI(page,tempDir,true);
+      return;
+    }
+    if (process.argv.includes("--canvas-account")) {
+      await checkCanvasAccountUI(page);
+      return;
+    }
+    if(process.argv.includes("--blocks")||process.argv.includes("--history-storage")){
+      const historyStorage=process.argv.includes("--history-storage");
+      if(historyStorage){
+        assert(!desktop,"Browser history storage QA is Web-only");
+        const {seedBrowserHistoryBeforeMigration,verifyBrowserHistoryStorage}=await import("./browser_history_storage_fixture.mjs");
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Browser history adapter");
+        await seedBrowserHistoryBeforeMigration({evaluate:expression=>evaluate(page,expression)});
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA legacy seed normal close timeout");})]);
+        browserClient.close();
+        browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1"},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+        browser.stderr.on("data",()=>{});
+        const seeded=await waitForPageTarget(debugPort,webPort);
+        browserClient=await CdpClient.connect(seeded.webSocketDebuggerUrl);
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Preexisting browser legacy adapter");
+        await verifyBrowserHistoryStorage({evaluate:expression=>evaluate(page,expression)});
+        console.log("Browser history actual IDB: migration, stale CAS, legacy divergence, cipher/other-account preservation and transaction abort PASS");
+      }else await checkBlockReferences(page);
+      const forceKill=desktop||process.argv.includes("--force-kill");
+      console.log((historyStorage?"Browser history":"Block")+" QA process restart: "+(forceKill?"forced":"normal"));
+      if(!forceKill){
+        const exited=new Promise(resolve=>browser.once("exit",resolve));
+        await page.send("Browser.close").catch(()=>{});
+        await Promise.race([exited,delay(5000).then(()=>{throw Error("QA browser normal close timeout");})]);
+      }else stopBrowserProcess(browser);
+      browserClient.close();await delay(300);
+      browser=spawn(browserPath,args,{env:{...process.env,NOWNOTE_HEADLESS_CHECK:"1",...(desktop?{NOWNOTE_DESKTOP_USER_DATA_DIR:tempDir}:{})},windowsHide:true,stdio:["ignore","ignore","pipe"]});
+      browser.stderr.on("data",()=>{});
+      const reopened=await waitForPageTarget(debugPort,webPort);
+      browserClient=await CdpClient.connect(reopened.webSocketDebuggerUrl);
+      if(historyStorage){
+        await waitForCondition(page,'typeof NowBrowserHistoryStorage!=="undefined"',"Cold browser history adapter");
+        const {verifyBrowserHistoryStorageCold}=await import("./browser_history_storage_fixture.mjs");
+        await verifyBrowserHistoryStorageCold({evaluate:expression=>evaluate(page,expression)});
+        console.log("Browser history actual forced cold process: committed cipher journal, retained sealed legacy and other-account copy PASS");
+        return;
+      }
+      await waitForCondition(page,'typeof noteHistory!=="undefined" && Boolean(noteHistory?.view("block-destination"))',"Block reference cold journal");
+      await evaluate(page,'selectTreeNode("block-destination");setDocumentMode(true)');
+      assert(await evaluate(page,'getSelectedTreeNode().content.trim().startsWith("![[nownote:") && elements.markdownPreview.textContent.includes("Copyable")'),"Cold process must restore the live reference, not a copied body");
+      console.log("Source blocks cold process: source anchor, raw reference and live formatted body PASS");
+      return;
+    }
+    if (process.argv.includes("--canvas-only")) {
+      await checkCanvasInteractions(page);
+      return;
+    }
 
     const result = await evaluate(page, `
       (() => {

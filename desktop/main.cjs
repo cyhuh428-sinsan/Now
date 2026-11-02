@@ -1,13 +1,16 @@
 const { app, BrowserWindow, Menu, dialog, ipcMain, shell } = require("electron");
 const path = require("path");
-const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
+const fs = require("node:fs");
+const { pathToFileURL } = require("node:url");
+const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
+const { readStoreFile, updateStoreFile, compareAndSetStoreValue } = require("./store-file.cjs");
 const { createVaultService } = require("./vault-service.cjs");
 
 const APP_TITLE = "NowNote";
 const APP_INDEX = path.join(__dirname, "app", "index.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
 const DESKTOP_STORE_VERSION = 1;
-const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1"]);
+const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1", "nownote.library.v1", "nownote.history.v1"]);
 
 function assertRendererStoreKey(key) {
   if (!RENDERER_STORE_KEYS.has(key)) throw new Error("Desktop storage key is not available to the renderer");
@@ -15,6 +18,33 @@ function assertRendererStoreKey(key) {
 
 if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.NOWNOTE_DESKTOP_USER_DATA_DIR));
+}
+
+// 같은 물리 데이터 폴더는 별칭 경로로 실행해도 하나의 소유자만 둔다.
+fs.mkdirSync(app.getPath("userData"), { recursive: true });
+app.setPath("userData", fs.realpathSync.native(app.getPath("userData")));
+let mainWindow = null;
+let desktopReady = false;
+let activationPending = false;
+let quitting = false;
+const primaryInstance = app.requestSingleInstanceLock();
+if (!primaryInstance) app.quit();
+else app.on("second-instance", () => activateMainWindow());
+app.on("before-quit", () => { quitting = true; });
+
+function activateMainWindow() {
+  if (quitting) return;
+  if (!desktopReady) { activationPending = true; return; }
+  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createMainWindow();
+  if (window.isMinimized()) {
+    window.once("restore", () => {
+      if (!quitting && !window.isDestroyed()) { window.show(); window.focus(); }
+    });
+    window.restore();
+  }
+  window.show();
+  window.focus();
+  activationPending = false;
 }
 
 function desktopStorePath() {
@@ -42,27 +72,31 @@ function registerDesktopStorageHandlers() {
     return store.values[key] ?? null;
   });
 
-  ipcMain.handle("nownote:desktop-store-write", (_event, key, value) => {
-    assertRendererStoreKey(key);
-    const result = updateStoreFile(desktopStorePath(), (store) => {
-      store.values[key] = value;
-      return store;
-    });
+  ipcMain.handle("nownote:desktop-store-write", (_event, key, value, options) => {
+    const result = updateRendererStoreValue(key, value, options);
     return { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
   });
 
-  ipcMain.on("nownote:desktop-store-write-sync", (event, key, value) => {
+  ipcMain.on("nownote:desktop-store-write-sync", (event, key, value, options) => {
     try {
-      assertRendererStoreKey(key);
-      const result = updateStoreFile(desktopStorePath(), (store) => {
-        store.values[key] = value;
-        return store;
-      });
+      const result = updateRendererStoreValue(key, value, options);
       event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
     } catch (error) {
       event.returnValue = { ok: false, error: error.message };
     }
   });
+}
+
+function updateRendererStoreValue(key, value, options) {
+  assertRendererStoreKey(key);
+  if (options && Object.hasOwn(options, "expectedValue")) {
+    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
+  }
+  if (key === "nownote.library.v1" || key === "nownote.history.v1") {
+    if (!options || !Object.hasOwn(options, "expectedValue")) throw new Error("Library writes require an expected value");
+    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
+  }
+  return updateStoreFile(desktopStorePath(), store => { store.values[key] = value; return store; });
 }
 
 function registerVaultHandlers() {
@@ -135,6 +169,8 @@ function createMainWindow(startFile = APP_INDEX) {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
+  mainWindow = window;
+  window.on("closed", () => { if (mainWindow === window) mainWindow = null; });
 
   window.loadFile(startFile);
 
@@ -208,11 +244,36 @@ function createMenu() {
   ]);
 }
 
-app.whenReady().then(() => {
+if (primaryInstance) app.whenReady().then(() => {
+  ipcMain.handle("nownote:open-document-file", async (event, input) => {
+    if (event.senderFrame?.parent || event.senderFrame?.url.split("?")[0] !== pathToFileURL(APP_INDEX).href) throw new Error("허용되지 않은 문서 요청입니다.");
+    const owner = BrowserWindow.fromWebContents(event.sender);
+    if (isRelativeDocumentReference(input)) {
+      const choice = await dialog.showOpenDialog(owner, {
+        title: "상대 링크의 문서 선택: " + input,
+        defaultPath: path.basename(input), properties: ["openFile"],
+      });
+      if (choice.canceled || !choice.filePaths[0]) return { opened: false };
+      input = choice.filePaths[0];
+    }
+    const target = await resolveDocumentPath(input);
+    const answer = await dialog.showMessageBox(owner, {
+      type: "question", title: "로컬 문서 열기", message: "기본 프로그램으로 이 문서를 열까요?", detail: target,
+      buttons: ["취소", "열기"], defaultId: 0, cancelId: 0,
+    });
+    if (answer.response !== 1) return { opened: false };
+    // 확인을 기다리는 동안 경로가 바뀌었으면 다시 확인한다.
+    if (await resolveDocumentPath(target) !== target) throw new Error("파일 경로가 변경되었습니다.");
+    const error = await shell.openPath(target);
+    if (error) throw new Error(error);
+    return { opened: true };
+  });
   registerDesktopStorageHandlers();
   registerVaultHandlers();
   Menu.setApplicationMenu(createMenu());
+  desktopReady = true;
   createMainWindow();
+  if (activationPending) activateMainWindow();
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

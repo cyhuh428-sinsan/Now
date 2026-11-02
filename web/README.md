@@ -150,7 +150,7 @@ npm install
 npm run dist:win
 ```
 
-생성 결과는 `desktop/dist/NowNote-Setup-2.3.9-x64.exe`입니다.
+생성 결과는 `desktop/dist/NowNote-Setup-2.4.0-x64.exe`입니다. Web·Windows의 업데이트 안내는 해당 플랫폼으로 조회하며 Android 안내는 별도로 게시된 판본을 유지합니다.
 
 PWA 설치형 배포 묶음도 개발/검증용으로 아래 명령으로 생성할 수 있습니다.
 

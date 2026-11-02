@@ -1,9 +1,12 @@
 from pathlib import Path
 import json
 import re
+import sys
 
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT.parent / "server" / "scripts"))
+from preflight import has_native_browser_confirm
 INDEX = ROOT / "index.html"
 APP = ROOT / "app.js"
 STYLES = ROOT / "styles.css"
@@ -301,7 +304,7 @@ def main() -> None:
         ('rel="icon"', "PWA icon link"),
         ("navigator.serviceWorker.register", "service worker registration"),
         ("hosted-web-only hidden", "group shared view menu hosted Web visibility guard"),
-        ("Web 2.3.9", "current Web version display"),
+        (f"Web {desktop_version}", "current Web version display"),
     ]
     for needle, label in html_requirements:
         check(needle in html, f"Web shell has {label}", needle, failures)
@@ -735,8 +738,7 @@ def main() -> None:
     for needle, label in context_menu_group_requirements:
         check(needle in app, f"Web app has {label}", needle, failures)
         check(needle in desktop_app_script, f"Desktop app script has {label}", needle, failures)
-    native_confirm_call = "confirm" + "("
-    check(native_confirm_call not in app, "Web app avoids native browser confirm", native_confirm_call, failures)
+    check(not has_native_browser_confirm(app), "Web app avoids native browser confirm", "native browser dialog calls", failures)
 
     markdown_flow_requirements = [
         ('downloadText(`nownote-${fileTimestamp(new Date())}.md`, markdown, "text/markdown")', "Markdown export downloads .md file"),

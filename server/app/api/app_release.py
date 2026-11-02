@@ -4,6 +4,8 @@
 GitHub Release 페이지 링크만 안내한다. `/api/v1/server`와 마찬가지로
 연결 전(로그인 전)에도 읽을 수 있어야 하므로 무인증으로 연다.
 """
+from typing import Literal
+
 from fastapi import APIRouter
 
 from app.core.capabilities import app_release_info
@@ -12,5 +14,5 @@ router = APIRouter(prefix="/api/v1/app", tags=["app"])
 
 
 @router.get("/release")
-def app_release() -> dict:
-    return {"status": "ok", **app_release_info()}
+def app_release(platform: Literal["windows", "web", "android"] = "windows") -> dict:
+    return {"status": "ok", **app_release_info(platform)}

@@ -1,6 +1,7 @@
 import logging
 import time
-from datetime import datetime
+from types import SimpleNamespace
+from uuid import uuid4
 
 from sqlalchemy import select
 
@@ -8,6 +9,8 @@ from app.core.config import get_settings
 from app.db import SessionLocal, create_tables
 from app.models.note import AnalysisJob
 from app.services.analysis_processor import process_analysis_job
+from app.services import related_drain
+from fastapi import HTTPException
 
 logging.basicConfig(
     level=logging.INFO,
@@ -16,41 +19,37 @@ logging.basicConfig(
 logger = logging.getLogger("nownote.worker")
 
 
+def candidate_jobs(db, limit):
+    return list(db.scalars(select(AnalysisJob.id).where(AnalysisJob.status == "queued")
+                           .order_by(AnalysisJob.created_at.asc(), AnalysisJob.id).limit(limit)))
+
+
 def run_once() -> int:
-    settings = get_settings()
     processed = 0
     with SessionLocal() as db:
-        jobs = list(
-            db.scalars(
-                select(AnalysisJob)
-                .where(AnalysisJob.status == "queued")
-                .order_by(AnalysisJob.created_at.asc())
-                .limit(settings.worker_batch_size)
-            ).all()
-        )
-        for job in jobs:
-            job.status = "running"
-            db.commit()
-            db.refresh(job)
+        jobs = candidate_jobs(db, get_settings().worker_batch_size)
+    worker_id = str(uuid4())
+    for ident in jobs:
+        try:
+            with SessionLocal() as db:
+                task = related_drain.claim(db, ident, worker_id)
+            if task is None:
+                continue
+            with SessionLocal() as db:
+                task = related_drain.dispatch(db, task)
+            value, failure = None, None
             try:
-                result_json = process_analysis_job(job)
-                db.refresh(job)
-                if job.status == "cancelled":
-                    logger.info("analysis job %s cancelled before completion", job.id)
-                    continue
-                job.status = "done"
-                job.result_json = result_json
-                job.error_message = None
-                job.updated_at = datetime.utcnow()
-                db.commit()
-                processed += 1
-                logger.info("analysis job %s done", job.id)
-            except Exception as exc:  # noqa: BLE001 - worker must persist failures
-                job.status = "failed"
-                job.error_message = str(exc)
-                job.updated_at = datetime.utcnow()
-                db.commit()
-                logger.exception("analysis job %s failed", job.id)
+                value = process_analysis_job(SimpleNamespace(job_type=task["job_type"], input_text=task["input_text"]))
+            except Exception as exc:
+                failure = str(exc)
+            with SessionLocal() as db:
+                receipt = related_drain.finish(db, task, result_json=value, error_message=failure)
+            processed += receipt["outcome"] == "done"
+            logger.info("analysis job %s settled outcome=%s", ident, receipt["outcome"])
+        except HTTPException:
+            logger.warning("analysis job %s deferred code=execution_not_settled", ident)
+        except Exception:
+            logger.warning("analysis job %s deferred code=storage_unavailable", ident)
     return processed
 
 
