@@ -396,6 +396,25 @@ app.whenReady().then(async()=>{
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});await noteHistory.ensure();return true;
     })()`);
     let workspace=null;
+    productSave.metadataBackup=await run(`(async()=>{
+      wikiUI.close();await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);
+      const backend=await historyPersistence(),before=await backend.open();
+      const account=NowNoteHistory.key(noteHistoryContext()),single={schema_version:1,contexts:{[account]:before.value.contexts[account]}};
+      await backend.full({expected:before.value,next:single,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred())throw Error('metadata_backup_not_deferred');
+      const original=downloadText,all=IDBObjectStore.prototype.getAll;let output=null;
+      downloadText=(_name,value)=>{output=value;};IDBObjectStore.prototype.getAll=function(){throw Error('metadata_backup_whole_scan');};
+      try{
+        await exportData();
+        if(!(output instanceof Blob)||!noteHistory.deferred()||noteHistory.failure())throw Error('metadata_backup_not_streamed');
+        const archive=JSON.parse(await output.text());
+        if(JSON.stringify(archive.history)!==JSON.stringify(single))throw Error('metadata_backup_content_changed');
+      }finally{downloadText=original;IDBObjectStore.prototype.getAll=all;}
+      const after=await backend.open();if(JSON.stringify(after.value)!==JSON.stringify(single))throw Error('metadata_backup_wrote_journal');
+      await backend.full({expected:after.value,next:before.value,revision:after.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});await noteHistory.ensure();return true;
+    })()`);
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
       workspace=await run(`(async()=>{
         const check=(value,name)=>{if(!value)throw Error('workspace_'+name);},pause=()=>new Promise(r=>setTimeout(r,5));

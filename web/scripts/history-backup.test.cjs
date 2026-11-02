@@ -5,16 +5,17 @@ globalThis.crypto=webcrypto;
 require('../vendor/note-history-state.js');
 const parts=require('../vendor/document-parts.js');
 const file=require('node:path').resolve(__dirname,'../vendor/history-backup.js');
-function fixture(){
+function fixture(metadata=null){
   assert.ok(require('node:fs').existsSync(file),'document-wise backup implementation required');
   require(file);const account=JSON.stringify(['https://qa.invalid','alice']);
   const note=(id,owner='alice')=>({owner_id:owner,local_id:id,content:id,note_type:'tree',source:'manual'});
   const entry=(id,owner)=>({raw:note(id,owner),draft:note(id,owner),base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[{snapshot:{note:{...note(id,owner),content:'old '+id}}}],outbox:[],receipts:[],unknown:{value:id}});
   const other=JSON.stringify(['https://qa.invalid','bob']);
-  const root={schema_version:1,contexts:{[account]:{notes:{a:entry('a'),b:entry('b')}},[other]:{notes:{'한글':entry('한글','bob')}}}},encoded=parts.encode(root),reads=[];let stamp='one',active=true,after=null;
+  const root={schema_version:1,contexts:{[account]:{notes:{a:entry('a'),b:entry('b')},...(metadata||{})},[other]:{notes:{'한글':entry('한글','bob')}}}},encoded=parts.encode(root),reads=[];let stamp='one',active=true,after=null;
   const read=async(path,directory)=>{reads.push({path:[...path],directory});const step=parts.selectSteps(path,directory);let item=step.next();while(!item.done)item=step.next(encoded.get(item.value));const result={...item.value,stamp,...(directory&&!path.length?{partIds:[...encoded.keys()]}:{})};after?.(path,directory);return result;};
-  const exporter=NowHistoryBackup.create({directory:path=>read(path,true),read:path=>read(path,false)});
-  return {root,account,other,reads,exporter,guard:{active:()=>active},orphan:()=>encoded.set('["orphan"]',{type:'object',entries:[]}),change:()=>{stamp='changed';},lock:()=>{active=false;},after:fn=>{after=fn;}};
+  const seen=[];
+  const exporter=NowHistoryBackup.create({directory:path=>read(path,true),read:path=>read(path,false),validateMetadata:row=>{seen.push(row);return row.value?.pending!==true;}});
+  return {root,account,other,reads,seen,exporter,guard:{active:()=>active},orphan:()=>encoded.set('["orphan"]',{type:'object',entries:[]}),change:()=>{stamp='changed';},lock:()=>{active=false;},after:fn=>{after=fn;}};
 }
 test('whole backup reads one document at a time and preserves every account/history/unknown field',async()=>{
   const f=fixture(),blob=await f.exporter.read('one',f.guard);
@@ -27,6 +28,22 @@ test('changed journal and authentication discard the backup without retry or par
 
 test('unreferenced physical records never become a silently incomplete archive',async()=>{
   const f=fixture();f.orphan();await assert.rejects(f.exporter.read('one',f.guard));
+});
+test('known settled Wiki metadata is validated and archived one item at a time without losing fields',async()=>{
+  const f=fixture({wiki_lifecycle:{one:{state:'local_only'}},wiki_ingest_operations:{operation:{state:'committed',unknown:{retained:true}}}});
+  assert.deepEqual(JSON.parse(await (await f.exporter.read('one',f.guard)).text()),f.root);
+  assert.deepEqual(f.seen.map(row=>[row.account,row.field,row.id]),[[f.account,'wiki_lifecycle','one'],[f.account,'wiki_ingest_operations','operation']]);
+  assert.ok(!f.reads.some(row=>!row.directory&&row.path.length===3&&row.path[2]!=='notes'));
+  const pending=fixture({wiki_ingest_operations:{operation:{pending:true}}});
+  await assert.rejects(pending.exporter.read('one',pending.guard),error=>error.code==='backup_full_required');
+});
+test('metadata reads keep the snapshot/account guard and unsupported metadata never emits a partial backup',async()=>{
+  for(const action of ['change','lock']){
+    const f=fixture({wiki_lifecycle:{one:{state:'local_only'}}});
+    f.after(path=>{if(path.at(-1)==='one')f[action]();});await assert.rejects(f.exporter.read('one',f.guard));
+  }
+  const unknown=fixture({future_metadata:{one:{preserved:true}}});
+  await assert.rejects(unknown.exporter.read('one',unknown.guard),error=>error.code==='backup_full_required');
 });
 test('unknown metadata requires the established full gate; broken document never exports',async()=>{
   const f=fixture();f.root.extension={preserved:true};

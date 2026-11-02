@@ -895,7 +895,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
   'use strict';
   const full=()=>Object.assign(Error('전체 백업 검증 경로가 필요합니다.'),{code:'backup_full_required'});
   const fail=()=>Error('백업 중 저장 상태가 변경되었거나 손상되었습니다. 파일을 만들지 않았습니다.');
-  function create({directory,read}){
+  function create({directory,read,validateMetadata}){
     async function exportHistory(stamp,guard){
       const active=()=>{if(guard?.active&&!guard.active())throw fail();};
       const get=async(path,shallow=false)=>{
@@ -917,11 +917,17 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       for(const account of accounts){
         let identity;try{identity=JSON.parse(account);}catch{throw full();}
         if(!Array.isArray(identity)||identity.length!==2||identity.some(x=>typeof x!=='string')||JSON.stringify(identity)!==account)throw full();
-        if(keys(await get(['contexts',account],true)).join(',')!=='notes')throw full();
-        plans.push({account,identity,ids:keys(await get(['contexts',account,'notes'],true))});
+        const fields=keys(await get(['contexts',account],true));
+        if(!fields.includes('notes')||fields.some(key=>!['notes','wiki_lifecycle','wiki_ingest_operations'].includes(key)))throw full();
+        const metadata=[];
+        for(const field of fields.filter(key=>key!=='notes')){
+          if(typeof validateMetadata!=='function')throw full();
+          metadata.push({field,ids:keys(await get(['contexts',account,field],true))});
+        }
+        plans.push({account,identity,ids:keys(await get(['contexts',account,'notes'],true)),metadata});
       }
       const chunks=['{"schema_version":1,"contexts":{'],expected=new Set(['$root','[]','["contexts"]']);
-      for(const [index,{account,identity,ids}]of plans.entries()){
+      for(const [index,{account,identity,ids,metadata}]of plans.entries()){
         expected.add(JSON.stringify(['contexts',account]));expected.add(JSON.stringify(['contexts',account,'notes']));
         chunks.push((index?',':'')+JSON.stringify(account)+':{"notes":{');
         for(const [offset,id]of ids.entries()){
@@ -934,7 +940,18 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           for(const key of NowDocumentParts.encode(entry).keys())if(key!=='$root')expected.add(JSON.stringify(['contexts',account,'notes',id,...JSON.parse(key)]));
           chunks.push(new Blob([(offset?',':'')+JSON.stringify(id)+':'+JSON.stringify(entry)]));
         }
-        chunks.push('}}');
+        chunks.push('}');
+        for(const {field,ids:metadataIds} of metadata){
+          const prefix=['contexts',account,field];expected.add(JSON.stringify(prefix));chunks.push(','+JSON.stringify(field)+':{');
+          for(const [offset,id] of metadataIds.entries()){
+            const selected=await get([...prefix,id]);if(!selected.found)throw fail();
+            if(await validateMetadata({account,identity,field,id,value:selected.value})!==true)throw full();active();
+            for(const key of NowDocumentParts.encode(selected.value).keys())if(key!=='$root')expected.add(JSON.stringify([...prefix,id,...JSON.parse(key)]));
+            chunks.push(new Blob([(offset?',':'')+JSON.stringify(id)+':'+JSON.stringify(selected.value)]));
+          }
+          chunks.push('}');
+        }
+        chunks.push('}');
       }
       chunks.push('}}');inventory(root,expected);inventory(await get([],true),expected);active();
       return new Blob(chunks,{type:'application/json'});
@@ -29905,6 +29922,11 @@ async function exportData() {
     const history=noteHistory,key=wikiViewKey(),data=JSON.stringify(state.data),settings=JSON.stringify(state.settings),library=JSON.stringify(libraryStore?.export());
     let archive;
     try{archive=await history?.archive?.(({stamp,guard})=>NowHistoryBackup.create({
+      validateMetadata:({account,field,id,value})=>{
+        if(account!==NowNoteHistory.key(noteHistoryContext()))return false;
+        if(field==='wiki_lifecycle'){NowWikiLifecycle.validateMap({[id]:value});return !value.pending;}
+        return field==='wiki_ingest_operations'&&wikiIngest.inspectOperations({[id]:value}).length===0;
+      },
       directory:path=>isDesktopClient()?nownoteDesktop.storage.readDirectory(NOTE_HISTORY_KEY,path):browserHistoryStorage().readDirectory(path,guard),
       read:path=>isDesktopClient()?nownoteDesktop.storage.readPath(NOTE_HISTORY_KEY,path):browserHistoryStorage().readPath(path,guard),
     }).read(stamp,guard));}catch(error){if(error.code!=='backup_full_required')throw error;}
