@@ -27,6 +27,24 @@ app.whenReady().then(async()=>{
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
     await run('wikiUI.open()');await wait('Boolean(document.querySelector("#wikiDialog [data-wiki-action=sources]"))','sources_button');
+    if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
+      const check=(value,name)=>{if(!value)throw Error('workspace_'+name);};
+      check(await run(`(()=>{const e=document.querySelector('#wikiDialog');return e.tagName==='SECTION'&&e.closest('#treeEditorPanel')&&!document.querySelector('dialog[open]');})()`),'embedded_not_modal');
+      check(await run(`document.querySelector('#wikiActionGroup')?.parentElement===document.querySelector('#fileActionGroup')?.parentElement&&!document.querySelector('#exploreActionGroup #wikiBtn')`),'independent_menu');
+      check(await run(`document.querySelectorAll('#wikiActionGroup [data-wiki-view]').length===6`),'six_entry_points');
+      for(const view of ['sources','build','lint','browse','query','graph']){
+        await run(`document.querySelector('#wikiActionGroup [data-wiki-view="${view}"]').click()`);
+        await wait(`document.querySelector('#wikiDialog')?.dataset.wikiView===${JSON.stringify(view)}&&!document.querySelector('#wikiDialog [data-wiki-action=refresh]')?.disabled`,'workspace_route_'+view);
+      }
+      await run(`document.querySelector('#wikiActionGroup [data-wiki-view=query]').click()`);
+      await wait(`Boolean(document.querySelector('#wikiDialog [name=wiki-query-question]'))`,'query_input');
+      await run(`document.querySelector('#wikiDialog [name=wiki-query-question]').value='Preserved synthetic question';document.querySelector('#wikiDialog [name=wiki-query-question]').dispatchEvent(new Event('input'));document.querySelector('#wikiMemoTab').click()`);
+      check(await run(`!document.querySelector('#treeEditorPanel').classList.contains('wiki-workspace-active')`),'memo_tab');
+      await run(`document.querySelector('#wikiWorkspaceTab').click()`);
+      check(await run(`document.querySelector('#wikiDialog [name=wiki-query-question]').value==='Preserved synthetic question'`),'tab_preserves_question');
+      await run('wikiUI.close();wikiUI.open()');
+      await wait('Boolean(document.querySelector("#wikiDialog [data-wiki-action=sources]"))','workspace_reopen');
+    }
     await run('document.querySelector("#wikiDialog [data-wiki-action=sources]").click()');
     await wait('Boolean(document.querySelector("#wikiDialog [name=wiki-files]"))','file_input');
     const assert=(v,code)=>{if(!v)throw Error(code);};
@@ -117,10 +135,39 @@ app.whenReady().then(async()=>{
         await click('sources');return {drafts:2,explicitApprovals:3,manualIntegrations:1,syntheticCalls:calls,outputTokens:4096};
       }finally{globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
+    let workspace=null;
+    if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
+      workspace=await run(`(async()=>{
+        const check=(value,name)=>{if(!value)throw Error('workspace_'+name);},pause=()=>new Promise(r=>setTimeout(r,5));
+        const wait=async fn=>{for(let n=0;n<400;n++){if(fn())return;await pause();}throw Error('workspace_review_timeout');};
+        const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export()),selection=state.selectedTreeId;
+        const scroll=document.querySelector('#treeList').parentElement,scrollTop=scroll.scrollTop;
+        await wikiUI.open('browse');
+        document.querySelector('#wikiDialog .wiki-entry .library-item').click();
+        await wait(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=edit-wiki]'))&&!document.querySelector('#wikiDialog [data-wiki-action=edit-wiki]').disabled);
+        check(!document.querySelector('#wikiDialog [data-wiki-action=approve]')&&!document.querySelector('#wikiDialog [data-wiki-action=generate]'),'browse_not_editor');
+        check([...document.querySelectorAll('#wikiDialog [name=wiki-version] option')].every(o=>o.textContent.includes('승인본')),'browse_approved_versions');
+        document.querySelector('#wikiDialog [data-wiki-action=edit-wiki]').click();
+        await wait(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=integrate]'))&&!document.querySelector('#wikiDialog [data-wiki-action=integrate]').disabled);
+        document.querySelector('#wikiMemoTab').focus();document.querySelector('#wikiMemoTab').click();
+        check(!document.querySelector('#treeEditorPanel').classList.contains('wiki-workspace-active'),'memo_visible');
+        document.querySelector('#wikiMemoTab').dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',bubbles:true,cancelable:true}));
+        check(document.activeElement.id==='wikiWorkspaceTab'&&document.querySelector('#wikiWorkspaceTab').getAttribute('aria-selected')==='true','keyboard_tabs');
+        check(state.selectedTreeId===selection&&scroll.scrollTop===scrollTop,'memo_selection_scroll');
+        check(NowNoteProtectionProtocol.canonicalJson(noteHistory.export())===before,'navigation_does_not_write');
+        await wikiUI.open('sources');
+        check(document.querySelector('.wiki-operation-details')&&!document.querySelector('.wiki-operation-details').open,'recovery_collapsed');
+        return {embedded:true,independentMenus:6,approvedRead:true,reviewRelation:true,tabsPreserveState:true,keyboardTabs:true,navigationWrites:0};
+      })()`);
+    }
     const screenshotRoot='D:/Project/Now/docs/2.4.0/qa';
     for(const [size,width,height] of [['desktop',1200,900],['mobile',390,844]]){
       window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
       assert(await run('(()=>{const d=document.querySelector("#wikiDialog");return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth;})()'),'source_layout_'+size);
+      if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
+        assert(await run(`(()=>{const panel=document.querySelector('#treeEditorPanel'),view=document.querySelector('#treeView');return panel.getBoundingClientRect().height>view.getBoundingClientRect().height*.65;})()`),'workspace_usable_height_'+size);
+        if(size==='mobile')assert(await run(`getComputedStyle(document.querySelector('#treePanel')).display==='none'`),'workspace_mobile_tree_hidden');
+      }
       fs.writeFileSync(path.join(screenshotRoot,'wiki-sources-'+mode+'-'+size+'.png'),(await window.webContents.capturePage()).toPNG());
     }
     assert(await run('(async()=>{const previous=state.settings.server.ownerId;state.settings.server.ownerId="qa-source-b";wikiUI.check();const hidden=!document.querySelector("#wikiDialog").open;const empty=(await wikiSources.list()).length===0;state.settings.server.ownerId=previous;return hidden&&empty;})()'),'account_b_leak');
@@ -250,13 +297,16 @@ app.whenReady().then(async()=>{
         await start();document.querySelector('#wikiDialog [data-wiki-action=confirm-send]').click();
         await until(()=>document.querySelector('#wikiDialog .wiki-detail h3')?.textContent==='Budget guide','budget_generate');
         if(calls!==1||body.max_tokens!==4096||body.model!=='Combo/auto'||body.reasoning_effort!=='high')throw Error('budget_actual_request');
+        const move=ui.open('browse');await until(()=>document.querySelector('#wikiDialog [data-wiki-action=cancel-send]'),'dirty_navigation_confirmation');
+        document.querySelector('#wikiDialog [data-wiki-action=cancel-send]').click();await move;
+        if(document.querySelector('#wikiDialog .wiki-detail h3')?.textContent!=='Budget guide'||calls!==1)throw Error('dirty_navigation_lost_draft');
         ui.close();note.content='x'.repeat(524288);await ui.open();document.querySelector('#wikiDialog [name=wiki-source]').click();document.querySelector('#wikiDialog [data-wiki-action=generate]').click();
         await until(()=>document.querySelector('#wikiDialog [role=status]').textContent.includes('512KiB'),'budget_prompt_limit');
         if(calls!==1||document.querySelector('#wikiDialog [data-wiki-action=confirm-send]'))throw Error('budget_prompt_limit_sent');
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};

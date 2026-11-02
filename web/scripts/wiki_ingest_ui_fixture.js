@@ -85,7 +85,7 @@ globalThis.runWikiIngestUiFixture=async function({initial,write,backend=null,pha
     await click('plan-ingest');await idle();await click('generate-ingest');await until(()=>button('confirm-send'),'remote_consent');expect(models===0,'remote_preconsent_model');
     await click('confirm-send');await until(()=>button('commit-ingest'),'remote_proposal');expect((await notebook.list()).length===0,'remote_implicit_draft');
     await click('commit-ingest');await idle();const operation=(await ingest.operations())[0];
-    await click('prepare-ingest',operation.operation_id);await idle();await click('commit-server-ingest',operation.operation_id);await idle();
+    await click('save-server',operation.operation_id);await idle();
     expect((await ingest.operations())[0].remote.phase==='commit_uncertain','remote_lost_commit');expect(!history.manages('wiki:'+operation.documents[0].wiki_id),'remote_implicit_settle');
     expect(models===1,'remote_single_model');
   }else{
@@ -94,7 +94,7 @@ globalThis.runWikiIngestUiFixture=async function({initial,write,backend=null,pha
     await click('apply-server-ingest',operation.operation_id);await idle();expect((await ingest.operations()).find(o=>o.operation_id===operation.operation_id).state==='committed','remote_settle');
     await click('sources');await idle();document.querySelector('#wikiDialog .wiki-entry button').click();await idle();await click('approve');await idle();
     const approval=(await ingest.operations()).find(o=>o.action==='approve');expect(approval?.remote.phase==='staged','remote_separate_approval');
-    await click('prepare-ingest',approval.operation_id);await idle();await click('commit-server-ingest',approval.operation_id);await idle();await click('apply-server-ingest',approval.operation_id);await idle();
+    await click('save-server',approval.operation_id);await idle();
     expect((await notebook.list())[0].document.approvals.length===1&&models===0,'remote_approval_cold_no_model');
   }
   await history.idle();return {backend:data,report:{phase,posts,syntheticModels:models,operationStates:(await ingest.operations()).map(o=>({action:o.action,state:o.state,phase:o.remote?.phase})),realProviderCalls:0}};

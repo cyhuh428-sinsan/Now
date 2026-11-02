@@ -5536,6 +5536,31 @@ kbd {
 .note-block-dialog [role="status"] { min-height: 20px; margin: 8px 0; font-size: 13px; color: var(--red); overflow-wrap: anywhere; }
 .note-block-dialog :is(button,input):focus-visible, .note-reference-source:focus-visible { outline: 2px solid var(--blue); outline-offset: 2px; }
 .wiki-dialog { width: min(1100px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); overflow: auto; }
+#wikiActionGroup h3 { margin: 8px 0 2px; color: var(--muted); font-size: 12px; font-weight: 700; }
+#wikiActionGroup button[aria-current="true"] { color: var(--blue); background: var(--blue-soft); }
+.editor-panel.wiki-workspace-mounted { display: flex; flex-direction: column; }
+.wiki-workspace-mounted > .tree-editor { flex: 1 1 0; }
+.wiki-workspace-tabs { display: flex; flex: 0 0 auto; gap: 4px; border-bottom: 1px solid var(--line); padding-bottom: 4px; }
+.wiki-workspace-tabs button { min-height: 32px; font-size: 13px; font-weight: 700; }
+.wiki-workspace-tabs button[aria-selected="true"] { background: var(--blue-soft); color: var(--blue); }
+.wiki-workspace-active > :not(.wiki-workspace-tabs):not(.wiki-workspace) { display: none !important; }
+.wiki-workspace-tabs[hidden], .wiki-workspace[hidden] { display: none !important; }
+.wiki-dialog.wiki-workspace { flex: 1 1 0; box-sizing: border-box; width: 100%; height: auto; max-height: none; min-height: 0; min-width: 0; margin: 0; padding: 12px; border: 0; border-radius: 0; }
+.wiki-workspace .library-layout { min-height: 0; }
+.wiki-workspace .library-toolbar { margin: 10px 0; }
+.wiki-workspace .library-header h2 { font-size: 18px; }
+.wiki-workspace :is(button,select) { max-width: 100%; }
+.wiki-workspace .wiki-relation-status { color: var(--muted); font-size: 13px; }
+.wiki-save-progress { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 16px 0; }
+.wiki-operation-details { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.wiki-operation-details summary { cursor: pointer; font-size: 13px; font-weight: 700; }
+.wiki-workspace .library-toolbar .secondary-btn { min-height: 30px; padding: 4px 8px; font-size: 12px; }
+.wiki-workspace .library-confirm { position: sticky; top: 0; z-index: 2; padding: 12px; background: var(--panel); border: 1px solid var(--line); }
+@media (max-width: 680px) { .wiki-workspace .wiki-layout { grid-template-columns: minmax(0, 1fr); } .wiki-workspace .wiki-layout > nav { max-height: 140px; overflow: auto; } .wiki-workspace .library-toolbar { gap: 4px; } }
+@media (max-width: 680px) {
+  .tree-layout:has(> .wiki-workspace-active) { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .tree-layout:has(> .wiki-workspace-active) > :is(.tree-panel,.resize-handle) { display: none; }
+}
 .wiki-dialog [role="status"] { min-height: 20px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .wiki-layout { grid-template-columns: minmax(160px, 230px) minmax(0, 1fr); align-items: start; }
 .wiki-layout > nav, .wiki-detail, .wiki-body { min-width: 0; overflow-wrap: anywhere; }
