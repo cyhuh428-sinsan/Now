@@ -50,7 +50,8 @@
     const entry = id => bucket(context())?.notes[id] || null;
     // A UI projection is deliberately not a complete journal/archive record.
     const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
-      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length}):null;
+      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length,
+      skipAutomaticSync:Boolean(!item.needsBaseline&&(item.conflict||!item.replicaSelected||item.localOnly))}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);

@@ -1,5 +1,6 @@
 const {createDocumentStore}=require('./document-store.cjs');
 const parts=require('./app/document-parts.js');
+const journalWindow=require('./app/journal-window.js');
 const {createHash}=require('node:crypto');
 const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const stamp=rows=>createHash('sha256').update(JSON.stringify(rows)).digest('hex');
@@ -19,6 +20,14 @@ function createPartitionedStore(filename){
     return cache.get(key);
   }
   return {
+    readWindow(key,request){return store.snapshot(()=>{
+      const manifest=store.manifest(key),token=stamp(manifest);
+      if(token!==request.stamp)throw Error('Document journal changed; reopen before reading');
+      const cache=new Map(),steps=journalWindow.readSteps(request);let step=steps.next();
+      while(!step.done){if(!cache.has(step.value))cache.set(step.value,store.read(key,step.value)?.value);step=steps.next(cache.get(step.value));}
+      return {window:step.value,manifest,stamp:token};
+    });},
+    writeWindow(key,request,options){return this.writePath(key,null,null,null,{...options,window:request});},
     readHistoryPage(key,request){return store.snapshot(()=>{
       if(stamp(store.manifest(key))!==request.stamp)throw Error('Document journal changed; reopen before paging');
       const cache=new Map(),steps=parts.historyPageSteps(request);let step=steps.next();
@@ -56,13 +65,19 @@ function createPartitionedStore(filename){
       });
     },
     write(key,value,expected){return this.commit([{key,value,expected}]);},
-    writePath(key,path,expected,value,{manifest=null,additional=[]}={}){
+    writePath(key,path,expected,value,{manifest=null,additional=[],window=null}={}){
       const plan=store.snapshot(()=>{
-        const checks=[],steps=parts.replaceSteps(path,expected,value);let step=steps.next();
+        if(window&&!manifest)throw Error('A journal Window requires a complete revision manifest');
+        const checks=[],reads=new Map(),steps=window?journalWindow.writeSteps(window):parts.replaceSteps(path,expected,value);let step=steps.next();
         while(!step.done){
-          const id=step.value,row=store.read(key,id);
+          const id=step.value,row=reads.has(id)?reads.get(id):store.read(key,id);reads.set(id,row);
           if(!row)throw Error('Missing document part');
           checks.push({scope:key,id,...row});step=steps.next(row.value);
+        }
+        if(window){
+          const range=step.value.range,ids=manifest.map(([id])=>id).filter(id=>id===range.id||id.startsWith(range.prefix)).sort();
+          if(!same(journalWindow.visibleIds(ids,range),range.ids))throw Error('Document Window parts conflict');
+          range.ids=ids;
         }
         const extras=[];
         for(const update of additional){

@@ -286,6 +286,23 @@
           return {entry:selected.value,stamp,revision:stamp,scoped:true};
         },guard);
       },
+      selectWindow(request,guard){
+        const selection=structuredClone(request);
+        return selective(async check=>{
+          if(typeof selection.stamp!=='string'||typeof selection.id!=='string')throw fail();
+          const result=await transaction.readWindow(selection,guard,check),entry=result.window.entry;
+          const root={schema_version:1,contexts:{[selection.account]:{notes:{[selection.id]:entry}}}};
+          if(result.stamp!==selection.stamp||!NowJournalWrites.eligible(root,selection.account,selection.id,entry))throw fail();
+          return {entry,window:{projection:result.window.projection,offsets:result.window.offsets},stamp:result.stamp,revision:result.stamp,scoped:true};
+        },guard);
+      },
+      replaceWindow(request,guard){
+        const {account,id,expected,next,revision,window}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
+        if(typeof revision!=='string'||window?.projection!=='journal_window_v1'||!NowJournalWrites.eligible(root,account,id,next))return Promise.reject(fail());
+        const selection={account,id,expected:{projection:window.projection,account,id,offsets:window.offsets,entry:expected},next,revision};
+        return selective(check=>transaction.writeWindow(selection,guard,check),guard)
+          .then(result=>({revision:result.stamp,stamp:result.stamp,scoped:true}));
+      },
       read: () => lock(async()=> (await settled()).row.value),
       readSnapshot:guard=>lock(async()=>{const {row,raw,retained}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null||Boolean(retained)};}),
       writeSnapshot:fullWrite,

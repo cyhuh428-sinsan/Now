@@ -22,7 +22,7 @@
       if(!guard.active())throw Error('저장 계정이 변경되었습니다.');return {snapshot};
     };
     const history=NowDeferredHistory.create({initial:await readInitial(),context,contextKey,accountKey,
-      select:backend.select,saveNote:backend.note,readPage:backend.page,request,ready,change,
+      select:backend.select,saveNote:backend.note,selectWindow:backend.selectWindow,saveWindow:backend.noteWindow,readPage:backend.page,request,ready,change,
       load:async guard=>normalize(await backend.open(guard)),
       build:opened=>{
         const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});

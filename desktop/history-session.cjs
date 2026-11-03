@@ -7,6 +7,26 @@ function createHistorySession(filename){
   function remember(sender,snapshot){const state={...snapshot,revision:randomUUID()};sessions.set(sender,state);return state;}
   function current(sender,revision){const state=sessions.get(sender);if(!state||state.revision!==revision)throw Error('저장 기준을 다시 열어 확인하세요.');return state;}
   return {
+    selectWindow(sender,{account,id,stamp}){
+      const snapshot=file.readKeyWindow(filename(),KEY,{account,id,stamp}),entry=snapshot.window.entry;
+      const value={schema_version:1,contexts:{[account]:{notes:{[id]:entry}}}};
+      if(!policy.eligible(value,account,id,entry))throw Error('선택 메모 보호 상태를 확인하세요.');
+      const window={projection:snapshot.window.projection,offsets:snapshot.window.offsets};
+      const saved=remember(sender,{value,manifest:snapshot.manifest,stamp:snapshot.stamp,selected:{account,id,window}});
+      return {entry:structuredClone(entry),window:structuredClone(window),revision:saved.revision,stamp:saved.stamp,scoped:true};
+    },
+    noteWindow(sender,{revision,account,id,expected,next}){
+      const state=current(sender,revision),selection=state.selected,before=state.value?.contexts?.[account]?.notes?.[id];
+      if(!selection?.window||selection.account!==account||selection.id!==id||!same(before,expected)||!policy.eligible(state.value,account,id,next))
+        throw Error('부분 이력 선택 기준을 확인하세요.');
+      try{
+        const window={...selection.window,account,id,entry:before};
+        const result=file.writeKeyWindow(filename(),KEY,{account,id,expected:window,next},state.manifest);
+        const value={schema_version:1,contexts:{[account]:{notes:{[id]:structuredClone(next)}}}};
+        const saved=remember(sender,{value,manifest:result.manifest,stamp:result.stamp,selected:selection});
+        return {revision:saved.revision,stamp:saved.stamp,scoped:true};
+      }catch(error){sessions.delete(sender);throw error;}
+    },
     page(_sender,request){return file.readKeyHistoryPage(filename(),KEY,request);},
     select(sender,{account,id,stamp}){
       const snapshot=file.readKeyNote(filename(),KEY,account,id,stamp);
@@ -29,6 +49,7 @@ function createHistorySession(filename){
     },
     note(sender,{revision,account,id,expected,next}){
       const state=current(sender,revision),before=state.value?.contexts?.[account]?.notes?.[id];
+      if(state.selected?.window)throw Error('부분 이력을 전체 메모로 교체할 수 없습니다.');
       if(state.selected&&(state.selected.account!==account||state.selected.id!==id))throw Error('선택 메모가 다릅니다.');
       if(!same(before,expected)||!policy.eligible(state.value,account,id,next))throw Error('전체 저장 또는 보호 상태 기준을 확인하세요.');
       try{

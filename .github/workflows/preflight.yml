@@ -61,6 +61,8 @@ jobs:
           web/scripts/wiki-workspace-fresh.test.mjs
           web/scripts/history-page-qa-guard.test.mjs
           web/scripts/settings-idle.test.cjs
+          web/scripts/journal-window.test.cjs web/scripts/window-client.test.cjs
+          web/scripts/document-write-idb.test.mjs desktop/tests/history-window-session.test.cjs
 
       - name: Run repository preflight
         working-directory: server

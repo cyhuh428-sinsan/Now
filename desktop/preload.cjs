@@ -22,6 +22,8 @@ contextBridge.exposeInMainWorld("nownoteDesktop", {
     },
     history:{
       select:request=>ipcRenderer.invoke('nownote:history-select',request),
+      selectWindow:request=>ipcRenderer.invoke('nownote:history-select-window',request),
+      noteWindow:request=>ipcRenderer.invoke('nownote:history-note-window',request),
       current:account=>ipcRenderer.invoke('nownote:history-current',account),
       page:request=>ipcRenderer.invoke('nownote:history-page',request),
       open:()=>ipcRenderer.invoke('nownote:history-open'),

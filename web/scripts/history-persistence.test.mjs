@@ -26,3 +26,14 @@ test('read-only freshness checks cannot advance the canonical stamp used to guar
   await backend.open(guard);assert.equal(backend.stamp(),'one');stamp='external';await backend.current('account',guard);assert.equal(backend.stamp(),'one');
   await backend.full({revision:'r',next:null},guard);assert.equal(backend.stamp(),'external');
 });
+test('Window native IPC requires declared support and an active guard, and late reads are discarded',async()=>{
+  const F=await factory();let active=true;const calls=[];
+  const history={selectWindow:async()=>{calls.push('select');return {ok:true,revision:'r',stamp:'s'};},noteWindow:async()=>{calls.push('note');return {ok:true,revision:'r2',stamp:'s2'};}};
+  const old=await F.create({native:{info:async()=>({historySessions:true}),history},key:'history'});assert.equal(old.selectWindow,undefined);
+  const backend=await F.create({native:{info:async()=>({historySessions:true,historyWindows:true}),history},key:'history'});
+  await assert.rejects(backend.selectWindow({}));assert.deepEqual(calls,[]);
+  await backend.selectWindow({},{active:()=>active});assert.equal(backend.stamp(),'s');
+  await backend.noteWindow({},{active:()=>active});assert.equal(backend.stamp(),'s2');
+  history.selectWindow=async()=>{active=false;return {ok:true,revision:'late',stamp:'late'};};
+  await assert.rejects(backend.selectWindow({},{active:()=>active}));assert.equal(backend.stamp(),'s2');
+});

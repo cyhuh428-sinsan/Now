@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,selectWindow=null,saveWindow=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null,browseIndex=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -14,7 +14,7 @@
     }
     reset(initial);
     const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
-    function selected(id,action){
+    function selected(id,action,window=false){
       const generation=epoch,key=bound,materialization=loading;let selection=null;
       const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled
         &&(!selection||preview===selection&&!full);
@@ -27,8 +27,10 @@
         if(!selection)throw stale();
         const account=accountKey(),stamp=preview.stamp;
         try{
-          const opened=await select({account,id,stamp},{active});
+          const useWindow=Boolean(window&&selectWindow&&saveWindow&&preview.syncSupported===true);
+          const opened=await (useWindow?selectWindow:select)({account,id,stamp},{active});
           if(!active()||opened.stamp!==stamp)throw stale();
+          if(useWindow&&opened.window?.projection!=='journal_window_v1')throw stale();
           let baseline=copy(opened.entry),revision=opened.revision;
           const initial={schema_version:1,contexts:{[account]:{notes:{[id]:baseline}}}};
           if(!NowJournalWrites.eligible(initial,account,id,baseline))throw stale();
@@ -38,7 +40,8 @@
               ||Object.keys(value.contexts[account]).join()!=='notes'||Object.keys(value.contexts[account].notes).length!==1||!Object.hasOwn(value.contexts[account].notes,id))throw stale();
             const next=value.contexts[account].notes[id];
             if(!NowJournalWrites.eligible(initial,account,id,next))throw stale();
-            const receipt=await saveNote({account,id,expected:baseline,next,revision},{active});
+            const receipt=await (useWindow?saveWindow:saveNote)({account,id,expected:baseline,next,revision,
+              ...(useWindow?{window:opened.window}:{})},{active});
             if(!active())throw Object.assign(stale(),{committed:true});
             if(typeof receipt?.stamp!=='string'||typeof receipt.revision!=='string')throw Object.assign(stale(),{committed:true});
             baseline=copy(next);revision=receipt.revision;preview.stamp=receipt.stamp;
@@ -156,14 +159,18 @@
         const targets=ids?[...ids]:Object.keys(preview.notes);
         if(targets.every(canSelect)){
           const generation=epoch,key=bound;
-          for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
+          for(const id of targets){
+            if(generation!==epoch||key!==contextKey()||!visible())throw stale();
+            if(preview.notes[id]?.skipAutomaticSync===true)continue;
+            await selected(id,store=>store.sync({onlyIds:[id]}),true);
+          }
           return;
         }
       }
       const id=name==='edit'?args[0]?.local_id:args[0];
       const selectedAction=['edit','seal','localOnly'].includes(name)
         ||['compare','restore','restoreLocal','importPending'].includes(name)&&preview?.wikiIndexSupported!==false;
-      if(selectedAction&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
+      if(selectedAction&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured),['edit','seal','localOnly'].includes(name));}
       const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
     };
     return api;

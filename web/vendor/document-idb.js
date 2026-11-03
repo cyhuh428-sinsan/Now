@@ -54,8 +54,9 @@
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null){
-      const steps=page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null,window=null){
+      const steps=window?(patch?NowJournalWindow.writeSteps(window):NowJournalWindow.readSteps(window))
+        :page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
@@ -72,7 +73,7 @@
             try{
               active();const physical=metadata.result;
               if(physical===undefined){
-                if(patch||page)throw Error('Document path conflict');
+                if(patch||page||window)throw Error('Document path conflict');
                 checkMetadata(undefined);
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
@@ -84,6 +85,7 @@
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
               if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
               if(page&&page.stamp!==physical.stamp)throw Error('Document journal changed; reopen before paging');
+              if(window&&!patch&&window.stamp!==physical.stamp)throw Error('Document journal changed; reopen before Window reading');
               checkMetadata(physical.row);
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
@@ -97,7 +99,8 @@
                         return value[1];
                       });
                       if(exact.result!==undefined)ids.push(range.id);
-                      if(JSON.stringify(ids.sort())!==JSON.stringify(range.ids))throw Error('Document parts conflict');
+                      const visible=range.opaque?NowJournalWindow.visibleIds(ids,range):ids.sort();
+                      if(JSON.stringify(visible)!==JSON.stringify(range.ids))throw Error('Document parts conflict');
                       checkMetadata(physical.row);
                       for(const change of plan.changes){
                         if(change.remove)documents.delete([key,change.id]);else documents.put({id:change.id,value:change.value},[key,change.id]);
@@ -114,6 +117,7 @@
                 if(step.done){
                   if(patch)apply(step.value);
                   else{
+                    if(window){result={projection:'window_read_v1',stamp:physical.stamp,window:step.value};return;}
                     result={projection:'path_v1',stamp:physical.stamp,...step.value};
                     if(shallow&&!path.length){
                       const keys=documents.getAllKeys(IDBKeyRange.bound([key],[key,[]]));
@@ -125,14 +129,14 @@
                   }
                   return;
                 }
-                if((current||page)&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
+                if((current||page||window)&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
                   active();const row=request.result;
                   if(row?.id!==id)throw Error('Missing document part');
                   if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
                     ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
-                  if(current||page)cache.set(id,row.value);
+                  if(current||page||window)cache.set(id,row.value);
                   step=steps.next(row.value);next();
                 }catch(e){fail(e);}};
               }
@@ -149,6 +153,13 @@
     transaction.readDirectory=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,null,false,true);
     transaction.readHistoryPage=(request,guard,checkMetadata=()=>{})=>pathTransaction(null,guard,checkMetadata,null,false,false,structuredClone(request));
     transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
+    transaction.readWindow=(request,guard,checkMetadata=()=>{})=>pathTransaction(null,guard,checkMetadata,null,false,false,null,structuredClone(request));
+    transaction.writeWindow=(request,guard,checkMetadata=()=>{})=>{
+      const window=structuredClone(request);
+      if(typeof window.revision!=='string')return Promise.reject(Error('A Window revision is required'));
+      return pathTransaction(null,guard,checkMetadata,{revision:window.revision},false,false,null,
+        {account:window.account,id:window.id,expected:window.expected,next:window.next});
+    };
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
     Object.defineProperty(transaction,'revision',{get:()=>lastRevision});
