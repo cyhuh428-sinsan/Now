@@ -18,6 +18,7 @@ mainLibraries.push('history-persistence.js');
 mainLibraries.push('wiki-connection.js');
 mainLibraries.push('workspace-navigation.js');
 mainLibraries.push('crypto-worker-client.js');
+mainLibraries.push('sync-status-ui.js');
 
 export async function buildRuntimeBundles() {
   const read = async names => Promise.all(names.map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
