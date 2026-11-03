@@ -22,6 +22,7 @@ for(const file of ['../app.js','../../desktop/app/app.js']){
   box.noteProtectionReader={read:async(s,c,d)=>({value:d.key.kind==='note_body'?note.content:{schema_version:1,note:structuredClone(note)}})};
   box.noteProtectionEditSession=null;
   box.noteProtectionInternalEnabled=true;
+  box.noteProtectionMutationsEnabled=()=>box.noteProtectionInternalEnabled===true;
   const info={scope,pending:null,catalog:{catalog_digest:'a'.repeat(64),context:{base:{identity_state:'coherent',current_exists:true,head_version:2,head_revision_id:uid(2),crypto_epoch:2,history_generation:2,inventory_revision_ids:[uid(2)]},current_mode:'protected',selected_physical_note_id:7},entries:[{key:{kind:'inventory_snapshot',id:'7',slot:'current'}},{key:{kind:'note_body',id:'7',slot:'content'}}]}};
   vm.runInContext(tail.slice(0,end.index)+'\nglobalThis.edit=editProtectedCurrent;',box);
   assert.equal((await box.edit(info,async()=> 'password')).content,note.content);passed++;
