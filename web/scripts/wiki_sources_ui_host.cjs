@@ -93,8 +93,8 @@ app.whenReady().then(async()=>{
       const q=qaProductSave,all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;let pageFloor=null;
       const dataBeforeSelected=JSON.stringify(await readStorage(STORAGE_KEY));
       IDBObjectStore.prototype.getAll=function(){throw Error('selected_first_full_scan');};
-      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');
-        if(pageFloor!==null&&Array.isArray(key)&&key[1]!=='$root'){const p=JSON.parse(key[1]);if(p[3]==='qa-save-a'&&p[4]==='revisions'&&p.length>5&&Number(p[5])<pageFloor)throw Error('unselected_revision_page_read');}
+      IDBObjectStore.prototype.get=function(key){if(this.name==='documents'&&Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');
+        if(this.name==='documents'&&pageFloor!==null&&Array.isArray(key)&&key[1]!=='$root'){const p=JSON.parse(key[1]);if(p[3]==='qa-save-a'&&p[4]==='revisions'&&p.length>5&&Number(p[5])<pageFloor)throw Error('unselected_revision_page_read');}
         return get.call(this,key);};
       try{
         globalThis.qaLazyBeforeBrowse=typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]');
@@ -607,8 +607,15 @@ app.whenReady().then(async()=>{
     let selectedOnline=null;
     if(selectedHttp){
       const credentials=JSON.parse(fs.readFileSync(path.join(process.env.NOWNOTE_HISTORY_QA_DIR,'synthetic-accounts.json'),'utf8'));
+      let apiToken='';
+      if(process.env.NOWNOTE_QA_ENV_FILE){
+        const line=fs.readFileSync(process.env.NOWNOTE_QA_ENV_FILE,'utf8').split(/\r?\n/).find(value=>value.startsWith('NOW_QA_API_TOKEN='));
+        apiToken=line?.slice('NOW_QA_API_TOKEN='.length).trim()||'';
+        if(apiToken.startsWith('"')&&apiToken.endsWith('"'))apiToken=apiToken.slice(1,-1);
+        if(!apiToken)throw Error('selected_http_qa_token_missing');
+      }
       await run(fs.readFileSync(path.join(root,'web/scripts/selected_history_http_fixture.js'),'utf8')+'\nvoid 0;');
-      selectedOnline=await run('runSelectedHistoryHttp('+JSON.stringify({url:selectedHttp.replace(/\/$/,''),token:credentials.qa_history_alice.token})+')');
+      selectedOnline=await run('runSelectedHistoryHttp('+JSON.stringify({url:selectedHttp.replace(/\/$/,''),token:credentials.qa_history_alice.token,owner:credentials.qa_history_alice.owner||'qa_history_alice',apiToken})+')');
     }
     await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,productSave,selectedOnline,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){

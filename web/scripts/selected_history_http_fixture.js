@@ -1,12 +1,12 @@
 /* Executed only by the disposable renderer QA host against its own loopback API. */
-globalThis.runSelectedHistoryHttp=async function({url,token}){
+globalThis.runSelectedHistoryHttp=async function({url,token,owner='qa_history_alice',apiToken=''}){
   const endpoint=new URL(url);if(endpoint.protocol!=='http:'||endpoint.hostname!=='127.0.0.1')throw Error('selected_http_boundary');
   await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);
   const backend=await historyPersistence(),before=await backend.open(),server=structuredClone(state.settings.server),data=state.data;
   const primary=[];for(const key of [STORAGE_KEY,SETTINGS_KEY,LIBRARY_STORAGE_KEY])primary.push([key,await readStorage(key)]);
   const clone=IDBObjectStore.prototype.getAll,id='selected-http-'+crypto.randomUUID();let result;
   try{
-    state.settings.server={...server,mode:'server',url,ownerId:'qa_history_alice',deviceId:'history-electron',userToken:token,webSessionToken:'',autoSync:false};
+    state.settings.server={...server,mode:'server',url,ownerId:owner,deviceId:'history-electron',token:apiToken,userToken:token,webSessionToken:'',autoSync:false};
     noteHistoryController.lock();noteHistoryProjectionScope=NowNoteHistory.key(noteHistoryContext());
     const ctx=noteHistoryContext();if(!ctx.online)throw Error('selected_http_not_online');
     const seed={owner_id:ctx.owner,local_id:id,note_type:'tree',title:'Synthetic selected HTTP',source:'manual',content:'BEFORE_HTTP',parent_local_id:null,level:1,tags:null,deleted_at:null};
