@@ -8,6 +8,7 @@ on:
       - .github/workflows/windows-installer-qa.yml
       - desktop/scripts/check-installed-lifecycle.ps1
       - desktop/tests/installer-runner.test.mjs
+      - desktop/tests/legacy-migration-approval.test.cjs
 
 permissions:
   contents: read
@@ -24,7 +25,7 @@ jobs:
         with:
           node-version: '24'
       - name: Check runner-only safety guard
-        run: node --test desktop/tests/installer-runner.test.mjs
+        run: node --test desktop/tests/installer-runner.test.mjs desktop/tests/legacy-migration-approval.test.cjs
       - name: Verify generated source
         run: node web/scripts/bundle_markdown.mjs --check
       - name: Install build dependencies
@@ -44,6 +45,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer-qa-${{ github.sha }}
-          path: desktop/dist/installer-lifecycle.json
+          path: |
+            desktop/dist/installer-lifecycle.json
+            desktop/dist/NowNote-Setup-2.4.1-x64.exe
+            desktop/dist/NowNote-Setup-2.4.1-x64.exe.blockmap
           if-no-files-found: warn
           retention-days: 7

@@ -43,18 +43,26 @@ function assertLegacyProtectionSettled(values){
     for(const child of Object.values(value))if(child&&typeof child==='object')pending.push(child);
   }
 }
-function initialize(storePath,{syntheticLegacy=false}={}){
+function initialize(storePath,{syntheticLegacy=false,approveLegacy=null}={}){
   fs.mkdirSync(path.dirname(storePath),{recursive:true});
   const exists=fs.existsSync(storePath),bytes=exists?fs.readFileSync(storePath):null;
   const original=exists?JSON.parse(bytes.toString('utf8')):{version:1,updatedAt:null,values:{}};
   if(original.storage_backend===FORMAT){open(storePath);return;}
   if(!original.values||typeof original.values!=='object'||Array.isArray(original.values))throw Error('Invalid legacy desktop store');
   if(exists){
-    // Real-profile conversion remains gated until its retained-copy protection inventory is verified.
     const qa=path.resolve('D:/tmp/nownote-241-migration');
     const resolved=fs.realpathSync.native(path.dirname(storePath));
     const relative=path.relative(qa,resolved);
-    if(!syntheticLegacy||!relative||relative.startsWith('..')||path.isAbsolute(relative))throw Error('Existing profile migration is not enabled. Use a separate 2.4.1 QA profile.');
+    const synthetic=syntheticLegacy&&relative&&!relative.startsWith('..')&&!path.isAbsolute(relative);
+    if(!synthetic){
+      const evidence=Object.freeze({profileDirectory:resolved,sourceSha256:hash(bytes),byteLength:bytes.length});
+      if(typeof approveLegacy!=='function'||approveLegacy(evidence)!==true){
+        const error=Error('Existing profile migration is not enabled. 원본을 보존했으며 전환 승인이 필요합니다.');
+        if(typeof approveLegacy==='function')error.code='NOWNOTE_MIGRATION_DECLINED';
+        throw error;
+      }
+      if(hash(fs.readFileSync(storePath))!==evidence.sourceSha256)throw Error('Migration source changed while approval was pending; original preserved.');
+    }
     // Old encrypted bundles bind their exact store inventory; a retained copy cannot be appended to them.
     assertLegacyProtectionSettled(original.values);
   }

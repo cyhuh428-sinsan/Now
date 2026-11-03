@@ -291,9 +291,16 @@ function createMenu() {
   ]);
 }
 
+function approveLegacyMigration(evidence){
+  return dialog.showMessageBoxSync({type:'question',title:'NowNote 2.4.1 저장소 전환',
+    message:'기존 자료를 새 저장 형식으로 전환할까요?',
+    detail:'원본은 별도 파일로 보존합니다. 전환 후 구버전은 같은 저장소에 쓸 수 없고, 원본으로 되돌리면 이후 변경은 자동 합쳐지지 않습니다.\n\n저장 위치: '+evidence.profileDirectory+'\n자료 크기: '+Math.ceil(evidence.byteLength/1024/1024)+' MiB',
+    buttons:['전환하고 계속','취소'],defaultId:1,cancelId:1,noLink:true})===0;
+}
+
 if (primaryInstance) app.whenReady().then(() => {
   // Only the actual Electron single-instance owner can publish a storage marker.
-  documentFile.initialize(desktopStorePath(),{syntheticLegacy:process.env.NOWNOTE_SYNTHETIC_MIGRATION==='1'});
+  documentFile.initialize(desktopStorePath(),{syntheticLegacy:process.env.NOWNOTE_SYNTHETIC_MIGRATION==='1',approveLegacy:approveLegacyMigration});
   ipcMain.handle('nownote:open-workspace',(event,workspace,input=null)=>{
     assertTrustedStoreFrame(event);
     if(!['note','wiki'].includes(workspace))throw Error('Invalid workspace');
@@ -344,7 +351,7 @@ if (primaryInstance) app.whenReady().then(() => {
       createMainWindow();
     }
   });
-}).catch(error=>{dialog.showErrorBox('NowNote 저장소 확인',error.message);app.quit();});
+}).catch(error=>{if(error.code!=='NOWNOTE_MIGRATION_DECLINED')dialog.showErrorBox('NowNote 저장소 확인',error.message);app.quit();});
 
 app.on('will-quit',()=>documentFile.closeAll());
 
