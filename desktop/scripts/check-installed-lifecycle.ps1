@@ -1,7 +1,10 @@
 param([switch]$Plan)
 $ErrorActionPreference = 'Stop'
+function Test-NowNoteRegistrationName([string]$Name) {
+  $Name -eq 'NowNote' -or $Name -match '^NowNote \d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$'
+}
 if ($Plan) {
-  @{ runnerOnly = $true; installMode = 'currentuser'; realUserData = $false; stages = @('install', 'runtime', 'uninstall') } | ConvertTo-Json -Compress
+  @{ runnerOnly = $true; installMode = 'currentuser'; realUserData = $false; stages = @('install', 'runtime', 'uninstall'); registrationNames = @('NowNote', 'NowNote 2.4.1', 'NowNote 2.4.0', 'Other NowNote', 'NowNote Wiki') | ForEach-Object { Test-NowNoteRegistrationName $_ } } | ConvertTo-Json -Compress
   exit 0
 }
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted' -or $env:RUNNER_OS -ne 'Windows' -or $env:NOWNOTE_INSTALLER_QA -ne '1' -or $env:GITHUB_REPOSITORY -ne 'cyhuh428-sinsan/Now') {
@@ -17,7 +20,7 @@ $installer = Join-Path $repo ('desktop/dist/NowNote-Setup-' + $package.version +
 $uninstaller = Join-Path $install 'Uninstall NowNote.exe'
 $registryRoots = @('HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\*', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*')
 function Registration {
-  @(Get-ItemProperty -Path $registryRoots -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName -eq 'NowNote' })
+  @(Get-ItemProperty -Path $registryRoots -ErrorAction SilentlyContinue | Where-Object { Test-NowNoteRegistrationName $_.DisplayName })
 }
 $desktop = [Environment]::GetFolderPath('DesktopDirectory')
 $programs = [Environment]::GetFolderPath('Programs')
@@ -41,7 +44,7 @@ try {
   }
   $receipt.installed = $true
   $entries = @(Registration)
-  if ($entries.Count -ne 1 -or $entries[0].DisplayVersion -ne $package.version) { throw 'Installed version/registration mismatch.' }
+  if ($entries.Count -ne 1 -or $entries[0].DisplayVersion -ne $package.version -or $entries[0].DisplayName -ne ('NowNote ' + $package.version)) { throw 'Installed version/registration mismatch.' }
   if (-not ([string]$entries[0].UninstallString).Contains($install)) { throw 'Uninstall registration points outside the owned installation.' }
   $receipt.registered = $true
   $wsh = New-Object -ComObject WScript.Shell
