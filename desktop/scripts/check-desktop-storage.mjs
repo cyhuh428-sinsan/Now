@@ -5,6 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import { fileURLToPath } from "node:url";
+import {createRequire} from 'node:module';
+import {once} from 'node:events';
+const require=createRequire(import.meta.url);
+const {readStoreFile,updateStoreFile}=require('../store-file.cjs');
+const {closeAll}=require('../document-file.cjs');
 
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const ROOT = path.resolve(path.dirname(SCRIPT_PATH), "..");
@@ -184,6 +189,10 @@ function stopProcess(proc) {
     proc.kill("SIGKILL");
   }
 }
+async function stopped(proc){
+  if(!proc||proc.exitCode!==null||proc.signalCode!==null)return;
+  await Promise.race([once(proc,'exit'),delay(5000).then(()=>{throw Error('Own QA process did not exit');})]);
+}
 
 async function launchApp(userDataDir, extraArgs = []) {
   const debugPort = await freePort();
@@ -267,7 +276,9 @@ async function verifyVaultPanel(page, vaultRoot, title) {
   })()`);
   assert(selected, "Vault preview omitted the saved topic.");
   const written = path.join(vaultRoot, title, "_index.md");
-  await waitForCondition(page, `document.querySelector('#vaultStatus').textContent.includes('적용 1')`, "Vault selected apply");
+  await waitForCondition(page, `document.querySelector('#vaultStatus').textContent.includes('적용 1')`, "Vault selected apply").catch(async error=>{
+    throw Error(error.message+' '+await evaluate(page,`document.querySelector('#vaultStatus').textContent`));
+  });
   assert((await fs.readFile(written, "utf8")).includes("nownote_id:"), "Vault export did not write managed Markdown.");
   await evaluate(page, `document.querySelector('#vaultPreviewBtn').click()`);
   await waitForCondition(page, `Boolean(document.querySelector('#vaultItems .vault-item'))`, "Vault linked preview rows");
@@ -518,7 +529,8 @@ async function main() {
   assert(typeof WebSocket === "function", "Current Node.js runtime does not support WebSocket.");
   assert(await exists(EXE_PATH), `Desktop app is missing: ${EXE_PATH}`);
 
-  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "nownote-desktop-storage-"));
+  const qaRoot='D:/tmp/nownote-241-desktop-storage';await fs.mkdir(qaRoot,{recursive:true});
+  const tempDir = await fs.mkdtemp(path.join(qaRoot, "run-"));
   const title = `Desktop storage smoke ${Date.now()}`;
   const body = "Desktop storage persisted after restart.";
   const worklogBody = "작업일지 마지막 단어 보존";
@@ -557,17 +569,20 @@ async function main() {
     await verifyTreeMap(first.page, title);
     first.client.close();
     stopProcess(first.app);
+    await stopped(first.app);
     first = null;
 
-    const storeRaw = await fs.readFile(storePath, "utf-8");
-    const store = JSON.parse(storeRaw);
+    const marker=JSON.parse(await fs.readFile(storePath,'utf8'));
+    assert(marker.storage_backend==='nownote-sqlite-parts-v1'&&!marker.values,'Old JSON must be a non-writable marker');
+    const dbBytes=await fs.readFile(storePath+'.sqlite');
+    assert(dbBytes.length>=64&&dbBytes.readUInt32BE(60)===1,'Committed SQLite schema was not preserved after forced exit');
+    const {store} = readStoreFile(storePath);
     assert(store.values?.[STORAGE_KEY]?.tree?.some((node) => node.title === title), "Saved note was not written to desktop store.");
     assert(store.values?.[STORAGE_KEY]?.worklogs?.[selectedWorklogDate]?.content === worklogBody, `Worklog was not written to desktop store for ${selectedWorklogDate}.`);
-    store.values[SETTINGS_KEY] = { contextMenuActions: ["undo", "redo"] };
     const vaultRoot = path.join(tempDir, "vault-fixture");
     await fs.mkdir(vaultRoot);
     store.values["nownote.vault.v1"] = { path: vaultRoot, baselines: {}, lastSuccessAt: null };
-    await fs.writeFile(storePath, `${JSON.stringify(store, null, 2)}\n`, "utf-8");
+    updateStoreFile(storePath,()=>store);closeAll();
 
     second = await launchApp(tempDir);
     await waitForCondition(second.page, `
@@ -601,14 +616,18 @@ async function main() {
     second?.client?.close();
     stopProcess(first?.app);
     stopProcess(second?.app);
+    await stopped(first?.app);await stopped(second?.app);
+    closeAll();
     await delay(500);
-    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    const relative=path.relative(await fs.realpath(qaRoot),await fs.realpath(tempDir));
+    if(!relative||relative.startsWith('..')||path.isAbsolute(relative))throw Error('Unsafe storage QA cleanup');
+    await fs.rm(tempDir, { recursive: true, force: true });
   }
 }
 
 export { launchApp, evaluate, stopProcess, CdpClient, freePort };
 
 if (process.argv[1] && path.resolve(process.argv[1]) === SCRIPT_PATH) main().catch((error) => {
-  console.error(`NowNote desktop storage check failed: ${error.message}`);
+  console.error(`NowNote desktop storage check failed: ${error.stack||error.message}`);
   process.exit(1);
 });

@@ -42,7 +42,7 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
   let pending = true, confirmLate = false, accessed = 0, owner='alice',switchAccount=false;
   const box = { state:{ selectedDate:'2026-10-30',data:{ daily:{'2026-10-30':{content:'SYNTHETIC-PLAIN'}},archivedDaily:[{id:'old',date:'2026-10-30',content:'SYNTHETIC-PLAIN'}] } },
     elements:{ dailyContent:{ readOnly:false,classList:{toggle(){}},focus(){} },appendTimeBtn:{},archiveSelectedBtn:{} },
-    requireProtectionSettled:() => { if (pending) throw Error('pending'); }, noteProtectionBlocked:() => pending,
+    requireProtectionSettled:() => { if (pending) throw Error('pending'); }, noteProtectionBlocked:() => pending,noteHistory:{ensure:async()=>{}},
     noteHistoryContext:()=>({owner,url:'https://synthetic.invalid',auth:owner,enabled:true}),noteHistoryCaptureEpoch:0,noteProtectionIdentity:null,
     confirmAction:async () => { if (confirmLate) pending = true;
       if(switchAccount){owner='bob';box.state.data={daily:{'2026-10-30':{content:'BOB-SAFE'}},archivedDaily:[]};}
@@ -53,8 +53,8 @@ for (const file of ['../app.js','../../desktop/app/app.js']) {
     '\nglobalThis.api = {exportPublishHtml,exportPublishSlides,setDailyArchivePreviewMode,archiveSelectedDailyNote,restoreArchivedDailyNote};',box);
   await check('publish',async () => {
     pending = true;
-    assert.throws(()=>box.api.exportPublishHtml(),/pending/);
-    assert.throws(()=>box.api.exportPublishSlides(),/pending/);
+    await assert.rejects(()=>box.api.exportPublishHtml(),/pending/);
+    await assert.rejects(()=>box.api.exportPublishSlides(),/pending/);
     assert.equal(accessed,0);
   });
   await check('preview',async () => {

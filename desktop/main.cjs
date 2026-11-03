@@ -3,13 +3,15 @@ const path = require("path");
 const fs = require("node:fs");
 const { pathToFileURL } = require("node:url");
 const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
-const { readStoreFile, updateStoreFile, compareAndSetStoreValue } = require("./store-file.cjs");
 const { createVaultService } = require("./vault-service.cjs");
+const documentFile=require('./document-file.cjs');
+const workspaceNavigation=require('./app/workspace-navigation.js');
 
 const APP_TITLE = "NowNote";
+const launchWorkspace=path.basename(process.execPath).toLowerCase()==='nownotewiki.exe'||process.argv.includes('--wiki')?'wiki':'note';
 const APP_INDEX = path.join(__dirname, "app", "index.html");
+const APP_WIKI = path.join(__dirname, "app", "wiki.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
-const DESKTOP_STORE_VERSION = 1;
 const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1", "nownote.library.v1", "nownote.history.v1"]);
 
 function assertRendererStoreKey(key) {
@@ -24,18 +26,21 @@ if (process.env.NOWNOTE_DESKTOP_USER_DATA_DIR) {
 fs.mkdirSync(app.getPath("userData"), { recursive: true });
 app.setPath("userData", fs.realpathSync.native(app.getPath("userData")));
 let mainWindow = null;
+let wikiWindow = null;
 let desktopReady = false;
-let activationPending = false;
+const activationPending = new Set();
 let quitting = false;
-const primaryInstance = app.requestSingleInstanceLock();
+const pendingNavigation=new WeakMap();
+const primaryInstance = app.requestSingleInstanceLock({workspace:launchWorkspace});
 if (!primaryInstance) app.quit();
-else app.on("second-instance", () => activateMainWindow());
+else app.on("second-instance", (_event,_args,_cwd,data) => activateMainWindow(data?.workspace==='wiki'?'wiki':'note'));
 app.on("before-quit", () => { quitting = true; });
 
-function activateMainWindow() {
+function activateMainWindow(workspace=launchWorkspace) {
   if (quitting) return;
-  if (!desktopReady) { activationPending = true; return; }
-  const window = mainWindow && !mainWindow.isDestroyed() ? mainWindow : createMainWindow();
+  if (!desktopReady) { activationPending.add(workspace); return; }
+  const existing=workspace==='wiki'?wikiWindow:mainWindow;
+  const window = existing && !existing.isDestroyed() ? existing : createMainWindow(APP_INDEX,workspace);
   if (window.isMinimized()) {
     window.once("restore", () => {
       if (!quitting && !window.isDestroyed()) { window.show(); window.focus(); }
@@ -44,59 +49,95 @@ function activateMainWindow() {
   }
   window.show();
   window.focus();
-  activationPending = false;
+  activationPending.delete(workspace);
 }
 
 function desktopStorePath() {
   return path.join(app.getPath("userData"), "nownote-desktop-store.json");
 }
 
-function readDesktopStore() {
-  return readStoreFile(desktopStorePath()).store;
+function assertTrustedStoreFrame(event){
+  if(event.senderFrame?.parent||![APP_INDEX,APP_WIKI].some(file=>event.senderFrame?.url.split('?')[0]===pathToFileURL(file).href))
+    throw Error('허용되지 않은 저장소 요청입니다.');
 }
 
+function notifyStoreChanged(sender,key){
+  assertRendererStoreKey(key);
+  for(const window of BrowserWindow.getAllWindows()){
+    const target=window.webContents;if(target===sender||target.isDestroyed())continue;
+    if(![APP_INDEX,APP_WIKI].some(file=>target.getURL().split('?')[0]===pathToFileURL(file).href))continue;
+    try{target.send('nownote:storage-changed',{schema_version:1,key});}catch{}
+  }
+}
+function storeMutation(sender,key,action){
+  try{const result=action();notifyStoreChanged(sender,key);return result;}
+  catch(error){if(error.committed===true)notifyStoreChanged(sender,key);throw error;}
+}
 function registerDesktopStorageHandlers() {
-  ipcMain.handle("nownote:desktop-store-info", () => {
-    const store = readDesktopStore();
+  const history=require('./history-session.cjs').createHistorySession(desktopStorePath);
+  for(const [route,method]of [['open','open'],['current','current'],['page','page'],['select','select'],['full','full'],['note','note']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey('nownote.history.v1');
+    try{return {ok:true,...(['full','note'].includes(method)?storeMutation(event.sender,'nownote.history.v1',()=>history[method](event.sender,payload)):history[method](event.sender,payload))};}
+    catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
+  });
+  const snapshots=new WeakMap();
+  const remember=(sender,key,value)=>{
+    if(!snapshots.has(sender))snapshots.set(sender,new Map());
+    snapshots.get(sender).set(key,structuredClone(value));
+  };
+  ipcMain.handle("nownote:desktop-store-info", (event) => {
+    assertTrustedStoreFrame(event);
+    const store = documentFile.info(desktopStorePath());
     return {
-      path: desktopStorePath(),
-      version: DESKTOP_STORE_VERSION,
+      path: desktopStorePath()+'.sqlite',
+      version: 2,
+      workspaces:['note','wiki'],
+      historySessions:true,
+      retainedOriginal:store.retainedOriginal,
       updatedAt: store.updatedAt,
-      keys: Object.keys(store.values),
+      keys: store.keys,
     };
   });
 
-  ipcMain.handle("nownote:desktop-store-read", (_event, key) => {
+  ipcMain.handle("nownote:desktop-store-read", (event, key) => {
+    assertTrustedStoreFrame(event);
     assertRendererStoreKey(key);
-    const store = readDesktopStore();
-    return store.values[key] ?? null;
+    const value=documentFile.readKey(desktopStorePath(),key);
+    remember(event.sender,key,value);return value;
+  });
+  ipcMain.handle('nownote:desktop-store-read-path',(event,key,segments,shallow=false)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    // A projection is not a full-store write baseline.
+    if(typeof shallow!=='boolean')throw Error('Invalid document directory option');
+    return documentFile.readKeyPath(desktopStorePath(),key,segments,shallow);
   });
 
-  ipcMain.handle("nownote:desktop-store-write", (_event, key, value, options) => {
-    const result = updateRendererStoreValue(key, value, options);
-    return { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
+  function writeFrom(event,key,value,options){
+    assertTrustedStoreFrame(event);
+    assertRendererStoreKey(key);
+    const expected=options&&Object.hasOwn(options,'expectedValue')?options.expectedValue:snapshots.get(event.sender)?.get(key);
+    if(expected===undefined)throw Error('저장 기준을 먼저 읽어야 합니다. 원본은 변경하지 않았습니다.');
+    const result=storeMutation(event.sender,key,()=>documentFile.writeKey(desktopStorePath(),key,value,expected));
+    remember(event.sender,key,value);return {ok:true,path:desktopStorePath()+'.sqlite',updatedAt:result.updatedAt};
+  }
+
+  ipcMain.handle("nownote:desktop-store-write", writeFrom);
+  ipcMain.handle('nownote:desktop-original-read',(event,key)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    return documentFile.readOriginal(desktopStorePath(),key);
+  });
+  ipcMain.handle('nownote:desktop-original-write',(event,key,value,expected)=>{
+    assertTrustedStoreFrame(event);assertRendererStoreKey(key);
+    return storeMutation(event.sender,key,()=>documentFile.casOriginal(desktopStorePath(),key,value,expected));
   });
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value, options) => {
     try {
-      const result = updateRendererStoreValue(key, value, options);
-      event.returnValue = { ok: true, path: desktopStorePath(), updatedAt: result.store.updatedAt };
+      event.returnValue = writeFrom(event,key,value,options);
     } catch (error) {
       event.returnValue = { ok: false, error: error.message };
     }
   });
-}
-
-function updateRendererStoreValue(key, value, options) {
-  assertRendererStoreKey(key);
-  if (options && Object.hasOwn(options, "expectedValue")) {
-    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
-  }
-  if (key === "nownote.library.v1" || key === "nownote.history.v1") {
-    if (!options || !Object.hasOwn(options, "expectedValue")) throw new Error("Library writes require an expected value");
-    return compareAndSetStoreValue(desktopStorePath(), key, value, options.expectedValue);
-  }
-  return updateStoreFile(desktopStorePath(), store => { store.values[key] = value; return store; });
 }
 
 function registerVaultHandlers() {
@@ -119,11 +160,13 @@ function registerVaultHandlers() {
     if (!input || !["toVault", "fromVault", "both"].includes(input.direction)) throw new Error("Invalid Vault direction");
     return service.previewVault({ direction: input.direction });
   });
-  ipcMain.handle("nownote:vault-apply", (_event, input) => {
+  ipcMain.handle("nownote:vault-apply", (event, input) => {
     if (!input || typeof input.planId !== "string" || !Array.isArray(input.selections) || input.selections.length > 5000) {
       throw new Error("Invalid Vault selections");
     }
-    return service.applyVault({ planId: input.planId, selections: input.selections });
+    return Promise.resolve(service.applyVault({ planId: input.planId, selections: input.selections })).then(result=>{
+      notifyStoreChanged(event.sender,'nownote.history.v1');notifyStoreChanged(event.sender,'nownote.web.v1');return result;
+    },error=>{if(error.committed===true){notifyStoreChanged(event.sender,'nownote.history.v1');notifyStoreChanged(event.sender,'nownote.web.v1');}throw error;});
   });
   ipcMain.handle("nownote:vault-recovery-status", () => service.recoveryStatus());
   ipcMain.handle("nownote:vault-confirm-recovery", (_event, input) => {
@@ -153,10 +196,10 @@ function sendAppCommand(command) {
   window.focus();
 }
 
-function createMainWindow(startFile = APP_INDEX) {
+function createMainWindow(startFile = APP_INDEX,workspace=launchWorkspace) {
   const iconPath = path.join(__dirname, "app", "icons", "nownote-icon.svg");
   const window = new BrowserWindow({
-    title: APP_TITLE,
+    title: workspace==='wiki'?'NowNote Wiki':APP_TITLE,
     width: 1280,
     height: 860,
     minWidth: 980,
@@ -169,10 +212,10 @@ function createMainWindow(startFile = APP_INDEX) {
       preload: path.join(__dirname, "preload.cjs"),
     },
   });
-  mainWindow = window;
-  window.on("closed", () => { if (mainWindow === window) mainWindow = null; });
+  if(workspace==='wiki')wikiWindow=window;else mainWindow = window;
+  window.on("closed", () => { if (mainWindow === window) mainWindow = null;if(wikiWindow===window)wikiWindow=null; });
 
-  window.loadFile(startFile);
+  window.loadFile(workspace==='wiki'&&startFile===APP_INDEX?APP_WIKI:startFile);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:")) {
@@ -228,6 +271,10 @@ function createMenu() {
       ],
     },
     {
+      label:'AI 지식 위키',
+      submenu:[{label:'NowNote Wiki 열기',click:()=>activateMainWindow('wiki')}],
+    },
+    {
       label: "도움말",
       submenu: [
         {
@@ -244,7 +291,31 @@ function createMenu() {
   ]);
 }
 
+function approveLegacyMigration(evidence){
+  return dialog.showMessageBoxSync({type:'question',title:'NowNote 2.4.1 저장소 전환',
+    message:'기존 자료를 새 저장 형식으로 전환할까요?',
+    detail:'원본은 별도 파일로 보존합니다. 전환 후 구버전은 같은 저장소에 쓸 수 없고, 원본으로 되돌리면 이후 변경은 자동 합쳐지지 않습니다.\n\n저장 위치: '+evidence.profileDirectory+'\n자료 크기: '+Math.ceil(evidence.byteLength/1024/1024)+' MiB',
+    buttons:['전환하고 계속','취소'],defaultId:1,cancelId:1,noLink:true})===0;
+}
+
 if (primaryInstance) app.whenReady().then(() => {
+  // Only the actual Electron single-instance owner can publish a storage marker.
+  documentFile.initialize(desktopStorePath(),{syntheticLegacy:process.env.NOWNOTE_SYNTHETIC_MIGRATION==='1',approveLegacy:approveLegacyMigration});
+  ipcMain.handle('nownote:open-workspace',(event,workspace,input=null)=>{
+    assertTrustedStoreFrame(event);
+    if(!['note','wiki'].includes(workspace))throw Error('Invalid workspace');
+    if(input!==null&&workspace!=='note')throw Error('Invalid workspace navigation');
+    const navigation=input===null?null:workspaceNavigation.shape(input);
+    activateMainWindow(workspace);
+    if(navigation){pendingNavigation.set(mainWindow.webContents,navigation);mainWindow.webContents.send('nownote:workspace-navigation');}
+    return {opened:true};
+  });
+  ipcMain.handle('nownote:take-workspace-navigation',event=>{
+    assertTrustedStoreFrame(event);
+    if(event.senderFrame?.url.split('?')[0]!==pathToFileURL(APP_INDEX).href)throw Error('허용되지 않은 화면 이동 요청입니다.');
+    const value=pendingNavigation.get(event.sender);pendingNavigation.delete(event.sender);
+    if(!value)return null;try{return workspaceNavigation.shape(value);}catch{return null;}
+  });
   ipcMain.handle("nownote:open-document-file", async (event, input) => {
     if (event.senderFrame?.parent || event.senderFrame?.url.split("?")[0] !== pathToFileURL(APP_INDEX).href) throw new Error("허용되지 않은 문서 요청입니다.");
     const owner = BrowserWindow.fromWebContents(event.sender);
@@ -273,14 +344,16 @@ if (primaryInstance) app.whenReady().then(() => {
   Menu.setApplicationMenu(createMenu());
   desktopReady = true;
   createMainWindow();
-  if (activationPending) activateMainWindow();
+  for(const workspace of activationPending)activateMainWindow(workspace);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createMainWindow();
     }
   });
-});
+}).catch(error=>{if(error.code!=='NOWNOTE_MIGRATION_DECLINED')dialog.showErrorBox('NowNote 저장소 확인',error.message);app.quit();});
+
+app.on('will-quit',()=>documentFile.closeAll());
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {

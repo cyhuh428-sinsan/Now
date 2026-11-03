@@ -18,6 +18,9 @@ COPY now_app/docs/mobile_runtime_checklist_ko.md /now_app/docs/mobile_runtime_ch
 COPY now_app/docs/google_play_release_checklist.md /play_docs/google_play_release_checklist.md
 COPY now_app/docs/google_play_step_by_step_ko.md /play_docs/google_play_step_by_step_ko.md
 COPY web/index.html web/app.js web/styles.css web/help.html web/manifest.webmanifest web/sw.js /web_app/
+COPY web/wiki-runtime.js /web_app/
+COPY web/wiki-core.js web/wiki.html web/wiki-shell.js web/wiki.css /web_app/
+COPY web/crypto-worker.js /web_app/
 COPY web/icons /web_app/icons
 
 EXPOSE 8080

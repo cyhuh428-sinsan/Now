@@ -1,31 +1,268 @@
 /* Actual renderer/file input/storage; external HTTP is blocked and remote/model fixtures are synthetic. */
 const {app,BrowserWindow,ipcMain,session}=require('electron');
-const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
+const fs=require('node:fs'),path=require('node:path');
 const root=path.resolve(__dirname,'../..'),own=path.resolve(process.argv[2]),mode=process.argv[3],phase=Number(process.argv[4]);
 if(!own.startsWith(path.resolve('D:/tmp/now-240-wiki-sources')+path.sep)||!['web','desktop'].includes(mode)||![1,2].includes(phase))throw Error('qa_boundary');
 app.setPath('userData',path.join(own,mode));app.disableHardwareAcceleration();
-const {readStoreFile,updateStoreFile,compareAndSetStoreValue}=require(path.join(root,'desktop/store-file.cjs'));
-const main=fs.readFileSync(path.join(root,'desktop/main.cjs'),'utf8'),start=main.indexOf('function updateRendererStoreValue('),end=main.indexOf('function registerVaultHandlers(',start);
+const documentFile=require(path.join(root,'desktop/document-file.cjs'));
 const store=path.join(own,mode,'nownote-desktop-store.json'),keys=new Set(['nownote.web.v1','nownote.web.settings.v1','nownote.history.v1','nownote.library.v1']);
-const box={compareAndSetStoreValue,updateStoreFile,desktopStorePath:()=>store,assertRendererStoreKey:k=>{if(!keys.has(k))throw Error('store_key');}};
-vm.runInNewContext(main.slice(start,end)+'\nglobalThis.write=updateRendererStoreValue;',box);
-ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');return readStoreFile(store).store.values[k]??null;});
-const write=(k,v,o)=>{const r=box.write(k,v,o);return {ok:true,updatedAt:r.store.updatedAt};};
+const snapshots=new Map();
+const historyCounts={open:0,current:0,page:0,select:0,full:0,note:0};
+const historySession=require(path.join(root,'desktop/history-session.cjs')).createHistorySession(()=>store);
+for(const method of ['open','current','page','select','full','note'])ipcMain.handle('nownote:history-'+method,(event,payload)=>{
+  historyCounts[method]++;
+  try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
+});
+ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
+ipcMain.handle('nownote:desktop-store-read-path',(_e,k,segments,shallow=false)=>{if(!keys.has(k)||typeof shallow!=='boolean')throw Error('store_key');return documentFile.readKeyPath(store,k,segments,shallow);});
+const write=(k,v,o)=>{
+  if(!keys.has(k))throw Error('store_key');
+  const expected=o&&Object.hasOwn(o,'expectedValue')?o.expectedValue:snapshots.get(k);
+  if(expected===undefined)throw Error('qa_missing_read');
+  const r=documentFile.writeKey(store,k,v,expected);snapshots.set(k,structuredClone(v));return {ok:true,updatedAt:r.updatedAt};
+};
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_CAS'};}});
-ipcMain.handle('nownote:desktop-store-info',()=>({version:1,keys:[...keys]}));
+ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys],historySessions:true}));
+ipcMain.handle('nownote:desktop-original-read',(_event,key)=>{if(!keys.has(key))throw Error('store_key');return documentFile.readOriginal(store,key);});
+ipcMain.handle('nownote:desktop-original-write',(_event,key,value,expected)=>{if(!keys.has(key))throw Error('store_key');return documentFile.casOriginal(store,key,value,expected);});
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
 let window,result={ok:false},network=0;
+const selectedHttp=process.env.NOWNOTE_SELECTED_HTTP_QA_URL;
+if(selectedHttp){const url=new URL(selectedHttp);if(url.protocol!=='http:'||url.hostname!=='127.0.0.1'||url.pathname!=='/')throw Error('selected_http_origin');}
 app.whenReady().then(async()=>{
   try{
-    session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(_d,done)=>{network++;done({cancel:true});});
+    documentFile.initialize(store);
+    session.defaultSession.webRequest.onBeforeRequest({urls:['http://*/*','https://*/*']},(request,done)=>{
+      if(selectedHttp&&new URL(request.url).origin===new URL(selectedHttp).origin){done({cancel:false});return;}network++;done({cancel:true});
+    });
     window=new BrowserWindow({show:false,width:1200,height:900,webPreferences:{contextIsolation:true,nodeIntegration:false,backgroundThrottling:false,
       ...(mode==='desktop'?{preload:path.join(root,'desktop/preload.cjs')}:{})}});
     await window.loadFile(path.join(root,mode==='desktop'?'desktop/app/index.html':'web/index.html'));
-    const run=code=>window.webContents.executeJavaScript(code),wait=async(code,label)=>{
+    let qaStep=0;
+    const run=async code=>{
+      const step=++qaStep;
+      try{
+        if(!code.trim().startsWith('(async()=>'))return await window.webContents.executeJavaScript(code);
+        const result=await window.webContents.executeJavaScript(code+'.then(value=>({qaOK:true,value}),error=>({qaOK:false,message:String(error.message),stack:String(error.stack)}))');
+        if(!result.qaOK)throw Error(result.message+' | '+result.stack);return result.value;
+      }catch(error){const label=code.trim().startsWith('runSelectedHistoryHttp(')?'runSelectedHistoryHttp(<synthetic configuration>)':code.trim().slice(0,70);throw Error('renderer_step_'+step+' '+label+' | '+error.message);}
+    },wait=async(code,label)=>{
       for(let i=0;i<300;i++){if(await run(code))return;await new Promise(r=>setTimeout(r,25));}throw Error(label);
     };
     await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','startup_timeout');
+    const savedSaveFixture=await run(`(async()=>{
+      await noteHistory.idle();await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
+      const backend=await historyPersistence(),before=await backend.open(),ctx=noteHistoryContext(),account=NowNoteHistory.key(ctx);
+      const note=id=>({owner_id:ctx.owner,local_id:id,note_type:'tree',source:'manual',content:'old',title:id,level:1});
+      const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true});
+      const value={schema_version:1,contexts:{[account]:{notes:{'qa-save-a':entry('qa-save-a'),'qa-save-b':entry('qa-save-b')}}}};
+      value.contexts[account].notes['qa-save-a'].revisions=Array.from({length:125},(_,index)=>({revision_id:crypto.randomUUID(),created_at:'2026-11-03T00:00:00.000Z',reason:'edit',snapshot:{schema_version:1,note:{...note('qa-save-a'),content:'QA_PAGE_HISTORY_'+index}}}));
+      for(const kind of ['daily','worklog']){
+        const date='2026-11-03',server={...state.settings.server,ownerId:ctx.owner},note=(kind==='daily'?dailyNoteToServerNote:worklogNoteToServerNote)({date,content:'OLD_DATE_BODY',updatedAt:new Date().toISOString()},server);
+        value.contexts[account].notes[note.local_id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true};
+      }
+      value.contexts[account].notes['qa-save-b'].revisions=[{snapshot:{note:{content:'QA_UNRELATED_HISTORY'}}}];
+      await backend.full({expected:before.value,next:value,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      globalThis.qaProductSave={backend,before,ctx,account,value,scoped:(await backend.open()).scoped};
+      // Opening the backend rotates native tokens; explicitly resume the product binding.
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      return {before,ctx,account,value,scoped:qaProductSave.scoped};
+    })()`);
+    const beforeStartup={...historyCounts};
+    window.webContents.debugger.attach('1.3');
+    await window.webContents.debugger.sendCommand('Page.enable');
+    const startupScript=await window.webContents.debugger.sendCommand('Page.addScriptToEvaluateOnNewDocument',{source:`(()=>{
+      globalThis.qaStartupFullReads=0;const original=IDBObjectStore.prototype.getAll;
+      globalThis.qaRestoreStartupRead=()=>{IDBObjectStore.prototype.getAll=original;};
+      IDBObjectStore.prototype.getAll=function(...args){if(this.name==='documents'){qaStartupFullReads++;throw Error('startup_full_history_read');}return original.apply(this,args);};
+    })();`});
+    const reloaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await reloaded;
+    await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','current_startup_timeout');
+    await run(`(()=>{globalThis.qaReadsBeforeSelection=qaStartupFullReads;globalThis.qaStartupWriteKeys=[];const original=writeStorage;
+      globalThis.qaRestoreStartupWrite=()=>{writeStorage=original;};writeStorage=(key,value)=>{qaStartupWriteKeys.push(key);return original(key,value);};})()`);
+    await run('selectTreeNode("qa-save-a");void 0;');await run('noteHistoryCaptureChain');
+    const startup=await run(`(()=>{let exportBlocked=false;try{noteHistory.export();}catch{exportBlocked=true;}
+      return {deferred:noteHistory.deferred(),current:noteHistory.currentView('qa-save-a')?.draft.content==='old',rendered:elements.treeContent.value==='old',fullReads:qaStartupFullReads,readsBeforeSelection:qaReadsBeforeSelection,writeKeys:qaStartupWriteKeys,exportBlocked,matches:noteHistory.matches()};})()`);
+    const startupCurrent=startup.deferred&&startup.current&&startup.rendered&&startup.fullReads===0&&startup.exportBlocked;
+    await run('qaRestoreStartupRead();qaRestoreStartupWrite()');
+    await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:startupScript.identifier});window.webContents.debugger.detach();
+    if(!startupCurrent||mode==='desktop'&&(historyCounts.open!==beforeStartup.open||historyCounts.current<=beforeStartup.current))throw Error('current_startup_did_not_defer '+JSON.stringify({startup,beforeStartup,historyCounts}));
+    await run(`(async()=>{globalThis.qaProductSave={...${JSON.stringify(savedSaveFixture)},backend:await historyPersistence()};
+      const q=qaProductSave,all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;let pageFloor=null;
+      const dataBeforeSelected=JSON.stringify(await readStorage(STORAGE_KEY));
+      IDBObjectStore.prototype.getAll=function(){throw Error('selected_first_full_scan');};
+      IDBObjectStore.prototype.get=function(key){if(this.name==='documents'&&Array.isArray(key)&&key[1]?.includes('qa-save-b')&&/revisions|receipts|"outbox",/.test(key[1]))throw Error('selected_sibling_history_read');
+        if(this.name==='documents'&&pageFloor!==null&&Array.isArray(key)&&key[1]!=='$root'){const p=JSON.parse(key[1]);if(p[3]==='qa-save-a'&&p[4]==='revisions'&&p.length>5&&Number(p[5])<pageFloor)throw Error('unselected_revision_page_read');}
+        return get.call(this,key);};
+      try{
+        globalThis.qaLazyBeforeBrowse=typeof cytoscape==='undefined'&&typeof mountNowWiki==='undefined'&&!document.querySelector('#wikiDialog')&&!document.querySelector('script[src$="wiki-runtime.js"]');
+        await wikiUI.open('browse');
+        if(!noteHistory.deferred()||noteHistory.failure()||!document.querySelector('#wikiDialog [data-wiki-action=refresh]'))throw Error('wiki_browse_loaded_whole_history');
+        wikiUI.close();q.browseDeferred=true;
+        pageFloor=75;await noteHistoryUI.open('qa-save-a');
+        const history=document.querySelector('#noteHistoryDialog');
+        if(!noteHistory.deferred()||history.querySelector('[name=before]').options.length!==51)throw Error('first_history_page_not_lazy '+JSON.stringify({deferred:noteHistory.deferred(),count:history.querySelector('[name=before]').options.length,status:history.querySelector('.history-status').textContent.slice(0,200)}));
+        pageFloor=25;history.querySelector('[data-action=more]').click();
+        for(let i=0;i<300&&history.querySelector('[name=before]').options.length!==101;i++)await new Promise(resolve=>setTimeout(resolve,10));
+        if(!noteHistory.deferred()||history.querySelector('[name=before]').options.length!==101)throw Error('next_history_page_not_lazy');
+        const context=noteHistoryContext,view=noteHistory.currentView;
+        try{
+          noteHistoryContext=()=>({...context(),online:true});noteHistory.currentView=id=>{const item=view(id);return item?{...item,localOnly:false}:item;};
+          history.querySelector('[data-action=more]').click();
+          for(let i=0;i<300&&!history.querySelector('.history-status').textContent.includes('연결 상태가 바뀌었습니다');i++)await new Promise(resolve=>setTimeout(resolve,10));
+          if(!history.querySelector('.history-status').textContent.includes('연결 상태가 바뀌었습니다')||noteHistory.failure())throw Error('local_cursor_crossed_network_mode');
+        }finally{noteHistoryContext=context;noteHistory.currentView=view;}
+        noteHistoryUI.close();pageFloor=null;q.localPaged=true;
+        elements.treeContent.value='SELECTED_FIRST_EDIT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
+        await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();
+        state.selectedDate='2026-11-03';elements.dailyContent.value='DAILY_SELECTED_EDIT';saveDailyFromEditor();await noteHistoryCaptureChain;
+        state.selectedWorklogDate='2026-11-03';elements.worklogContent.value='WORKLOG_SELECTED_EDIT';saveWorklogFromEditor();await noteHistoryCaptureChain;
+        await noteHistoryFlush();await noteHistory.idle();
+        if(!noteHistory.deferred()||noteHistory.currentView('qa-save-a').draft.content!=='SELECTED_FIRST_EDIT'||!protectionBootstrapPending
+          ||noteHistory.currentView('daily:2026-11-03').draft.content!=='DAILY_SELECTED_EDIT'||noteHistory.currentView('worklog:2026-11-03').draft.content!=='WORKLOG_SELECTED_EDIT'
+          ||noteHistory.failure()||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBeforeSelected)throw Error('selected_first_edit_not_scoped');
+        q.firstEditSelected=true;
+      }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      const afterFirst=await q.backend.open();
+      if(afterFirst.value.contexts[q.account].notes['qa-save-a'].draft.content!=='SELECTED_FIRST_EDIT'
+        ||afterFirst.value.contexts[q.account].notes['daily:2026-11-03'].draft.content!=='DAILY_SELECTED_EDIT'||afterFirst.value.contexts[q.account].notes['worklog:2026-11-03'].draft.content!=='WORKLOG_SELECTED_EDIT'
+        ||afterFirst.value.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('selected_first_edit_not_durable');
+      await q.backend.full({expected:afterFirst.value,next:q.value,revision:afterFirst.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      const opened=await q.backend.open(),other=structuredClone(opened.value);
+      other.contexts[q.account].notes['qa-save-b'].draft.content='OTHER_WINDOW_CURRENT';
+      await q.backend.full({expected:opened.value,next:other,revision:opened.revision},{active:()=>true});
+      let blocked=false;try{await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'STALE_MUST_NOT_SAVE'});}catch{blocked=true;}
+      const latest=await q.backend.open();
+      if(!blocked||!noteHistory.failure()||latest.value.contexts[q.account].notes['qa-save-a'].draft.content!=='old'
+        ||latest.value.contexts[q.account].notes['qa-save-b'].draft.content!=='OTHER_WINDOW_CURRENT')throw Error('startup_stale_overwrite');
+      await q.backend.full({expected:latest.value,next:q.value,revision:latest.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred())throw Error('explicit_preview_resume');
+      const clean=await q.backend.open(),damaged=structuredClone(clean.value);damaged.contexts[q.account].notes['qa-save-a'].revisions=[{broken:true}];
+      await q.backend.full({expected:clean.value,next:damaged,revision:clean.revision},{active:()=>true});
+      const dataBefore=JSON.stringify(await readStorage(STORAGE_KEY)),settingsBefore=JSON.stringify(await readStorage(SETTINGS_KEY));
+      const normalize=normalizeData;let normalized=0;normalizeData=()=>{normalized++;return normalize();};
+      try{
+        noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+        let rejected=false;try{await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'DAMAGED_MUST_NOT_SAVE'});}catch{rejected=true;}
+        writeStorage(STORAGE_KEY,state.data);await Promise.all([...storagePendingWrites]);
+        if(!rejected||!protectionBootstrapPending||normalized!==0||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBefore
+          ||JSON.stringify(await readStorage(SETTINGS_KEY))!==settingsBefore)throw Error('damaged_history_bootstrap_unlocked');
+      }finally{normalizeData=normalize;}
+      const damagedStored=await q.backend.open();await q.backend.full({expected:damagedStored.value,next:q.value,revision:damagedStored.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      const download=downloadText;let backup;
+      try{downloadText=(_name,text)=>{backup=text;};await exportData();if(backup instanceof Blob)backup=await backup.text();backup=JSON.parse(backup);}finally{downloadText=download;}
+      if(!noteHistory.deferred()||backup?.history?.contexts?.[q.account]?.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('startup_backup_lost_history');
+      q.hydrationStaleBlocked=true;q.backupDocumentWise=true;q.corruptHistoryBlocked=true;
+    })()`);
+    const beforeCounts={...historyCounts};
+    const productSave=await run(`(async()=>{
+      const q=qaProductSave,clone=globalThis.structuredClone,all=IDBObjectStore.prototype.getAll;
+      if(q.scoped){
+        globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_UNRELATED_HISTORY'))throw Error('product_full_history_clone');return clone(value);};
+        IDBObjectStore.prototype.getAll=function(){throw Error('product_full_history_scan');};
+      }
+      try{
+        await noteHistory.edit({...q.value.contexts[q.account].notes['qa-save-a'].draft,content:'PRODUCT_EDITED'});await noteHistory.seal('qa-save-a');await noteHistory.idle();
+      }finally{globalThis.structuredClone=clone;IDBObjectStore.prototype.getAll=all;}
+      const stored=(await q.backend.open()).value;
+      if(stored.contexts[q.account].notes['qa-save-a'].draft.content!=='PRODUCT_EDITED'
+        ||stored.contexts[q.account].notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('product_note_save_lost_history');
+      let currentRead=false;
+      if(q.scoped){
+        const get=IDBObjectStore.prototype.get;
+        IDBObjectStore.prototype.getAll=function(){throw Error('current_whole_scan');};
+        IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&/revisions|receipts|snapshot/.test(key[1]))throw Error('current_history_body');return get.call(this,key);};
+        try{
+          const current=isDesktopClient()?await nownoteDesktop.storage.history.current(q.account):await browserHistoryStorage().readCurrent(q.account);
+          if(current.projection!=='journal_current_v1'||!current.supported||current.notes['qa-save-a'].draft.content!=='PRODUCT_EDITED'
+            ||JSON.stringify(current).includes('QA_UNRELATED_HISTORY')||Object.hasOwn(current,'value')||Object.hasOwn(current,'revision'))throw Error('current_product_projection');
+          currentRead=true;
+        }finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      }
+      return {scoped:q.scoped,saved:true,otherHistoryPreserved:true,currentRead,startupCurrent:true,localPaged:q.localPaged,browseDeferred:q.browseDeferred,firstEditSelected:q.firstEditSelected,hydrationStaleBlocked:q.hydrationStaleBlocked,backupDocumentWise:q.backupDocumentWise,corruptHistoryBlocked:q.corruptHistoryBlocked};
+    })()`);
+    if(mode==='desktop'&&productSave.scoped&&(historyCounts.note-beforeCounts.note!==2||historyCounts.full-beforeCounts.full!==0))throw Error('product_native_scoped_route');
+    productSave.metadataScoped=await run(`(async()=>{
+      const q=qaProductSave,before=await q.backend.open(),next=structuredClone(before.value);
+      const metadata={one:{state:'committed',body:'QA_UNREAD_OPERATION'}};next.contexts[q.account].wiki_ingest_operations=metadata;
+      await q.backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred()||noteHistory.wikiIndex()!==null)throw Error('metadata_preview_wiki_gate');
+      const all=IDBObjectStore.prototype.getAll,get=IDBObjectStore.prototype.get;
+      IDBObjectStore.prototype.getAll=function(){throw Error('metadata_edit_full_scan');};
+      IDBObjectStore.prototype.get=function(key){if(Array.isArray(key)&&key[1]?.includes('wiki_ingest_operations')&&key[1]?.includes('"one"'))throw Error('metadata_operation_body_read');return get.call(this,key);};
+      try{await noteHistory.edit({...next.contexts[q.account].notes['qa-save-a'].draft,content:'METADATA_SCOPED_EDIT'});await noteHistory.seal('qa-save-a');await noteHistory.idle();}
+      finally{IDBObjectStore.prototype.getAll=all;IDBObjectStore.prototype.get=get;}
+      if(!noteHistory.deferred()||noteHistory.failure())throw Error('metadata_edit_whole_materialized');
+      const actual=(await q.backend.open()).value.contexts[q.account];
+      if(JSON.stringify(actual.wiki_ingest_operations)!==JSON.stringify(metadata)||actual.notes['qa-save-a'].draft.content!=='METADATA_SCOPED_EDIT'
+        ||actual.notes['qa-save-b'].revisions[0].snapshot.note.content!=='QA_UNRELATED_HISTORY')throw Error('metadata_edit_lost_data');
+      return true;
+    })()`);
+    productSave.metadataBrowse=await run(`(async()=>{
+      const q=qaProductSave,before=await q.backend.open(),next=structuredClone(before.value),id='wiki:00000000-0000-4000-8000-000000000241';
+      const note={...next.contexts[q.account].notes['qa-save-a'].draft,local_id:id,source:'wiki-artifact',content:'QA_UNREAD_WIKI_BODY'};
+      next.contexts[q.account].notes[id]={raw:note,draft:note,base:{crypto_epoch:0,head_revision_id:null,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],localOnly:true};
+      const ctx=noteHistoryContext(),op=crypto.randomUUID(),page={wiki_id:id.slice(5),draft_id:crypto.randomUUID(),generation_id:crypto.randomUUID(),note_mutation_id:crypto.randomUUID()};
+      const operation={schema_version:1,operation_id:op,action:'ingest',scope:{url:ctx.url,owner:ctx.owner,device:ctx.device,serverInstance:'local-note-journal'},
+        reservation:{operation_id:op,mutation_id:crypto.randomUUID(),commit_mutation_id:crypto.randomUUID(),abort_mutation_id:crypto.randomUUID(),pages:[page]},
+        selection:{fileIds:[],noteIds:['qa-save-a']},plan_hash:'b'.repeat(64),inputs:[{id:'qa-source',kind:'note',origin:'local',note_ref:{owner_id:ctx.owner,local_id:'qa-save-a'},source_revision_id:null,head_version:0,content_hash:'a'.repeat(64)}],fingerprints:[],state:'reserved',documents:[]};
+      next.contexts[q.account].wiki_ingest_operations={[op]:operation};
+      next.contexts[q.account].wiki_lifecycle={[id]:{local_only:true,version:2,deleted_at:'2026-11-03T00:00:00Z',pending:null}};
+      await q.backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred()||noteHistory.wikiIndex()!==null)throw Error('metadata_browse_startup_gate');
+      const all=IDBObjectStore.prototype.getAll,clone=structuredClone;
+      IDBObjectStore.prototype.getAll=function(){throw Error('metadata_browse_whole_scan');};
+      globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_UNREAD_WIKI_BODY'))throw Error('metadata_browse_wiki_body_clone');return clone(value);};
+      try{await wikiUI.open('browse');
+        if(!noteHistory.deferred()||noteHistory.failure()||noteHistory.wikiIndex()?.lifecycle?.[id]?.version!==2||document.body.innerText.includes('QA_UNREAD_WIKI_BODY'))throw Error('metadata_browse_did_not_defer');
+      }finally{wikiUI.close();IDBObjectStore.prototype.getAll=all;globalThis.structuredClone=clone;}
+      const after=(await q.backend.open()).value;if(JSON.stringify(after)!==JSON.stringify(next))throw Error('metadata_browse_wrote_journal');
+      return true;
+    })()`);
+    productSave.operationBrowse=productSave.metadataBrowse;
+    await run(`(async()=>{const q=qaProductSave,current=await q.backend.open();await q.backend.full({expected:current.value,next:q.before.value,revision:current.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});delete globalThis.qaProductSave;})()`);
+    const selectiveRead=await run(`(async()=>{
+      const key='qa.document.path.'+${phase},value={schema_version:1,contexts:{A:{notes:{one:{draft:{content:'SELECTED_CURRENT'},revisions:[{body:'UNREAD_HISTORY'}]},two:{body:'OTHER_BODY'}}},B:{body:'FOREIGN_BODY'}}};
+      const raw=JSON.stringify(value),legacyKey=key+'.legacy';localStorage.setItem(legacyKey,raw);
+      const make=()=>NowBrowserHistoryStorage.create({indexedDB,localStorage,key,lock:fn=>navigator.locks.request(key,fn)}),store=make();
+      const legacy=NowBrowserHistoryStorage.create({indexedDB,localStorage,key:legacyKey,lock:fn=>navigator.locks.request(legacyKey,fn)});
+      let before=false;try{await legacy.readPath(['contexts','A']);}catch{before=true;}
+      if(!before)throw Error('path_unmigrated_legacy_hidden');
+      await store.read();await store.write(null,value);
+      const all=IDBObjectStore.prototype.getAll;let projection;
+      IDBObjectStore.prototype.getAll=function(){throw Error('path_full_scan');};
+      try{projection=await make().readPath(['contexts','A','notes','one','draft']);}finally{IDBObjectStore.prototype.getAll=all;}
+      if(projection.projection!=='path_v1'||!projection.found||projection.value.content!=='SELECTED_CURRENT'
+        ||JSON.stringify(projection).includes('UNREAD_HISTORY')||JSON.stringify(projection).includes('FOREIGN_BODY'))throw Error('path_projection');
+      let partial=false;try{await store.write(projection,{lost:true});}catch{partial=true;}
+      if(!partial||await store.read()!==raw)throw Error('path_partial_overwrite');
+      const a=make(),b=make(),one=(await a.readPath(['contexts','A','notes','one'])).value,two=(await b.readPath(['contexts','A','notes','two'])).value;
+      IDBObjectStore.prototype.getAll=function(){throw Error('path_write_full_scan');};
+      try{
+        await a.writePath(['contexts','A','notes','one'],one,{...one,draft:{content:'SELECTED_EDIT'}});
+        await b.writePath(['contexts','A','notes','two'],two,{body:'OTHER_EDIT'});
+        let stale=false;try{await b.writePath(['contexts','A','notes','one'],one,{draft:{content:'STALE'}});}catch{stale=true;}
+        if(!stale)throw Error('path_write_stale');
+      }finally{IDBObjectStore.prototype.getAll=all;}
+      const updated=JSON.parse(await store.read());
+      if(updated.contexts.A.notes.one.draft.content!=='SELECTED_EDIT'||updated.contexts.A.notes.two.body!=='OTHER_EDIT'
+        ||updated.contexts.A.notes.one.revisions[0].body!=='UNREAD_HISTORY'||updated.contexts.B.body!=='FOREIGN_BODY')throw Error('path_write_lost_sibling_history');
+      localStorage.setItem(key,raw+' ');let divergent=false;
+      try{await store.readPath(['contexts','A']);}catch{divergent=true;}finally{localStorage.removeItem(key);}
+      if(!divergent)throw Error('path_legacy_divergence');
+      return {selected:true,wholeScan:false,partialOverwrite:false,legacyMismatchBlocked:true,scopedWrite:true,staleWriteRejected:true,siblingsPreserved:true};
+    })()`);
+    if(process.env.NOWNOTE_LAZY_WIKI_QA==='1'){
+      if(!await run(`qaLazyBeforeBrowse===true`))throw Error('wiki_runtime_eager_startup');
+    }
     await run('wikiUI.open()');await wait('Boolean(document.querySelector("#wikiDialog [data-wiki-action=sources]"))','sources_button');
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
       const check=(value,name)=>{if(!value)throw Error('workspace_'+name);};
@@ -135,7 +372,49 @@ app.whenReady().then(async()=>{
         await click('sources');return {drafts:2,explicitApprovals:3,manualIntegrations:1,syntheticCalls:calls,outputTokens:4096};
       }finally{globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
+    productSave.localSelectedDetail=await run(`(async()=>{
+      wikiUI.close();await noteHistory.idle();await noteHistoryCaptureChain;await Promise.all([...storagePendingWrites]);
+      const rows=await wikiNotebook.list(),target=rows.find(row=>row.document?.approvals.length&&row.localOnly);if(!target)throw Error('selected_detail_fixture_target');
+      const backend=await historyPersistence(),before=await backend.open(),next=structuredClone(before.value),account=NowNoteHistory.key(noteHistoryContext()),id='qa-detail-unrelated';
+      const note={owner_id:noteHistoryContext().owner,local_id:id,note_type:'tree',source:'manual',title:'Unrelated',content:'current',level:1};
+      next.contexts[account].notes[id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[{snapshot:{note:{...note,content:'QA_DETAIL_UNRELATED_HISTORY'}}}],outbox:[],receipts:[],localOnly:true};
+      await backend.full({expected:before.value,next,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});if(!noteHistory.deferred())throw Error('selected_detail_not_deferred');
+      const all=IDBObjectStore.prototype.getAll,clone=structuredClone;
+      IDBObjectStore.prototype.getAll=function(){throw Error('selected_detail_whole_scan');};
+      globalThis.structuredClone=value=>{if(JSON.stringify(value).includes('QA_DETAIL_UNRELATED_HISTORY'))throw Error('selected_detail_whole_clone');return clone(value);};
+      try{
+        await wikiUI.open('browse');
+        const button=document.querySelector('#wikiDialog .wiki-entry[data-wiki-id="'+target.id+'"] .library-item');if(!button)throw Error('selected_detail_button');button.click();
+        let ready=false;for(let i=0;i<400;i++){
+          const edit=document.querySelector('#wikiDialog [data-wiki-action=edit-wiki]');if(edit&&!edit.disabled){ready=true;break;}await new Promise(r=>setTimeout(r,10));
+        }
+        if(!ready||!noteHistory.deferred()||noteHistory.failure()||!document.querySelector('#wikiDialog .wiki-detail h3')?.textContent||document.body.innerText.includes('QA_DETAIL_UNRELATED_HISTORY'))throw Error('selected_detail_ui_failed: '+document.querySelector('#wikiDialog [role=status]')?.textContent);
+      }finally{wikiUI.close();IDBObjectStore.prototype.getAll=all;globalThis.structuredClone=clone;}
+      const after=await backend.open();if(JSON.stringify(after.value)!==JSON.stringify(next))throw Error('selected_detail_wrote_history');
+      await backend.full({expected:after.value,next:before.value,revision:after.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});await noteHistory.ensure();return true;
+    })()`);
     let workspace=null;
+    productSave.metadataBackup=await run(`(async()=>{
+      wikiUI.close();await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);
+      const backend=await historyPersistence(),before=await backend.open();
+      const account=NowNoteHistory.key(noteHistoryContext()),single={schema_version:1,contexts:{[account]:before.value.contexts[account]}};
+      await backend.full({expected:before.value,next:single,revision:before.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
+      if(!noteHistory.deferred())throw Error('metadata_backup_not_deferred');
+      const original=downloadText,all=IDBObjectStore.prototype.getAll;let output=null;
+      downloadText=(_name,value)=>{output=value;};IDBObjectStore.prototype.getAll=function(){throw Error('metadata_backup_whole_scan');};
+      try{
+        await exportData();
+        if(!(output instanceof Blob)||!noteHistory.deferred()||noteHistory.failure())throw Error('metadata_backup_not_streamed');
+        const archive=JSON.parse(await output.text());
+        if(JSON.stringify(archive.history)!==JSON.stringify(single))throw Error('metadata_backup_content_changed');
+      }finally{downloadText=original;IDBObjectStore.prototype.getAll=all;}
+      const after=await backend.open();if(JSON.stringify(after.value)!==JSON.stringify(single))throw Error('metadata_backup_wrote_journal');
+      await backend.full({expected:after.value,next:before.value,revision:after.revision},{active:()=>true});
+      noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});await noteHistory.ensure();return true;
+    })()`);
     if(process.env.NOWNOTE_WIKI_WORKSPACE==='1'){
       workspace=await run(`(async()=>{
         const check=(value,name)=>{if(!value)throw Error('workspace_'+name);},pause=()=>new Promise(r=>setTimeout(r,5));
@@ -160,7 +439,7 @@ app.whenReady().then(async()=>{
         return {embedded:true,independentMenus:6,approvedRead:true,reviewRelation:true,tabsPreserveState:true,keyboardTabs:true,navigationWrites:0};
       })()`);
     }
-    const screenshotRoot='D:/Project/Now/docs/2.4.0/qa';
+    const screenshotRoot=process.env.NOWNOTE_QA_REPORT_DIR||'D:/Project/Now/docs/2.4.0/qa';
     for(const [size,width,height] of [['desktop',1200,900],['mobile',390,844]]){
       window.setContentSize(width,height);await run('new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))');
       assert(await run('(()=>{const d=document.querySelector("#wikiDialog");return d.scrollWidth<=d.clientWidth+1&&d.getBoundingClientRect().right<=innerWidth;})()'),'source_layout_'+size);
@@ -242,13 +521,32 @@ app.whenReady().then(async()=>{
       documentValue.approvals.at(-1).draft_hash=draft.draft_hash;documentValue.approvals.at(-1).evidence_manifest_hash=await NowNoteProtectionProtocol.hashJson(draft.evidence_manifest);
       await NowNoteWiki.validateDocument(documentValue,documentValue.scope);
       const before=NowNoteProtectionProtocol.canonicalJson(noteHistory.export());
-      const ui=mountNowWiki({...wikiNotebook,contextKey:wikiViewKey,notes:()=>[],list:async()=>[{...outer,document:documentValue},source]});
+      const ui=mountNowWiki({...wikiNotebook,listIndex:undefined,contextKey:wikiViewKey,notes:()=>[],list:async()=>[{...outer,document:documentValue},source]});
       const pause=()=>new Promise(r=>setTimeout(r,0)),until=async(fn)=>{for(let n=0;n<300;n++){if(fn())return;await pause();}throw Error('wiki_citation_navigation');};
       await ui.open();document.querySelector('#wikiDialog .wiki-entry button.library-item').click();
       await until(()=>Boolean(document.querySelector('#wikiDialog [data-wiki-action=source]'))&&!document.querySelector('#wikiDialog [data-wiki-action=source]').disabled);
       document.querySelector('#wikiDialog [data-wiki-action=source]').click();await until(()=>document.querySelector('#wikiDialog [name=wiki-version]')?.value===target.id);
       if(document.querySelector('#wikiDialog .wiki-detail h3')?.textContent!==target.title||NowNoteProtectionProtocol.canonicalJson(noteHistory.export())!==before)throw Error('wiki_citation_target_or_write');
-      ui.close();return {wikiCitationNavigation:true,journalUnchanged:true};
+      ui.close();document.querySelector('#wikiDialog').remove();
+      let summaryAllowed=true,selectedReads=0,release;
+      const summaryRow={id:documentValue.wiki_id,deferred:true,summary:{schema_version:1,readable:true,protected:false,approved:true,
+        title:'SUMMARY_ONLY_TITLE',topic:'Summary topic',stale:false}};
+      const lazy=mountNowWiki({contextKey:wikiViewKey,notes:()=>[],list:async()=>{throw Error('summary_eager_full_list');},
+        listIndex:async()=>[summaryRow],canReadSummary:()=>summaryAllowed,canRead:()=>true,
+        readPage:async id=>{if(id!==documentValue.wiki_id)throw Error('summary_wrong_selected_id');selectedReads++;return new Promise(resolve=>{release=()=>resolve({id,document:documentValue});});},
+        sourceStatus:async()=>({available:true,stale:false,sources:[]})});
+      await lazy.open('browse');
+      if(!document.querySelector('#wikiDialog').textContent.includes('SUMMARY_ONLY_TITLE')||selectedReads)throw Error('summary_catalog_without_body');
+      document.querySelector('#wikiDialog .library-item').click();await until(()=>typeof release==='function');
+      if(document.querySelector('#wikiDialog .wiki-body'))throw Error('summary_body_before_selection_finished');
+      release();await until(()=>Boolean(document.querySelector('#wikiDialog .wiki-body')));
+      if(selectedReads!==1)throw Error('summary_selected_read_count');
+      lazy.close();await lazy.open('browse');summaryAllowed=false;lazy.check();
+      if(document.querySelector('#wikiDialog').open||document.querySelector('#wikiDialog').textContent.includes('SUMMARY_ONLY_TITLE'))throw Error('summary_revoked_title');
+      summaryAllowed=true;await lazy.open('browse');release=null;document.querySelector('#wikiDialog .library-item').click();
+      await until(()=>typeof release==='function');lazy.close();release();await pause();
+      if(document.querySelector('#wikiDialog .wiki-body'))throw Error('summary_late_closed_body');
+      return {wikiCitationNavigation:true,journalUnchanged:true,summaryCatalog:true,selectedOnly:true,summaryRevocation:true,closedLateRead:true};
     })()`);
     const callbacks=await run(`(async()=>{
       wikiUI.close();document.querySelector('#wikiDialog').remove();
@@ -306,10 +604,23 @@ app.whenReady().then(async()=>{
         return {syntheticCalls:calls,outputTokens:body.max_tokens,cancelCalls:0,staleCalls:0,overLimitCalls:0};
       }finally{ui.close();globalThis.fetch=realFetch;state.settings.llm=original;}
     })()`);
-    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
+    let selectedOnline=null;
+    if(selectedHttp){
+      const credentials=JSON.parse(fs.readFileSync(path.join(process.env.NOWNOTE_HISTORY_QA_DIR,'synthetic-accounts.json'),'utf8'));
+      let apiToken='';
+      if(process.env.NOWNOTE_QA_ENV_FILE){
+        const line=fs.readFileSync(process.env.NOWNOTE_QA_ENV_FILE,'utf8').split(/\r?\n/).find(value=>value.startsWith('NOW_QA_API_TOKEN='));
+        apiToken=line?.slice('NOW_QA_API_TOKEN='.length).trim()||'';
+        if(apiToken.startsWith('"')&&apiToken.endsWith('"'))apiToken=apiToken.slice(1,-1);
+        if(!apiToken)throw Error('selected_http_qa_token_missing');
+      }
+      await run(fs.readFileSync(path.join(root,'web/scripts/selected_history_http_fixture.js'),'utf8')+'\nvoid 0;');
+      selectedOnline=await run('runSelectedHistoryHttp('+JSON.stringify({url:selectedHttp.replace(/\/$/,''),token:credentials.qa_history_alice.token,owner:credentials.qa_history_alice.owner||'qa_history_alice',apiToken})+')');
+    }
+    await run('noteHistory.idle()');result={ok:true,sources:2,ids:before,phase,callbacks,budget,ingest,query,lint,workspace,relationVisibility,citationNavigation,selectiveRead,productSave,selectedOnline,remote:remoteFixture.report,blockedNetworkAttempts:network,realProviderCalls:0};
   }catch(error){
     const status=window&&!window.isDestroyed()?await window.webContents.executeJavaScript('document.querySelector("#wikiDialog [role=status]")?.textContent||""').catch(()=>''):'';
     result={ok:false,error:error.message,status};
   }
-  finally{fs.writeFileSync(path.join(own,mode+'-'+phase+'.json'),JSON.stringify(result));window?.destroy();app.exit(result.ok?0:1);}
+  finally{fs.writeFileSync(path.join(own,mode+'-'+phase+'.json'),JSON.stringify(result));window?.destroy();documentFile.closeAll();app.exit(result.ok?0:1);}
 });

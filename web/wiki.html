@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="ko" data-auth="locked">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' http: https:; worker-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'">
+  <title>NowNote Wiki</title>
+  <link rel="icon" href="./icons/nownote-icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <link rel="stylesheet" href="./wiki.css">
+  <script src="./wiki-core.js" defer></script>
+  <script src="./wiki-shell.js" defer></script>
+</head>
+<body class="wiki-only">
+  <section id="wikiLogin" class="web-login-view" aria-labelledby="wikiLoginTitle" hidden>
+    <form id="wikiLoginForm" class="web-login-card">
+      <h1 id="wikiLoginTitle">NowNote Wiki</h1>
+      <label>사용자 ID<input id="wikiLoginOwner" class="settings-input" autocomplete="username" required></label>
+      <label>비밀번호<input id="wikiLoginPassword" class="settings-input" type="password" autocomplete="current-password" required></label>
+      <label>2단계 인증 코드<input id="wikiLoginFactor" class="settings-input" inputmode="numeric" autocomplete="one-time-code" maxlength="6"></label>
+      <button class="primary-btn" type="submit">로그인</button>
+      <a href="../app/">계정 만들기 · 비밀번호 재설정</a>
+      <p id="wikiLoginStatus" role="status"></p>
+    </form>
+  </section>
+  <div id="wikiShell" hidden>
+    <header class="wiki-shell-header">
+      <div class="wiki-shell-brand"><img src="./icons/nownote-icon.svg" width="28" height="28" alt=""><h1>NowNote Wiki</h1></div>
+      <span id="wikiAccount"></span>
+      <button id="wikiOpenMemo" class="ghost-btn" type="button">NowNote</button>
+      <button id="wikiSettings" class="ghost-btn" type="button">설정</button>
+      <button id="wikiLogout" class="ghost-btn" type="button" hidden>로그아웃</button>
+    </header>
+    <div class="wiki-shell-layout">
+      <nav class="wiki-shell-nav" aria-label="AI 지식 위키">
+        <h2>구축</h2>
+        <button type="button" data-wiki-view="sources">자료함</button>
+        <button type="button" data-wiki-view="build">위키 작성·검토</button>
+        <button type="button" data-wiki-view="lint">위키 점검</button>
+        <h2>활용</h2>
+        <button type="button" data-wiki-view="browse">위키 찾아보기</button>
+        <button type="button" data-wiki-view="query">위키에 질문</button>
+        <button type="button" data-wiki-view="graph">관계 탐색</button>
+      </nav>
+      <main id="wikiWorkspaceHost" aria-label="위키 작업 공간"></main>
+    </div>
+    <p id="wikiShellStatus" role="status"></p>
+  </div>
+</body>
+</html>

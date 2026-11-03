@@ -13,9 +13,11 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   noteProtectionReader:{read:async()=>{reads++;if(late)invalid=true;return {value:'{"summary":"RESULT\\r\\n"}'};}},
   editProtectedCurrent:async()=>structuredClone(old),createProtectedCurrent:async()=>{created++;return {...old,content:''};},
   writeProtectedCurrent:async(i,n,p,r)=>{assert.equal(p,'journal-key');writes.push(structuredClone(n));return 'mw';},
-  extractServerAnalysisResultText:value=>JSON.parse(value).summary,extractTags:()=>[],t:k=>k,
+  extractServerAnalysisResultText:value=>JSON.parse(value).summary,extractTags:()=>[],t:k=>k,noteHistoryContext:()=>({enabled:false}),
  });
- vm.runInContext('let noteProtectionInternalEnabled=true,noteProtectionEditSession=null;'+source.slice(start,end),box);
+ const gateStart=source.indexOf('function noteProtectionMutationsEnabled('),gateEnd=source.indexOf('\nasync function ',gateStart);
+ assert.ok(gateStart>0&&gateEnd>gateStart);
+ vm.runInContext('let noteProtectionInternalEnabled=true,noteProtectionEditSession=null,noteProtectionSupport=null;'+source.slice(gateStart,gateEnd)+source.slice(start,end),box);
  assert.equal(await box.applyProtectedAnalysisResult(info,row,'append','journal-key',async()=> 'key'),'mw');
  assert.ok(writes[0].content.startsWith(old.content));assert.ok(writes[0].content.endsWith('RESULT\r\n'));assert.equal(old.content,'ORIGINAL\r\n');
  await box.applyProtectedAnalysisResult(info,row,'approve','journal-key',async()=> 'key');assert.equal(writes.length,2);
@@ -32,7 +34,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
  const legacy=vm.createContext({state:{data:{tree:[node]},settings:{server:{}}},findTreeNode:()=>node,noteProtectionBlocked:()=>blocked,showNotice:()=>{notices++;},extractServerAnalysisResultText:()=> 'PLAINTEXT RESULT',createRecoverySnapshot:()=>{backups++;},persist:()=>{plainWrites++;},persistSettings:()=>{plainWrites++;},renderTree:()=>{},renderServerSettings:()=>{},showSaved:()=>{},markTreeNodeChanged:()=>{},setServerMessage:()=>{},extractTags:()=>[],formatServerJobTime:()=> 'time',t:k=>k,elements:{treeSavedLabel:{}}});
  vm.runInContext(source.slice(legacyStart,legacyEnd),legacy);
  const job={id:7,note_local_id:'memo',result_json:'result',status:'done'};
- legacy.appendAnalysisResultToNote(job);legacy.approveAnalysisResult(job);
+ legacy.appendAnalysisResultToNote(job);await legacy.approveAnalysisResult(job);
  assert.equal(node.content,'PROTECTED-CIPHER');assert.equal(plainWrites,0);assert.equal(backups,0);assert.equal(notices,2);
  delete node.protection_record;blocked=false;node.content='PLAIN';legacy.appendAnalysisResultToNote(job);assert.ok(node.content.includes('PLAINTEXT RESULT'));assert.ok(plainWrites>0);
  console.log(file+': typed append/approve MW, preserved original, absent approval, gate/scope/pending and protected plain-path denial PASS (synthetic)');

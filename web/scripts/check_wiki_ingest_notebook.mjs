@@ -22,6 +22,22 @@ let book=box.createWikiIngestNotebook(api);const source=(await api.sources.list(
 const operation=await book.plan({fileIds:[source.id],noteIds:[]});
 assert.equal(operation.plan.calls,1);assert.equal(operation.plan.serverEligible,false);
 assert.equal((await book.operations()).length,1);assert.equal((await book.operations())[0].state,'reserved');
+assert.equal(typeof book.inspectOperations,'function','readonly browse must reuse the existing operation validator without a whole export');
+{
+  const rows=structuredClone(saved.contexts[box.NowNoteHistory.key(ctx)].wiki_ingest_operations),exporter=history.export,written=writes;
+  history.export=()=>{throw Error('readonly inspection cannot export history');};
+  try{
+    assert.deepEqual(Array.from(book.inspectOperations(rows)),[]);
+    const invalid=structuredClone(rows);invalid[operation.operation_id].scope.owner='bob';assert.throws(()=>book.inspectOperations(invalid));
+    const pending=structuredClone(rows),row=pending[operation.operation_id],page=row.reservation.pages[0],digest='a'.repeat(64);
+    row.state='attempted';row.scope.serverInstance=webcrypto.randomUUID();row.documents=[{wiki_id:page.wiki_id,draft_id:page.draft_id,draft_hash:digest,document_hash:digest}];
+    row.remote={phase:'staged',receipt:null,manifest:{operation_id:row.operation_id,owner_id:ctx.owner,device_id:ctx.device,mutation_id:row.reservation.mutation_id,
+      commit_mutation_id:row.reservation.commit_mutation_id,abort_mutation_id:row.reservation.abort_mutation_id,inputs:row.inputs,changes:[{wiki_id:page.wiki_id,result_document_hash:digest}]}};
+    assert.deepEqual(Array.from(book.inspectOperations(pending)),['wiki:'+page.wiki_id,'wiki-proposal:'+row.operation_id+':'+page.wiki_id]);
+    row.remote.phase='settled';assert.throws(()=>book.inspectOperations(pending),'a settled label without matching state/receipt is not proof');
+    assert.equal(writes,written);
+  }finally{history.export=exporter;}
+}
 const prompt=JSON.parse(book.prompt(operation));assert.equal(prompt.input.sources[0].content,'Exact ingest evidence.');
 const output=JSON.stringify({pages:operation.plan.pages.map(p=>({wiki_id:p.wiki_id,draft_id:p.draft_id,title:'source.md',topic:'source.md',page_type:'concept',summary:'Synthetic',aliases:[],
   sections:[{id:'s1',title:'Finding',markdown:'Synthetic finding.',citation_ids:['c1']}],claims:[],relations:[],citations:[{id:'c1',evidence_id:source.id,section_id:null,quote:'Exact ingest evidence.'}]}))});

@@ -5,19 +5,26 @@ import {webcrypto} from 'node:crypto';
 
 const runtime=await readFile(new URL('../vendor/browser-history-storage.js',import.meta.url),'utf8').catch(()=> '');
 const context=vm.createContext({structuredClone,TextEncoder,crypto:webcrypto});
+vm.runInContext(await readFile(new URL('../vendor/document-parts.js',import.meta.url),'utf8'),context);
+vm.runInContext(await readFile(new URL('../vendor/document-idb.js',import.meta.url),'utf8'),context);
+context.IDBKeyRange={bound:(lower,upper)=>({lower,upper})};
 vm.runInContext(await readFile(new URL('../vendor/note-protection-state.js',import.meta.url),'utf8'),context);
 vm.runInContext(runtime,context);
 assert.equal(typeof context.NowBrowserHistoryStorage?.create,'function','Browser history transaction adapter is required');
 
 // Deterministic IDB events: request success precedes transaction completion.
 function fixture(raw=null){
-  let row,legacy=raw,connection,hold=false,pending,abort=false,strict=true,failLegacy=false,afterLegacy;
+  let row,documents=new Map(),legacy=raw,connection,hold=false,pending,abort=false,strict=true,failLegacy=false,afterLegacy;
   const transactions=[];
   const db={objectStoreNames:{contains:()=>true},close(){},transaction(_store,mode,options){
     const tx={durability:strict?options?.durability:'relaxed',error:null,abort(){this.error=new Error('aborted');queueMicrotask(()=>this.onabort?.());}};
-    transactions.push({mode,options});let candidate=row;
-    const done=()=>{if(abort){abort=false;tx.abort();return;}row=candidate;tx.oncomplete?.();};
-    tx.objectStore=()=>({get(){const req={};queueMicrotask(()=>{req.result=structuredClone(row);req.onsuccess?.();if(tx.error)return;if(hold&&mode==='readwrite')pending=done;else queueMicrotask(done);});return req;},put(value){candidate=structuredClone(value);}});
+    transactions.push({mode,options});let candidate=row,parts=new Map(documents),requests=0,scheduled=false;
+    const done=()=>{if(tx.error)return;if(abort){abort=false;tx.abort();return;}row=candidate;documents=parts;tx.oncomplete?.();};
+    const finish=()=>{if(scheduled||requests||tx.error)return;scheduled=true;queueMicrotask(()=>{scheduled=false;if(requests||tx.error)return;if(hold&&mode==='readwrite')pending=done;else done();});};
+    const request=value=>{const req={};requests++;queueMicrotask(()=>{req.result=structuredClone(value);req.onsuccess?.();requests--;finish();});return req;};
+    tx.objectStore=name=>name==='journals'?{get(key){return request(key==='history'?row:undefined);},getKey(){return request(undefined);},put(value){candidate=structuredClone(value);}}:
+      {getAll(range){return request([...parts.values()].filter(item=>item.key[0]===range.lower[0]).map(item=>item.row));},
+        put(value,key){parts.set(JSON.stringify(key),{key,row:structuredClone(value)});},delete(key){parts.delete(JSON.stringify(key));}};
     return tx;
   }};
   const indexedDB={open(){const req={};queueMicrotask(()=>{req.result=db;req.onsuccess?.();});return req;}};
@@ -26,7 +33,11 @@ function fixture(raw=null){
   const lock=action=>{const next=tail.catch(()=>{}).then(action);tail=next;return next;};
   const create=()=>context.NowBrowserHistoryStorage.create({indexedDB,localStorage,lock,key:'history'});
   connection=create();
-  return {connection,create,transactions,get row(){return structuredClone(row);},set row(v){row=v;},get legacy(){return legacy;},set legacy(v){legacy=v;},hold(v){hold=v;},release(){const fn=pending;pending=null;fn();},hasPending:()=>Boolean(pending),abortNext(){abort=true;},strict(v){strict=v;},failLegacy(v){failLegacy=v;},afterLegacy(fn){afterLegacy=fn;}};
+  return {connection,create,transactions,get row(){
+    if(row?.format!==2)return structuredClone(row);
+    const parts=new Map([...documents.values()].map(item=>[item.row.id,item.row.value]));
+    return {...structuredClone(row.row),value:row.isNull?null:JSON.stringify(context.NowDocumentParts.decode(parts))};
+  },set row(v){row=row?.format===2?{...row,row:Object.fromEntries(Object.entries(v).filter(([key])=>key!=='value'))}:v;},get legacy(){return legacy;},set legacy(v){legacy=v;},hold(v){hold=v;},release(){const fn=pending;pending=null;fn();},hasPending:()=>Boolean(pending),abortNext(){abort=true;},strict(v){strict=v;},failLegacy(v){failLegacy=v;},afterLegacy(fn){afterLegacy=fn;}};
 }
 const turn=()=>new Promise(resolve=>setImmediate(resolve));
 const scope={url:'https://qa.invalid',owner:'owner',instance:'11111111-1111-4111-8111-111111111111',local_id:'a',device:'qa'};
@@ -39,7 +50,7 @@ async function test(name,run){await run();count++;console.log('PASS '+name);}
 await test('migration preserves exact legacy bytes and canonical JSON',async()=>{
   const raw=JSON.stringify(old,null,2),f=fixture(raw);
   assert.deepEqual(JSON.parse(await f.connection.read()),old);assert.equal(f.legacy,raw);
-  assert.equal(f.row.value,raw);assert.equal(Object.keys(f.row).sort().join(','),'legacy_hash,redo,schema_version,value');
+  assert.deepEqual(JSON.parse(f.row.value),old);assert.equal(Object.keys(f.row).sort().join(','),'legacy_hash,redo,schema_version,value');
   assert.equal(f.transactions.filter(t=>t.mode==='readwrite').every(t=>t.options.durability==='strict'),true);
 });
 await test('request success does not acknowledge migration before commit',async()=>{

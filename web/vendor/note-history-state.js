@@ -10,8 +10,9 @@
   const emptyBase = () => ({ head_version: 0, head_revision_id: null, inventory_revision_ids: [], crypto_epoch: 0, replica_count: 0 });
   const record = value => value && typeof value === 'object' && !Array.isArray(value);
   const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
-  function create({ initial, context, request, write, change = () => {} }) {
+  function create({ initial, context, request, write, writeNote = null, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
+    const writeSnapshots=globalThis.NowHistorySnapshots?.create();
     let generation = 0, failed = null, writes = Promise.resolve(), running = null;
     const readable = (value=data) => value?.schema_version === 1 && record(value.contexts)
       && (!Object.hasOwn(value,'protection_operations') || record(value.protection_operations))
@@ -33,12 +34,13 @@
       if (createBucket) data.contexts[key(ctx)] ||= { notes: {} };
       return data.contexts[key(ctx)] || null;
     };
-    const save = (strict = false, guard = null) => {
-      const snapshot = copy(data), source = data, ctx = { ...context() }, epoch = generation;
+    const save = (strict = false, guard = null, noteId = null) => {
+      const selected=typeof writeNote==='function'&&noteId!==null;
+      const snapshot = selected?copy(entry(noteId)):writeSnapshots?writeSnapshots.capture(data):copy(data), source = data, ctx = { ...context() }, epoch = generation;
       const valid = () => data === source && active(ctx,epoch) && (!guard?.active || guard.active());
       writes = writes.catch(() => {}).then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
-        return write(snapshot,{ active:valid });
+        return selected?writeNote(ctx,noteId,snapshot,{active:valid}):write(snapshot,{ active:valid });
       });
       return writes.then(() => {
         if (!valid()) { if (strict) throw new Error('저장 인증 상태가 변경되었습니다.'); return; }
@@ -46,6 +48,9 @@
       },error => { if (valid()) { failed = error; change(); throw error; } if (strict) throw error; });
     };
     const entry = id => bucket(context())?.notes[id] || null;
+    // A UI projection is deliberately not a complete journal/archive record.
+    const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
+      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
@@ -100,7 +105,7 @@
       if (!same(item.draft, note)) item.edit_generation = (item.edit_generation || 0) + 1;
       item.draft = copy(note);
       item.dirty = !same(item.raw, note) || item.outbox.length > 0 || (!item.revisions.length && !item.base.head_revision_id);
-      await save();
+      await save(false,null,note.local_id);
     }
     async function seal(id, reason = 'edit') {
       writableNote(id);
@@ -117,7 +122,7 @@
       item.outbox.push({ id: uuid(), revision_id: revision.revision_id, sent: false, operation: 'put',
         body: { ...common(ctx, id, item.base), ...baseFields(item.base), note: meaning(item.draft) },
         waiting_for: previous?.body.mutation_id || null });
-      await save();
+      await save(false,null,id);
     }
     async function sync(options=null) {
       const onlyIds=options?.onlyIds;
@@ -339,6 +344,14 @@
         await save();
       },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
+      currentView: id => context().enabled&&readable()?currentEntry(entry(id)):null,
+      currentEntries({excludeWiki=false}={}){
+        if(!context().enabled||!readable())return {};
+        return Object.fromEntries(Object.entries(bucket(context())?.notes||{}).filter(([id,item])=>!protectedItem(item)
+          &&(!excludeWiki||!/^wiki(?:-source|-proposal)?:/.test(id)&&!['wiki-artifact','wiki-source-snapshot','wiki-ingest-proposal'].includes(item.draft.source)))
+          .map(([id,item])=>[id,currentEntry(item)]));
+      },
+      entryIds: ({includeProtected=false}={}) => context().enabled&&readable()?Object.keys(bucket(context())?.notes||{}).filter(id=>includeProtected||!protectedItem(entry(id))):[],
       view: id => context().enabled && readable() && entry(id) && !protectedItem(entry(id)) ? copy(entry(id)) : null,
       entries: () => context().enabled && readable() ? copy(Object.fromEntries(Object.entries(bucket(context())?.notes || {}).filter(([,v]) => !protectedItem(v)))) : {},
       export: () => copy(data),

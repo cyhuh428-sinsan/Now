@@ -25,4 +25,9 @@ unknown.document_version++;unknown.drafts.push(modern);const unknownNote={...not
 const blocked=await evidence.graph([ref]);assert.equal(blocked.nodes[0].complete,false,'unknown retained v2 production cannot prove comparison completeness');
 const corrupt=clone(saved);corrupt.contexts[box.NowNoteHistory.key(currentContext)].notes[note.local_id].revisions[0].snapshot.note.content='{broken';h.hydrate(corrupt);
 await assert.rejects(()=>evidence.graph([ref]));
+{
+  let reads=0;const exporter=h.export;h.export=()=>{reads++;return exporter();};currentContext.enabled=false;
+  try{await assert.rejects(()=>evidence.resolve(ref));assert.equal(reads,0,'logged-out evidence must reject before reading either journal representation');}
+  finally{currentContext.enabled=true;h.export=exporter;}
+}
 console.log('Wiki evidence: exact retained local revision, tuple freshness, owner isolation and unknown/damaged history fail closed PASS (synthetic journal only)');

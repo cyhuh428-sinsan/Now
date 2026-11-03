@@ -41,6 +41,26 @@ jobs:
       - name: Check web runtime script syntax
         run: node --check web/scripts/check_import_export.mjs
 
+      - name: Check document history read and backup regressions
+        run: >-
+          node --test web/scripts/history-page.test.cjs web/scripts/history-backup.test.cjs
+          web/scripts/deferred-history.test.cjs web/scripts/selected-history.test.cjs
+          web/scripts/default-history-sync.test.cjs web/scripts/current-source-projection.test.cjs
+          web/scripts/wiki-index-reader.test.cjs web/scripts/wiki-browse-wiring.test.cjs
+          web/scripts/wiki-read-set.test.cjs web/scripts/wiki-selected-page.test.mjs web/scripts/history-client.test.mjs
+          web/scripts/document-select-idb.test.mjs web/scripts/browser-select-guard.test.mjs
+          web/scripts/wiki-summary-notebook.test.mjs web/scripts/wiki-runtime-loader.test.mjs
+          web/scripts/wiki-runtime-bundle.test.mjs
+          web/scripts/history-persistence.test.mjs web/scripts/web-session-storage.test.mjs
+          web/scripts/wiki-connection.test.mjs web/scripts/workspace-navigation.test.mjs
+          web/scripts/wiki-shell.test.mjs web/scripts/wiki-service-worker.test.mjs
+          web/scripts/crypto-worker.test.mjs desktop/tests/app-performance-fixture.test.mjs
+          web/scripts/browser-retained-wiring.test.mjs
+          desktop/tests/app-performance-options.test.mjs desktop/tests/storage-notice.test.cjs
+          web/scripts/browser-history-events.test.mjs web/scripts/wiki-storage-revocation.test.mjs web/scripts/wiki-peer-view.test.mjs
+          web/scripts/wiki-workspace-fresh.test.mjs
+          web/scripts/history-page-qa-guard.test.mjs
+
       - name: Run repository preflight
         working-directory: server
         run: python scripts/preflight.py --env-file .env.example --allow-example

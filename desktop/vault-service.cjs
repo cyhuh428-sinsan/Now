@@ -6,7 +6,7 @@ const { createHash, randomUUID } = require("node:crypto");
 const { mapNowTree, buildSyncPlan, contentHash } = require("./vault-plan.cjs");
 const { renderManagedMarkdown } = require("./vault-markdown.cjs");
 const { scanVault, writeVaultEntry, moveVaultEntry, removeVaultEntry, removeCreatedDirs } = require("./vault-files.cjs");
-const { readStoreFile, updateStoreFile } = require("./store-file.cjs");
+const { readStoreFile, writeStoreFile, updateStoreFile, isDocumentFile } = require("./store-file.cjs");
 const { createVaultJournal } = require("./vault-journal.cjs");
 const { recoveryStatus: inspectRecovery, confirmRecovery: clearRecovery } = require("./vault-transaction.cjs");
 const {assertVaultHistorySource,validateHistoryPatch,applyVaultHistoryPatch}=require("./vault-history.cjs");
@@ -39,7 +39,8 @@ function backupStore(storePath, backupDir) {
   if (!fs.existsSync(storePath)) return null;
   fs.mkdirSync(backupDir, { recursive: true });
   const backupPath = path.join(backupDir, `${Date.now()}-${randomUUID()}-nownote-desktop-store.json`);
-  fs.copyFileSync(storePath, backupPath, fs.constants.COPYFILE_EXCL);
+  if(isDocumentFile(storePath))writeStoreFile(backupPath,readStoreFile(storePath).store);
+  else fs.copyFileSync(storePath, backupPath, fs.constants.COPYFILE_EXCL);
   return backupPath;
 }
 

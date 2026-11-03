@@ -228,6 +228,7 @@
   }
   async function encryptContent(value, password) {
     text(value);
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return NowNoteCryptoWorker.execute('encrypt',value,password);
     const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await derive(password, salt, ITERATIONS, 'encrypt');
     const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(value));
@@ -236,6 +237,7 @@
   }
   async function decryptContent(value, password) {
     if (typeof value !== 'string' || !value.startsWith(PREFIX)) fail('content_cipher');
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return NowNoteCryptoWorker.execute('decrypt',value,password);
     const p = parseJson(unbase64(value.slice(PREFIX.length)));
     exact(p, ['v', 'alg', 'kdf', 'iterations', 'salt', 'iv', 'data']);
     if (p.v !== 1 || p.alg !== 'AES-GCM' || p.kdf !== 'PBKDF2-SHA256') fail('content_algorithm');
@@ -245,6 +247,10 @@
     if (salt.length !== 16 || iv.length !== 12 || data.length < 16) fail('content_parameters');
     const key = await derive(password, salt, p.iterations, 'decrypt');
     return decoder.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data));
+  }
+  async function parseCryptoJson(value) {
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return JSON.parse(await NowNoteCryptoWorker.execute('parse',value,''));
+    return parseJson(value);
   }
   function checkOutput(d, strict = true) {
     if (strict) exact(d, ['key', 'output_kind', 'output_epoch', 'is_null', 'expected_binding', 'operation_origin']);
@@ -350,12 +356,12 @@
     if (typeof keyResolver !== 'function') fail('key_resolver');
     if (d.representation_kind === 'content_encrypted_v1') return decryptContent(raw, await keyResolver(d));
     let value;
-    if (d.representation_kind === 'snapshot_v1') value = validateSnapshot(parseJson(raw));
+    if (d.representation_kind === 'snapshot_v1') value = validateSnapshot(await parseCryptoJson(raw));
     else {
-      const outer = parseJson(raw);
+      const outer = await parseCryptoJson(raw);
       exact(outer, ['schema_version', 'kind', 'crypto_epoch', 'binding', 'ciphertext']);
       if (outer.schema_version !== 1 || outer.kind !== d.representation_kind || outer.crypto_epoch !== d.representation_epoch || !equal(outer.binding, d.expected_binding)) fail('envelope_binding');
-      const inner = parseJson(await decryptContent(outer.ciphertext, await keyResolver(d)));
+      const inner = await parseCryptoJson(await decryptContent(outer.ciphertext, await keyResolver(d)));
       const linked = d.representation_kind === 'linked_text_envelope_v1';
       const fields = ['schema_version', 'binding', linked ? 'value' : 'snapshot', 'semantic_sha256'];
       if (!linked) fields.push('content_origin_kind');
@@ -387,7 +393,7 @@
     const linked = d.output_kind === 'linked_text_envelope_v1';
     if (linked) text(value); else validateSnapshot(value);
     if (!linked && (value.note.owner_id !== d.expected_binding.owner_id || value.note.local_id !== d.expected_binding.local_id)) fail('snapshot_scope');
-    value = parseJson(canonicalJson(value));
+    value = await parseCryptoJson(canonicalJson(value));
     const inner = { schema_version: 1, binding: d.expected_binding, [linked ? 'value' : 'snapshot']: value,
       semantic_sha256: await sha256(linked ? value : canonicalJson(value)) };
     if (!linked) { inner.content_origin_kind = 'semantic'; inner.origin = d.operation_origin; }

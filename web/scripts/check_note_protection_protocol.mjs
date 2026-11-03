@@ -297,10 +297,12 @@ await test('all native semantic purposes and schema1/3 MA replan keep typed orig
   }
 });
 await test('both generated bundles embed exact runtime and keep release gate/version', async () => {
+  const version=JSON.parse(await readFile(new URL('../../desktop/package.json',import.meta.url),'utf8')).version;
+  assert.match(version,/^\d+\.\d+\.\d+$/);
   for (const relative of ['../app.js', '../../desktop/app/app.js']) {
     const app = (await readFile(new URL(relative, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
     assert.ok(app.includes(source.replace(/\r\n/g, '\n')));
-    assert.ok(app.includes('const APP_VERSION = "2.3.9"'));
+    assert.ok(app.includes(`const APP_VERSION = "${version}"`));
     assert.ok(app.includes('historyProtectionTransitionBlocked'));
   }
 });
