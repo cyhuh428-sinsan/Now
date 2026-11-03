@@ -2,7 +2,9 @@
 (() => {
   'use strict';
   function create({database,key,onCommit=()=>{}}) {
-    let cached=null,lastRevision=null;
+    let cached=null,lastRevision=null,currentCertificate=null;
+    const certificate=(current,stamp)=>({stamp,account:current.account,view:{projection:current.projection,supported:current.supported,
+      account:current.account,syncSupported:current.syncSupported,notes:Object.fromEntries(Object.keys(current.notes||{}).map(id=>[id,null]))}});
     async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
@@ -54,26 +56,30 @@
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null,window=null){
-      const steps=window?(patch?NowJournalWindow.writeSteps(window):NowJournalWindow.readSteps(window))
-        :page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null,window=null,effect=null){
+      let steps=effect?NowJournalWindow.settingsSteps():window?null:page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow),step=steps?.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
-        let tx,error,result;
+        let tx,error,result,nextCertificate=null,effected=false;
         try{
-          tx=db.transaction(['journals','documents'],patch?'readwrite':'readonly',patch?{durability:'strict'}:undefined);
-          tx.onabort=()=>reject(error||Error('Document read aborted'));
+          tx=db.transaction(['journals','documents'],patch||effect?'readwrite':'readonly',patch||effect?{durability:'strict'}:undefined);
+          tx.onabort=()=>{const failure=error||Error('Document read aborted');if(effected)failure.committed=true;reject(failure);};
           tx.onerror=()=>{error=Error('Document read failed');};
-          tx.oncomplete=()=>{if(patch){cached=null;if(result?.partsWritten>0)onCommit();}try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
-          if(patch&&tx.durability!=='strict')throw Error('Strict document durability is required');
+          tx.oncomplete=()=>{if(patch){cached=null;currentCertificate=null;if(result?.partsWritten>0)onCommit();}try{
+            active();if(!patch){if(current&&result?.supported)currentCertificate=certificate(result,result.stamp);else if(nextCertificate)currentCertificate=nextCertificate;}
+            else if(window&&nextCertificate)currentCertificate={...nextCertificate,stamp:result.stamp,view:{...nextCertificate.view,
+              notes:window.insert?{...nextCertificate.view.notes,[window.id]:null}:nextCertificate.view.notes}};
+            resolve(result);
+          }catch(e){if(effected||patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
+          if((patch||effect)&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const metadata=journals.get(key);
           metadata.onsuccess=()=>{
             try{
               active();const physical=metadata.result;
               if(physical===undefined){
-                if(patch||page||window)throw Error('Document path conflict');
+                if(patch||page||window||effect)throw Error('Document path conflict');
                 checkMetadata(undefined);
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
@@ -86,7 +92,13 @@
               if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
               if(page&&page.stamp!==physical.stamp)throw Error('Document journal changed; reopen before paging');
               if(window&&!patch&&window.stamp!==physical.stamp)throw Error('Document journal changed; reopen before Window reading');
+              if(effect&&effect.stamp!==physical.stamp)throw Error('Document journal changed; reopen before saving settings');
               checkMetadata(physical.row);
+              if(window){
+                const proof=currentCertificate?.stamp===physical.stamp&&currentCertificate.account===window.account?currentCertificate.view:null;
+                const inspected=value=>{nextCertificate=certificate(value,physical.stamp);};
+                steps=patch?(window.insert?NowJournalWindow.insertSteps(window,proof,inspected):NowJournalWindow.writeSteps(window,proof,inspected)):NowJournalWindow.readSteps(window,proof,inspected);step=steps.next();
+              }
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
                 keys.onsuccess=()=>{
@@ -115,7 +127,8 @@
               const cache=new Map();
               function next(){
                 if(step.done){
-                  if(patch)apply(step.value);
+                  if(effect){active();checkMetadata(physical.row);effected=true;effect.run();result={projection:'settings_write_v1',stamp:physical.stamp,committed:true};}
+                  else if(patch)apply(step.value);
                   else{
                     if(window){result={projection:'window_read_v1',stamp:physical.stamp,window:step.value};return;}
                     result={projection:'path_v1',stamp:physical.stamp,...step.value};
@@ -159,6 +172,16 @@
       if(typeof window.revision!=='string')return Promise.reject(Error('A Window revision is required'));
       return pathTransaction(null,guard,checkMetadata,{revision:window.revision},false,false,null,
         {account:window.account,id:window.id,expected:window.expected,next:window.next});
+    };
+    transaction.createWindow=(request,guard,checkMetadata=()=>{})=>{
+      const window=structuredClone(request);
+      if(typeof window.stamp!=='string')return Promise.reject(Error('A Window creation revision is required'));
+      return pathTransaction(null,guard,checkMetadata,{revision:window.stamp},false,false,null,
+        {insert:true,account:window.account,id:window.id,next:window.next});
+    };
+    transaction.settingsEffect=(stamp,run,guard,checkMetadata=()=>{})=>{
+      if(typeof stamp!=='string'||typeof run!=='function')return Promise.reject(Error('Invalid settings guard'));
+      return pathTransaction(null,guard,checkMetadata,null,false,false,null,null,{stamp,run});
     };
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});

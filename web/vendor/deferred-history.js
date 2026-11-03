@@ -2,7 +2,7 @@
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,selectWindow=null,saveWindow=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,selectWindow=null,saveWindow=null,createWindow=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null,browseIndex=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -14,6 +14,34 @@
     }
     reset(initial);
     const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
+    const canCreate=id=>Boolean(createWindow&&visible()&&preview?.syncSupported===true&&!loading&&!failed&&typeof id==='string'&&!Object.hasOwn(preview.notes,id));
+    function inserted(args){
+      const captured=copy(args),generation=epoch,key=bound;let selection=null;
+      const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled&&(!selection||preview===selection&&!full);
+      const run=selectedTail.catch(()=>{}).then(async()=>{
+        if(!active()||failed)throw failed||stale();
+        if(full)return full.track(...captured);
+        const id=captured[0].local_id,account=accountKey();selection=preview;
+        if(!selection||selection.syncSupported!==true)throw stale();
+        if(Object.hasOwn(selection.notes,id))return;
+        let committed=false;
+        const store=NowNoteHistory.create({initial:{schema_version:1,contexts:{[account]:{notes:{}}}},context,request,
+          write:async value=>{
+            if(!active()||Object.keys(value).sort().join(',')!=='contexts,schema_version'||Object.keys(value.contexts).length!==1
+              ||Object.keys(value.contexts[account]||{}).join()!=='notes'||Object.keys(value.contexts[account].notes).length!==1
+              ||!Object.hasOwn(value.contexts[account].notes,id))throw stale();
+            const next=value.contexts[account].notes[id];
+            const result=await createWindow({account,id,stamp:selection.stamp,next},{active});
+            if(!active()||typeof result?.stamp!=='string'||typeof result.revision!=='string')throw Object.assign(stale(),{committed:true});
+            committed=true;selection.stamp=result.stamp;
+          }});
+        await store.track(...captured);await store.idle();
+        if(!active()||!committed)throw stale();
+        Object.defineProperty(selection.notes,id,{value:store.currentView(id),enumerable:true,writable:true,configurable:true});
+        selectedView=null;
+      }).catch(error=>{if(active()){failed=error;change(error);}throw error;});
+      selectedTail=run;return run;
+    }
     function selected(id,action,window=false){
       const generation=epoch,key=bound,materialization=loading;let selection=null;
       const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled
@@ -83,7 +111,7 @@
     }
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
-      ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),creatable:canCreate,
       revision:()=>visible()&&preview&&!failed?preview.stamp:null,
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
@@ -153,6 +181,12 @@
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
+      if(name==='track'&&visible()&&preview?.syncSupported===true&&Object.hasOwn(preview.notes,args[0]?.local_id)){
+        if(args[0]?.owner_id!==context().owner)throw Error('이력 소유자가 현재 계정과 다릅니다.');
+        return;
+      }
+      if(name==='track'&&canCreate(args[0]?.local_id)&&['tree','daily','worklog'].includes(args[0]?.note_type)
+        &&!String(args[0]?.source||'').startsWith('wiki')&&!String(args[0]?.content||'').startsWith('NOW_ENCRYPTED_'))return inserted(args);
       if(name==='sync'&&!full&&preview&&request&&!loading&&(args[0]?.onlyIds!==undefined||preview.syncSupported===true)){
         const ids=args[0]?.onlyIds;
         if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');

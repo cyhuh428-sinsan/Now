@@ -13,6 +13,12 @@ for(const method of ['open','current','page','select','full','note'])ipcMain.han
   historyCounts[method]++;
   try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
 });
+for(const [route,method]of [['select-window','selectWindow'],['note-window','noteWindow'],['create-window','createWindow']]){
+ historyCounts[method]=0;
+ ipcMain.handle('nownote:history-'+route,(event,payload)=>{historyCounts[method]++;
+  try{return {ok:true,...historySession[method](event.sender,payload)};}catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
+ });
+}
 ipcMain.handle('nownote:desktop-store-read',(_e,k)=>{if(!keys.has(k))throw Error('store_key');const value=documentFile.readKey(store,k);snapshots.set(k,structuredClone(value));return value;});
 ipcMain.handle('nownote:desktop-store-read-path',(_e,k,segments,shallow=false)=>{if(!keys.has(k)||typeof shallow!=='boolean')throw Error('store_key');return documentFile.readKeyPath(store,k,segments,shallow);});
 const write=(k,v,o)=>{
@@ -23,7 +29,8 @@ const write=(k,v,o)=>{
 };
 ipcMain.handle('nownote:desktop-store-write',(_e,k,v,o)=>write(k,v,o));
 ipcMain.on('nownote:desktop-store-write-sync',(e,k,v,o)=>{try{e.returnValue=write(k,v,o);}catch{e.returnValue={ok:false,error:'qa_CAS'};}});
-ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys],historySessions:true}));
+ipcMain.handle('nownote:settings-save',(_event,request)=>{const result=documentFile.writeSettings(store,request);snapshots.set('nownote.web.settings.v1',structuredClone(request.next));return result;});
+ipcMain.handle('nownote:desktop-store-info',()=>({version:2,keys:[...keys],historySessions:true,guardedSettings:true,historyWindows:process.env.NOWNOTE_JOURNAL_WINDOW_QA==='1'}));
 ipcMain.handle('nownote:desktop-original-read',(_event,key)=>{if(!keys.has(key))throw Error('store_key');return documentFile.readOriginal(store,key);});
 ipcMain.handle('nownote:desktop-original-write',(_event,key,value,expected)=>{if(!keys.has(key))throw Error('store_key');return documentFile.casOriginal(store,key,value,expected);});
 ipcMain.handle('nownote:vault-status',()=>({connected:false}));ipcMain.handle('nownote:vault-recovery-status',()=>({pending:false}));
@@ -87,6 +94,37 @@ app.whenReady().then(async()=>{
     const startup=await run(`(()=>{let exportBlocked=false;try{noteHistory.export();}catch{exportBlocked=true;}
       return {deferred:noteHistory.deferred(),current:noteHistory.currentView('qa-save-a')?.draft.content==='old',rendered:elements.treeContent.value==='old',fullReads:qaStartupFullReads,readsBeforeSelection:qaReadsBeforeSelection,writeKeys:qaStartupWriteKeys,exportBlocked,matches:noteHistory.matches()};})()`);
     const startupCurrent=startup.deferred&&startup.current&&startup.rendered&&startup.fullReads===0&&startup.exportBlocked;
+    if(process.env.NOWNOTE_JOURNAL_WINDOW_QA==='1'){
+      if(!startupCurrent)throw Error('window_startup_projection');
+      const before={...historyCounts};
+      const created=await run(`(async()=>{
+        const dataBefore=JSON.stringify(await readStorage(STORAGE_KEY));
+        document.querySelector('#addRootBtn').click();const root=state.selectedTreeId;
+        await noteHistoryCaptureChain;await noteHistory.idle();
+        if(!noteHistory.selectable(root))throw Error('new_root_not_canonical');
+        elements.treeContent.value='SYNTHETIC_NEW_ROOT';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
+        await noteHistoryCaptureChain;await noteHistory.seal(root);await noteHistory.idle();
+        addChildToSelectedTreeNode();const child=state.selectedTreeId;await noteHistoryCaptureChain;await noteHistory.idle();
+        elements.treeContent.value='SYNTHETIC_NEW_CHILD';elements.treeContent.dispatchEvent(new Event('input',{bubbles:true}));
+        await noteHistoryCaptureChain;await noteHistory.seal(child);await noteHistory.idle();
+        if(noteHistory.failure()||!noteHistory.deferred()||qaStartupFullReads||JSON.stringify(await readStorage(STORAGE_KEY))!==dataBefore)throw Error('creation_materialized_or_replaced_data');
+        return {root,child};
+      })()`);
+      const reloaded=new Promise(resolve=>window.webContents.once('did-finish-load',resolve));window.webContents.reload();await reloaded;
+      await wait('Boolean(wikiSources&&wikiUI&&noteHistory&&!noteHistory.suspended())','window_cold_startup_timeout');
+      const cold=await run(`(()=>{const root=findTreeNode(state.data.tree,${JSON.stringify(created.root)}),child=findTreeNode(state.data.tree,${JSON.stringify(created.child)});
+        return {deferred:noteHistory.deferred(),fullReads:qaStartupFullReads,root:root?.content==='SYNTHETIC_NEW_ROOT',child:child?.content==='SYNTHETIC_NEW_CHILD'&&child.parentId===root?.id};})()`);
+      if(!cold.deferred||cold.fullReads||!cold.root||!cold.child||historyCounts.open!==before.open||mode==='desktop'&&historyCounts.createWindow-before.createWindow!==2)throw Error('window_creation_cold_failed');
+      const settingsProbe=await run(`(async()=>{
+        const before=JSON.stringify(await readStorage(SETTINGS_KEY));state.settings.fontSize=state.settings.fontSize==='large'?'small':'large';
+        const saved=await persistSettings();await Promise.all([...storagePendingWrites]);
+        return {saved,bootstrapPending:protectionBootstrapPending,changed:JSON.stringify(await readStorage(SETTINGS_KEY))!==before,font:state.settings.fontSize,failed:settingsSaveFailed};
+      })()`);
+      if(!settingsProbe.saved||!settingsProbe.changed||settingsProbe.failed)throw Error('settings_not_saved '+JSON.stringify(settingsProbe));
+      await window.reload();await wait('noteHistoryStartupReady','settings_cold_startup');
+      if(await run('state.settings.fontSize')!==settingsProbe.font)throw Error('settings_cold_not_preserved');
+      result={ok:true,mode,phase,windowCreation:true,cold,settingsProbe,counts:{...historyCounts},blockedNetworkAttempts:network,realProviderCalls:0};return;
+    }
     if(process.env.NOWNOTE_SETTINGS_IDLE_QA==='1'){
       if(!startupCurrent)throw Error('idle_startup_projection');
       const countsBefore={...historyCounts};

@@ -183,6 +183,12 @@ function writeKeyWindow(storePath,key,request,manifest){
   const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()}};
   return database.writeWindow(`value:${key}`,request,{manifest,additional:[{key:META,expected:file,value:next}]});
 }
+function createKeyWindow(storePath,key,request){
+  const database=open(storePath),file=database.read(META);
+  if(!file.keys.includes(key))throw Error('History storage must be initialized first');
+  const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()}};
+  return database.createWindow(`value:${key}`,request,{additional:[{key:META,expected:file,value:next}]});
+}
 function writeKeyPath(storePath,key,segments,expected,value,manifest){
   const database=open(storePath),file=database.read(META);
   if(!file.keys.includes(key))throw Error('History storage must be initialized first');
@@ -195,6 +201,16 @@ function writeKey(storePath,key,value,expected){
   const result=database.commit([{key:`value:${key}`,value,expected},{key:META,value:next,expected:file}]);
   return {...result,updatedAt:next.metadata.updatedAt};
 }
+function writeSettings(storePath,request){
+  if(!request||Object.keys(request).sort().join(',')!=='expected,next,stamp'||request.expected===undefined
+    ||!request.next||typeof request.next!=='object'||Array.isArray(request.next))throw Error('Invalid settings save request');
+  const database=open(storePath),file=database.read(META),key='nownote.web.settings.v1';
+  if(originalState(file).pending)throw Error('Protection transition prevents settings save');
+  const next={...file,metadata:{...file.metadata,updatedAt:new Date().toISOString()},keys:file.keys.includes(key)?file.keys:[...file.keys,key]};
+  database.commit([{key:`value:${key}`,value:request.next,expected:request.expected},{key:META,value:next,expected:file}],
+    {journal:{key:'value:nownote.history.v1',stamp:request.stamp}});
+  return {ok:true,updatedAt:next.metadata.updatedAt};
+}
 function update(storePath,transform,expectedHash){
   const database=open(storePath),before=snapshot(database);
   if(expectedHash!==undefined&&expectedHash!==before.hash)throw Error('NowNote store changed since preview');
@@ -206,4 +222,4 @@ function update(storePath,transform,expectedHash){
   return snapshot(database);
 }
 function closeAll(){for(const database of databases.values())database.close();databases.clear();}
-module.exports={FORMAT,initialize,read,readKey,readKeyPath,readKeySnapshot,readKeyCurrent,readKeyNote,readKeyHistoryPage,readKeyWindow,writeKeyWindow,writeKeyPath,writeKey,readOriginal,casOriginal,info,update,closeAll};
+module.exports={FORMAT,initialize,read,readKey,readKeyPath,readKeySnapshot,readKeyCurrent,readKeyNote,readKeyHistoryPage,readKeyWindow,writeKeyWindow,createKeyWindow,writeKeyPath,writeKey,writeSettings,readOriginal,casOriginal,info,update,closeAll};

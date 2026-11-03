@@ -70,3 +70,15 @@ test('discarding a queued mutation or changing a sent body/import request is ref
  }
  assert.deepEqual(parts.decode(stored),f.root);
 });
+test('new-note insertion changes only the note directory and the absent owned entry',()=>{
+ const f=fixture(),newId='new-note',note={...f.entry.raw,local_id:newId,content:'new'},next={raw:note,draft:structuredClone(note),base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],conflict:null,dirty:true,localOnly:true,needsBaseline:false,replicaSelected:true};
+ const plan=f.run(windowed.insertSteps({account,id:newId,next})),result=f.apply(plan);
+ assert.deepEqual(result.contexts[account].notes[id],f.entry);assert.deepEqual(result.contexts[account].notes[newId],next);
+ assert.equal(plan.range.ids.length,0);assert.throws(()=>f.run(windowed.insertSteps({account,id:newId,next})));
+});
+test('creation refuses another owner, preloaded history and protected or Wiki targets',()=>{
+ for(const mutate of [entry=>{entry.draft.owner_id='other';},entry=>{entry.base.crypto_epoch=1;},entry=>{entry.revisions=[{snapshot:{note:entry.raw}}];},entry=>{entry.raw.source='wiki-artifact';}]){
+  const f=fixture(),newId='new-note',note={...f.entry.raw,local_id:newId},next={raw:note,draft:structuredClone(note),base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],conflict:null,dirty:true,localOnly:true,needsBaseline:false,replicaSelected:true};
+  mutate(next);assert.throws(()=>f.run(windowed.insertSteps({account,id:newId,next})));assert.deepEqual(parts.decode(f.stored),f.root);
+ }
+});

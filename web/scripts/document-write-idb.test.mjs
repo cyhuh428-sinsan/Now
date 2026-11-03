@@ -77,3 +77,36 @@ test('product revision guard rejects a stale whole journal even when its selecte
   const f=await fixture();await assert.rejects(f.read.writePath(['notes','a'],f.original.notes.a,{content:'new'},undefined,()=>{},{revision:'older'}),/journal changed/i);
   assert.deepEqual(f.value(),f.original);
 });
+
+test('settings guard reads root metadata only and waits for the exclusive transaction acknowledgement',async()=>{
+  const root={schema_version:1,contexts:{alice:{notes:{large:{history:['preserved']}}}}},f=await fixture({windowed:true,originalValue:root});
+  let writes=0,settled=false;
+  const pending=f.read.settingsEffect('old',()=>writes++).then(result=>{settled=true;return result;});
+  await f.turn();assert.equal(writes,1);assert.equal(settled,false);assert.deepEqual(f.value(),root);
+  f.finish();assert.equal((await pending).projection,'settings_write_v1');assert.equal(settled,true);
+  await assert.rejects(f.read.settingsEffect('stale',()=>writes++),/changed/);assert.equal(writes,1);
+  const protectedStore=await fixture({windowed:true,originalValue:{...root,protection_operations:{}}});
+  await assert.rejects(protectedStore.read.settingsEffect('old',()=>writes++),/Protection|metadata/);assert.equal(writes,1);
+});
+
+test('settings side effect followed by abort or account change is an uncertain failure, never a retry',async()=>{
+  for(const abort of [true,false]){
+    const f=await fixture({windowed:true,originalValue:{schema_version:1,contexts:{}}});let writes=0,active=true;
+    const pending=assert.rejects(f.read.settingsEffect('old',()=>writes++,{active:()=>active}),error=>error.committed===true);
+    await f.turn();assert.equal(writes,1);
+    if(abort)f.abort();else{active=false;f.finish();}
+    await pending;assert.equal(writes,1);
+  }
+});
+
+test('new-note Window IDB insertion commits once, preserves siblings and refuses duplicates',async()=>{
+  const account=JSON.stringify(['https://qa.invalid','alice']),root={schema_version:1,contexts:{[account]:{notes:{}}}};
+  const f=await fixture({windowed:true,originalValue:root}),id='created';
+  const note={owner_id:'alice',local_id:id,note_type:'tree',source:'manual',content:'created'};
+  const entry={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[]},revisions:[],outbox:[],receipts:[],conflict:null,dirty:true,localOnly:true,needsBaseline:false,replicaSelected:true};
+  const request={account,id,stamp:'old',next:entry},pending=f.read.createWindow(request);
+  await f.turn();assert.deepEqual(f.value(),root);f.finish();const saved=await pending;
+  assert.deepEqual(f.value().contexts[account].notes[id],entry);
+  await assert.rejects(f.read.createWindow({...request,stamp:saved.stamp}));
+  assert.deepEqual(f.value().contexts[account].notes[id],entry);
+});

@@ -10,6 +10,7 @@
       ...(typeof browser().selectWindow==='function'&&typeof browser().replaceWindow==='function'?{
         selectWindow:async(request,guard)=>remember(await browser().selectWindow(request,guard),true),
         noteWindow:async(request,guard)=>remember(await browser().replaceWindow(request,guard),true)}:{}),
+      ...(typeof browser().createWindow==='function'?{createWindow:async(request,guard)=>remember(await browser().createWindow(request,guard),true)}:{}),
       full:async(request,guard)=>remember(await browser().writeSnapshot(request.expected,request.next,guard),true),note:async(request,guard)=>remember(await browser().replaceNote(request,guard),true)};
     const info=await storage.info();let expected;
     const check=guard=>{if(guard?.active&&!guard.active())throw Error('저장 계정이 변경되었습니다.');};
@@ -23,6 +24,8 @@
       ...(info.historyWindows&&typeof storage.history.selectWindow==='function'&&typeof storage.history.noteWindow==='function'?{
         selectWindow:(request,guard)=>read('selectWindow',request,guard),
         noteWindow:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.noteWindow(request)));}}:{}),
+      ...(info.historyWindows&&typeof storage.history.createWindow==='function'?{
+        createWindow:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.createWindow(request)));}}:{}),
       ...(storage.history.current?{current:(account,guard)=>read('current',account,guard)}:{}),
       ...(storage.history.page?{page:(request,guard)=>read('page',request,guard)}:{}),
       full:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.full({revision:request.revision,next:request.next})));},

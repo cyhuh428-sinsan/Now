@@ -13,7 +13,7 @@ test('shared client sync, edit, seal and cold read use Window IPC while preservi
   file.initialize(filename);file.writeKey(filename,key,root,null);let selected=0,full=0,remote={...note};
   const sender={},session=createHistorySession(()=>filename),context=()=>({url:'https://qa.invalid',owner:'alice',enabled:true,online:true,auth:'synthetic',device:'qa'});
   const backend={current:async account=>session.current(sender,account),select:async()=>{full++;throw Error('Old full-note path forbidden');},note:async()=>{throw Error('Old writer forbidden');},open:async()=>{throw Error('Whole journal forbidden');},
-    selectWindow:async request=>{selected++;return session.selectWindow(sender,request);},noteWindow:async request=>session.noteWindow(sender,request)};
+    selectWindow:async request=>{selected++;return session.selectWindow(sender,request);},noteWindow:async request=>session.noteWindow(sender,request),createWindow:async request=>session.createWindow(sender,request)};
   const request=async(_ctx,route,method,body)=>{
    if(route==='revisions/import')return {imported_refs:body.entries.map(row=>({kind:'offline_branch',id:row.revision_id}))};
    if(route==='current'&&method==='GET')return {snapshot:{note:remote},crypto_epoch:0,head_revision_id:'head',head_version:1,inventory_revision_ids:['head'],replica_count:1};
@@ -26,6 +26,11 @@ test('shared client sync, edit, seal and cold read use Window IPC while preservi
   const saved=file.readKey(filename,key).contexts[account].notes[id];
   assert.deepEqual(saved.revisions.slice(0,10),entry.revisions);assert.deepEqual(saved.receipts[0],entry.receipts[0]);assert.deepEqual(saved.completed_outbox[0],entry.completed_outbox[0]);
   assert.equal(saved.outbox.length,0);assert.equal(saved.draft.content,'한글 window edit');assert.equal(saved.revisions.length,11);
+  const created={...note,local_id:'created',content:'new body'};assert.equal(history.creatable('created'),true);
+  await history.track(created,null,{localOnly:true});await history.track({...created,content:'must not replace'});
+  assert.equal(history.currentView('created').draft.content,'new body');assert.equal(history.creatable('created'),false);
+  await history.edit({...created,content:'new Korean draft'});await history.seal('created');assert.equal(full,0);
   const cold=await NowHistoryClient.create({backend,context,request});assert.equal(cold.history.currentView(id).draft.content,'한글 window edit');
+  assert.equal(cold.history.currentView('created').draft.content,'new Korean draft');
  }finally{file.closeAll();assert.equal(path.dirname(fs.realpathSync(own)),parent);fs.rmSync(own,{recursive:true,force:true});}
 });

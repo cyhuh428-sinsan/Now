@@ -7,6 +7,13 @@ function createHistorySession(filename){
   function remember(sender,snapshot){const state={...snapshot,revision:randomUUID()};sessions.set(sender,state);return state;}
   function current(sender,revision){const state=sessions.get(sender);if(!state||state.revision!==revision)throw Error('저장 기준을 다시 열어 확인하세요.');return state;}
   return {
+    createWindow(sender,{account,id,stamp,next}){
+      const result=file.createKeyWindow(filename(),KEY,{account,id,stamp,next});
+      const value={schema_version:1,contexts:{[account]:{notes:{[id]:structuredClone(next)}}}};
+      const window={projection:'journal_window_v1',offsets:{revisions:0,receipts:0,completed_outbox:0,archived_outbox:0}};
+      const saved=remember(sender,{value,manifest:result.manifest,stamp:result.stamp,selected:{account,id,window}});
+      return {revision:saved.revision,stamp:saved.stamp,scoped:true};
+    },
     selectWindow(sender,{account,id,stamp}){
       const snapshot=file.readKeyWindow(filename(),KEY,{account,id,stamp}),entry=snapshot.window.entry;
       const value={schema_version:1,contexts:{[account]:{notes:{[id]:entry}}}};

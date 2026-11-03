@@ -63,6 +63,7 @@ jobs:
           web/scripts/settings-idle.test.cjs
           web/scripts/journal-window.test.cjs web/scripts/window-client.test.cjs
           web/scripts/document-write-idb.test.mjs desktop/tests/history-window-session.test.cjs
+          web/scripts/settings-save.test.cjs desktop/tests/settings-window.test.cjs
 
       - name: Run repository preflight
         working-directory: server
