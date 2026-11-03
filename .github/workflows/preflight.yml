@@ -60,6 +60,7 @@ jobs:
           web/scripts/browser-history-events.test.mjs web/scripts/wiki-storage-revocation.test.mjs web/scripts/wiki-peer-view.test.mjs
           web/scripts/wiki-workspace-fresh.test.mjs
           web/scripts/history-page-qa-guard.test.mjs
+          web/scripts/settings-idle.test.cjs
 
       - name: Run repository preflight
         working-directory: server

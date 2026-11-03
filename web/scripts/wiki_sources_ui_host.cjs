@@ -58,6 +58,7 @@ app.whenReady().then(async()=>{
       const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true});
       const value={schema_version:1,contexts:{[account]:{notes:{'qa-save-a':entry('qa-save-a'),'qa-save-b':entry('qa-save-b')}}}};
       value.contexts[account].notes['qa-save-a'].revisions=Array.from({length:125},(_,index)=>({revision_id:crypto.randomUUID(),created_at:'2026-11-03T00:00:00.000Z',reason:'edit',snapshot:{schema_version:1,note:{...note('qa-save-a'),content:'QA_PAGE_HISTORY_'+index}}}));
+      if(${process.env.NOWNOTE_SETTINGS_IDLE_QA==='1'})for(const revision of value.contexts[account].notes['qa-save-a'].revisions)revision.snapshot.note.content+='x'.repeat(65536);
       for(const kind of ['daily','worklog']){
         const date='2026-11-03',server={...state.settings.server,ownerId:ctx.owner},note=(kind==='daily'?dailyNoteToServerNote:worklogNoteToServerNote)({date,content:'OLD_DATE_BODY',updatedAt:new Date().toISOString()},server);
         value.contexts[account].notes[note.local_id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true};
@@ -86,6 +87,25 @@ app.whenReady().then(async()=>{
     const startup=await run(`(()=>{let exportBlocked=false;try{noteHistory.export();}catch{exportBlocked=true;}
       return {deferred:noteHistory.deferred(),current:noteHistory.currentView('qa-save-a')?.draft.content==='old',rendered:elements.treeContent.value==='old',fullReads:qaStartupFullReads,readsBeforeSelection:qaReadsBeforeSelection,writeKeys:qaStartupWriteKeys,exportBlocked,matches:noteHistory.matches()};})()`);
     const startupCurrent=startup.deferred&&startup.current&&startup.rendered&&startup.fullReads===0&&startup.exportBlocked;
+    if(process.env.NOWNOTE_SETTINGS_IDLE_QA==='1'){
+      if(!startupCurrent)throw Error('idle_startup_projection');
+      const countsBefore={...historyCounts};
+      app.getAppMetrics();
+      const settingsIdle=await run(`(async()=>{
+        for(let index=0;index<3;index++){await toggleSettings();if(elements.settingsView.classList.contains('hidden'))throw Error('settings_not_visible');await toggleSettings();}
+        for(let index=0;index<100;index++)showNotice('QA_DUPLICATE_STORAGE_ERROR','error');
+        const alerts=[...elements.toastRegion.children].filter(item=>item.textContent==='QA_DUPLICATE_STORAGE_ERROR').length;
+        await new Promise(resolve=>setTimeout(resolve,10000));
+        return {deferred:noteHistory.deferred(),fullReads:qaStartupFullReads,duplicateAlerts:alerts};
+      })()`);
+      if(!settingsIdle.deferred||settingsIdle.fullReads||settingsIdle.duplicateAlerts!==1||historyCounts.open!==countsBefore.open||historyCounts.full!==countsBefore.full)throw Error('settings_idle_full_read_or_duplicate');
+      const memory={main:await process.getProcessMemoryInfo()};
+      memory.renderer=await window.webContents.executeJavaScript('performance.memory ? {usedJSHeapSize:performance.memory.usedJSHeapSize,totalJSHeapSize:performance.memory.totalJSHeapSize} : null');
+      memory.processes=app.getAppMetrics().map(item=>({type:item.type,workingSetKiB:item.memory.workingSetSize,cpuPercent:item.cpu.percentCPUUsage}));
+      const screenshotBytes=(await window.webContents.capturePage()).toPNG().length;
+      result={ok:true,mode,phase,syntheticHistoryBytes:125*65536,settingsIdle,countsBefore,countsAfter:{...historyCounts},memory,screenshotBytes,blockedNetworkAttempts:network,realProviderCalls:0};
+      return;
+    }
     await run('qaRestoreStartupRead();qaRestoreStartupWrite()');
     await window.webContents.debugger.sendCommand('Page.removeScriptToEvaluateOnNewDocument',{identifier:startupScript.identifier});window.webContents.debugger.detach();
     if(!startupCurrent||mode==='desktop'&&(historyCounts.open!==beforeStartup.open||historyCounts.current<=beforeStartup.current))throw Error('current_startup_did_not_defer '+JSON.stringify({startup,beforeStartup,historyCounts}));

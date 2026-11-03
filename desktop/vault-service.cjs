@@ -91,7 +91,14 @@ function createVaultService({ storePath, backupDir, beforeStoreCommit, afterStor
     }
     let state;
     let storeError = false;
-    try { state = vaultState(readStoreFile(storePath).store); }
+    try {
+      if(isDocumentFile(storePath)){
+        const file=require('./document-file.cjs');state={};
+        for(const key of ['path','lastSuccessAt','lastResult']){
+          const row=file.readKeyPath(storePath,VAULT_KEY,[key]);state[key]=row.found?row.value:null;
+        }
+      }else state = vaultState(readStoreFile(storePath).store);
+    }
     catch { state = { path: null, lastSuccessAt: null, lastResult: null }; storeError = true; }
     let recoveryRequired = storeError;
     let recovery = null;

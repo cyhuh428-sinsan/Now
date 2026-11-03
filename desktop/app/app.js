@@ -759,10 +759,16 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     reset(initial);
     const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
     function selected(id,action){
-      const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
+      const generation=epoch,key=bound,materialization=loading;let selection=null;
+      const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled
+        &&(!selection||preview===selection&&!full);
       const run=selectedTail.catch(()=>{}).then(async()=>{
         if(!active()||failed)throw failed||stale();
+        // Only later selections wait: earlier ones are already awaited by ensure().
+        if(materialization){await materialization;if(!active()||failed)throw failed||stale();}
         if(full)return action(full);
+        selection=preview;
+        if(!selection)throw stale();
         const account=accountKey(),stamp=preview.stamp;
         try{
           const opened=await select({account,id,stamp},{active});
@@ -14666,7 +14672,9 @@ function showNotice(message, type = "info") {
     console.warn(message);
     return;
   }
+  if (Array.from(elements.toastRegion.children || []).some(item => item.dataset?.noticeType === type && item.textContent === message)) return;
   const item = document.createElement("div");
+  item.dataset.noticeType = type;
   item.className = `toast ${type}`;
   item.setAttribute("role", type === "error" ? "alert" : "status");
   item.textContent = message;
@@ -18649,9 +18657,9 @@ function closeSettingsPopup() {
 
 async function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
-    await noteHistory?.ensure?.();
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
+    renderWorkspacePanel();
     refreshMailSettingsStatus();
     refreshVaultStatus();
   } else {
@@ -19102,6 +19110,7 @@ function renderSettings() {
 }
 
 function renderWorkspacePanel() {
+  if (elements.settingsView?.classList.contains("hidden")) return;
   if (!elements.workspaceSelect || !elements.workspaceSummary || !elements.workspaceHealthList) return;
   state.settings.workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
   const workspaces = state.settings.workspaces.items;

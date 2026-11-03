@@ -15,10 +15,16 @@
     reset(initial);
     const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
     function selected(id,action){
-      const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
+      const generation=epoch,key=bound,materialization=loading;let selection=null;
+      const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled
+        &&(!selection||preview===selection&&!full);
       const run=selectedTail.catch(()=>{}).then(async()=>{
         if(!active()||failed)throw failed||stale();
+        // Only later selections wait: earlier ones are already awaited by ensure().
+        if(materialization){await materialization;if(!active()||failed)throw failed||stale();}
         if(full)return action(full);
+        selection=preview;
+        if(!selection)throw stale();
         const account=accountKey(),stamp=preview.stamp;
         try{
           const opened=await select({account,id,stamp},{active});
