@@ -1,7 +1,7 @@
 /* Physical journal records are split; the protection protocol keeps its existing contract. */
 (() => {
   'use strict';
-  function create({database,key}) {
+  function create({database,key,onCommit=()=>{}}) {
     let cached=null,lastRevision=null;
     async function transaction(write,transform,guard) {
       const db=await database();
@@ -13,7 +13,7 @@
           tx=db.transaction(['journals','documents'],write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document transaction aborted'));
           tx.onerror=()=>{error=Error('Document transaction failed');};
-          tx.oncomplete=()=>{lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(write)onCommit();lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const fail=e=>{error=e;tx.abort();};
@@ -64,7 +64,7 @@
           tx=db.transaction(['journals','documents'],patch?'readwrite':'readonly',patch?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document read aborted'));
           tx.onerror=()=>{error=Error('Document read failed');};
-          tx.oncomplete=()=>{if(patch)cached=null;try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(patch){cached=null;if(result?.partsWritten>0)onCommit();}try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
           if(patch&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const metadata=journals.get(key);

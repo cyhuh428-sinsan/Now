@@ -19,6 +19,7 @@ function fixture(){
 }
 test('startup projects current notes without opening full history; sync exports fail closed',async()=>{
   const f=fixture();assert.equal(f.store.deferred(),true);assert.equal(f.loads(),0);
+  assert.equal(f.store.revision(),'one');
   assert.equal(f.store.currentView('a').draft.content,'current');assert.equal(f.store.currentEntries().a.projection,'current_v1');
   assert.equal(f.store.status().revisions,null);assert.equal(f.store.manages('a'),true);
   assert.throws(()=>f.store.export(),/이력|먼저/);assert.throws(()=>f.store.view('a'),/이력|먼저/);

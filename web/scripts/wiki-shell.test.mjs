@@ -39,3 +39,16 @@ test('full Wiki consumers load authenticated source availability before Query, L
     assert.deepEqual(calls,view==='browse'?['browse']:['full','sources',view]);
   }
 });
+
+test('a current 401 response revokes the independent workspace and cancels workers without deleting saved data',async()=>{
+  const source=await fs.readFile(new URL('../wiki-shell.js',import.meta.url),'utf8'),elements=new Map();let cancelled=0,cleared=0,closed=0,invalidated=0;
+  const element=id=>{if(!elements.has(id))elements.set(id,{hidden:false,textContent:'',replaceChildren(){}});return elements.get(id);};
+  const box=vm.createContext({URLSearchParams,AbortSignal,generation:0,authenticated:true,history:{invalidate(){invalidated++;}},workspace:{view:{close(){closed++;}}},remoteSources:new Map(),
+    context:()=>({enabled:box.authenticated,online:true,url:'https://qa.invalid',headers:{}}),contextKey:()=>String(box.generation),
+    fetch:async()=>({ok:false,status:401,json:async()=>({detail:{code:'session_expired'}})}),
+    session:{clear(){cleared++;}},NowNoteCryptoWorker:{cancelAll(){cancelled++;}},$:element,document:{documentElement:{dataset:{auth:'unlocked'}}}});
+  for(const [start,end]of [['  async function request(','  async function historyRequest('],['  function invalidate()','  async function login(']])vm.runInContext(source.slice(source.indexOf(start),source.indexOf(end)),box);
+  await assert.rejects(box.request('/api/v1/wikis'));
+  assert.equal(box.authenticated,false);assert.equal(cancelled,1);assert.equal(closed,1);assert.equal(invalidated,1);assert.equal(cleared,1);
+  assert.equal(element('#wikiLogin').hidden,false);assert.equal(element('#wikiShell').hidden,true);
+});

@@ -3,6 +3,7 @@
   'use strict';
   function create(api){
     const {context,contextKey,history,source,notes,readCurrent,readRemote}=api;
+    const fresh=async()=>{if(api.verifyFresh){await api.verifyFresh();if(!context().enabled)throw Error('자료·보호 상태가 변경되었습니다. 다시 확인하세요.');}};
     const server=NowWikiServerAccess.create({context,contextKey,request:api.request,readWiki:readRemote});
     const sources=NowNoteWikiSources.create({context,contextKey,history,readCurrent});
     const lifecycle=NowWikiLifecycle.create({context,contextKey,history,
@@ -34,8 +35,8 @@
         return {status:'ok',epoch:0,lineage:false,fence:false};
       }});
     const view=createLazyWikiView({contextKey,
-      prepare:(method,args)=>method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure(),
-      mount:()=>mountNowWiki({prepare:()=>history().ensure(),...book,sources,ingest,contextKey,
+      prepare:async(method,args)=>{await fresh();return method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure();},
+      mount:()=>mountNowWiki({prepare:async()=>{await fresh();await history().ensure();},...book,sources,ingest,contextKey,
         connection:api.connection,openProtection:api.openProtection,query:createWikiQueryNotebook({book,context,contextKey}),notes,
         openSource:ref=>{
           if(ref.owner_id!==context().owner||!source(ref.local_id))throw Error('현재 계정에서 원문을 사용할 수 없습니다.');

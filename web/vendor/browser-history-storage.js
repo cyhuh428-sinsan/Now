@@ -7,6 +7,20 @@
   const hash = async raw => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(raw)))),b=>b.toString(16).padStart(2,'0')).join('');
   const active = guard => { if (guard?.active && !guard.active()) throw fail(); };
   const digest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  const changeKeys=new Set(['nownote.history.v1','nownote.web.v1','nownote.web.settings.v1','nownote.library.v1']),listeners=new Set();let channel=null;
+  function changeChannel(){
+    if(!channel&&typeof BroadcastChannel==='function')try{
+      channel=new BroadcastChannel('nownote.storage.v1');channel.onmessage=event=>{
+        const value=event.data;if(!value||Object.keys(value).sort().join(',')!=='key,schema_version'||value.schema_version!==1||!changeKeys.has(value.key))return;
+        for(const listener of listeners)listener(value.key);
+      };
+    }catch{channel=null;}
+    return channel;
+  }
+  function notify(key){if(changeKeys.has(key))try{changeChannel()?.postMessage({schema_version:1,key});}catch{}}
+  function onChange(listener){if(typeof listener!=='function')throw fail();listeners.add(listener);changeChannel();return ()=>listeners.delete(listener);}
+  globalThis.addEventListener?.('pagehide',()=>{channel?.close();channel=null;});
+  globalThis.addEventListener?.('pageshow',()=>{if(listeners.size)changeChannel();});
   function protectionPatch(patch) {
     if (!patch || Object.keys(patch).sort().join(',') !== 'after,path' || !Array.isArray(patch.path)
       || patch.path.length < 4 || patch.path.some(k=>typeof k==='string'?['__proto__','constructor','prototype'].includes(k):!Number.isInteger(k)||k<0)) throw fail();
@@ -93,7 +107,7 @@
         resolve(db);
       };
     });
-    const transaction=globalThis.NowDocumentTransactions.create({database,key});
+    const transaction=globalThis.NowDocumentTransactions.create({database,key,onCommit:()=>notify(key)});
     const headerKey=[key,'retained-header-v1'],originalKey=[key,'retained-original-v1'];
     const marker=header=>JSON.stringify({schema_version:241,storage:'indexeddb-retained-v1',id:header.id});
     async function retainedTransaction(full,guard,write=null){
@@ -103,7 +117,7 @@
         try{
           tx=db.transaction('journals',write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||fail());tx.onerror=()=>{error=fail();};
-          tx.oncomplete=()=>{try{active(guard);resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(write)notify(key);try{active(guard);resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw fail();
           const store=tx.objectStore('journals'),values={},requests=[['physical',store.get(key)],['header',store.get(headerKey)],
             ['original',full?store.get(originalKey):store.getKey(originalKey)]];let remaining=requests.length;
@@ -319,5 +333,5 @@
       }),
     };
   }
-  globalThis.NowBrowserHistoryStorage={create};
+  globalThis.NowBrowserHistoryStorage={create,onChange};
 })();

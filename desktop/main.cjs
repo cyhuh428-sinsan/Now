@@ -61,11 +61,23 @@ function assertTrustedStoreFrame(event){
     throw Error('허용되지 않은 저장소 요청입니다.');
 }
 
+function notifyStoreChanged(sender,key){
+  assertRendererStoreKey(key);
+  for(const window of BrowserWindow.getAllWindows()){
+    const target=window.webContents;if(target===sender||target.isDestroyed())continue;
+    if(![APP_INDEX,APP_WIKI].some(file=>target.getURL().split('?')[0]===pathToFileURL(file).href))continue;
+    try{target.send('nownote:storage-changed',{schema_version:1,key});}catch{}
+  }
+}
+function storeMutation(sender,key,action){
+  try{const result=action();notifyStoreChanged(sender,key);return result;}
+  catch(error){if(error.committed===true)notifyStoreChanged(sender,key);throw error;}
+}
 function registerDesktopStorageHandlers() {
   const history=require('./history-session.cjs').createHistorySession(desktopStorePath);
   for(const [route,method]of [['open','open'],['current','current'],['page','page'],['select','select'],['full','full'],['note','note']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey('nownote.history.v1');
-    try{return {ok:true,...history[method](event.sender,payload)};}
+    try{return {ok:true,...(['full','note'].includes(method)?storeMutation(event.sender,'nownote.history.v1',()=>history[method](event.sender,payload)):history[method](event.sender,payload))};}
     catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
   });
   const snapshots=new WeakMap();
@@ -105,7 +117,7 @@ function registerDesktopStorageHandlers() {
     assertRendererStoreKey(key);
     const expected=options&&Object.hasOwn(options,'expectedValue')?options.expectedValue:snapshots.get(event.sender)?.get(key);
     if(expected===undefined)throw Error('저장 기준을 먼저 읽어야 합니다. 원본은 변경하지 않았습니다.');
-    const result=documentFile.writeKey(desktopStorePath(),key,value,expected);
+    const result=storeMutation(event.sender,key,()=>documentFile.writeKey(desktopStorePath(),key,value,expected));
     remember(event.sender,key,value);return {ok:true,path:desktopStorePath()+'.sqlite',updatedAt:result.updatedAt};
   }
 
@@ -116,7 +128,7 @@ function registerDesktopStorageHandlers() {
   });
   ipcMain.handle('nownote:desktop-original-write',(event,key,value,expected)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey(key);
-    return documentFile.casOriginal(desktopStorePath(),key,value,expected);
+    return storeMutation(event.sender,key,()=>documentFile.casOriginal(desktopStorePath(),key,value,expected));
   });
 
   ipcMain.on("nownote:desktop-store-write-sync", (event, key, value, options) => {
@@ -148,11 +160,13 @@ function registerVaultHandlers() {
     if (!input || !["toVault", "fromVault", "both"].includes(input.direction)) throw new Error("Invalid Vault direction");
     return service.previewVault({ direction: input.direction });
   });
-  ipcMain.handle("nownote:vault-apply", (_event, input) => {
+  ipcMain.handle("nownote:vault-apply", (event, input) => {
     if (!input || typeof input.planId !== "string" || !Array.isArray(input.selections) || input.selections.length > 5000) {
       throw new Error("Invalid Vault selections");
     }
-    return service.applyVault({ planId: input.planId, selections: input.selections });
+    return Promise.resolve(service.applyVault({ planId: input.planId, selections: input.selections })).then(result=>{
+      notifyStoreChanged(event.sender,'nownote.history.v1');notifyStoreChanged(event.sender,'nownote.web.v1');return result;
+    },error=>{if(error.committed===true){notifyStoreChanged(event.sender,'nownote.history.v1');notifyStoreChanged(event.sender,'nownote.web.v1');}throw error;});
   });
   ipcMain.handle("nownote:vault-recovery-status", () => service.recoveryStatus());
   ipcMain.handle("nownote:vault-confirm-recovery", (_event, input) => {

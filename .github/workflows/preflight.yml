@@ -56,6 +56,9 @@ jobs:
           web/scripts/wiki-shell.test.mjs web/scripts/wiki-service-worker.test.mjs
           web/scripts/crypto-worker.test.mjs desktop/tests/app-performance-fixture.test.mjs
           web/scripts/browser-retained-wiring.test.mjs
+          desktop/tests/app-performance-options.test.mjs desktop/tests/storage-notice.test.cjs
+          web/scripts/browser-history-events.test.mjs web/scripts/wiki-storage-revocation.test.mjs web/scripts/wiki-peer-view.test.mjs
+          web/scripts/wiki-workspace-fresh.test.mjs
 
       - name: Run repository preflight
         working-directory: server

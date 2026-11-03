@@ -474,7 +474,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* Physical journal records are split; the protection protocol keeps its existing contract. */
 (() => {
   'use strict';
-  function create({database,key}) {
+  function create({database,key,onCommit=()=>{}}) {
     let cached=null,lastRevision=null;
     async function transaction(write,transform,guard) {
       const db=await database();
@@ -486,7 +486,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           tx=db.transaction(['journals','documents'],write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document transaction aborted'));
           tx.onerror=()=>{error=Error('Document transaction failed');};
-          tx.oncomplete=()=>{lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(write)onCommit();lastRevision=revision;try{active();if(nextCache)cached=nextCache;resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const fail=e=>{error=e;tx.abort();};
@@ -537,7 +537,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
           tx=db.transaction(['journals','documents'],patch?'readwrite':'readonly',patch?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||Error('Document read aborted'));
           tx.onerror=()=>{error=Error('Document read failed');};
-          tx.oncomplete=()=>{if(patch)cached=null;try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(patch){cached=null;if(result?.partsWritten>0)onCommit();}try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
           if(patch&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const metadata=journals.get(key);
@@ -801,6 +801,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
       ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      revision:()=>visible()&&preview&&!failed?preview.stamp:null,
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
         ?{projection:'wiki_index_v1',stamp:preview.stamp,ids:copy(preview.wikiIds||[]),...(browseIndex?.stamp===preview.stamp?{lifecycle:copy(browseIndex.lifecycle),blocked:copy(browseIndex.blocked)}:{})}:null,
@@ -1809,6 +1810,20 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
   const hash = async raw => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify(raw)))),b=>b.toString(16).padStart(2,'0')).join('');
   const active = guard => { if (guard?.active && !guard.active()) throw fail(); };
   const digest = value => typeof value === 'string' && /^[0-9a-f]{64}$/.test(value);
+  const changeKeys=new Set(['nownote.history.v1','nownote.web.v1','nownote.web.settings.v1','nownote.library.v1']),listeners=new Set();let channel=null;
+  function changeChannel(){
+    if(!channel&&typeof BroadcastChannel==='function')try{
+      channel=new BroadcastChannel('nownote.storage.v1');channel.onmessage=event=>{
+        const value=event.data;if(!value||Object.keys(value).sort().join(',')!=='key,schema_version'||value.schema_version!==1||!changeKeys.has(value.key))return;
+        for(const listener of listeners)listener(value.key);
+      };
+    }catch{channel=null;}
+    return channel;
+  }
+  function notify(key){if(changeKeys.has(key))try{changeChannel()?.postMessage({schema_version:1,key});}catch{}}
+  function onChange(listener){if(typeof listener!=='function')throw fail();listeners.add(listener);changeChannel();return ()=>listeners.delete(listener);}
+  globalThis.addEventListener?.('pagehide',()=>{channel?.close();channel=null;});
+  globalThis.addEventListener?.('pageshow',()=>{if(listeners.size)changeChannel();});
   function protectionPatch(patch) {
     if (!patch || Object.keys(patch).sort().join(',') !== 'after,path' || !Array.isArray(patch.path)
       || patch.path.length < 4 || patch.path.some(k=>typeof k==='string'?['__proto__','constructor','prototype'].includes(k):!Number.isInteger(k)||k<0)) throw fail();
@@ -1895,7 +1910,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         resolve(db);
       };
     });
-    const transaction=globalThis.NowDocumentTransactions.create({database,key});
+    const transaction=globalThis.NowDocumentTransactions.create({database,key,onCommit:()=>notify(key)});
     const headerKey=[key,'retained-header-v1'],originalKey=[key,'retained-original-v1'];
     const marker=header=>JSON.stringify({schema_version:241,storage:'indexeddb-retained-v1',id:header.id});
     async function retainedTransaction(full,guard,write=null){
@@ -1905,7 +1920,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         try{
           tx=db.transaction('journals',write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
           tx.onabort=()=>reject(error||fail());tx.onerror=()=>{error=fail();};
-          tx.oncomplete=()=>{try{active(guard);resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
+          tx.oncomplete=()=>{if(write)notify(key);try{active(guard);resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
           if(write&&tx.durability!=='strict')throw fail();
           const store=tx.objectStore('journals'),values={},requests=[['physical',store.get(key)],['header',store.get(headerKey)],
             ['original',full?store.get(originalKey):store.getKey(originalKey)]];let remaining=requests.length;
@@ -2121,7 +2136,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       }),
     };
   }
-  globalThis.NowBrowserHistoryStorage={create};
+  globalThis.NowBrowserHistoryStorage={create,onChange};
 })();
 
 ;
@@ -10207,6 +10222,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
   'use strict';
   function create(api){
     const {context,contextKey,history,source,notes,readCurrent,readRemote}=api;
+    const fresh=async()=>{if(api.verifyFresh){await api.verifyFresh();if(!context().enabled)throw Error('자료·보호 상태가 변경되었습니다. 다시 확인하세요.');}};
     const server=NowWikiServerAccess.create({context,contextKey,request:api.request,readWiki:readRemote});
     const sources=NowNoteWikiSources.create({context,contextKey,history,readCurrent});
     const lifecycle=NowWikiLifecycle.create({context,contextKey,history,
@@ -10238,8 +10254,8 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
         return {status:'ok',epoch:0,lineage:false,fence:false};
       }});
     const view=createLazyWikiView({contextKey,
-      prepare:(method,args)=>method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure(),
-      mount:()=>mountNowWiki({prepare:()=>history().ensure(),...book,sources,ingest,contextKey,
+      prepare:async(method,args)=>{await fresh();return method==='open'&&args[0]==='browse'?api.prepareBrowse():history().ensure();},
+      mount:()=>mountNowWiki({prepare:async()=>{await fresh();await history().ensure();},...book,sources,ingest,contextKey,
         connection:api.connection,openProtection:api.openProtection,query:createWikiQueryNotebook({book,context,contextKey}),notes,
         openSource:ref=>{
           if(ref.owner_id!==context().owner||!source(ref.local_id))throw Error('현재 계정에서 원문을 사용할 수 없습니다.');
@@ -16610,6 +16626,7 @@ async function initializeLibrary() {
 }
 
 let wikiUI=null,wikiNotebook=null,wikiLifecycle=null,wikiSources=null,wikiIngest=null;
+let wikiStorageWatch=null;
 
 function wikiViewKey(){
   const ctx=noteHistoryContext();
@@ -16806,7 +16823,12 @@ async function prepareWikiBrowse(){
   }));
   if(!prepared)await noteHistory.ensure();
 }
+function handleWikiStorageChange(key){
+  if(!['nownote.history.v1','nownote.web.v1','nownote.library.v1'].includes(key))return;
+  noteProtectionViewGeneration++;globalThis.NowNoteCryptoWorker?.cancelAll?.();wikiUI?.close();
+}
 function initializeWikiNotebook(){
+  if(!wikiStorageWatch)wikiStorageWatch=isDesktopClient()?window.nownoteDesktop.storage.onChange?.(handleWikiStorageChange):globalThis.NowBrowserHistoryStorage?.onChange?.(handleWikiStorageChange);
   const workspace=NowWikiWorkspace.create({
     context:noteHistoryContext,contextKey:wikiViewKey,history:()=>noteHistory,source:wikiSourceNote,
     notes:()=>libraryNotes().filter(note=>wikiSourceNote(note.id)?.status==="ok"),
@@ -18172,6 +18194,7 @@ function bindEvents() {
 
   // #endregion
   window.addEventListener("storage", (event) => {
+    handleWikiStorageChange(event.key);
     if (!isHostedWebClient() || event.key !== WEB_LOGOUT_KEY) return;
     stopGroupMessengerAutoRefresh();
     clearWebSession();
@@ -30339,7 +30362,12 @@ async function exportData() {
   try{
     await noteHistoryCaptureChain;await noteHistory?.idle?.();
     const history=noteHistory,key=wikiViewKey(),data=JSON.stringify(state.data),settings=JSON.stringify(state.settings),library=JSON.stringify(libraryStore?.export());
-    if(!isDesktopClient())await browserHistoryStorage().verifyRetainedOriginal({active:()=>history===noteHistory&&key===wikiViewKey()});
+    const active=()=>history===noteHistory&&key===wikiViewKey();
+    if(isDesktopClient()){
+      if(!window.nownoteDesktop?.storage?.original?.read)throw Error('보존 원본 검증을 지원하는 설치형으로 다시 확인하세요.');
+      await window.nownoteDesktop.storage.original.read(NOTE_HISTORY_KEY);
+      if(!active())throw Error('백업 중 계정·자료가 변경되었습니다. 파일을 만들지 않았습니다.');
+    }else await browserHistoryStorage().verifyRetainedOriginal({active});
     let archive;
     try{archive=await history?.archive?.(({stamp,guard})=>NowHistoryBackup.create({
       validateMetadata:({account,field,id,value})=>{

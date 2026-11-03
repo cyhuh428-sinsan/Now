@@ -7,6 +7,7 @@
   const hosted=['http:','https:'].includes(location.protocol)&&!['localhost','127.0.0.1','::1'].includes(location.hostname);
   let settings={},server={},authenticated=false,generation=0,history=null,runtime=null,workspace=null,browser=null,backend=null,frozen=false,settingsRead=0;
   const remoteSources=new Map();
+  let storageCheck=null;
   const parse=value=>typeof value==='string'?JSON.parse(value):value;
   const storageRead=async key=>native?parse(await native.read(key)):parse(localStorage.getItem(key));
   const status=message=>{$('#wikiShellStatus').textContent=message||'';};
@@ -39,6 +40,7 @@
     if(key!==contextKey())throw Error('계정·서버가 변경되었습니다. 원본을 보존했습니다.');
     const result=await response.json().catch(()=>null);
     if(key!==contextKey())throw Error('계정·서버가 변경되었습니다. 원본을 보존했습니다.');
+    if(response.status===401){session.clear();invalidate();throw Error('로그인 인증이 만료되거나 취소되었습니다. 다시 로그인하세요. 저장된 자료는 보존했습니다.');}
     if(!response.ok||!result)throw Object.assign(Error(result?.detail?.code||'요청을 확인하지 못했습니다: HTTP '+response.status),{status:response.status,code:result?.detail?.code});
     return result;
   }
@@ -113,6 +115,28 @@
       const value=settings.markdownColors?.[theme]?.[id];if(typeof value==='string'&&/^#[0-9a-f]{6}$/i.test(value))root.style.setProperty(token,value);else root.style.removeProperty(token);
     }
   }
+  function externalStorageChanged(key){
+    if(key==='nownote.web.settings.v1'){void refreshSettings().catch(error=>status(error.message));return;}
+    if(!history||frozen||!['nownote.history.v1','nownote.web.v1','nownote.library.v1'].includes(key))return;
+    frozen=true;generation++;globalThis.NowNoteCryptoWorker?.cancelAll?.();
+    workspace?.view.close();history.invalidate();remoteSources.clear();$('#wikiWorkspaceHost').replaceChildren();
+    status('다른 창에서 자료·보호 상태가 변경되었습니다. 창을 새로 불러와 확인하세요. 저장된 자료는 보존했습니다.');
+  }
+  async function verifyStoredRevision(){
+    if(!history||frozen||!context().enabled)return;
+    const currentHistory=history,key=contextKey(),host=$('#wikiWorkspaceHost'),expected=history.deferred()?history.revision?.()||history.wikiIndex?.()?.stamp:backend.stamp();
+    if(storageCheck?.history===currentHistory&&storageCheck.key===key)return storageCheck.promise;
+    const active=()=>history===currentHistory&&key===contextKey()&&!frozen;
+    const check={history:currentHistory,key,promise:null};storageCheck=check;host.style.opacity='0';
+    check.promise=(async()=>{
+      try{
+        const current=await readPath([],{active},true);
+        if(active()&&(typeof expected!=='string'||current.stamp!==expected))externalStorageChanged(HISTORY);
+      }catch{if(active())externalStorageChanged(HISTORY);}
+      finally{if(active())host.style.opacity='';}
+    })();
+    try{await check.promise;}finally{if(storageCheck===check)storageCheck=null;}
+  }
   async function refreshSettings(){
     const token=++settingsRead,value=await storageRead(SETTINGS)||{};if(token!==settingsRead)return;
     if(typeof value!=='object'||Array.isArray(value))throw Error('설정 저장본을 확인하세요.');
@@ -151,14 +175,16 @@
     history=runtime.history;
     workspace=NowWikiWorkspace.create({context,contextKey,history:()=>history,source,notes,readCurrent,
       request:wikiRequest,readRemote:id=>wikiRead('/'+encodeURIComponent(id)),listRemote:async options=>(await wikiRead('',options)).items,
-      openSet,prepareBrowse,viewGeneration:()=>generation,connection,openSource:ref=>navigateMemo('source',ref.local_id),openProtection:id=>navigateMemo('wiki-protection','wiki:'+id),
+      openSet,prepareBrowse,verifyFresh:verifyStoredRevision,viewGeneration:()=>generation,connection,openSource:ref=>navigateMemo('source',ref.local_id),openProtection:id=>navigateMemo('wiki-protection','wiki:'+id),
       lifecycleRequest:async(ctx,local,operation,body)=>{
         if(!ctx.enabled||!ctx.online||!['trash','restore'].includes(operation))throw Error('서버 연결과 위키 상태를 확인하세요.');
         return request('/api/v1/wikis/'+encodeURIComponent(local.slice(5))+'/'+operation,'POST',body);
       },mountOptions:{host:$('#wikiWorkspaceHost'),standalone:true}});
     document.documentElement.dataset.auth='unlocked';$('#wikiLogin').hidden=true;$('#wikiShell').hidden=false;
+    $('#wikiWorkspaceHost').hidden=false;$('#wikiWorkspaceHost').inert=false;$('#wikiWorkspaceHost').style.opacity='';
     $('#wikiLogout').hidden=!hosted;$('#wikiAccount').textContent=ctx.owner+(ctx.online?' · 서버 연결':' · 오프라인');
     const requested=new URLSearchParams(location.search).get('view');
+    await verifyStoredRevision();if(!context().enabled)return;
     await open(['sources','build','lint','browse','query','graph'].includes(requested)?requested:'browse');
   }
   async function open(view){
@@ -196,8 +222,10 @@
       const ctx=context();session.markLoggedOut();session.clear();invalidate();
       try{await fetch(ctx.url+'/api/v1/auth/web-logout',{method:'POST',headers:ctx.headers});}catch{}
     });
-    window.addEventListener('storage',event=>{if(['nownote.web.logout.v1','nownote.web.auth.active.v1'].includes(event.key)&&hosted&&session.invalidated(session.load()))invalidate();});
-    window.addEventListener('focus',()=>refreshSettings().catch(error=>status(error.message)));
+    if(native)native.onChange?.(externalStorageChanged);else NowBrowserHistoryStorage.onChange?.(externalStorageChanged);
+    window.addEventListener('storage',event=>{if(['nownote.web.logout.v1','nownote.web.auth.active.v1'].includes(event.key)&&hosted&&session.invalidated(session.load()))invalidate();else externalStorageChanged(event.key);});
+    window.addEventListener('focus',()=>refreshSettings().then(verifyStoredRevision).catch(error=>status(error.message)));
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)void verifyStoredRevision();});
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change',appearance);
     if(!hosted){await initialize();return;}
     const saved=session.load();if(!saved?.ownerId||!saved.token||session.invalidated(saved)){session.clear();$('#wikiLogin').hidden=false;return;}

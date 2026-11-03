@@ -11,8 +11,13 @@ import {createHash} from 'node:crypto';
 import {makeFixture} from './app-performance-fixture.mjs';
 const script=fileURLToPath(import.meta.url),root=path.resolve(path.dirname(script),'..');
 const base='D:/tmp/nownote-241-migration',digest=bytes=>createHash('sha256').update(bytes).digest('hex');
+const candidateOnly=process.argv.includes('--candidate-only'),requested=process.argv.find(value=>value.startsWith('--sizes='));
+const sizes=requested?requested.slice(8).split(',').map(Number):process.argv.includes('--smoke')?[1]:[1,8,16],iterations=process.argv.includes('--smoke')?1:3;
+const modes=candidateOnly?['candidate']:['baseline','candidate'],memoryLimitBytes=1.2*1024**3;
+if(!sizes.length||new Set(sizes).size!==sizes.length||sizes.some(value=>![1,8,16].includes(value)))throw Error('Unsupported benchmark sizes');
 
-if(process.argv[2]==='--prepare'){
+if(process.argv.includes('--plan'))console.log(JSON.stringify({sizes,iterations,modes,comparison:!candidateOnly,memoryLimitBytes}));
+else if(process.argv[2]==='--prepare'){
   const profile=await fs.realpath(process.argv[3]),relative=path.relative(await fs.realpath(base),profile);
   assert.ok(relative&&!relative.startsWith('..')&&!path.isAbsolute(relative));assert.equal(path.basename(path.dirname(profile)).startsWith('perf-'),true);
   const require=createRequire(import.meta.url),file=require('../document-file.cjs');
@@ -41,7 +46,7 @@ if(process.argv[2]==='--prepare'){
   const resources=pid=>{
     const result=spawnSync('pwsh',['-NoProfile','-File',path.join(root,'scripts/read-app-resources.ps1'),'-TargetProcessId',String(pid)],{encoding:'utf8',windowsHide:true,timeout:20000});
     if(result.status!==0)throw Error('Own resource probe failed: '+result.stderr);const value=JSON.parse(result.stdout);
-    if(Math.max(value.privateBytes,value.workingSet)>1.2*1024**3)throw Error('Synthetic app exceeded the 1.2GiB expansion budget');return value;
+    if(Math.max(value.privateBytes,value.workingSet)>memoryLimitBytes)throw Error('Synthetic app exceeded the 1.2GiB expansion budget');return value;
   };
   const settle=`(async()=>{await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();await Promise.all([...storagePendingWrites]);return true;})()`;
   async function stop(client){
@@ -52,12 +57,9 @@ if(process.argv[2]==='--prepare'){
     if(alive())throw Error('Owned performance child has not stopped');child=null;
   }
   try{
-    const requested=process.argv.find(value=>value.startsWith('--sizes='));
-    const sizes=requested?requested.slice(8).split(',').map(Number):process.argv.includes('--smoke')?[1]:[1,8,16],iterations=process.argv.includes('--smoke')?1:3;
-    if(!sizes.length||new Set(sizes).size!==sizes.length||sizes.some(value=>![1,8,16].includes(value)))throw Error('Unsupported benchmark sizes');
     for(const mib of sizes)for(let iteration=0;iteration<iterations;iteration++){
       const fixture=JSON.stringify(makeFixture(mib),null,2)+'\n',fixtureHash=digest(fixture);
-      for(const [mode,exe]of [['baseline',baseline],['candidate',candidate]]){
+      for(const [mode,exe]of [['baseline',baseline],['candidate',candidate]].filter(([mode])=>modes.includes(mode))){
         const profile=path.join(own,mode+'-'+mib+'-'+iteration);await fs.mkdir(profile);const filename=path.join(profile,'nownote-desktop-store.json');await fs.writeFile(filename,fixture);
         let conversionMs=null;
         if(mode==='candidate'){
@@ -96,10 +98,10 @@ if(process.argv[2]==='--prepare'){
         rows.push(row);console.log(JSON.stringify({mode,mib,iteration,startMs,input,workingSetMiB:after.workingSet/1024**2,privateMiB:after.privateBytes/1024**2,historyDeferred:modeInfo.historyDeferred}));
       }
     }
-    const report={kind:'actual packaged apps; synthetic serial comparison; handler timings are not OS keyboard-to-paint latency; process I/O includes IPC, not SSD/file-only writes',baselineSource,
+    const report={kind:'actual packaged apps; synthetic serial measurements; handler timings are not OS keyboard-to-paint latency; process I/O includes IPC, not SSD/file-only writes',comparison:!candidateOnly,baselineSource,
       baselineExecutableSha:digest(await fs.readFile(baseline)),candidateExecutableSha:digest(await fs.readFile(candidate)),rows};
     const reportDir=process.env.NOWNOTE_QA_REPORT_DIR;if(!reportDir)throw Error('Explicit private report directory required');await fs.mkdir(reportDir,{recursive:true});
-    await fs.writeFile(path.join(reportDir,process.argv.includes('--smoke')?'app-performance-smoke.json':'app-performance.json'),JSON.stringify(report,null,2));
+    await fs.writeFile(path.join(reportDir,candidateOnly?'app-performance-candidate-only.json':process.argv.includes('--smoke')?'app-performance-smoke.json':'app-performance.json'),JSON.stringify(report,null,2));
   }catch(error){
     const reportDir=process.env.NOWNOTE_QA_REPORT_DIR;if(reportDir)await fs.writeFile(path.join(reportDir,'app-performance-last-error.json'),JSON.stringify({message:error.message,stack:error.stack,own:path.basename(own),pid:child?.pid,rows},null,2));
     throw error;

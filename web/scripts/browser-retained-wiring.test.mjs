@@ -31,3 +31,15 @@ for(const app of ['web/app.js','desktop/app/app.js'])test(app+': explicit Web ba
   vm.runInContext(source.slice(start,end),box);await box.exportData();assert.equal(verified,1);assert.equal(downloads,1);
   fail=true;await box.exportData();assert.equal(verified,2);assert.equal(downloads,1);assert.equal(notice,'retained-corruption');
 });
+
+for(const app of ['web/app.js','desktop/app/app.js'])test(app+': native backup refuses missing, damaged or untracked original copies before download',async()=>{
+  const source=await fs.readFile(new URL('../../'+app,import.meta.url),'utf8');
+  const start=source.indexOf('async function exportData()'),end=source.indexOf('async function exportMarkdown()',start);let checks=0,downloads=0,failure=null;
+  const box=vm.createContext({Blob,state:{data:{},settings:{}},noteHistoryCaptureChain:Promise.resolve(),noteHistory:{idle:async()=>{},archive:async()=>new Blob(['{}'])},
+    wikiViewKey:()=> 'native-bound',libraryStore:null,isDesktopClient:()=>true,NOTE_HISTORY_KEY:'history',
+    window:{nownoteDesktop:{storage:{original:{read:async key=>{assert.equal(key,'history');checks++;if(failure)throw Error(failure);return null;}}}}},
+    NowHistoryBackup:{create(){}},requireProtectionSettled(){},downloadText(){downloads++;},fileTimestamp:()=> 'qa',showNotice(){}});
+  vm.runInContext(source.slice(start,end),box);await box.exportData();assert.equal(checks,1);assert.equal(downloads,1);
+  for(const kind of ['missing','damaged','untracked']){failure=kind;await box.exportData();assert.equal(downloads,1);}
+  assert.equal(checks,4);
+});

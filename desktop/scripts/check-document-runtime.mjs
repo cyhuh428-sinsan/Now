@@ -52,6 +52,17 @@ try{
       try{await nownoteDesktop.storage.original.cas(key,original,original);throw Error('Stale original accepted');}catch(error){if(error.message==='Stale original accepted')throw error;}
       try{await nownoteDesktop.storage.original.read('nownote.vault.v1');throw Error('Unknown original key accepted');}catch(error){if(error.message==='Unknown original key accepted')throw error;}
     })()`);
+    const originalFile=path.join(profile,'nownote-desktop-store.json.original-v1.json'),originalBytes=await fs.readFile(originalFile),temporary=originalFile+'.qa-unregistered.tmp';
+    const backupBlocked=async()=>a.evaluate(`(async()=>{const original=downloadText;let files=0;downloadText=()=>{files++;};try{await exportData();return files===0;}finally{downloadText=original;}})()`);
+    try{
+      await fs.rename(originalFile,originalFile+'.qa-held');assert.equal(await backupBlocked(),true,'missing original must block native backup');
+      await fs.rename(originalFile+'.qa-held',originalFile);
+      await fs.writeFile(originalFile,Buffer.concat([originalBytes,Buffer.from(' ')]));assert.equal(await backupBlocked(),true,'modified original must block native backup');
+      await fs.writeFile(originalFile,originalBytes);
+      await fs.writeFile(temporary,'synthetic unregistered original copy');assert.equal(await backupBlocked(),true,'unregistered original must block native backup');
+    }finally{
+      await fs.writeFile(originalFile,originalBytes);await fs.rm(originalFile+'.qa-held',{force:true});await fs.rm(temporary,{force:true});
+    }
   }
   await a.evaluate(`(async()=>{
     document.querySelector('#addRootBtn').click();const id=state.selectedTreeId;globalThis.qaRestoredId=id;
@@ -132,12 +143,13 @@ try{
   assert.equal(await a.evaluate(`(await nownoteDesktop.storage.history.full({revision:${JSON.stringify(currentJournal.revision)},next:${JSON.stringify(changedJournal)}})).ok`),true);
   try{
     await b.evaluate(`globalThis.qaReleaseTransmission()`);
-    await until(()=>b.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('다른 창에서 자료 또는 보호 상태')`),'standalone stale transmission rejected');
+    await until(()=>b.evaluate(`!document.querySelector('#wikiDialog')&&document.querySelector('#wikiShellStatus').textContent.includes('다른 창에서 자료')`),'standalone peer plaintext/proof revoked');
     assert.equal(await b.evaluate('qaWikiProviderCalls'),1,'changed local store must not reach Provider');
   }finally{
     await a.evaluate(`(async()=>{const opened=await nownoteDesktop.storage.history.open();if(!(await nownoteDesktop.storage.history.full({revision:opened.revision,next:${JSON.stringify(currentJournal.value)}})).ok)throw Error('standalone source fixture restore');})()`);
   }
   await a.evaluate(`(async()=>{noteHistoryController.lock();await noteHistoryController.resume({projectView:false,renderView:false});})()`);
+  await b.command('Page.reload');await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog')`),'explicit Wiki reload after peer change');
   for(const [label,width,height]of [['desktop',1200,860],['mobile',390,844]]){
     await b.command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
     await delay(100);
@@ -193,6 +205,8 @@ try{
     const memoTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>new URL(row.url).pathname.endsWith('/index.html'));},'heavy-work memo');
     const memo=await client(memoTarget);
     await until(()=>memo.evaluate(`typeof wikiUI!=='undefined'&&wikiUI!==null&&!!document.querySelector('#treeContent')`),'heavy-work memo ready');
+    await memo.evaluate(`(async()=>{await noteHistoryCaptureChain;await noteHistory.idle();await Promise.all([...storagePendingWrites]);})()`);
+    await d.command('Page.reload');await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'heavy-work Wiki explicit refresh');
     await memo.command('Page.bringToFront');
     await until(()=>memo.evaluate(`document.visibilityState==='visible'`),'foreground memo timing ready');
     assert.equal(await memo.evaluate(`document.visibilityState`),'visible','memo timing must not include background timer throttling');
