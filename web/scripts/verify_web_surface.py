@@ -908,10 +908,13 @@ def main() -> None:
         ("self.addEventListener(\"install\"", "install handler"),
         ("self.addEventListener(\"activate\"", "activate handler"),
         ("self.addEventListener(\"fetch\"", "fetch handler"),
-        ("caches.match", "cache-first response"),
+        ("cache.match", "scope-bound offline response"),
+        ("key.startsWith(CACHE_PREFIX)", "scope-owned cache retirement"),
+        ("CACHEABLE.has(url.href)", "static shell allowlist"),
     ]
     for needle, label in service_worker_requirements:
         check(needle in service_worker, f"Web service worker has {label}", needle, failures)
+    check("caches.match(" not in service_worker, "Web service worker avoids unscoped shared-cache reads", "API and foreign scope bypass cache", failures)
 
     package_script_requirements = [
         ("nownote-web-pwa.zip", "PWA zip output"),

@@ -52,6 +52,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
   return {
     open:(...args)=>open('open',args),
     openProtected:(...args)=>open('openProtected',args),
+    requestLeave:()=>view?.requestLeave?.()??Promise.resolve(true),
     close(){generation++;pendingContext=null;view?.close();},
     check(){if(pendingContext!==null&&pendingContext!==contextKey()){generation++;pendingContext=null;view?.close();}else view?.check();},
   };

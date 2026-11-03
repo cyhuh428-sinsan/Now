@@ -125,7 +125,7 @@ globalThis.mountWikiGraph=function(options){
 
 ;
 /* Wiki text stays in the existing Note journal; this view holds no durable cache. */
-globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}={}) {
+globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null,standalone=false}={}) {
   const embedded=Boolean(host),dialog=document.createElement(embedded?'section':'dialog');
   dialog.id='wikiDialog';dialog.className='library-dialog wiki-dialog';
   dialog.setAttribute('aria-labelledby','wikiTitle');
@@ -137,7 +137,7 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
     if(!active)confirmation?.(false);
     host.classList.toggle('wiki-workspace-active',active);
     dialog.hidden=!active;
-    for(const [id,selected]of [['wikiMemoTab',!active],['wikiWorkspaceTab',active]]){
+    for(const [id,selected]of (standalone?[['wikiWorkspaceTab',active]]:[['wikiMemoTab',!active],['wikiWorkspaceTab',active]])){
       const button=tabs.querySelector('#'+id);button.setAttribute('aria-selected',String(selected));button.tabIndex=selected?0:-1;
     }
   }
@@ -951,7 +951,8 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
   if(embedded){
     tabs.className='wiki-workspace-tabs';tabs.setAttribute('role','tablist');tabs.setAttribute('aria-label','작업 화면');tabs.hidden=true;
     dialog.setAttribute('role','tabpanel');dialog.setAttribute('aria-labelledby','wikiWorkspaceTab');
-    for(const [id,title,active]of [['wikiMemoTab','메모',false],['wikiWorkspaceTab','AI 지식 위키',true]]){
+    const tabItems=standalone?[['wikiWorkspaceTab','AI 지식 위키',true]]:[['wikiMemoTab','메모',false],['wikiWorkspaceTab','AI 지식 위키',true]];
+    for(const [id,title,active]of tabItems){
       const button=node('button',title,'ghost-btn');button.type='button';button.id=id;button.setAttribute('role','tab');button.setAttribute('aria-selected',String(active));
       if(active)button.setAttribute('aria-controls','wikiDialog');
       button.onclick=()=>{check();if(dialog.open){activate(active);if(active)dialog.querySelector('h2')?.focus();}};tabs.append(button);
@@ -959,12 +960,12 @@ globalThis.mountNowWiki = function mountNowWiki(api,{host=null,onActivate=null}=
     tabs.addEventListener('keydown',event=>{
       if(!['ArrowLeft','ArrowRight','Home','End'].includes(event.key))return;
       event.preventDefault();const buttons=[...tabs.querySelectorAll('button')],index=buttons.indexOf(document.activeElement);
-      const next=event.key==='Home'?0:event.key==='End'?1:1-Math.max(0,index);buttons[next].click();buttons[next].focus();
+      const next=event.key==='Home'?0:event.key==='End'?buttons.length-1:(Math.max(0,index)+(event.key==='ArrowLeft'?-1:1)+buttons.length)%buttons.length;buttons[next].click();buttons[next].focus();
     });
     host.prepend(tabs);host.append(dialog);
     for(const id of ['treeList','openTabs'])document.getElementById(id)?.addEventListener('click',()=>{if(dialog.open)activate(false);});
   }else document.body.append(dialog);
-  return {close,check,openProtected(value,queryAccess=null){
+  return {close,check,async requestLeave(){return !busy&&(!dirty||readOnly||await ask('저장하지 않은 초안을 버리고 다른 화면으로 이동할까요?'));},openProtected(value,queryAccess=null){
     close();previous=document.activeElement;bound=api.contextKey();epoch++;
     doc=structuredClone(value);rows=[{document:structuredClone(value)}];readOnly=true;readable=true;protectedQueryAccess=queryAccess;
     workspaceView='browse';message='보호된 저장 판본 · 읽기 전용';choose(preferred(doc).id);show();render();

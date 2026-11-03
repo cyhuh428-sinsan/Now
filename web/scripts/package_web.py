@@ -17,6 +17,11 @@ APP_FILES = [
     "help.html",
     "manifest.webmanifest",
     "sw.js",
+    "wiki.html",
+    "wiki-core.js",
+    "wiki-shell.js",
+    "wiki-runtime.js",
+    "wiki.css",
     "README.md",
     "runtime_checklist_ko.md",
 ]
@@ -44,6 +49,11 @@ def copy_dir(relative_path: str) -> None:
 
 
 def main() -> None:
+    root, dist = ROOT.resolve(), DIST.resolve()
+    if not dist.is_relative_to(root) or PACKAGE_DIR.resolve().parent != dist or ZIP_PATH.resolve().parent != dist:
+        raise ValueError("Package output must remain inside this project's dist directory")
+    if PACKAGE_DIR.is_symlink() or ZIP_PATH.is_symlink():
+        raise ValueError("Package output cannot be a symbolic link")
     if PACKAGE_DIR.exists():
         shutil.rmtree(PACKAGE_DIR)
     if ZIP_PATH.exists():
@@ -56,6 +66,13 @@ def main() -> None:
 
     for relative_path in APP_DIRS:
         copy_dir(relative_path)
+
+    wiki_dir = PACKAGE_DIR / "wiki"
+    wiki_dir.mkdir()
+    for name in ("wiki.html", "wiki-core.js", "wiki-shell.js", "wiki-runtime.js", "wiki.css", "styles.css", "sw.js"):
+        shutil.copy2(ROOT / name, wiki_dir / name)
+    shutil.copy2(ROOT / "wiki.html", wiki_dir / "index.html")
+    shutil.copytree(ROOT / "icons", wiki_dir / "icons")
 
     with zipfile.ZipFile(ZIP_PATH, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for path in sorted(PACKAGE_DIR.rglob("*")):

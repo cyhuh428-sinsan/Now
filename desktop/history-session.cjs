@@ -24,7 +24,7 @@ function createHistorySession(filename){
         file.writeKey(filename(),KEY,next,state.value);committed=true;
         const snapshot=file.readKeySnapshot(filename(),KEY);
         if(!same(snapshot.value,next))throw Error('저장 뒤 원장 변경을 확인했습니다. 다시 여세요.');
-        const saved=remember(sender,snapshot);return {revision:saved.revision,scoped:true};
+        const saved=remember(sender,snapshot);return {revision:saved.revision,stamp:saved.stamp,scoped:true};
       }catch(error){sessions.delete(sender);if(committed)error.committed=true;throw error;}
     },
     note(sender,{revision,account,id,expected,next}){

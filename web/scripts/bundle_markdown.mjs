@@ -13,7 +13,10 @@ const mainLibraries = ['marked.umd.js','purify.min.js','note-blocks.js','documen
 const wikiLibraries = ['cytoscape.min.js','wiki-graph-ui.js','wiki-ui.js'];
 mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js','journal-writes.js','deferred-history.js','history-backup.js');
 mainLibraries.push('wiki-index-reader.js');
-mainLibraries.push('wiki-read-set.js','wiki-selected-page.js','history-client.js','wiki-workspace.js');
+mainLibraries.push('wiki-read-set.js','wiki-selected-page.js','history-client.js','wiki-workspace.js','web-session-storage.js');
+mainLibraries.push('history-persistence.js');
+mainLibraries.push('wiki-connection.js');
+mainLibraries.push('workspace-navigation.js');
 
 export async function buildRuntimeBundles() {
   const read = async names => Promise.all(names.map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
@@ -21,19 +24,22 @@ export async function buildRuntimeBundles() {
   const licenses = await read(['marked.LICENSE','dompurify.LICENSE','diff.LICENSE']);
   const wikiLibrariesSource = await read(wikiLibraries);
   const wikiLicenses = await read(['cytoscape.LICENSE']);
+  const assets={};
+  for(const name of ['wiki.html','wiki-shell.js','wiki.css'])assets['desktop/app/'+name]=normalize(await fs.readFile(path.join(root,'web',name),'utf8'));
+  assets['desktop/app/workspace-navigation.js']=(await read(['workspace-navigation.js']))[0];
   const core=`${prefix}\n/*\n${licenses.join('\n')}\n*/\n${libraries.join('\n;\n')}\n${suffix}\n`;
   return {
-    main: core,core,
+    main: core,core,assets,
     wiki: `// BEGIN NOWNOTE WIKI RUNTIME\n/*\n${wikiLicenses.join('\n')}\n*/\n${wikiLibrariesSource.join('\n;\n')}\n// END NOWNOTE WIKI RUNTIME\n`,
   };
 }
 
 export async function checkRuntimeBundles(bundles, read = relative => fs.readFile(path.join(root,relative),'utf8')) {
-  for (const relative of [...mainFiles,...wikiFiles,...coreFiles]) {
+  for (const relative of [...mainFiles,...wikiFiles,...coreFiles,...Object.keys(bundles.assets)]) {
     let source;
     try { source = normalize(await read(relative)); }
     catch { throw new Error(`${relative}: runtime 파일을 읽을 수 없습니다.`); }
-    const valid = mainFiles.includes(relative) ? source.startsWith(bundles.main) : source === (coreFiles.includes(relative)?bundles.core:bundles.wiki);
+    const valid = mainFiles.includes(relative) ? source.startsWith(bundles.main) : source === (bundles.assets[relative]??(coreFiles.includes(relative)?bundles.core:bundles.wiki));
     if (!valid) throw new Error(`${relative}: runtime 번들을 다시 생성해야 합니다.`);
   }
 }
@@ -54,6 +60,7 @@ async function run() {
   for (const relative of coreFiles) await fs.writeFile(path.join(root,relative), bundles.core);
   await fs.copyFile(path.join(vendor,'document-parts.js'),path.join(root,'desktop/app/document-parts.js'));
   await fs.copyFile(path.join(vendor,'journal-writes.js'),path.join(root,'desktop/app/journal-writes.js'));
+  for(const [relative,source]of Object.entries(bundles.assets))await fs.writeFile(path.join(root,relative),source);
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await run();

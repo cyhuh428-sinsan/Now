@@ -27,8 +27,13 @@ async function targets(port){return (await(await fetch(`http://127.0.0.1:${port}
 async function client(target){
   const ws=new WebSocket(target.webSocketDebuggerUrl);await once(ws,'open');sockets.add(ws);let id=0;const pending=new Map();
   ws.addEventListener('message',event=>{const row=JSON.parse(event.data);if(!row.id)return;const entry=pending.get(row.id);if(!entry)return;pending.delete(row.id);row.error?entry.reject(Error(row.error.message)):entry.resolve(row.result);});
-  async function evaluate(expression){const next=++id;const reply=new Promise((resolve,reject)=>pending.set(next,{resolve,reject}));ws.send(JSON.stringify({id:next,method:'Runtime.evaluate',params:{expression:`(async()=>(${expression}))()`,awaitPromise:true,returnByValue:true}}));const result=await reply;if(result.exceptionDetails)throw Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text);return result.result?.value;}
-  return {evaluate,close(){ws.close();sockets.delete(ws);}};
+  async function command(method,params={}){
+    const next=++id;let timer;
+    const reply=new Promise((resolve,reject)=>{timer=setTimeout(()=>{pending.delete(next);reject(Error('CDP timeout: '+method));},15000);pending.set(next,{resolve,reject});});
+    ws.send(JSON.stringify({id:next,method,params}));try{return await reply;}finally{clearTimeout(timer);}
+  }
+  async function evaluate(expression){const result=await command('Runtime.evaluate',{expression:`(async()=>(${expression}))()`,awaitPromise:true,returnByValue:true});if(result.exceptionDetails)throw Error(result.exceptionDetails.exception?.description||result.exceptionDetails.text);return result.result?.value;}
+  return {evaluate,command,close(){ws.close();sockets.delete(ws);}};
 }
 try{
   const debug=await port(),primary=start(debug);
@@ -49,7 +54,7 @@ try{
     })()`);
   }
   await a.evaluate(`(async()=>{
-    document.querySelector('#addRootBtn').click();const id=state.selectedTreeId;
+    document.querySelector('#addRootBtn').click();const id=state.selectedTreeId;globalThis.qaRestoredId=id;
     findTreeNode(state.data.tree,id).title='Restore storage QA';archiveDeletedTreeNode(id);persist();
     await Promise.all([...storagePendingWrites]);restoreDeletedTreeNode(id);
     await Promise.all([...storagePendingWrites]);
@@ -57,7 +62,9 @@ try{
     if(!stored.tree.some(node=>node.id===id&&node.status==='active'))throw Error('Restore was not persisted');
   })()`);
   const settingsKey='nownote.web.settings.v1';
-  await a.evaluate(`(async()=>{const value=await nownoteDesktop.storage.read('${settingsKey}');state.settings.fontSize='small';await nownoteDesktop.storage.write('${settingsKey}',{...(value||{}),fontSize:'small'},{expectedValue:value});})()`);
+  await a.evaluate(`(async()=>{const value=await nownoteDesktop.storage.read('${settingsKey}');state.settings.fontSize='small';
+    state.settings.llm={provider:'omniroute',apiKey:'',omniUrl:'https://registered.invalid',omniModel:'Combo/qa',omniReasoning:'high',omniApiKey:'synthetic-only',ollamaUrl:'',ollamaModel:'llama3.1'};
+    await nownoteDesktop.storage.write('${settingsKey}',{...(value||{}),fontSize:'small',llm:state.settings.llm},{expectedValue:value});})()`);
   await a.evaluate(`(async()=>{
     const value=await nownoteDesktop.storage.readPath('${settingsKey}',['fontSize']);
     if(value.projection!=='path_v1'||value.found!==true||value.value!=='small')throw Error('Selective IPC read failed');
@@ -82,9 +89,73 @@ try{
   })()`);
   const secondary=start(debug,true);
   const secondaryExit=once(secondary,'exit');
-  const wikiTarget=await until(async()=>{const rows=await targets(debug);return rows.find(row=>row.url.includes('workspace=wiki'));},'wiki window');
+  const wikiTarget=await until(async()=>{const rows=await targets(debug);return rows.find(row=>new URL(row.url).pathname.endsWith('/wiki.html'));},'wiki window');
   const b=await client(wikiTarget);
   await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog')`),'wiki mounted');
+  assert.equal(await b.evaluate(`typeof initializeApp==='undefined'&&typeof state==='undefined'&&!document.querySelector('#treeContent')&&!performance.getEntriesByType('resource').some(row=>new URL(row.name).pathname.endsWith('/app.js'))`),true,'Wiki must not load the memo runtime');
+  assert.equal(await b.evaluate(`document.querySelectorAll('.wiki-workspace-tabs button').length`),1);
+  await b.evaluate(`(()=>{
+    globalThis.qaWikiProviderCalls=0;
+    globalThis.fetch=async(url,options)=>{
+      if(url!=='https://registered.invalid/v1/chat/completions')throw Error('external network forbidden in standalone QA');
+      qaWikiProviderCalls++;const body=JSON.parse(options.body),input=JSON.parse(body.messages.at(-1).content).input;
+      if(body.max_tokens!==4096||body.model!=='Combo/qa')throw Error('standalone request budget');
+      return {ok:true,json:async()=>({choices:[{message:{content:JSON.stringify({pages:input.pages.map((page,index)=>({wiki_id:page.wiki_id,draft_id:page.draft_id,
+        title:'Standalone synthetic wiki',topic:'Synthetic QA',page_type:'concept',summary:'Synthetic only',aliases:[],claims:[],relations:[],
+        sections:[{id:'s1',title:'Finding',markdown:'Synthetic standalone finding.',citation_ids:['c1']}],citations:[{id:'c1',evidence_id:input.sources[index].id,section_id:null,quote:input.sources[index].content.slice(0,20)}]}))})}}]})};
+    };
+  })()`);
+  const clickWiki=async action=>{await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog [data-wiki-action=${action}]')&&!document.querySelector('#wikiDialog [data-wiki-action=${action}]').disabled`),'standalone '+action);await b.evaluate(`document.querySelector('#wikiDialog [data-wiki-action=${action}]').click()`);};
+  const upload=async(name,content)=>{
+    const file=path.join(profile,name);await fs.writeFile(file,content);
+    await b.evaluate(`document.querySelector('[data-wiki-view=sources]').click()`);
+    await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog [name=wiki-files]')`),'standalone file input');
+    const {root:doc}=await b.command('DOM.getDocument'),{nodeId}=await b.command('DOM.querySelector',{nodeId:doc.nodeId,selector:'#wikiDialog [name=wiki-files]'});
+    await b.command('DOM.setFileInputFiles',{nodeId,files:[file]});await clickWiki('capture-files');
+    await until(()=>b.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('원본 1개 저장')`),'standalone capture');
+    await b.evaluate(`(()=>{const input=[...document.querySelectorAll('#wikiDialog [name=wiki-ingest-file]')].find(node=>node.closest('label').textContent.includes(${JSON.stringify(name)}));if(!input)throw Error('captured source selector');input.click();})()`);
+    await clickWiki('plan-ingest');await clickWiki('generate-ingest');await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog [data-wiki-action=confirm-send]')`),'standalone transmission consent');
+  };
+  await upload('standalone-source.md','Synthetic standalone evidence. No personal data.');assert.equal(await b.evaluate('qaWikiProviderCalls'),0);
+  await clickWiki('confirm-send');await clickWiki('commit-ingest');
+  await until(()=>b.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('초안 1개 저장')`),'standalone saved draft');
+  await clickWiki('sources');await until(()=>b.evaluate(`!!document.querySelector('#wikiDialog .wiki-entry .library-item')`),'standalone draft row');
+  await b.evaluate(`document.querySelector('#wikiDialog .wiki-entry .library-item').click()`);await clickWiki('approve');
+  await until(()=>b.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('승인 저장 완료')`),'standalone approved');
+  assert.equal(await b.evaluate('qaWikiProviderCalls'),1);
+  await b.evaluate(`(()=>{const create=NowWikiConnection.create;NowWikiConnection.create=options=>create({...options,verify:async()=>{if(globalThis.qaHoldTransmission&&!globalThis.qaHeldTransmission){globalThis.qaHeldTransmission=true;await new Promise(resolve=>globalThis.qaReleaseTransmission=resolve);}await options.verify();}});globalThis.qaHoldTransmission=true;})()`);
+  await upload('standalone-guard.md','Synthetic guard evidence. Never sent to a real model.');await clickWiki('confirm-send');
+  await until(()=>b.evaluate(`globalThis.qaHeldTransmission===true`),'standalone held preflight');
+  const currentJournal=await a.evaluate(`nownoteDesktop.storage.history.open()`),changedJournal=structuredClone(currentJournal.value);
+  const sourceEntry=Object.values(changedJournal.contexts).flatMap(bucket=>Object.values(bucket.notes)).find(entry=>entry.draft?.title==='standalone-guard.md');
+  assert.ok(sourceEntry);sourceEntry.draft.content+=' Concurrent synthetic change.';
+  assert.equal(await a.evaluate(`(await nownoteDesktop.storage.history.full({revision:${JSON.stringify(currentJournal.revision)},next:${JSON.stringify(changedJournal)}})).ok`),true);
+  try{
+    await b.evaluate(`globalThis.qaReleaseTransmission()`);
+    await until(()=>b.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('다른 창에서 자료 또는 보호 상태')`),'standalone stale transmission rejected');
+    assert.equal(await b.evaluate('qaWikiProviderCalls'),1,'changed local store must not reach Provider');
+  }finally{
+    await a.evaluate(`(async()=>{const opened=await nownoteDesktop.storage.history.open();if(!(await nownoteDesktop.storage.history.full({revision:opened.revision,next:${JSON.stringify(currentJournal.value)}})).ok)throw Error('standalone source fixture restore');})()`);
+  }
+  await a.evaluate(`(async()=>{noteHistoryController.lock();await noteHistoryController.resume({projectView:false,renderView:false});})()`);
+  for(const [label,width,height]of [['desktop',1200,860],['mobile',390,844]]){
+    await b.command('Emulation.setDeviceMetricsOverride',{width,height,deviceScaleFactor:1,mobile:false});
+    await delay(100);
+    if(process.env.NOWNOTE_QA_REPORT_DIR){
+      const report=path.resolve(process.env.NOWNOTE_QA_REPORT_DIR);await fs.mkdir(report,{recursive:true});
+      const shot=await b.command('Page.captureScreenshot',{format:'png'});await fs.writeFile(path.join(report,'wiki-standalone-native-'+label+'.png'),Buffer.from(shot.data,'base64'));
+    }
+    const fit=await b.evaluate(`({width:document.documentElement.getBoundingClientRect().width,right:document.documentElement.getBoundingClientRect().right,body:document.body.scrollWidth,host:document.querySelector('#wikiWorkspaceHost').getBoundingClientRect().right})`);
+    assert.equal(fit.body<=Math.round(fit.width)&&fit.host<=fit.right,true,'standalone '+label+' fit '+JSON.stringify(fit));
+  }
+  await b.command('Emulation.clearDeviceMetricsOverride');
+  await b.evaluate(`document.querySelector('#wikiSettings').click()`);
+  await until(()=>a.evaluate(`!elements.settingsView.classList.contains('hidden')`),'Wiki settings navigation');await a.evaluate(`closeSettingsPopup()`);
+  const navigation=await a.evaluate(`({schema_version:1,action:'source',local_id:qaRestoredId,owner:noteHistoryContext().owner,url:noteHistoryContext().url,created_at:Date.now()})`);
+  await a.evaluate(`state.selectedTreeId=null`);await b.evaluate(`nownoteDesktop.openWorkspace('note',${JSON.stringify(navigation)})`);
+  await until(()=>a.evaluate(`state.selectedTreeId===qaRestoredId`),'Wiki source navigation');
+  await b.evaluate(`nownoteDesktop.openWorkspace('note',${JSON.stringify({...navigation,owner:'foreign-qa'})})`);
+  await until(()=>a.evaluate(`document.querySelector('#toastRegion').textContent.includes('이동 요청의 계정')`),'foreign navigation rejected');
   const [code]=await secondaryExit;assert.equal(code,0);
   await a.evaluate(`window.qaSettings=await nownoteDesktop.storage.read('${settingsKey}')`);
   await b.evaluate(`window.qaSettings=await nownoteDesktop.storage.read('${settingsKey}')`);
@@ -114,11 +185,11 @@ try{
   if(retainedQA)assert.equal(await c.evaluate(`(await nownoteDesktop.storage.original.read('nownote.web.v1')).qaRetained`),'confirmed');
   await c.evaluate('window.close()').catch(()=>{});c.close();if(cold.exitCode===null)await once(cold,'exit');
   const wikiPort=await port(),standalone=start(wikiPort,true);
-  const standaloneTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>row.url.includes('workspace=wiki'));},'standalone Wiki');
+  const standaloneTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>new URL(row.url).pathname.endsWith('/wiki.html'));},'standalone Wiki');
   const d=await client(standaloneTarget);await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'standalone Wiki mounted');
   assert.equal(await d.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
   await d.evaluate('window.close()').catch(()=>{});d.close();if(standalone.exitCode===null)await once(standalone,'exit');
-  console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,pagedHistory:true,separateWikiWindow:true,standaloneWiki:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
+  console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,pagedHistory:true,separateWikiWindow:true,standaloneWiki:true,standaloneIngest:true,syntheticProviderCalls:1,realProviderCalls:0,staleTransmissionRejected:true,sourceSettingsNavigation:true,foreignNavigationRejected:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
 }finally{
   for(const ws of sockets)ws.close();
   for(const child of children){child.kill();if(child.exitCode===null)await Promise.race([once(child,'exit'),delay(5000)]);}

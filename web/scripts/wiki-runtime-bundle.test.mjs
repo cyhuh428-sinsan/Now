@@ -48,6 +48,7 @@ test('--check 검증은 양쪽 main/chunk의 누락·오래된 내용 거부, CR
     ['desktop/app/wiki-runtime.js', bundles.wiki],
     ['web/wiki-core.js',bundles.core],
     ['desktop/app/wiki-core.js',bundles.core],
+    ...Object.entries(bundles.assets),
   ]);
   const reader = async name => { if (!files.has(name)) throw Error('missing'); return files.get(name); };
   await bundler.checkRuntimeBundles(bundles, reader);

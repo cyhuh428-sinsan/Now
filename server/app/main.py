@@ -111,11 +111,18 @@ def create_app() -> FastAPI:
     app.include_router(wikis_router)
     app.include_router(wiki_operations_router)
     if web_app_dir is not None:
+        @app.get("/wiki", include_in_schema=False)
+        @app.get("/wiki/", include_in_schema=False)
+        @app.get("/wiki/index.html", include_in_schema=False)
+        def web_wiki_index() -> FileResponse:
+            return FileResponse(web_app_dir / "wiki.html")
+
         @app.get("/app", include_in_schema=False)
         def web_app_compat_index() -> FileResponse:
             return FileResponse(web_app_dir / "index.html")
 
         app.mount("/app", StaticFiles(directory=str(web_app_dir), html=True), name="web_app_compat")
+        app.mount("/wiki", StaticFiles(directory=str(web_app_dir), html=True), name="web_wiki")
         app.mount("/", StaticFiles(directory=str(web_app_dir), html=True), name="web_app")
     return app
 

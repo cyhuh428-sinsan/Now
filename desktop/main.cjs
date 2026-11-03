@@ -5,10 +5,12 @@ const { pathToFileURL } = require("node:url");
 const { resolveDocumentPath, isRelativeDocumentReference } = require("./document-links.cjs");
 const { createVaultService } = require("./vault-service.cjs");
 const documentFile=require('./document-file.cjs');
+const workspaceNavigation=require('./app/workspace-navigation.js');
 
 const APP_TITLE = "NowNote";
 const launchWorkspace=path.basename(process.execPath).toLowerCase()==='nownotewiki.exe'||process.argv.includes('--wiki')?'wiki':'note';
 const APP_INDEX = path.join(__dirname, "app", "index.html");
+const APP_WIKI = path.join(__dirname, "app", "wiki.html");
 const APP_HELP = path.join(__dirname, "app", "help.html");
 const RENDERER_STORE_KEYS = new Set(["nownote.web.v1", "nownote.web.settings.v1", "nownote.library.v1", "nownote.history.v1"]);
 
@@ -28,6 +30,7 @@ let wikiWindow = null;
 let desktopReady = false;
 const activationPending = new Set();
 let quitting = false;
+const pendingNavigation=new WeakMap();
 const primaryInstance = app.requestSingleInstanceLock({workspace:launchWorkspace});
 if (!primaryInstance) app.quit();
 else app.on("second-instance", (_event,_args,_cwd,data) => activateMainWindow(data?.workspace==='wiki'?'wiki':'note'));
@@ -54,7 +57,7 @@ function desktopStorePath() {
 }
 
 function assertTrustedStoreFrame(event){
-  if(event.senderFrame?.parent||event.senderFrame?.url.split('?')[0]!==pathToFileURL(APP_INDEX).href)
+  if(event.senderFrame?.parent||![APP_INDEX,APP_WIKI].some(file=>event.senderFrame?.url.split('?')[0]===pathToFileURL(file).href))
     throw Error('허용되지 않은 저장소 요청입니다.');
 }
 
@@ -198,7 +201,7 @@ function createMainWindow(startFile = APP_INDEX,workspace=launchWorkspace) {
   if(workspace==='wiki')wikiWindow=window;else mainWindow = window;
   window.on("closed", () => { if (mainWindow === window) mainWindow = null;if(wikiWindow===window)wikiWindow=null; });
 
-  window.loadFile(startFile,workspace==='wiki'?{query:{workspace:'wiki'}}:undefined);
+  window.loadFile(workspace==='wiki'&&startFile===APP_INDEX?APP_WIKI:startFile);
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("mailto:")) {
@@ -277,10 +280,20 @@ function createMenu() {
 if (primaryInstance) app.whenReady().then(() => {
   // Only the actual Electron single-instance owner can publish a storage marker.
   documentFile.initialize(desktopStorePath(),{syntheticLegacy:process.env.NOWNOTE_SYNTHETIC_MIGRATION==='1'});
-  ipcMain.handle('nownote:open-workspace',(event,workspace)=>{
+  ipcMain.handle('nownote:open-workspace',(event,workspace,input=null)=>{
     assertTrustedStoreFrame(event);
     if(!['note','wiki'].includes(workspace))throw Error('Invalid workspace');
-    activateMainWindow(workspace);return {opened:true};
+    if(input!==null&&workspace!=='note')throw Error('Invalid workspace navigation');
+    const navigation=input===null?null:workspaceNavigation.shape(input);
+    activateMainWindow(workspace);
+    if(navigation){pendingNavigation.set(mainWindow.webContents,navigation);mainWindow.webContents.send('nownote:workspace-navigation');}
+    return {opened:true};
+  });
+  ipcMain.handle('nownote:take-workspace-navigation',event=>{
+    assertTrustedStoreFrame(event);
+    if(event.senderFrame?.url.split('?')[0]!==pathToFileURL(APP_INDEX).href)throw Error('허용되지 않은 화면 이동 요청입니다.');
+    const value=pendingNavigation.get(event.sender);pendingNavigation.delete(event.sender);
+    if(!value)return null;try{return workspaceNavigation.shape(value);}catch{return null;}
   });
   ipcMain.handle("nownote:open-document-file", async (event, input) => {
     if (event.senderFrame?.parent || event.senderFrame?.url.split("?")[0] !== pathToFileURL(APP_INDEX).href) throw new Error("허용되지 않은 문서 요청입니다.");

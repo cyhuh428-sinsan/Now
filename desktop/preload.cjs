@@ -3,7 +3,13 @@ const { contextBridge, ipcRenderer } = require("electron");
 contextBridge.exposeInMainWorld("nownoteDesktop", {
   platform: process.platform,
   desktopShell: "electron",
-  openWorkspace: workspace=>ipcRenderer.invoke('nownote:open-workspace',workspace),
+  openWorkspace: (workspace,navigation=null)=>ipcRenderer.invoke('nownote:open-workspace',workspace,navigation),
+  takeWorkspaceNavigation:()=>ipcRenderer.invoke('nownote:take-workspace-navigation'),
+  onWorkspaceNavigation:listener=>{
+    if(typeof listener!=='function')throw Error('화면 이동 수신 함수를 확인하세요.');
+    const receive=()=>listener();ipcRenderer.on('nownote:workspace-navigation',receive);
+    return ()=>ipcRenderer.removeListener('nownote:workspace-navigation',receive);
+  },
   openDocumentFile: (filePath) => ipcRenderer.invoke("nownote:open-document-file", filePath),
   storage: {
     history:{
