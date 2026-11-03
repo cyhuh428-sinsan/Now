@@ -1,0 +1,69 @@
+name: Windows performance QA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [codex/2.4.1]
+    paths:
+      - .github/workflows/windows-performance-qa.yml
+      - desktop/scripts/measure-app-performance.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  performance:
+    runs-on: windows-2022
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: candidate
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: afbc730bb7cb6858d96991b80bede1756a28795b
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Check guarded benchmark options
+        working-directory: candidate
+        run: node --test desktop/tests/app-performance-options.test.mjs desktop/tests/app-performance-fixture.test.mjs
+      - name: Build baseline without installing
+        working-directory: baseline/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx --no-install electron-builder --win --dir --x64 --publish never
+      - name: Build candidate without installing
+        working-directory: candidate/desktop
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: |
+          npm ci
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          npx --no-install electron-builder --win --dir --x64 --publish never
+      - name: Compare exact synthetic fixtures serially
+        working-directory: candidate
+        env:
+          NOWNOTE_VM_PERFORMANCE_QA: '1'
+        run: |
+          $env:NOWNOTE_BASELINE_EXE_PATH = Join-Path $env:GITHUB_WORKSPACE 'baseline/desktop/dist/win-unpacked/NowNote.exe'
+          $env:NOWNOTE_DESKTOP_EXE_PATH = Join-Path $env:GITHUB_WORKSPACE 'candidate/desktop/dist/win-unpacked/NowNote.exe'
+          $env:NOWNOTE_QA_REPORT_DIR = Join-Path $env:GITHUB_WORKSPACE 'candidate/desktop/dist/performance-qa'
+          node desktop/scripts/measure-app-performance.mjs --github-vm --sizes=8,16
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if (@(Get-ChildItem -LiteralPath 'D:/tmp/nownote-241-migration' -Directory -Filter 'perf-*').Count -ne 0) { throw 'Owned QA profiles remain.' }
+      - name: Preserve synthetic measurements
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-performance-qa-${{ github.sha }}
+          path: candidate/desktop/dist/performance-qa/*.json
+          if-no-files-found: warn
+          retention-days: 7

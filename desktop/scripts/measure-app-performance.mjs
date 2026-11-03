@@ -13,7 +13,10 @@ const script=fileURLToPath(import.meta.url),root=path.resolve(path.dirname(scrip
 const base='D:/tmp/nownote-241-migration',digest=bytes=>createHash('sha256').update(bytes).digest('hex');
 const candidateOnly=process.argv.includes('--candidate-only'),requested=process.argv.find(value=>value.startsWith('--sizes='));
 const sizes=requested?requested.slice(8).split(',').map(Number):process.argv.includes('--smoke')?[1]:[1,8,16],iterations=process.argv.includes('--smoke')?1:3;
-const modes=candidateOnly?['candidate']:['baseline','candidate'],memoryLimitBytes=1.2*1024**3;
+const githubVM=process.argv.includes('--github-vm');
+if(githubVM&&!(process.env.GITHUB_ACTIONS==='true'&&process.env.RUNNER_ENVIRONMENT==='github-hosted'&&process.env.RUNNER_OS==='Windows'
+  &&process.env.GITHUB_REPOSITORY==='cyhuh428-sinsan/Now'&&process.env.NOWNOTE_VM_PERFORMANCE_QA==='1'))throw Error('Expansion is restricted to the approved GitHub-hosted Windows job');
+const modes=candidateOnly?['candidate']:['baseline','candidate'],memoryLimitBytes=(githubVM?4:1.2)*1024**3;
 if(!sizes.length||new Set(sizes).size!==sizes.length||sizes.some(value=>![1,8,16].includes(value)))throw Error('Unsupported benchmark sizes');
 
 if(process.argv.includes('--plan'))console.log(JSON.stringify({sizes,iterations,modes,comparison:!candidateOnly,memoryLimitBytes}));
@@ -28,7 +31,7 @@ else if(process.argv[2]==='--prepare'){
   const require=createRequire(path.join(root,'package.json')),asar=require('@electron/asar'),baselineSource={};
   for(const name of ['main.cjs','preload.cjs','app/app.js']){
     const bytes=asar.extractFile(path.join(path.dirname(baseline),'resources/app.asar'),name).toString().replace(/\r\n/g,'\n');
-    const canonical=execFileSync('git',['show','main:desktop/'+name],{cwd:root,maxBuffer:12*1024*1024}).toString().replace(/\r\n/g,'\n');
+    const canonical=execFileSync('git',['show',(githubVM?'afbc730bb7cb6858d96991b80bede1756a28795b':'main')+':desktop/'+name],{cwd:root,maxBuffer:12*1024*1024}).toString().replace(/\r\n/g,'\n');
     assert.equal(digest(bytes),digest(canonical),'Baseline must match main');baselineSource[name]=digest(bytes);
   }
   await fs.mkdir(base,{recursive:true});const own=await fs.mkdtemp(path.join(base,'perf-')),rows=[],sockets=new Set();let child;
@@ -46,7 +49,7 @@ else if(process.argv[2]==='--prepare'){
   const resources=pid=>{
     const result=spawnSync('pwsh',['-NoProfile','-File',path.join(root,'scripts/read-app-resources.ps1'),'-TargetProcessId',String(pid)],{encoding:'utf8',windowsHide:true,timeout:20000});
     if(result.status!==0)throw Error('Own resource probe failed: '+result.stderr);const value=JSON.parse(result.stdout);
-    if(Math.max(value.privateBytes,value.workingSet)>memoryLimitBytes)throw Error('Synthetic app exceeded the 1.2GiB expansion budget');return value;
+    if(Math.max(value.privateBytes,value.workingSet)>memoryLimitBytes)throw Error('Synthetic app exceeded the '+memoryLimitBytes/1024**3+'GiB expansion budget');return value;
   };
   const settle=`(async()=>{await noteHistoryCaptureChain;await noteHistoryFlush();await noteHistory.idle();await Promise.all([...storagePendingWrites]);return true;})()`;
   async function stop(client){
@@ -98,7 +101,7 @@ else if(process.argv[2]==='--prepare'){
         rows.push(row);console.log(JSON.stringify({mode,mib,iteration,startMs,input,workingSetMiB:after.workingSet/1024**2,privateMiB:after.privateBytes/1024**2,historyDeferred:modeInfo.historyDeferred}));
       }
     }
-    const report={kind:'actual packaged apps; synthetic serial measurements; handler timings are not OS keyboard-to-paint latency; process I/O includes IPC, not SSD/file-only writes',comparison:!candidateOnly,baselineSource,
+    const report={kind:'actual packaged apps; synthetic serial measurements; handler timings are not OS keyboard-to-paint latency; process I/O includes IPC, not SSD/file-only writes',comparison:!candidateOnly,baselineSource,memoryLimitBytes,
       baselineExecutableSha:digest(await fs.readFile(baseline)),candidateExecutableSha:digest(await fs.readFile(candidate)),rows};
     const reportDir=process.env.NOWNOTE_QA_REPORT_DIR;if(!reportDir)throw Error('Explicit private report directory required');await fs.mkdir(reportDir,{recursive:true});
     await fs.writeFile(path.join(reportDir,candidateOnly?'app-performance-candidate-only.json':process.argv.includes('--smoke')?'app-performance-smoke.json':'app-performance.json'),JSON.stringify(report,null,2));
