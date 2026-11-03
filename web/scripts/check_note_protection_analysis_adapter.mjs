@@ -11,6 +11,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const config={provider:'omniroute',omniUrl:'http://127.0.0.1:1/v1',omniModel:'auto',omniApiKey:'synthetic-only',omniReasoning:''};
   let phase='analysis_claimed',replan=null,legacy=false;
   const box=vm.createContext({URL,crypto:webcrypto,structuredClone,state:{settings:{llm:config}},
+    noteProtectionMutationsEnabled:()=>enabled,
     NowNoteProtectionProtocol:{canonicalJson:JSON.stringify},noteProtectionIdentity:{instance:scope.instance},
     NowNoteProtectionState:{scopeKey:s=>JSON.stringify([s.url.replace(/\/+$/,''),s.owner,s.instance,s.local_id])},
     noteHistoryContext:()=>context,protectionActionGuard:()=>()=>{},protectionTargetId:()=>scope.local_id,isLlmConfigured:()=>true,
@@ -84,7 +85,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
   const beforeLegacyPublish=serverCalls.length;await assert.rejects(()=>box.publishProtectedAnalysis('one-run','fixture-key'),/재계획/);assert.equal(serverCalls.length,beforeLegacyPublish);
   await assert.rejects(()=>box.prepareProtectedAnalysis(info,'one-run',async()=>'fixture-key'),/재계획/);assert.equal(invocations,providerBefore);legacy=false;
   context={...context,owner:'bob'};const before=invocations;await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);context={...scope,enabled:true};
-  vm.runInContext('noteProtectionInternalEnabled=false;',box);await assert.rejects(()=>box.beginProtectedAnalysis(plan,route,'fixture-key'));await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);
+  enabled=false;vm.runInContext('noteProtectionInternalEnabled=false;',box);await assert.rejects(()=>box.beginProtectedAnalysis(plan,route,'fixture-key'));await assert.rejects(()=>box.invokeProtectedAnalysis(handoff));assert.equal(invocations,before);
   await assert.rejects(()=>box.prepareProtectedReplan(info,'one-run','fixture-key'));await assert.rejects(()=>box.beginProtectedReplan(replanView,'fixture-key',{confirmed_reuse_original_result:true,target_epoch:2},async()=>'target-key'));await assert.rejects(()=>box.resumeProtectedReplan('one-run','fixture-key',async()=>'target-key'));assert.equal(invocations,before);
 }
 console.log('Protected analysis adapters: both apps, original source, exact route/auto/combo/provider model, invalid target/account/gate before call, terminal shape PASS (synthetic functions; no network)');

@@ -1896,9 +1896,78 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       };
     });
     const transaction=globalThis.NowDocumentTransactions.create({database,key});
+    const headerKey=[key,'retained-header-v1'],originalKey=[key,'retained-original-v1'];
+    const marker=header=>JSON.stringify({schema_version:241,storage:'indexeddb-retained-v1',id:header.id});
+    async function retainedTransaction(full,guard,write=null){
+      const db=await database();active(guard);
+      return new Promise((resolve,reject)=>{
+        let tx,error,result;
+        try{
+          tx=db.transaction('journals',write?'readwrite':'readonly',write?{durability:'strict'}:undefined);
+          tx.onabort=()=>reject(error||fail());tx.onerror=()=>{error=fail();};
+          tx.oncomplete=()=>{try{active(guard);resolve(result);}catch(e){if(write)e.committed=true;reject(e);}};
+          if(write&&tx.durability!=='strict')throw fail();
+          const store=tx.objectStore('journals'),values={},requests=[['physical',store.get(key)],['header',store.get(headerKey)],
+            ['original',full?store.get(originalKey):store.getKey(originalKey)]];let remaining=requests.length;
+          for(const [name,request]of requests)request.onsuccess=()=>{
+            try{
+              values[name]=request.result;if(--remaining)return;active(guard);
+              result=write?write(values,store):values;
+            }catch(e){error=e;tx.abort();}
+          };
+        }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
+      });
+    }
+    async function retainedState(guard,full=false){
+      const state=await retainedTransaction(full,guard),{header,physical,original}=state;
+      if(header===undefined){if(original!==undefined)throw fail();return null;}
+      if(!header||Object.keys(header).sort().join(',')!=='format,hash,id,phase'||header.format!==1
+        ||typeof header.id!=='string'||!/^[0-9a-f-]{36}$/.test(header.id)||!digest(header.hash)
+        ||!['prepared','ready'].includes(header.phase)||original===undefined||physical?.format!==2
+        ||physical.row?.legacy_hash!==header.hash)throw fail();
+      validate({...physical.row,value:null});
+      if(full){
+        if(!original||Object.keys(original).sort().join(',')!=='format,id,raw'||original.format!==1
+          ||original.id!==header.id||typeof original.raw!=='string'||await hash(original.raw)!==header.hash)throw fail();
+        parse(original.raw);active(guard);
+      }
+      return state;
+    }
+    async function finishRetained(state,guard){
+      if(!state)return null;
+      const expected=marker(state.header),raw=localStorage.getItem(key);active(guard);
+      if(state.header.phase==='ready'){if(raw!==expected)throw fail();return state;}
+      const canonical=await transaction(false,value=>value,guard);
+      unfinished(parse(canonical.value));
+      if(transaction.revision!==state.physical.stamp)throw fail();
+      if(raw!==expected&&raw!==state.original.raw)throw fail();
+      if(raw!==expected){localStorage.setItem(key,expected);if(localStorage.getItem(key)!==expected)throw fail();}
+      const header={...state.header,phase:'ready'};
+      await retainedTransaction(true,guard,(current,store)=>{
+        if(localStorage.getItem(key)!==expected||!same(current,state))throw fail();
+        store.put(header,headerKey);return null;
+      });
+      return {...state,header};
+    }
+    function unfinished(value){
+      if(typeof value==='string'){try{unfinished(JSON.parse(value));}catch(error){if(error?.message==='retained_pending')throw error;}return;}
+      if(!value||typeof value!=='object')return;
+      if(Object.hasOwn(value,'protection_operations')){
+        const operations=value.protection_operations;
+        if(!operations||typeof operations!=='object'||Array.isArray(operations)
+          ||Object.values(operations).some(item=>item?.phase!=='complete'))throw Error('retained_pending');
+      }
+      for(const child of Object.values(value))unfinished(child);
+    }
     // Call only inside the shared legacy-key lock. Hashing must not suspend an IDB transaction.
     async function settled(guard) {
       active(guard);
+      const retained=await retainedState(guard,true);
+      if(retained){
+        const state=await finishRetained(retained,guard),row=await transaction(false,value=>value,guard);
+        if(localStorage.getItem(key)!==marker(state.header)||row.legacy_hash!==state.header.hash)throw fail();
+        validate(row);return {row,raw:state.original.raw,retained:state.header};
+      }
       let raw=localStorage.getItem(key), legacyHash=await hash(raw);
       active(guard);
       let row=await transaction(false,value=>value,guard);
@@ -1932,19 +2001,22 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     function selective(action,guard){
       return lock(async()=>{
         active(guard);
-        // Retained legacy cannot be integrity-checked without loading its whole body.
-        // Keep that profile on the established full-read path until migration is verified.
+        const retained=await retainedState(guard);
+        if(retained&&retained.header.phase!=='ready')throw fail();
         const unchanged=()=>{
           active(guard);
           const count=localStorage.length;
           if(!Number.isSafeInteger(count)||count<0||typeof localStorage.key!=='function')throw fail();
-          for(let i=0;i<count;i++)if(localStorage.key(i)===key)throw fail();
+          let found=false;
+          for(let i=0;i<count;i++)if(localStorage.key(i)===key)found=true;
+          if(retained){if(!found||localStorage.getItem(key)!==marker(retained.header))throw fail();}
+          else if(found)throw fail();
         };
-        unchanged();const legacyHash=await hash(null);
+        unchanged();const legacyHash=retained?retained.header.hash:await hash(null);
         unchanged();
         const result=await action(metadata=>{
           unchanged();
-          if(metadata===undefined)return;
+          if(metadata===undefined){if(retained)throw fail();return;}
           if(!metadata||Object.keys(metadata).sort().join(',')!=='legacy_hash,redo,schema_version')throw fail();
           const row=validate({...metadata,value:null});
           if(row.legacy_hash!==legacyHash)throw fail();
@@ -1954,16 +2026,42 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       });
     }
     const fullWrite=(expected,next,guard)=>lock(async()=>{
-      const {row,raw}=await settled(guard);
+      const {row,raw,retained}=await settled(guard),local=retained?marker(retained):raw;
       if(!same(parse(row.value),expected))throw fail();
       const value=JSON.stringify(next);parse(value);
       await transaction(true,current=>{
-        active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
+        active(guard);if(!same(current,row)||localStorage.getItem(key)!==local)throw fail();
         return {...current,value};
       },guard);
-      return {revision:transaction.revision,scoped:raw===null};
+      return {revision:transaction.revision,scoped:raw===null||Boolean(retained)};
     });
     return {
+      retainLegacy: (options,guard)=>lock(async()=>{
+        if(options?.syntheticLegacy!==true)throw fail();active(guard);
+        const existing=await retainedState(guard,true);
+        if(existing){await finishRetained(existing,guard);return;}
+        const raw=localStorage.getItem(key);if(raw===null)throw fail();unfinished(parse(raw));
+        const {row}=await settled(guard),legacyHash=await hash(raw);unfinished(parse(row.value));active(guard);
+        if(row.legacy_hash!==legacyHash||localStorage.getItem(key)!==raw)throw fail();
+        const original={format:1,id:crypto.randomUUID(),raw},header={format:1,id:original.id,hash:legacyHash,phase:'prepared'};
+        await retainedTransaction(true,guard,(current,store)=>{
+          if(current.header!==undefined||current.original!==undefined||current.physical?.stamp!==transaction.revision
+            ||!same(current.physical?.row,{schema_version:row.schema_version,legacy_hash:row.legacy_hash,redo:row.redo})
+            ||localStorage.getItem(key)!==raw)throw fail();
+          store.put(original,originalKey);store.put(header,headerKey);return null;
+        });
+        await finishRetained(await retainedState(guard,true),guard);
+      }),
+      readOriginal: guard=>lock(async()=>{
+        const retained=await retainedState(guard,true);
+        if(!retained)return (await settled(guard)).raw;
+        return (await finishRetained(retained,guard)).original.raw;
+      }),
+      verifyRetainedOriginal: guard=>lock(async()=>{
+        const retained=await retainedState(guard,true);
+        if(!retained)return false;
+        await finishRetained(retained,guard);return true;
+      }),
       selectNote(request,guard){
         const {account,id,stamp}=structuredClone(request);
         return selective(async check=>{
@@ -1977,7 +2075,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
         },guard);
       },
       read: () => lock(async()=> (await settled()).row.value),
-      readSnapshot:guard=>lock(async()=>{const {row,raw}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null};}),
+      readSnapshot:guard=>lock(async()=>{const {row,raw,retained}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null||Boolean(retained)};}),
       writeSnapshot:fullWrite,
       replaceNote(request,guard){
         const {account,id,expected,next,revision}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
@@ -1995,12 +2093,23 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
       },
       write: async(expected,next,guard)=>{await fullWrite(expected,next,guard);},
       casLegacy: (expected,next,guard) => lock(async()=>{
-        const {row,raw}=await settled(guard);
+        const {row,raw,retained}=await settled(guard);
         if(!same(parse(raw),expected))throw fail();
         const value=JSON.stringify(next), nextHash=await hash(value), delta=patches(expected,next);active(guard);
         const redo={from:row.legacy_hash,to:nextHash,patches:delta};
         if(!delta.length || apply(raw,redo)!==value)throw fail();
         validate({...row,legacy_hash:nextHash,redo:[...row.redo,redo]});
+        if(retained){
+          const state=await retainedState(guard,true),local=marker(retained);
+          await retainedTransaction(true,guard,(current,store)=>{
+            if(!same(current,state)||localStorage.getItem(key)!==local||state.original.raw!==raw)throw fail();
+            const metadata={...current.physical.row,legacy_hash:nextHash,redo:[...current.physical.row.redo,redo]};
+            validate({...metadata,value:null});
+            store.put({...current.physical,stamp:crypto.randomUUID(),row:metadata},key);
+            store.put({...current.original,raw:value},originalKey);store.put({...current.header,hash:nextHash},headerKey);
+            return null;
+          });return;
+        }
         await transaction(true,current=>{
           active(guard);if(!same(current,row)||localStorage.getItem(key)!==raw)throw fail();
           return {...current,legacy_hash:nextHash,redo:[...current.redo,redo]};
@@ -2872,6 +2981,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   }
   async function encryptContent(value, password) {
     text(value);
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return NowNoteCryptoWorker.execute('encrypt',value,password);
     const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
     const key = await derive(password, salt, ITERATIONS, 'encrypt');
     const data = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, encoder.encode(value));
@@ -2880,6 +2990,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
   }
   async function decryptContent(value, password) {
     if (typeof value !== 'string' || !value.startsWith(PREFIX)) fail('content_cipher');
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return NowNoteCryptoWorker.execute('decrypt',value,password);
     const p = parseJson(unbase64(value.slice(PREFIX.length)));
     exact(p, ['v', 'alg', 'kdf', 'iterations', 'salt', 'iv', 'data']);
     if (p.v !== 1 || p.alg !== 'AES-GCM' || p.kdf !== 'PBKDF2-SHA256') fail('content_algorithm');
@@ -2889,6 +3000,10 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     if (salt.length !== 16 || iv.length !== 12 || data.length < 16) fail('content_parameters');
     const key = await derive(password, salt, p.iterations, 'decrypt');
     return decoder.decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, data));
+  }
+  async function parseCryptoJson(value) {
+    if(globalThis.NowNoteCryptoWorker?.canRun(value))return JSON.parse(await NowNoteCryptoWorker.execute('parse',value,''));
+    return parseJson(value);
   }
   function checkOutput(d, strict = true) {
     if (strict) exact(d, ['key', 'output_kind', 'output_epoch', 'is_null', 'expected_binding', 'operation_origin']);
@@ -2994,12 +3109,12 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     if (typeof keyResolver !== 'function') fail('key_resolver');
     if (d.representation_kind === 'content_encrypted_v1') return decryptContent(raw, await keyResolver(d));
     let value;
-    if (d.representation_kind === 'snapshot_v1') value = validateSnapshot(parseJson(raw));
+    if (d.representation_kind === 'snapshot_v1') value = validateSnapshot(await parseCryptoJson(raw));
     else {
-      const outer = parseJson(raw);
+      const outer = await parseCryptoJson(raw);
       exact(outer, ['schema_version', 'kind', 'crypto_epoch', 'binding', 'ciphertext']);
       if (outer.schema_version !== 1 || outer.kind !== d.representation_kind || outer.crypto_epoch !== d.representation_epoch || !equal(outer.binding, d.expected_binding)) fail('envelope_binding');
-      const inner = parseJson(await decryptContent(outer.ciphertext, await keyResolver(d)));
+      const inner = await parseCryptoJson(await decryptContent(outer.ciphertext, await keyResolver(d)));
       const linked = d.representation_kind === 'linked_text_envelope_v1';
       const fields = ['schema_version', 'binding', linked ? 'value' : 'snapshot', 'semantic_sha256'];
       if (!linked) fields.push('content_origin_kind');
@@ -3031,7 +3146,7 @@ globalThis.mountNoteHistory = function mountNoteHistory(api) {
     const linked = d.output_kind === 'linked_text_envelope_v1';
     if (linked) text(value); else validateSnapshot(value);
     if (!linked && (value.note.owner_id !== d.expected_binding.owner_id || value.note.local_id !== d.expected_binding.local_id)) fail('snapshot_scope');
-    value = parseJson(canonicalJson(value));
+    value = await parseCryptoJson(canonicalJson(value));
     const inner = { schema_version: 1, binding: d.expected_binding, [linked ? 'value' : 'snapshot']: value,
       semantic_sha256: await sha256(linked ? value : canonicalJson(value)) };
     if (!linked) { inner.content_origin_kind = 'semantic'; inner.origin = d.operation_origin; }
@@ -10357,6 +10472,47 @@ globalThis.NowWikiConnection={create};
   if(typeof module==='object'&&module.exports)module.exports=api;
 })();
 
+;
+/* Fixed-origin, one-request workers keep large crypto conversions off the editor thread. */
+(() => {
+  'use strict';
+  const page=typeof location==='object'?new URL(location.href):null;
+  const script=page&&typeof document==='object'?new URL(document.currentScript?.src||page.href,page):null;
+  const endpoint=script?new URL('crypto-worker.js',script):null;
+  const pending=new Set();
+  const cancelAll=()=>{for(const finish of [...pending])finish(Error('note_crypto_worker:cancelled'));};
+  const canRun=value=>typeof document==='object'&&typeof Worker==='function'&&typeof value==='string'&&value.length>=65536;
+  function execute(operation,value,password){
+    return new Promise((resolve,reject)=>{
+      if(!endpoint||endpoint.origin!==page.origin||endpoint.protocol!==page.protocol||!['encrypt','decrypt','parse'].includes(operation)
+        ||typeof value!=='string'||typeof password!=='string'||operation!=='parse'&&!password.length){reject(Error('note_crypto_worker:request'));return;}
+      let worker,timer,finished=false;
+      const finish=(error,result)=>{
+        if(finished)return;finished=true;pending.delete(finish);clearTimeout(timer);
+        if(worker){worker.onmessage=worker.onerror=worker.onmessageerror=null;worker.terminate();}
+        if(error)reject(error);else resolve(result);
+      };
+      pending.add(finish);
+      try{
+        worker=new Worker(endpoint.href);const id=crypto.randomUUID();
+        timer=setTimeout(()=>finish(Error('note_crypto_worker:timeout')),30000);
+        worker.onerror=event=>{event.preventDefault?.();finish(Error('note_crypto_worker:failed'));};
+        worker.onmessageerror=()=>finish(Error('note_crypto_worker:message'));
+        worker.onmessage=event=>{
+          const result=event.data;
+          if(!result||result.schema_version!==1||result.id!==id){finish(Error('note_crypto_worker:binding'));return;}
+          if(Object.keys(result).sort().join(',')==='id,schema_version,value'&&typeof result.value==='string')finish(null,result.value);
+          else if(Object.keys(result).sort().join(',')==='error,id,schema_version'&&/^note_protection:[a-z0-9_]+$/.test(result.error))finish(Error(result.error));
+          else finish(Error('note_crypto_worker:failed'));
+        };
+        const payload={schema_version:1,id,operation,value,password};worker.postMessage(payload);payload.value=payload.password='';
+      }catch{finish(Error('note_crypto_worker:start'));}
+    });
+  }
+  globalThis.addEventListener?.('pagehide',cancelAll);
+  globalThis.NowNoteCryptoWorker=Object.freeze({canRun,execute,cancelAll});
+})();
+
 // END NOWNOTE MARKDOWN RUNTIME
 const STORAGE_KEY = "nownote.web.v1";
 const SETTINGS_KEY = "nownote.web.settings.v1";
@@ -15083,6 +15239,7 @@ let noteProtectionSupportGeneration = 0;
 function invalidateNoteProtectionSupport(previous,next) {
   const keys=["mode","url","ownerId","deviceId","token","userToken","webSessionToken"];
   if(previous&&next&&!keys.some(key=>(previous[key]??"")!==(next[key]??"")))return;
+  globalThis.NowNoteCryptoWorker?.cancelAll?.();
   noteProtectionSupport=null;noteProtectionSupportGeneration++;
 }
 
@@ -15138,7 +15295,8 @@ function protectionStorageAdapters() {
   const storageAdapter = (key,kind,fallback = false) => ({
     name: (fallback ? "fallback:" : "store:") + key, kind,
     ephemeral: isHostedWebClient() && [STORAGE_KEY,SETTINGS_KEY].includes(key),
-    read: async () => parse(isDesktopClient() && !fallback ? await window.nownoteDesktop.storage.read(key) : localStorage.getItem(key)),
+    read: async () => parse(isDesktopClient() && !fallback ? await window.nownoteDesktop.storage.read(key)
+      : !isDesktopClient() && key === NOTE_HISTORY_KEY ? await browserHistoryStorage().readOriginal() : localStorage.getItem(key)),
     async cas(expected,next,guard) {
       const active = guard?.active || (() => true);
       if (!active()) throw new Error("저장 인증 상태가 변경되었습니다.");
@@ -30181,6 +30339,7 @@ async function exportData() {
   try{
     await noteHistoryCaptureChain;await noteHistory?.idle?.();
     const history=noteHistory,key=wikiViewKey(),data=JSON.stringify(state.data),settings=JSON.stringify(state.settings),library=JSON.stringify(libraryStore?.export());
+    if(!isDesktopClient())await browserHistoryStorage().verifyRetainedOriginal({active:()=>history===noteHistory&&key===wikiViewKey()});
     let archive;
     try{archive=await history?.archive?.(({stamp,guard})=>NowHistoryBackup.create({
       validateMetadata:({account,field,id,value})=>{

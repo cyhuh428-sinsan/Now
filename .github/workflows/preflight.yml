@@ -54,6 +54,8 @@ jobs:
           web/scripts/history-persistence.test.mjs web/scripts/web-session-storage.test.mjs
           web/scripts/wiki-connection.test.mjs web/scripts/workspace-navigation.test.mjs
           web/scripts/wiki-shell.test.mjs web/scripts/wiki-service-worker.test.mjs
+          web/scripts/crypto-worker.test.mjs desktop/tests/app-performance-fixture.test.mjs
+          web/scripts/browser-retained-wiring.test.mjs
 
       - name: Run repository preflight
         working-directory: server

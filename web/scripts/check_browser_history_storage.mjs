@@ -22,7 +22,7 @@ function fixture(raw=null){
     const done=()=>{if(tx.error)return;if(abort){abort=false;tx.abort();return;}row=candidate;documents=parts;tx.oncomplete?.();};
     const finish=()=>{if(scheduled||requests||tx.error)return;scheduled=true;queueMicrotask(()=>{scheduled=false;if(requests||tx.error)return;if(hold&&mode==='readwrite')pending=done;else done();});};
     const request=value=>{const req={};requests++;queueMicrotask(()=>{req.result=structuredClone(value);req.onsuccess?.();requests--;finish();});return req;};
-    tx.objectStore=name=>name==='journals'?{get(){return request(row);},put(value){candidate=structuredClone(value);}}:
+    tx.objectStore=name=>name==='journals'?{get(key){return request(key==='history'?row:undefined);},getKey(){return request(undefined);},put(value){candidate=structuredClone(value);}}:
       {getAll(range){return request([...parts.values()].filter(item=>item.key[0]===range.lower[0]).map(item=>item.row));},
         put(value,key){parts.set(JSON.stringify(key),{key,row:structuredClone(value)});},delete(key){parts.delete(JSON.stringify(key));}};
     return tx;

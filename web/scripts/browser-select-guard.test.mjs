@@ -14,7 +14,13 @@ async function fixture(){
   const box=vm.createContext({crypto,TextEncoder,structuredClone,NowDocumentTransactions:{create:()=>transaction}});
   vm.runInContext(await fs.readFile(new URL('../vendor/journal-writes.js',import.meta.url),'utf8'),box);
   vm.runInContext(await fs.readFile(new URL('../vendor/browser-history-storage.js',import.meta.url),'utf8'),box);
-  const storage=box.NowBrowserHistoryStorage.create({indexedDB:{},localStorage,lock:fn=>fn(),key:'synthetic'});
+  const db={close(){},transaction(){
+    const tx={};let pending=0;
+    const request=()=>{const r={};pending++;queueMicrotask(()=>{r.result=undefined;r.onsuccess?.();if(!--pending)queueMicrotask(()=>tx.oncomplete?.());});return r;};
+    tx.objectStore=()=>({get:request,getKey:request});return tx;
+  }};
+  const indexedDB={open(){const r={};queueMicrotask(()=>{r.result=db;r.onsuccess?.();});return r;}};
+  const storage=box.NowBrowserHistoryStorage.create({indexedDB,localStorage,lock:fn=>fn(),key:'synthetic'});
   return {transaction,storage,metadata,setRaw:value=>{raw=value;},setMetadata:value=>{metadata=value;},after:fn=>{after=fn;}};
 }
 test('browser selected history combines current proof with exact path and rejects a different stamp',async()=>{

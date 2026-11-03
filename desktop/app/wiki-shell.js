@@ -117,6 +117,7 @@
     const token=++settingsRead,value=await storageRead(SETTINGS)||{};if(token!==settingsRead)return;
     if(typeof value!=='object'||Array.isArray(value))throw Error('설정 저장본을 확인하세요.');
     if(!hosted&&serverKey(normalizeServer(value.server))!==serverKey(server)){
+      globalThis.NowNoteCryptoWorker?.cancelAll?.();
       frozen=true;generation++;workspace?.view.close();history?.invalidate();remoteSources.clear();
       status('연결 설정이 변경되었습니다. 창을 다시 불러와 확인하세요. 원본은 보존했습니다.');return;
     }
@@ -168,6 +169,7 @@
     for(const button of document.querySelectorAll('[data-wiki-view]'))button.setAttribute('aria-current',button.dataset.wikiView===view?'page':'false');
   }
   function invalidate(){
+    globalThis.NowNoteCryptoWorker?.cancelAll?.();
     generation++;authenticated=false;workspace?.view.close();history?.invalidate();history=null;workspace=null;runtime=null;remoteSources.clear();
     $('#wikiWorkspaceHost').replaceChildren();$('#wikiShell').hidden=true;$('#wikiLogin').hidden=false;document.documentElement.dataset.auth='locked';
   }

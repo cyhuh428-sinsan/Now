@@ -5,6 +5,7 @@ const WIKI = SCOPE.pathname.endsWith('/wiki/');
 const APP_SHELL = WIKI
   ? ['./', './index.html', './wiki.html', './styles.css', './wiki.css', './wiki-core.js', './wiki-shell.js', './wiki-runtime.js', './icons/nownote-icon.svg']
   : ['./', './index.html', './styles.css', './app.js', './help.html', './manifest.webmanifest', './icons/nownote-icon.svg'];
+APP_SHELL.push('./crypto-worker.js');
 const CACHEABLE = new Set([...APP_SHELL, './wiki-runtime.js'].map(path => new URL(path, SCOPE).href));
 
 self.addEventListener("install", event => {

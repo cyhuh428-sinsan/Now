@@ -17,6 +17,7 @@ mainLibraries.push('wiki-read-set.js','wiki-selected-page.js','history-client.js
 mainLibraries.push('history-persistence.js');
 mainLibraries.push('wiki-connection.js');
 mainLibraries.push('workspace-navigation.js');
+mainLibraries.push('crypto-worker-client.js');
 
 export async function buildRuntimeBundles() {
   const read = async names => Promise.all(names.map(async name => normalize(await fs.readFile(path.join(vendor,name),'utf8'))));
@@ -27,6 +28,8 @@ export async function buildRuntimeBundles() {
   const assets={};
   for(const name of ['wiki.html','wiki-shell.js','wiki.css'])assets['desktop/app/'+name]=normalize(await fs.readFile(path.join(root,'web',name),'utf8'));
   assets['desktop/app/workspace-navigation.js']=(await read(['workspace-navigation.js']))[0];
+  const worker=libraries[mainLibraries.indexOf('note-protection-protocol.js')]+'\n;\n'+(await read(['crypto-worker-host.js']))[0];
+  assets['web/crypto-worker.js']=worker;assets['desktop/app/crypto-worker.js']=worker;
   const core=`${prefix}\n/*\n${licenses.join('\n')}\n*/\n${libraries.join('\n;\n')}\n${suffix}\n`;
   return {
     main: core,core,assets,

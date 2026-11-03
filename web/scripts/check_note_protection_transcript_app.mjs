@@ -9,6 +9,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
  const info={scope,pending:null,catalog:{entries:[d],context:{base:{crypto_epoch:2}},catalog_digest:'digest'}},row={kind:'typed',descriptor:d};
  const origin={value:{purpose:'original'},legacy:null};
  const box=vm.createContext({structuredClone,NowNoteProtectionProtocol:{canonicalJson:JSON.stringify},protectionActionGuard:()=>()=>{if(invalid)throw Error('invalidated');},
+  noteProtectionMutationsEnabled:()=>enabled,
   NowNoteProtectionClient:{planTranscript:async(s,c,descriptor,value,origins)=>{assert.equal(value,'Replacement\r\n');assert.equal(origins[0].origin.value.purpose,'original');return {purpose:'mixed_transcript_write'};},buildTranscriptWork:async()=>({})},
   noteProtectionReader:{read:async()=>{reads++;return {value:'Original\r\n',origin};}},noteProtectionRemote:{},
   noteProtectionTranscript:{start:async()=>{starts++;return 'operation';},resume:async()=>{resumes++;}},
@@ -19,7 +20,7 @@ for(const file of ['web/app.js','desktop/app/app.js']){
  await assert.rejects(box.prepareProtectedTranscript(info,{kind:'archive',descriptor:d},async()=> 'key'),/transcript/);assert.equal(reads,1);
  const pending={...info,pending:{id:'existing'}};await assert.rejects(box.saveProtectedTranscript(pending,edit,'Replacement\r\n','journal-key',async()=> 'key'));assert.equal(starts,1);
  const foreign=structuredClone(edit);foreign.scope.owner='bob';await assert.rejects(box.saveProtectedTranscript(info,foreign,'Replacement\r\n','journal-key',async()=> 'key'));assert.equal(starts,1);
- vm.runInContext('noteProtectionInternalEnabled=false',box);await assert.rejects(box.prepareProtectedTranscript(info,row,async()=> 'key'));assert.equal(reads,1);
- vm.runInContext('noteProtectionInternalEnabled=true',box);invalid=true;await assert.rejects(box.saveProtectedTranscript(info,edit,'Replacement\r\n','journal-key',async()=> 'key'));assert.equal(starts,1);
+ enabled=false;vm.runInContext('noteProtectionInternalEnabled=false',box);await assert.rejects(box.prepareProtectedTranscript(info,row,async()=> 'key'));assert.equal(reads,1);
+ enabled=true;vm.runInContext('noteProtectionInternalEnabled=true',box);invalid=true;await assert.rejects(box.saveProtectedTranscript(info,edit,'Replacement\r\n','journal-key',async()=> 'key'));assert.equal(starts,1);
  console.log(file+': typed transcript adapters, exact CRLF, gate/pending/scope/invalidation and no plain note write PASS (synthetic)');
 }

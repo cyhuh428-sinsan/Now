@@ -22,6 +22,7 @@ APP_FILES = [
     "wiki-shell.js",
     "wiki-runtime.js",
     "wiki.css",
+    "crypto-worker.js",
     "README.md",
     "runtime_checklist_ko.md",
 ]
@@ -69,7 +70,7 @@ def main() -> None:
 
     wiki_dir = PACKAGE_DIR / "wiki"
     wiki_dir.mkdir()
-    for name in ("wiki.html", "wiki-core.js", "wiki-shell.js", "wiki-runtime.js", "wiki.css", "styles.css", "sw.js"):
+    for name in ("wiki.html", "wiki-core.js", "wiki-shell.js", "wiki-runtime.js", "wiki.css", "styles.css", "sw.js", "crypto-worker.js"):
         shutil.copy2(ROOT / name, wiki_dir / name)
     shutil.copy2(ROOT / "wiki.html", wiki_dir / "index.html")
     shutil.copytree(ROOT / "icons", wiki_dir / "icons")

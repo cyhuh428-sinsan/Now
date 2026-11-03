@@ -32,7 +32,7 @@ class WikiEntryTests(unittest.IsolatedAsyncioTestCase):
                     self.assertIn('src="./wiki-shell.js"', body)
                     self.assertNotIn('src="./app.js"', body)
             self.assertIn('src="./app.js?', (await get("/app/"))[1])
-            for asset in ("wiki-core.js", "wiki-shell.js", "wiki-runtime.js", "wiki.css"):
+            for asset in ("wiki-core.js", "wiki-shell.js", "wiki-runtime.js", "wiki.css", "crypto-worker.js"):
                 self.assertEqual((await get("/wiki/" + asset))[0], 200)
             self.assertEqual((await get("/wiki/server/.env"))[0], 404)
             self.assertEqual((await get("/api/v1/wiki-shell-auth"))[0], 404)

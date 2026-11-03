@@ -18,7 +18,7 @@ function start(debugPort,wiki=false){
   const exe=wiki&&packaged?path.join(path.dirname(executable),'NowNoteWiki.exe'):executable;
   const args=[...(packaged?[]:[path.join(root,'main.cjs')]),`--remote-debugging-port=${debugPort}`,'--disable-gpu',...(wiki&&!packaged?['--wiki']:[])];
   const env={...process.env,NOWNOTE_DESKTOP_USER_DATA_DIR:profile,...(retainedQA?{NOWNOTE_SYNTHETIC_MIGRATION:'1'}:{})};delete env.ELECTRON_RUN_AS_NODE;
-  const child=spawn(exe,args,{env,windowsHide:true,stdio:['ignore','pipe','pipe']});children.add(child);
+  const child=spawn(exe,args,{env,windowsHide:process.env.NOWNOTE_QA_HEAVY_WORK!=='1',stdio:['ignore','pipe','pipe']});children.add(child);
   child.on('exit',()=>children.delete(child));child.on('error',error=>{console.error(error.message);});
   return child;
 }
@@ -188,6 +188,55 @@ try{
   const standaloneTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>new URL(row.url).pathname.endsWith('/wiki.html'));},'standalone Wiki');
   const d=await client(standaloneTarget);await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog')`),'standalone Wiki mounted');
   assert.equal(await d.evaluate(`(await nownoteDesktop.storage.read('${settingsKey}')).fontSize`),'large');
+  if(process.env.NOWNOTE_QA_HEAVY_WORK==='1'){
+    await d.evaluate(`nownoteDesktop.openWorkspace('note')`);
+    const memoTarget=await until(async()=>{const rows=await targets(wikiPort);return rows.find(row=>new URL(row.url).pathname.endsWith('/index.html'));},'heavy-work memo');
+    const memo=await client(memoTarget);
+    await until(()=>memo.evaluate(`typeof wikiUI!=='undefined'&&wikiUI!==null&&!!document.querySelector('#treeContent')`),'heavy-work memo ready');
+    await memo.command('Page.bringToFront');
+    await until(()=>memo.evaluate(`document.visibilityState==='visible'`),'foreground memo timing ready');
+    assert.equal(await memo.evaluate(`document.visibilityState`),'visible','memo timing must not include background timer throttling');
+    const begin=frame=>frame.evaluate(`(()=>{globalThis.qaHeartbeat={last:performance.now(),gaps:[],longTasks:[]};globalThis.qaObserver=new PerformanceObserver(list=>qaHeartbeat.longTasks.push(...list.getEntries().map(row=>row.duration)));qaObserver.observe({type:'longtask'});globalThis.qaInterval=setInterval(()=>{const now=performance.now();qaHeartbeat.gaps.push(now-qaHeartbeat.last);qaHeartbeat.last=now;},10);return Date.now();})()`);
+    const end=frame=>frame.evaluate(`(()=>{clearInterval(qaInterval);qaObserver.disconnect();const gaps=qaHeartbeat.gaps;return {visible:document.visibilityState,ticks:gaps.length,maxGapMs:Math.max(0,...gaps),p95GapMs:gaps.length?gaps.slice().sort((a,b)=>a-b)[Math.floor(gaps.length*.95)]:null,longTasks:qaHeartbeat.longTasks};})()`);
+    await begin(memo);await delay(350);const idle=await end(memo);
+    const largeFile=path.join(profile,'heavy-synthetic.md');await fs.writeFile(largeFile,'Synthetic text only.\n'.repeat(23000));
+    assert.ok((await fs.stat(largeFile)).size<524288);
+    await d.evaluate(`document.querySelector('[data-wiki-view=sources]').click()`);
+    await until(()=>d.evaluate(`!!document.querySelector('#wikiDialog [name=wiki-files]')`),'heavy source input');
+    const {root:heavyDoc}=await d.command('DOM.getDocument'),{nodeId:heavyInput}=await d.command('DOM.querySelector',{nodeId:heavyDoc.nodeId,selector:'#wikiDialog [name=wiki-files]'});
+    await d.command('DOM.setFileInputFiles',{nodeId:heavyInput,files:[largeFile]});
+    await begin(memo);await begin(d);const captureStart=performance.now();
+    await d.evaluate(`document.querySelector('#wikiDialog [data-wiki-action=capture-files]').click()`);
+    await until(()=>d.evaluate(`document.querySelector('#wikiDialog [role=status]')?.textContent.includes('원본 1개 저장')`),'heavy file durable capture');
+    const captureMs=performance.now()-captureStart,memoDuringFile=await end(memo),wikiDuringFile=await end(d);
+    await memo.evaluate(`(async()=>{noteHistoryController.lock();await noteHistoryController.resume({projectView:false,renderView:false});})()`);
+    await begin(memo);
+    const cryptoWork=await memo.evaluate(`(async()=>{const text='Synthetic transcript and analysis text. '.repeat(12000),start=performance.now(),cipher=await NowNoteProtectionProtocol.encryptContent(text,'synthetic-qa-only'),plain=await NowNoteProtectionProtocol.decryptContent(cipher,'synthetic-qa-only');if(plain!==text)throw Error('Synthetic crypto round trip');return {bytes:new TextEncoder().encode(text).length,elapsedMs:performance.now()-start};})()`);
+    const memoDuringCrypto=await end(memo);
+    if(process.env.NOWNOTE_QA_PROFILE_CRYPTO==='1'){await memo.command('Profiler.enable');await memo.command('Profiler.setSamplingInterval',{interval:100});await memo.command('Profiler.start');}
+    await begin(memo);
+    const typedWork=await memo.evaluate(`(async()=>{const Q=NowNoteProtectionProtocol,u=n=>'00000000-0000-4000-8000-'+String(n).padStart(12,'0'),text='Synthetic typed linked text. '.repeat(16000),start=performance.now();
+      for(const [kind,id,slot]of [['analysis_result','9','result_json'],['recording_transcript','7','transcript']]){
+        const key={kind,id,slot},binding={server_instance_id:u(2),owner_id:'local_user',local_id:'heavy-qa',transition_id:u(3),crypto_epoch:2,destination_key:key,revision_ref:null,parent_ref:null};
+        const destination={key,output_kind:'linked_text_envelope_v1',output_epoch:2,is_null:false,expected_binding:binding,operation_origin:null},raw=await Q.encryptRepresentation(text,destination,'synthetic-qa-only');
+        const descriptor={key,representation_kind:'linked_text_envelope_v1',representation_epoch:2,is_null:false,representation_version:1,representation_etag:u(10),storage_operation_id:u(3),semantic_origin_id:null,origin_validator:'linked_v1',origin_row_required:false,expected_binding:binding,revision_ref:null,parent_ref:null,physical_note_id:null,inventory_revision_id:null,linked_slot_version:1,ciphertext_sha256:await Q.sha256(raw)};
+        if(await Q.decryptRepresentation(raw,descriptor,{value:null,legacy:null},async()=> 'synthetic-qa-only',3)!==text)throw Error('Typed linked round trip');
+      }return {bytes:new TextEncoder().encode(text).length,elapsedMs:performance.now()-start};})()`);
+    const memoDuringTyped=await end(memo);
+    if(process.env.NOWNOTE_QA_PROFILE_CRYPTO==='1'){
+      const {profile:cpu}=await memo.command('Profiler.stop'),nodes=new Map(cpu.nodes.map(node=>[node.id,node.callFrame])),weights=new Map();
+      cpu.samples.forEach((id,index)=>{const frame=nodes.get(id),key=frame.functionName+' '+frame.lineNumber;weights.set(key,(weights.get(key)||0)+(cpu.timeDeltas[index]||0));});
+      console.log(JSON.stringify({typedCpuTop:[...weights].sort((a,b)=>b[1]-a[1]).slice(0,15)}));
+      if(process.env.NOWNOTE_QA_REPORT_DIR)await fs.writeFile(path.join(process.env.NOWNOTE_QA_REPORT_DIR,'crypto-c4-typed.cpuprofile'),JSON.stringify(cpu));
+    }
+    const heavy={kind:'actual native synthetic file capture and shared transcript/analysis crypto; not STT or Provider calls',packaged,idle,captureMs,memoDuringFile,wikiDuringFile,cryptoWork,memoDuringCrypto,typedWork,memoDuringTyped,realProviderCalls:0};
+    if(process.env.NOWNOTE_QA_REPORT_DIR)await fs.writeFile(path.join(process.env.NOWNOTE_QA_REPORT_DIR,'heavy-workspaces.json'),JSON.stringify(heavy,null,2));
+    console.log(JSON.stringify(heavy));
+    assert.equal(memoDuringFile.visible,'visible');assert.equal(memoDuringCrypto.visible,'visible');
+    assert.ok(memoDuringFile.ticks>0&&memoDuringCrypto.ticks>0,'memo event loop must progress');
+    assert.ok(memoDuringFile.maxGapMs<50&&memoDuringCrypto.maxGapMs<50&&memoDuringTyped.maxGapMs<50,'direct memo-blocking work requires follow-up');
+    await memo.evaluate('window.close()').catch(()=>{});memo.close();
+  }
   await d.evaluate('window.close()').catch(()=>{});d.close();if(standalone.exitCode===null)await once(standalone,'exit');
   console.log(JSON.stringify({runtime:'actual main/preload',packaged,retainedOriginal:retainedQA,sqlite:true,pagedHistory:true,separateWikiWindow:true,standaloneWiki:true,standaloneIngest:true,syntheticProviderCalls:1,realProviderCalls:0,staleTransmissionRejected:true,sourceSettingsNavigation:true,foreignNavigationRejected:true,secondaryExited:true,staleRejected:true,noteGraphUnloaded:true,restoreCold:true,untrustedIPCBlocked:true,cold:true}));
 }finally{

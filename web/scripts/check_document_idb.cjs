@@ -18,7 +18,11 @@ async function child(){
         const storage=NowBrowserHistoryStorage.create({indexedDB,localStorage,key,lock:action=>navigator.locks.request(key,action)});
         const value=JSON.parse(await storage.read());
         if(value.contexts[account].notes.a.protection_record.ciphertext!=='NOW_ENCRYPTED_V1:opaque'||value.contexts[account].notes.b.draft.content!=='unrelated'.repeat(10000))throw Error('Cold process document recovery failed');
-        return {coldProcess:true,protected:true,unrelatedPreserved:true};
+        const retained=NowBrowserHistoryStorage.create({indexedDB,localStorage,key:'qa.history.retained',lock:action=>navigator.locks.request('qa.history.retained',action)});
+        const original=JSON.parse(await retained.readOriginal());
+        if(original.contexts[JSON.stringify(['https://qa.invalid','alice'])].notes.a.protection_record.ciphertext!=='NOW_ENCRYPTED_V1:synthetic')throw Error('Cold retained original protection failed');
+        if(!(await retained.readDirectory(['contexts'])).found)throw Error('Cold retained selective read failed');
+        return {coldProcess:true,protected:true,unrelatedPreserved:true,retainedOriginal:true};
       })()`);
       console.log(JSON.stringify(result));return;
     }
@@ -58,6 +62,8 @@ async function child(){
       db.close();return {checks:9,changedParts:changed.length,format:after.row.format};
     })()`);
     console.log(JSON.stringify(result));
+    const {verifyRetainedBrowserHistory}=await import('./browser-retained-history-fixture.mjs');
+    console.log(JSON.stringify(await verifyRetainedBrowserHistory(expression=>window.webContents.executeJavaScript(expression))));
   }finally{window.destroy();app.quit();}
 }
 if(process.versions.electron){child().catch(error=>{console.error(error.stack);require('electron').app.exit(1);});}

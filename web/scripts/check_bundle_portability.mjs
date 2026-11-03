@@ -24,6 +24,7 @@ files.push('web/vendor/history-persistence.js');
 files.push('web/vendor/wiki-connection.js','web/wiki.html','web/wiki-shell.js','web/wiki.css');
 files.push('web/vendor/workspace-navigation.js','desktop/app/workspace-navigation.js');
 files.push('desktop/app/wiki.html','desktop/app/wiki-shell.js','desktop/app/wiki.css');
+files.push('web/vendor/crypto-worker-client.js','web/vendor/crypto-worker-host.js','web/crypto-worker.js','desktop/app/crypto-worker.js');
 function run(command,args,cwd){const result=spawnSync(command,args,{cwd,encoding:'utf8'});if(result.status!==0)throw Error(result.stderr||result.stdout);return result.stdout;}
 try{
   for(const autocrlf of ['false','true']){
