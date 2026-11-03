@@ -10,6 +10,13 @@
   const emptyBase = () => ({ head_version: 0, head_revision_id: null, inventory_revision_ids: [], crypto_epoch: 0, replica_count: 0 });
   const record = value => value && typeof value === 'object' && !Array.isArray(value);
   const protectedItem = value => globalThis.NowNoteProtectionState?.protectedRecord(value) || false;
+  const issueSummary=(id,item)=>{
+    const conflicted=Boolean(item.conflict||item.conflicted),error=item.error;
+    if(!conflicted&&!error)return null;
+    return {id,title:item.draft?.title||id,excluded:item.localOnly===true,deleted:Boolean(item.draft?.deleted_at),
+      code:item.conflict?.code||item.conflictCode||error?.code||'',message:error?.message||'',conflicted,
+      active:item.localOnly!==true&&Boolean(conflicted||item.dirty||item.pending||item.outbox?.length||item.needsBaseline)};
+  };
   function create({ initial, context, request, write, writeNote = null, change = () => {} }) {
     let data = initial == null ? { schema_version: 1, contexts: {} } : copy(initial);
     const writeSnapshots=globalThis.NowHistorySnapshots?.create();
@@ -51,6 +58,7 @@
     // A UI projection is deliberately not a complete journal/archive record.
     const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
       base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length,
+      conflicted:Boolean(item.conflict),conflictCode:item.conflict?.code||null,error:item.error?copy(item.error):null,
       skipAutomaticSync:Boolean(!item.needsBaseline&&(item.conflict||!item.replicaSelected||item.localOnly))}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
@@ -346,6 +354,7 @@
       },
       manages: id => Boolean(context().enabled && readable() && entry(id)),
       currentView: id => context().enabled&&readable()?currentEntry(entry(id)):null,
+      issues:()=>context().enabled&&readable()?Object.entries(bucket(context())?.notes||{}).filter(([,item])=>!protectedItem(item)).map(([id,item])=>issueSummary(id,item)).filter(Boolean):[],
       currentEntries({excludeWiki=false}={}){
         if(!context().enabled||!readable())return {};
         return Object.fromEntries(Object.entries(bucket(context())?.notes||{}).filter(([id,item])=>!protectedItem(item)
@@ -361,7 +370,8 @@
       status() {
         const notes = context().enabled && readable() ? Object.values(bucket(context())?.notes || {}).filter(v => !protectedItem(v)) : [];
         return { pending: notes.filter(item => !item.localOnly && (item.dirty || item.outbox.length)).length,
-          conflicts: notes.filter(item => item.conflict).length, revisions: notes.reduce((sum, item) => sum + item.revisions.length, 0),
+          conflicts: notes.filter(item => !item.localOnly&&item.conflict).length, errors:notes.filter(item=>!item.localOnly&&item.error&&issueSummary('',item).active).length,
+          revisions: notes.reduce((sum, item) => sum + item.revisions.length, 0),
           failed: Boolean(failed), unsupported: data !== null && !readable() };
       },
       invalidate() { generation++; },
@@ -415,5 +425,5 @@
     return {scope:{url:String(context.url || '').replace(/\/+$/,''),owner:context.owner},local_id:note.local_id,
       expected,next:copy(staged.contexts[key(context)].notes[note.local_id])};
   }
-  globalThis.NowNoteHistory = { create, key, meaning, same, prepareExternalEdit };
+  globalThis.NowNoteHistory = { create, key, meaning, same, prepareExternalEdit, issueSummary };
 })();

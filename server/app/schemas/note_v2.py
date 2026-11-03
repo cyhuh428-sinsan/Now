@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
+import re
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -64,6 +65,13 @@ class SnapshotNote(NoteValue):
     client_updated_at: str | None
     created_at: str
     updated_at: str
+    @field_validator('client_updated_at', 'deleted_at', mode='before')
+    @classmethod
+    def legacy_server_utc(cls, value):
+        # Legacy sync serialized these UTC database fields without the timezone.
+        if isinstance(value, str) and re.fullmatch(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?', value):
+            return value + 'Z'
+        return value
     _dates = field_validator("client_updated_at", "created_at", "updated_at")(timestamp)
 
 

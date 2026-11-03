@@ -71,6 +71,12 @@ app.whenReady().then(async()=>{
         value.contexts[account].notes[note.local_id]={raw:note,draft:note,base:{crypto_epoch:0,inventory_revision_ids:[],head_revision_id:'qa-head'},revisions:[],outbox:[],receipts:[],localOnly:true};
       }
       value.contexts[account].notes['qa-save-b'].revisions=[{snapshot:{note:{content:'QA_UNRELATED_HISTORY'}}}];
+      if(${process.env.NOWNOTE_SYNC_STATUS_QA==='1'}){
+        const a=value.contexts[account].notes['qa-save-a'],b=value.contexts[account].notes['qa-save-b'];
+        a.localOnly=false;a.conflict={code:'baseline_selection_required',local:a.draft,remote:null};
+        b.conflict={code:'invalid_note_parent',local:b.draft,remote:null};b.draft.deleted_at='2026-11-03T00:00:00Z';
+        b.error={code:'invalid_note_parent',message:'invalid_note_parent'};
+      }
       await backend.full({expected:before.value,next:value,revision:before.revision},{active:()=>true});
       noteHistory.suspend();await noteHistoryController.resume({projectView:false,renderView:false});
       globalThis.qaProductSave={backend,before,ctx,account,value,scoped:(await backend.open()).scoped};
@@ -94,6 +100,21 @@ app.whenReady().then(async()=>{
     const startup=await run(`(()=>{let exportBlocked=false;try{noteHistory.export();}catch{exportBlocked=true;}
       return {deferred:noteHistory.deferred(),current:noteHistory.currentView('qa-save-a')?.draft.content==='old',rendered:elements.treeContent.value==='old',fullReads:qaStartupFullReads,readsBeforeSelection:qaReadsBeforeSelection,writeKeys:qaStartupWriteKeys,exportBlocked,matches:noteHistory.matches()};})()`);
     const startupCurrent=startup.deferred&&startup.current&&startup.rendered&&startup.fullReads===0&&startup.exportBlocked;
+    if(process.env.NOWNOTE_SYNC_STATUS_QA==='1'){
+      if(!startupCurrent)throw Error('status_startup_projection');
+      const before={...historyCounts};
+      const inspect=()=>run(`(()=>{
+        elements.syncStatusBtn.click();const dialog=document.querySelector('#syncStatusDialog'),r=dialog.getBoundingClientRect();
+        const result={open:dialog.open,settingsHidden:elements.settingsView.classList.contains('hidden'),text:dialog.textContent,
+          fullReads:qaStartupFullReads,deferred:noteHistory.deferred(),fits:r.x>=0&&r.y>=0&&r.right<=innerWidth+1&&r.bottom<=innerHeight+1};
+        syncStatusUI.close();return result;
+      })()`);
+      const desktop=await inspect();window.setSize(600,820);const narrow=await inspect();
+      for(const value of [desktop,narrow])if(!value.open||!value.settingsHidden||value.fullReads||!value.deferred||!value.fits
+        ||!value.text.includes('PC 보관 · 동기화 제외')||!value.text.includes('PC본·서버본 비교 필요'))throw Error('status_not_visible_or_full_read '+JSON.stringify(value));
+      if(historyCounts.open!==before.open)throw Error('status_opened_full_journal');
+      result={ok:true,mode,phase,syncStatus:true,desktop,narrow,realProviderCalls:0,blockedNetworkAttempts:network};return;
+    }
     if(process.env.NOWNOTE_JOURNAL_WINDOW_QA==='1'){
       if(!startupCurrent)throw Error('window_startup_projection');
       const before={...historyCounts};

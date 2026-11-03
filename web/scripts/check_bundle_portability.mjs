@@ -14,7 +14,9 @@ files.push('web/vendor/wiki-runtime-loader.js','web/wiki-runtime.js','desktop/ap
 files.push('web/vendor/document-parts.js','web/vendor/document-idb.js','desktop/app/document-parts.js');
 files.push('web/vendor/history-snapshot.js');
 files.push('web/vendor/journal-writes.js','desktop/app/journal-writes.js');
+files.push('web/vendor/journal-window.js','desktop/app/journal-window.js');
 files.push('web/vendor/deferred-history.js');
+files.push('web/vendor/sync-status-ui.js');
 files.push('web/vendor/history-backup.js');
 files.push('web/vendor/wiki-index-reader.js');
 files.push('web/vendor/wiki-read-set.js','web/vendor/wiki-selected-page.js');

@@ -154,6 +154,7 @@
       },
       currentView:id=>!visible()?null:full?full.currentView(id):current(id),
       currentEntries:options=>!visible()?{}:full?full.currentEntries(options):copy(preview?.notes||{}),
+      issues:()=>!visible()?[]:full?full.issues():Object.entries(preview?.notes||{}).map(([id,item])=>NowNoteHistory.issueSummary(id,item)).filter(Boolean),
       entryIds:options=>!visible()?[]:full?full.entryIds(options):Object.keys(preview?.notes||{}),
       manages:id=>visible()&&(full?full.manages(id):Boolean(preview?.notes[id])),
       blocked:id=>!visible()||Boolean(full?.blocked(id)),
@@ -165,7 +166,8 @@
         if(full)return full.status();
         const notes=visible()?Object.values(preview?.notes||{}):[];
         return {pending:notes.filter(n=>!n.localOnly&&(n.dirty||n.pending)).length,
-          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:notes.filter(n=>n.conflicted).length,revisions:null,deferred:Boolean(preview),
+          dirty:notes.filter(n=>n.dirty||n.pending).length,conflicts:notes.filter(n=>!n.localOnly&&n.conflicted).length,
+          errors:notes.filter(n=>!n.localOnly&&n.error&&NowNoteHistory.issueSummary('',n).active).length,revisions:null,deferred:Boolean(preview),
           failed:Boolean(failed),unsupported:!suspended&&bound!==contextKey()};
       },
       idle:()=>full?full.idle():loading?loading.then(store=>store.idle()):selectedTail.then(()=>{}),

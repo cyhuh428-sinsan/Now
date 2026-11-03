@@ -55,6 +55,14 @@ def history(db, owner):
     return head, revisions, inventory
 
 
+def registered_history_owner(db):
+    from app.models.note import UserAccount
+    owner = 'e1_' + uuid4().hex
+    db.add(UserAccount(owner_id=owner, email=owner+'@example.invalid'))
+    db.commit()
+    return owner
+
+
 def test_new_raw_snapshot_and_noop(history_db):
     from app.services.note_sync import upsert_note
     owner = "e1_" + uuid4().hex
@@ -132,7 +140,7 @@ def test_repeated_existing_writes_and_rollback_session_reuse(history_db):
 def test_parent_error_after_natural_flush_has_no_ghost_history(client, history_db):
     from app.models.note import Note, SyncLog
     from sqlalchemy import select
-    owner = "e1_" + uuid4().hex
+    owner = registered_history_owner(history_db)
     original = Note(owner_id=owner, device_id="one", local_id="daily:history",
                     note_type="daily", title="raw", content="legacy")
     history_db.add(original)
@@ -181,7 +189,7 @@ def test_history_insert_failure_rolls_back_note_and_session_queue(history_db):
 
 def test_soft_delete_and_single_type_change(client, history_db):
     from app.services.note_sync import upsert_note
-    owner = "e1_" + uuid4().hex
+    owner = registered_history_owner(history_db)
     item = payload(owner)
     upsert_note(item, history_db)
     history_db.commit()
@@ -261,7 +269,7 @@ def test_fallback_and_timestamp_only_representative_change(history_db):
 def test_ambiguous_baseline_and_natural_parent_flush(client, history_db):
     from app.models.note import Note
     from app.services.note_sync import upsert_note
-    owner = "e1_" + uuid4().hex
+    owner = registered_history_owner(history_db)
     for device, kind in [("one", "daily"), ("two", "worklog")]:
         history_db.add(Note(owner_id=owner, device_id=device, local_id="daily:history", note_type=kind,
                             title="raw", content="old", client_updated_at=datetime(2026, 10, 29)))

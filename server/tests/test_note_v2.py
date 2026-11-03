@@ -165,6 +165,32 @@ def test_offline_branch_only_import_restore_and_parent_cycle(client, subject):
     assert client.post("/api/v2/notes/revisions/import", json=bad, headers=subject["headers"]).status_code == 409
 
 
+def test_legacy_utc_import_preserves_request_and_replay(client, subject):
+    request = body(subject, "legacy-utc:/branch")
+    stamp = "2026-10-29T01:02:03.123456"
+    raw = {"id": None, "owner_id": subject["owner"], "device_id": "offline-origin", "local_id": request["local_id"],
+           "note_type": "daily", "title": "branch", "content": "preserved synthetic original", "parent_local_id": None,
+           "level": 1, "tags": None, "source": "raw", "client_updated_at": stamp,
+           "deleted_at": stamp, "created_at": stamp + "Z", "updated_at": stamp + "Z"}
+    revision = str(uuid4())
+    imported = {key: value for key, value in request.items() if key not in ["note", "base_head_version", "base_revision_id", "expected_inventory_revision_ids"]}
+    imported["entries"] = [{"revision_id": revision, "parent_ref": None, "snapshot": {"schema_version": 1, "note": raw}}]
+    original = copy.deepcopy(imported)
+    response = client.post("/api/v2/notes/revisions/import", json=imported, headers=subject["headers"])
+    assert response.status_code == 200, response.text
+    assert client.post("/api/v2/notes/revisions/import", json=imported, headers=subject["headers"]).json() == response.json()
+    assert imported == original
+    saved = client.get("/api/v2/notes/revision", params={"owner_id": subject["owner"], "local_id": request["local_id"],
+                       "revision_id": revision, "revision_kind": "offline_branch"}, headers=subject["headers"])
+    assert saved.status_code == 200, saved.text
+    note = saved.json()["snapshot"]["note"]
+    assert note["content"] == raw["content"]
+    assert note["client_updated_at"] == stamp + "Z"
+    assert note["deleted_at"] == stamp + "Z"
+    denied = client.post("/api/v2/notes/revisions/import", json={**imported, "owner_id": subject["other"]}, headers=subject["headers"])
+    assert denied.status_code == 401
+
+
 def test_epoch_precedes_replay_and_legacy_batch_protection(client, subject):
     from app.models.note_history import NoteHead
     request = body(subject)
