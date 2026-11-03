@@ -3,15 +3,18 @@ globalThis.crypto=require('node:crypto').webcrypto;
 require('../vendor/note-history-state.js');require('../vendor/journal-writes.js');
 const {create}=require('../vendor/deferred-history.js');
 const account=JSON.stringify(['https://qa.invalid','alice']);
-function fixture({online=false}={}){
+function fixture({online=false,conflicted=false,wikiMetadata=false}={}){
   let stamp='one',fullReads=0,selectedReads=[],saved=[],binding='one';
   const context=()=>({url:'https://qa.invalid',owner:'alice',auth:binding,device:'qa',enabled:true,online});
   const note=id=>({owner_id:'alice',local_id:id,note_type:'tree',source:'manual',title:id,content:'current',level:1});
   const entry=id=>({raw:note(id),draft:note(id),base:{crypto_epoch:0,inventory_revision_ids:['r'],head_revision_id:'r',head_version:1},revisions:[{revision_id:'old',snapshot:{note:note(id)}}],outbox:[],receipts:[],replicaSelected:true,localOnly:!online,dirty:false});
   let root={schema_version:1,contexts:{[account]:{notes:{a:entry('a'),b:entry('b')}}}};
+  if(conflicted)root.contexts[account].notes.a.conflict={code:'version_conflict',local:note('a'),remote:null};
+  if(wikiMetadata)root.contexts[account].wiki_ingest_operations={pending:{state:'prepared'}};
   const notes=Object.fromEntries(Object.entries(root.contexts[account].notes).map(([id,item])=>[id,{projection:'current_v1',raw:item.raw,draft:item.draft,base:{crypto_epoch:0,head_revision_id:'r'},localOnly:!online,pending:0,dirty:false}]));
   const calls=[],pages=[],remote={a:note('a'),b:note('b')};let version=1;
-  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,syncSupported:true,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
+  if(conflicted)notes.a.conflicted=true;
+  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,syncSupported:true,wikiIndexSupported:!wikiMetadata,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
     readPage:async request=>{pages.push(request);return {projection:'history_page_v1',account,id:request.id,stamp,total:1,items:structuredClone(root.contexts[account].notes[request.id].revisions),nextCursor:null};},
     request:async(_ctx,path,method,body)=>{
       calls.push({path,method,id:body.local_id});
@@ -19,6 +22,11 @@ function fixture({online=false}={}){
       if(path==='current'&&method==='PUT'){remote[body.local_id]={...remote[body.local_id],...body.note};version++;
         return {mutation_id:body.mutation_id,result_revision_id:'r'+version,result_head_version:version,result_inventory_revision_ids:['r'+version],crypto_epoch:0,history_generation:version};}
       if(path==='current'&&method==='GET')return {snapshot:{schema_version:1,note:remote[body.local_id]},head_version:version,head_revision_id:'r'+version,inventory_revision_ids:['r'+version],crypto_epoch:0,replica_count:1};
+      if(path==='revision'&&method==='GET')return {snapshot:{schema_version:1,note:{...note(body.local_id),content:'RESTORED'}}};
+      if(path==='restore'&&method==='POST'){
+        remote[body.local_id]={...note(body.local_id),content:'RESTORED'};version++;
+        return {mutation_id:body.mutation_id,result_revision_id:'r'+version,result_head_version:version,result_inventory_revision_ids:['r'+version],crypto_epoch:0,history_generation:version};
+      }
       throw Error('unexpected request');
     },
     select:async request=>{selectedReads.push(request.id);assert.equal(request.stamp,stamp);return {entry:structuredClone(root.contexts[account].notes[request.id]),stamp,revision:stamp};},
@@ -76,4 +84,39 @@ test('selection and multiple queued edits never lose their save points or cross 
   const f=fixture();await Promise.all([f.api.edit({...f.note('a'),content:'one'}),f.api.edit({...f.note('b'),content:'two'}),f.api.seal('a')]);
   assert.equal(f.fullReads(),0);assert.equal(f.root().contexts[account].notes.a.draft.content,'one');assert.equal(f.root().contexts[account].notes.b.draft.content,'two');
   f.changeBinding();await assert.rejects(f.api.edit({...f.note('a'),content:'FOREIGN'}));assert.equal(f.saved.length,3);
+});
+
+test('conflicted document edit, seal and comparison preserve conflict and sibling without whole reads',async()=>{
+  const f=fixture({online:true,conflicted:true}),sibling=structuredClone(f.root().contexts[account].notes.b);
+  assert.equal(f.api.status().conflicts,1);assert.equal(f.api.selectable('a'),true);
+  await f.api.edit({...f.note('a'),content:'conflict draft'});await f.api.seal('a');
+  const compared=await f.api.compare('a');
+  assert.ok(compared.remote);assert.equal(f.fullReads(),0);
+  assert.equal(f.api.status().conflicts,1);
+  assert.equal(f.root().contexts[account].notes.a.draft.content,'conflict draft');
+  assert.equal(f.root().contexts[account].notes.a.conflict.code,'version_conflict');
+  assert.deepEqual(f.root().contexts[account].notes.b,sibling);
+  const before=f.calls.length;await f.api.sync({onlyIds:['a']});
+  assert.equal(f.calls.length,before);assert.equal(f.fullReads(),0);
+});
+
+test('explicit conflict restoration keeps archived requests and sibling history with only selected loads',async()=>{
+  const f=fixture({online:true,conflicted:true}),sibling=structuredClone(f.root().contexts[account].notes.b);
+  await f.api.edit({...f.note('a'),content:'offline conflict edit'});await f.api.seal('a');
+  const originalRequests=structuredClone(f.root().contexts[account].notes.a.outbox);
+  const comparison=await f.api.compare('a');
+  const receipt=await f.api.restore('a',{kind:'note_revision',id:'r0'},comparison.remote);
+  assert.ok(receipt);assert.equal(f.fullReads(),0);assert.equal(f.api.deferred(),true);
+  const entry=f.root().contexts[account].notes.a;
+  assert.equal(entry.conflict,null);assert.equal(entry.draft.content,'RESTORED');
+  assert.deepEqual(entry.archived_outbox,originalRequests);
+  assert.deepEqual(f.root().contexts[account].notes.b,sibling);
+  assert.ok(f.calls.every(call=>call.id==='a'));
+});
+
+test('comparison with Wiki operation metadata retains the full validation boundary',async()=>{
+  const f=fixture({online:true,conflicted:true,wikiMetadata:true});
+  await assert.rejects(f.api.compare('a'),/network forbidden/);
+  assert.equal(f.fullReads(),1);assert.equal(f.selectedReads.length,0);assert.equal(f.saved.length,0);
+  assert.equal(f.root().contexts[account].wiki_ingest_operations.pending.state,'prepared');
 });

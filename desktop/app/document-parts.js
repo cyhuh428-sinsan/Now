@@ -122,10 +122,16 @@
     for(const key of wikiMetadata)if(bucket.has(key)&&!(yield* object(['contexts',account,key])))return unavailable();
     const wikiIndexSupported=bucket.size===1;
     const path=['contexts',account,'notes'],entries=yield* object(path);if(!entries)return unavailable();
-    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox','wiki_source_snapshot']);
+    const allowed=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox','archived_outbox','comparison','wiki_source_snapshot','error']);
     for(const id of entries.keys()){
       const location=[...path,id],entry=yield* object(location);
       if(!entry||[...entry.keys()].some(k=>!allowed.has(k))||['raw','draft','base','revisions','outbox','receipts'].some(k=>!entry.has(k)))return unavailable();
+      if(entry.has('error')){
+        const error=yield* object([...location,'error']);
+        if(!error||[...error.keys()].sort().join(',')!=='code,message'
+          ||typeof(yield* value([...location,'error','code']))!=='string'
+          ||typeof(yield* value([...location,'error','message']))!=='string')return unavailable();
+      }
       if(entry.has('wiki_source_snapshot')&&(!id.startsWith('wiki-source:')||!(yield* object([...location,'wiki_source_snapshot']))))return unavailable();
       const base=yield* object([...location,'base']);
       if(!base||(yield* value([...location,'base','crypto_epoch']))!==0)return unavailable();
@@ -136,11 +142,23 @@
       if([draft,raw].some(n=>String(n.source||'').startsWith('wiki')))continue;
       const pending=yield* selectSteps([...location,'outbox'],true,validated);
       if(pending.part?.type!=='array')return unavailable();
-      if(entry.has('conflict')&&(yield* value([...location,'conflict']))!==null)return unavailable();
+      let conflicted=false;
+      if(entry.has('conflict')){
+        const row=yield* selectSteps([...location,'conflict'],true,validated);
+        if(row.value!==null){
+          const conflict=row.part?.type==='object'?new Map(row.part.entries):null;
+          if(!conflict||!conflict.has('local')||!conflict.has('remote')
+            ||[...conflict.keys()].some(key=>!['code','base','local','remote'].includes(key))
+            ||conflict.has('code')&&typeof(yield* value([...location,'conflict','code']))!=='string')return unavailable();
+          conflicted=true;
+        }
+      }
+      if(entry.has('archived_outbox')&&(yield* selectSteps([...location,'archived_outbox'],true,validated)).part?.type!=='array')return unavailable();
+      if(entry.has('comparison')&&!(yield* object([...location,'comparison'])))return unavailable();
       const head=yield* value([...location,'base','head_revision_id']);
       Object.defineProperty(notes,id,{enumerable:true,value:{projection:'current_v1',raw,draft,base:{head_revision_id:head,crypto_epoch:0},
         localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
-        dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length}});
+        dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length,conflicted}});
     }
     return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,
       wikiIndexMetadata:wikiMetadata.filter(key=>bucket.has(key)),syncSupported:wikiIndexSupported&&entries.size===Object.keys(notes).length};

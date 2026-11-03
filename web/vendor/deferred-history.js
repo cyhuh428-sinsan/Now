@@ -13,7 +13,7 @@
       preview=next?copy(next):null;full=next?null:build(initial.snapshot);
     }
     reset(initial);
-    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id)&&!preview.notes[id].conflicted);
+    const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
     function selected(id,action){
       const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
       const run=selectedTail.catch(()=>{}).then(async()=>{
@@ -155,7 +155,9 @@
         }
       }
       const id=name==='edit'?args[0]?.local_id:args[0];
-      if(['edit','seal','localOnly'].includes(name)&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
+      const selectedAction=['edit','seal','localOnly'].includes(name)
+        ||['compare','restore','restoreLocal','importPending'].includes(name)&&preview?.wikiIndexSupported!==false;
+      if(selectedAction&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
       const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
     };
     return api;

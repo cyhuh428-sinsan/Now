@@ -62,3 +62,29 @@ test('current preview validates the shared note directory once, with linear work
   const small=count(60),large=count(120);assert.ok(large<=small*2.2,`directory validation grew ${small} -> ${large}`);
   assert.ok(large<120*15,`directory validation repeated ${large} times`);
 });
+
+test('normal sync errors do not force full history loading or leak error details into the preview',()=>{
+  const root=fixture(),entry=root.contexts[account].notes.a;
+  entry.error={code:'request_failed',message:'PRIVATE_ERROR_DETAIL'};
+  const result=read(root);
+  assert.equal(result.value.supported,true);
+  assert.equal(JSON.stringify(result.value).includes('PRIVATE_ERROR_DETAIL'),false);
+  assert.equal(result.value.notes.a.draft.content,'current a');
+  for(const invalid of ['text',[],{code:'request_failed',message:'x',extension:true},{code:{},message:'x'}]){
+    entry.error=invalid;assert.equal(read(root).value.supported,false);
+  }
+});
+
+test('known conflicts are projected as a flag without reading saved remote or local conflict bodies',()=>{
+  const root=fixture(),entry=root.contexts[account].notes.a;
+  entry.conflict={code:'version_conflict',base:{private:'UNREAD_BASE'},local:{private:'UNREAD_LOCAL'},remote:{private:'UNREAD_REMOTE'}};
+  entry.archived_outbox=[{private:'UNREAD_ARCHIVED_REQUEST'}];
+  entry.comparison={snapshot:{note:{content:'UNREAD_COMPARISON'}}};
+  const result=read(root);
+  assert.equal(result.value.supported,true);
+  assert.equal(result.value.notes.a.conflicted,true);
+  assert.ok(!JSON.stringify(result.value).includes('UNREAD_'));
+  assert.ok(result.ids.every(id=>!id.includes('"conflict","')&&!id.includes('"archived_outbox","')));
+  entry.conflict.extension=true;assert.equal(read(root).value.supported,false);
+  delete entry.conflict.extension;entry.comparison=[];assert.equal(read(root).value.supported,false);
+});
