@@ -3,7 +3,7 @@ globalThis.crypto=require('node:crypto').webcrypto;
 require('../vendor/note-history-state.js');require('../vendor/journal-writes.js');
 const {create}=require('../vendor/deferred-history.js');
 const account=JSON.stringify(['https://qa.invalid','alice']);
-function fixture({online=false,conflicted=false,wikiMetadata=false}={}){
+function fixture({online=false,conflicted=false,wikiMetadata=false,onRequest=async()=>{},onSelect=async()=>{},onLoad=async()=>{},fullRequest=false}={}){
   let stamp='one',fullReads=0,selectedReads=[],saved=[],binding='one';
   const context=()=>({url:'https://qa.invalid',owner:'alice',auth:binding,device:'qa',enabled:true,online});
   const note=id=>({owner_id:'alice',local_id:id,note_type:'tree',source:'manual',title:id,content:'current',level:1});
@@ -14,10 +14,9 @@ function fixture({online=false,conflicted=false,wikiMetadata=false}={}){
   const notes=Object.fromEntries(Object.entries(root.contexts[account].notes).map(([id,item])=>[id,{projection:'current_v1',raw:item.raw,draft:item.draft,base:{crypto_epoch:0,head_revision_id:'r'},localOnly:!online,pending:0,dirty:false}]));
   const calls=[],pages=[],remote={a:note('a'),b:note('b')};let version=1;
   if(conflicted)notes.a.conflicted=true;
-  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,syncSupported:true,wikiIndexSupported:!wikiMetadata,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
-    readPage:async request=>{pages.push(request);return {projection:'history_page_v1',account,id:request.id,stamp,total:1,items:structuredClone(root.contexts[account].notes[request.id].revisions),nextCursor:null};},
-    request:async(_ctx,path,method,body)=>{
+  const request=async(_ctx,path,method,body)=>{
       calls.push({path,method,id:body.local_id});
+      await onRequest({path,method,id:body.local_id});
       if(path==='revisions/import')return {imported_refs:body.entries.map(e=>({kind:'offline_branch',id:e.revision_id}))};
       if(path==='current'&&method==='PUT'){remote[body.local_id]={...remote[body.local_id],...body.note};version++;
         return {mutation_id:body.mutation_id,result_revision_id:'r'+version,result_head_version:version,result_inventory_revision_ids:['r'+version],crypto_epoch:0,history_generation:version};}
@@ -28,12 +27,15 @@ function fixture({online=false,conflicted=false,wikiMetadata=false}={}){
         return {mutation_id:body.mutation_id,result_revision_id:'r'+version,result_head_version:version,result_inventory_revision_ids:['r'+version],crypto_epoch:0,history_generation:version};
       }
       throw Error('unexpected request');
-    },
-    select:async request=>{selectedReads.push(request.id);assert.equal(request.stamp,stamp);return {entry:structuredClone(root.contexts[account].notes[request.id]),stamp,revision:stamp};},
+    };
+  const api=create({initial:{preview:{projection:'journal_current_v1',supported:true,syncSupported:true,wikiIndexSupported:!wikiMetadata,account,stamp,notes}},context,contextKey:()=>binding,accountKey:()=>account,
+    readPage:async request=>{pages.push(request);return {projection:'history_page_v1',account,id:request.id,stamp,total:1,items:structuredClone(root.contexts[account].notes[request.id].revisions),nextCursor:null};},
+    request,
+    select:async request=>{selectedReads.push(request.id);await onSelect(request);assert.equal(request.stamp,stamp);return {entry:structuredClone(root.contexts[account].notes[request.id]),stamp,revision:stamp};},
     saveNote:async request=>{assert.equal(request.revision,stamp);assert.deepEqual(request.expected,root.contexts[account].notes[request.id]);
       root.contexts[account].notes[request.id]=structuredClone(request.next);saved.push(request.id);stamp+='x';return {stamp,revision:stamp};},
-    load:async()=>{fullReads++;return {value:root,stamp};},
-    build:s=>NowNoteHistory.create({initial:s.value,context,write:async()=>{},request:async()=>{throw Error('network forbidden');}})});
+    load:async()=>{fullReads++;await onLoad();return {value:root,stamp};},
+    build:s=>NowNoteHistory.create({initial:s.value,context,write:async value=>{root=structuredClone(value);},request:fullRequest?request:async()=>{throw Error('network forbidden');}})});
   return {api,note,calls,pages,remote,fullReads:()=>fullReads,selectedReads,saved,root:()=>root,changeBinding:()=>{binding='other';},externalChange:()=>{stamp+='external';}};
 }
 
@@ -119,4 +121,26 @@ test('comparison with Wiki operation metadata retains the full validation bounda
   await assert.rejects(f.api.compare('a'),/network forbidden/);
   assert.equal(f.fullReads(),1);assert.equal(f.selectedReads.length,0);assert.equal(f.saved.length,0);
   assert.equal(f.root().contexts[account].wiki_ingest_operations.pending.state,'prepared');
+});
+
+test('default synchronization racing full materialization never writes a discarded preview stamp',async()=>{
+  let entered,release;
+  const started=new Promise(resolve=>{entered=resolve;}),gate=new Promise(resolve=>{release=resolve;});
+  const f=fixture({online:true,fullRequest:true,onRequest:async({id})=>{if(id==='a'){entered();await gate;}},
+    onLoad:()=>new Promise(resolve=>setImmediate(resolve)),
+    onSelect:({id})=>id==='b'?new Promise(resolve=>setImmediate(()=>setImmediate(resolve))):Promise.resolve()});
+  f.remote.b.content='PEER_DURING_SETTINGS';
+  const syncing=f.api.sync();await started;
+  const materializing=f.api.ensure();release();
+  await Promise.all([syncing,materializing]);
+  assert.equal(f.fullReads(),1);assert.equal(f.api.deferred(),false);
+  assert.equal(f.api.view('b').draft.content,'PEER_DURING_SETTINGS');
+  assert.equal(f.api.failure(),'');
+});
+
+test('a detached selected store cannot commit after its preview was materialized',async()=>{
+  const f=fixture(),selected=await f.api.ensure('a');await f.api.ensure();
+  const saved=f.saved.length;
+  await assert.rejects(selected.edit({...f.note('a'),content:'STALE_SELECTED'}),/계정|변경|다시|이력/);
+  assert.equal(f.saved.length,saved);assert.equal(f.api.view('a').draft.content,'current');
 });

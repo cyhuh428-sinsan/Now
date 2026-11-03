@@ -437,8 +437,11 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
       if(entry.has('archived_outbox')&&(yield* selectSteps([...location,'archived_outbox'],true,validated)).part?.type!=='array')return unavailable();
       if(entry.has('comparison')&&!(yield* object([...location,'comparison'])))return unavailable();
       const head=yield* value([...location,'base','head_revision_id']);
+      const localOnly=entry.has('localOnly')?yield* value([...location,'localOnly']):undefined;
+      const needsBaseline=entry.has('needsBaseline')?yield* value([...location,'needsBaseline']):undefined;
+      const replicaSelected=entry.has('replicaSelected')?yield* value([...location,'replicaSelected']):undefined;
       Object.defineProperty(notes,id,{enumerable:true,value:{projection:'current_v1',raw,draft,base:{head_revision_id:head,crypto_epoch:0},
-        localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
+        localOnly,skipAutomaticSync:Boolean(!needsBaseline&&(conflicted||!replicaSelected||localOnly)),
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length,conflicted}});
     }
     return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,
@@ -493,7 +496,9 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 (() => {
   'use strict';
   function create({database,key,onCommit=()=>{}}) {
-    let cached=null,lastRevision=null;
+    let cached=null,lastRevision=null,currentCertificate=null;
+    const certificate=(current,stamp)=>({stamp,account:current.account,view:{projection:current.projection,supported:current.supported,
+      account:current.account,syncSupported:current.syncSupported,notes:Object.fromEntries(Object.keys(current.notes||{}).map(id=>[id,null]))}});
     async function transaction(write,transform,guard) {
       const db=await database();
       const active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
@@ -545,25 +550,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
         }catch(e){error=e;if(tx){try{tx.abort();}catch{reject(e);}}else reject(e);}
       });
     }
-    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null){
-      const steps=page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow);let step=steps.next();
+    async function pathTransaction(path,guard,checkMetadata,patch=null,current=false,shallow=false,page=null,window=null,effect=null){
+      let steps=effect?NowJournalWindow.settingsSteps():window?null:page?NowDocumentParts.historyPageSteps(page):current?NowDocumentParts.currentSteps(path):patch?NowDocumentParts.replaceSteps(path,patch.expected,patch.next):NowDocumentParts.selectSteps(path,shallow),step=steps?.next();
       const db=await database(),active=()=>{if(guard?.active&&!guard.active())throw Error('Storage authentication changed');};
       active();
       return new Promise((resolve,reject)=>{
-        let tx,error,result;
+        let tx,error,result,nextCertificate=null,effected=false;
         try{
-          tx=db.transaction(['journals','documents'],patch?'readwrite':'readonly',patch?{durability:'strict'}:undefined);
-          tx.onabort=()=>reject(error||Error('Document read aborted'));
+          tx=db.transaction(['journals','documents'],patch||effect?'readwrite':'readonly',patch||effect?{durability:'strict'}:undefined);
+          tx.onabort=()=>{const failure=error||Error('Document read aborted');if(effected)failure.committed=true;reject(failure);};
           tx.onerror=()=>{error=Error('Document read failed');};
-          tx.oncomplete=()=>{if(patch){cached=null;if(result?.partsWritten>0)onCommit();}try{active();resolve(result);}catch(e){if(patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
-          if(patch&&tx.durability!=='strict')throw Error('Strict document durability is required');
+          tx.oncomplete=()=>{if(patch){cached=null;currentCertificate=null;if(result?.partsWritten>0)onCommit();}try{
+            active();if(!patch){if(current&&result?.supported)currentCertificate=certificate(result,result.stamp);else if(nextCertificate)currentCertificate=nextCertificate;}
+            else if(window&&nextCertificate)currentCertificate={...nextCertificate,stamp:result.stamp,view:{...nextCertificate.view,
+              notes:window.insert?{...nextCertificate.view.notes,[window.id]:null}:nextCertificate.view.notes}};
+            resolve(result);
+          }catch(e){if(effected||patch&&result?.partsWritten>0)e.committed=true;reject(e);}};
+          if((patch||effect)&&tx.durability!=='strict')throw Error('Strict document durability is required');
           const fail=e=>{error=e;tx.abort();},journals=tx.objectStore('journals'),documents=tx.objectStore('documents');
           const metadata=journals.get(key);
           metadata.onsuccess=()=>{
             try{
               active();const physical=metadata.result;
               if(physical===undefined){
-                if(patch||page)throw Error('Document path conflict');
+                if(patch||page||window||effect)throw Error('Document path conflict');
                 checkMetadata(undefined);
                 const count=documents.count(IDBKeyRange.bound([key],[key,[]]));
                 count.onsuccess=()=>{try{
@@ -575,7 +585,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               if(physical.format!==2||typeof physical.stamp!=='string'||typeof physical.isNull!=='boolean'||!physical.row)throw Error('Unsupported document journal');
               if(patch?.revision!==null&&patch?.revision!==undefined&&patch.revision!==physical.stamp)throw Error('Document journal changed; reopen before saving');
               if(page&&page.stamp!==physical.stamp)throw Error('Document journal changed; reopen before paging');
+              if(window&&!patch&&window.stamp!==physical.stamp)throw Error('Document journal changed; reopen before Window reading');
+              if(effect&&effect.stamp!==physical.stamp)throw Error('Document journal changed; reopen before saving settings');
               checkMetadata(physical.row);
+              if(window){
+                const proof=currentCertificate?.stamp===physical.stamp&&currentCertificate.account===window.account?currentCertificate.view:null;
+                const inspected=value=>{nextCertificate=certificate(value,physical.stamp);};
+                steps=patch?(window.insert?NowJournalWindow.insertSteps(window,proof,inspected):NowJournalWindow.writeSteps(window,proof,inspected)):NowJournalWindow.readSteps(window,proof,inspected);step=steps.next();
+              }
               function apply(plan){
                 const range=plan.range,keys=documents.getAllKeys(IDBKeyRange.bound([key,range.prefix],[key,range.prefix+'\uffff']));
                 keys.onsuccess=()=>{
@@ -588,7 +605,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                         return value[1];
                       });
                       if(exact.result!==undefined)ids.push(range.id);
-                      if(JSON.stringify(ids.sort())!==JSON.stringify(range.ids))throw Error('Document parts conflict');
+                      const visible=range.opaque?NowJournalWindow.visibleIds(ids,range):ids.sort();
+                      if(JSON.stringify(visible)!==JSON.stringify(range.ids))throw Error('Document parts conflict');
                       checkMetadata(physical.row);
                       for(const change of plan.changes){
                         if(change.remove)documents.delete([key,change.id]);else documents.put({id:change.id,value:change.value},[key,change.id]);
@@ -603,8 +621,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               const cache=new Map();
               function next(){
                 if(step.done){
-                  if(patch)apply(step.value);
+                  if(effect){active();checkMetadata(physical.row);effected=true;effect.run();result={projection:'settings_write_v1',stamp:physical.stamp,committed:true};}
+                  else if(patch)apply(step.value);
                   else{
+                    if(window){result={projection:'window_read_v1',stamp:physical.stamp,window:step.value};return;}
                     result={projection:'path_v1',stamp:physical.stamp,...step.value};
                     if(shallow&&!path.length){
                       const keys=documents.getAllKeys(IDBKeyRange.bound([key],[key,[]]));
@@ -616,14 +636,14 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
                   }
                   return;
                 }
-                if((current||page)&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
+                if((current||page||window)&&cache.has(step.value)){step=steps.next(cache.get(step.value));next();return;}
                 const id=step.value,request=documents.get([key,id]);
                 request.onsuccess=()=>{try{
                   active();const row=request.result;
                   if(row?.id!==id)throw Error('Missing document part');
                   if(id==='$root'&&physical.isNull&&(!row.value||Object.keys(row.value).length!==1
                     ||!Object.hasOwn(row.value,'value')||row.value.value!==null))throw Error('Invalid null document');
-                  if(current||page)cache.set(id,row.value);
+                  if(current||page||window)cache.set(id,row.value);
                   step=steps.next(row.value);next();
                 }catch(e){fail(e);}};
               }
@@ -640,6 +660,23 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     transaction.readDirectory=(path,guard,checkMetadata=()=>{})=>pathTransaction(path,guard,checkMetadata,null,false,true);
     transaction.readHistoryPage=(request,guard,checkMetadata=()=>{})=>pathTransaction(null,guard,checkMetadata,null,false,false,structuredClone(request));
     transaction.readCurrent=(account,guard,checkMetadata=()=>{})=>pathTransaction(account,guard,checkMetadata,null,true);
+    transaction.readWindow=(request,guard,checkMetadata=()=>{})=>pathTransaction(null,guard,checkMetadata,null,false,false,null,structuredClone(request));
+    transaction.writeWindow=(request,guard,checkMetadata=()=>{})=>{
+      const window=structuredClone(request);
+      if(typeof window.revision!=='string')return Promise.reject(Error('A Window revision is required'));
+      return pathTransaction(null,guard,checkMetadata,{revision:window.revision},false,false,null,
+        {account:window.account,id:window.id,expected:window.expected,next:window.next});
+    };
+    transaction.createWindow=(request,guard,checkMetadata=()=>{})=>{
+      const window=structuredClone(request);
+      if(typeof window.stamp!=='string')return Promise.reject(Error('A Window creation revision is required'));
+      return pathTransaction(null,guard,checkMetadata,{revision:window.stamp},false,false,null,
+        {insert:true,account:window.account,id:window.id,next:window.next});
+    };
+    transaction.settingsEffect=(stamp,run,guard,checkMetadata=()=>{})=>{
+      if(typeof stamp!=='string'||typeof run!=='function')return Promise.reject(Error('Invalid settings guard'));
+      return pathTransaction(null,guard,checkMetadata,null,false,false,null,null,{stamp,run});
+    };
     transaction.writePath=(path,expected,next,guard,checkMetadata=()=>{},options={})=>pathTransaction(path,guard,checkMetadata,
       {expected:structuredClone(expected),next:structuredClone(next),revision:options.revision??null});
     Object.defineProperty(transaction,'revision',{get:()=>lastRevision});
@@ -742,11 +779,173 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 })();
 
 ;
+/* A selected journal suffix never becomes a complete archive or full-write baseline. */
+(() => {
+  'use strict';
+  const parts=globalThis.NowDocumentParts||(typeof require==='function'?require('./document-parts.js'):null);
+  const policy=globalThis.NowJournalWrites||(typeof require==='function'?require('./journal-writes.js'):null);
+  const arrays=['revisions','receipts','completed_outbox','archived_outbox'];
+  const fields=new Set(['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected','edit_generation','completed_outbox','archived_outbox','comparison','error']);
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  const fail=()=>Error('부분 이력의 저장 기준이 다릅니다. 원본과 편집본을 보존했습니다.');
+  function currentEligible(value){
+    const object=item=>item&&typeof item==='object'&&!Array.isArray(item);
+    if(Object.keys(value).some(key=>!fields.has(key)))return false;
+    if(Object.hasOwn(value,'error')&&(!object(value.error)||Object.keys(value.error).sort().join(',')!=='code,message'
+      ||typeof value.error.code!=='string'||typeof value.error.message!=='string'))return false;
+    if(Object.hasOwn(value,'conflict')&&value.conflict!==null&&(!object(value.conflict)
+      ||!Object.hasOwn(value.conflict,'local')||!Object.hasOwn(value.conflict,'remote')
+      ||Object.keys(value.conflict).some(key=>!['code','base','local','remote'].includes(key))
+      ||Object.hasOwn(value.conflict,'code')&&typeof value.conflict.code!=='string'))return false;
+    if(Object.hasOwn(value,'comparison')&&!object(value.comparison))return false;
+    return arrays.every(key=>!Object.hasOwn(value,key)||Array.isArray(value[key]));
+  }
+  function encodeAt(input,path,offsets={},before=new Map()){
+    const shifted=relative=>relative.length>1&&arrays.includes(relative[0])
+      ?[relative[0],String(Number(relative[1])+(offsets[relative[0]]||0)),...relative.slice(2)]:relative;
+    const descriptor=value=>Object.hasOwn(value,'ref')?{ref:JSON.stringify([...path,...shifted(JSON.parse(value.ref))])}:value;
+    const after=new Map();
+    for(const [key,value]of parts.encode(input)){
+      if(key==='$root')continue;
+      const relative=JSON.parse(key),location=[...path,...shifted(relative)];
+      let entries=value.entries.map(([field,item])=>[relative.length===1&&arrays.includes(relative[0])
+        ?String(Number(field)+(offsets[relative[0]]||0)):field,descriptor(item)]);
+      if(relative.length===1&&arrays.includes(relative[0])){
+        const old=before.get(JSON.stringify([...path,relative[0]]));
+        entries=[...(old?.entries||[]).slice(0,offsets[relative[0]]||0),...entries];
+      }
+      after.set(JSON.stringify(location),{type:value.type,entries});
+    }
+    return after;
+  }
+  function visibleIds(ids,range){
+    return ids.filter(id=>{
+      let path;try{path=JSON.parse(id);}catch{return true;}
+      if(!Array.isArray(path)||JSON.stringify(path)!==id)return true;
+      return !range.opaque.some(item=>path.length>item.path.length&&item.path.every((key,index)=>path[index]===key)
+        &&/^(0|[1-9][0-9]*)$/.test(path[item.path.length])&&Number(path[item.path.length])<item.count);
+    }).sort();
+  }
+  function* readSteps({account,id,offsets=null},certified=null,inspected=()=>{}){
+    if(typeof id!=='string'||!id)throw fail();
+    const current=certified||(yield* parts.currentSteps(account));
+    if(!current.supported||!Object.hasOwn(current.notes,id)||!current.syncSupported)throw fail();
+    if(current.account!==account)throw fail();inspected(current);
+    const path=['contexts',account,'notes',id],validated=new Map();
+    const row=yield* parts.selectSteps(path,true,validated);
+    if(row.part?.type!=='object')throw fail();
+    const fields=new Map(row.part.entries),limits={},containers=new Map();
+    for(const key of arrays){
+      if(!fields.has(key)){limits[key]=0;continue;}
+      const selected=yield* parts.selectSteps([...path,key],true,validated);
+      if(selected.part?.type!=='array')throw fail();
+      containers.set(key,selected.part);limits[key]=selected.part.entries.length;
+    }
+    if(!fields.has('revisions')||!fields.has('receipts'))throw fail();
+    let firstPending=Math.max(0,limits.revisions-1);
+    for(let index=0;index<limits.revisions;index++){
+      const metadata=yield* parts.selectSteps([...path,'revisions',String(index)],true,validated);
+      if(metadata.part?.type!=='object'||!metadata.part.entries.some(([key])=>key==='snapshot'))throw fail();
+      const imported=yield* parts.selectSteps([...path,'revisions',String(index),'imported'],false,validated);
+      if(imported.value!==true)firstPending=Math.min(firstPending,index);
+    }
+    const selected=offsets?structuredClone(offsets):{...limits,revisions:firstPending};
+    if(!selected||Object.keys(selected).sort().join(',')!==[...arrays].sort().join(',')
+      ||arrays.some(key=>!Number.isSafeInteger(selected[key])||selected[key]<0||selected[key]>limits[key])
+      ||selected.revisions>firstPending)throw fail();
+    const entry={};
+    for(const [key]of fields){
+      let value;
+      if(arrays.includes(key)){
+        value=[];
+        for(let index=selected[key];index<limits[key];index++){
+          const item=yield* parts.selectSteps([...path,key,String(index)],false,validated);
+          if(!item.found)throw fail();value.push(item.value);
+        }
+      }else{
+        const item=yield* parts.selectSteps([...path,key],false,validated);
+        if(!item.found)throw fail();value=item.value;
+      }
+      Object.defineProperty(entry,key,{value,enumerable:true,writable:true,configurable:true});
+    }
+    return {projection:'journal_window_v1',account,id,offsets:selected,entry};
+  }
+  function* writeSteps({account,id,expected,next},certified=null,inspected=()=>{}){
+    if(expected?.projection!=='journal_window_v1'||expected.account!==account||expected.id!==id)throw fail();
+    const before=new Map(),reader=readSteps({account,id,offsets:expected.offsets},certified,inspected);let step=reader.next();
+    while(!step.done){const key=step.value,value=yield key;before.set(key,value);step=reader.next(value);}
+    if(Object.keys(expected).sort().join(',')!=='account,entry,id,offsets,projection'
+      ||!same(step.value.entry,expected.entry)||arrays.some(key=>step.value.offsets[key]!==expected.offsets[key])
+      ||!next||typeof next!=='object'||Array.isArray(next))throw fail();
+    const rootValue={schema_version:1,contexts:{[account]:{notes:{[id]:expected.entry}}}};
+    if(!policy.eligible(rootValue,account,id,next)||!currentEligible(next))throw fail();
+    for(const key of arrays){
+      const previous=expected.entry[key];
+      if(previous===undefined){if(next[key]!==undefined&&!Array.isArray(next[key]))throw fail();continue;}
+      if(!Array.isArray(next[key])||next[key].length<previous.length)throw fail();
+      for(let index=0;index<previous.length;index++){
+        if(key==='revisions'){
+          if(!same(previous[index].snapshot,next[key][index]?.snapshot)||previous[index].revision_id!==next[key][index]?.revision_id)throw fail();
+          if(previous[index].import_request!==undefined&&!same(previous[index].import_request,next[key][index].import_request))throw fail();
+        }else if(!same(previous[index],next[key][index]))throw fail();
+      }
+    }
+    for(const operation of expected.entry.outbox){
+      if(typeof operation.id!=='string'||!operation.id||!operation.body)throw fail();
+      const queued=next.outbox.find(item=>item.id===operation.id);
+      const completed=(next.completed_outbox||[]).find(item=>item.id===operation.id);
+      const retained=queued||completed;
+      if(!retained||retained.revision_id!==operation.revision_id||retained.operation!==operation.operation
+        ||retained.body?.mutation_id!==operation.body.mutation_id||operation.sent&&(!retained.sent||!same(retained.body,operation.body))
+        ||completed&&!same(completed.body,operation.body))throw fail();
+    }
+    const path=['contexts',account,'notes',id],root=JSON.stringify(path),prefix=root.slice(0,-1)+',';
+    const after=encodeAt(next,path,expected.offsets,before);
+    const visible=new Map();
+    for(const [key,value]of before){
+      if(key!==root&&!key.startsWith(prefix))continue;
+      const relative=JSON.parse(key).slice(path.length);
+      if(relative.length>1&&arrays.includes(relative[0])&&Number(relative[1])<expected.offsets[relative[0]])continue;
+      visible.set(key,value);
+    }
+    return {changes:parts.delta(visible,after),range:{id:root,prefix,ids:[...visible.keys()].sort(),
+      opaque:arrays.filter(key=>expected.offsets[key]>0).map(key=>({path:[...path,key],count:expected.offsets[key]}))}};
+  }
+  function* insertSteps({account,id,next},certified=null,inspected=()=>{}){
+    if(typeof id!=='string'||!id||/^wiki(?:[-:]|$)/.test(id))throw fail();
+    const current=certified||(yield* parts.currentSteps(account));
+    if(!current.supported||!current.syncSupported||current.account!==account||Object.hasOwn(current.notes,id))throw fail();
+    inspected(current);
+    const rootValue={schema_version:1,contexts:{[account]:{notes:{[id]:next}}}};
+    const allowed=['raw','draft','base','revisions','outbox','receipts','conflict','dirty','localOnly','needsBaseline','replicaSelected'];
+    if(!policy.eligible(rootValue,account,id,next)||Object.keys(next).some(key=>!allowed.includes(key))
+      ||['revisions','outbox','receipts'].some(key=>next[key].length!==0)||next.conflict!==null
+      ||['dirty','localOnly','needsBaseline','replicaSelected'].some(key=>typeof next[key]!=='boolean'))throw fail();
+    const parent=['contexts',account,'notes'],directory=yield* parts.selectSteps(parent,true);
+    if(directory.part?.type!=='object'||directory.part.entries.some(([key])=>key===id))throw fail();
+    const path=[...parent,id],root=JSON.stringify(path),after=encodeAt(next,path);
+    const changes=[{id:JSON.stringify(parent),value:{type:'object',entries:[...directory.part.entries,[id,{ref:root}]]}},
+      ...[...after].map(([id,value])=>({id,value}))];
+    return {changes,range:{id:root,prefix:root.slice(0,-1)+',',ids:[],opaque:[]}};
+  }
+  function* settingsSteps(){
+    const root=yield* parts.selectSteps([],true);
+    if(root.part?.type!=='object'||root.part.entries.map(([key])=>key).sort().join(',')!=='contexts,schema_version'
+      ||(yield* parts.selectSteps(['schema_version'])).value!==1
+      ||(yield* parts.selectSteps(['contexts'],true)).part?.type!=='object')
+      throw Error('Protection or unsupported journal metadata prevents settings save');
+    return true;
+  }
+  const api={readSteps,writeSteps,insertSteps,visibleIds,settingsSteps};globalThis.NowJournalWindow=api;
+  if(typeof module!=='undefined'&&module.exports)module.exports=api;
+})();
+
+;
 /* A current projection never authorizes a journal write or a complete export. */
 (() => {
   'use strict';
   const copy=value=>structuredClone(value);
-  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
+  function create({initial,context,contextKey,accountKey,load,build,select=null,saveNote=null,selectWindow=null,saveWindow=null,createWindow=null,readPage=null,request=null,ready=()=>{},change=()=>{}}){
     let full=null,preview=null,bound='',epoch=0,loading=null,failed=null,suspended=false,selectedTail=Promise.resolve(),selectedView=null,browseIndex=null;
     const stale=()=>Error('이력을 읽는 중 계정 또는 저장 기준이 변경되었습니다. 편집본을 보존했으며 다시 확인하세요.');
     const visible=()=>!suspended&&bound===contextKey()&&context().enabled;
@@ -758,15 +957,51 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     }
     reset(initial);
     const canSelect=id=>Boolean(select&&saveNote&&preview&&Object.hasOwn(preview.notes,id));
-    function selected(id,action){
-      const generation=epoch,key=bound,active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled;
+    const canCreate=id=>Boolean(createWindow&&visible()&&preview?.syncSupported===true&&!loading&&!failed&&typeof id==='string'&&!Object.hasOwn(preview.notes,id));
+    function inserted(args){
+      const captured=copy(args),generation=epoch,key=bound;let selection=null;
+      const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled&&(!selection||preview===selection&&!full);
       const run=selectedTail.catch(()=>{}).then(async()=>{
         if(!active()||failed)throw failed||stale();
+        if(full)return full.track(...captured);
+        const id=captured[0].local_id,account=accountKey();selection=preview;
+        if(!selection||selection.syncSupported!==true)throw stale();
+        if(Object.hasOwn(selection.notes,id))return;
+        let committed=false;
+        const store=NowNoteHistory.create({initial:{schema_version:1,contexts:{[account]:{notes:{}}}},context,request,
+          write:async value=>{
+            if(!active()||Object.keys(value).sort().join(',')!=='contexts,schema_version'||Object.keys(value.contexts).length!==1
+              ||Object.keys(value.contexts[account]||{}).join()!=='notes'||Object.keys(value.contexts[account].notes).length!==1
+              ||!Object.hasOwn(value.contexts[account].notes,id))throw stale();
+            const next=value.contexts[account].notes[id];
+            const result=await createWindow({account,id,stamp:selection.stamp,next},{active});
+            if(!active()||typeof result?.stamp!=='string'||typeof result.revision!=='string')throw Object.assign(stale(),{committed:true});
+            committed=true;selection.stamp=result.stamp;
+          }});
+        await store.track(...captured);await store.idle();
+        if(!active()||!committed)throw stale();
+        Object.defineProperty(selection.notes,id,{value:store.currentView(id),enumerable:true,writable:true,configurable:true});
+        selectedView=null;
+      }).catch(error=>{if(active()){failed=error;change(error);}throw error;});
+      selectedTail=run;return run;
+    }
+    function selected(id,action,window=false){
+      const generation=epoch,key=bound,materialization=loading;let selection=null;
+      const active=()=>generation===epoch&&key===contextKey()&&!suspended&&context().enabled
+        &&(!selection||preview===selection&&!full);
+      const run=selectedTail.catch(()=>{}).then(async()=>{
+        if(!active()||failed)throw failed||stale();
+        // Only later selections wait: earlier ones are already awaited by ensure().
+        if(materialization){await materialization;if(!active()||failed)throw failed||stale();}
         if(full)return action(full);
+        selection=preview;
+        if(!selection)throw stale();
         const account=accountKey(),stamp=preview.stamp;
         try{
-          const opened=await select({account,id,stamp},{active});
+          const useWindow=Boolean(window&&selectWindow&&saveWindow&&preview.syncSupported===true);
+          const opened=await (useWindow?selectWindow:select)({account,id,stamp},{active});
           if(!active()||opened.stamp!==stamp)throw stale();
+          if(useWindow&&opened.window?.projection!=='journal_window_v1')throw stale();
           let baseline=copy(opened.entry),revision=opened.revision;
           const initial={schema_version:1,contexts:{[account]:{notes:{[id]:baseline}}}};
           if(!NowJournalWrites.eligible(initial,account,id,baseline))throw stale();
@@ -776,7 +1011,8 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
               ||Object.keys(value.contexts[account]).join()!=='notes'||Object.keys(value.contexts[account].notes).length!==1||!Object.hasOwn(value.contexts[account].notes,id))throw stale();
             const next=value.contexts[account].notes[id];
             if(!NowJournalWrites.eligible(initial,account,id,next))throw stale();
-            const receipt=await saveNote({account,id,expected:baseline,next,revision},{active});
+            const receipt=await (useWindow?saveWindow:saveNote)({account,id,expected:baseline,next,revision,
+              ...(useWindow?{window:opened.window}:{})},{active});
             if(!active())throw Object.assign(stale(),{committed:true});
             if(typeof receipt?.stamp!=='string'||typeof receipt.revision!=='string')throw Object.assign(stale(),{committed:true});
             baseline=copy(next);revision=receipt.revision;preview.stamp=receipt.stamp;
@@ -818,7 +1054,7 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     }
     const current=(id)=>visible()?copy(preview?.notes[id]||null):null;
     const api={
-      ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),
+      ensure,reset,matches:()=>bound===contextKey(),deferred:()=>Boolean(preview),selectable:id=>visible()&&canSelect(id),creatable:canCreate,
       revision:()=>visible()&&preview&&!failed?preview.stamp:null,
       syncSupported:()=>visible()&&preview?.syncSupported===true&&!full&&!loading&&!failed,
       wikiIndex:()=>visible()&&preview&&!failed&&(preview.wikiIndexSupported!==false||browseIndex?.stamp===preview.stamp)
@@ -888,20 +1124,30 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     for(const name of ['track','edit','seal','sync','compare','importPending','restore','restoreLocal','bindBaseline','saveProtection',
       'replaceProtectionStore','beginLegacy','completeLegacy','selectReplica','localOnly','import'])api[name]=async(...args)=>{
       if(name==='sync'&&(!context().enabled||suspended))return;
+      if(name==='track'&&visible()&&preview?.syncSupported===true&&Object.hasOwn(preview.notes,args[0]?.local_id)){
+        if(args[0]?.owner_id!==context().owner)throw Error('이력 소유자가 현재 계정과 다릅니다.');
+        return;
+      }
+      if(name==='track'&&canCreate(args[0]?.local_id)&&['tree','daily','worklog'].includes(args[0]?.note_type)
+        &&!String(args[0]?.source||'').startsWith('wiki')&&!String(args[0]?.content||'').startsWith('NOW_ENCRYPTED_'))return inserted(args);
       if(name==='sync'&&!full&&preview&&request&&!loading&&(args[0]?.onlyIds!==undefined||preview.syncSupported===true)){
         const ids=args[0]?.onlyIds;
         if(ids!==undefined&&(!Array.isArray(ids)||ids.length>30||ids.some(id=>typeof id!=='string')||new Set(ids).size!==ids.length))throw Error('동기화할 메모 ID를 확인하세요.');
         const targets=ids?[...ids]:Object.keys(preview.notes);
         if(targets.every(canSelect)){
           const generation=epoch,key=bound;
-          for(const id of targets){if(generation!==epoch||key!==contextKey()||!visible())throw stale();await selected(id,store=>store.sync({onlyIds:[id]}));}
+          for(const id of targets){
+            if(generation!==epoch||key!==contextKey()||!visible())throw stale();
+            if(preview.notes[id]?.skipAutomaticSync===true)continue;
+            await selected(id,store=>store.sync({onlyIds:[id]}),true);
+          }
           return;
         }
       }
       const id=name==='edit'?args[0]?.local_id:args[0];
       const selectedAction=['edit','seal','localOnly'].includes(name)
         ||['compare','restore','restoreLocal','importPending'].includes(name)&&preview?.wikiIndexSupported!==false;
-      if(selectedAction&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured));}
+      if(selectedAction&&canSelect(id)&&!loading){const captured=copy(args);return selected(id,store=>store[name](...captured),['edit','seal','localOnly'].includes(name));}
       const generation=epoch,store=await ensure();if(generation!==epoch||!visible())throw stale();return store[name](...args);
     };
     return api;
@@ -2056,7 +2302,7 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
           const row=validate({...metadata,value:null});
           if(row.legacy_hash!==legacyHash)throw fail();
         });
-        try{unchanged();}catch(error){if(result?.projection==='path_write_v1'&&result.partsWritten>0)error.committed=true;throw error;}
+        try{unchanged();}catch(error){if(result?.committed===true||result?.projection==='path_write_v1'&&result.partsWritten>0)error.committed=true;throw error;}
         return result;
       });
     }
@@ -2108,6 +2354,40 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
           if(!selected.found||selected.stamp!==stamp||!NowJournalWrites.eligible(root,account,id,selected.value))throw fail();
           return {entry:selected.value,stamp,revision:stamp,scoped:true};
         },guard);
+      },
+      selectWindow(request,guard){
+        const selection=structuredClone(request);
+        return selective(async check=>{
+          if(typeof selection.stamp!=='string'||typeof selection.id!=='string')throw fail();
+          const result=await transaction.readWindow(selection,guard,check),entry=result.window.entry;
+          const root={schema_version:1,contexts:{[selection.account]:{notes:{[selection.id]:entry}}}};
+          if(result.stamp!==selection.stamp||!NowJournalWrites.eligible(root,selection.account,selection.id,entry))throw fail();
+          return {entry,window:{projection:result.window.projection,offsets:result.window.offsets},stamp:result.stamp,revision:result.stamp,scoped:true};
+        },guard);
+      },
+      replaceWindow(request,guard){
+        const {account,id,expected,next,revision,window}=structuredClone(request),root={schema_version:1,contexts:{[account]:{notes:{[id]:expected}}}};
+        if(typeof revision!=='string'||window?.projection!=='journal_window_v1'||!NowJournalWrites.eligible(root,account,id,next))return Promise.reject(fail());
+        const selection={account,id,expected:{projection:window.projection,account,id,offsets:window.offsets,entry:expected},next,revision};
+        return selective(check=>transaction.writeWindow(selection,guard,check),guard)
+          .then(result=>({revision:result.stamp,stamp:result.stamp,scoped:true}));
+      },
+      createWindow(request,guard){
+        const selection=structuredClone(request);
+        if(typeof selection.stamp!=='string'||typeof selection.id!=='string')return Promise.reject(fail());
+        return selective(check=>transaction.createWindow(selection,guard,check),guard)
+          .then(result=>({revision:result.stamp,stamp:result.stamp,scoped:true}));
+      },
+      saveSettings(request,guard){
+        const {stamp,expected,next}=structuredClone(request),settingsKey='nownote.web.settings.v1';
+        if(!(expected===null||typeof expected==='string')||typeof next!=='string')return Promise.reject(fail());
+        const value=parse(next);if(!value||typeof value!=='object'||Array.isArray(value))return Promise.reject(fail());
+        return selective(check=>transaction.settingsEffect(stamp,()=>{
+          active(guard);if(localStorage.getItem(settingsKey)!==expected)throw fail();
+          localStorage.setItem(settingsKey,next);
+          if(localStorage.getItem(settingsKey)!==next)throw fail();
+          active(guard);
+        },guard,check),guard).then(result=>{notify(settingsKey);return result;});
       },
       read: () => lock(async()=> (await settled()).row.value),
       readSnapshot:guard=>lock(async()=>{const {row,raw,retained}=await settled(guard);return {value:parse(row.value),revision:transaction.revision,stamp:transaction.revision,scoped:raw===null||Boolean(retained)};}),
@@ -2212,7 +2492,8 @@ globalThis.mountNowLibrary = function mountNowLibrary(api) {
     const entry = id => bucket(context())?.notes[id] || null;
     // A UI projection is deliberately not a complete journal/archive record.
     const currentEntry = item => item&&!protectedItem(item)?copy({projection:'current_v1',raw:item.raw,draft:item.draft,
-      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length}):null;
+      base:{head_revision_id:item.base.head_revision_id,crypto_epoch:item.base.crypto_epoch},localOnly:item.localOnly,dirty:item.dirty,pending:item.outbox.length,
+      skipAutomaticSync:Boolean(!item.needsBaseline&&(item.conflict||!item.replicaSelected||item.localOnly))}):null;
     const blocked = id => protectedItem(entry(id)) || Boolean(globalThis.createWikiIngestNotebook?.blocks(data,context(),id)) || Object.values(data?.protection_operations || {}).some(m => {
       if (m?.scope?.owner !== context().owner || m?.scope?.url?.replace(/\/+$/,'') !== String(context().url || '').replace(/\/+$/,'')) return false;
       globalThis.NowNoteProtectionState.validateMarker(m);
@@ -10224,7 +10505,7 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
       if(!guard.active())throw Error('저장 계정이 변경되었습니다.');return {snapshot};
     };
     const history=NowDeferredHistory.create({initial:await readInitial(),context,contextKey,accountKey,
-      select:backend.select,saveNote:backend.note,readPage:backend.page,request,ready,change,
+      select:backend.select,saveNote:backend.note,selectWindow:backend.selectWindow,saveWindow:backend.noteWindow,createWindow:backend.createWindow,readPage:backend.page,request,ready,change,
       load:async guard=>normalize(await backend.open(guard)),
       build:opened=>{
         const writer=NowJournalWrites.create({initial:opened.value,revision:opened.revision,scoped:opened.scoped,contextKey,full:backend.full,note:backend.note});
@@ -10318,16 +10599,25 @@ globalThis.createLazyWikiView=function createLazyWikiView({contextKey,mount,prep
     if(!storage)return {
       stamp:()=>stamp,open:async guard=>remember(await browser().readSnapshot(guard),true),page:(request,guard)=>browser().readHistoryPage(request,guard),
       select:async(request,guard)=>remember(await browser().selectNote(request,guard),true),current:(account,guard)=>browser().readCurrent(account,guard),
+      ...(typeof browser().selectWindow==='function'&&typeof browser().replaceWindow==='function'?{
+        selectWindow:async(request,guard)=>remember(await browser().selectWindow(request,guard),true),
+        noteWindow:async(request,guard)=>remember(await browser().replaceWindow(request,guard),true)}:{}),
+      ...(typeof browser().createWindow==='function'?{createWindow:async(request,guard)=>remember(await browser().createWindow(request,guard),true)}:{}),
       full:async(request,guard)=>remember(await browser().writeSnapshot(request.expected,request.next,guard),true),note:async(request,guard)=>remember(await browser().replaceNote(request,guard),true)};
     const info=await storage.info();let expected;
     const check=guard=>{if(guard?.active&&!guard.active())throw Error('저장 계정이 변경되었습니다.');};
     const required=guard=>{if(typeof guard?.active!=='function')throw Error('저장 인증 상태를 확인하세요.');check(guard);};
     const unwrap=result=>{if(!result?.ok)throw Object.assign(Error(result?.message||'이력 저장 기준을 확인하세요.'),{committed:result?.committed===true});return result;};
-    const read=async(method,input,guard)=>{if(['select','page'].includes(method))required(guard);check(guard);const result=unwrap(await storage.history[method](input));check(guard);return ['open','select'].includes(method)?remember(result):result;};
+    const read=async(method,input,guard)=>{if(['select','selectWindow','page'].includes(method))required(guard);check(guard);const result=unwrap(await storage.history[method](input));check(guard);return ['open','select','selectWindow'].includes(method)?remember(result):result;};
     if(info.historySessions&&storage.history)return {
       stamp:()=>stamp,
       open:guard=>read('open',undefined,guard),
       ...(storage.history.select?{select:(request,guard)=>read('select',request,guard)}:{}),
+      ...(info.historyWindows&&typeof storage.history.selectWindow==='function'&&typeof storage.history.noteWindow==='function'?{
+        selectWindow:(request,guard)=>read('selectWindow',request,guard),
+        noteWindow:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.noteWindow(request)));}}:{}),
+      ...(info.historyWindows&&typeof storage.history.createWindow==='function'?{
+        createWindow:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.createWindow(request)));}}:{}),
       ...(storage.history.current?{current:(account,guard)=>read('current',account,guard)}:{}),
       ...(storage.history.page?{page:(request,guard)=>read('page',request,guard)}:{}),
       full:async(request,guard)=>{required(guard);return remember(unwrap(await storage.history.full({revision:request.revision,next:request.next})));},
@@ -14666,7 +14956,9 @@ function showNotice(message, type = "info") {
     console.warn(message);
     return;
   }
+  if (Array.from(elements.toastRegion.children || []).some(item => item.dataset?.noticeType === type && item.textContent === message)) return;
   const item = document.createElement("div");
+  item.dataset.noticeType = type;
   item.className = `toast ${type}`;
   item.setAttribute("role", type === "error" ? "alert" : "status");
   item.textContent = message;
@@ -16914,13 +17206,13 @@ async function initializeApp() {
     render();
     scheduleServerSync({ force: true, delay: 1600 });
     await openInitialWorkspace();
-    noteHistoryStartupReady=true;
+    noteHistoryStartupReady=true;persistSettings();
     return;
   }
   render();
   scheduleServerSync({ force: true, delay: 1600 });
   await openInitialWorkspace();
-  noteHistoryStartupReady=true;
+  noteHistoryStartupReady=true;persistSettings();
 }
 
 async function openInitialWorkspace(){
@@ -18649,9 +18941,9 @@ function closeSettingsPopup() {
 
 async function toggleSettings() {
   if (elements.settingsView.classList.contains("hidden")) {
-    await noteHistory?.ensure?.();
     closePopupLayers();
     elements.settingsView.classList.remove("hidden");
+    renderWorkspacePanel();
     refreshMailSettingsStatus();
     refreshVaultStatus();
   } else {
@@ -19102,6 +19394,7 @@ function renderSettings() {
 }
 
 function renderWorkspacePanel() {
+  if (elements.settingsView?.classList.contains("hidden")) return;
   if (!elements.workspaceSelect || !elements.workspaceSummary || !elements.workspaceHealthList) return;
   state.settings.workspaces = normalizeWorkspaceSettings(state.settings.workspaces);
   const workspaces = state.settings.workspaces.items;
@@ -19138,9 +19431,8 @@ function saveCurrentWorkspace() {
   workspaces.items = [workspace, ...workspaces.items.filter((item) => item.id !== id)].slice(0, 12);
   workspaces.activeId = id;
   state.settings.workspaces = workspaces;
-  persistSettings();
+  persistSettings().then(saved=>{if(saved)showNotice(t("settings.workspace.saved"), "success");});
   renderWorkspacePanel();
-  showNotice(t("settings.workspace.saved"), "success");
 }
 
 function applySelectedWorkspace() {
@@ -27460,7 +27752,7 @@ function addRootNote() {
   state.data.tree.push(node);
   state.selectedTreeId = node.id;
   state.expandedTreeIds.add(node.id);
-  persist();
+  persist({journalId:node.id});
   renderTree();
 }
 
@@ -27479,7 +27771,7 @@ function addChildToSelectedTreeNode() {
   selected.children.push(node);
   state.selectedTreeId = node.id;
   state.expandedTreeIds.add(selected.id);
-  persist();
+  persist({journalId:node.id});
   renderTree();
 }
 
@@ -29723,6 +30015,7 @@ async function load() {
 
 async function loadSettings() {
   const raw = await readStorage(SETTINGS_KEY);
+  settingsSaveBaseline=structuredClone(raw??null);
   if (!raw) return;
   try {
     const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
@@ -30048,8 +30341,44 @@ function normalizeContextMenuActions(value, fallback = defaultContextMenuActions
   return normalized;
 }
 
+let settingsSaveBaseline=null,settingsSaveTail=Promise.resolve(),settingsSaveFailed=false;
 function persistSettings() {
-  writeStorage(SETTINGS_KEY, settingsForStorage());
+  if(!noteHistoryStartupReady)return Promise.resolve(false);
+  const next=structuredClone(settingsForStorage()),history=noteHistory,binding=wikiViewKey();
+  const active=()=>history===noteHistory&&binding===wikiViewKey()&&!protectionApplying;
+  const pending=settingsSaveTail.then(async()=>{
+    if(settingsSaveFailed)return false;
+    try{
+      if(!active())throw Error('설정 저장 중 계정 또는 보호 상태가 변경되었습니다.');
+      if(JSON.stringify(isDesktopClient()?settingsSaveBaseline:settingsSaveBaseline===null?null:JSON.parse(settingsSaveBaseline))===JSON.stringify(next))return true;
+      await history?.idle?.();
+      if(!active())throw Error('설정 저장 기준이 변경되었습니다.');
+      if(protectionBootstrapPending){
+        const root=isDesktopClient()?await window.nownoteDesktop.storage.readDirectory(NOTE_HISTORY_KEY,[]):await browserHistoryStorage().readDirectory([],{active});
+        if(!active()||typeof root?.stamp!=='string')throw Error('설정 저장 기준을 확인하지 못했습니다.');
+        if(isDesktopClient()){
+          if(desktopStorageInfo?.guardedSettings!==true||typeof window.nownoteDesktop.storage.saveSettings!=='function')throw Error('설정 저장을 지원하는 설치형으로 다시 확인하세요.');
+          const result=await window.nownoteDesktop.storage.saveSettings({stamp:root.stamp,expected:settingsSaveBaseline,next});
+          if(result?.ok!==true)throw Error('설정 저장을 확인하지 못했습니다.');
+        }else await browserHistoryStorage().saveSettings({stamp:root.stamp,expected:settingsSaveBaseline,next:JSON.stringify(next)},{active});
+      }else if(isDesktopClient()){
+        const result=await window.nownoteDesktop.storage.write(SETTINGS_KEY,next,{expectedValue:settingsSaveBaseline});
+        if(result?.ok!==true)throw Error('설정 저장을 확인하지 못했습니다.');
+      }else{
+        if(localStorage.getItem(SETTINGS_KEY)!==settingsSaveBaseline)throw Error('다른 창에서 설정이 변경되었습니다.');
+        const raw=JSON.stringify(next);localStorage.setItem(SETTINGS_KEY,raw);
+        if(localStorage.getItem(SETTINGS_KEY)!==raw)throw Error('설정 저장을 확인하지 못했습니다.');
+      }
+      if(!active())throw Error('설정 저장 결과가 불확실합니다. 다시 열어 확인하세요.');
+      settingsSaveBaseline=isDesktopClient()?structuredClone(next):JSON.stringify(next);return true;
+    }catch(error){
+      settingsSaveFailed=true;
+      desktopStorageInfo={...(desktopStorageInfo||{}),error:true};renderDesktopStorageStatus();
+      setServerRawMessage(state.settings.server,'bad',error.message||t('note.storageFail'));renderServerSettings();
+      showNotice(error.message||t('note.storageFail'),'error');return false;
+    }
+  }).finally(()=>storagePendingWrites.delete(pending));
+  settingsSaveTail=pending;storagePendingWrites.add(pending);return pending;
 }
 
 function settingsForStorage() {
@@ -30280,7 +30609,8 @@ function mergeOverflowTreeChildren(content, children) {
 
 function persist({journalId=null}={}) {
   noteHistoryCaptureDrafts();
-  if(journalId!==null&&noteHistory?.deferred?.()&&noteHistory.selectable?.(journalId)){scheduleServerSync();return;}
+  if(journalId!==null&&noteHistory?.deferred?.()&&(noteHistory.selectable?.(journalId)
+    ||noteHistoryEnrolling.has(journalId)&&noteHistory.creatable?.(journalId))){scheduleServerSync();return;}
   if (!isHostedWebClient()) {
     writeStorage(STORAGE_KEY, state.data);
   }

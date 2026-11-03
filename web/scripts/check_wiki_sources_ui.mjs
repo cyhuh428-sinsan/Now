@@ -8,6 +8,8 @@ const reportRoot=process.env.NOWNOTE_QA_REPORT_DIR||'D:/Project/Now/docs/2.4.0/q
 await fs.mkdir(reportRoot,{recursive:true});
 await fs.mkdir(base,{recursive:true});const own=await fs.mkdtemp(path.join(base,'client-'));
 const run=randomUUID(),report={run,kind:process.env.NOWNOTE_SELECTED_HTTP_QA_URL?'actual renderer/local cold and selected-history/Wiki detail loopback API/SQLite; other Wiki scenarios and Provider synthetic':'actual renderer/local cold; remote API and Provider are synthetic',phases:[],
+  settingsIdleOnly:process.env.NOWNOTE_SETTINGS_IDLE_QA==='1',
+  journalWindowOnly:process.env.NOWNOTE_JOURNAL_WINDOW_QA==='1',
   lazyRuntimeExpected:process.env.NOWNOTE_LAZY_WIKI_QA==='1',
   sourceHashes:Object.fromEntries(await Promise.all(['web/app.js','desktop/app/app.js'].map(async file=>[file,createHash('sha256').update(await fs.readFile(path.join(root,file))).digest('hex')])))};let child;
 try{
@@ -22,7 +24,7 @@ try{
     catch(error){if(error.code!=='ENOENT')throw error;result={ok:false,error:'missing_host_report_exit_'+exit};}
     report.phases.push({mode,phase,...result});
     if(exit!==0||result.ok!==true)throw Error('wiki_sources_ui_'+mode+'_'+phase+':'+(result.error||exit));
-    console.log(mode+' phase '+phase+' actual file/journal/cold and synthetic remote Wiki journey PASS');
+    console.log(mode+' phase '+phase+(report.journalWindowOnly?' actual root/child creation, edit, seal and cold Window journey PASS':report.settingsIdleOnly?' actual settings/idle projection and duplicate-alert check PASS':' actual file/journal/cold and synthetic remote Wiki journey PASS'));
   }
 }finally{
   child?.kill();const resolved=await fs.realpath(own),stat=await fs.lstat(own);

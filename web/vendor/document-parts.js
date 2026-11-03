@@ -156,8 +156,11 @@
       if(entry.has('archived_outbox')&&(yield* selectSteps([...location,'archived_outbox'],true,validated)).part?.type!=='array')return unavailable();
       if(entry.has('comparison')&&!(yield* object([...location,'comparison'])))return unavailable();
       const head=yield* value([...location,'base','head_revision_id']);
+      const localOnly=entry.has('localOnly')?yield* value([...location,'localOnly']):undefined;
+      const needsBaseline=entry.has('needsBaseline')?yield* value([...location,'needsBaseline']):undefined;
+      const replicaSelected=entry.has('replicaSelected')?yield* value([...location,'replicaSelected']):undefined;
       Object.defineProperty(notes,id,{enumerable:true,value:{projection:'current_v1',raw,draft,base:{head_revision_id:head,crypto_epoch:0},
-        localOnly:entry.has('localOnly')?yield* value([...location,'localOnly']):undefined,
+        localOnly,skipAutomaticSync:Boolean(!needsBaseline&&(conflicted||!replicaSelected||localOnly)),
         dirty:entry.has('dirty')?yield* value([...location,'dirty']):undefined,pending:pending.part.entries.length,conflicted}});
     }
     return {projection:'journal_current_v1',supported:true,account,notes,wikiIds,wikiIndexSupported,

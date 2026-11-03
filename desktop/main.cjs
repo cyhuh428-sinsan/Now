@@ -75,9 +75,9 @@ function storeMutation(sender,key,action){
 }
 function registerDesktopStorageHandlers() {
   const history=require('./history-session.cjs').createHistorySession(desktopStorePath);
-  for(const [route,method]of [['open','open'],['current','current'],['page','page'],['select','select'],['full','full'],['note','note']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
+  for(const [route,method]of [['open','open'],['current','current'],['page','page'],['select','select'],['full','full'],['note','note'],['select-window','selectWindow'],['note-window','noteWindow'],['create-window','createWindow']])ipcMain.handle('nownote:history-'+route,(event,payload)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey('nownote.history.v1');
-    try{return {ok:true,...(['full','note'].includes(method)?storeMutation(event.sender,'nownote.history.v1',()=>history[method](event.sender,payload)):history[method](event.sender,payload))};}
+    try{return {ok:true,...(['full','note','noteWindow','createWindow'].includes(method)?storeMutation(event.sender,'nownote.history.v1',()=>history[method](event.sender,payload)):history[method](event.sender,payload))};}
     catch(error){return {ok:false,message:error.message,committed:error.committed===true};}
   });
   const snapshots=new WeakMap();
@@ -93,6 +93,8 @@ function registerDesktopStorageHandlers() {
       version: 2,
       workspaces:['note','wiki'],
       historySessions:true,
+      historyWindows:true,
+      guardedSettings:true,
       retainedOriginal:store.retainedOriginal,
       updatedAt: store.updatedAt,
       keys: store.keys,
@@ -122,6 +124,13 @@ function registerDesktopStorageHandlers() {
   }
 
   ipcMain.handle("nownote:desktop-store-write", writeFrom);
+  ipcMain.handle('nownote:settings-save',(event,request)=>{
+    assertTrustedStoreFrame(event);
+    const key='nownote.web.settings.v1',expected=snapshots.get(event.sender)?.get(key);
+    if(expected===undefined||JSON.stringify(expected)!==JSON.stringify(request?.expected))throw Error('Settings baseline changed');
+    const result=storeMutation(event.sender,key,()=>documentFile.writeSettings(desktopStorePath(),request));
+    remember(event.sender,key,request.next);return result;
+  });
   ipcMain.handle('nownote:desktop-original-read',(event,key)=>{
     assertTrustedStoreFrame(event);assertRendererStoreKey(key);
     return documentFile.readOriginal(desktopStorePath(),key);

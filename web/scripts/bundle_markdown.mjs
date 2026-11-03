@@ -11,7 +11,7 @@ const wikiFiles = ['web/wiki-runtime.js','desktop/app/wiki-runtime.js'];
 const coreFiles = ['web/wiki-core.js','desktop/app/wiki-core.js'];
 const mainLibraries = ['marked.umd.js','purify.min.js','note-blocks.js','document-renderer.js','library-state.js','library-ui.js','diff.js','browser-history-storage.js','note-history-state.js','note-history-ui.js','note-protection-protocol.js','note-protection-state.js','note-protection-client.js','note-protection-analysis.js','note-protection-ui.js','wiki-state.js','wiki-ingest.js','wiki-sources.js','wiki-lifecycle.js','wiki-notebook.js','wiki-server-access.js','wiki-evidence.js','wiki-protection-group.js','wiki-ingest-notebook.js','wiki-graph.js','wiki-query.js','wiki-query-notebook.js','wiki-lint.js','wiki-runtime-loader.js'];
 const wikiLibraries = ['cytoscape.min.js','wiki-graph-ui.js','wiki-ui.js'];
-mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js','journal-writes.js','deferred-history.js','history-backup.js');
+mainLibraries.unshift('document-parts.js','document-idb.js','history-snapshot.js','journal-writes.js','journal-window.js','deferred-history.js','history-backup.js');
 mainLibraries.push('wiki-index-reader.js');
 mainLibraries.push('wiki-read-set.js','wiki-selected-page.js','history-client.js','wiki-workspace.js','web-session-storage.js');
 mainLibraries.push('history-persistence.js');
@@ -63,6 +63,7 @@ async function run() {
   for (const relative of coreFiles) await fs.writeFile(path.join(root,relative), bundles.core);
   await fs.copyFile(path.join(vendor,'document-parts.js'),path.join(root,'desktop/app/document-parts.js'));
   await fs.copyFile(path.join(vendor,'journal-writes.js'),path.join(root,'desktop/app/journal-writes.js'));
+  await fs.copyFile(path.join(vendor,'journal-window.js'),path.join(root,'desktop/app/journal-window.js'));
   for(const [relative,source]of Object.entries(bundles.assets))await fs.writeFile(path.join(root,relative),source);
 }
 
