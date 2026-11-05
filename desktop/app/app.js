@@ -16692,10 +16692,10 @@ function noteHistoryProject(note) {
     if (note.parent_local_id && !parent) throw new Error("상위 메모를 먼저 불러와야 합니다. 원문은 이력에 보존했습니다.");
     let node = findTreeNode(state.data.tree, note.local_id);
     if (note.deleted_at) {
-      if (node && !isTreeNodeSharedForServer(node) && node.status !== "deleted") {
+      if (node && !managed?.localOnly && !isTreeNodeSharedForServer(node) && node.status !== "deleted") {
         node.serverShared = false; node.syncState = "local"; return;
       }
-      if (node) { detachTreeNode(note.local_id); state.data.deletedTree.push({ ...node, deletedAt: note.deleted_at }); }
+      if (node) { detachTreeNode(note.local_id); state.data.deletedTree.push({ ...node, status: "deleted", deletedAt: note.deleted_at }); }
       return;
     }
     if (!node) {
@@ -18800,7 +18800,7 @@ function bindEvents() {
     if (!(await confirmAction(t("note.nodeDelete.toTrashConfirm", { title: noteTitle(selected.title) })))) return;
     if (!archiveDeletedTreeNode(selected.id)) return;
     state.selectedTreeId = null;
-    persist();
+    persist({journalId:selected.id});
     renderTree();
     renderDeletedTreeButton();
   });
@@ -29989,7 +29989,7 @@ function restoreDeletedTreeNode(id) {
     state.data.tree.push(restored);
   }
   state.selectedTreeId = restored.id;
-  persist();
+  persist({journalId:restored.id});
   render();
   renderDeletedTreeList();
 }
