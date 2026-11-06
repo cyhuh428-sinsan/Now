@@ -317,7 +317,7 @@ async function runOnce() {
         results.editableValueAfterEnd = proto.get.call(input);
         results.editableTitleAfterEnd = state.data.tree[0].title;
 
-        // --- 2b) 조합 중 바깥 렌더는 값 쓰기를 미루고 조합이 끝난 뒤에 적용된다 ---
+        // --- 2b) 같은 문서의 바깥 렌더보다 미저장 조합 입력을 우선 보존한다 ---
         state.data = defaultData();
         state.data.tree = [node("rw2b", "메모", "본문")];
         state.selectedTreeId = "rw2b";
@@ -469,7 +469,7 @@ async function runOnce() {
 
     assert(result.renderWritesWhileComposing.length === 0, `조합 중 렌더가 value 를 덮어썼습니다: ${JSON.stringify(result.renderWritesWhileComposing)}`);
     assert(result.renderValueDuringComposition === "메모ㅅ", "조합 중 렌더가 값을 바꿨습니다.");
-    assert(result.renderValueAfterEnd === "바깥에서바뀐제목", `조합이 끝난 뒤 미뤄둔 렌더 값이 적용되지 않았습니다: ${result.renderValueAfterEnd}`);
+    assert(result.renderValueAfterEnd === "메모ㅅ", `같은 문서의 렌더가 미저장 조합 입력을 덮었습니다: ${result.renderValueAfterEnd}`);
     assert(result.contentSurfaceDuringComposition, "본문 조합 중 IME 표시 상태가 적용되지 않았습니다.");
     assert(result.contentTextVisibleDuringComposition, "본문 조합 중 실제 입력 글자가 보이지 않습니다.");
     assert(!result.contentSurfaceAfterComposition, "본문 조합 종료 후 IME 표시 상태가 남아 있습니다.");

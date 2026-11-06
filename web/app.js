@@ -13446,23 +13446,31 @@ function setTreeEditorImeComposing(element, composing) {
   elements.treeContentSurface?.classList.toggle("ime-composing", composing);
 }
 
-function bindEditorComposition(element, flushInput) {
+function bindEditorComposition(element, flushInput, {context=null,writable=()=>false}={}) {
   if (!element) return;
+  let compositionContext = null;
   const settle = () => {
     setTreeEditorImeComposing(element, false);
     composingEditors.delete(element);
-    if (pendingEditorValueWrite.has(element)) {
-      // 조합 중에 바깥에서 편집기 내용을 통째로 바꿨다면 그 값이 최신이므로 그것을 적용한다.
+    const preserveInput = context && context() === compositionContext && writable()
+      && pendingEditorInputFlush.has(element);
+    if (pendingEditorValueWrite.has(element) && !preserveInput) {
       const nextValue = pendingEditorValueWrite.get(element);
       pendingEditorValueWrite.delete(element);
       pendingEditorInputFlush.delete(element);
       element.value = nextValue;
       return;
     }
+    pendingEditorValueWrite.delete(element);
+    if (context && (context() !== compositionContext || !writable())) {
+      pendingEditorInputFlush.delete(element);
+      return;
+    }
     if (!pendingEditorInputFlush.delete(element)) return;
     flushInput();
   };
   element.addEventListener("compositionstart", () => {
+    compositionContext = context?.();
     composingEditors.add(element);
     setTreeEditorImeComposing(element, true);
   });
@@ -13486,7 +13494,7 @@ function setEditorValue(element, nextValue) {
     pendingEditorValueWrite.set(element, nextValue);
     return;
   }
-  element.value = nextValue;
+  if (element.value !== String(nextValue ?? "")) element.value = nextValue;
 }
 
 const WRITING_TEMPLATES = {
@@ -16819,6 +16827,7 @@ async function initializeNoteHistory() {
     lock() { protectionBootstrapPending=true;invalidateNoteProtectionSupport();noteHistoryCaptureEpoch++; noteHistory?.suspend(); for (const timer of noteHistoryTimers.values()) clearTimeout(timer); noteHistoryTimers.clear(); syncStatusUI?.close();noteHistoryUI?.close();wikiUI?.close(); },
     async resume({renderView=true,projectView=true}={}) {
       if (!noteHistoryContext().enabled) return;
+      const history=noteHistory,projectionScope=contextKey(),projectionEpoch=noteHistoryCaptureEpoch;
       if ([elements.treeContent, elements.treeTitleInput, elements.dailyContent, elements.worklogContent].some(editor => editor && isEditorComposing(editor))) return;
       if (noteHistory.suspended()||!noteHistory.matches()) {
         protectionBootstrapPending=true;
@@ -16828,6 +16837,11 @@ async function initializeNoteHistory() {
         finishNoteHistoryBootstrap();
       }
       if (!projectView) return;
+      const capture=noteHistoryCaptureChain;
+      await capture;
+      if(history!==noteHistory||projectionScope!==contextKey()||projectionEpoch!==noteHistoryCaptureEpoch
+        ||capture!==noteHistoryCaptureChain||!noteHistoryContext().enabled
+        ||[elements.treeContent,elements.treeTitleInput,elements.dailyContent,elements.worklogContent].some(editor=>editor&&isEditorComposing(editor)))return;
       noteHistoryProjection = true;
       try {
         const drafts = Object.values(noteHistory.currentEntries({excludeWiki:true})).map(item => item.draft).sort((a, b) => a.level - b.level);
@@ -18610,13 +18624,19 @@ function bindEvents() {
   elements.treeTitleInput.addEventListener("input", (event) => {
     handleEditorInput(elements.treeTitleInput, event, flushTreeTitleInput);
   });
-  bindEditorComposition(elements.treeTitleInput, flushTreeTitleInput);
+  bindEditorComposition(elements.treeTitleInput, flushTreeTitleInput, {
+    context: () => JSON.stringify([state.selectedTreeId,noteHistoryCaptureEpoch]),
+    writable: () => {const node=getSelectedTreeNode();return Boolean(node&&!isReadOnlyTreeNode(node));},
+  });
 
   elements.treeContent.addEventListener("input", (event) => {
     if (!blockSelection.active && blockSelection.ranges.length) clearBlockSelection();
     handleEditorInput(elements.treeContent, event, flushTreeContentInput);
   });
-  bindEditorComposition(elements.treeContent, flushTreeContentInput);
+  bindEditorComposition(elements.treeContent, flushTreeContentInput, {
+    context: () => JSON.stringify([state.selectedTreeId,noteHistoryCaptureEpoch]),
+    writable: () => {const node=getSelectedTreeNode();return Boolean(node&&!isReadOnlyTreeNode(node)&&!isEncryptedTreeNodeLocked(node));},
+  });
   // bindEditorComposition 이 먼저 조합 상태를 정리하고 밀린 처리를 흘려보낸다.
   // 그 뒤에 도는 이 처리는 밀린 입력이 없었던 경우를 받아 준다.
   elements.treeContent.addEventListener("compositionend", () => {
@@ -28735,6 +28755,7 @@ function treePathNodes(id, nodes = state.data.tree, parents = []) {
 }
 
 function renderMarkdownPreview(content) {
+  if (elements.markdownPreview.classList.contains("hidden")) return;
   const html = markdownToHtml(content || "", { withCodeBlockActions: true, withReferences:true });
   elements.markdownPreview.innerHTML = html || `<p class="empty-compact">${escapeHtml(t("note.previewEmpty"))}</p>`;
   hydrateNoteAttachmentImages(elements.markdownPreview);
