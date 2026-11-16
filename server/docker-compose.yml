@@ -74,6 +74,7 @@ services:
       dockerfile: server/Dockerfile
     container_name: now-worker
     restart: unless-stopped
+    stop_grace_period: 120s
     depends_on:
       now-postgres:
         condition: service_healthy
